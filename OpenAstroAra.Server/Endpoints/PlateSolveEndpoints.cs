@@ -113,9 +113,9 @@ public static class PlateSolveEndpoints {
     }
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
-    public static IResult CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
+    public static async Task<IResult> CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
             OpenAstroAra.Profile.Interfaces.IProfileService profileService,
-            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null) {
+            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null, CancellationToken ct = default) {
         // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
         if (request is null
                 || request.RaHours is not (>= 0 and < 24)
@@ -137,7 +137,9 @@ public static class PlateSolveEndpoints {
         // #2071 — the centring slews would be refused inside the job; answer the cause now instead. Checked
         // before Enqueue on purpose: while the gate is closed a repeat Center for the running job's target
         // is refused too rather than joining it, so the user sees the cause instead of a job that cannot slew.
-        if (mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+        // Like a REST GoTo, a Center sent while a clock push is running (the app's time sync just after it
+        // connects) waits for it, up to about 10 s, instead of a 409 the push is about to lift.
+        if (mountClock is not null && await mountClock.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false) is { } clockRefusal) {
             throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
         }
         BatchJobDto job;

@@ -90,37 +90,196 @@ namespace OpenAstroAra.Test {
             public bool Slewing => false;
         }
 
+        /// <summary>#2087 review — a connected mount whose rig clock has just been synced, with the mount-clock
+        /// push that sync started held in <see cref="Pushes"/> until the test runs it. Every connect gets a new
+        /// <see cref="FakeTelescopeDevice"/>; the mount's clock is one <see cref="FollowingMountClock"/>.</summary>
+        private sealed class HeldPush : IDisposable {
+            public readonly System.Collections.Concurrent.ConcurrentQueue<Func<Task>> Pushes = new();
+            public required System.Collections.Generic.List<FakeTelescopeDevice> Devices { get; init; }
+            public required TimeSyncService Time { get; init; }
+            public required TelescopeService Svc { get; init; }
+            public FakeTelescopeDevice Device { get { lock (Devices) { return Devices[^1]; } } }
+
+            /// <summary>Runs the oldest held push.</summary>
+            public async Task ReleaseAsync() {
+                Assert.That(Pushes.TryDequeue(out var push), Is.True, "a clock push is held");
+                await push!();
+            }
+
+            /// <summary>Holds every push from now on (the connect's own, inline until then, has run).</summary>
+            public void HoldPushes() => Svc.RunSitePush = push => { Pushes.Enqueue(push); return Task.CompletedTask; };
+
+            public void Dispose() {
+                Svc.Dispose();
+                lock (Devices) {
+                    foreach (var d in Devices) {
+                        d.Dispose();
+                    }
+                }
+            }
+        }
+
+        private static async Task<HeldPush> HeldPushAsync(IProfileService? profile = null, Action<FakeTelescopeDevice>? configure = null) {
+            var time = new TimeSyncService(NullLogger<TimeSyncService>.Instance, Mock.Of<ISystemClockSetter>());
+            var clock = new FollowingMountClock();
+            var devices = new System.Collections.Generic.List<FakeTelescopeDevice>();
+            var svc = new TelescopeService(profileService: profile, timeSyncResolver: () => time) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                SlewSettleMaxPolls = 30,
+                DeviceFactory = _ => {
+                    var d = new FakeTelescopeDevice();
+                    configure?.Invoke(d);
+                    lock (devices) { devices.Add(d); }
+                    return d;
+                },
+                MountClockSource = () => clock,
+                RunSitePush = push => push(),
+                MountClockPushWait = TimeSpan.FromSeconds(10),
+            };
+            var rig = new HeldPush { Time = time, Svc = svc, Devices = devices };
+            svc.FollowTimeSync(time);
+            await svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
+            await WaitForAsync(() => svc.MountClockMotionRefusal()?.Contains("not been synced", StringComparison.Ordinal) == true,
+                "the connect's clock check never ran");
+            rig.HoldPushes();
+            await time.PushAsync(new TimeSyncPushRequestDto("client", DateTimeOffset.UtcNow), CancellationToken.None);
+            Assert.That(rig.Pushes, Has.Count.EqualTo(1), "the sync started a mount-clock push");
+            return rig;
+        }
+
+        /// <summary>A reconnect while <paramref name="waiting"/> waits for the held push: the new session's
+        /// connect push is held too, then both run, the old session's first.</summary>
+        private static async Task ReconnectThenReleaseAsync(HeldPush rig, Task waiting) {
+            await rig.Svc.DisconnectAsync(null, CancellationToken.None);
+            await rig.Svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
+            await WaitForAsync(() => rig.Pushes.Count == 2, "the reconnect never started its clock push");
+            Assert.That(waiting.IsCompleted, Is.False, "still waiting for the clock");
+            await rig.ReleaseAsync(); // the old session's: its verdict is dropped
+            await rig.ReleaseAsync(); // the new session's: opens the gate
+        }
+
         [Test]
         public async Task A_REST_Sync_sent_while_the_mount_clock_is_being_set_waits_for_it_and_goes_through() {
             // #2087 review: right after the app connects, its time sync is still setting the mount's clock; a
             // REST GoTo or Sync then was refused although the push was about to open the gate. It waits now,
             // as a sequencer GoTo does (MountClockPushWait).
-            using var device = new FakeTelescopeDevice();
+            using var rig = await HeldPushAsync();
+            var sync = rig.Svc.SlewAsync(new SlewRequestDto(5, 30, Sync: true), null, CancellationToken.None);
+            await Task.Delay(100);
+            Assert.That(sync.IsCompleted, Is.False, "the Sync waits for the push in flight instead of a refusal");
+
+            await rig.ReleaseAsync();
+            await sync;
+            await WaitForAsync(() => rig.Device.Syncs == 1, "the Sync never reached the mount after the clock was verified");
+        }
+
+        [Test]
+        public async Task A_sequencer_GoTo_sent_while_the_mount_clock_is_being_set_waits_for_it_and_reaches_the_mount() {
+            // #2087 review: a §42.3 reconnect just before a sequencer slew starts a clock push; the slew must wait
+            // for it, not fail the step.
+            using var rig = await HeldPushAsync();
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+            await Task.Delay(100);
+            Assert.That(slew.IsCompleted, Is.False, "the slew waits for the push in flight instead of failing the step");
+            Assert.That(rig.Device.Slews, Is.Zero);
+
+            await rig.ReleaseAsync();
+            Assert.That(await slew, Is.True);
+            Assert.That(rig.Device.Slews, Is.EqualTo(1), "the goto reached the mount once the clock was verified");
+        }
+
+        [Test]
+        public async Task A_meridian_flip_sent_while_the_mount_clock_is_being_set_waits_for_it_and_reaches_the_mount() {
+            // #2087 review: a time sync landing at the flip must not abort it (a failed flip parks).
+            using var rig = await HeldPushAsync();
+            var flip = ((ITelescopeMediator)rig.Svc).MeridianFlip(Target(5), CancellationToken.None);
+            await Task.Delay(100);
+            Assert.That(flip.IsCompleted, Is.False, "the flip waits for the push in flight instead of failing");
+            Assert.That(rig.Device.Slews, Is.Zero);
+
+            await rig.ReleaseAsync();
+            Assert.That(await flip, Is.True);
+            Assert.That(rig.Device.Slews, Is.EqualTo(1), "the flip goto reached the mount once the clock was verified");
+        }
+
+        [Test]
+        public async Task A_REST_GoTo_waiting_for_the_mount_clock_goes_to_the_reconnected_mount_not_the_old_one() {
+            // #2087 review: the GoTo kept the device read before the wait; after a reconnect in that window it
+            // went to the old, disposed one.
+            using var rig = await HeldPushAsync();
+            var old = rig.Device;
+            var goTo = rig.Svc.SlewAsync(new SlewRequestDto(5, 30), null, CancellationToken.None);
+
+            await ReconnectThenReleaseAsync(rig, goTo);
+            await goTo;
+            var current = rig.Device;
+            Assert.That(current, Is.Not.SameAs(old), "precondition: a new device");
+            await WaitForAsync(() => current.Slews == 1, "the GoTo never reached the reconnected mount");
+            Assert.That(old.Slews, Is.Zero, "nothing goes to the disposed device");
+        }
+
+        [Test]
+        public async Task A_meridian_flip_waiting_for_the_mount_clock_sends_the_pier_side_hint_to_the_reconnected_mount() {
+            // #2087 review: the flip kept the device read before the wait, so after a reconnect the pier-side
+            // hint (some mounts start the flip on it) went to the old, disposed device.
+            using var profile = new OpenAstroAra.Profile.Profile();
+            profile.AstrometrySettings.Longitude = 0;
+            profile.MeridianFlipSettings.UseSideOfPier = true;
+            profile.TelescopeSettings.SettleTime = 0;
+            var profileService = new Mock<IProfileService>();
+            profileService.SetupGet(p => p.ActiveProfile).Returns(profile);
+            // A target the hint moves to the west side (the mount reads east), so the hint is written.
+            var lst = SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, 0) / 15.0;
+            var ra = OpenAstroAra.Astrometry.MeridianFlip.ExpectedPierSide(Target((lst + 3) % 24), Angle.ByHours(lst)) == PierSide.pierWest
+                ? (lst + 3) % 24 : (lst + 21) % 24;
+            // Each mount reports the target, so the flip goto settles.
+            using var rig = await HeldPushAsync(profileService.Object, d => { d.CanSetPierSide = true; d.Ra = ra; });
+            var old = rig.Device;
+            var flip = ((ITelescopeMediator)rig.Svc).MeridianFlip(Target(ra), CancellationToken.None);
+
+            await ReconnectThenReleaseAsync(rig, flip);
+            Assert.That(await flip, Is.True);
+            var current = rig.Device;
+            Assert.That(current, Is.Not.SameAs(old), "precondition: a new device");
+            Assert.That(current.PierSideWrites, Is.EqualTo(1), "the hint went to the reconnected mount");
+            Assert.That(old.PierSideWrites, Is.Zero, "nothing goes to the disposed device");
+            Assert.That((old.Slews, current.Slews), Is.EqualTo((0, 1)));
+        }
+
+        [Test]
+        public async Task A_REST_Sync_sent_just_after_a_rig_clock_step_waits_for_the_recheck_and_goes_through() {
+            // #2087 review: the verified-but-stepped branch. The check passed, then the rig clock stepped; until
+            // the next 2 s refresh sets the mount's clock again the gate is closed. A Sync in that window waits
+            // for the recheck instead of a refusal. No refresh ticks here: the test runs the 2 s hook itself.
+            var step = TimeSpan.Zero;
             var time = new TimeSyncService(NullLogger<TimeSyncService>.Instance, Mock.Of<ISystemClockSetter>());
             var clock = new FollowingMountClock();
-            var pushes = new System.Collections.Concurrent.ConcurrentQueue<Func<Task>>();
+            using var device = new FakeTelescopeDevice();
             using var svc = new TelescopeService(timeSyncResolver: () => time) {
-                RefreshPeriod = TimeSpan.FromMilliseconds(20),
+                RefreshPeriod = TimeSpan.FromHours(1),
                 DeviceFactory = _ => device,
                 MountClockSource = () => clock,
                 RunSitePush = push => push(),
+                UtcNow = () => DateTimeOffset.UtcNow + step,
+                MountClockPushWait = TimeSpan.FromSeconds(10),
             };
             svc.FollowTimeSync(time);
             await svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
             await WaitForAsync(() => svc.MountClockMotionRefusal()?.Contains("not been synced", StringComparison.Ordinal) == true,
                 "the connect's clock check never ran");
-            svc.RunSitePush = push => { pushes.Enqueue(push); return Task.CompletedTask; };
-
             await time.PushAsync(new TimeSyncPushRequestDto("client", DateTimeOffset.UtcNow), CancellationToken.None);
-            Assert.That(pushes, Has.Count.EqualTo(1), "the sync started a mount-clock push");
+            Assert.That(svc.MountClockMotionRefusal(), Is.Null, "precondition: the sync set and verified the mount's clock");
+
+            step = TimeSpan.FromMinutes(1); // the wall clock jumps; the monotonic clock does not
+            Assert.That(svc.MountClockMotionRefusal(), Does.Contain("stepped"));
             var sync = svc.SlewAsync(new SlewRequestDto(5, 30, Sync: true), null, CancellationToken.None);
             await Task.Delay(100);
-            Assert.That(sync.IsCompleted, Is.False, "the Sync waits for the push in flight instead of a refusal");
+            Assert.That(sync.IsCompleted, Is.False, "the Sync waits for the recheck instead of a refusal");
+            Assert.That(device.Syncs, Is.Zero);
 
-            Assert.That(pushes.TryDequeue(out var push), Is.True);
-            await push!();
+            svc.WatchMountClock(); // the 2 s refresh: sets the mount's clock again and verifies it
             await sync;
-            await WaitForAsync(() => device.Syncs == 1, "the Sync never reached the mount after the clock was verified");
+            await WaitForAsync(() => device.Syncs == 1, "the Sync never reached the mount after the recheck");
         }
 
         [Test]
@@ -269,17 +428,45 @@ namespace OpenAstroAra.Test {
 
         private static Mock<IMountClockGate> ClosedGate() {
             var gate = new Mock<IMountClockGate>();
-            gate.Setup(g => g.MountClockMotionRefusal()).Returns("Mount clock not verified: the rig clock has not been synced from the app or a GPS.");
+            const string refusal = "Mount clock not verified: the rig clock has not been synced from the app or a GPS.";
+            gate.Setup(g => g.MountClockMotionRefusal()).Returns(refusal);
+            gate.Setup(g => g.MountClockRefusalAfterPushAsync(It.IsAny<CancellationToken>())).ReturnsAsync(refusal);
             return gate;
         }
 
         [Test]
-        public void Center_is_refused_before_a_job_is_enqueued() {
+        public async Task Center_is_refused_before_a_job_is_enqueued() {
             var jobs = new Mock<IBatchJobService>(MockBehavior.Strict); // any Enqueue = test failure
             var profile = new Mock<IProfileService>();
-            var refusal = Assert.Throws<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
                 Mock.Of<ICenteringService>(), jobs.Object, profile.Object, ClosedGate().Object));
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.MountClockNotVerified));
+        }
+
+        [Test]
+        public async Task A_Center_sent_while_the_mount_clock_is_being_set_waits_for_it_and_is_enqueued() {
+            // #2087 review: a Center right after the app's time sync got a 409 a GoTo would not get. It waits
+            // like the REST GoTo now; with no push in flight it is still refused at once, before Enqueue.
+            var profile = new Mock<IProfileService>();
+            var (closed, _) = await UnverifiedAsync();
+            using (closed) {
+                closed.MountClockPushWait = TimeSpan.FromSeconds(10);
+                var started = System.Diagnostics.Stopwatch.StartNew();
+                var refusal = await Assert.ThrowsAsync<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+                    Mock.Of<ICenteringService>(), new Mock<IBatchJobService>(MockBehavior.Strict).Object, profile.Object, closed));
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.MountClockNotVerified));
+                Assert.That(started.Elapsed, Is.LessThan(TimeSpan.FromSeconds(2)), "no push in flight: refused at once");
+            }
+
+            using var rig = await HeldPushAsync();
+            var jobs = new InMemoryBatchJobService(null);
+            var center = PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), Mock.Of<ICenteringService>(), jobs, profile.Object, rig.Svc);
+            await Task.Delay(100);
+            Assert.That(center.IsCompleted, Is.False, "the Center waits for the push in flight instead of a 409");
+
+            await rig.ReleaseAsync();
+            Assert.That(await center, Is.InstanceOf<Microsoft.AspNetCore.Http.HttpResults.Accepted<BatchJobDto>>(),
+                "enqueued once the clock was verified");
         }
 
         [Test]

@@ -258,18 +258,27 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             // A clock push is running (the app's time sync just after it connects), or a host clock step
             // is about to start one: wait for it, as a sequencer GoTo does, instead of refusing a GoTo
             // the push is about to allow.
-            return SlewOnceMountClockSettledAsync(client, ra, dec, sync, idempotencyKey, abortEpoch, ct);
+            return SlewOnceMountClockSettledAsync(ra, dec, sync, idempotencyKey, abortEpoch, ct);
         }
         // A sync moves nothing, so guiding carries on, and it is allowed while the position is
         // unverified (#2070). The checks above still throw synchronously.
         return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, ct);
     }
 
-    private async Task<OperationAcceptedDto> SlewOnceMountClockSettledAsync(ITelescopeDevice client, double ra, double dec, bool sync,
+    private async Task<OperationAcceptedDto> SlewOnceMountClockSettledAsync(double ra, double dec, bool sync,
             string? idempotencyKey, long abortEpoch, CancellationToken ct) {
         if (await MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false) is { } clockRefusal) {
             LogMountOpRejectedClock(sync ? "telescope.sync" : "telescope.slew", clockRefusal);
             throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
+        // The wait can span a reconnect: send to the device connected now, never the one read before the
+        // wait (disposed by then).
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            throw new InvalidOperationException("telescope is not connected");
         }
         return sync
             ? DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)

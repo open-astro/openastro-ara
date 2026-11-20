@@ -27,6 +27,11 @@ public interface IMountClockGate {
     /// <summary>Null when the mount's clock is verified; otherwise the English reason, for the
     /// <c>mount-clock-not-verified</c> refusal or the failed sequencer step.</summary>
     string? MountClockMotionRefusal();
+
+    /// <summary>The same answer, but while a clock push is running (the app's time sync just after it
+    /// connects) or a host clock step is about to start one, it first waits for that push, up to about
+    /// 10 s, instead of refusing a move the push is about to allow.</summary>
+    Task<string?> MountClockRefusalAfterPushAsync(CancellationToken token);
 }
 
 // #2071 — the §31 push corrected the Pi's clock and never the mount's. On RC51 (2026-11-19) the mount
@@ -422,9 +427,10 @@ public sealed partial class TelescopeService : IMountClockGate {
         RunMountClockJob("recheck", write: check.Reason is SlewingReason or NoTrustedTimeReason);
     }
 
-    /// <summary>A sequencer GoTo right after a reconnect waits, up to <see cref="MountClockPushWait"/>, for
-    /// the clock push already running, then answers like <see cref="MountClockMotionRefusal"/>.</summary>
-    private async Task<string?> MountClockRefusalAfterPushAsync(CancellationToken token) {
+    /// <summary>A sequencer GoTo right after a reconnect, a REST GoTo or Sync and a Center wait, up to
+    /// <see cref="MountClockPushWait"/>, for the clock push already running, then answer like
+    /// <see cref="MountClockMotionRefusal"/>. With no push running or about to start, the answer is immediate.</summary>
+    public async Task<string?> MountClockRefusalAfterPushAsync(CancellationToken token) {
         var refusal = MountClockMotionRefusal();
         var deadline = TickMs() + (long)MountClockPushWait.TotalMilliseconds;
         while (refusal is not null && MountClockSettling() && TickMs() < deadline) {

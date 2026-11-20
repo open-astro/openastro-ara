@@ -333,7 +333,10 @@ namespace OpenAstroAra.Test {
                 return IsSlewing;
             }
         }
-        public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return 5.0; } }
+        public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return Ra; } }
+        /// <summary>The RA the mount reports (5 h unless a test points it elsewhere).</summary>
+        public double Ra { get => Volatile.Read(ref _ra); set => Volatile.Write(ref _ra, value); }
+        private double _ra = 5.0;
         public double Declination { get { ThrowIfLatched(); return Dec; } }
         public double TargetRightAscension => throw new InvalidOperationException("no target set");
         public double TargetDeclination => throw new InvalidOperationException("no target set");
