@@ -18,6 +18,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
@@ -146,18 +147,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
-            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null) {
+            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null,
+            Func<ITimeSyncService?>? timeSyncResolver = null) {
         _profileStore = profileStore;
         _poseStore = poseStore;
+        // #2071 — the time-sync service, resolved lazily like the guider. Without it the mount-clock gate is off.
+        _timeSyncResolver = timeSyncResolver;
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _guiderResolver = guiderResolver;
         _faults = faults;
         _ws = ws;
         _profileService = profileService;
-        // onConnected pushes the profile's site into the mount (one source of truth).
+        // onConnected pushes the profile's site into the mount (one source of truth), then sets and
+        // checks the mount's clock from the synced rig clock (#2071).
         _lifecycle = new DeviceLifecycle<ITelescopeDevice>(this, DeviceType.Telescope, "telescope",
             d => _createDevice(d), ReadTick, ResetSessionLocked, DeviceHealthTracker.DefaultThreshold, _logger, events, faults,
-            onConnected: () => PushProfileSite(force: true));
+            onConnected: OnMountConnected);
         _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -219,6 +224,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
         BeginPoseSessionLocked();   // #2070 — the first read decides again; an unverified position stays unverified
         ForgetPushedSite();
+        ForgetMountClockLocked(); // #2071 — every session sets and checks the mount's clock again
     }
 
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -237,9 +243,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (client is null) {
             throw new InvalidOperationException("telescope is not connected");
         }
+        // #2071 — a GoTo or a Sync on a wrong mount clock points at (or bakes in) the wrong sky.
+        var clockRefusal = MountClockMotionRefusal();
+        if (clockRefusal is not null && !MountClockSettling()) {
+            LogMountOpRejectedClock(request.Sync == true ? "telescope.sync" : "telescope.slew", clockRefusal);
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
+        if (clockRefusal is not null) {
+            // #2071 — a clock push is running (the app's time sync just after it connects), or a host clock step is
+            // about to start one: wait for it, as a sequencer GoTo does, instead of refusing a GoTo the push is about
+            // to allow. A GoTo is noted as a move from its request (#2066), so a stop during the wait wins over it.
+            var (waitingMotion, waitingEpoch) = sync ? (0L, AbortEpoch) : NoteMotionRequested();
+            return SlewOnceMountClockSettledAsync(client, ra, dec, sync, idempotencyKey, waitingEpoch, sync ? null : waitingMotion, ct);
+        }
         // A sync moves nothing, so guiding carries on, and it is allowed while the position is
         // unverified (#2070). The checks above still throw synchronously.
         if (sync) {
@@ -251,6 +270,38 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // one waits for the guider and then race its PUT.
         var (motion, abortEpoch) = NoteMotionRequested();
         return SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, motion, ct);
+    }
+
+    private async Task<OperationAcceptedDto> SlewOnceMountClockSettledAsync(ITelescopeDevice requested, double ra, double dec, bool sync,
+            string? idempotencyKey, long abortEpoch, long? motion, CancellationToken ct) {
+        string? clockRefusal;
+        try {
+            clockRefusal = await MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
+        } catch {
+            if (motion is { } m) {
+                NoteMotionFailed(m, requested);
+            }
+            throw;
+        }
+        // The wait can span a reconnect: send to the device connected now, never the one read before the
+        // wait (disposed by then).
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (clockRefusal is not null || client is null) {
+            if (motion is { } m) {
+                NoteMotionFailed(m, client ?? requested);
+            }
+            if (clockRefusal is not null) {
+                LogMountOpRejectedClock(sync ? "telescope.sync" : "telescope.slew", clockRefusal);
+                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+            }
+            throw new InvalidOperationException("telescope is not connected");
+        }
+        return motion is { } token
+            ? await SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, token, ct).ConfigureAwait(false)
+            : DispatchSlew(client, ra, dec, sync: true, idempotencyKey, AbortEpoch, motion: null);
     }
 
     private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
@@ -1281,6 +1332,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     }
                     MaybeAutoPopulateOptics(caps);
                 }
+                WatchMountClock(); // #2071 — a host clock step, or a recheck of an unverified mount clock
             });
     }
 

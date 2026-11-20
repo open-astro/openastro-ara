@@ -176,6 +176,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
+        // #2071 — the routine homes and slews against the mount's sidereal time: refuse to start while its clock is not verified.
+        private readonly IMountClockGate? _mountClock;
         // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
         private GuideCameraCustody.Claim? _claim;
 
@@ -189,8 +191,10 @@ namespace OpenAstroAra.Server.Services {
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
                 IPolarAlignMainCameraSolver? mainCamera = null,
-                IPolarAlignerSource? aligner = null) {
+                IPolarAlignerSource? aligner = null,
+                IMountClockGate? mountClock = null) {
             _guider = guider;
+            _mountClock = mountClock;
             _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
@@ -470,6 +474,9 @@ namespace OpenAstroAra.Server.Services {
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
+                if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+                    throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+                }
                 // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.

@@ -11275,6 +11275,12 @@ abstract class AppLocalizations {
   /// **'west'**
   String get polarDirectionWest;
 
+  /// Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.'**
+  String get refusalMountClockNotVerified;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:

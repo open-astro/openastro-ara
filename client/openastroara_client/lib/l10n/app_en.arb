@@ -8627,6 +8627,8 @@
   "@polarDirectionEast": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
   "polarDirectionWest": "west",
   "@polarDirectionWest": {"description": "Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)"},
+  "refusalMountClockNotVerified": "The mount's clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.",
+  "@refusalMountClockNotVerified": {"description": "Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"

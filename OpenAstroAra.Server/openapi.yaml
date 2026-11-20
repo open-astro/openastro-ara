@@ -15165,6 +15165,7 @@ components:
         - polar-align-moving-mount
         - polar-align-on-axis
         - first-flip-not-completed
+        - mount-clock-not-verified
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
