@@ -1119,6 +1119,14 @@ public partial class Program {
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
+        // #2044 — flip off + "Stop before meridian": stops tracking and pauses runs that many minutes before the
+        // meridian; never slews or parks. Same sequencer-resolver pattern as the reaction engines.
+        builder.Services.AddHostedService(sp => new MeridianStopWatch(
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetRequiredService<ILogger<MeridianStopWatch>>()));
         // §42.5 — fault-log retention sweep (#1145): drops fault rows older than storage.fault_log_retention_days
         // two minutes after start, then once a day. 0 keeps everything.
         builder.Services.AddHostedService<FaultLogRetentionService>();
