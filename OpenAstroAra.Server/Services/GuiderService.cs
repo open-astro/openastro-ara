@@ -667,11 +667,13 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     }
 
     // Caller holds _gate. A disposed service publishes nothing.
-    private EquipmentFaultEvent? PublishFaultLocked(EquipmentFaultKind kind, string details) {
+    // [opening] sees the fault before the hub's subscribers do (#1589).
+    private EquipmentFaultEvent? PublishFaultLocked(EquipmentFaultKind kind, string details, Action<EquipmentFaultEvent>? opening = null) {
         if (_disposed) {
             return null;
         }
         var fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2", kind, details, DateTimeOffset.UtcNow);
+        opening?.Invoke(fault);
         _faultSink?.Publish(fault);
         return fault;
     }
@@ -692,7 +694,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         _starLostReacted = false;
         _starLostFault = null;
         _starLostPausedRuns = [];
-        _decRunawayFault = null;
+        DropDecRunawayFaultLocked();
     }
 
     // #1191 — the guider reports the lost device back: the camera-drop fault is recovered now, not on

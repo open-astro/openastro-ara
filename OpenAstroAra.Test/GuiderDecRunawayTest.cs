@@ -54,16 +54,18 @@ namespace OpenAstroAra.Test {
             public readonly FaultReactionService Reaction;
             public GuiderService Service = null!;
 
-            public Rig() {
+            public Rig(string onGuiderLost = "pause_and_retry", bool runActive = true, double settleTime = 0) {
                 // The profile default (10 s) would make the resume wait 10 s.
-                Profile.ActiveProfile.GuiderSettings.SettleTime = 0;
+                Profile.ActiveProfile.GuiderSettings.SettleTime = settleTime;
                 var profiles = new Mock<IProfileStore>();
                 profiles.Setup(p => p.GetSafetyPolicies()).Returns(new SafetyPoliciesDto(
                     OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
                     MeridianFlipAuto: true, MeridianPauseMin: 2, MeridianRecenter: true, MeridianRecalGuider: false,
-                    OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                    OnAltitudeLimit: "pause", ParkIfNoMoreTargets: true, OnGuiderLost: onGuiderLost,
                     GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: false));
-                var running = new List<Guid> { RunId };
+                var running = runActive ? new List<Guid> { RunId } : new List<Guid>();
+                Sequencer.Setup(s => s.SkipActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(running.Count);
+                Sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(running.Count);
                 Sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(running);
                 Sequencer.Setup(s => s.PauseActiveRunsAsync(true, It.IsAny<CancellationToken>())).ReturnsAsync(running);
                 Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
@@ -94,6 +96,8 @@ namespace OpenAstroAra.Test {
             }
 
             public int Paused() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync));
+            public int Skipped() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.SkipActiveRunsAsync));
+            public int Aborted() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.AbortActiveRunsAsync));
             public int Resumed() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.ResumeRunsAsync));
             public int StepsSeen() {
                 lock (WsTopics) {
@@ -161,6 +165,14 @@ namespace OpenAstroAra.Test {
             await fake.BroadcastAsync(PhdEvents.GuideStep(ra, dec, decDurationMs: decMs, decDirection: dec >= 0 ? "South" : "North",
                 raDurationMs: raMs, raDirection: raMs > 0 ? "West" : null)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.StepsSeen() > before, pollMs: 2).ConfigureAwait(false), Is.True, "the guide step never landed");
+        }
+
+        // Dec walks off 0.5 px a frame with every Dec pulse at the maximum: a runaway on the frame the
+        // streak completes, and the frames after it are ignored.
+        private static async Task RunAwayAsync(Rig rig, FakeGuider fake) {
+            for (var n = 1; n <= GuideAxisRunaway.Steps + 2; n++) {
+                await StepAsync(rig, fake, dec: 0.5 * n, decMs: MaxPulseMs).ConfigureAwait(false);
+            }
         }
 
         private static int StopCaptures(FakeGuider fake) => fake.ReceivedMethods.Count(m => m == "stop_capture");
@@ -366,6 +378,99 @@ namespace OpenAstroAra.Test {
             }
 
             AssertNoRunaway(rig, fake);
+        }
+
+        // #1589 review — skip_target ends the reaction at once. The next target starts guiding on the same
+        // calibration, which never settles (the profile's 10 s settle) and runs away again: that runaway is
+        // skipped and notified too, not stopped silently under the first fault.
+        [TestCase("skip_target")]
+        [TestCase("abort_sequence")]
+        public async Task After_a_skip_or_abort_a_second_runaway_on_the_next_target_reacts_again(string onGuiderLost) {
+            using var rig = new Rig(onGuiderLost, settleTime: 10);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            int Acted() => onGuiderLost == "skip_target" ? rig.Skipped() : rig.Aborted();
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 1 && Acted() == 1 && rig.NotificationTitles().Count == 1).ConfigureAwait(false),
+                Is.True, "the first runaway stops guiding and acts");
+
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 2).ConfigureAwait(false), Is.True, "the second runaway stops guiding");
+            Assert.That(await WaitUntilAsync(() => Acted() == 2).ConfigureAwait(false), Is.True,
+                $"the second runaway runs on_guider_lost again: faults={rig.RunawayFaults().Count}");
+            Assert.That(rig.RunawayFaults(), Has.Count.EqualTo(2), "a fault of its own");
+            Assert.That(await WaitUntilAsync(() => rig.NotificationTitles().Count == 2).ConfigureAwait(false), Is.True, "and a notice of its own");
+            lock (rig.Recovered) {
+                Assert.That(rig.Recovered.Single(), Is.SameAs(rig.RunawayFaults()[0]), "the first fault is closed for the second");
+            }
+            Assert.That(rig.Paused(), Is.Zero);
+        }
+
+        [Test]
+        public async Task With_no_run_going_a_second_runaway_after_a_restart_notifies_again() {
+            using var rig = new Rig(runActive: false, settleTime: 10);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.NotificationTitles().Count == 1).ConfigureAwait(false), Is.True);
+            Assert.That(rig.NotificationTitles()[0], Is.EqualTo("Dec guiding ran away"), "notify only: no run was going");
+
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 2 && rig.NotificationTitles().Count == 2).ConfigureAwait(false), Is.True,
+                $"the second runaway notifies again: faults={rig.RunawayFaults().Count}");
+            Assert.That(rig.RunawayFaults(), Has.Count.EqualTo(2));
+        }
+
+        [Test]
+        public async Task While_the_run_stays_paused_a_second_runaway_only_stops_guiding_again() {
+            using var rig = new Rig(settleTime: 10);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1 && rig.NotificationTitles().Count == 1).ConfigureAwait(false), Is.True);
+
+            // The user starts guiding by hand without calibrating again; the run is still paused.
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 2).ConfigureAwait(false), Is.True, "guiding is stopped again");
+            await Task.Delay(300).ConfigureAwait(false);
+            Assert.That(rig.RunawayFaults(), Has.Count.EqualTo(1), "the paused episode still holds the first fault");
+            Assert.That(rig.Paused(), Is.EqualTo(1));
+            Assert.That(rig.Resumed(), Is.Zero, "the paused run is not resumed");
+            Assert.That(rig.NotificationTitles(), Has.Count.EqualTo(1));
+        }
+
+        [Test]
+        public async Task A_run_resumed_by_hand_is_paused_again_by_a_second_runaway() {
+            using var rig = new Rig(settleTime: 10);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1 && rig.NotificationTitles().Count == 1).ConfigureAwait(false), Is.True);
+
+            // The user presses Resume without calibrating again: the run leaves the daemon's pause (a daemon
+            // resume of it now resumes nothing), and a dither starts guiding again on the same calibration.
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<Guid>());
+            rig.Sequencer.Setup(s => s.ResumeRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>())).ReturnsAsync(0);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 2).ConfigureAwait(false), Is.True, "guiding is stopped again");
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 2).ConfigureAwait(false), Is.True,
+                $"the resumed run is paused again: faults={rig.RunawayFaults().Count}");
+            var faults = rig.RunawayFaults();
+            Assert.That(faults, Has.Count.EqualTo(2), "a new fault for the second runaway");
+            lock (rig.Recovered) {
+                Assert.That(rig.Recovered.Single(), Is.SameAs(faults[0]), "the first fault is closed for the second");
+            }
+            Assert.That(await WaitUntilAsync(() => rig.NotificationTitles().Count == 2).ConfigureAwait(false), Is.True);
+            Assert.That(rig.NotificationTitles()[1], Is.EqualTo("Dec guiding ran away — sequence paused"));
         }
     }
 }

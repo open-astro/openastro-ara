@@ -40,6 +40,12 @@ public interface IGuiderEpisodeListener {
     /// paused episode ends when this count moves. A count, not a flag: a Disconnect then Connect
     /// between two polls still ends it.</summary>
     int UserDisconnects => 0;
+
+    /// <summary>#1589 — the shared reaction holds this guider fault no longer: its episode ended (it skipped,
+    /// aborted or only notified, the fault was recovered, or the user took the guider back), or the fault
+    /// joined a guider episode already running. A fault the guider still has open can then make way for a
+    /// new one that runs the plan again. Called outside the reaction's lock.</summary>
+    void Released(EquipmentFaultEvent fault) { }
 }
 
 /// <summary>
@@ -145,15 +151,22 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     /// mismatch must not lose its one notification just because the same device type happens
     /// to be mid-reconnect (review finding).</summary>
     internal void OnFault(EquipmentFaultEvent fault) {
+        if (!TryStartEpisode(fault) && fault.DeviceType == DeviceType.Guider) {
+            // #1589 — joined the running guider episode (or none started): no episode holds this fault.
+            _guiderEpisodes?.Invoke()?.Released(fault);
+        }
+    }
+
+    private bool TryStartEpisode(EquipmentFaultEvent fault) {
         lock (_gate) {
             if (_disposed || _cts.IsCancellationRequested) {
-                return;
+                return false;
             }
             var recoverable = fault.Kind is EquipmentFaultKind.Disconnected or EquipmentFaultKind.TrackingLost;
             var key = recoverable ? (object)NormalizeType(fault.DeviceType) : new object();
             if (recoverable && _episodes.ContainsKey(key)) {
                 LogEpisodeAlreadyActive(fault.DeviceType, fault.Kind);
-                return;
+                return false;
             }
             // §42.2 items 2+5 — non-recoverable kinds also feed the persistence counter: the
             // fault that tips its device over the threshold escalates (its episode runs the
@@ -164,6 +177,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             var escalated = !recoverable
                 && _escalator.Observe(NormalizeType(fault.DeviceType), fault.Kind, DateTimeOffset.UtcNow);
             _episodes[key] = Task.Run(() => RunEpisodeAsync(key, fault, escalated), CancellationToken.None);
+            return true;
         }
     }
 
@@ -299,9 +313,14 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogEpisodeFailed(fault.DeviceType, ex);
         } finally {
+            bool guiderEpisode;
             lock (_gate) {
                 _episodes.Remove(key);
-                _recoveryWaiters.Remove(key);
+                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter) && waiter.Fault == fault;
+            }
+            // #1589 — after the slot is free, so a fault the guider publishes in answer starts its own episode.
+            if (guiderEpisode) {
+                _guiderEpisodes?.Invoke()?.Released(fault);
             }
         }
     }
