@@ -708,6 +708,13 @@ void main() {
     expect(api.stages, [PolarAlignStages.coarse]);
   });
 
+  testWidgets('a main-camera run that could not solve offers no Rough first (#2082)', (tester) async {
+    await _pump(tester, const PolarAlignLive(
+        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
+        errorReason: 'seed_solve_failed'));
+    expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
+  });
+
   testWidgets('another failure offers no Rough first (#2082)', (tester) async {
     await _pump(tester, const PolarAlignLive(
         phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'slew_failed'));

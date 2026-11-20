@@ -418,9 +418,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Future<void> _check() => _start(stage: PolarAlignStages.check);
 
   /// #2082 Rough first (the main camera's measurement) is offered only after
-  /// the guide camera could not solve the pole field (Joey, 2026-11-20).
+  /// the guide camera could not solve the pole field (Joey, 2026-11-20): not
+  /// after a run on the main camera, which just failed.
   static bool _roughFirstOffered(PolarAlignLive live) =>
-      live.phase == PolarAlignStates.failed && live.errorReason == 'seed_solve_failed';
+      live.phase == PolarAlignStates.failed &&
+      live.errorReason == 'seed_solve_failed' &&
+      !live.usesMainCamera;
 
   /// The Rough first caption: the rig's own turn, twice. Null until its
   /// settings are in (ADR 0015).

@@ -602,10 +602,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               ),
             ],
             // #2082 — after the guide camera could not solve the pole field:
-            // the main camera's measurement, which says how far it turns.
+            // the main camera's measurement, which says how far it turns. Not
+            // after a run on the main camera, which just failed.
             if (!active &&
                 live.phase == PolarAlignStates.failed &&
-                live.errorReason == 'seed_solve_failed') ...[
+                live.errorReason == 'seed_solve_failed' &&
+                !live.usesMainCamera) ...[
               if (settings != null)
                 Text(
                   l10n.polarRoughFirstCaption(

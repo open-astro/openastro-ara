@@ -430,6 +430,17 @@ void main() {
       expect(api.calls, isNot(contains('frame')), reason: 'the guider has no picture of this run');
     });
 
+    testWidgets('a main-camera run that could not solve offers no Rough first (#2082)', (tester) async {
+      // Rough first is the fallback for a guide camera that could not solve: the main camera just failed.
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), const PolarAlignLive(
+        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
+        errorReason: 'seed_solve_failed', errorMessage: 'the seed-a seed frame failed to solve',
+      )));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-error-banner')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-start-rough')), findsNothing);
+    });
+
     testWidgets('idle after another failure offers no Rough first (#2082)', (tester) async {
       await tester.pumpWidget(_harness(_FakePolarAlignClient(), const PolarAlignLive(
         phase: PolarAlignStates.failed, errorReason: 'slew_failed', errorMessage: 'the mount refused to turn',
