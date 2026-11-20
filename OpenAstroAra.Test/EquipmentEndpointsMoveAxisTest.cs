@@ -18,6 +18,7 @@ using Moq;
 using NUnit.Framework;
 using Microsoft.AspNetCore.Mvc;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 using System;
@@ -61,6 +62,23 @@ namespace OpenAstroAra.Test {
             Assert.That(StatusOf(await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(-1, 1), svc.Object, CancellationToken.None)), Is.EqualTo(StatusCodes.Status400BadRequest));
             Assert.That(StatusOf(await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, double.NaN), svc.Object, CancellationToken.None)), Is.EqualTo(StatusCodes.Status400BadRequest));
             svc.Verify(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        // #2066 — a pad move while Polar Align turns the mount is the polar-align-moving-mount Refusal (not the plain 409
+        // below, which drops its reason); the pad's stop always reaches the mount.
+        [Test]
+        public async Task A_pad_move_while_polar_align_turns_the_mount_is_refused_and_a_stop_goes_through() {
+            var svc = new Mock<ITelescopeService>();
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 1.0), svc.Object, CancellationToken.None, polarAlign.Object));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            svc.Verify(s => s.MoveAxisAsync(0, 1.0, It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            var stop = await EquipmentEndpoints.MoveAxisAsync(new MoveAxisRequestDto(0, 0), svc.Object, CancellationToken.None, polarAlign.Object);
+            Assert.That(StatusOf(stop), Is.EqualTo(StatusCodes.Status202Accepted));
+            svc.Verify(s => s.MoveAxisAsync(0, 0, It.IsAny<int?>(), It.IsAny<CancellationToken>()), Times.Once);
         }
 
         [Test]

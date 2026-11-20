@@ -52,7 +52,8 @@ class _Profile extends ProfileApi {
     etag: '"v1"',
   );
   @override
-  Future<Phd2Settings> getPhd2Settings() async => phd2;
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: phd2, etag: '"v1"');
 }
 
 /// The daemon holds no Guider, so its status read is a 404: nothing has

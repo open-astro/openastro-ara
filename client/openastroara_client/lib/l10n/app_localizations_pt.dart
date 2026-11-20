@@ -6664,6 +6664,10 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignMovingMount =>
+      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -13522,6 +13526,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalPolarAlignSweepLimit(String offset) {
     return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
   }
+
+  @override
+  String get refusalPolarAlignMovingMount =>
+      'O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
 
   @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';

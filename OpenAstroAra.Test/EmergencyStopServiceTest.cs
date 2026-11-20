@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -161,14 +162,14 @@ namespace OpenAstroAra.Test {
             polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PolarAlignStateDto("adjusting", 12, 10, 2, 5, null));
             polar.Setup(p => p.IsActive).Returns(true);
-            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+            polar.Setup(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
                 polarAlign: polar.Object).ExecuteAsync();
 
-            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            polar.Verify(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
@@ -180,14 +181,14 @@ namespace OpenAstroAra.Test {
             polar.Setup(p => p.GetStatusAsync(It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PolarAlignStateDto("checking", null, null, null, 0, null));
             polar.Setup(p => p.IsActive).Returns(true);
-            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+            polar.Setup(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
                 polarAlign: polar.Object).ExecuteAsync();
 
-            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            polar.Verify(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>()), Times.Once);
             Assert.That(result.FailedRungs, Is.Empty);
         }
 
@@ -205,7 +206,7 @@ namespace OpenAstroAra.Test {
                 telescope.Object, flat.Object, notifications.Object, ws.Object,
                 polarAlign: polar.Object).ExecuteAsync();
 
-            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            polar.Verify(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
@@ -363,6 +364,7 @@ namespace OpenAstroAra.Test {
             telescope.Verify(t => t.GetAsync(It.IsAny<CancellationToken>()), Times.AtLeastOnce);
             telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once);
             telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once);
+            telescope.Verify(t => t.FenceMotion("emergency_stop"), Times.Once, "#2066 — the latch: counted, no command to the mount");
             telescope.VerifyNoOtherCalls();
         }
 
@@ -463,7 +465,7 @@ namespace OpenAstroAra.Test {
                 .Callback(() => calls.Add("tracking_off")).Returns(Task.CompletedTask);
             var polar = new Mock<IPolarAlignService>();
             polar.Setup(p => p.IsActive).Returns(true);
-            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            polar.Setup(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>()))
                 .Callback(() => calls.Add("polar")).ReturnsAsync(Accepted);
 
             await new EmergencyStopService(
@@ -474,6 +476,53 @@ namespace OpenAstroAra.Test {
             Assert.That(calls, Is.EqualTo(StoppedAgainAfterPolar));
         }
 
+        // #2066 — the stop is latched in the mount's stop count before the first event and before any rung: a polar
+        // alignment between two turns would otherwise start its next turn while a slow rung (the run abort) holds the ladder.
+        [Test]
+        public async Task Execute_LatchesTheStopInTheMount_BeforeTheEventAndTheRunAbort() {
+            var calls = new List<string>();
+            telescope.Setup(t => t.FenceMotion(It.IsAny<string>()))
+                .Callback<string>(reason => { lock (calls) { calls.Add("fence " + reason); } });
+            ws.Setup(w => w.PublishAsync(It.IsAny<OpenAstroAra.Server.Contracts.WsEvents.WsEvent>(), It.IsAny<System.Text.Json.JsonElement>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("event"); } })
+                .Returns(Task.CompletedTask);
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("abort_runs"); } }).ReturnsAsync(0);
+            telescope.Setup(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("abort"); } }).Returns(Task.CompletedTask);
+
+            await Build().ExecuteAsync();
+
+            Assert.That(calls.Take(4), Is.EqualTo(LatchFirst));
+        }
+
+        private static readonly string[] LatchFirst = { "fence emergency_stop", "event", "abort_runs", "abort" };
+
+        private static readonly string[] AlignerStoppedAgainAfterPolar = { "aligner", "polar", "aligner" };
+
+        // #2066 — polar alignment drives the Polar Aligner, and now leaves the stop to this ladder: the aligner is stopped
+        // again after it, like the mount.
+        [Test]
+        public async Task Execute_StopsThePolarAlignerAgain_AfterARunningPolarAlignmentEnds() {
+            var calls = new List<string>();
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("polar")).ReturnsAsync(Accepted);
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(p => p.IsPresent).Returns(true);
+            aligner.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => calls.Add("aligner")).ReturnsAsync(Accepted);
+
+            var result = await new EmergencyStopService(
+                camera.Object, () => sequencer.Object, guider.Object,
+                telescope.Object, flat.Object, notifications.Object, ws.Object,
+                polarAlign: polar.Object, polarAligner: aligner.Object).ExecuteAsync();
+
+            Assert.That(calls, Is.EqualTo(AlignerStoppedAgainAfterPolar));
+            Assert.That(result.FailedRungs, Is.Empty);
+        }
+
         [Test]
         public async Task Execute_ASecondMountStopThatFaults_ReportsTheMountOnce_AndNotStopped() {
             var aborts = 0;
@@ -482,7 +531,7 @@ namespace OpenAstroAra.Test {
             telescope.Setup(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             var polar = new Mock<IPolarAlignService>();
             polar.Setup(p => p.IsActive).Returns(true);
-            polar.Setup(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
+            polar.Setup(p => p.StopForTakeoverAsync("emergency_stop", It.IsAny<CancellationToken>())).ReturnsAsync(Accepted);
 
             var result = await new EmergencyStopService(
                 camera.Object, () => sequencer.Object, guider.Object,

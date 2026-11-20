@@ -20,7 +20,8 @@ enum RefusalCause {
   counterweightLimit('counterweight-limit'),
   polarAlignMountParked('polar-align-mount-parked'),
   polarAlignUnconfirmed('polar-align-unconfirmed'),
-  polarAlignSweepLimit('polar-align-sweep-limit');
+  polarAlignSweepLimit('polar-align-sweep-limit'),
+  polarAlignMovingMount('polar-align-moving-mount');
 
   const RefusalCause(this.token);
 

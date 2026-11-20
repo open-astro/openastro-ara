@@ -11,6 +11,8 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
+import '../../support/phd2_section.dart';
+
 /// The rig the app talks to, switchable from a test.
 class _Rig extends Notifier<AraServer?> {
   @override
@@ -57,6 +59,8 @@ void main() {
     final c = ProviderContainer(overrides: [
       alpacaDeviceNamesApiProvider.overrideWithValue(names),
       activeServerProvider.overrideWith((ref) => ref.watch(_rig)),
+      // A pick edits the rig's copy of the guider settings (ADR 0015).
+      phd2FromRig(),
     ]);
     addTearDown(c.dispose);
     return c;
@@ -216,10 +220,10 @@ void main() {
       final n = c.read(phd2SettingsProvider.notifier);
       n.applyPick(pick);
       expect(
-        c.read(phd2SettingsProvider).guiderCameraAlpacaUniqueId,
+        c.read(phd2SettingsProvider).value!.guiderCameraAlpacaUniqueId,
         applyGuiderPick(const Phd2Settings(), pick).guiderCameraAlpacaUniqueId,
       );
-      expect(c.read(phd2SettingsProvider).guiderAlpacaPort, 6800);
+      expect(c.read(phd2SettingsProvider).value!.guiderAlpacaPort, 6800);
     });
 
     test('an untouched first-run camera step has no pick; a bare camera name derives its endpoint', () {

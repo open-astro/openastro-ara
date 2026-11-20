@@ -20,6 +20,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
@@ -47,6 +48,7 @@ const _paths = [
   'imaging-defaults',
   'notifications',
   'optics',
+  'phd2',
   'plate-solve',
   'safety',
   'site',
@@ -63,6 +65,7 @@ final _selfLoading = {
   filterWheelPolicyProvider,
   imagingDefaultsProvider,
   opticsSettingsProvider,
+  phd2SettingsProvider,
   safetyPoliciesProvider,
   siteSettingsProvider,
 };
@@ -186,6 +189,7 @@ void main() {
         c.read(siteSettingsProvider.notifier).setLatitudeDeg(-33.856784),
     'safety': (c) =>
         c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
+    'phd2': (c) => c.read(phd2SettingsProvider.notifier).setSettleTimeSec(15),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -321,6 +325,7 @@ void main() {
       ])
         {...rigDefaults['safety']!, key: 'bogus'},
     ],
+    'phd2': [null, ...without(rigDefaults['phd2']!)],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -361,6 +366,7 @@ void main() {
     'filter-wheel/policy': 'use_filter_wheel_offsets',
     'imaging-defaults': 'cooler_target_c',
     'optics': 'focal_length_mm',
+    'phd2': 'settle_time_sec',
     'plate-solve': 'center_after_slew',
     'safety': 'meridian_pause_min',
     'site': 'latitude_deg',
@@ -470,6 +476,68 @@ void main() {
     expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
     expect((put.body as Map)['meridian_pause_min'], 12);
     expect(c.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isTrue);
+  });
+
+  test('phd2: a guide camera fill announced by profile.updated reloads the '
+      'copy, so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own guider save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(phd2SettingsProvider).canSave);
+    // The guider connects and the daemon fills the guide camera's pixel size
+    // and the guide train on the rig, then announces it.
+    rig.daemonWrote('phd2', {
+      ...rigDefaults['phd2']!,
+      'guide_pixel_size': 3.75,
+      'guide_focal_length': 128,
+    });
+    await applyProfileUpdated(c, 'phd2');
+    c.read(phd2SettingsProvider.notifier).setSettleTimeSec(15);
+    await c.read(phd2SettingsProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, '"phd2-v2"', reason: 'the tag of the copy the daemon wrote');
+    final body = put.body as Map;
+    expect(body['guide_pixel_size'], 3.75, reason: 'the daemon\'s fill is kept');
+    expect(body['settle_time_sec'], 15);
+  });
+
+  test('phd2: a guide camera fill announced moments after this device\'s own '
+      'guider save still lands, so the next Save is not refused (ADR 0015)', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(phd2SettingsProvider).canSave);
+    final guider = c.read(phd2SettingsProvider.notifier);
+    // Settings → Guider's Connect saves the pending edit, then connects.
+    guider.setSettleTimeSec(12);
+    await guider.save(rig.api());
+    expect(ProfileApi.wroteRecently('phd2'), isTrue);
+    await applyProfileUpdated(c, 'phd2'); // that save's own announcement
+    // The guider connects within the same moments; the daemon fills the guide
+    // camera's pixel size and the guide train, then announces it.
+    rig.daemonWrote('phd2', {
+      ...rig.sectionOf('phd2')! as Map,
+      'guide_pixel_size': 3.75,
+      'guide_focal_length': 128,
+    });
+    final filled = rig.etagOf('phd2');
+    await applyProfileUpdated(c, 'phd2');
+    expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75);
+    guider.setSettleTimeSec(15);
+    await guider.save(rig.api());
+    expect(rig.puts.last.ifMatch, filled, reason: 'the tag of the copy the daemon wrote');
+    expect((rig.puts.last.body as Map)['guide_focal_length'], 128);
+  });
+
+  test('phd2: a rig copy from before the Dec split reads Dec as RA, and an '
+      'Automatic guider profile as 0 (ADR 0015)', () async {
+    final rig = FakeSectionRig({
+      'phd2': {...rigDefaults['phd2']!, 'minimum_move': 0.3},
+    });
+    final c = _container(rig);
+    await settle(() => c.read(phd2SettingsProvider).canSave);
+    final v = c.read(phd2SettingsProvider).value!;
+    expect(v.decMinimumMove, 0.3);
+    expect(v.guiderProfileId, 0);
   });
 
   // The re-arm POST answers the rig's policies with their new tag.

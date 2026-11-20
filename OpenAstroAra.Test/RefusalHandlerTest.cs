@@ -52,6 +52,7 @@ namespace OpenAstroAra.Test {
             new object[] { "polar-align-mount-parked", 409, Array.Empty<string>() },
             new object[] { "polar-align-unconfirmed", 409, new[] { "direction" } },
             new object[] { "polar-align-sweep-limit", 409, new[] { "offset_deg", "limit_deg" } },
+            new object[] { "polar-align-moving-mount", 409, Array.Empty<string>() },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };

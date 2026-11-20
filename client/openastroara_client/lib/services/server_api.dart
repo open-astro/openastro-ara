@@ -87,11 +87,11 @@ class ServerApi {
   /// §35.3 — trigger the daemon's emergency stop (abort runs → stop
   /// mount → abort exposure → stop guiding → flat panel light off). Synchronous on
   /// the server: the response reports honestly what each rung did. The
-  /// receive timeout outlasts the ladder's worst case (15 rungs at 10 s).
+  /// receive timeout outlasts the ladder's worst case (17 rungs at 10 s, #2066).
   Future<EmergencyStopResult> emergencyStop() async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/server/emergency-stop',
-      options: Options(receiveTimeout: const Duration(seconds: 160)),
+      options: Options(receiveTimeout: const Duration(seconds: 180)),
     );
     return EmergencyStopResult.fromJson(res.data ?? const {});
   }

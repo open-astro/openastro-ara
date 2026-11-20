@@ -2,14 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
+import '../../support/phd2_section.dart';
+
 void main() {
   group('Phd2SettingsNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    // The setters edit the rig's copy (ADR 0015): start from one.
+    setUp(() => container = ProviderContainer(overrides: [phd2FromRig()]));
     tearDown(() => container.dispose());
 
     test('defaults match playbook §63', () {
-      final s = container.read(phd2SettingsProvider);
+      final s = container.read(phd2SettingsProvider).value!;
       expect(s.host, 'localhost');
       expect(s.port, 4400);
       expect(s.phd2Profile, 'Default');
@@ -40,22 +43,22 @@ void main() {
     test('setGuideCameraGain accepts 0..100 and rejects anything outside', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuideCameraGain(30);
-      expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
+      expect(container.read(phd2SettingsProvider).value!.guideCameraGain, 30);
       n.setGuideCameraGain(101);
       n.setGuideCameraGain(-1);
-      expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
+      expect(container.read(phd2SettingsProvider).value!.guideCameraGain, 30);
       n.setGuideCameraGain(0);
-      expect(container.read(phd2SettingsProvider).guideCameraGain, 0);
+      expect(container.read(phd2SettingsProvider).value!.guideCameraGain, 0);
     });
 
     test('setGuideExposureMs accepts 0 (= unset) and rejects negative', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuideExposureMs(500);
-      expect(container.read(phd2SettingsProvider).guideExposureMs, 500);
+      expect(container.read(phd2SettingsProvider).value!.guideExposureMs, 500);
       n.setGuideExposureMs(-1);
-      expect(container.read(phd2SettingsProvider).guideExposureMs, 500);
+      expect(container.read(phd2SettingsProvider).value!.guideExposureMs, 500);
       n.setGuideExposureMs(0);
-      expect(container.read(phd2SettingsProvider).guideExposureMs, 0);
+      expect(container.read(phd2SettingsProvider).value!.guideExposureMs, 0);
     });
 
     test('guide exposure choices are the guider\'s list, labelled in seconds', () {
@@ -75,12 +78,12 @@ void main() {
     test('§63.19 setGuiderSetupType accepts known tokens, normalizes case', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuiderSetupType('oag');
-      expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
+      expect(container.read(phd2SettingsProvider).value!.guiderSetupType, 'oag');
       n.setGuiderSetupType('guide_scope');
       expect(
-          container.read(phd2SettingsProvider).guiderSetupType, 'guide_scope');
+          container.read(phd2SettingsProvider).value!.guiderSetupType, 'guide_scope');
       n.setGuiderSetupType('  OAG  ');
-      expect(container.read(phd2SettingsProvider).guiderSetupType, 'oag');
+      expect(container.read(phd2SettingsProvider).value!.guiderSetupType, 'oag');
     });
 
     test('#1715 leaving the OAG train drops the guide focal length it derived from the main scope', () {
@@ -88,22 +91,22 @@ void main() {
       n.setGuiderSetupType('oag');
       n.setGuideFocalLength(375);
       n.setGuiderSetupType('oag');
-      expect(container.read(phd2SettingsProvider).guideFocalLength, 375);
+      expect(container.read(phd2SettingsProvider).value!.guideFocalLength, 375);
       n.setGuiderSetupType('guide_scope');
-      expect(container.read(phd2SettingsProvider).guideFocalLength, 0);
+      expect(container.read(phd2SettingsProvider).value!.guideFocalLength, 0);
     });
 
     test('§63.19 leaving the OAG train drops the guider rotator', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuiderSetupType('oag');
       n.setGuiderRotator('Alpaca Rotator [localhost:6800/0]');
-      expect(container.read(phd2SettingsProvider).guiderRotator,
+      expect(container.read(phd2SettingsProvider).value!.guiderRotator,
           'Alpaca Rotator [localhost:6800/0]');
       n.setGuiderSetupType('oag'); // re-asserting OAG keeps it
-      expect(container.read(phd2SettingsProvider).guiderRotator,
+      expect(container.read(phd2SettingsProvider).value!.guiderRotator,
           'Alpaca Rotator [localhost:6800/0]');
       n.setGuiderSetupType('guide_scope');
-      expect(container.read(phd2SettingsProvider).guiderRotator, '');
+      expect(container.read(phd2SettingsProvider).value!.guiderRotator, '');
       expect(Phd2SettingsNotifier.usesGuideCameraRotator('oag'), isTrue);
       expect(Phd2SettingsNotifier.usesGuideCameraRotator('guide_scope'),
           isFalse);
@@ -115,7 +118,7 @@ void main() {
       n.setGuiderSetupType('oag');
       n.setGuiderSetupType('newtonian_oag_v2');
       expect(
-          container.read(phd2SettingsProvider).guiderSetupType, 'guide_scope');
+          container.read(phd2SettingsProvider).value!.guiderSetupType, 'guide_scope');
       expect(Phd2SettingsNotifier.normalizeGuiderSetupType(''), 'guide_scope');
       expect(Phd2SettingsNotifier.normalizeGuiderSetupType('bogus'),
           'guide_scope');
@@ -130,7 +133,7 @@ void main() {
       n.setGuiderAuxMount(' INDI Mount ');
       n.setGuiderRotator(' Alpaca Rotator ');
       n.setGuiderAlpacaHost(' 192.168.1.20 ');
-      var s = container.read(phd2SettingsProvider);
+      var s = container.read(phd2SettingsProvider).value!;
       expect(s.guiderCamera, 'ZWO ASI120MM');
       expect(s.guiderCameraId, 'cam-1');
       expect(s.guiderMount, 'On-camera');
@@ -141,7 +144,7 @@ void main() {
       // Empty is a valid value — it clears the selection back to daemon default.
       n.setGuiderCamera('  ');
       n.setGuiderAlpacaHost('');
-      s = container.read(phd2SettingsProvider);
+      s = container.read(phd2SettingsProvider).value!;
       expect(s.guiderCamera, '');
       expect(s.guiderAlpacaHost, '');
     });
@@ -149,21 +152,21 @@ void main() {
     test('setGuiderAlpacaPort accepts 0 (= unset) and rejects out-of-range', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setGuiderAlpacaPort(11111);
-      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 11111);
+      expect(container.read(phd2SettingsProvider).value!.guiderAlpacaPort, 11111);
       n.setGuiderAlpacaPort(-1);
       n.setGuiderAlpacaPort(65536);
-      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 11111);
+      expect(container.read(phd2SettingsProvider).value!.guiderAlpacaPort, 11111);
       n.setGuiderAlpacaPort(0);
-      expect(container.read(phd2SettingsProvider).guiderAlpacaPort, 0);
+      expect(container.read(phd2SettingsProvider).value!.guiderAlpacaPort, 0);
     });
 
     test('setHost trims + rejects empty', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setHost('');
       n.setHost('   ');
-      expect(container.read(phd2SettingsProvider).host, 'localhost');
+      expect(container.read(phd2SettingsProvider).value!.host, 'localhost');
       n.setHost('  192.168.1.50  ');
-      expect(container.read(phd2SettingsProvider).host, '192.168.1.50');
+      expect(container.read(phd2SettingsProvider).value!.host, '192.168.1.50');
     });
 
     test('setPort rejects privileged + out-of-range', () {
@@ -172,9 +175,9 @@ void main() {
       n.setPort(80);
       n.setPort(1023);
       n.setPort(65536);
-      expect(container.read(phd2SettingsProvider).port, 4400);
+      expect(container.read(phd2SettingsProvider).value!.port, 4400);
       n.setPort(4401);
-      expect(container.read(phd2SettingsProvider).port, 4401);
+      expect(container.read(phd2SettingsProvider).value!.port, 4401);
     });
 
     test('positive-only setters reject zero/negative', () {
@@ -183,7 +186,7 @@ void main() {
       n.setDitherEveryNFrames(-1);
       n.setSettleTimeoutSec(0);
       n.setSettleTimeoutSec(-1);
-      final s = container.read(phd2SettingsProvider);
+      final s = container.read(phd2SettingsProvider).value!;
       expect(s.ditherEveryNFrames, 1);
       expect(s.settleTimeoutSec, 60);
     });
@@ -193,26 +196,26 @@ void main() {
       n.setDitherPixels(-1);
       n.setSettlePixels(-1);
       n.setSettleTimeSec(-1);
-      final s = container.read(phd2SettingsProvider);
+      final s = container.read(phd2SettingsProvider).value!;
       expect(s.ditherPixels, 5.0);
       expect(s.settlePixels, 1.5);
       expect(s.settleTimeSec, 10);
       // Zero is allowed (instant settle).
       n.setSettleTimeSec(0);
-      expect(container.read(phd2SettingsProvider).settleTimeSec, 0);
+      expect(container.read(phd2SettingsProvider).value!.settleTimeSec, 0);
     });
 
     test('boolean toggles assign directly', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setDitherEnabled(false);
       n.setForceCalibrationEachSession(true);
-      final s = container.read(phd2SettingsProvider);
+      final s = container.read(phd2SettingsProvider).value!;
       expect(s.ditherEnabled, isFalse);
       expect(s.forceCalibrationEachSession, isTrue);
     });
 
     test('§63.5 guider-engine defaults', () {
-      final s = container.read(phd2SettingsProvider);
+      final s = container.read(phd2SettingsProvider).value!;
       expect(s.guideFocalLength, 0);
       expect(s.guidePixelSize, 0);
       expect(s.raAggressiveness, 0.7);
@@ -227,28 +230,28 @@ void main() {
       // Aggressiveness rejects outside [0,1].
       n.setRaAggressiveness(1.5);
       n.setRaAggressiveness(-0.1);
-      expect(container.read(phd2SettingsProvider).raAggressiveness, 0.7);
+      expect(container.read(phd2SettingsProvider).value!.raAggressiveness, 0.7);
       n.setRaAggressiveness(0.85);
-      expect(container.read(phd2SettingsProvider).raAggressiveness, 0.85);
+      expect(container.read(phd2SettingsProvider).value!.raAggressiveness, 0.85);
       // Focal / pixel / min-move reject negatives.
       n.setGuideFocalLength(-5);
       n.setMinimumMove(-1);
       n.setDecMinimumMove(-1);
-      expect(container.read(phd2SettingsProvider).guideFocalLength, 0);
-      expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
-      expect(container.read(phd2SettingsProvider).decMinimumMove, 0.15);
+      expect(container.read(phd2SettingsProvider).value!.guideFocalLength, 0);
+      expect(container.read(phd2SettingsProvider).value!.minimumMove, 0.15);
+      expect(container.read(phd2SettingsProvider).value!.decMinimumMove, 0.15);
       n.setDecMinimumMove(0.3);
-      expect(container.read(phd2SettingsProvider).decMinimumMove, 0.3, reason: '#1156 — Dec has its own dead band');
+      expect(container.read(phd2SettingsProvider).value!.decMinimumMove, 0.3, reason: '#1156 — Dec has its own dead band');
       n.setGuideFocalLength(250);
-      expect(container.read(phd2SettingsProvider).guideFocalLength, 250);
+      expect(container.read(phd2SettingsProvider).value!.guideFocalLength, 250);
     });
 
     test('§63.5 setDecGuideMode normalizes + rejects unknown', () {
       final n = container.read(phd2SettingsProvider.notifier);
       n.setDecGuideMode('NORTH'); // case-insensitive
-      expect(container.read(phd2SettingsProvider).decGuideMode, 'north');
+      expect(container.read(phd2SettingsProvider).value!.decGuideMode, 'north');
       n.setDecGuideMode('sideways'); // unknown → rejected, keeps prior
-      expect(container.read(phd2SettingsProvider).decGuideMode, 'north');
+      expect(container.read(phd2SettingsProvider).value!.decGuideMode, 'north');
     });
   });
 }
