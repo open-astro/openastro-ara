@@ -12,11 +12,13 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -359,6 +361,64 @@ namespace OpenAstroAra.Test {
             kernel.Synced = false;
             Assert.That(svc.TryGetTrustedUtc(out var pushed), Is.True);
             Assert.That(pushed, Is.EqualTo(T0.AddSeconds(10)), "the client push, carried forward on the monotonic clock");
+        }
+
+        // ─── #2087 review: a client sync carried for over a day with no NTP is logged once a day ───
+
+        private sealed class WarningLog : ILogger<TimeSyncService> {
+            public List<string> Warnings { get; } = [];
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(LogLevel logLevel) => true;
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel == LogLevel.Warning) {
+                    lock (Warnings) { Warnings.Add(formatter(state, exception)); }
+                }
+            }
+        }
+
+        private static long Hours(double h) => (long)TimeSpan.FromHours(h).TotalMilliseconds;
+
+        [Test]
+        public async Task A_client_sync_over_a_day_old_with_no_NTP_is_logged_once_a_day() {
+            var log = new WarningLog();
+            long tick = 0;
+            var svc = new TimeSyncService(log, new FakeClockSetter(), kernelClock: new FakeKernelClock { Synced = false }) {
+                Now = () => T0,
+                TickMs = () => tick,
+            };
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+            tick = Hours(23);
+            Assert.That(svc.TryGetTrustedUtc(out _), Is.True);
+            Assert.That(log.Warnings, Is.Empty, "under a day old");
+
+            tick = Hours(25);
+            Assert.That(svc.TryGetTrustedUtc(out var utc), Is.True, "still trusted: a log, no expiry");
+            Assert.That(utc, Is.EqualTo(T0.AddHours(25)));
+            Assert.That(log.Warnings, Has.Count.EqualTo(1));
+            Assert.That(log.Warnings[0], Does.Contain("last synced from the app 25 h ago and NTP is not running"));
+
+            tick = Hours(48);
+            svc.TryGetTrustedUtc(out _);
+            Assert.That(log.Warnings, Has.Count.EqualTo(1), "once a day, not on every read");
+
+            tick = Hours(49);
+            svc.TryGetTrustedUtc(out _);
+            Assert.That(log.Warnings, Has.Count.EqualTo(2));
+            Assert.That(log.Warnings[1], Does.Contain("49 h ago"));
+        }
+
+        [Test]
+        public async Task A_day_old_client_sync_is_not_logged_while_NTP_keeps_the_clock() {
+            var log = new WarningLog();
+            long tick = 0;
+            var svc = new TimeSyncService(log, new FakeClockSetter(), kernelClock: new FakeKernelClock { Synced = true }) {
+                Now = () => T0,
+                TickMs = () => tick,
+            };
+            await svc.PushAsync(new TimeSyncPushRequestDto("client", T0), CancellationToken.None);
+            tick = Hours(30);
+            Assert.That(svc.TryGetTrustedUtc(out _), Is.True);
+            Assert.That(log.Warnings, Is.Empty, "NTP keeps the clock: the push's age does not matter");
         }
 
         [TestCase(0, 0x2001, 50_000L, true)] // TIME_OK, PLL + NANO, 50 ms bound: chrony or timesyncd keeping it

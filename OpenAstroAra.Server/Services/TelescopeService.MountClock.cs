@@ -76,6 +76,8 @@ public sealed partial class TelescopeService : IMountClockGate {
 
     internal const string NoTrustedTimeReason = "the rig clock has not been synced from the app, a GPS or NTP";
     private const string SlewingReason = "the mount was still slewing when Ara went to set its clock";
+    internal const string SlewWaitRefusal =
+        "Mount clock not verified: Ara is waiting for the mount to stop slewing before it sets the mount's clock. Try again when it has stopped.";
 
     // Null: no time-sync service is wired (unit tests, tools), and the gate is off.
     private readonly Func<ITimeSyncService?>? _timeSyncResolver;
@@ -84,6 +86,8 @@ public sealed partial class TelescopeService : IMountClockGate {
     private MountClockCheck? _mountClock;
     private long _mountClockSession;
     private int _mountClockPushes;
+    // 1 while a clock push waits for the mount to stop slewing before it writes the clock.
+    private int _mountClockSlewWait;
 
     /// <summary>The connected mount's clock, null when none is connected; tests swap in a fake.</summary>
     internal Func<IMountClock?>? MountClockSource { get; set; }
@@ -203,7 +207,21 @@ public sealed partial class TelescopeService : IMountClockGate {
             RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false);
             return;
         }
-        if (!await SlewEndedAsync(() => clock.Slewing).ConfigureAwait(false)) {
+        // #2087 review — while this waits out a slew (up to ~3 min), a GoTo that times out waiting for it
+        // says so. Pushes run one at a time under _sitePushGate, so one flag is enough.
+        bool slewEnded;
+        try {
+            slewEnded = await SlewEndedAsync(() => {
+                var moving = clock.Slewing;
+                if (moving) {
+                    Volatile.Write(ref _mountClockSlewWait, 1);
+                }
+                return moving;
+            }).ConfigureAwait(false);
+        } finally {
+            Volatile.Write(ref _mountClockSlewWait, 0);
+        }
+        if (!slewEnded) {
             LogMountClockSlewing(reason);
             RecordMountClock(session, verified: false, SlewingReason, alwaysLog: false);
             return;
@@ -362,6 +380,12 @@ public sealed partial class TelescopeService : IMountClockGate {
             : read.NotImplemented ? "not reported (not implemented)" : "unreadable";
 
     public string? MountClockMotionRefusal() {
+        var refusal = MountClockRefusalNow();
+        // A push in flight that waits out a slew: name the slew, not just "setting the clock".
+        return refusal is not null && Volatile.Read(ref _mountClockSlewWait) != 0 ? SlewWaitRefusal : refusal;
+    }
+
+    private string? MountClockRefusalNow() {
         if (_timeSyncResolver is null) {
             return null;
         }

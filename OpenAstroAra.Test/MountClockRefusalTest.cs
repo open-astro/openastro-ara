@@ -87,7 +87,8 @@ namespace OpenAstroAra.Test {
             public double SiderealTime => SiteAstrometry.LocalSiderealTimeDeg(new DateTimeOffset(UtcDate), 0) / 15.0;
             public double Latitude => 0;
             public double Longitude => 0;
-            public bool Slewing => false;
+            public volatile bool IsSlewing;
+            public bool Slewing => IsSlewing;
         }
 
         /// <summary>#2087 review — a connected mount whose rig clock has just been synced, with the mount-clock
@@ -98,6 +99,7 @@ namespace OpenAstroAra.Test {
             public required System.Collections.Generic.List<FakeTelescopeDevice> Devices { get; init; }
             public required TimeSyncService Time { get; init; }
             public required TelescopeService Svc { get; init; }
+            public required FollowingMountClock Clock { get; init; }
             public FakeTelescopeDevice Device { get { lock (Devices) { return Devices[^1]; } } }
 
             /// <summary>Runs the oldest held push.</summary>
@@ -136,7 +138,7 @@ namespace OpenAstroAra.Test {
                 RunSitePush = push => push(),
                 MountClockPushWait = TimeSpan.FromSeconds(10),
             };
-            var rig = new HeldPush { Time = time, Svc = svc, Devices = devices };
+            var rig = new HeldPush { Time = time, Svc = svc, Devices = devices, Clock = clock };
             svc.FollowTimeSync(time);
             await svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
             await WaitForAsync(() => svc.MountClockMotionRefusal()?.Contains("not been synced", StringComparison.Ordinal) == true,
@@ -216,6 +218,72 @@ namespace OpenAstroAra.Test {
             Assert.That(current, Is.Not.SameAs(old), "precondition: a new device");
             await WaitForAsync(() => current.Slews == 1, "the GoTo never reached the reconnected mount");
             Assert.That(old.Slews, Is.Zero, "nothing goes to the disposed device");
+        }
+
+        [Test]
+        public async Task A_sequencer_GoTo_waiting_for_the_mount_clock_goes_to_the_reconnected_mount_not_the_old_one() {
+            // #2087 review: the sequencer slew read the device before the clock wait; after a reconnect in that
+            // window it must re-read it and send the goto to the new device.
+            using var rig = await HeldPushAsync();
+            var old = rig.Device;
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+
+            await ReconnectThenReleaseAsync(rig, slew);
+            Assert.That(await slew, Is.True);
+            var current = rig.Device;
+            Assert.That(current, Is.Not.SameAs(old), "precondition: a new device");
+            Assert.That((old.Slews, current.Slews), Is.EqualTo((0, 1)), "the goto went to the reconnected mount only");
+        }
+
+        [Test]
+        public async Task A_sequencer_GoTo_waiting_for_the_mount_clock_is_not_sent_when_the_reconnected_mount_is_parked() {
+            // #2087 review: the parked check before the wait saw the old mount; the reconnected one is parked, so
+            // the slew fails cleanly and nothing is sent.
+            var connects = 0;
+            using var rig = await HeldPushAsync(configure: d => {
+                if (Interlocked.Increment(ref connects) > 1) {
+                    d.ReportsArrival = true;
+                    d.Park(); // the reconnected mount reports AtPark
+                }
+            });
+            var old = rig.Device;
+            var slew = ((ITelescopeMediator)rig.Svc).SlewToCoordinatesAsync(Target(5), CancellationToken.None);
+
+            await rig.Svc.DisconnectAsync(null, CancellationToken.None);
+            await rig.Svc.ConnectAsync(new ConnectRequestDto(Mount), null, CancellationToken.None);
+            await WaitForAsync(() => rig.Pushes.Count == 2, "the reconnect never started its clock push");
+            await WaitForAsync(() => rig.Svc.GetInfo().AtPark, "the reconnected mount never read as parked");
+            Assert.That(slew.IsCompleted, Is.False, "still waiting for the clock");
+            await rig.ReleaseAsync();
+            await rig.ReleaseAsync();
+
+            Assert.That(await slew, Is.False, "a parked mount is not slewed");
+            var current = rig.Device;
+            Assert.That(current, Is.Not.SameAs(old), "precondition: a new device");
+            Assert.That((old.Slews, current.Slews), Is.EqualTo((0, 0)), "nothing reaches either mount");
+        }
+
+        [Test]
+        public async Task A_REST_GoTo_that_times_out_while_the_clock_push_waits_out_a_slew_says_so() {
+            // #2087 review: the push waits up to ~3 min for a slew to end before it writes the mount's clock; a
+            // GoTo that gives up meanwhile names the slew instead of "setting and checking the clock".
+            using var rig = await HeldPushAsync();
+            rig.Svc.MountClockPushWait = TimeSpan.FromMilliseconds(300);
+            rig.Svc.SitePushWait = _ => Task.Delay(10);
+
+            var held = await Assert.ThrowsAsync<RefusalException>(() => rig.Svc.SlewAsync(new SlewRequestDto(5, 30), null, CancellationToken.None));
+            Assert.That(held!.Message, Does.Not.Contain("slewing"), "a push not in its slew wait keeps its own text");
+
+            rig.Clock.IsSlewing = true;
+            var pushing = rig.ReleaseAsync();
+            var waiting = await Assert.ThrowsAsync<RefusalException>(() => rig.Svc.SlewAsync(new SlewRequestDto(5, 30), null, CancellationToken.None));
+            Assert.That(waiting!.Cause, Is.EqualTo(RefusalCatalog.MountClockNotVerified));
+            Assert.That(waiting.Message, Is.EqualTo(TelescopeService.SlewWaitRefusal));
+            Assert.That(rig.Device.Slews, Is.Zero);
+
+            rig.Clock.IsSlewing = false;
+            await pushing;
+            Assert.That(rig.Svc.MountClockMotionRefusal(), Is.Null, "the push set and checked the clock once the slew ended");
         }
 
         [Test]
