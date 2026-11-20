@@ -22,7 +22,8 @@ const int kSimpleLowestMax = 60;
 const int kSimpleMeridianSpan = 30;
 
 /// One 5-unit step from [v] in direction [dir], onto the 5 grid (a value set
-/// in Advanced Mode, like 22.5, steps to 25 or 20), kept in [lo]..[hi].
+/// in Advanced Mode off the grid, like 23, steps to 25 or 20), kept in
+/// [lo]..[hi].
 int simpleLimitStep(num v, int dir, int lo, int hi) {
   final q = v / 5;
   final next = (dir > 0 ? q.floor() + 1 : q.ceil() - 1) * 5;

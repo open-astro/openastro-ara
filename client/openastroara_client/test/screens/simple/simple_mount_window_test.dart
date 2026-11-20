@@ -148,12 +148,14 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades like a result');
   });
 
-  testWidgets('the Limits group sits under the Meridian flip switch, in the window and in Settings (#2044)', (tester) async {
+  testWidgets('the Limits group sits under the rows and the pad, in the window and in Settings (#2044)', (tester) async {
     for (final inSettings in [false, true]) {
       await _pump(tester, _wire(), inSettings: inSettings);
       final flip = tester.getTopLeft(find.byKey(const Key('simple-window-row-Meridian flip')));
+      final pad = tester.getBottomLeft(find.byKey(const Key('simple-mount-pad-none')));
       final limits = tester.getTopLeft(find.byKey(const Key('simple-mount-limits')));
       expect(limits.dy, greaterThan(flip.dy));
+      expect(limits.dy, greaterThan(pad.dy), reason: 'the pad stays at the top');
       expect(find.text('LIMITS'), findsOneWidget);
     }
   });

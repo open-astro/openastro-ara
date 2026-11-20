@@ -319,6 +319,17 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
     state = state.copyWith(meridianPauseMin: v);
   }
 
+  /// #2044 — the flip window after the meridian (Advanced rows).
+  void setMinutesAfterMeridian(int v) {
+    if (v < 0) return;
+    state = state.copyWith(minutesAfterMeridian: v);
+  }
+
+  void setMaxMinutesAfterMeridian(int v) {
+    if (v < 0) return;
+    state = state.copyWith(maxMinutesAfterMeridian: v);
+  }
+
   /// #2044 — Simple Mode's signed "At the meridian" (see [meridianTimingMin]).
   void setMeridianTimingMin(int v) => state = withMeridianTimingMin(state, v);
 

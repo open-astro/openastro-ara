@@ -58,10 +58,12 @@ namespace OpenAstroAra.Test {
             public Mock<ISequencerService> Sequencer { get; } = new();
             public List<(string Event, JsonElement Payload)> Published { get; } = [];
             public MeridianStopWatch Watch { get; }
+            public TelescopeInfo Info { get; set; }
 
             public Rig(SafetyPoliciesDto safety, TelescopeInfo info, IReadOnlyList<Guid>? paused = null) {
                 Profiles.Setup(p => p.GetSafetyPolicies()).Returns(safety);
-                Mount.Setup(m => m.GetInfo()).Returns(info);
+                Info = info;
+                Mount.Setup(m => m.GetInfo()).Returns(() => Info);
                 Mount.Setup(m => m.SetTrackingEnabled(false)).Returns(true);
                 Sequencer.Setup(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()))
                     .ReturnsAsync(paused ?? [Guid.NewGuid()]);
@@ -139,6 +141,21 @@ namespace OpenAstroAra.Test {
             rig.Mount.Verify(m => m.SetTrackingEnabled(false), Times.Once);
             Assert.That(rig.Published, Has.Count.EqualTo(1));
             Assert.That(rig.Published[0].Payload.GetProperty("runs_paused").GetInt32(), Is.Zero);
+        }
+
+        [Test]
+        public async Task It_rearms_once_the_pointing_leaves_the_window() {
+            // In the window, out of it (past the meridian, or a slew to the next target), back in: a second trip.
+            var rig = new Rig(Safety(flipAuto: false, stopBefore: 10), Tracking(9));
+            await rig.Watch.TickAsync(CancellationToken.None);
+            rig.Info = Tracking(60);
+            await rig.Watch.TickAsync(CancellationToken.None);
+            rig.Info = Tracking(8);
+            await rig.Watch.TickAsync(CancellationToken.None);
+
+            rig.Mount.Verify(m => m.SetTrackingEnabled(false), Times.Exactly(2));
+            rig.Sequencer.Verify(s => s.PauseActiveRunsAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+            Assert.That(rig.Published, Has.Count.EqualTo(2));
         }
 
         [Test]
