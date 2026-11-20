@@ -125,6 +125,7 @@ class PolarAlignLive {
     PolarAlignerRun? correction,
     bool clearCorrection = false,
     String? readoutCaution,
+    bool clearReadoutCaution = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -151,39 +152,15 @@ class PolarAlignLive {
         checkResult: checkResult ?? this.checkResult,
         correction: clearCorrection ? null : correction ?? this.correction,
         // The readout's own caution goes with it.
-        readoutCaution: clearReadout ? null : readoutCaution ?? this.readoutCaution,
+        readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
       );
-}
-
-extension on PolarAlignLive {
-  /// Every progress event says the readout's caution afresh (null = sound).
-  PolarAlignLive withReadoutCaution(String? caution) => caution == readoutCaution
-      ? this
-      : PolarAlignLive(
-          phase: phase,
-          iteration: iteration,
-          altErrorArcmin: altErrorArcmin,
-          azErrorArcmin: azErrorArcmin,
-          totalErrorArcmin: totalErrorArcmin,
-          zone: zone,
-          consecutiveSolveFailures: consecutiveSolveFailures,
-          errorReason: errorReason,
-          errorMessage: errorMessage,
-          frameStartedAt: frameStartedAt,
-          frameExposureSeconds: frameExposureSeconds,
-          lastFrame: lastFrame,
-          stage: stage,
-          waitingForHome: waitingForHome,
-          checkSolvesDone: checkSolvesDone,
-          checkSolvesTotal: checkSolvesTotal,
-          checkResult: checkResult,
-          correction: correction,
-          readoutCaution: caution,
-        );
 }
 
 double? _num(Map<String, dynamic> payload, String key) =>
     (payload[key] as num?)?.toDouble();
+
+String? _str(Map<String, dynamic> payload, String key) =>
+    payload[key] is String ? payload[key] as String : null;
 
 /// Pure fold of one WS event into the live routine view. Returns null when the
 /// event is not a `polar_align.*` event (no state write). [now] stamps a
@@ -256,8 +233,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
-      ).withReadoutCaution(
-        event.payload['readout_caution'] is String ? event.payload['readout_caution'] as String : null,
+        // Every progress event says the readout's caution afresh (absent = sound).
+        readoutCaution: _str(event.payload, 'readout_caution'),
+        clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(

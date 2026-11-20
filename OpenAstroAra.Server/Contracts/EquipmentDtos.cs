@@ -1011,7 +1011,7 @@ public sealed record PolarAlignStateDto(
     // drive the one it has, or before the run's first measurement.
     PolarAlignCorrectionDto? Correction = null,
     // #2072 — a caution on the live readout from the last seed (PolarAlignReadoutCautions), also on each
-    // polar_align.progress event; null when the readout is sound or before the first seed.
+    // polar_align.progress event; null when the readout is sound, before the first seed, and outside adjusting/paused.
     string? ReadoutCaution = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>

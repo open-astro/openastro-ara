@@ -1839,7 +1839,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_mount_that_keeps_tracking_ends_the_live_readout_as_tracking_not_off() {
             // #2072 — the mount accepts tracking off and keeps tracking: the readout would take its turn for knob motion.
-            var (mount, calls) = TrackingMount(tracking: true, onSet: on => on);
+            var (mount, calls) = TrackingMount(tracking: true, onSet: _ => true);
             var fake = NewFake();
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
@@ -1856,6 +1856,49 @@ namespace OpenAstroAra.Test {
                 "caught before the first live frame, not by the per-frame check");
             Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress), Is.False, "no readout was shown");
             Assert.That(calls, Does.Contain("tracking False"), "the routine did ask for tracking off");
+        }
+
+        [Test]
+        public async Task A_mount_that_refuses_tracking_off_ends_the_run_at_once_as_tracking_not_off() {
+            // #2072 — the write is refused (a driver fault) and the mount still reads tracking on: no 10 s wait.
+            var (mount, _) = TrackingMount(tracking: true, onSet: on => on);
+            var ws = new WsRecorder();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(NewFake(), solver, mount, ws);
+            svc.TrackingConfirmTimeout = TimeSpan.FromMinutes(5); // a wait for the confirm would time the test out
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
+            Assert.That(failure.GetProperty("message").GetString(), Does.Contain("refused tracking off"));
+        }
+
+        [Test]
+        public async Task A_weak_seed_puts_the_caution_on_each_progress_event_and_the_status_while_adjusting() {
+            // #2072 — the wire the clients read: every seed in the weak band (the threshold raised past 1).
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), solver, ws: ws);
+            svc.WeakReadoutCosPsi = 1.01;
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, 2).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            var progress = ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignProgress).Select(e => e.Payload).ToArray();
+            Assert.That(progress.Select(p => p.GetProperty("readout_caution").GetString()),
+                Is.All.EqualTo(PolarAlignReadoutCautions.AltitudeWeak), "the seed's event and every live frame's");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution,
+                Is.EqualTo(PolarAlignReadoutCautions.AltitudeWeak));
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution, Is.Null,
+                "no caution outside a live readout");
         }
 
         [Test]
@@ -1881,14 +1924,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_seed_due_east_of_the_pole_cautions_the_readout_and_a_seed_facing_it_clears_it() {
-            // #2072 — the readout reads the altitude bolt poorly near ψ = ±90°: the status says so until the next seed.
+        public void A_seed_due_east_of_the_pole_cautions_the_readout_and_a_seed_facing_it_clears_it() {
+            // #2072 — the readout reads the altitude bolt poorly near ψ = ±90°: a seed there cautions it, the next
+            // seed facing the pole clears it (the wire is A_weak_seed_puts_the_caution_on_each_progress_event…).
             using var svc = NewService(NewFake(), new ScriptedSolver());
-            svc.NoteReadoutReference(gen: 0, (AltDeg: 30.0, AzDeg: 88.0), latitudeDeg: SiteLatDeg);
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution,
+            Assert.That(svc.NoteReadoutReference(gen: 0, (AltDeg: 30.0, AzDeg: 88.0), latitudeDeg: SiteLatDeg),
                 Is.EqualTo(PolarAlignReadoutCautions.AltitudeWeak));
-            svc.NoteReadoutReference(gen: 0, (AltDeg: 40.0, AzDeg: 5.0), latitudeDeg: SiteLatDeg);
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution, Is.Null);
+            Assert.That(svc.NoteReadoutReference(gen: 0, (AltDeg: 30.0, AzDeg: 101.0), latitudeDeg: SiteLatDeg),
+                Is.EqualTo(PolarAlignReadoutCautions.AltitudeWeak), "|cos ψ| 0.19, inside the 0.2 band");
+            Assert.That(svc.NoteReadoutReference(gen: 0, (AltDeg: 40.0, AzDeg: 5.0), latitudeDeg: SiteLatDeg), Is.Null);
+            Assert.That(svc.NoteReadoutReference(gen: 0, (AltDeg: 30.0, AzDeg: 77.0), latitudeDeg: SiteLatDeg), Is.Null,
+                "|cos ψ| 0.22, outside the band");
         }
 
         [Test]

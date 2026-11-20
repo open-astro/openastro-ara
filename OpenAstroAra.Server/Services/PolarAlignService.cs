@@ -222,7 +222,8 @@ namespace OpenAstroAra.Server.Services {
                     CheckResult: _checkResult,
                     LastResult: _lastResult,
                     Correction: _aligner,
-                    ReadoutCaution: _readoutCaution));
+                    // #2072 — the caution describes a live readout: shown only while one runs.
+                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null));
             }
         }
 

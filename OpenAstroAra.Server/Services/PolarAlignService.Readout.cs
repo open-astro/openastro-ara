@@ -40,6 +40,10 @@ namespace OpenAstroAra.Server.Services {
             "the mount kept tracking after Polar Align turned tracking off, so the live readout cannot tell a knob turn " +
             "from the mount's own motion — check that the mount accepts tracking off, then start again";
 
+        private const string TrackingRefusedMessage =
+            "the mount refused tracking off, so the live readout cannot tell a knob turn from the mount's own motion — " +
+            "check that the mount accepts tracking off, then start again";
+
         private const string TrackingCameOnMessage =
             "the mount started tracking during the live readout, so the readout no longer shows only your knob turns — " +
             "something turned tracking on (the hand pad, another app, the mount's firmware); start again";
@@ -47,24 +51,33 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>Under this |cos ψ| the readout's altitude reading amplifies solve noise five times or more, and under
         /// <see cref="PolarAlignGeometry.ReadoutCosPsiFloor"/> it under-reads the altitude knob: the run warns
         /// (<see cref="PolarAlignReadoutCautions.AltitudeWeak"/>).</summary>
-        internal const double WeakReadoutCosPsi = 0.2;
+        internal const double DefaultWeakReadoutCosPsi = 0.2;
+
+        /// <summary><see cref="DefaultWeakReadoutCosPsi"/>; tests raise it to put any seed in the weak band.</summary>
+        internal double WeakReadoutCosPsi { get; set; } = DefaultWeakReadoutCosPsi;
 
         // The live readout's caution for the current seed (PolarAlignReadoutCautions); null when the readout is sound.
-        // Guarded by _gate; cleared per run (StartAsync) and set again by each seed.
+        // Guarded by _gate; set by each seed once tracking is confirmed off, cleared per run (StartAsync); the status shows
+        // it only while a live readout runs (adjusting or paused).
         private string? _readoutCaution;
 
-        /// <summary>Turn tracking off for a live loop and wait until the mount reports it off. A refused write counts the
-        /// same as one the mount ignores: the run fails <see cref="TrackingNotOff"/> once the confirm window ends with
-        /// tracking still on. A thrown write fails the run as before (<c>internal_error</c>). A superseded run writes
-        /// nothing.</summary>
+        /// <summary>Turn tracking off for a live loop and wait until the mount reports it off: the run fails
+        /// <see cref="TrackingNotOff"/> at once when the mount refuses the write and still reads tracking on, and once the
+        /// confirm window ends when it accepts the write and keeps tracking. A thrown write fails the run as before
+        /// (<c>internal_error</c>). A superseded run writes nothing.</summary>
         private async Task TurnTrackingOffForLiveLoopAsync(int gen, CancellationToken ct) {
             if (!TryMarkTrackingTouched(gen)) {
                 throw new OperationCanceledException("the run was superseded before it turned tracking off");
             }
+            bool accepted;
             try {
-                _mount.SetTrackingEnabled(false);
+                accepted = _mount.SetTrackingEnabled(false);
             } finally {
                 _ownTrackingWrites = _mount.TrackingWriteCount; // a refused or thrown write is still ours
+            }
+            if (!accepted && _mount.GetInfo().TrackingEnabled) {
+                LogTrackingOffRefused();
+                throw new RoutineFailedException(TrackingNotOff, TrackingRefusedMessage);
             }
             var deadline = DateTimeOffset.UtcNow + TrackingConfirmTimeout;
             while (_mount.GetInfo().TrackingEnabled) {
@@ -86,19 +99,21 @@ namespace OpenAstroAra.Server.Services {
             return false;
         }
 
-        /// <summary>Log the seed pointing the live readout is anchored to, and set or clear the readout's caution for it.</summary>
-        internal void NoteReadoutReference(int gen, (double AltDeg, double AzDeg) seedPointing, double latitudeDeg) {
+        /// <summary>Log the seed pointing the live readout is anchored to, and set or clear the readout's caution for it.
+        /// Returns the caution (<see cref="PolarAlignReadoutCautions"/>), or null for a sound readout.</summary>
+        internal string? NoteReadoutReference(int gen, (double AltDeg, double AzDeg) seedPointing, double latitudeDeg) {
             var cosPsi = PolarAlignGeometry.ReadoutCosPsi(seedPointing.AzDeg, latitudeDeg);
-            var weak = Math.Abs(cosPsi) < WeakReadoutCosPsi;
+            var caution = Math.Abs(cosPsi) < WeakReadoutCosPsi ? PolarAlignReadoutCautions.AltitudeWeak : null;
             LogReadoutReference(seedPointing.AltDeg, seedPointing.AzDeg, cosPsi);
-            if (weak) {
+            if (caution is not null) {
                 LogReadoutWeak(cosPsi, WeakReadoutCosPsi);
             }
             lock (_gate) {
                 if (_generation == gen) {
-                    _readoutCaution = weak ? PolarAlignReadoutCautions.AltitudeWeak : null;
+                    _readoutCaution = caution;
                 }
             }
+            return caution;
         }
 
         [LoggerMessage(EventId = 4590, Level = LogLevel.Information, Message = "§45 polar-align: tracking off confirmed for the live readout")]
@@ -106,6 +121,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4591, Level = LogLevel.Warning, Message = "§45 polar-align: the mount still reads tracking on {Seconds:F0} s after tracking off was sent — the run ends (tracking_not_off)")]
         private partial void LogTrackingStayedOn(double seconds);
+
+        [LoggerMessage(EventId = 4593, Level = LogLevel.Warning, Message = "§45 polar-align: the mount refused tracking off and reads tracking on — the run ends (tracking_not_off)")]
+        private partial void LogTrackingOffRefused();
 
         [LoggerMessage(EventId = 4592, Level = LogLevel.Warning, Message = "§45 polar-align live frame {FrameId}: the mount reads tracking on — the run ends (tracking_not_off)")]
         private partial void LogTrackingCameOn(string frameId);
