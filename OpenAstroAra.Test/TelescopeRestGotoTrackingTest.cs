@@ -399,6 +399,40 @@ namespace OpenAstroAra.Test {
             Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(gotoB), "the abort follows GoTo B's refusal");
         }
 
+        // #2066 — GoTo B, sent after the stop, is still waiting for the guider to stop when A's PUT returns. A's second abort
+        // would go out while B's PUT does, and could reach the mount after it: B counts as newer from its request on.
+        [Test]
+        public async Task A_GoTo_still_stopping_the_guider_is_not_aborted_by_the_raced_GoTo() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<OperationAcceptedDto>? slewB = null;
+            var gotos = 0;
+            var guiderStops = 0;
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>()))
+                .Returns(() => Interlocked.Increment(ref guiderStops) == 1 ? Task.FromResult(true) : stopDone.Task); // A's; B's waits
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                    Thread.Sleep(200); // A's PUT on the wire
+                    svc!.FenceMotion("user_request"); // a Stop Mount
+                    slewB = svc.SlewAsync(new SlewRequestDto(7.0, 7.0), idempotencyKey: null, CancellationToken.None); // held in the guider stop
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log, () => guider.Object);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("aborted again", StringComparison.Ordinal)), "the raced GoTo never finished");
+            stopDone.SetResult(true);
+            await slewB!.WaitAsync(TimeSpan.FromSeconds(15));
+            await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, "GoTo B never reached the mount");
+            Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would race GoTo B's PUT");
+        }
+
         // #2066 — the same race with a sequencer (mediator) slew sent after the stop: it is not stopped by A's second abort.
         [Test]
         public async Task A_sequencer_slew_after_the_stop_is_not_aborted_by_the_raced_GoTo() {
