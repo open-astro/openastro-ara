@@ -539,13 +539,21 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
+        // #2066 — a raced REST GoTo's second abort must not stop this move: noted from here (not from its send, after the
+        // pose check below) and settled when its call returns or throws.
+        long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
-            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
-                // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
-                // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
-                stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
+            try {
+                await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
+                    // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
+                    // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
+                    stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
+            } catch {
+                NoteMotionFailed(motion!.Value, client);
+                throw;
+            }
         }
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is
@@ -556,7 +564,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 : w => w.NoteMotionCommanded());
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
-            var opTask = Task.Run(() => action(client), CancellationToken.None);
+            var opTask = Task.Run(() => {
+                if (motion is long token) {
+                    SendMotion(token, client, () => action(client));
+                } else {
+                    action(client);
+                }
+            }, CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 linked.CancelAfter(MountOpHardTimeout);
                 var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);

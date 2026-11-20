@@ -872,17 +872,21 @@ public static partial class EquipmentEndpoints {
             .WithName("GetPolarAlignStartPlan")
             .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
             .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
-        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = coarse (main-camera solves), or fine when
-        // the coarse stage cannot run (main camera off, optics unset, no solver). The routine starts from where the mount
-        // points (no Home, no GoTo) and moves only with confirmed: true and the plan's direction (#2048); else the
-        // polar-align-unconfirmed Refusal. A parked mount is the polar-align-mount-parked Refusal.
+        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
+        // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
+        // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
+        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis. A check while the routine
+        // adjusts ends the loop first (the adjust screen's Check).
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignStartAsync(svc, body, key, ct));
-        // Next (coarse → fine, fine → check). 409 when nothing waits.
+        // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
         polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignNextAsync(svc, key, ct));
+                await PolarAlignNextAsync(svc, key, ct))
+            .WithName("PolarAlignNext")
+            .WithSummary("Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.")
+            .ProducesProblem(StatusCodes.Status409Conflict);
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
         // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
@@ -1457,6 +1461,11 @@ public static partial class EquipmentEndpoints {
         // #2066 — outside the try below, whose 409 would drop the Refusal's reason. A stop (rate 0) always goes through.
         if (request.Rate != 0) {
             ThrowIfPolarAlignMovesTheMount(polarAlign, "move");
+        } else if (polarAlign is { IsMovingMount: true }) {
+            // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
+            // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
+            // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
+            svc.FenceMotion(PolarAlignService.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

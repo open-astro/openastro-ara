@@ -1475,8 +1475,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'img.polar.check_step_deg',
     tier: SettingTier.advanced,
-    label: 'Verify step (°)',
-    description: 'The RA turn between the three frames of Verify. Kept between 5° and 30°.',
+    label: 'Check step (°)',
+    description: 'The RA turn between the three frames of a Check, which turns the mount 2 × this step. Kept between 5° and 30°.',
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),

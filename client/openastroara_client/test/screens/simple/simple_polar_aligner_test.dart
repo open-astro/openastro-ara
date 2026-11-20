@@ -36,8 +36,6 @@ class _Api implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
-  Future<void> next() async => calls.add('next');
-  @override
   Future<void> stop() async {}
   @override
   Future<void> complete() async => calls.add('complete');
@@ -197,7 +195,7 @@ void main() {
     expect(_key('simple-polar-done'), findsOneWidget);
   });
 
-  testWidgets('the rough stage keeps Next: fine but its Done steps aside while the motors work', (tester) async {
+  testWidgets("the rough stage's Done steps aside while the motors work", (tester) async {
     await _pump(
         tester,
         const PolarAlignLive(
@@ -208,8 +206,18 @@ void main() {
           totalErrorArcmin: 0.7,
           correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
         ));
-    expect(_key('simple-polar-next-fine'), findsOneWidget);
+    expect(_key('simple-polar-next-fine'), findsNothing, reason: 'one measurement per Start (#2082)');
     expect(_key('simple-polar-done-rough'), findsNothing);
+    _liveNotifier.set(const PolarAlignLive(
+      phase: PolarAlignStates.adjusting,
+      stage: PolarAlignStages.coarse,
+      altErrorArcmin: 0.5,
+      azErrorArcmin: 0.5,
+      totalErrorArcmin: 0.7,
+      correction: PolarAlignerRun(state: 'converged', moves: 2),
+    ));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-done-rough'), findsOneWidget, reason: 'back once the motors rest');
   });
 
   testWidgets('Stop motors in the panel stops them in the routine', (tester) async {

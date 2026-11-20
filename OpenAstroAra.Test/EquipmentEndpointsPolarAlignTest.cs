@@ -169,21 +169,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Next_returns_202_accepted_on_success() {
-            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.next", DateTimeOffset.UtcNow, "idem-2");
-            var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.NextAsync("idem-2", It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
-
-            var result = await EquipmentEndpoints.PolarAlignNextAsync(svc.Object, "idem-2", CancellationToken.None);
-
-            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
-        }
-
-        [Test]
         public async Task Next_with_nothing_to_advance_maps_to_409() {
             var svc = new Mock<IPolarAlignService>();
             svc.Setup(s => s.NextAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("polar alignment has nothing to advance — it is not waiting on you"));
+                .ThrowsAsync(new InvalidOperationException(PolarAlignService.NextRetiredMessage));
 
             var result = await EquipmentEndpoints.PolarAlignNextAsync(svc.Object, null, CancellationToken.None);
 
