@@ -1229,7 +1229,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>One point of a measurement (a seed or a check point): <see cref="PolarAlignSettingsDto.FramesPerPoint"/>
         /// frames with the mount still, averaged as unit vectors (#2082), with the rms scatter of the solves about their
         /// mean logged in arcseconds. A point scattered over <see cref="MaxPointScatterArcsec"/> is retaken once; still
-        /// over it, the run goes on and its result is flagged noisy (<see cref="MarkMeasurementNoisy"/>). A frame that
+        /// over it (or with no solve in the retake: the first set stands), the run goes on and its result is flagged noisy
+        /// (<see cref="MarkMeasurementNoisy"/>). A frame that
         /// does not solve is retried, up to <c>SeedSolveAttempts</c> failures per set; a set with no solve fails the
         /// routine (a seed that can't solve means clouds/focus problems the live loop can't fix either).</summary>
         /// <returns>The point's mean pointing and the mean time of its solves (the three-point fit moves each point to
@@ -1238,12 +1239,19 @@ namespace OpenAstroAra.Server.Services {
                 LiveCapture capture, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
             var frames = Math.Clamp(settings.FramesPerPoint, PolarAlignSettingsClamp.MinFramesPerPoint, PolarAlignSettingsClamp.MaxFramesPerPoint);
-            var set = await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore: 0, gen, ct).ConfigureAwait(false);
+            var set = (await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore: 0, gen, ct).ConfigureAwait(false))!;
             LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
             if (set.ScatterArcsec > MaxPointScatterArcsec) {
                 LogPointRetake(frameId, set.ScatterArcsec, MaxPointScatterArcsec);
-                set = await SolvePointSetAsync(capture, frameId, (set.Point.RaDegJnow, set.Point.DecDegJnow), settings, frames,
-                    attemptsBefore: set.Attempts, gen, ct).ConfigureAwait(false);
+                var retake = await SolvePointSetAsync(capture, frameId, (set.Point.RaDegJnow, set.Point.DecDegJnow), settings, frames,
+                    attemptsBefore: set.Attempts, gen, ct, retake: true).ConfigureAwait(false);
+                if (retake is null) {
+                    // The retake did not solve (a cloud): the first set still stands for the point, flagged noisy.
+                    LogPointRetakeUnsolved(frameId, set.ScatterArcsec);
+                    MarkMeasurementNoisy(gen);
+                    return (set.Point, set.At);
+                }
+                set = retake;
                 LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
                 if (set.ScatterArcsec > MaxPointScatterArcsec) {
                     LogPointNoisy(frameId, set.ScatterArcsec);
@@ -1257,9 +1265,10 @@ namespace OpenAstroAra.Server.Services {
         private sealed record PointSet(PolarAlignSolveOutcome Point, DateTimeOffset At, int Solved, int Failed, double ScatterArcsec, int Attempts);
 
         /// <param name="attemptsBefore">The frames this point took already (a retake): frame ids stay unique.</param>
-        private async Task<PointSet> SolvePointSetAsync(
+        /// <param name="retake">A retake: a set with no solve returns null (the first set stands) and keeps no frame.</param>
+        private async Task<PointSet?> SolvePointSetAsync(
                 LiveCapture capture, string frameId, (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings,
-                int frames, int attemptsBefore, int gen, CancellationToken ct) {
+                int frames, int attemptsBefore, int gen, CancellationToken ct, bool retake = false) {
             var anyFrameReachedSolver = false;
             string? keptFrame = null;
             var solves = new List<(PolarAlignSolveOutcome S, DateTimeOffset At)>(frames);
@@ -1269,7 +1278,7 @@ namespace OpenAstroAra.Server.Services {
             while (solves.Count < frames && failed < SeedSolveAttempts) {
                 attempt++;
                 // The frame kept for the focal-length measurement: the last one a set with no solve may take.
-                var timing = new FrameTiming { KeepUnsolvedFrame = solves.Count == 0 && failed == SeedSolveAttempts - 1 };
+                var timing = new FrameTiming { KeepUnsolvedFrame = !retake && solves.Count == 0 && failed == SeedSolveAttempts - 1 };
                 // One id per frame, on frame_started and frame_complete alike.
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
                 var s = await capture(attemptId, frameHint, settings, timing, ct).ConfigureAwait(false);
@@ -1301,6 +1310,9 @@ namespace OpenAstroAra.Server.Services {
                 var first = solves[0].At;
                 var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
                 return new PointSet(new PolarAlignSolveOutcome(true, ra, dec), meanAt, solves.Count, failed, scatter, attempt);
+            }
+            if (retake) {
+                return null;
             }
             string? captureFault;
             lock (_gate) {
@@ -1850,6 +1862,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4576, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: still {ScatterArcsec:F2}″ rms after the retake — the result is flagged noisy")]
         private partial void LogPointNoisy(string frame, double scatterArcsec);
+
+        [LoggerMessage(EventId = 4577, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: the retake did not solve — the first set ({ScatterArcsec:F2}″ rms) stands for the point and the result is flagged noisy")]
+        private partial void LogPointRetakeUnsolved(string frame, double scatterArcsec);
 
         [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
         private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);

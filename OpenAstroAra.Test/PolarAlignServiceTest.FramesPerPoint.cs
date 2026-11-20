@@ -42,11 +42,16 @@ namespace OpenAstroAra.Test {
         /// (the frame's file is <c>&lt;frame id&gt;.fits</c>, e.g. <c>seed-a-3</c>).</summary>
         private sealed class OffsetFrameSolver : IPolarAlignFrameSolver {
             public Dictionary<string, double> DecOffsetArcsec { get; } = new(StringComparer.Ordinal);
+            /// <summary>Frames that do not solve (a cloud), by id.</summary>
+            public HashSet<string> Unsolved { get; } = new(StringComparer.Ordinal);
             public List<string> Frames { get; } = new();
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 var frame = Path.GetFileNameWithoutExtension(fitsPath);
                 lock (Frames) {
                     Frames.Add(frame);
+                }
+                if (Unsolved.Contains(frame)) {
+                    return Task.FromResult(new PolarAlignSolveOutcome(false, 0.0, 0.0));
                 }
                 var offset = DecOffsetArcsec.TryGetValue(frame, out var arcsec) ? arcsec / 3600.0 : 0.0;
                 return Task.FromResult(new PolarAlignSolveOutcome(true, hintRa ?? 0.0, PoleMountDecDeg + offset));
@@ -124,6 +129,26 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("adjusting"));
             Assert.That(solver.Count("seed-a"), Is.EqualTo(6), "retaken once");
             Assert.That(status.MeasurementNoisy, Is.False, "the retake was steady: its frames stand for the point");
+        }
+
+        [Test]
+        public async Task A_retake_that_does_not_solve_keeps_the_first_set_and_flags_the_result_noisy() {
+            // seed-b's first set is scattered (one 10″ outlier); a cloud then hides all three retake frames. The first
+            // set's mean still stands for the point: the run goes on, flagged noisy, never seed_solve_failed.
+            var solver = new OffsetFrameSolver { DecOffsetArcsec = { ["seed-b-3"] = 10.0 }, Unsolved = { "seed-b-4", "seed-b-5", "seed-b-6" } };
+            var logger = new CapturingLogger();
+            using var svc = NewService(NewFake(), solver, NewPoleMount(), store: StoreWith(s => s with { FramesPerPoint = 3 }), logger: logger);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"), "a retake with no solve does not fail the run");
+            Assert.That(status.MeasurementNoisy, Is.True, "the point is the scattered first set: the result is noisy");
+            Assert.That(solver.Count("seed-c"), Is.EqualTo(3), "the run went on to the next point");
+            // The point is the first set's mean (85° + 10″/3 = 85.0009°), not a failure.
+            var seedB = logger.Entries.Single(e => e.EventId == 4527 && e.Message.Contains("seed-b", StringComparison.Ordinal)).Message;
+            Assert.That(seedB, Does.Contain("Dec 85.0009°"));
         }
 
         [Test]
