@@ -136,6 +136,49 @@ void main() {
       expect(folded.errorReason, 'axis_fit_failed');
       expect(folded.errorMessage, contains('fitted axis'));
     });
+
+    // #2107 the stop's name rides on the error, and never carries over to the
+    // next error that has none.
+    test('a stop from outside keeps stopped_by, and the next error drops it', () {
+      final stopped = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'the mount was stopped from the direction pad',
+          'stopped_by': 'pad_stop',
+        }),
+      )!;
+      expect(stopped.errorStoppedBy, 'pad_stop');
+      final next = foldPolarAlignEvent(
+        stopped,
+        _event(PolarAlignWsEvents.error, {'reason': 'mount_did_not_stop', 'message': 'cut power'}),
+      )!;
+      expect(next.errorStoppedBy, isNull);
+    });
+
+    // #2066 an error whose run could not confirm its stop says so, and the
+    // next error that does not say so drops it.
+    test('stop_unconfirmed rides on the error, and the next error drops it', () {
+      final unconfirmed = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped from the direction pad. Cut the mount\'s power now',
+          'stopped_by': 'pad_stop',
+          'stop_unconfirmed': true,
+        }),
+      )!;
+      expect(unconfirmed.errorStopUnconfirmed, isTrue);
+      final next = foldPolarAlignEvent(
+        unconfirmed,
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped (Stop Mount)',
+          'stopped_by': 'user_request',
+        }),
+      )!;
+      expect(next.errorStopUnconfirmed, isFalse);
+    });
   });
 
   group('liveFromStatus', () {

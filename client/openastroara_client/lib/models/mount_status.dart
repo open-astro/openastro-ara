@@ -173,8 +173,19 @@ class MountStatus extends EquipmentDeviceStatus {
   final bool positionUnverified;
 
   /// Why [positionUnverified] (`at_home_on_connect`, `pose_jump_on_reconnect`,
-  /// `at_home_without_command`, `pose_jump_in_session`); null when trusted.
+  /// `at_home_without_command`, `pose_jump_in_session`, `stop_unconfirmed`);
+  /// null when trusted.
   final String? positionUnverifiedReason;
+
+  /// #2066: the position is unverified because polar alignment could not
+  /// confirm the mount stopped (or the mount reconnected while it ran), not
+  /// because of a power loss.
+  bool get positionUnverifiedByStop =>
+      positionUnverifiedReason == stopUnconfirmedReason;
+
+  /// The `position_unverified_reason` a polar alignment's unconfirmed stop
+  /// sets (#2066).
+  static const stopUnconfirmedReason = 'stop_unconfirmed';
 
   MountStatus({
     required this.deviceId,

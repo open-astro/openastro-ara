@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_mount_panel.dart';
@@ -125,6 +126,7 @@ MountStatus _status({
   String? trackingRate,
   bool atHome = false,
   bool positionUnverified = false,
+  String unverifiedReason = 'at_home_on_connect',
 }) => MountStatus(
   deviceId: 'mount-0',
   name: 'EQ6-R',
@@ -151,7 +153,7 @@ MountStatus _status({
   atHome: atHome,
   trackingRate: trackingRate,
   positionUnverified: positionUnverified,
-  positionUnverifiedReason: positionUnverified ? 'at_home_on_connect' : null,
+  positionUnverifiedReason: positionUnverified ? unverifiedReason : null,
 );
 
 Future<void> _wideSurface(WidgetTester tester) async {
@@ -340,6 +342,15 @@ void main() {
       findsNothing,
       reason: 'the mount does not report Home yet',
     );
+  });
+
+  // #2066 polar alignment's stop was not confirmed: the warning says so, not
+  // "the mount may have lost power".
+  testWidgets('Advanced: a position left unverified by an unconfirmed stop says why', (tester) async {
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
+    expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
   });
 
   testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (

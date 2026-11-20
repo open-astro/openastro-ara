@@ -476,7 +476,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // so a watchdog-killed flip slew no longer reads as a normal slew_complete (the
         // #836 r4 follow-up from PORT_TODO).
         _ = Task.Run(
-            () => AbortSlewCoreAsync(client, reason: "watchdog", rethrow: false),
+            () => AbortSlewCoreAsync(client, reason: MountStopReasons.Watchdog, rethrow: false),
             CancellationToken.None);
     }
 
