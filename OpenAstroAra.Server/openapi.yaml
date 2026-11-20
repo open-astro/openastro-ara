@@ -15171,6 +15171,7 @@ components:
         - polar-align-moving-mount
         - polar-align-on-axis
         - first-flip-not-completed
+        - mount-clock-not-verified
         - polar-align-already-running
         - polar-align-clutch-turned
       type: string

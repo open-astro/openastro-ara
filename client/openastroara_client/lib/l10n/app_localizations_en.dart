@@ -6741,6 +6741,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarDirectionWest => 'west';
 
   @override
+  String get refusalMountClockNotVerified =>
+      'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
+
+  @override
   String get polarConfirmGuideField =>
       'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.';
 

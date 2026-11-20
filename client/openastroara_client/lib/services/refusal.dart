@@ -24,6 +24,7 @@ enum RefusalCause {
   polarAlignMovingMount('polar-align-moving-mount'),
   polarAlignOnAxis('polar-align-on-axis'),
   firstFlipNotCompleted('first-flip-not-completed'),
+  mountClockNotVerified('mount-clock-not-verified'),
   polarAlignAlreadyRunning('polar-align-already-running'),
   polarAlignClutchTurned('polar-align-clutch-turned');
 

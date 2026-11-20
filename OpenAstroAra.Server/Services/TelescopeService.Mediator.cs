@@ -321,6 +321,26 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
+            // here: refuse before anything is sent while the mount's clock is not verified.
+            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+                LogMountOpRejectedClock("telescope.slew", clockRefusal);
+                throw new SequenceEntityFailedException(clockRefusal);
+            }
+            // The wait above can span a reconnect: go on with the device connected now, never the one
+            // read before it (disposed by then), and check it again as GotoAsync did.
+            lock (_gate) {
+                var live = _lifecycle.Live;
+                if (live is null) {
+                    return false;
+                }
+                client = live;
+                parked = _runtime.Parked;
+            }
+            if (parked) {
+                LogMountOpRejectedParked("telescope.slew");
+                return false;
+            }
             // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
             // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
             // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
@@ -836,6 +856,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogMountOpRejectedParked("telescope.sync");
             return false;
         }
+        // #2071 — a sync on a wrong mount clock bakes the error into the pointing model: a clean
+        // "not synced", so the centring loop offset-compensates (its re-slew is refused in turn).
+        if (MountClockMotionRefusal() is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.sync", clockRefusal);
+            return false;
+        }
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
@@ -907,6 +933,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
+        }
+        // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
+        // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
+        if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.flip", clockRefusal);
+            throw new SequenceEntityFailedException(clockRefusal);
+        }
+        // The wait can span a reconnect: the pose check and the pier-side hint go to the device connected
+        // now, never the one read before it (disposed by then).
+        client = ConnectedClientOrNull();
+        if (client is null) {
+            return false;
         }
         // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
         await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);

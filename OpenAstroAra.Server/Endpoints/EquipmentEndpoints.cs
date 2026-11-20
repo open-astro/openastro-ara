@@ -1278,7 +1278,7 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
-            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position) keeps its own answer (RefusalHandler, ADR 0022).
+            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
