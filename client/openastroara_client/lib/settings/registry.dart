@@ -1477,6 +1477,17 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.polar_aligner_auto',
   ),
   Setting(
+    id: 'img.polar.stop_tracking_when_done',
+    tier: SettingTier.advanced,
+    label: 'Stop tracking when polar align ends',
+    description: 'Every end of a polar align run turns tracking off, as NINA does by default, so the mount cannot track into the pier while nobody watches. Off: a run that finishes gives back the tracking it found. A Stop or a failure always leaves tracking off.',
+    keywords: ['polar', 'alignment', 'tracking', 'stop', 'pier', 'collision', 'nina'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.bool(),
+    defaultValue: true,
+    profilePath: 'polar_align.stop_tracking_when_done',
+  ),
+  Setting(
     id: 'img.polar.seed_rotation_deg',
     tier: SettingTier.advanced,
     label: 'Polar align turn (°)',

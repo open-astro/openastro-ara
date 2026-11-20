@@ -146,6 +146,7 @@ void main() {
         'Turn',
         'Verify step',
         'Rough step exposure',
+        'Stop tracking when polar align ends',
       ]) {
         expect(find.textContaining(english), findsNothing, reason: english);
       }
@@ -170,6 +171,27 @@ void main() {
       expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
       expect(
         find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
+    (tester) async {
+      final rig = _Api()..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false);
+      await _pump(tester, rig: rig);
+      expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
+      expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
+      final stopTracking = find.byType(Switch).at(2);
+      expect(tester.widget<Switch>(stopTracking).value, isTrue);
+      await tester.tap(stopTracking);
+      await tester.pumpAndSettle();
+      final saved = rig.saved.single;
+      expect(saved.stopTrackingWhenDone, isFalse);
+      expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
+      expect(
+        find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
         findsOneWidget,
       );
     },

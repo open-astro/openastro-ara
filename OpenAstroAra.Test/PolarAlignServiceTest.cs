@@ -298,6 +298,13 @@ namespace OpenAstroAra.Test {
                 AxisMovePoll = TimeSpan.FromMilliseconds(1),
                 AxisSettle = TimeSpan.Zero,
                 AxisMoveStall = TimeSpan.FromMilliseconds(200),
+                // #2048: the exit's stop confirmation at bench speed (the daemon waits 2 s at least, 8 s at most).
+                StopVerifyPoll = TimeSpan.FromMilliseconds(1),
+                StopVerifyStillFor = TimeSpan.Zero,
+                StopVerifyNotBefore = TimeSpan.Zero,
+                StopResendAfter = TimeSpan.FromMilliseconds(20),
+                StopVerifyWindow = TimeSpan.FromMilliseconds(500),
+                ShutdownGrace = TimeSpan.FromSeconds(2),
             };
             Recorders.Add(svc, ws);
             return svc;
@@ -496,7 +503,9 @@ namespace OpenAstroAra.Test {
             Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
 
             releaseStartLease.SetResult();
-            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+            // #2048 — a Stop that lands while the Start still holds the lock means the Start launches no run.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => startTask).ConfigureAwait(false);
+            await stopTask.ConfigureAwait(false);
 
             Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease),
                 "the lease calls must run in call order — acquire then release — not race");
@@ -539,7 +548,9 @@ namespace OpenAstroAra.Test {
             Assert.That(progress.GetProperty("zone").GetString(), Is.EqualTo("green"));
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.Once, "Stop restores the pre-routine tracking state");
+            // #2048: stop_tracking_when_done is on by default, as NINA's, and a Stop never turns tracking back on.
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Exactly(2), "off for the adjust loop, and off again at the exit");
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.Never, "Stop does not turn tracking back on");
             Assert.That(PaCalls(fake).Last(), Is.False, "Stop releases the lease");
         }
 
@@ -1739,21 +1750,29 @@ namespace OpenAstroAra.Test {
                 "on before the seed slew, off for the adjust loop, the user's off put back");
         }
 
+        /// <summary>The bench store with <c>stop_tracking_when_done</c> off: a finished run hands tracking back.</summary>
+        private static InMemoryProfileStore HandBackStore() {
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = false });
+            return store;
+        }
+
         [TestCase(true)]
         [TestCase(false)]
-        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_on_at_Stop(bool sameValueAsRoutine) {
-            // A sequence's Set Tracking writes while the run is live; the exit must not turn it off again.
+        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_as_set_at_Done_with_hand_back(bool sameValueAsRoutine) {
+            // A sequence's Set Tracking writes while the run is live; with stop_tracking_when_done off, Done hands
+            // tracking back, and that hand-back must not undo the other caller's write.
             // sameValueAsRoutine: the other caller writes the value the routine itself last wrote (off).
             var (mount, calls) = TrackingMount(tracking: false);
             var fake = NewFake();
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount);
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             mount.Object.SetTrackingEnabled(!sameValueAsRoutine);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(string.Join(", ", calls), Is.EqualTo(
                 $"tracking True, slew tracking=True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
@@ -1761,19 +1780,19 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Stop() {
+        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Done_with_hand_back() {
             // Drives the real instruction, so the test follows the mediator member the sequence uses.
             var (mount, calls) = TrackingMount(tracking: false);
             var fake = NewFake();
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount);
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             await new SetTracking(mount.Object) { TrackingMode = TrackingMode.Sidereal }
                 .Execute(null!, CancellationToken.None).ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking True"),
                 "the sequence's Sidereal stays on: no restore to off after it");
@@ -1819,17 +1838,18 @@ namespace OpenAstroAra.Test {
 
             await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("slew tracking=True, slew tracking=True, tracking False, tracking True"));
+            // Untouched until the adjust loop turns it off; Stop then leaves it off (#2048), it does not turn it back on.
+            Assert.That(string.Join(", ", calls), Is.EqualTo("slew tracking=True, slew tracking=True, tracking False, tracking False"));
         }
 
         [Test]
-        public async Task Tracking_dropped_before_the_seed_slew_is_turned_back_on_and_left_on() {
+        public async Task Tracking_dropped_before_the_seed_slew_is_turned_back_on_for_the_turns() {
             var (mount, calls) = TrackingMount(tracking: true, dropAtPointingRead: 1);
 
             await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking True"),
-                "the user had it on, so Stop leaves it on");
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking False"),
+                "on again for the turns; the user had it on, but a Stop never turns it back on (#2048)");
         }
 
         [TestCase("refused")]
@@ -2173,6 +2193,7 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.CoarseExposureSeconds, Is.EqualTo(3.0));
             Assert.That(defaults.UseHome, Is.True);
             Assert.That(defaults.PolarAlignerAuto, Is.True, "#1971: a rig with a Polar Aligner uses it unless told not to");
+            Assert.That(defaults.StopTrackingWhenDone, Is.True, "#2048: tracking off at the end of a run, as NINA's default");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
 
@@ -2411,14 +2432,18 @@ namespace OpenAstroAra.Test {
             var position = new Coordinates(0.0, 2.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             var tilts = new List<Coordinates>();
+            var decMoving = false;
             mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
                 .Callback<TelescopeAxes, double>((axis, rate) => {
                     if (rate == 0) {
-                        if (axis == TelescopeAxes.Secondary) {
+                        // A stop that ends a Dec move is a tilt; the exit's stop of an axis at rest (#2048) is not.
+                        if (axis == TelescopeAxes.Secondary && decMoving) {
                             tilts.Add(position);
+                            decMoving = false;
                         }
                         return;
                     }
+                    decMoving |= axis == TelescopeAxes.Secondary;
                     var step = Math.Sign(rate) * MotorStepDeg;
                     position = axis == TelescopeAxes.Primary
                         ? new Coordinates((position.RADegrees + step + 360.0) % 360.0, position.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
@@ -2669,11 +2694,12 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount);
+            // The hand-back happens only at Done with stop_tracking_when_done off (#2048).
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(trackingWrites, Is.Not.Empty);
             Assert.That(trackingWrites.Last(), Is.True, "the hand-back restores the tracking read after the unpark");
@@ -2764,8 +2790,10 @@ namespace OpenAstroAra.Test {
             // Both stages measured the same axis (the pole): the distance between the two measured axes is ~0.
             Assert.That(status.CheckResult.FineDeltaArcmin, Is.Not.Null.And.LessThan(0.1));
             Assert.That(log.Rows.Single().Outcome, Is.EqualTo("checked"));
-            // Tracking was handed back at the end of the run.
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeastOnce);
+            // The verdict ends the run: stop_tracking_when_done (on by default, #2048) leaves tracking off.
+            var trackingWrites = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled)).ToArray();
+            Assert.That(trackingWrites, Is.Not.Empty);
+            Assert.That(trackingWrites.Last().Arguments[0], Is.False, "tracking off after the verdict");
         }
 
         private static async Task AssertThrowsAsync<T>(Func<Task> act) where T : Exception {
