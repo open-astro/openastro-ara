@@ -315,6 +315,24 @@ void main() {
       expect(polarAlignStepState(folded), SetupStepState.done);
     });
 
+    test('a checked event and a status check result carry the noisy flag (#2082)', () {
+      final noisy = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true}),
+      )!;
+      expect(noisy.checkResult!.noisy, isTrue);
+      final steady = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent'}),
+      )!;
+      expect(steady.checkResult!.noisy, isFalse, reason: 'an older daemon sends no key');
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson(const {
+        'state': 'checked',
+        'check_result': {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true},
+      }));
+      expect(fromStatus.checkResult!.noisy, isTrue);
+    });
+
     test('progress carries the stage; an older daemon leaves it null', () {
       final coarse = foldPolarAlignEvent(
         const PolarAlignLive(),
