@@ -313,6 +313,8 @@ namespace OpenAstroAra.Test {
             actions.Replies["PolarAlign:Status"] = () => StopCalls(actions) < 3 ? HealthyStatus : StillStatus;
             _switches.Connected.Add(new("sw", "Base", actions));
             var service = Build();
+            // All three sends must start inside the window, also on a loaded CI runner (150 ms fitted only two there).
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
 
             var stop = await service.StopAsync(null, CancellationToken.None);
 
@@ -328,6 +330,8 @@ namespace OpenAstroAra.Test {
             var actions = Healthy(); // an axis reads moving whatever is sent
             _switches.Connected.Add(new("sw", "Base", actions));
             var service = Build();
+            // All three sends must start inside the window, also on a loaded CI runner (150 ms fitted only two there).
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
 
             await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
                 Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
