@@ -242,6 +242,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(GuiderTwinPreviewDto))]
 [JsonSerializable(typeof(ProfileDeleteResultDto))]
 [JsonSerializable(typeof(PendingGuiderTwinDeleteFile))]
+[JsonSerializable(typeof(MountPoseFile))]
 [JsonSerializable(typeof(QualityScoreBreakdownDto))]
 [JsonSerializable(typeof(QuietHoursDto))]
 [JsonSerializable(typeof(ReleaseNotesDto))]

@@ -5105,6 +5105,10 @@
   "@simpleGuiderCalibrationFailed": {
     "description": "Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open"
   },
+  "simpleCoolerNotResponding": "Cooler not responding: is the camera's 12 V connected?",
+  "@simpleCoolerNotResponding": {
+    "description": "Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)"
+  },
   "simpleDewWarning": "Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.",
   "@simpleDewWarning": {
     "description": "Simple Mode warning pill while the daemon's dew_formation diagnostic is open"
@@ -8552,6 +8556,24 @@
   },
   "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
   "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
+  "refusalMountPositionUnverified": "The mount's position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount's zero search from its hand controller or app, or confirm it is physically at Home.",
+  "@refusalMountPositionUnverified": {"description": "Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss"},
+  "refusalMountPositionNotReadYet": "The mount's position has not been read since it connected. Try again in a few seconds.",
+  "@refusalMountPositionNotReadYet": {"description": "Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read"},
+  "mountPositionUnverifiedTitle": "Mount position unverified",
+  "@mountPositionUnverifiedTitle": {"description": "Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)"},
+  "mountPositionUnverifiedBody": "The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.",
+  "@mountPositionUnverifiedBody": {"description": "Mount window: what the unverified-position warning means and what still works"},
+  "mountPositionUnverifiedRunZeroSearch": "Run the mount's zero search from its hand controller or app. When it reports Home, confirm it here.",
+  "@mountPositionUnverifiedRunZeroSearch": {"description": "Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)"},
+  "mountConfirmAtHome": "The mount IS at Home",
+  "@mountConfirmAtHome": {"description": "Mount window: button that confirms the mount is physically at Home, so its position is trusted again"},
+  "mountConfirmAtHomeQuestion": "Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.",
+  "@mountConfirmAtHomeQuestion": {"description": "Mount window: the question asked before confirming Home"},
+  "mountConfirmAtHomeYes": "Yes, it is at Home",
+  "@mountConfirmAtHomeYes": {"description": "Mount window: the confirm button of the Home question"},
+  "mountCouldntConfirmHome": "Couldn't confirm Home",
+  "@mountCouldntConfirmHome": {"description": "Mount window: notice when the rig refused the Home confirmation"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"

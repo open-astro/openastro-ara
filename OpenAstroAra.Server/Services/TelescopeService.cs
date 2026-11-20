@@ -145,8 +145,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
-            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null) {
+            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null) {
         _profileStore = profileStore;
+        _poseStore = poseStore;
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _guiderResolver = guiderResolver;
         _faults = faults;
@@ -168,7 +169,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             var state = _lifecycle.State;
             var connected = state == EquipmentConnectionState.Connected;
-            var runtime = connected ? _runtime : IdleRuntime;
+            // #2070 — read from the trust state itself, never a copy a tick old: a confirm shows at once.
+            var runtime = connected
+                ? _runtime with { PositionUnverified = PoseTrust.Reason is not null, PositionUnverifiedReason = PoseTrust.Reason }
+                : IdleRuntime;
             var caps = connected ? _capabilities : null;
             return Task.FromResult<TelescopeDto?>(new TelescopeDto(device.UniqueId, device.Name, state, caps, runtime));
         }
@@ -211,6 +215,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
         SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
         TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
+        BeginPoseSessionLocked();   // #2070 — the first read decides again; an unverified position stays unverified
         ForgetPushedSite();
     }
 
@@ -233,14 +238,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
-        // #2073 — read before the guider stop (up to StopGuidingBeforeMoveTimeout): an abort or an
-        // emergency stop that lands after this request must win over its goto. See SlewInBackground.
+        // #2073 — read before the pose check and the guider stop (up to StopGuidingBeforeMoveTimeout): an
+        // abort or an emergency stop that lands after this request must win over its goto. See SlewInBackground.
         var abortEpoch = AbortEpoch;
-        // A sync moves nothing, so guiding carries on. The checks above still throw synchronously.
-        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch);
+        // A sync moves nothing, so guiding carries on, and it is allowed while the position is
+        // unverified (#2070). The checks above still throw synchronously.
+        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, abortEpoch)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, ct);
     }
 
-    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch) {
+    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch, CancellationToken ct) {
+        // #2070 — before the guider stops: a refused GoTo leaves everything as it was. force does not bypass it.
+        // It runs before SlewInBackground's TryEnableTracking (#2073), so a refused GoTo turns nothing on.
+        await ThrowIfPoseUnverifiedAsync(client, "slew", ct).ConfigureAwait(false);
         await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
         return DispatchSlew(client, ra, dec, sync: false, idempotencyKey, abortEpoch);
     }
@@ -320,14 +329,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // Not-connected / disposed still throw synchronously (the endpoint and tests rely on it); only
         // the guider stop and the move itself are deferred.
         var client = RequireConnectedClient();
-        Lease.CancelAll();
-        // #2073 — read before the guider stop, as the GoTo does: a Stop Mount or emergency stop that lands
-        // after this request must win over its tracking enable and park.
+        // #2073 — read before the pose check and the guider stop, as the GoTo does: a Stop Mount or emergency
+        // stop that lands after this request must win over its tracking enable and park.
         var abortEpoch = AbortEpoch;
-        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch);
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, ct);
     }
 
-    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch) {
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, CancellationToken ct) {
+        // #2070 — a park drives to a position the mount's model computes: refused while that model is
+        // not trusted, before the leases end or the guider stops. The safety and fault parks fall back to
+        // stopping tracking on this refusal.
+        await ThrowIfPoseUnverifiedAsync(client, "park", ct).ConfigureAwait(false);
+        Lease.CancelAll();
         await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
@@ -355,10 +368,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
-        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey);
+        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, ct);
     }
 
-    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey) {
+    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, CancellationToken ct) {
+        // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
+        // sends :MH#, a no-op at a false zero), so it is refused while the position is unverified.
+        await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
         await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
         // FindHome blocks until the mount reaches its home switch; run it off the request
@@ -443,6 +459,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // explicitly so the omission reads as deliberate, not an oversight.
         _ = ct;
         var client = RequireConnectedClient();
+        // #2070 — a routine's motor move (polar alignment, the only unlessAbortedSince caller) turns the
+        // mount from where its model says it is: refused while that is unverified. The pad's own nudge
+        // (no unlessAbortedSince) and every stop stay allowed, so the user can always back the mount off.
+        if (unlessAbortedSince is not null && rate != 0 && !double.IsNaN(rate)) {
+            await ThrowIfPoseUnverifiedAsync(client, "moveaxis", CancellationToken.None).ConfigureAwait(false);
+        }
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
         // backstop that halts all axes.
@@ -473,6 +495,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (effective == 0 || leaseMs is null) {
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
+            NotePoseAxis(axis, moving: true); // #2070 — still Ara's move
             return;
         }
         // A routine's renewal after Stop Mount finds its lease gone and would start the motor again: refuse it.
@@ -486,6 +509,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             LogMoveAxisRateSnapped(_logger, axis, rate, effective);
         }
         NoteMountCommand(w => w.NoteMotionCommanded());
+        NotePoseAxis(axis, moving: effective != 0); // #2070
         try {
             await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
         } catch (ASCOM.DriverException ex) when (IsSuperseded(ex)) {
@@ -532,6 +556,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         foreach (var axis in expired) {
             try {
                 NoteMountCommand(w => w.NoteMotionCommanded());
+                NotePoseAxis(axis, moving: false); // #2070
                 client.MoveAxis((TelescopeAxis)axis, 0);
                 LogMoveAxisLeaseExpired(_logger, axis);
             } catch (Exception ex) {
@@ -670,6 +695,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Interlocked.Increment(ref _abortEpoch);
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
+        lock (_gate) {
+            PoseTrust.NoteAllAxesStopped(PoseClock.GetUtcNow()); // #2070
+        }
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount
         // incident so the panic budget is tunable from the logs. The tap→request network leg is
         // client-side and unmeasurable here.
@@ -852,6 +880,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         string? axisRatesUnknownReason = null;
         int? republishedBands = null;
         (double? Primary, double? Secondary) axisRatesUnknownValues = default;
+        var poseFlagged = false;
+        string? poseReason = null;
         // #1246 — the ladder's "recovered" waits for a tick without the latch and with RA/Dec read (the module's
         // clean-read gate); the same failure feeds read health (ADR 0011 rule 2).
         var latched = readError is not null && IsLatchedBridgeFault(readError);
@@ -920,9 +950,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // driver whose Slewing is never implemented never opens an episode either, since
                 // the runtime state can never read "slewing" — so nothing is left unfinished.)
                 slewVerdict = slewingUnknown ? new SlewEventWatch.Verdict(SlewEventWatch.Kind.None) : SlewWatch.Observe(runtime.State == "slewing");
+                // #2070 — the same snapshot decides whether the position can be trusted.
+                poseFlagged = ObservePoseLocked(runtime, slewingUnknown);
+                poseReason = PoseTrust.Reason;
                 watchedDevice = _lifecycle.Device;
             },
             AfterCommit: () => {
+                if (poseFlagged && poseReason is not null) {
+                    AfterPoseFlagged(poseReason);
+                }
                 if (republishedBands is { } republished) {
                     LogPadBandsRepublished(_logger, republished);
                 }
@@ -1069,6 +1105,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private void NoteMountCommand(Action<MountTrackingWatch> note) {
         lock (_gate) {
             note(_trackingWatch);
+            PoseTrust.NoteCommand(PoseClock.GetUtcNow()); // #2070 — an Ara command explains the next position change
+        }
+    }
+
+    // #2070 — a command the tracking watch does not see (a mediator sync) still explains a position change.
+    private void NotePoseCommand() {
+        lock (_gate) {
+            PoseTrust.NoteCommand(PoseClock.GetUtcNow());
         }
     }
 

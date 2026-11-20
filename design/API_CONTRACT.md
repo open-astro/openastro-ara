@@ -1818,6 +1818,20 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #1544
 
+## 2026-11-19 — #2070 An unverified mount position: `position_unverified` on the telescope runtime, `POST /equipment/telescope/confirm-home`, the `mount-position-unverified` refusal (ADR 0022)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/telescope` (`runtime`); `POST /api/v1/equipment/telescope/slew`, `/park`, `/home`, `/moveaxis` (a polar-alignment lease move); new `POST /api/v1/equipment/telescope/confirm-home`; `POST /api/v1/equipment/polaralign/start`; the `RefusalReason` schema in `openapi.yaml`.
+
+**Decision:** the daemon marks a mount's position **unverified** when the first read of a session reports AtHome while still (unless the last pose this process trusted for that device was a trusted Home), when that first read is more than 2° in Dec from the last trusted pose (a pose the mount had settled at; a session that ended mid-move keeps none), or, inside a session, when AtHome turns true or Dec jumps more than 2° between two still ticks with no Ara mount command or slewing tick in the last 30 s. It applies to every mount. The runtime carries `position_unverified` (bool, default false) and `position_unverified_reason` (`at_home_on_connect` | `pose_jump_on_reconnect` | `at_home_without_command` | `pose_jump_in_session`, null when trusted), read from the trust state at request time. While unverified, a slew (not a sync; `force` does not bypass it), a park, a find-home, a polar-alignment start and a polar-alignment lease move answer 409 `application/problem+json` with `reason` `mount-position-unverified` and the extension `position_unverified_reason`; the same check before a session's first position read answers `not_read_yet`. The sequencer's GoTo, Park, Find Home and meridian flip fail the instruction (no op fault); a refused sequencer Park stops tracking first, so the mount is not left tracking unattended. A sync, a pad move with no lease owner, Stop, tracking and Unpark are not checked. `POST /confirm-home` answers 204 and trusts the position again when the mount reports AtHome now; 409 when it is not connected or does not report AtHome. The flag is kept per device id in `{profileDir}/mount-pose.json`, so a reconnect or a daemon restart does not clear it; only `confirm-home` does. The safety and fault reactions stop the mount's motion (AbortSlew, which also ends any axis lease) and its tracking, and post a Critical notification, when their park is refused this way. The eleventh cause of the `RefusalReason` enum (after `below-horizon-limit`).
+
+**Reasoning:** a mount with no absolute encoders (the iOptron HAE29C) wakes from a power loss reporting Home and Dec 90 wherever it points. A GoTo, Park, model Home or polar alignment from that false zero drives the tube to the wrong place (RC51, 2026-11-19: Polar Align slewed below the pole, and Home was a no-op). Parking by a wrong model can hit the tripod, so a refused safety park stops tracking instead. The extension is not named `reason`, which ADR 0022 keeps for the cause. A sensor zero search route waits for the AlpacaBridge contract (open-astro/AlpacaBridge#2420).
+
+**Spec ref:** `Services/MountPoseTrust.cs`, `Services/MountPoseStore.cs`, `Services/TelescopeService.PoseTrust.cs`, `Services/TelescopeService.cs`, `Services/TelescopeService.Mediator.cs`, `Services/PolarAlignService.cs`, `Services/SafetyReactionService.cs`, `Services/FaultReactionService.cs`, `Endpoints/EquipmentEndpoints.cs` (`ConfirmHomeAsync`), `Contracts/EquipmentDtos.cs`, `Contracts/Refusals/RefusalCatalog.cs`. Tests `MountPoseTrustTest`, `TelescopePositionUnverifiedTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`, `lib/models/mount_status.dart`.
+
+**Related:** #2070, #2048, #2044, #1847, ADR 0022, open-astro/AlpacaBridge#2420
+
+---
+
 ## 2026-11-19 — #2044 `POST /equipment/telescope/slew` refuses a target under the horizon: `below-horizon-limit` (ADR 0022)
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`; the `RefusalReason` schema in `openapi.yaml`.
@@ -1856,13 +1870,25 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #2048, #1591, #1735
 
+## 2026-11-19 — `CameraStateDto.cooler_not_responding` (#2076)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/camera` (`runtime`): `CameraStateDto` gains the optional `cooler_not_responding` (bool, default false).
+
+**Decision:** true while a cooler that Ara switched on does not respond. That is: `CoolerOn` has read back off for 1 min without a break, or it reads on at ≤ 1 % power with the sensor more than 2 °C above the set-point and not closing on it for 1 min. An unknown `CoolerOn` read neither sets nor clears it. It clears when the cooler responds, when the cooler is switched off, and on a reconnect. Only Ara's own cooler-on arms it; a cooler that another client or the driver's session restore switched on is not watched. When it is set, the daemon publishes one `value_mismatch` camera fault (notify-only Warning: no retry, pause or escalation) whose details start "Cooler not responding: is the camera's 12 V connected?". The daemon never re-sends the cooler write. A sequencer Cool Camera step whose cooler reads off for 1 min (in the ramp or the wait) fails through the normal step failure with the same hint, instead of after the 10-min regulating bound.
+
+**Reasoning:** 2026-11-19: the Uranus-C Pro had no 12 V. The driver accepted `CoolerOn = true` and read it back false at 0 % power for hours, and nothing told the user. The drift monitor (§42.2) disarms while `CoolerOn` reads off, so it could not see this.
+
+**Spec ref:** `Services/CoolerResponseWatch.cs`, `Services/CameraService.cs` (`ReadTick`, `SetCoolerAsync`), `Services/CameraService.Mediator.cs` (`RegulateTemperatureAsync`), `Contracts/EquipmentDtos.cs`; client `models/camera_status.dart`, `screens/simple/simple_shell.dart`.
+
+**Related:** #2076, #1076, #1210
+
 ---
 
 ## 2026-11-20 — #2073 `POST /equipment/telescope/slew` turns tracking on first and refuses a counterweight-up target: `counterweight-limit` (ADR 0022)
 
 **Endpoint(s) or area:** `POST /api/v1/equipment/telescope/slew`; the `RefusalReason` schema in `openapi.yaml`.
 
-**Decision:** the daemon turns the mount's tracking on (when it reads off) right before it sends the GoTo, as the sequence GoTo and Park already do; the answer stays 202, and a GoTo the mount then refuses is logged with the driver's reason in the message. A slew (not a sync) to a target below the pole within 2 h of the lower meridian (|hour angle| > 10 h, which is a counterweight angle over #2048's 60° default by the shared model φ = 90° − the distance from the hour angle to the nearer of 0 h and 12 h) answers 409 `application/problem+json` with `reason` `counterweight-limit` and the extensions `hour_angle_hours`, `counterweight_angle_deg` and `limit_deg`, and dispatches nothing. The check runs only on a German equatorial mount: the daemon reads ASCOM `AlignmentMode` once per connect, skips the check for `algAltAz` and `algPolar` (fork), and checks a mount that does not answer (logged once). The horizon check runs first. `force` does not bypass it. A profile with no site lets the slew through. The limit is a constant until #2048 adds its setting. The eleventh cause of the `RefusalReason` enum (after `below-horizon-limit`).
+**Decision:** the daemon turns the mount's tracking on (when it reads off) right before it sends the GoTo, as the sequence GoTo and Park already do; the answer stays 202, and a GoTo the mount then refuses is logged with the driver's reason in the message. A slew (not a sync) to a target below the pole within 2 h of the lower meridian (|hour angle| > 10 h, which is a counterweight angle over #2048's 60° default by the shared model φ = 90° − the distance from the hour angle to the nearer of 0 h and 12 h) answers 409 `application/problem+json` with `reason` `counterweight-limit` and the extensions `hour_angle_hours`, `counterweight_angle_deg` and `limit_deg`, and dispatches nothing. The check runs only on a German equatorial mount: the daemon reads ASCOM `AlignmentMode` once per connect, skips the check for `algAltAz` and `algPolar` (fork), and checks a mount that does not answer (logged once). The horizon check runs first. `force` does not bypass it. A profile with no site lets the slew through. The limit is a constant until #2048 adds its setting. The twelfth cause of the `RefusalReason` enum (after `mount-position-unverified`).
 
 **Reasoning:** on 2026-11-19 four GoTos from the Mount panel were refused by the mount ("SlewToCoordinatesAsync requires Tracking to be true") and Ara showed no reason. Two of them were at hour angle ≈ −11.1 h, counterweight-up on the HAE29C, and only the tracking refusal stopped them. Turning tracking on removes that accidental barrier, so the counterweight check ships with it. Above the pole a target near the meridian also has φ near 90°, but that is the normal meridian-flip zone, so only targets below the pole are checked.
 

@@ -146,10 +146,14 @@ namespace OpenAstroAra.Test {
         /// return at once.</summary>
         private static async Task<(CameraService Svc, ConcurrentQueue<TimeSpan> Delays)> ConnectedAsync(
                 SimCamera cam, Func<ICoolingFanActuator?>? fan = null, Action<int>? onDelay = null,
-                Func<int, Task>? delayGate = null, TimeSpan? refreshPeriod = null) {
+                Func<int, Task>? delayGate = null, TimeSpan? refreshPeriod = null,
+                IEquipmentFaultSink? faults = null, Func<DateTimeOffset>? clock = null) {
             var store = new InMemoryProfileStore();
             store.PutCoolingFan(new CoolingFanDto("sw-5", 1));
-            var svc = refreshPeriod is TimeSpan period ? new CameraService(fan: fan, profileStore: store) { RefreshPeriod = period } : new CameraService(fan: fan, profileStore: store);
+            var now = clock ?? (() => DateTimeOffset.UtcNow);
+            var svc = refreshPeriod is TimeSpan period
+                ? new CameraService(fan: fan, profileStore: store, faults: faults) { RefreshPeriod = period, Clock = now }
+                : new CameraService(fan: fan, profileStore: store, faults: faults) { Clock = now };
             var delays = new ConcurrentQueue<TimeSpan>();
             svc.CoolingDelay = (d, ct) => {
                 delays.Enqueue(d);
@@ -563,6 +567,146 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.WarmCamera(TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.True);
             await WaitForAsync(() => Task.FromResult(double.IsNaN(svc.TargetTemp) && !svc.AtTargetTemp),
                 "TargetTemp stayed set after the cooler was switched off");
+        }
+
+        private static readonly bool[] OneCoolerOn = [true];
+        private static readonly double[] FirstMinuteOfTenMinuteRamp = [19.0, 18.0, 17.0];
+
+        private sealed class FaultSink : IEquipmentFaultSink {
+            private readonly List<EquipmentFaultEvent> _faults = new();
+            public void Publish(EquipmentFaultEvent fault) { lock (_faults) { _faults.Add(fault); } }
+            public List<EquipmentFaultEvent> Faults { get { lock (_faults) { return _faults.ToList(); } } }
+        }
+
+        [Test]
+        public async Task A_cool_whose_cooler_never_turns_on_fails_after_a_minute_with_the_12_V_hint() {
+            // #2076 — the Uranus-C Pro with no 12 V: CoolerOn = true is accepted and reads back off.
+            await using var cam = new SimCamera { FixedTemperature = 20, CoolerPower = 0, ReportsCoolerOff = true };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var _ = svc;
+            var log = new StatusLog();
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, log, CancellationToken.None), Is.False);
+
+            Assert.That(TimeSpan.FromTicks(delays.Sum(d => d.Ticks)), Is.EqualTo(TimeSpan.FromMinutes(1)),
+                "12 polls of 5 s, not the 10-minute regulating bound");
+            Assert.That(log.Statuses, Has.Some.Contains("12 V"));
+            Assert.That(cam.CoolerWrites, Is.EqualTo(OneCoolerOn), "one cooler-on write, never retried");
+        }
+
+        [Test]
+        public async Task A_cool_whose_cooler_never_turns_on_warns_before_it_fails_and_only_once() {
+            // #2076 user decision: warn, then fail. The step's poll time reaches the minute before
+            // the wall-clock refresh watch does, so the step publishes the warning itself; a
+            // cooler-off straight after the failure (a plan's Warm Camera) must not swallow it.
+            await using var cam = new SimCamera { FixedTemperature = 20, CoolerPower = 0, ReportsCoolerOff = true };
+            var sink = new FaultSink();
+            var nowTicks = DateTimeOffset.UtcNow.UtcTicks;
+            DateTimeOffset Now() => new(Interlocked.Read(ref nowTicks), TimeSpan.Zero);
+            var (svc, _) = await ConnectedAsync(cam, refreshPeriod: TimeSpan.FromMilliseconds(50), faults: sink, clock: Now);
+            using var __ = svc;
+            List<EquipmentFaultEvent> Mismatches() => sink.Faults.Where(f => f.Kind == EquipmentFaultKind.ValueMismatch).ToList();
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.False);
+
+            var fault = Mismatches().Single();
+            Assert.That(fault.Details, Does.Contain("12 V"));
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding, Is.True);
+
+            Interlocked.Add(ref nowTicks, TimeSpan.FromSeconds(61).Ticks);
+            await Task.Delay(400); // refresh passes past the watch's own minute
+            Assert.That(Mismatches(), Has.Count.EqualTo(1), "the refresh pass does not warn a second time");
+            Assert.That((await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding, Is.True);
+        }
+
+        [Test]
+        public async Task A_long_ramped_cool_whose_cooler_never_turns_on_stops_ramping_after_a_minute() {
+            // #2076 review — an imported 10-minute ramp must not PUT the set-point every 15 s for
+            // its whole duration while the cooler reads off.
+            await using var cam = new SimCamera { FixedTemperature = 20, CoolerPower = 0, ReportsCoolerOff = true };
+            var (svc, delays) = await ConnectedAsync(cam);
+            using var _ = svc;
+            var log = new StatusLog();
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.FromMinutes(10), log, CancellationToken.None), Is.False);
+
+            Assert.That(delays, Has.Count.EqualTo(4).And.All.EqualTo(TimeSpan.FromSeconds(15)), "four ramp steps = 1 min");
+            // 20 → -10 °C over 10 min in whole degrees: 19, (19), 18, 17 — then it stops.
+            Assert.That(cam.Setpoints, Is.EqualTo(FirstMinuteOfTenMinuteRamp), "not the full 40-step ramp");
+            Assert.That(log.Statuses, Has.Some.Contains("12 V"));
+        }
+
+        [Test]
+        public async Task An_operator_cooler_off_during_a_cool_is_not_reported_as_not_responding() {
+            // An Emergency Stop or the REST control switching the cooler off is not a missing 12 V.
+            await using var cam = new SimCamera { FixedTemperature = 20, CoolerPower = 50 };
+            CameraService? service = null;
+            var (svc, delays) = await ConnectedAsync(cam, onDelay: n => {
+                if (n == 2) {
+                    service!.SetCoolerAsync(false, null, CancellationToken.None).GetAwaiter().GetResult();
+                }
+            });
+            service = svc;
+            using var _ = svc;
+            var log = new StatusLog();
+
+            Assert.That(await svc.CoolCamera(-10, TimeSpan.Zero, log, CancellationToken.None), Is.False);
+
+            Assert.That(log.Statuses, Has.None.Contains("12 V"));
+            Assert.That(TimeSpan.FromTicks(delays.Sum(d => d.Ticks)), Is.GreaterThanOrEqualTo(TimeSpan.FromMinutes(10)),
+                "only the ordinary regulating bound ends it");
+        }
+
+        [Test]
+        public async Task A_warm_whose_cooler_reads_off_waits_its_own_bound_not_the_12_V_minute() {
+            // The 12 V check is for a cool: a TEC that drops to off during a warm is not short of power.
+            await using var cam = new SimCamera { InitialCoolerOn = true, InitialSetpoint = -10, FixedTemperature = 3, CoolerPower = 0 };
+            var (svc, delays) = await ConnectedAsync(cam, onDelay: n => {
+                if (n == 1) {
+                    cam.ReportsCoolerOff = true;
+                }
+            });
+            using var _ = svc;
+
+            Assert.That(await svc.WarmCamera(TimeSpan.Zero, new StatusLog(), CancellationToken.None), Is.True);
+
+            Assert.That(delays.Count(d => d == TimeSpan.FromSeconds(5)), Is.GreaterThanOrEqualTo(24),
+                "the 2-minute idle-TEC bound of a warm, not 1 minute");
+            Assert.That(cam.CoolerWrites[^1], Is.False, "the warm still ends with the cooler off");
+        }
+
+        [Test]
+        public async Task The_refresh_pass_warns_once_when_a_cooler_switched_on_reads_off_for_a_minute() {
+            // #2076 — the Simple Mode cooler toggle path: one notify-only fault, the runtime flag
+            // the client's pill reads, and both cleared by switching the cooler off.
+            await using var cam = new SimCamera { FixedTemperature = 20, ReportsCoolerOff = true };
+            var sink = new FaultSink();
+            var nowTicks = DateTimeOffset.UtcNow.UtcTicks;
+            DateTimeOffset Now() => new(Interlocked.Read(ref nowTicks), TimeSpan.Zero);
+            var (svc, _) = await ConnectedAsync(cam, refreshPeriod: TimeSpan.FromMilliseconds(50), faults: sink, clock: Now);
+            using var __ = svc;
+
+            await svc.SetCoolerAsync(true, -10, CancellationToken.None);
+            await Task.Delay(300); // several refresh passes see the cooler off: the window opens
+            // The scripted camera has no CameraState, so the read-health watch may add a degraded
+            // fault of its own; only the ValueMismatch faults are this watch's.
+            List<EquipmentFaultEvent> Mismatches() => sink.Faults.Where(f => f.Kind == EquipmentFaultKind.ValueMismatch).ToList();
+            Assert.That(Mismatches(), Is.Empty, "not before the minute");
+            Interlocked.Add(ref nowTicks, TimeSpan.FromSeconds(61).Ticks);
+
+            await WaitForAsync(() => Task.FromResult(Mismatches().Count > 0), "no cooler-not-responding fault");
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding,
+                "the runtime never carried cooler_not_responding");
+            await Task.Delay(300);
+            var fault = Mismatches().Single();
+            Assert.That(fault.DeviceType, Is.EqualTo(DeviceType.Camera));
+            Assert.That(fault.Kind, Is.EqualTo(EquipmentFaultKind.ValueMismatch));
+            Assert.That(fault.Details, Does.Contain("12 V"));
+            Assert.That(cam.CoolerWrites, Is.EqualTo(OneCoolerOn), "the daemon does not re-send the cooler write");
+
+            await svc.SetCoolerAsync(false, null, CancellationToken.None);
+            await WaitForAsync(async () => !(await svc.GetAsync(CancellationToken.None))!.Runtime.CoolerNotResponding,
+                "switching the cooler off did not clear the flag");
         }
 
         [Test]

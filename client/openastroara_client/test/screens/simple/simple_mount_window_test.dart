@@ -49,6 +49,12 @@ class _Mount extends MountNotifier {
     calls.add('unpark');
     return true;
   }
+
+  @override
+  Future<bool> confirmHome() async {
+    calls.add('confirm-home');
+    return true;
+  }
 }
 
 Map<String, dynamic> _wire({bool tracking = true, bool parked = false, String state = 'connected', String runtime = 'tracking'}) => {
@@ -91,7 +97,39 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
   return (c, mount);
 }
 
+/// #2070 — a mount at its false zero after a power loss: the rig does not trust its position.
+Map<String, dynamic> _unverified({required bool atHome}) {
+  final w = _wire(tracking: false, runtime: 'idle');
+  w['runtime'] = {
+    ...w['runtime'] as Map<String, dynamic>,
+    'at_home': atHome,
+    'position_unverified': true,
+    'position_unverified_reason': 'at_home_on_connect',
+  };
+  return w;
+}
+
 void main() {
+  testWidgets('an unverified position is said, Park is off, and Home is confirmed only after asking (#2070)', (tester) async {
+    final (_, mount) = await _pump(tester, _unverified(atHome: true));
+    expect(find.byKey(const Key('simple-mount-position-unverified')), findsOneWidget);
+    expect(find.text('Mount position unverified'), findsOneWidget);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).onTap, isNull,
+        reason: 'the rig refuses a park from an unverified position');
+    await tester.tap(find.byKey(const Key('simple-mount-confirm-home')));
+    await tester.pump();
+    expect(mount.calls, isEmpty, reason: 'the window asks first');
+    await tester.tap(find.text('Yes, it is at Home'));
+    await tester.pump();
+    expect(mount.calls, ['confirm-home']);
+  });
+
+  testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {
+    await _pump(tester, _unverified(atHome: false));
+    expect(find.byKey(const Key('simple-mount-run-zero-search')), findsOneWidget);
+    expect(find.byKey(const Key('simple-mount-confirm-home')), findsNothing);
+  });
+
   testWidgets('a tap dropped while the last command runs says so in a pill, once (ALP-4982)', (tester) async {
     // #1486 review: Tracking Off then Parked before the first answer dropped the second with no word.
     final (c, mount) = await _pump(tester, _wire());

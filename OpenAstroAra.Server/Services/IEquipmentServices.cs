@@ -138,6 +138,16 @@ public interface ITelescopeService {
     /// must never restart a motor the user just stopped.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, ct);
+
+    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park, Home or
+    /// polar alignment; otherwise why not (a <c>position_unverified_reason</c> token, or
+    /// <c>not_read_yet</c> before the session's first position read). Reads the mount once when the
+    /// session has not read it yet.</summary>
+    Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult<string?>(null);
+
+    /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
+    /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
+    Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
 }
 
 public interface IFocuserService {

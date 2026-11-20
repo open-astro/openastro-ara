@@ -14,6 +14,7 @@
 
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using OpenAstroAra.Server;
@@ -46,6 +47,8 @@ namespace OpenAstroAra.Test.Contract {
             builder.UseEnvironment("Production");
             // Built by the container, so the container disposes it: the last step of the host's own dispose.
             builder.ConfigureServices(s => s.AddSingleton(_ => new DisposeSignal(hostDisposed)));
+            // Never ask systemd or polkit for anything (a guider start pops a password dialog on a desktop).
+            builder.ConfigureTestServices(TestHostSeams.Replace);
         }
 
         // Program.Main runs app.Run() on its own thread, and app.Run() stops and disposes the host once
