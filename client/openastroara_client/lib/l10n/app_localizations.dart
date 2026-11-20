@@ -11161,6 +11161,18 @@ abstract class AppLocalizations {
   /// **'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.'**
   String get refusalPolarAlignOnAxis;
 
+  /// Refusal (polar-align-pointing-unknown, #2066): polar alignment plans only from a reading of the mount taken now; none came, it was the (0, 0) placeholder, or it was more than 2 s old
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align got no fresh reading of where the mount points. Check the mount\'s connection, then start again.'**
+  String get refusalPolarAlignPointingUnknown;
+
+  /// Refusal (polar-align-pose-ambiguous, #2066): the mount reads a declination beyond ±90° (its Dec axis over the pole, e.g. after a sync), so which side of the pier it is on is ambiguous; polar alignment moves nothing
+  ///
+  /// In en, this message translates to:
+  /// **'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.'**
+  String get refusalPolarAlignPoseAmbiguous;
+
   /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///
   /// In en, this message translates to:
