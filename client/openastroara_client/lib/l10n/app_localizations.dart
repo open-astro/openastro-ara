@@ -11215,6 +11215,12 @@ abstract class AppLocalizations {
   /// **'Meridian flip confirmed. Later flips run without the alert.'**
   String get safetyFirstFlipConfirmedSnack;
 
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Re-arm succeeds; the confirmation and any completed-flip record are cleared
+  ///
+  /// In en, this message translates to:
+  /// **'Re-armed. Every flip alerts and waits 60 s again until you confirm one.'**
+  String get safetyFirstFlipRearmedSnack;
+
   /// Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change
   ///
   /// In en, this message translates to:

@@ -6692,6 +6692,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Meridian flip confirmed. Later flips run without the alert.';
 
   @override
+  String get safetyFirstFlipRearmedSnack =>
+      'Re-armed. Every flip alerts and waits 60 s again until you confirm one.';
+
+  @override
   String get refusalFirstFlipNotCompleted =>
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
@@ -13582,6 +13586,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get safetyFirstFlipConfirmedSnack =>
       'Virada de meridiano confirmada. As próximas viradas rodam sem o alerta.';
+
+  @override
+  String get safetyFirstFlipRearmedSnack =>
+      'Rearmado. Toda virada volta a alertar e esperar 60 s até você confirmar uma.';
 
   @override
   String get refusalFirstFlipNotCompleted =>

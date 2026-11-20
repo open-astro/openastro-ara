@@ -8549,6 +8549,8 @@ This is a starting suggestion; user adjusts for their specific setup. Pier heigh
 
 As soon as the flip slew returns, before the re-center, re-focus or guider restart, ARA reads Alpaca's `SideOfPier` and compares it with the value read before the slew (#1589). A changed pier side verifies the flip. An unknown pier side (`pierUnknown`, before or after) verifies nothing: log a warning and continue. An unchanged known pier side means the mount likely did not flip: with the §58.9 layers on (`flip_safety_enabled`, the default) the flip fails there and goes to the Layer-4 safe rest, so nothing re-centers or guides an unflipped mount; with them off, ARA posts a Warning notification at once and continues, because some Alpaca drivers lie about pier side. No brand-quirk database (per §52 Alpaca-only commitment).
 
+The hour-angle inference this section once named for a driver without `SideOfPier` was dropped on purpose (#1589), and the code has none: the target crosses the meridian whether or not the mount flipped, so a side inferred from hour angle would always look changed and verify nothing. A mount that reports no pier side is the unknown case above.
+
 ### 58.6 Profile schema
 
 Profile JSON gains a `meridian_flip` block (lives alongside §35.6 safety policy and §57 mount_safety):

@@ -46,12 +46,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       await ref.read(safetyPoliciesProvider.notifier).rearmFirstFlip();
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'First-flip announce re-armed — the next flip will '
-            'alert and wait 60 s.',
-          ),
-        ),
+        SnackBar(content: Text(l10n.safetyFirstFlipRearmedSnack)),
       );
     } catch (e) {
       if (!mounted) return;

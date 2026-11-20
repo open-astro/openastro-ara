@@ -6692,6 +6692,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Meridian flip confirmed. Later flips run without the alert.';
 
   @override
+  String get safetyFirstFlipRearmedSnack =>
+      'Re-armed. Every flip alerts and waits 60 s again until you confirm one.';
+
+  @override
   String get refusalFirstFlipNotCompleted =>
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
