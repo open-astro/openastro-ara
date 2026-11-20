@@ -31,6 +31,7 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -292,7 +293,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     }
 
     // The goto alone: drive the slew and wait for arrival, no settle. The flip goto uses it directly —
-    // MeridianFlipExecutor settles after it with MeridianFlipSettings.SettleTime.
+    // MeridianFlipExecutor settles after it with MeridianFlipSettings.SettleTime. #2075 — every
+    // mediator slew (sequence, centering, meridian flip, Polar Align) is range-checked here, after the
+    // epoch transform: RA is wrapped into [0, 24) and a Dec outside ±90° or a non-finite coordinate is
+    // refused before anything reaches the mount. There is no horizon check here; the callers that need
+    // one (the REST GoTo, TargetRecenter, the resume refinement) apply HorizonGuard themselves.
     private Task<bool> GotoAsync(Coordinates coords, CancellationToken token) {
         ITelescopeDevice client;
         bool parked;
@@ -335,8 +340,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             // absent on an unstaged dev box) — a missing native falls back to the untransformed
             // target rather than failing the run (same-epoch transforms are pure managed).
             var target = TransformBestEffort(coords, MapSlewEpoch(equatorialSystem.Value));
-            var targetRa = target.RA;
+            // #2075 — validate before the target latch, the slew watch and the mount op: a refused
+            // target sends nothing to the mount and publishes no op fault (the mount did nothing
+            // wrong, so it must not count toward abort_and_park). Throw rather than return false:
+            // SlewScopeToRaDec's blind slew ignores a false return, and the mount's own refusal
+            // already reaches the caller as this exception type through RunMountOpAsync.
+            var targetRa = WrapRaHours(target.RA);
             var targetDec = target.Dec;
+            if (SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
+                LogSlewTargetRefused("telescope.slew", refusal);
+                throw new SequenceEntityFailedException(refusal);
+            }
             lock (_gate) {
                 TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
@@ -486,7 +500,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         lock (_gate) {
             var connected = _lifecycle.Live is not null;
             if (connected && _runtime.RightAscensionHours is double ra && _runtime.DeclinationDegrees is double dec) {
-                return new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), MapEpoch(_equatorialSystemRaw));
+                // #2075 — a synced mount can report its Dec axis over the pole (an iOptron HAE29C read
+                // 90.9°). Fold it to the same sky point so the centering offset and the meridian-flip
+                // fallback target compare like with like and never carry a Dec past ±90°.
+                return new Coordinates(Angle.ByHours(ra), Angle.ByDegree(dec), MapEpoch(_equatorialSystemRaw)).FoldedOverPole();
             }
         }
         return new Coordinates(Angle.ByDegree(0), Angle.ByDegree(0), Epoch.J2000);
@@ -715,10 +732,62 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     private static bool ReadAtPark(ITelescopeDevice c) => c.AtPark;
     private static bool ReadAtHome(ITelescopeDevice c) => c.AtHome;
 
-    private static bool PointingNear(ITelescopeDevice c, double targetRaHours, double targetDecDeg) {
-        var raDiffHours = Math.Abs(c.RightAscension - targetRaHours);
+    private static bool PointingNear(ITelescopeDevice c, double targetRaHours, double targetDecDeg) =>
+        PointingNear(c.RightAscension, c.Declination, targetRaHours, targetDecDeg);
+
+    // #2075 — the per-axis compare alone fails over the pole: a mount that reports its Dec axis past
+    // ±90° (RA r, Dec 90.6°) after a goto to the folded target (r + 12h, 89.4°) is on target, but its
+    // RA differs by 180°, the settle never completes and a StallTimeout fault is published. Folding
+    // the reading instead would split the sky at the pole (a goto to (r, 89.99°) on a mount that then
+    // reads (r, 90.001°) folds to 12h off). So a great-circle separation inside the tolerance also
+    // counts as near: the unit vector of (r, 90.6°) is the one of (r + 12h, 89.4°), so it needs no
+    // fold, and it is the only sane compare near the pole, where RA is ill-defined.
+    internal static bool PointingNear(double raHours, double decDeg, double targetRaHours, double targetDecDeg) {
+        var raDiffHours = Math.Abs(raHours - targetRaHours);
         var raDiffDeg = Math.Min(raDiffHours, 24.0 - raDiffHours) * 15.0; // wrap-aware, hours → degrees
-        return raDiffDeg < SlewToleranceDeg && Math.Abs(c.Declination - targetDecDeg) < SlewToleranceDeg;
+        return (raDiffDeg < SlewToleranceDeg && Math.Abs(decDeg - targetDecDeg) < SlewToleranceDeg)
+            || GreatCircleSeparationDeg(raHours, decDeg, targetRaHours, targetDecDeg) < SlewToleranceDeg;
+    }
+
+    // Angular distance between two (RA hours, Dec degrees) points. A NaN input gives NaN (never near).
+    private static double GreatCircleSeparationDeg(double ra1Hours, double dec1Deg, double ra2Hours, double dec2Deg) {
+        var d1 = dec1Deg * Math.PI / 180.0;
+        var d2 = dec2Deg * Math.PI / 180.0;
+        var dRa = (ra1Hours - ra2Hours) * 15.0 * Math.PI / 180.0;
+        var cos = Math.Sin(d1) * Math.Sin(d2) + Math.Cos(d1) * Math.Cos(d2) * Math.Cos(dRa);
+        return Math.Acos(Math.Clamp(cos, -1.0, 1.0)) * 180.0 / Math.PI;
+    }
+
+    // #2075 — RA into [0, 24): the same sky point, so nothing is lost. A non-finite value is returned
+    // as is for SlewTargetRefusal to refuse. The last clause catches a tiny negative input that
+    // rounds to exactly 24 after the + 24.
+    internal static double WrapRaHours(double raHours) {
+        if (!double.IsFinite(raHours)) {
+            return raHours;
+        }
+        var r = raHours % 24.0;
+        if (r < 0) {
+            r += 24.0;
+        }
+        return r >= 24.0 ? 0.0 : r;
+    }
+
+    /// <summary>
+    /// #2075 — the range part of the mediator's slew/sync guard: null when the target may go to the
+    /// mount, else the plain refusal message. RA is wrapped into [0, 24) first (the same sky point);
+    /// a non-finite coordinate or a Dec outside −90..90° is refused.
+    /// </summary>
+    internal static string? SlewTargetRefusal(double raHours, double decDeg, string op = "telescope.slew") {
+        var ra = WrapRaHours(raHours);
+        if (!IsCoordinateOutOfRange(ra, decDeg)) {
+            return null;
+        }
+        if (!double.IsFinite(ra) || !double.IsFinite(decDeg)) {
+            return string.Create(CultureInfo.InvariantCulture,
+                $"{op} refused: the target is not a valid position (RA {raHours}h, Dec {decDeg}°). Nothing was sent to the mount.");
+        }
+        return string.Create(CultureInfo.InvariantCulture,
+            $"{op} refused: the target Dec {decDeg:F2}° is outside -90..90°. Nothing was sent to the mount.");
     }
 
     /// <summary>
@@ -766,6 +835,13 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem.Value));
+        // #2075 — the same range check as the slew core; a refused sync is a clean "not synced".
+        var syncRa = WrapRaHours(target.RA);
+        var syncDec = target.Dec;
+        if (SlewTargetRefusal(syncRa, syncDec, "telescope.sync") is string refusal) {
+            LogSlewTargetRefused("telescope.sync", refusal);
+            return false;
+        }
         NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
         try {
             var opTask = Task.Run(() => {
@@ -775,7 +851,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                     return false;
                 }
                 TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
-                client.SyncToCoordinates(target.RA, target.Dec);
+                client.SyncToCoordinates(syncRa, syncDec);
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
                 return true;
             }, CancellationToken.None);
@@ -810,6 +886,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
+        }
+        // #2075 — refuse an out-of-range flip target BEFORE the pier-side write: some mounts start
+        // moving on that write, and the goto's own guard runs only after it.
+        if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
+            LogSlewTargetRefused("telescope.flip", refusal);
+            throw new SequenceEntityFailedException(refusal);
         }
         // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
         await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
@@ -948,6 +1030,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
         Message = "Mount mediator op {Op} rejected: the mount's EquatorialSystem could not be read, so the target's epoch is unknown")]
     private partial void LogMountOpRejectedUnknownSystem(string op);
+
+    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning,
+        Message = "Mount mediator op {Op} refused before the mount (#2075): {Reason}")]
+    private partial void LogSlewTargetRefused(string op, string reason);
 
     private static string UnknownSystemMessage(string op) =>
         $"{op} refused: the mount has not reported its coordinate system (EquatorialSystem), so the target cannot be put in its epoch without guessing. Check the mount connection and retry.";
