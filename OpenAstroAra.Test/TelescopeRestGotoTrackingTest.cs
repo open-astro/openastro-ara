@@ -233,6 +233,46 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        // #2107 — two parks in flight (a second Park while the first still waits for the guider): the first one counted goes
+        // to the mount, the other is dropped with a log line that names the park it lost to (its 202 stands). One stop count,
+        // and no AbortSlew: neither park aborts the other.
+        [Test]
+        public async Task Two_parks_in_flight_send_one_park_count_one_stop_and_name_the_dropped_one() {
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true));
+            var asked = 0;
+            var bothAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                if (Interlocked.Increment(ref asked) == 2) {
+                    bothAsked.TrySetResult();
+                }
+                return stopDone.Task;
+            });
+            using var svc = await ConnectedAsync(box, log, () => guider.Object);
+            var before = svc.AbortEpoch;
+
+            var first = svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            var second = svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            await bothAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            stopDone.SetResult(true);
+            await first;
+            await second;
+
+            await WaitForAsync(() => PutIndex(box, "park") >= 0, "no park reached the mount");
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("park dropped", StringComparison.Ordinal)), "the other park was not dropped");
+            await Task.Delay(200);
+            Assert.Multiple(() => {
+                Assert.That(box.Puts.Count(p => p.Path.EndsWith("/park", StringComparison.Ordinal)), Is.EqualTo(1), "one park reaches the mount");
+                Assert.That(PutIndex(box, "abortslew"), Is.EqualTo(-1), "neither park aborts the other");
+                Assert.That(svc.AbortEpoch, Is.EqualTo(before + 1), "the two parks count one stop");
+                Assert.That(svc.AbortReasonSince(before, except: null), Is.EqualTo(MountStopReasons.Park));
+                Assert.That(log.Messages, Has.Some.Contains("park dropped: the mount was stopped (a park)"), "the dropped park says what took the mount");
+            });
+        }
+
         // #2066 — a Find Home has the park's window (it waits for the guider before the homing): Emergency Stop's latch, or a
         // Stop Mount, that lands in it must not be followed by the homing.
         [TestCase("emergency_stop")]
