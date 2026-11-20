@@ -336,6 +336,40 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.IsMoving, Is.True, "the ledger agrees: the RA axis still turns");
         }
 
+        [Test]
+        public async Task A_runaway_read_after_Emergency_Stop_took_the_mount_sends_no_stop_of_its_own() {
+            // The turn's MoveAxis 0 is ignored and the mount runs on; while a settle read is in flight Emergency Stop takes
+            // the mount over. The read then comes back 2° past the step: the run's own confirmed stop (and its resends)
+            // would abort the park and hold Emergency Stop's rung, so the run sends nothing more.
+            var mount = PolledGemAt(-4.0);
+            mount.MoveAxisStopIgnored = 1;
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws);
+            var clock = (ManualMountClock)mount.Clock;
+            Task<OperationAcceptedDto>? takeover = null;
+            var from = -1;
+            mount.OnFullRead = () => {
+                if (takeover is null && LastCommand(mount) == "move primary 0" && RaTurns(mount).Length == 1) {
+                    clock.Advance(TimeSpan.FromSeconds(0.5)); // the runaway: 5° past the step at the bench's 10°/s
+                    takeover = svc.StopForTakeoverAsync("emergency_stop", CancellationToken.None);
+                    var deadline = DateTime.UtcNow + SignalTimeout;
+                    while (!mount.Commands.Any(c => c.Text == "move secondary 0") && DateTime.UtcNow < deadline) {
+                        Thread.Sleep(1); // the takeover's own stop round goes out first
+                    }
+                    from = mount.Commands.Count;
+                }
+            };
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await WaitUntilAsync(() => takeover is not null).ConfigureAwait(false);
+            await takeover!.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(from, Is.GreaterThan(0));
+            var after = mount.Commands.Skip(from).Select(c => c.Text).ToArray();
+            Assert.That(after.Where(t => t.StartsWith("abort", StringComparison.Ordinal) || t.StartsWith("move", StringComparison.Ordinal)),
+                Is.Empty, "no stop from the run once the mount was taken over (the motion owner's release is fine): " + string.Join(", ", after));
+        }
+
         // ── a soft limit (M33) ───────────────────────────────────────────────────────────────
 
         [Test]

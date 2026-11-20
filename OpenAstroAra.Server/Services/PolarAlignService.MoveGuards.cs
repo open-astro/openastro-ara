@@ -201,6 +201,13 @@ namespace OpenAstroAra.Server.Services {
         /// goes out now, not after the run unwinds. Confirmed: the run fails with <see cref="TurnMismatch"/>. Not confirmed:
         /// with <see cref="MountDidNotStop"/> and the cut-power sentence; the motion stays marked, so the exit stops it again.</summary>
         private async Task FailTurnNotStoppedAsync(string what, int gen) {
+            // A read that came back after a Stop, Emergency Stop or a park took the mount (the read ignores cancellation):
+            // no stop round from here. Emergency Stop and a park own the mount (the run's exit skips its stop for them too),
+            // and the confirmed stop's resends would abort the park and hold Emergency Stop's rung.
+            if (!IsCurrent(gen)) {
+                throw new OperationCanceledException("the run was stopped before its turn's runaway was stopped");
+            }
+            ThrowIfStoppedFromOutside(gen);
             LogTurnNotStopped(what);
             var stopped = await StopMountMotionAsync("turn_not_stopped").ConfigureAwait(false);
             if (!IsCurrent(gen)) {
