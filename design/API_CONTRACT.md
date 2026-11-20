@@ -1869,3 +1869,15 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/PolarAlignService.Stages.cs` (`MoveAxisUntilAsync`, `FitThreePointOrFail`), `Services/PolarAlignSettingsClamp.cs`, `Services/TelescopeService.cs` (`ReadPointingNowAsync`), `Contracts/ProfileDtos.cs`.
 
 **Related:** #2048, #1591, #1735
+
+## 2026-11-19 — `CameraStateDto.cooler_not_responding` (#2076)
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/camera` (`runtime`): `CameraStateDto` gains the optional `cooler_not_responding` (bool, default false).
+
+**Decision:** true while a cooler that Ara switched on does not respond. That is: `CoolerOn` has read back off for 1 min without a break, or it reads on at ≤ 1 % power with the sensor more than 2 °C above the set-point and not closing on it for 1 min. An unknown `CoolerOn` read neither sets nor clears it. It clears when the cooler responds, when the cooler is switched off, and on a reconnect. Only Ara's own cooler-on arms it; a cooler that another client or the driver's session restore switched on is not watched. When it is set, the daemon publishes one `value_mismatch` camera fault (notify-only Warning: no retry, pause or escalation) whose details start "Cooler not responding: is the camera's 12 V connected?". The daemon never re-sends the cooler write. A sequencer Cool Camera step whose cooler reads off for 1 min (in the ramp or the wait) fails through the normal step failure with the same hint, instead of after the 10-min regulating bound.
+
+**Reasoning:** 2026-11-19: the Uranus-C Pro had no 12 V. The driver accepted `CoolerOn = true` and read it back false at 0 % power for hours, and nothing told the user. The drift monitor (§42.2) disarms while `CoolerOn` reads off, so it could not see this.
+
+**Spec ref:** `Services/CoolerResponseWatch.cs`, `Services/CameraService.cs` (`ReadTick`, `SetCoolerAsync`), `Services/CameraService.Mediator.cs` (`RegulateTemperatureAsync`), `Contracts/EquipmentDtos.cs`; client `models/camera_status.dart`, `screens/simple/simple_shell.dart`.
+
+**Related:** #2076, #1076, #1210

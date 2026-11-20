@@ -6693,6 +6693,12 @@ abstract class AppLocalizations {
   /// **'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.'**
   String get simpleGuiderCalibrationFailed;
 
+  /// Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler not responding: is the camera\'s 12 V connected?'**
+  String get simpleCoolerNotResponding;
+
   /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
   ///
   /// In en, this message translates to:

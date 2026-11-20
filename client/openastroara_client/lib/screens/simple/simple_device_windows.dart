@@ -204,6 +204,16 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           ),
         );
+        // #2076 — switched on, but the camera does not run it (no 12 V).
+        if (s.coolerNotResponding) {
+          children.add(
+            Text(
+              context.l10n.simpleCoolerNotResponding,
+              key: const Key('simple-camera-cooler-not-responding'),
+              style: AraText.caption.copyWith(color: AraColors.accentWarning),
+            ),
+          );
+        }
         // The target only while the cooler is on (On cools to the profile's).
         if (caps.canSetTemperature && s.coolerOn) {
           const lo = SimpleCameraWindow.targetMin,
