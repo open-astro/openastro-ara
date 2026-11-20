@@ -52,6 +52,15 @@ import 'package:openastroara/widgets/inline_choices.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart' show serverLinkUpProvider;
+import 'package:openastroara/state/settings/loaded_section.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+
+/// The profile's optics, in from the rig from the start (no load, no network).
+class _RigOptics extends OpticsSettingsNotifier {
+  @override
+  LoadedSection<OpticsSettings> build() =>
+      const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+}
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -201,6 +210,8 @@ void main() {
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
           // The Connect to your rig card (no rig link here) scans: no network in a test.
           discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
+          // The profile's optics in from the rig (ADR 0015): Rig shows its telescope wheels.
+          opticsSettingsProvider.overrideWith(_RigOptics.new),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),

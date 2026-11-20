@@ -820,7 +820,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 10000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.focal_length_mm',
   ),
   Setting(
@@ -838,7 +838,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0.1, max: 5, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'optics.reducer_factor',
   ),
   Setting(
@@ -857,7 +857,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_width_px',
   ),
   Setting(
@@ -876,7 +876,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_height_px',
   ),
   Setting(
@@ -895,7 +895,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 50, step: 0.1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.pixel_size_um',
   ),
   Setting(
@@ -915,7 +915,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 2000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.aperture_mm',
     relatedSettings: [
       'img.optics.focal_length_mm',

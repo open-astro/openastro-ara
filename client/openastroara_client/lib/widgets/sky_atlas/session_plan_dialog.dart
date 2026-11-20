@@ -191,7 +191,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // A mosaic becomes one target block per panel, on the same grid the
     // preview drew (mosaic_geometry ports the overlay's math). Each panel
     // gets its share of the slot so the run finishes inside it.
-    final fov = opticsFovArcmin(ref.read(opticsSettingsProvider));
+    final fov = opticsFovArcmin(
+      ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
+    );
     final aim = t.aim;
     final panels = t.mosaic.isMosaic && fov != null
         ? mosaicPanelCentres(
@@ -284,7 +286,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final theme = Theme.of(context);
     final s = ref.watch(sessionPlanProvider);
     final plan = s.plan;
-    final frameFov = opticsFovArcmin(ref.watch(opticsSettingsProvider));
+    final frameFov = opticsFovArcmin(
+      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings(),
+    );
 
     return AlertDialog(
       backgroundColor: AraColors.bgPanel,

@@ -82,7 +82,9 @@ import '../../models/mount_status.dart' show MountCapabilities;
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/optics_settings_state.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../util/gps_site_fill.dart';
 import '../../util/friendly_error.dart';
@@ -567,21 +569,26 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final api = ref.read(profileApiProvider);
     if (api == null) return;
     final optics = ref.read(opticsSettingsProvider.notifier);
+    // Only what the rig's copy leaves unset; null when that is nothing.
+    OpticsSettings? fill(OpticsSettings c) {
+      final aperture = c.apertureMm <= 0 ? caps.apertureMm : null;
+      final focal = c.focalLengthMm <= 0 ? caps.focalLengthMm : null;
+      return aperture == null && focal == null
+          ? null
+          : c.copyWith(apertureMm: aperture, focalLengthMm: focal);
+    }
+
     try {
-      // The profile's own values first: never fill over one not loaded yet.
-      await optics.hydrateFromServer(api);
-      if (!mounted) return;
-      final known = ref.read(opticsSettingsProvider);
-      var changed = false;
-      if (known.apertureMm <= 0 && caps.apertureMm != null) {
-        optics.setApertureMm(caps.apertureMm!);
-        changed = true;
+      // The rig's copy first (ADR 0015): never fill over one not loaded. The
+      // daemon fills these itself on a mount connect and announces it, so the
+      // copy may already hold them. A load the section's own first load
+      // superseded lands nothing: load once more.
+      for (var i = 0; i < 2 && !ref.read(opticsSettingsProvider).canSave; i++) {
+        if (!await optics.load(api) || !mounted) return;
       }
-      if (known.focalLengthMm <= 0 && caps.focalLengthMm != null) {
-        optics.setFocalLengthMm(caps.focalLengthMm!);
-        changed = true;
-      }
-      if (changed) await optics.persistToServer(api);
+      final known = ref.read(opticsSettingsProvider).value;
+      if (known == null || fill(known) == null) return;
+      await optics.changeAndSave((c) => fill(c) ?? c);
     } catch (e) {
       debugPrint('[simple] telescope from the mount: $e');
     }
@@ -4754,6 +4761,37 @@ class _ThisRig extends ConsumerWidget {
     }
   }
 
+  /// Keep [change] in the profile's optics: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveOptics(
+    BuildContext context,
+    WidgetRef ref,
+    OpticsSettings Function(OpticsSettings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
+      notify(
+        l10n.shellCouldntSave,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return;
+    }
+    try {
+      await ref.read(opticsSettingsProvider.notifier).changeAndSave(change);
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSave,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
+        error: true,
+      );
+    }
+  }
+
   /// The site from this device (its GPS, or the rig's held fix): the same
   /// lookup as the full UI's Fill from GPS, with the time zone those
   /// coordinates fall in, saved at once; and this device's clock to the rig.
@@ -4926,39 +4964,55 @@ class _ThisRig extends ConsumerWidget {
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
         const Divider(height: AraSpace.s16),
-        for (final (id, label, digits, value, set)
-            in <(String, String, int?, double, void Function(double))>[
-              // Aperture on one wheel of millimetres; focal length per digit.
-              (
-                'aperture',
-                l10n.shellAperture,
-                null,
-                ref.watch(opticsSettingsProvider).apertureMm,
-                ref.read(opticsSettingsProvider.notifier).setApertureMm,
-              ),
-              (
-                'focal',
-                l10n.shellFocalLength,
-                4,
-                ref.watch(opticsSettingsProvider).focalLengthMm,
-                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
-              ),
-            ])
-          _RigWheelRow.millimetres(
-            l10n,
-            id: id,
-            label: label,
-            digits: digits,
-            value: value,
-            onSet: (v) => _save(
-              context,
-              ref,
-              () => set(v),
-              (api) => ref
-                  .read(opticsSettingsProvider.notifier)
-                  .persistToServer(api),
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(opticsSettingsProvider) case final optics
+            when optics.value == null)
+          SectionNotLoaded(
+            section: optics,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(opticsSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else
+          for (final (id, label, digits, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  int?,
+                  double,
+                  OpticsSettings Function(OpticsSettings, double),
+                )
+              >[
+                // Aperture on one wheel of millimetres; focal length per digit.
+                (
+                  'aperture',
+                  l10n.shellAperture,
+                  null,
+                  ref.watch(opticsSettingsProvider).value!.apertureMm,
+                  (c, v) => c.copyWith(apertureMm: v),
+                ),
+                (
+                  'focal',
+                  l10n.shellFocalLength,
+                  4,
+                  ref.watch(opticsSettingsProvider).value!.focalLengthMm,
+                  (c, v) => c.copyWith(focalLengthMm: v),
+                ),
+              ])
+            _RigWheelRow.millimetres(
+              l10n,
+              id: id,
+              label: label,
+              digits: digits,
+              value: value,
+              onSet: (v) => _saveOptics(context, ref, (c) => change(c, v)),
             ),
-          ),
         // The guide scope: read from the guider when the profile left it
         // unset, kept in the profile (polar alignment solves with it).
         _GuideOpticsReader(
