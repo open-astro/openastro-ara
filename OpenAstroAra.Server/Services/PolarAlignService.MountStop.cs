@@ -145,11 +145,16 @@ namespace OpenAstroAra.Server.Services {
         /// moves it on purpose. The run's exit then sends no stop of its own (it would abort the park) and confirms none.</summary>
         internal static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
 
+        /// <summary>#2066 — the reason a pad stop counts with: a MoveAxis 0 from the app's direction pad (or any client of
+        /// <c>/moveaxis</c>) that lands while Polar Align turns the mount. The run ends and does not restart the motor.</summary>
+        public const string PadStop = "pad_stop";
+
         internal static string StoppedFromOutsideMessage(string? by) => by switch {
             "emergency_stop" => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
             "watchdog" => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
             "park" => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
             "findhome" => "the mount was sent Home from outside polar alignment — polar alignment ended. Start again when ready",
+            PadStop => "the mount was stopped from the direction pad — polar alignment ended. Start again when ready",
             _ => "the mount was stopped from outside polar alignment (Stop Mount) — polar alignment ended. Start again when ready",
         };
 
