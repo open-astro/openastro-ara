@@ -114,7 +114,7 @@ public static class PlateSolveEndpoints {
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
     public static IResult CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
-            OpenAstroAra.Profile.Interfaces.IProfileService profileService, ITelescopeService? telescope = null) {
+            OpenAstroAra.Profile.Interfaces.IProfileService profileService, [Microsoft.AspNetCore.Mvc.FromServices] ITelescopeService? telescope = null) {
         // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
         if (request is null
                 || request.RaHours is not (>= 0 and < 24)
