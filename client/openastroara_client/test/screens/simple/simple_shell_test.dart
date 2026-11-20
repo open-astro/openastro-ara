@@ -461,7 +461,8 @@ class _PoliciesApi extends ProfileApi {
   _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
   final SafetyPolicies? policies;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: policies ?? (throw StateError('unreachable')), etag: '"v1"');
 }
 
 /// Fails its first safety-policies read, then answers with the weather on.
@@ -469,9 +470,9 @@ class _FlakyPoliciesApi extends ProfileApi {
   _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
   int calls = 0;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async {
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
     if (++calls == 1) throw StateError('unreachable');
-    return const SafetyPolicies(weatherTriggersEnabled: true);
+    return (value: const SafetyPolicies(weatherTriggersEnabled: true), etag: '"v1"');
   }
 }
 
@@ -796,7 +797,7 @@ class _GuideOpticsApi extends ProfileApi {
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
       ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
@@ -815,7 +816,7 @@ class _PierRefusedApi extends ProfileApi {
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async =>
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
       throw StateError('unreachable');
   @override
   Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
@@ -989,7 +990,7 @@ class _OpticsApi extends ProfileApi {
   final puts = <OpticsSettings>[];
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
   // The Storage block loads its section when Rig opens; no network here.
   @override
   Future<({StorageSettings value, String? etag})> getStorageSection() async =>
@@ -7211,7 +7212,7 @@ void main() {
       weatherProvider.overrideWith(() => _Windy()),
       profileApiProvider.overrideWithValue(_PoliciesApi(null)),
     ]);
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
@@ -7229,7 +7230,7 @@ void main() {
     await tester.pump();
     expect(api.calls, greaterThan(0));
     // Anything that rebuilds the pill retries after the failed first load.
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     await tester.pump();

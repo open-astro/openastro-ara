@@ -1,12 +1,13 @@
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
-/// §35 Safety policies. Phase 12h.6g wires the daemon round-trip via
-/// [ProfileApi] (`/api/v1/profile/safety`). Local state is still source
-/// of truth between syncs.
+/// §35 Safety policies. Backed by the daemon's `GET`/`PUT
+/// /api/v1/profile/safety` section through the section module
+/// (loaded_section.dart): the rig's copy, loaded before it is saved.
 
 enum UnsafeAction { pauseAndPark, parkOnly, abortAndPark, ignore }
 enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
@@ -279,201 +280,215 @@ class SafetyPolicies {
       );
 }
 
-class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
-    with SettingsSyncMixin<SafetyPolicies> {
-  @override
-  SafetyPolicies build() => const SafetyPolicies();
-
-  void setOnUnsafe(UnsafeAction a) => state = state.copyWith(onUnsafe: a);
+/// ADR 0015 — a value only once the rig has answered. Loads itself: Simple
+/// Mode's mount, weather and safety windows and the monitor read it with no
+/// Settings panel open first. The daemon's own writes (the flip executor's
+/// first-flip confirmation, auto flats) reach it as `profile.updated`.
+class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
+  void setOnUnsafe(UnsafeAction a) => edit((c) => c.copyWith(onUnsafe: a));
   void setAutoResumeWhenSafe(bool v) =>
-      state = state.copyWith(autoResumeWhenSafe: v);
+      edit((c) => c.copyWith(autoResumeWhenSafe: v));
 
   void setResumeDelayMin(int v) {
     if (v < 0) return;
-    state = state.copyWith(resumeDelayMin: v);
+    edit((c) => c.copyWith(resumeDelayMin: v));
   }
 
   void setMeridianFlipAuto(bool v) =>
-      state = state.copyWith(meridianFlipAuto: v);
+      edit((c) => c.copyWith(meridianFlipAuto: v));
 
   void setMeridianPauseMin(int v) {
     if (v < 0) return;
-    state = state.copyWith(meridianPauseMin: v);
+    edit((c) => c.copyWith(meridianPauseMin: v));
   }
 
   void setMeridianRecenter(bool v) =>
-      state = state.copyWith(meridianRecenter: v);
+      edit((c) => c.copyWith(meridianRecenter: v));
 
   void setMeridianRefocus(MeridianRefocusMode v) =>
-      state = state.copyWith(meridianRefocus: v);
+      edit((c) => c.copyWith(meridianRefocus: v));
 
   /// Clamped to the registry's 0.5–10 °C range.
   void setMeridianRefocusTempThresholdC(double v) {
     if (v <= 0 || v.isNaN) return;
-    state = state.copyWith(meridianRefocusTempThresholdC: v.clamp(0.5, 10.0));
+    edit((c) => c.copyWith(meridianRefocusTempThresholdC: v.clamp(0.5, 10.0)));
   }
 
   /// The mode drives the legacy bool too, so an older daemon still sees
   /// "recalibrate" for anything but skip. Until the user picks one, a legacy
   /// profile's null mode (and its bool) are left exactly as stored.
-  void setMeridianGuiderRecal(GuiderRecalMode v) => state = state.copyWith(
+  void setMeridianGuiderRecal(GuiderRecalMode v) => edit((c) => c.copyWith(
         meridianGuiderRecal: v,
         meridianRecalGuider: v != GuiderRecalMode.skip,
-      );
+      ));
 
   /// Blank clears (back to the sun-computed window); otherwise HH:mm only.
   void setUnattendedWindowStart(String v) {
     final t = v.trim();
     if (t.isNotEmpty && !isClockText(t)) return;
-    state = state.copyWith(unattendedWindowStart: t);
+    edit((c) => c.copyWith(unattendedWindowStart: t));
   }
 
   void setUnattendedWindowEnd(String v) {
     final t = v.trim();
     if (t.isNotEmpty && !isClockText(t)) return;
-    state = state.copyWith(unattendedWindowEnd: t);
+    edit((c) => c.copyWith(unattendedWindowEnd: t));
   }
 
   void setFlipSafetyEnabled(bool v) =>
-      state = state.copyWith(flipSafetyEnabled: v);
+      edit((c) => c.copyWith(flipSafetyEnabled: v));
 
   void setUnattendedEscalation(bool v) =>
-      state = state.copyWith(unattendedEscalation: v);
+      edit((c) => c.copyWith(unattendedEscalation: v));
 
   void setUnattendedShutdownEnabled(bool v) =>
-      state = state.copyWith(unattendedShutdownEnabled: v);
+      edit((c) => c.copyWith(unattendedShutdownEnabled: v));
 
   void setUnattendedShutdownWaitMinutes(int v) {
     if (v < 1) return; // the daemon clamps to >= 1 minute; mirror it here
-    state = state.copyWith(unattendedShutdownWaitMinutes: v);
+    edit((c) => c.copyWith(unattendedShutdownWaitMinutes: v));
   }
 
   void setExpectedFlipSlewSeconds(int v) {
     if (v <= 0) return; // the daemon's watchdog needs a positive expectation
-    state = state.copyWith(expectedFlipSlewSeconds: v);
+    edit((c) => c.copyWith(expectedFlipSlewSeconds: v));
   }
 
   void setOnAltitudeLimit(AltitudeLimitAction a) =>
-      state = state.copyWith(onAltitudeLimit: a);
+      edit((c) => c.copyWith(onAltitudeLimit: a));
   void setParkIfNoMoreTargets(bool v) =>
-      state = state.copyWith(parkIfNoMoreTargets: v);
+      edit((c) => c.copyWith(parkIfNoMoreTargets: v));
   void setOnGuiderLost(GuiderLostAction a) =>
-      state = state.copyWith(onGuiderLost: a);
+      edit((c) => c.copyWith(onGuiderLost: a));
 
   void setGuiderRetryTimeoutSec(int v) {
     if (v < 0) return;
-    state = state.copyWith(guiderRetryTimeoutSec: v);
+    edit((c) => c.copyWith(guiderRetryTimeoutSec: v));
   }
 
   void setSkipTargetIfRecoveryFails(bool v) =>
-      state = state.copyWith(skipTargetIfRecoveryFails: v);
+      edit((c) => c.copyWith(skipTargetIfRecoveryFails: v));
   void setCalibrationCaptureDefault(CalibrationCaptureDefault v) =>
-      state = state.copyWith(calibrationCaptureDefault: v);
+      edit((c) => c.copyWith(calibrationCaptureDefault: v));
   void setWeatherTriggersEnabled(bool v) =>
-      state = state.copyWith(weatherTriggersEnabled: v);
+      edit((c) => c.copyWith(weatherTriggersEnabled: v));
 
   void setMaxWindKmh(int v) {
     if (v <= 0) return;
-    state = state.copyWith(maxWindKmh: v);
+    edit((c) => c.copyWith(maxWindKmh: v));
   }
 
   void setMaxHumidityPct(int v) {
     if (v <= 0 || v > 100) return;
-    state = state.copyWith(maxHumidityPct: v);
+    edit((c) => c.copyWith(maxHumidityPct: v));
   }
 
   void setMinDewDeltaC(double v) {
     if (v < 0) return;
-    state = state.copyWith(minDewDeltaC: v);
+    edit((c) => c.copyWith(minDewDeltaC: v));
   }
 
   void setFlatTargetAdu(int v) {
     if (v <= 0) return;
-    state = state.copyWith(flatTargetAdu: v);
+    edit((c) => c.copyWith(flatTargetAdu: v));
   }
 
   void setFlatTargetPercent(double v) {
     if (v <= 0 || v >= 100) return;
-    state = state.copyWith(flatTargetPercent: v);
+    edit((c) => c.copyWith(flatTargetPercent: v));
   }
 
   void setFlatTargetAduTolerancePct(double v) {
     if (v <= 0) return;
-    state = state.copyWith(flatTargetAduTolerancePct: v);
+    edit((c) => c.copyWith(flatTargetAduTolerancePct: v));
   }
 
   void setFlatFramesPerFilter(int v) {
     if (v <= 0) return;
-    state = state.copyWith(flatFramesPerFilter: v);
+    edit((c) => c.copyWith(flatFramesPerFilter: v));
   }
 
   void setPostFlatParkMount(bool v) =>
-      state = state.copyWith(postFlatParkMount: v);
+      edit((c) => c.copyWith(postFlatParkMount: v));
 
   void setSkyFlatTargetAdu(int v) {
     if (v <= 0) return;
-    state = state.copyWith(skyFlatTargetAdu: v);
+    edit((c) => c.copyWith(skyFlatTargetAdu: v));
   }
 
   void setSkyFlatFramesPerFilter(int v) {
     if (v <= 0) return;
-    state = state.copyWith(skyFlatFramesPerFilter: v);
+    edit((c) => c.copyWith(skyFlatFramesPerFilter: v));
   }
 
   void setSkyFlatTargetAzimuth(double v) {
     if (v < 0 || v > 360) return;
-    state = state.copyWith(skyFlatTargetAzimuth: v);
+    edit((c) => c.copyWith(skyFlatTargetAzimuth: v));
   }
 
   void setSkyFlatTargetAltitude(double v) {
     if (v < 0 || v > 90) return;
-    state = state.copyWith(skyFlatTargetAltitude: v);
+    edit((c) => c.copyWith(skyFlatTargetAltitude: v));
   }
 
   void setSkyFlatStopAtMaxAdu(double v) {
     if (v <= 0) return;
-    state = state.copyWith(skyFlatStopAtMaxAdu: v);
+    edit((c) => c.copyWith(skyFlatStopAtMaxAdu: v));
   }
 
   void setSkyFlatStopAtMinAdu(double v) {
     if (v < 0) return;
-    state = state.copyWith(skyFlatStopAtMinAdu: v);
+    edit((c) => c.copyWith(skyFlatStopAtMinAdu: v));
   }
 
   void setSkyFlatSunAltitude(double v) {
     if (v < -90 || v > 90) return;
-    state = state.copyWith(skyFlatSunAltitude: v);
+    edit((c) => c.copyWith(skyFlatSunAltitude: v));
   }
 
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
-      state = state.copyWith(onDiskSpaceCritical: a);
+      edit((c) => c.copyWith(onDiskSpaceCritical: a));
 
   /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
   /// or any rig change the optics-based auto-reset can't see). Goes straight
   /// to the daemon's dedicated endpoint — the flag is DAEMON-owned (the flip
   /// executor sets it out-of-band, and the general safety PUT ignores it), so
   /// a local-only mutation deferred to Save could clobber or be clobbered by
-  /// an overnight flip. State refreshes from the daemon's echoed policies.
-  Future<void> rearmFirstFlip(ProfileApi api) async {
-    final echoed = await api.rearmFirstFlip();
-    // Patch ONLY the daemon-owned flag into local state: the echo carries the
-    // PERSISTED policies, and replacing the whole object would silently
-    // discard any unsaved edits staged in the panel — the same stale-snapshot
-    // clobber class the server-side merge closes for the daemon-owned field,
-    // mirrored here for the thirteen user-owned ones.
-    state = state.copyWith(firstFlipConfirmed: echoed.firstFlipConfirmed);
-  }
+  /// an overnight flip.
+  ///
+  /// Only the flag is patched into the shown copy: replacing it with the
+  /// rig's would discard unsaved edits staged in the panel. The rig answers
+  /// its new tag (#1807), kept so the next Save is not refused as stale; when
+  /// the rig's copy differs by more than the flag, another device saved in
+  /// between and the panel offers Reload instead (ADR 0015).
+  Future<void> rearmFirstFlip() => actOnRig(
+    (api) => api.rearmFirstFlip(),
+    apply: (shown, rig) =>
+        shown.copyWith(firstFlipConfirmed: rig.firstFlipConfirmed),
+    onlyAction: (loaded, rig) => mapEquals(
+      ProfileApi.safetyPoliciesToJson(
+        loaded.copyWith(firstFlipConfirmed: rig.firstFlipConfirmed),
+      ),
+      ProfileApi.safetyPoliciesToJson(rig),
+    ),
+  );
 
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getSafetyPolicies());
+  @override
+  Future<Tagged<SafetyPolicies>> fetch(ProfileApi api) =>
+      api.getSafetySection();
 
-  Future<SafetyPolicies> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putSafetyPolicies(sent));
+  @override
+  Future<Tagged<SafetyPolicies>> send(
+    ProfileApi api,
+    SafetyPolicies value,
+    String? etag,
+  ) => api.putSafetySection(value, ifMatch: etag);
 }
 
 final safetyPoliciesProvider =
-    NotifierProvider<SafetyPoliciesNotifier, SafetyPolicies>(
-        SafetyPoliciesNotifier.new);
+    NotifierProvider<SafetyPoliciesNotifier, LoadedSection<SafetyPolicies>>(
+      SafetyPoliciesNotifier.new,
+    );
 
 /// `H:mm` / `HH:mm`, 24-hour — what the daemon's unattended window parses.
 bool isClockText(String s) {

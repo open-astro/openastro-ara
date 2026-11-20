@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
 
@@ -47,6 +48,7 @@ const _paths = [
   'notifications',
   'optics',
   'plate-solve',
+  'safety',
   'site',
   'storage',
   'unguided',
@@ -61,6 +63,7 @@ final _selfLoading = {
   filterWheelPolicyProvider,
   imagingDefaultsProvider,
   opticsSettingsProvider,
+  safetyPoliciesProvider,
   siteSettingsProvider,
 };
 
@@ -181,6 +184,8 @@ void main() {
         c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382),
     'site': (c) =>
         c.read(siteSettingsProvider.notifier).setLatitudeDeg(-33.856784),
+    'safety': (c) =>
+        c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -291,6 +296,21 @@ void main() {
       ...without(rigDefaults['site']!),
       {...rigDefaults['site']!, 'twilight_definition': 'bogus'},
     ],
+    'safety': [
+      null,
+      // Every key the client reads (not the daemon's fault policies).
+      ...without({...rigDefaults['safety']!}..remove('hot_reconnect_enabled')),
+      for (final key in [
+        'on_unsafe',
+        'meridian_refocus',
+        'meridian_guider_recal',
+        'on_altitude_limit',
+        'on_guider_lost',
+        'on_disk_space_critical',
+        'calibration_capture_default',
+      ])
+        {...rigDefaults['safety']!, key: 'bogus'},
+    ],
     'custom-horizon': [
       null,
       <String, Object?>{},
@@ -332,6 +352,7 @@ void main() {
     'imaging-defaults': 'cooler_target_c',
     'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
+    'safety': 'meridian_pause_min',
     'site': 'latitude_deg',
     'unguided': 'guard_enabled',
   };
@@ -419,6 +440,87 @@ void main() {
     expect(shown.value!.latitudeDeg, 51.477833, reason: 'the edit stays');
     expect(shown.value!.permanentPier, isTrue);
     expect(shown.etag, rig.etagOf('site'), reason: 'the next Save is not refused');
+  });
+
+  test('safety: a meridian flip write announced by profile.updated reloads '
+      'the copy, so the next Save is not refused (ADR 0015)', () async {
+    ProfileApi.forgetOwnWrites(); // an earlier case's own safety save
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    // The flip executor confirms the first flip on the rig and announces it.
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'first_flip_confirmed': true,
+    });
+    await applyProfileUpdated(c, 'safety');
+    c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12);
+    await c.read(safetyPoliciesProvider.notifier).save(rig.api());
+    final put = rig.puts.single;
+    expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
+    expect((put.body as Map)['meridian_pause_min'], 12);
+    expect(c.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isTrue);
+  });
+
+  // The re-arm POST answers the rig's policies with their new tag.
+  Map<String, Object?> rearmed(Object? copy) => {
+    ...copy! as Map<String, Object?>,
+    'first_flip_confirmed': false,
+  };
+
+  test('safety: the first-flip re-arm keeps the tag it answers and an unsaved '
+      'edit, so the next Save is not refused (ADR 0015)', () async {
+    final rig = _rig()
+      ..actions['safety/first-flip/rearm'] = (
+        section: 'safety',
+        change: rearmed,
+      );
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'first_flip_confirmed': true,
+    });
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    final n = c.read(safetyPoliciesProvider.notifier);
+    n.setMeridianPauseMin(12); // typed in the panel; Save not pressed yet
+    await n.rearmFirstFlip();
+    final shown = c.read(safetyPoliciesProvider);
+    expect(shown.value!.firstFlipConfirmed, isFalse);
+    expect(shown.value!.meridianPauseMin, 12, reason: 'the edit stays');
+    expect(shown.etag, rig.etagOf('safety'));
+    expect(shown.conflict, isFalse);
+    await n.save(rig.api());
+    expect(rig.puts.single.ifMatch, shown.etag);
+    expect((rig.puts.single.body as Map)['meridian_pause_min'], 12);
+  });
+
+  test('safety: a re-arm answered with a copy another device saved keeps the '
+      'old tag and offers Reload (ADR 0015)', () async {
+    final rig = _rig()
+      ..actions['safety/first-flip/rearm'] = (
+        section: 'safety',
+        change: rearmed,
+      );
+    final c = _container(rig);
+    await settle(() => c.read(safetyPoliciesProvider).canSave);
+    final tag = c.read(safetyPoliciesProvider).etag;
+    // Another device turned auto flip off; this one did not hear of it.
+    rig.daemonWrote('safety', {
+      ...rigDefaults['safety']!,
+      'meridian_flip_auto': false,
+      'first_flip_confirmed': true,
+    });
+    final n = c.read(safetyPoliciesProvider.notifier);
+    await n.rearmFirstFlip();
+    final shown = c.read(safetyPoliciesProvider);
+    expect(shown.value!.firstFlipConfirmed, isFalse);
+    expect(shown.etag, tag, reason: 'the copy shown is not the rig\'s');
+    expect(shown.conflict, isTrue);
+    await expectLater(
+      n.save(rig.api()),
+      throwsA(isA<SectionConflictException>()),
+    );
+    expect(rig.puts, isEmpty, reason: 'auto flip stays off on the rig');
   });
 
   // The diagnostics radios save on each tap (replaceAndSave).

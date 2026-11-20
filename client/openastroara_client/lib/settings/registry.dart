@@ -163,7 +163,7 @@ const List<Setting> settingsRegistry = [
       'Abort + park',
       'Ignore',
     ]),
-    defaultValue: 'Pause + park',
+    defaultValue: null,
     profilePath: 'safety.on_unsafe',
   ),
   Setting(
@@ -207,7 +207,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['resume', 'safe', 'automatic', 'weather', 'restart'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.auto_resume',
   ),
   Setting(
@@ -227,7 +227,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.weather_triggers_enabled',
   ),
   Setting(
@@ -238,7 +238,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['wind', 'gust', 'speed', 'kmh', 'threshold', 'weather'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 200),
-    defaultValue: 36,
+    defaultValue: null,
     profilePath: 'safety.max_wind_kmh',
   ),
   Setting(
@@ -256,7 +256,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 100),
-    defaultValue: 85,
+    defaultValue: null,
     profilePath: 'safety.max_humidity_pct',
   ),
   Setting(
@@ -275,7 +275,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.5),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'safety.min_dew_delta_c',
   ),
   Setting(
@@ -286,7 +286,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['delay', 'wait', 'resume', 'safe', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 60),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'safety.resume_delay_min',
   ),
   Setting(
@@ -305,7 +305,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.meridian_flip_auto',
   ),
   Setting(
@@ -316,7 +316,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['meridian', 'flip', 'pause', 'stop', 'wait', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 30),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'safety.meridian_pause_min',
   ),
   Setting(
@@ -334,7 +334,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.meridian_recenter',
   ),
   Setting(
@@ -352,7 +352,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.enumValue(['if_temp_drifted', 'always', 'never']),
-    defaultValue: 'if_temp_drifted',
+    defaultValue: null,
     profilePath: 'safety.meridian_refocus',
     relatedSettings: ['safety.policies.meridian_refocus_temp_threshold_c'],
   ),
@@ -371,7 +371,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.doubleRange(min: 0.5, max: 10, step: 0.5),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'safety.meridian_refocus_temp_threshold_c',
     relatedSettings: ['safety.policies.meridian_refocus'],
   ),
@@ -391,7 +391,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.enumValue(['auto_restore', 'full', 'skip']),
-    defaultValue: 'auto_restore',
+    defaultValue: null,
     profilePath: 'safety.meridian_guider_recal',
     relatedSettings: ['safety.policies.meridian_recenter'],
   ),
@@ -413,7 +413,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'safety.unattended_window_start',
     relatedSettings: [
       'safety.policies.unattended_window_end',
@@ -438,7 +438,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'safety.unattended_window_end',
     relatedSettings: [
       'safety.policies.unattended_window_start',
@@ -462,7 +462,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.flip_safety_enabled',
     relatedSettings: [
       'safety.policies.meridian_flip_auto',
@@ -485,7 +485,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 300),
-    defaultValue: 90,
+    defaultValue: null,
     profilePath: 'safety.expected_flip_slew_seconds',
     relatedSettings: ['safety.policies.flip_safety_enabled'],
   ),
@@ -507,7 +507,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.unattended_escalation',
     relatedSettings: [
       'safety.policies.unattended_window_start',
@@ -534,7 +534,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.unattended_shutdown_enabled',
     relatedSettings: [
       'safety.policies.unattended_shutdown_wait_minutes',
@@ -558,7 +558,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 120),
-    defaultValue: 30,
+    defaultValue: null,
     profilePath: 'safety.unattended_shutdown_wait_minutes',
     relatedSettings: ['safety.policies.unattended_shutdown_enabled'],
   ),
@@ -580,7 +580,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.first_flip_confirmed',
     relatedSettings: [
       'safety.policies.flip_safety_enabled',
@@ -599,7 +599,7 @@ const List<Setting> settingsRegistry = [
       'Pause sequence',
       'Abort sequence',
     ]),
-    defaultValue: 'Skip target',
+    defaultValue: null,
     profilePath: 'safety.on_altitude_limit',
   ),
   Setting(
@@ -610,7 +610,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['park', 'no targets', 'sequence end', 'idle'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.park_if_no_more_targets',
   ),
   Setting(
@@ -625,7 +625,7 @@ const List<Setting> settingsRegistry = [
       'Skip target',
       'Abort sequence',
     ]),
-    defaultValue: 'Pause + retry',
+    defaultValue: null,
     profilePath: 'safety.on_guider_lost',
   ),
   Setting(
@@ -651,7 +651,7 @@ const List<Setting> settingsRegistry = [
       'Pause the running sequence',
       'Abort the running sequence',
     ]),
-    defaultValue: 'Warn only',
+    defaultValue: null,
     profilePath: 'safety.on_disk_space_critical',
   ),
   Setting(
@@ -662,7 +662,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guider', 'retry', 'timeout', 'phd2', 'seconds'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 600),
-    defaultValue: 60,
+    defaultValue: null,
     profilePath: 'safety.guider_retry_timeout_sec',
   ),
   Setting(
@@ -673,7 +673,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['skip', 'target', 'recovery', 'guider', 'fail', 'continue'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.skip_target_if_recovery_fails',
   ),
 
@@ -1222,7 +1222,7 @@ const List<Setting> settingsRegistry = [
       'Sky flats at twilight',
       'Never',
     ]),
-    defaultValue: 'Ask at each sequence start',
+    defaultValue: null,
     profilePath: 'safety.calibration_capture_default',
   ),
   Setting(
@@ -1242,7 +1242,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 1, max: 99),
-    defaultValue: 50.0,
+    defaultValue: null,
     profilePath: 'safety.flat_target_percent',
   ),
   Setting(
@@ -1253,7 +1253,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'tolerance', 'adu', 'target', 'percent'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0.1, max: 50),
-    defaultValue: 5.0,
+    defaultValue: null,
     profilePath: 'safety.flat_target_adu_tolerance_pct',
   ),
   Setting(
@@ -1264,7 +1264,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'frames', 'count', 'filter', 'per filter'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 500),
-    defaultValue: 30,
+    defaultValue: null,
     profilePath: 'safety.flat_frames_per_filter',
   ),
   Setting(
@@ -1275,7 +1275,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'park', 'mount', 'end of night'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.post_flat_park_mount',
   ),
   Setting(
@@ -1294,7 +1294,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 65535),
-    defaultValue: 25000,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_adu',
   ),
   Setting(
@@ -1312,7 +1312,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 500),
-    defaultValue: 20,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_frames_per_filter',
   ),
   Setting(
@@ -1331,7 +1331,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 360),
-    defaultValue: 90.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_azimuth',
   ),
   Setting(
@@ -1350,7 +1350,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 90),
-    defaultValue: 75.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_altitude',
   ),
   Setting(
@@ -1369,7 +1369,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 1, max: 65535),
-    defaultValue: 50000.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_stop_at_max_adu',
   ),
   Setting(
@@ -1380,7 +1380,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sky flats', 'twilight', 'stop', 'floor', 'too dark', 'adu'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 65535),
-    defaultValue: 5000.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_stop_at_min_adu',
   ),
   Setting(
@@ -1400,7 +1400,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: -90, max: 90),
-    defaultValue: -9.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_sun_altitude',
   ),
   Setting(
