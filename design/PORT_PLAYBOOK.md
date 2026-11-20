@@ -6361,6 +6361,8 @@ To find `P_mount_axis`, server captures three frames with the mount's RA motor t
 
 Once `P_mount_axis` is known (after the initial 3-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
+The reverse projection holds only while the camera is fixed in alt/az, so the live loop needs tracking off (#2072): the routine confirms the mount reports tracking off before the first live frame (within `TrackingConfirmTimeout`) and checks it on every frame; a mount still or again tracking ends the run with `tracking_not_off`. The projection divides the altitude shift by cos ψ (ψ = the camera's azimuth from the pole's at the seed, floored at |cos ψ| = 0.1); under |cos ψ| = 0.2 the status and each `polar_align.progress` carry `readout_caution: "altitude_weak"` and the client says to trust the Check. Each live frame logs its solved RA/Dec and the tracking state (EventId 4529); each seed logs the seed pointing and cos ψ (4594).
+
 This is the same math iPolar uses internally; we're just running it on the main camera at lower resolution instead of a dedicated PA cam.
 
 ### 45.9 API endpoints + WebSocket events
@@ -6447,6 +6449,7 @@ Failure events:
 | Mount is parked at Start (#2048) | Refused before anything moves (`polar-align-mount-parked`: "Mount is parked — unpark it and point near the pole first"); the routine never unparks |
 | Start without the user's confirmation, or with a direction that changed since (#2048) | Refused before anything moves (`polar-align-unconfirmed`, with the direction the run would turn now) |
 | A start whose turns would take the RA axis more than 30° from the session's sweep origin (#2089) | Refused before anything moves (`polar-align-sweep-limit`, with `offset_deg` and `limit_deg`): "slew it back near the pole (counterweights down) and confirm again". The origin is the first confirmed start after the mount connects; later starts turn back toward it; it is reset on reconnect, daemon restart, or a mount moved by other means since Polar Align last turned it (the start plan then says `new_origin`, which the start must confirm) |
+| Mount reads tracking on in the live loop (#2072) | Tracking off is confirmed before the first live frame and checked every frame; a mount that keeps or resumes tracking ends the run `failed` with `tracking_not_off` (its sentence names which), before the readout can mistake the mount's turn for a knob move |
 | Mount does not confirm it stopped (any end of a run, #2048) | The stop (AbortSlew, MoveAxis 0 on both axes) is sent three times, 2 s apart; after 8 s without two still, not-slewing fresh reads 1.5 s apart, the daemon logs a Critical line and the run ends `failed` with `mount_did_not_stop` (or its own failure reason with the same sentence): "cut the mount's power" |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |

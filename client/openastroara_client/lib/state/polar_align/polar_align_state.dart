@@ -70,6 +70,10 @@ class PolarAlignLive {
   /// first measurement, and once the routine ends.
   final PolarAlignerRun? correction;
 
+  /// #2072 a caution on the live readout ([PolarAlignReadoutCautions]) from
+  /// the last progress event; null when the readout is sound.
+  final String? readoutCaution;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -89,6 +93,7 @@ class PolarAlignLive {
     this.checkSolvesTotal = 3,
     this.checkResult,
     this.correction,
+    this.readoutCaution,
   });
 
   /// True between a frame's `frame_started` and its `frame_complete`.
@@ -119,6 +124,7 @@ class PolarAlignLive {
     PolarAlignCheckResult? checkResult,
     PolarAlignerRun? correction,
     bool clearCorrection = false,
+    String? readoutCaution,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -144,7 +150,36 @@ class PolarAlignLive {
         checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
         correction: clearCorrection ? null : correction ?? this.correction,
+        // The readout's own caution goes with it.
+        readoutCaution: clearReadout ? null : readoutCaution ?? this.readoutCaution,
       );
+}
+
+extension on PolarAlignLive {
+  /// Every progress event says the readout's caution afresh (null = sound).
+  PolarAlignLive withReadoutCaution(String? caution) => caution == readoutCaution
+      ? this
+      : PolarAlignLive(
+          phase: phase,
+          iteration: iteration,
+          altErrorArcmin: altErrorArcmin,
+          azErrorArcmin: azErrorArcmin,
+          totalErrorArcmin: totalErrorArcmin,
+          zone: zone,
+          consecutiveSolveFailures: consecutiveSolveFailures,
+          errorReason: errorReason,
+          errorMessage: errorMessage,
+          frameStartedAt: frameStartedAt,
+          frameExposureSeconds: frameExposureSeconds,
+          lastFrame: lastFrame,
+          stage: stage,
+          waitingForHome: waitingForHome,
+          checkSolvesDone: checkSolvesDone,
+          checkSolvesTotal: checkSolvesTotal,
+          checkResult: checkResult,
+          correction: correction,
+          readoutCaution: caution,
+        );
 }
 
 double? _num(Map<String, dynamic> payload, String key) =>
@@ -221,6 +256,8 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
+      ).withReadoutCaution(
+        event.payload['readout_caution'] is String ? event.payload['readout_caution'] as String : null,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -325,6 +362,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkSolvesDone: status.checkSolvesDone,
       checkResult: status.checkResult,
       correction: status.correction,
+      readoutCaution: status.readoutCaution,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

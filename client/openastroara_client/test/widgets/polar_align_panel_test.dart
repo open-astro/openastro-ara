@@ -240,6 +240,31 @@ void main() {
     });
 
 
+    testWidgets('the live readout says what it measures, and warns where it reads altitude poorly (#2072)', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const live = PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        azErrorArcmin: 2.0,
+        altErrorArcmin: -1.0,
+        totalErrorArcmin: 2.24,
+      );
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), live));
+      await tester.pumpAndSettle();
+      final measures = find.byKey(const Key('polar-align-readout-measures'));
+      expect(measures, findsOneWidget);
+      expect(tester.widget<Text>(measures).data, allOf(contains('refracted pole'), contains('cos alt applied')));
+      expect(find.byKey(const Key('polar-align-readout-caution')), findsNothing, reason: 'a sound readout');
+
+      final notifier = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)))
+          .read(polarAlignLiveProvider.notifier) as _StubLiveNotifier;
+      notifier.set(live.copyWith(readoutCaution: PolarAlignReadoutCautions.altitudeWeak));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-readout-caution')), findsOneWidget);
+      expect(find.text(_en.polarReadoutCautionAltitudeWeak), findsOneWidget);
+    });
+
     testWidgets('adjusting explains the error in arcseconds and plain English', (tester) async {
       // A tall window: a short one drops this card for the one-row readout.
       tester.view.physicalSize = const Size(1400, 1000);
@@ -431,6 +456,7 @@ void main() {
       expect(find.byKey(const Key('polar-align-check-result')), findsOneWidget);
       expect(find.byKey(const Key('polar-align-check-verdict')), findsOneWidget);
       expect(find.byKey(const Key('polar-align-check-disagree')), findsOneWidget, reason: '3.7′ apart is worth a warning');
+      expect(find.text(_en.polarCheckMeasures), findsOneWidget, reason: "#2072 the check's figure says what it measures");
       await tester.ensureVisible(find.byKey(const Key('polar-align-check-done')));
       await tester.tap(find.byKey(const Key('polar-align-check-done')));
       await tester.pumpAndSettle();

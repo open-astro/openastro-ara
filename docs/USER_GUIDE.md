@@ -252,6 +252,15 @@ framing/focus loop when you need to point or focus by eye.
   started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
+- **Which number to trust (#2072).** The two numbers measure different things. Polar Align's figure
+  is the RA axis against the refracted pole, from plate solves, live while you turn the bolts; its
+  azimuth is the true arc on the sky (cos alt applied, so it can read smaller than NINA's unscaled
+  azimuth). The guiding residual is a lower bound from Dec drift, taken later. The live readout
+  needs the camera to stand still: Polar Align turns tracking off, checks that the mount reports it
+  off before the first live frame and on every frame, and ends the run (*the mount kept tracking*,
+  or *started tracking during the live readout*) when it does not. When the camera points nearly due
+  east or west of the pole, the readout reads the altitude bolt poorly and the card says so: trust
+  **Verify**, or start again with the scope nearer the pole.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
@@ -266,8 +275,11 @@ framing/focus loop when you need to point or focus by eye.
   can't see: refraction, flexure and the mount's own slop. It is a lower bound ("≥"): Dec drift at
   one hour angle shows only part of the error. The tooltip has the drift, the hour angle and
   tonight's Polar Align result to compare. "noisy" means the guiding was too rough for a firm
-  figure; "above Polar Align" means it came out higher than tonight's Polar Align result, which a
-  lower bound can't be, so Dec backlash is the likelier cause; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
+  figure; "disagrees with Polar Align" means it came out well above tonight's Polar Align result,
+  which a lower bound can't be: either Dec backlash ate guide pulses (the guiding figure is too
+  high), or the mount shifted since the alignment or its reference was wrong (the Polar Align figure
+  is too low). Run Polar Align again: about the same figure again points at backlash, a much larger
+  one at the mount or the alignment; "n/a" means it could not be measured (lock-position shift on, an adaptive-optics unit, or no calibration data).
   Guiding that stops after 2 minutes still reports what it has.
 
 ## 7. Unattended safety (the 3 a.m. story)

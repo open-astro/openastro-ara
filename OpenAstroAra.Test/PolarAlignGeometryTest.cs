@@ -537,5 +537,19 @@ namespace OpenAstroAra.Test {
                 }
             }
         }
+
+        // #2072 — ψ is the camera's azimuth from the pole's: cos ψ is 1 facing the pole and 0 due east or west of it,
+        // in either hemisphere; the routine warns under PolarAlignService.WeakReadoutCosPsi.
+        [TestCase(45.0, 0.0, 1.0)]
+        [TestCase(45.0, 350.0, 0.985)]
+        [TestCase(45.0, 90.0, 0.0)]
+        [TestCase(45.0, 275.0, 0.087)]
+        [TestCase(-33.0, 180.0, 1.0)]
+        [TestCase(-33.0, 270.0, 0.0)]
+        [TestCase(-33.0, 95.0, 0.087)]
+        public void The_readout_cos_psi_is_one_facing_the_pole_and_zero_due_east_or_west_of_it(
+                double latitudeDeg, double seedAzDeg, double expected) {
+            Assert.That(Math.Abs(PolarAlignGeometry.ReadoutCosPsi(seedAzDeg, latitudeDeg)), Is.EqualTo(expected).Within(0.001));
+        }
     }
 }

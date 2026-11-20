@@ -162,10 +162,11 @@ namespace OpenAstroAra.Test {
 
         private static Mock<ITelescopeMediator> NewMount(bool connected = true, bool tracking = true) {
             var mount = new Mock<ITelescopeMediator>();
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo {
+            var info = new TelescopeInfo {
                 // LST 20 h puts RA 0 east of the meridian, so the seed slew turns RA up like the SolveA→SolveB pair.
                 Connected = connected, SiderealTime = 20.0, TrackingEnabled = tracking,
-            });
+            };
+            mount.Setup(m => m.GetInfo()).Returns(info);
             // The reported pointing follows slews, so the routine reads the mount's own RA turn.
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
@@ -174,7 +175,11 @@ namespace OpenAstroAra.Test {
                 .ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c);
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
+            // The mount reports the tracking it was last set to: the live readout confirms it off (#2072).
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
+                info.TrackingEnabled = on;
+                return true;
+            });
             return mount;
         }
 
@@ -1170,7 +1175,7 @@ namespace OpenAstroAra.Test {
             var seedC = Solved(Turn(camera, axis, 2.0 * turnDeg));
 
             var mount = NewMount();
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = lstHours, TrackingEnabled = true });
+            mount.Object.GetInfo().SiderealTime = lstHours; // NewMount's info, which follows the tracking writes
             var position = new Coordinates(0.0, 89.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
@@ -1264,7 +1269,7 @@ namespace OpenAstroAra.Test {
             var position = new Coordinates(0.0, reportedDec, Epoch.JNOW, Coordinates.RAType.Degrees);
             var targets = new ConcurrentQueue<Coordinates>();
             // LST 2 h puts the folded RA 180° east of the meridian, so the turn is RA up like SolveA→SolveB.
-            mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = 2.0, TrackingEnabled = true });
+            mount.Object.GetInfo().SiderealTime = 2.0; // NewMount's info, which follows the tracking writes
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
@@ -1832,6 +1837,60 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_mount_that_keeps_tracking_ends_the_live_readout_as_tracking_not_off() {
+            // #2072 — the mount accepts tracking off and keeps tracking: the readout would take its turn for knob motion.
+            var (mount, calls) = TrackingMount(tracking: true, onSet: on => on);
+            var fake = NewFake();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            var ws = new WsRecorder();
+            using var svc = NewService(fake, solver, mount, ws);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "failed", "adjusting").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"), "no live readout from a tracking mount");
+            var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignProgress
+                    && e.Payload.GetProperty("iteration").GetInt32() > 0), Is.False, "no live frame was read as a knob turn");
+            Assert.That(calls, Does.Contain("tracking False"), "the routine did ask for tracking off");
+        }
+
+        [Test]
+        public async Task Tracking_that_comes_on_during_the_live_readout_ends_the_run_as_tracking_not_off() {
+            // #2072 — the hand pad, another app or the firmware turns tracking back on mid-loop.
+            var (mount, _) = TrackingMount(tracking: true);
+            var fake = NewFake();
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            var ws = new WsRecorder();
+            using var svc = NewService(fake, solver, mount, ws);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            Assert.That(mount.Object.GetInfo().TrackingEnabled, Is.False, "confirmed off before the first live frame");
+            mount.Object.SetTrackingEnabled(true); // not the routine's write
+
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var failure = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(failure.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TrackingNotOff));
+            Assert.That(failure.GetProperty("message").GetString(), Does.Contain("started tracking during the live readout"));
+        }
+
+        [Test]
+        public async Task A_seed_due_east_of_the_pole_cautions_the_readout_and_a_seed_facing_it_clears_it() {
+            // #2072 — the readout reads the altitude bolt poorly near ψ = ±90°: the status says so until the next seed.
+            using var svc = NewService(NewFake(), new ScriptedSolver());
+            svc.NoteReadoutReference(gen: 0, (AltDeg: 30.0, AzDeg: 88.0), latitudeDeg: SiteLatDeg);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution,
+                Is.EqualTo(PolarAlignReadoutCautions.AltitudeWeak));
+            svc.NoteReadoutReference(gen: 0, (AltDeg: 40.0, AzDeg: 5.0), latitudeDeg: SiteLatDeg);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).ReadoutCaution, Is.Null);
+        }
+
+        [Test]
         public async Task Tracking_that_drops_and_will_not_come_back_fails_before_the_slew() {
             var (mount, calls) = TrackingMount(tracking: true, onSet: _ => false, dropAtPointingRead: 1);
 
@@ -2204,8 +2263,9 @@ namespace OpenAstroAra.Test {
         /// records where each motor move ended, and <see cref="NoHomeNoGoTo"/> checks the rest.</summary>
         private static Mock<ITelescopeMediator> NewPoleMount(ConcurrentQueue<Coordinates>? motorStops = null) {
             var mount = new Mock<ITelescopeMediator>();
+            var tracking = true;
             mount.Setup(m => m.GetInfo()).Returns(() => new TelescopeInfo {
-                Connected = true, SiderealTime = 20.0, TrackingEnabled = true, CanFindHome = true, CanSlew = true,
+                Connected = true, SiderealTime = 20.0, TrackingEnabled = tracking, CanFindHome = true, CanSlew = true,
             });
             var position = new Coordinates(0.0, 90.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
@@ -2213,7 +2273,10 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>())).ReturnsAsync(true);
             SimulateMotors(mount, () => position, c => position = c, stopped: c => motorStops?.Enqueue(c));
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
-            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
+            mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
+                tracking = on;
+                return true;
+            });
             return mount;
         }
 

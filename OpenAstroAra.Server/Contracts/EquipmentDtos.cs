@@ -760,7 +760,9 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
 /// <c>UncertaintyArcmin</c> exceeds max(1′, half the value), or when the value less twice that
 /// uncertainty is more than 2′ above <c>AlignErrorArcmin</c> (#1731). <c>AlignErrorArcmin</c> is the last
-/// Polar Align result in the 12 h before, for comparison. Hour angle / Dec are the mount's at the end.
+/// Polar Align result in the 12 h before, for comparison. <c>AboveAlign</c> (#2072) is that second rule on its own:
+/// the two numbers disagree (Dec lost motion inflated the guiding figure, or the mount shifted or the alignment was
+/// wrong); null with no Polar Align result to compare. Hour angle / Dec are the mount's at the end.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,
@@ -779,7 +781,8 @@ public sealed record PaResidualDto(
     double? AlignErrorArcmin = null,
     DateTimeOffset? AlignEndedUtc = null,
     Guid? SessionId = null,
-    string? Reason = null);
+    string? Reason = null,
+    bool? AboveAlign = null);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at
@@ -1006,7 +1009,18 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastResultDto? LastResult = null,
     // #1971 — what the Polar Aligner is doing in this run; null when the rig has none, when Ara cannot
     // drive the one it has, or before the run's first measurement.
-    PolarAlignCorrectionDto? Correction = null);
+    PolarAlignCorrectionDto? Correction = null,
+    // #2072 — a caution on the live readout from the last seed (PolarAlignReadoutCautions), also on each
+    // polar_align.progress event; null when the readout is sound or before the first seed.
+    string? ReadoutCaution = null);
+
+/// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
+public static class PolarAlignReadoutCautions {
+    /// <summary>The camera sits nearly due east or west of the pole's azimuth (|cos ψ| under 0.2): the live readout
+    /// amplifies solve noise in altitude five times or more, and near ψ = ±90° it under-reads the altitude knob. The
+    /// Check (a fresh three-point measurement) is the number to trust.</summary>
+    public const string AltitudeWeak = "altitude_weak";
+}
 
 /// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.correction</c>.
 /// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>

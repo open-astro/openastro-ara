@@ -1071,7 +1071,7 @@ void main() {
       final tip = tester.widget<Tooltip>(find.ancestor(
           of: find.text('PA ≥ 48″ · Excellent'), matching: find.byType(Tooltip)));
       expect(tip.message, contains('at least 48″'));
-      expect(tip.message, contains('Polar Align measured 41″'));
+      expect(tip.message, contains("Polar Align's figure: 41″"));
       await _teardownPanel(tester, container);
     });
 
@@ -1116,10 +1116,11 @@ void main() {
               alignErrorArcmin: 0.9,
             ),
           ));
-      expect(find.text('PA ≥ 17′ · above Polar Align'), findsOneWidget);
+      expect(find.text('PA ≥ 17′ · disagrees with Polar Align'), findsOneWidget);
       final tip = tester.widget<Tooltip>(find.ancestor(
-          of: find.text('PA ≥ 17′ · above Polar Align'), matching: find.byType(Tooltip)));
+          of: find.text('PA ≥ 17′ · disagrees with Polar Align'), matching: find.byType(Tooltip)));
       expect(tip.message, isNot(contains('too noisy')));
+      expect(tip.message, contains('Polar Align and guiding disagree'));
       await _teardownPanel(tester, container);
     });
 

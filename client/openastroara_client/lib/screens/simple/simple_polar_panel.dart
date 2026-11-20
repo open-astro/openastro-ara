@@ -406,6 +406,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
+            // #2072 the camera sits where the readout reads the altitude bolt poorly.
+            if (active &&
+                !verifying &&
+                live.readoutCaution == PolarAlignReadoutCautions.altitudeWeak)
+              Text(
+                l10n.polarReadoutCautionAltitudeWeak,
+                key: const Key('simple-polar-readout-caution'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
             // Waiting for the user to put the mount at Home.
             if (active && live.waitingForHome)
               Text(

@@ -196,11 +196,12 @@ namespace OpenAstroAra.Server.Services {
             var seedPointing = PolarAlignGeometry.PointingAltAz(
                 c.RaDegJnow, c.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, cTime);
             LogSeedFit(mountTurn1 + mountTurn2, axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
+            NoteReadoutReference(gen, seedPointing, site.LatitudeDeg); // #2072
 
             // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
             // every subsequent solve's alt/az delta from the seed pointing is purely the user's
-            // knob adjustment (§45.8) — and the loop needs no further slews.
-            SetTracking(gen, false);
+            // knob adjustment (§45.8) — and the loop needs no further slews. Confirmed off, and checked every frame (#2072).
+            await TurnTrackingOffForLiveLoopAsync(gen, ct).ConfigureAwait(false);
             SetErrors(gen, seedAltErr, seedAzErr, "adjusting", frameId: null); // keeps the seed-c attempt's id
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
             ResetAlignerBaseline();
