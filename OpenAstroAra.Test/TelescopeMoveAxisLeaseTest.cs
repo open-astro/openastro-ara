@@ -113,12 +113,16 @@ namespace OpenAstroAra.Test {
             : null;
 
         private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync(
-                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null) {
+                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null,
+                TimeProvider? poseClock = null) {
             var box = ScriptedAlpacaDevice.Start(Mount(), putResponder);
             box.RespondWithQuery((path, _) => path.EndsWith("/axisrates", StringComparison.Ordinal)
                 ? "[{\"Minimum\":0.002,\"Maximum\":4.0}]" : null);
             var clock = new ManualClock();
-            var svc = new TelescopeService(logger) { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
+            var svc = new TelescopeService(logger) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan,
+                PoseClock = poseClock ?? TimeProvider.System,
+            };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             var sw = Stopwatch.StartNew();
             while ((await svc.GetAsync(CancellationToken.None))?.Capabilities?.MoveAxisRateBandsDegPerSec is not { Count: > 0 }) {
@@ -180,6 +184,46 @@ namespace OpenAstroAra.Test {
             box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
 
             Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        // #2066 (ARA-5) — Polar Align plans and moves only from this reading: the driver's raw answer now (a Dec past the pole
+        // is not folded, so the routine can refuse it), stamped when the read began and with the mount session it came from.
+        [Test]
+        public async Task ReadNow_returns_the_drivers_raw_pose_stamped_with_its_time_and_session() {
+            var stamp = new ManualClock { Now = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero) };
+            var (box, svc, _) = await ArmedAsync(poseClock: stamp);
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "90.9"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "1"
+                : mount(path));
+
+            var now = await svc.ReadNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.Not.Null);
+            Assert.That((now!.RaHours, now.DecDegrees), Is.EqualTo((7.5, 90.9)), "the driver's answer, never folded");
+            Assert.That(now.Slewing, Is.True, "Slewing read now, not the cached false");
+            Assert.That(now.SideOfPier, Is.EqualTo(PierSide.pierWest), "pointing state 1 (through the pole)");
+            Assert.That(now.ReadAtUtc, Is.EqualTo(stamp.Now), "stamped when the read began");
+            Assert.That(now.SessionEpoch, Is.EqualTo(svc.SessionEpoch).And.Not.Zero, "the session the read came from");
+        }
+
+        [Test]
+        public async Task ReadNow_is_null_when_the_position_read_fails_and_unknown_when_only_slewing_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("busy") : mount(path));
+            var slewingUnknown = await svc.ReadNowAsync(CancellationToken.None);
+            box.Respond(path => path.EndsWith("/declination", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadNowAsync(CancellationToken.None), Is.Null, "no position, no reading");
+            Assert.That(slewingUnknown, Is.Not.Null);
+            Assert.That(slewingUnknown!.Slewing, Is.Null, "a failed Slewing read is unknown, never 'not slewing'");
         }
 
         // #2048 — Polar Align confirms its stop on this read: the driver's Slewing now, not the 2 s refresh.

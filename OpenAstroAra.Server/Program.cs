@@ -543,6 +543,7 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
                 sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<ITelescopeService>(), // #2066 — the IMountMotionControl seam: the same TelescopeService
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),

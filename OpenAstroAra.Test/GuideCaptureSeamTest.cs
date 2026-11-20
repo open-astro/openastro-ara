@@ -114,8 +114,9 @@ namespace OpenAstroAra.Test {
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
                 ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0));
+            var mount = NewMount().Object;
             return new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver ?? new ScriptedSolver(SolveA, SolveB),
-                NewMount().Object, store, ws, log: null, fetcher ?? new FileFetcher()) {
+                mount, OpenAstroAra.Test.PolarAlign.MediatorMotionControl.For(mount), store, ws, log: null, fetcher ?? new FileFetcher()) {
                 PausedRetryDelay = TimeSpan.Zero,
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.Zero,

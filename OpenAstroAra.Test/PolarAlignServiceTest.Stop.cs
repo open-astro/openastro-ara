@@ -24,6 +24,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -162,7 +163,7 @@ namespace OpenAstroAra.Test {
                 var service = Mock.As<ITelescopeService>();
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
                 service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
-                service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
+                service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
                     lock (_lock) {
                         if (FailReadPastRaDeg is double past && _rates[0] != 0 && _raDeg >= past) {
                             FailReadPastRaDeg = null;
@@ -171,7 +172,7 @@ namespace OpenAstroAra.Test {
                         if (_driverReadsFail > 0) {
                             _driverReadsFail--;
                             _cacheLost = true;
-                            return Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+                            return Task.FromResult<MountReading?>(null);
                         }
                         _cacheLost = false;
                         if (!Frozen) {
@@ -179,12 +180,8 @@ namespace OpenAstroAra.Test {
                             var dec = Math.Sign(_rates[1]) * StepDeg;
                             _decDeg = _decDeg >= 0 ? _decDeg - dec : _decDeg + dec;
                         }
-                        return Task.FromResult<(double RaHours, double DecDegrees)?>((_raDeg / 15.0, _decDeg));
-                    }
-                });
-                service.Setup(s => s.ReadSlewingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
-                    lock (_lock) {
-                        return Task.FromResult<bool?>(SlewingLocked());
+                        return Task.FromResult<MountReading?>(new MountReading(_raDeg / 15.0, _decDeg, SlewingLocked(),
+                            PierSide.pierWest, DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
                     }
                 });
                 service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
@@ -429,8 +426,9 @@ namespace OpenAstroAra.Test {
         /// row and the camera release, or the app reports a failed Stop while the daemon is still stopping the mount.</summary>
         [Test]
         public void The_clients_end_timeout_outlasts_the_daemons_slowest_end() {
+            var mount = NewMount().Object;
             using var svc = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
-                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+                mount, MediatorMotionControl.For(mount), NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
             Assert.That(svc.EndWorstCase, Is.EqualTo(TimeSpan.FromSeconds(47.25)), "the default bounds");
 
             var dir = new DirectoryInfo(AppContext.BaseDirectory);

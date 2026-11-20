@@ -15164,6 +15164,8 @@ components:
         - polar-align-sweep-limit
         - polar-align-moving-mount
         - polar-align-on-axis
+        - polar-align-pointing-unknown
+        - polar-align-pose-ambiguous
         - first-flip-not-completed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'

@@ -345,8 +345,8 @@ namespace OpenAstroAra.Test {
             await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("did not report where it points during the turn"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PointingUnknown));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("no fresh reading of where the mount points"));
             Assert.That(mount.Log.Where(c => c.StartsWith("move primary -", StringComparison.Ordinal)), Is.Empty,
                 "never reversed on the placeholder: " + string.Join(", ", mount.Log));
             Assert.That(mount.RaDeg, Is.InRange(12.0, 13.0), "stopped where the read failed");

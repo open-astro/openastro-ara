@@ -34,7 +34,7 @@ namespace OpenAstroAra.Server.Services {
     /// <para>Everything here is an RA <i>difference</i> the mount reports, less the Earth's turn over the daemon's own
     /// monotonic clock: never the mount's clock, its LST or its absolute RA, which can all be wrong (#2071 a stale clock,
     /// #2070 a false zero). The origin is forgotten on a new mount session (connect, disconnect, fault trip:
-    /// <see cref="ITelescopeService.SessionEpoch"/>), on a daemon restart (it lives in memory), and when the mount was
+    /// <see cref="IMountMotionControl.SessionEpoch"/>), on a daemon restart (it lives in memory), and when the mount was
     /// moved by other means (a slew, the hand pad, by hand) since Polar Align last turned it: then the confirm step says
     /// the pose is a new start, the user confirms it as one, and it becomes the origin.</para>
     /// </summary>
@@ -65,8 +65,6 @@ namespace OpenAstroAra.Server.Services {
         private SweepOrigin? _sweepOrigin;
         private SweepPose? _sweepLastLeft;
 
-        private long MountSessionEpoch => (_mount as ITelescopeService)?.SessionEpoch ?? 0;
-
         /// <summary>The RA axis's mechanical turn between two readings, in RA-reading terms (+ east): the reading's change
         /// less the Earth's turn between them. Tracking keeps the reading still while the axis turns west; with tracking
         /// off the reading drifts while the axis stands still. Wraps across 0/24 h. Pure, for the tests.</summary>
@@ -87,10 +85,10 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The sweep part of a start's plan from the mount's pose read now: a new origin (the first start since
         /// the mount connected, or the mount was moved by other means), whose first turn goes away from the meridian as
         /// before (<see cref="AwayFromMeridianSign"/>); or the offset from the origin, with the turns back toward it.
-        /// Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would take the axis past the limit.</summary>
-        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg) {
+        /// Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would take the axis past the limit.
+        /// <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it).</summary>
+        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch) {
             var pose = new SweepPose(raDeg, decDeg, Stopwatch.GetTimestamp(), _mount.GetInfo().SideOfPier);
-            var epoch = MountSessionEpoch;
             SweepOrigin? origin;
             SweepPose? lastLeft;
             lock (_gate) {
@@ -160,7 +158,7 @@ namespace OpenAstroAra.Server.Services {
             Justification = "A best-effort read on the exit path: its fault must never mask the exit's outcome.")]
         private async Task NoteMountLeftAfterStopAsync() {
             try {
-                if (await DriverPointingJnowAsync(CancellationToken.None).ConfigureAwait(false) is { } now) {
+                if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now) {
                     NoteMountLeft(now);
                 }
             } catch (Exception ex) {

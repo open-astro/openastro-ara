@@ -25,8 +25,10 @@ using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Sequencer.SequenceItem.Telescope;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -186,6 +188,10 @@ namespace OpenAstroAra.Test {
             return mount;
         }
 
+        /// <summary>#2066 — a fresh reading of the telescope service as Polar Align takes it: stamped now, mount session 0.</summary>
+        private static MountReading FreshReading(double raHours, double decDeg) =>
+            new(raHours, decDeg, Slewing: false, PierSide.pierWest, DateTimeOffset.UtcNow, SessionEpoch: 0);
+
         private static double Wrap180Test(double deg) => ((deg + 540.0) % 360.0) - 180.0;
 
         /// <summary>#2064 — the pier side of a counterweight-down pose at RA <paramref name="raDeg"/> and LST
@@ -305,7 +311,7 @@ namespace OpenAstroAra.Test {
                 IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
             ws ??= new WsRecorder();
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
-                mount, store ?? NewStore(), ws, log,
+                mount, MediatorMotionControl.For(mount), store ?? NewStore(), ws, log,
                 fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
@@ -321,6 +327,9 @@ namespace OpenAstroAra.Test {
                 StopVerifyWindow = TimeSpan.FromMilliseconds(500),
                 ShutdownGrace = TimeSpan.FromSeconds(2),
             };
+            if (mount is FakeGemMount gem) {
+                svc.Clock = gem.Clock; // #2066 — a reading's age on the fake's own clock
+            }
             Recorders.Add(svc, ws);
             return svc;
         }
@@ -1144,7 +1153,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_mount_fault() {
+        public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_pointing_unknown() {
             var mount = NewMount();
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             var slewed = false;
@@ -1152,7 +1161,7 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
                 .Callback(() => slewed = true);
 
-            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo(PolarAlignService.PointingUnknown));
         }
 
         // #1591 — seed close to a mount axis that sits 10° off the pole: two pointings admit two mirror-image
@@ -1282,43 +1291,30 @@ namespace OpenAstroAra.Test {
             Assert.That(targets.Select(t => t.Dec), Is.All.EqualTo(Math.CopySign(85.0, latitudeDeg)).Within(1e-6), "the turns keep the Dec");
         }
 
-        // #1536 — a synced iOptron at home reported Dec 90.9°. The seed target kept that Dec, the mount
-        // refused it, and every start failed. Past the pole the same sky point is (RA+180°, 180°−Dec); the
-        // fold keeps the mount's Dec axis where it is, so the RA turn stays a pure rotation about the axis.
-        // #2082 — a reading that folds to within 3° of the pole is refused before anything moves (no Dec tilt any more),
-        // so the tube here was pointed 5° off the pole over the top.
-        [TestCase(95.0, 85.0)]
-        [TestCase(-95.0, -85.0)]
-        public async Task A_reported_Dec_past_the_pole_is_folded_over_it_before_the_seed_slew(double reportedDec, double foldedDec) {
+        // #1536 — a synced iOptron at home reported Dec 90.9°. Past the pole the same sky point is (RA+180°, 180°−Dec), and
+        // the routine used to fold the reading and turn from it. #2066 (ARA-5) — such a reading leaves the pier side and the
+        // hour angle ambiguous (which side of the pole is the Dec axis really on?): the start is refused as
+        // polar-align-pose-ambiguous before the camera is taken or anything moves, in either hemisphere.
+        [TestCase(95.0)]
+        [TestCase(-95.0)]
+        public async Task Dec_over_90_reading_refuses_turns(double reportedDec) {
             var mount = NewMount();
             var position = new Coordinates(0.0, reportedDec, Epoch.JNOW, Coordinates.RAType.Degrees);
-            var targets = new ConcurrentQueue<Coordinates>();
-            // LST 2 h puts the folded RA 180° east of the meridian, so the turn is RA up like SolveA→SolveB. A Dec past the
-            // pole is the Dec axis through it: counterweight down at HA −10 h is the west side of the pier. NewMount's info,
-            // which follows the tracking writes (#2072).
             mount.Object.GetInfo().SiderealTime = 2.0;
             mount.Object.GetInfo().SideOfPier = PierSide.pierWest;
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
-                .ReturnsAsync(true);
-            SimulateMotors(mount, () => position, c => position = c, stopped: targets.Enqueue);
             var fake = NewFake();
-            var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(fake, solver, mount);
+            using var svc = NewService(fake, new ScriptedSolver(), mount);
 
-            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var plan = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(null, CancellationToken.None));
+            var start = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
+                null, new PolarAlignStartConfirmation(PolarAlignDirections.East, NewOrigin: true), null, CancellationToken.None));
 
-            Assert.That(status.State, Is.EqualTo("adjusting"));
-            // The folded pointing (RA 180°, Dec ±85°): two pure 30° RA turns from it, on the reading's side of the pole.
-            var stops = targets.ToArray();
-            Assert.That(stops, Has.Length.EqualTo(2), "the two seed turns, no Dec move");
-            Assert.That(Folded(stops[0]).RADegrees, Is.EqualTo(210.0).Within(1e-6));
-            Assert.That(Folded(stops[1]).RADegrees, Is.EqualTo(240.0).Within(1e-6));
-            Assert.That(stops.Select(c => Folded(c).Dec), Is.All.EqualTo(foldedDec).Within(1e-6), "the turns keep the Dec");
+            Assert.That(plan!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignPoseAmbiguous), "the confirm step already says so");
+            Assert.That(start!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignPoseAmbiguous));
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never, "no turn");
+            mount.Verify(m => m.SetTrackingEnabled(It.IsAny<bool>()), Times.Never, "nothing touched the mount");
+            Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
         }
 
         // A driver's sign for a "positive" RA motor rate is not standard. The turn must still go the way the
@@ -1359,8 +1355,8 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
             var freshRaHours = 0.0;
             var service = mount.As<ITelescopeService>();
-            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var calls = new ConcurrentQueue<(int Axis, double Rate, int? LeaseMs)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((axis, rate, lease, _, _) => {
@@ -1414,8 +1410,8 @@ namespace OpenAstroAra.Test {
             var afterAbort = new ConcurrentQueue<(double Rate, long? Since)>();
             var service = mount.As<ITelescopeService>();
             service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref abortEpoch));
-            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var moves = 0;
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
@@ -1456,8 +1452,8 @@ namespace OpenAstroAra.Test {
             var freshRaHours = 0.0;
             var service = mount.As<ITelescopeService>();
             service.SetupGet(s => s.AbortEpoch).Returns(42L);
-            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaHours, 85.0));
             var guards = new ConcurrentQueue<(double Rate, long? Since)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
@@ -1487,8 +1483,8 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
             var freshRaDeg = 0.0;
             var service = mount.As<ITelescopeService>();
-            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
-                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaDeg / 15.0, 85.0));
+            service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => FreshReading(freshRaDeg / 15.0, 85.0));
             var commands = new ConcurrentQueue<(double Rate, double AtDeg)>();
             service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                 .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, _, _) => {
