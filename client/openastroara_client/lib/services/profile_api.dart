@@ -601,7 +601,7 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
 
-  /// §58.8 — re-arm the first-flip announce (the daemon clears
+  /// §58.8 — re-arm the unconfirmed-flip announce (the daemon clears
   /// `first_flip_confirmed` and the completed-flip record, so the next flip
   /// alerts and waits again). Answers the rig's policies with their new tag
   /// (#1807): this device's own write, so no `profile.updated` reloads it.

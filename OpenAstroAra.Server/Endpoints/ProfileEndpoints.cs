@@ -337,7 +337,7 @@ public static partial class ProfileEndpoints {
             // The stored values always win; confirming and re-arming go through the dedicated
             // endpoints below.
             // Atomic read-merge-write under the store lock: a Get→Put pair from here could
-            // lose a concurrent executor confirmation / re-arm to a stale snapshot — the exact
+            // lose a concurrent completed-flip record, confirm or re-arm to a stale snapshot — the exact
             // lost-update class this merge exists to close.
             var merged = store.UpdateSafetyPolicies(current => PreserveDaemonOwnedSafetyFields(body, current));
             return Results.Ok(merged);
@@ -359,7 +359,7 @@ public static partial class ProfileEndpoints {
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
             .WithSection(ProfileSections.SafetyPolicies) // #1807 — answers the safety tag, as a PUT does
             .WithName("RearmFirstFlipAnnounce")
-            .WithSummary("Re-arm the §58.8 first-flip announce (clears first_flip_confirmed and the " +
+            .WithSummary("Re-arm the §58.8 unconfirmed-flip announce (clears first_flip_confirmed and the " +
                 "completed-flip record). Returns the updated safety policies.");
 
         // §58.8 (#1589) — the user's confirm: only after a flip ran to the end on this profile (the

@@ -6888,7 +6888,7 @@ paths:
     post:
       tags:
         - Profile
-      summary: Re-arm the §58.8 first-flip announce (clears first_flip_confirmed and the completed-flip record). Returns the updated safety policies.
+      summary: Re-arm the §58.8 unconfirmed-flip announce (clears first_flip_confirmed and the completed-flip record). Returns the updated safety policies.
       operationId: RearmFirstFlipAnnounce
       responses:
         '200':

@@ -484,7 +484,7 @@ class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       edit((c) => c.copyWith(onDiskSpaceCritical: a));
 
-  /// §58.8 — re-arm the first-flip announce (e.g. after re-balancing or any
+  /// §58.8 — re-arm the unconfirmed-flip announce (e.g. after re-balancing or any
   /// rig change the optics-based auto-reset can't see). Goes straight to the
   /// daemon's dedicated endpoint — the fields are DAEMON-owned (the flip
   /// executor records a completed flip out-of-band, and the general safety PUT

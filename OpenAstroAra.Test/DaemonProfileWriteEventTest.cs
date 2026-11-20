@@ -110,7 +110,7 @@ namespace OpenAstroAra.Test {
 
         [SetUp]
         public void ClearEvents() {
-            // An optics change also clears a confirmed first flip (safety): start each test unconfirmed,
+            // An optics change also clears the flip confirmation (safety): start each test unconfirmed,
             // with no completed flip on record.
             _store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = false, FirstFlipCompletedUtc = null, FirstFlipPierSideChanged = false });
             _ws.Clear();
