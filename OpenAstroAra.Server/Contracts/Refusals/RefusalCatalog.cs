@@ -52,6 +52,8 @@ public static class RefusalCatalog {
 
     // Slice 2: a GoTo below the pole that would turn the counterweight past its limit (#2073).
     public static readonly RefusalCause CounterweightLimit = new("counterweight-limit", 409, "The target would turn the counterweight past its limit", "hour_angle_hours", "counterweight_angle_deg", "limit_deg");
+    // A GoTo, Sync, Center or polar alignment before the mount's clock is set from the synced rig clock and checked (#2071).
+    public static readonly RefusalCause MountClockNotVerified = new("mount-clock-not-verified", 409, "Mount clock not verified");
 
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
@@ -90,6 +92,6 @@ public static class RefusalCatalog {
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
-        FirstFlipNotCompleted,
+        FirstFlipNotCompleted, MountClockNotVerified,
     ];
 }

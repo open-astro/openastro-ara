@@ -11,10 +11,14 @@ import '../../state/night_mode_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../util/polar_align_error_text.dart';
 import '../../l10n/l10n.dart';
 import '../fit_pane.dart';
 import '../help_icon.dart';
@@ -23,6 +27,7 @@ import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
 import 'polar_start_confirm.dart';
 import '../adaptive_controls.dart';
+import '../settings/section_load_state.dart';
 
 export 'polar_align_readout.dart';
 
@@ -91,14 +96,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   // (polar_align_routine_state.dart); this panel renders them.
   bool get _busy => ref.watch(polarAlignActionProvider).busy;
   String? get _status => ref.watch(polarAlignActionProvider).error;
-  PolarAlignSettings get _settings =>
-      ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-  double get _toleranceArcmin => _settings.targetToleranceArcmin;
+  // Null until the profile's copy is in from the rig (ADR 0015): the capture
+  // settings say so, and nothing is judged against a made-up tolerance.
+  PolarAlignSettings? get _settings => ref.watch(polarAlignSettingsProvider).value;
+  double? get _toleranceArcmin => _settings?.targetToleranceArcmin;
 
   // §45.16 bolt-direction nudge: the previous frame's errors, the iteration
   // they came from, the nudge in force and the iteration it expires after.
   final _bolt = BoltNudgeTracker();
-  final _exposureCtrl = TextEditingController(text: _exposureText(1.0));
+  final _exposureCtrl = TextEditingController();
 
   // Repaints the exposing/solving readout while a frame is in progress.
   Timer? _ticker;
@@ -117,6 +123,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   void initState() {
     super.initState();
     _bolt.track(ref.read(polarAlignLiveProvider)); // the first frame is the nudge baseline
+    if (ref.read(polarAlignSettingsProvider).value case final settings?) {
+      _exposureCtrl.text = _exposureText(settings.exposureSeconds);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
   }
 
@@ -141,8 +150,15 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// Seed the live view and settings from REST on open (the WS resume may
   /// have skipped past routine events fired before this client connected).
   Future<void> _hydrate() {
-    ref.invalidate(polarAlignSettingsProvider);
+    _loadSettings();
     return ref.read(polarAlignFrameProvider.notifier).hydrate();
+  }
+
+  /// The profile's copy from the rig, again (ADR 0015: a failure is kept and
+  /// shown with Retry; nothing falls back to a default).
+  void _loadSettings() {
+    final api = ref.read(profileApiProvider);
+    if (api != null) ref.read(polarAlignSettingsProvider.notifier).load(api);
   }
 
   // [action] is a verb phrase completing "Couldn't <action>".
@@ -153,14 +169,22 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         .run(op, describe: (e) => friendlyError(l10n, e, action: action));
   }
 
-  /// Persist [next] to the profile; the module rolls a failed save back.
-  void _saveSettings(PolarAlignSettings next) => _run(
-        'save the polar-align settings',
-        (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
-      );
+  /// Persist [change] on the rig's copy of the profile section; the module
+  /// rolls a failed save back, refuses one that was never loaded, and reloads
+  /// the rig's copy on a 412 (this panel has no Reload of its own).
+  void _saveSettings(PolarAlignSettings Function(PolarAlignSettings) change) {
+    final l10n = context.l10n;
+    ref.read(polarAlignActionProvider.notifier).run(
+          (_) => ref.read(polarAlignSettingsProvider.notifier).changeAndSave(change),
+          describe: (e) => e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : friendlyError(l10n, e, action: l10n.polarActionSave),
+        );
+  }
 
   void _commitExposure() {
-    final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
+    final settings = ref.read(polarAlignSettingsProvider).value;
+    if (settings == null) return; // the field shows only once loaded
     final value = double.tryParse(_exposureCtrl.text.trim());
     if (!polarExposureValid(value)) {
       ref.read(polarAlignActionProvider.notifier).fail('Exposure must be more than 0 and at most 60 seconds.');
@@ -168,7 +192,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
       return;
     }
     if (value == settings.exposureSeconds) return;
-    _saveSettings(settings.copyWith(exposureSeconds: value));
+    _saveSettings((s) => s.copyWith(exposureSeconds: value));
   }
 
   void _showFullFrame(Uint8List jpeg) {
@@ -395,8 +419,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Future<void> _check() => _start(stage: PolarAlignStages.check);
 
   /// The Check button's caption: how far it turns the mount before it moves.
-  String get _checkCaption =>
-      context.l10n.polarCheckCaption(_settings.checkStepDeg.toStringAsFixed(0));
+  /// Only the rig's own step: null until its settings are in (ADR 0015).
+  String? get _checkCaption => switch (_settings) {
+    final s? => context.l10n.polarCheckCaption(s.checkStepDeg.toStringAsFixed(0)),
+    null => null,
+  };
 
   /// An older daemon only: the mount is going Home, or waits for the user to
   /// put it there (#2048 retired both; Continue went with Next, #2082).
@@ -679,7 +706,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
         if (live.phase == PolarAlignStates.failed && live.errorReason != null) ...[
           const SizedBox(height: 12),
           _callout(
-            'Failed (${live.errorReason}): ${live.errorMessage ?? 'see the server log'}',
+            'Failed (${live.errorReason}): ${polarAlignErrorText(context.l10n, live) ?? 'see the server log'}',
             AraColors.accentError,
             Icons.error_outline,
             key: const Key('polar-align-error-banner'),
@@ -726,12 +753,14 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               ),
           ],
         ),
-        const SizedBox(height: 8),
-        Text(
-          _checkCaption,
-          key: const Key('polar-align-check-caption'),
-          style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
-        ),
+        if (_checkCaption case final caption?) ...[
+          const SizedBox(height: 8),
+          Text(
+            caption,
+            key: const Key('polar-align-check-caption'),
+            style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
+          ),
+        ],
         // #1736 the routine's four knobs, collapsed.
         const PolarAdvancedRow(),
       ],
@@ -789,8 +818,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   Widget _adjustBody(PolarAlignLive live, Color color) {
-    final inTolerance = live.totalErrorArcmin != null && live.totalErrorArcmin! <= _toleranceArcmin;
-    final single = _settings.loopMode == PolarAlignLoopModes.single;
+    final tolerance = _toleranceArcmin;
+    final inTolerance =
+        live.totalErrorArcmin != null && tolerance != null && live.totalErrorArcmin! <= tolerance;
+    final single = _settings?.loopMode == PolarAlignLoopModes.single;
     final coarse = live.stage == PolarAlignStages.coarse;
     final side = coarse ? polarSideOfPoleText(context.l10n, live.altErrorArcmin, live.azErrorArcmin) : null;
     return FitColumn(
@@ -916,9 +947,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
                 if (!coarse) ...[
                   Tooltip(
-                    message: inTolerance
+                    message: inTolerance || tolerance == null
                         ? ''
-                        : 'Available once the total error is under ${_toleranceArcmin.toStringAsFixed(1)}′',
+                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
                     child: FilledButton.tonalIcon(
                       key: const Key('polar-align-done'),
                       onPressed: _busy || !inTolerance
@@ -930,8 +961,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
                   Tooltip(
                     message: inTolerance
-                        ? _checkCaption
-                        : 'Available once the total error is under ${_toleranceArcmin.toStringAsFixed(1)}′',
+                        ? _checkCaption ?? ''
+                        : tolerance == null
+                        ? ''
+                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
                     child: FilledButton.icon(
                       key: const Key('polar-align-check'),
                       onPressed: _busy || !inTolerance ? null : _check,
@@ -944,12 +977,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ],
         ),
-        if (!coarse) ...[
+        if (!coarse && _checkCaption != null) ...[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
-              _checkCaption,
+              _checkCaption!,
               key: const Key('polar-align-check-caption'),
               style: const TextStyle(fontSize: _smallFont, color: AraColors.textSecondary),
             ),
@@ -1309,7 +1342,11 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// Exposure box + Loop/Single switch. Saved to the profile; a running
   /// routine picks the change up on its next frame.
   Widget _captureSettings() {
-    final settings = _settings;
+    final loaded = ref.watch(polarAlignSettingsProvider);
+    final settings = loaded.value;
+    if (settings == null) {
+      return SectionNotLoaded(section: loaded, padding: EdgeInsets.zero, onRetry: _loadSettings);
+    }
     // One literal names both the visible label and the field for a screen reader.
     const exposureLabel = Text(
       'Exposure',
@@ -1367,7 +1404,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           ],
           selected: {settings.loopMode},
           onSelectionChanged: (selection) =>
-              _saveSettings(settings.copyWith(loopMode: selection.first)),
+              _saveSettings((s) => s.copyWith(loopMode: selection.first)),
         ),
       ],
     );

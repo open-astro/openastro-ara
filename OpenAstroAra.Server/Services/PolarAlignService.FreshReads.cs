@@ -56,18 +56,23 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>A reading of the mount checked as above: the pointing in JNOW (degrees) and its mount session, or why it
         /// cannot be trusted. <paramref name="runSession"/>: the session the reading must come from; null takes any.</summary>
         private async Task<FreshPointing> ReadFreshPointingAsync(long? runSession, CancellationToken ct, bool positionOnly = false) {
+            var askedAt = Clock.GetUtcNow();
             var reading = await (positionOnly ? _motionControl.ReadPositionNowAsync(ct) : _motionControl.ReadNowAsync(ct)).ConfigureAwait(false);
+            var answeredAt = Clock.GetUtcNow();
             if (reading is null) {
                 return FreshPointing.Unknown("the mount gave no reading");
             }
+            // Exact (0, 0) can only be the placeholder here because Polar Align works within 5° of the pole (Dec 0 never comes up).
             if (reading.RaHours == 0.0 && reading.DecDegrees == 0.0) {
                 return FreshPointing.Unknown("the mount answered the (0, 0) placeholder");
             }
             if (runSession is long session && reading.SessionEpoch != session) {
                 return FreshPointing.Unknown("the mount reconnected since the start");
             }
-            var age = Clock.GetUtcNow() - reading.ReadAtUtc;
+            var age = answeredAt - reading.ReadAtUtc;
             if (age > FreshReadMaxAge) {
+                // The read's own round trip beside its age tells a slow driver (a long round trip) from a stale value (a short one).
+                LogStaleReading(age.TotalSeconds, (answeredAt - askedAt).TotalSeconds);
                 return FreshPointing.Unknown(string.Create(CultureInfo.InvariantCulture, $"the reading was {age.TotalSeconds:F1} s old"));
             }
             if (Math.Abs(reading.DecDegrees) > 90.0) {
@@ -183,6 +188,9 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4580, Level = LogLevel.Warning, Message = "§45 polar-align: no fresh reading of the mount ({Why}) — nothing more moves (pointing_unknown)")]
         private partial void LogPointingUnknown(string why);
+
+        [LoggerMessage(EventId = 4582, Level = LogLevel.Warning, Message = "§45 polar-align: a mount reading was {AgeS:F2} s old when it arrived; the read itself took {RoundTripS:F2} s")]
+        private partial void LogStaleReading(double ageS, double roundTripS);
 
         [LoggerMessage(EventId = 4581, Level = LogLevel.Warning, Message = "§45 polar-align: the mount reads Dec {DecDeg:F2}°, past the pole — nothing moves (pose_ambiguous)")]
         private partial void LogPoseAmbiguous(double decDeg);

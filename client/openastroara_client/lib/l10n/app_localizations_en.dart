@@ -6149,6 +6149,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your tolerance after $moves moves.',
+      one: 'Inside your tolerance after 1 move.',
+    );
+    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+  }
+
+  @override
   String get polarAlignerAxisAzimuth => 'azimuth';
 
   @override
@@ -6615,6 +6626,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The mount\'s position has not been read since it connected. Try again in a few seconds.';
 
   @override
+  String get refusalMountPositionStopUnconfirmed =>
+      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
   String get mountPositionUnverifiedTitle => 'Mount position unverified';
 
   @override
@@ -6624,6 +6639,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
       'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountPositionStopUnconfirmedBody =>
+      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
 
   @override
   String get mountConfirmAtHome => 'The mount IS at Home';
@@ -6654,6 +6673,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalPolarAlignMovingMount =>
       'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
+  String polarAlignStoppedFromOutside(String by) {
+    String _temp0 = intl.Intl.selectLogic(by, {
+      'user_request': 'The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.',
+      'emergency_stop': 'Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.',
+      'watchdog': 'The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.',
+      'park': 'The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.',
+      'findhome': 'The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.',
+      'pad_stop': 'The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.',
+      'fault_reaction': 'The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.',
+      'pose_unverified': 'The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.',
+      'other': 'The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get polarAlignStopNotConfirmed =>
+      'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
   String get refusalPolarAlignOnAxis =>
@@ -6743,6 +6782,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarDirectionWest => 'west';
+
+  @override
+  String get refusalMountClockNotVerified =>
+      'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';

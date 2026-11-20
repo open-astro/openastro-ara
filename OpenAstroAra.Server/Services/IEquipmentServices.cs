@@ -154,6 +154,12 @@ public interface ITelescopeService : IMountMotionControl {
     /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
     /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
     Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors marks the mount's position unverified with
+    /// <paramref name="reason"/> (<c>stop_unconfirmed</c>): its stop was not confirmed, or the mount reconnected while it
+    /// ran. GoTo, Park, Home and polar alignment are then refused, as after a power loss, until
+    /// <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
+    void MarkPositionUnverified(string reason) { }
 }
 
 public interface IFocuserService {

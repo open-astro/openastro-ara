@@ -179,6 +179,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
+        // #2071 — the routine homes and slews against the mount's sidereal time: refuse to start while its clock is not verified.
+        private readonly IMountClockGate? _mountClock;
         // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
         private GuideCameraCustody.Claim? _claim;
 
@@ -193,8 +195,10 @@ namespace OpenAstroAra.Server.Services {
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
                 IPolarAlignMainCameraSolver? mainCamera = null,
-                IPolarAlignerSource? aligner = null) {
+                IPolarAlignerSource? aligner = null,
+                IMountClockGate? mountClock = null) {
             _guider = guider;
+            _mountClock = mountClock;
             _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
@@ -328,6 +332,14 @@ namespace OpenAstroAra.Server.Services {
             return site;
         }
 
+        /// <summary>#2070 — refuses (<c>mount-position-unverified</c>) while the mount's position is not trusted: a false zero
+        /// after a power loss, or a stop a run could not confirm (#2066, cleared only by a confirmed Home).</summary>
+        private async Task ThrowIfPoseUnverifiedAsync(CancellationToken ct) {
+            if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+                throw TelescopeService.PositionUnverifiedRefusal(unverified);
+            }
+        }
+
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
         /// they take the axis (this measurement's two turns).</summary>
         private sealed record RunBand(double AwaySign, double MaxSweepDeg);
@@ -364,6 +376,9 @@ namespace OpenAstroAra.Server.Services {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
             MountPreflight();
+            // #2066 — the same order as Start: an unverified position is refused before the plan reads the pointing, so a
+            // false Home at the pole after a power cycle names the unconfirmed stop, not the on-axis refusal (#2082).
+            await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             // A start that names no stage is the fine measurement (#2082); the plan echoes the request.
             var (plan, _, _) = await PlanStartAsync(stage ?? PolarAlignStages.Fine, settings, ct).ConfigureAwait(false);
@@ -377,8 +392,9 @@ namespace OpenAstroAra.Server.Services {
         /// (connected guider, connected and unparked mount, a configured site latitude, a pointing 3° or more from the
         /// pole, the user's <paramref name="confirmation"/> of the turn direction), then the guide-camera PA-session lease,
         /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept, except a
-        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which plans and confirms the check
-        /// first (a refusal leaves the loop running), then ends the loop like Stop and starts the check. Throws
+        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which checks the mount's clock and
+        /// plans and confirms the check first (those refusals leave the loop running), then ends the loop like Stop and
+        /// starts the check. A mount clock push in flight is waited for first, as a GoTo waits (#2071). Throws
         /// <see cref="InvalidOperationException"/> on a failed preflight (409 by the endpoint; a <see cref="RefusalException"/>
         /// carries its cause). The lease is taken through the custody module before the guider's capture idles and its loop
         /// stops; when either fails, the lease is given back.
@@ -429,6 +445,11 @@ namespace OpenAstroAra.Server.Services {
             long endRequestsAtCall;
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
+            }
+            // #2071 — like a GoTo, a Start just after the app connects waits (up to about 10 s) for the mount clock push in
+            // flight; the gate is read again below, after the preflight. Before the lock: a Stop must not wait behind it.
+            if (_mountClock is { } clockGate) {
+                await clockGate.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
             }
             if (handOver) {
                 var adjustWatch = await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false);
@@ -481,12 +502,11 @@ namespace OpenAstroAra.Server.Services {
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
+                ThrowIfMountClockNotVerified();
                 // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
-                if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
-                    throw TelescopeService.PositionUnverifiedRefusal(unverified);
-                }
+                await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
                 // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
                 // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
                 // Taken before the start reading below: a GoTo the daemon sent before is seen on it (slewing, or where it
@@ -570,8 +590,11 @@ namespace OpenAstroAra.Server.Services {
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                         gen = ++_generation;
+                        runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
+                        _runFence = (gen, runEnd.Fence);
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
-                        _abortWatch = (gen, baselineEpoch, baselineOwn);
+                        runEnd.MountSession = _motionControl.SessionEpoch; // #2066 — a change while the run runs leaves the pose unverified
+                        _abortWatch = (gen, baselineEpoch, baselineOwn, runEnd);
                         _runSession = (gen, sweep.SessionEpoch); // #2066 — a reading of another mount session fails the run
                         // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
                         // no stop; a stop that was never confirmed) is not this run's, which has moved nothing yet, and must
@@ -626,6 +649,13 @@ namespace OpenAstroAra.Server.Services {
                 new Dictionary<string, object?> { ["direction"] = plan.Direction });
         }
 
+        /// <summary>#2071 — the routine turns the mount against its sidereal time: refused while its clock is not verified.</summary>
+        private void ThrowIfMountClockNotVerified() {
+            if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+            }
+        }
+
         /// <summary>The run is in its live adjust loop (adjusting, or paused on failed solves).</summary>
         private bool IsAdjusting() {
             lock (_gate) {
@@ -634,14 +664,15 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>#2082 — the Check button of the adjust screen: a confirmed Start(check) through the session's sweep plan
-        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The check is planned and its
-        /// confirmation verified while the loop still runs (a refusal leaves it running), then the loop ends like Stop (the
-        /// mount stopped and confirmed, its readout kept as the last run's) before the check starts. It makes exactly one
-        /// end request (<see cref="StartAsync"/> allows that one and no other).</summary>
+        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The mount's clock is checked, the check
+        /// planned and its confirmation verified while the loop still runs (any of those refusals leaves it running), then
+        /// the loop ends like Stop (the mount stopped and confirmed, its readout kept as the last run's) before the check
+        /// starts. It makes exactly one end request (<see cref="StartAsync"/> allows that one and no other).</summary>
         /// <returns>The loop's reading of the mount's stop count (<c>_abortWatch</c>), for the check to keep; null when the
         /// loop had none (a mount that keeps no count).</returns>
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
             MountPreflight();
+            ThrowIfMountClockNotVerified(); // #2071: a refused Check leaves the loop running, the mount untouched
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             var (plan, _, _) = await PlanStartAsync(PolarAlignStages.Check, settings, ct).ConfigureAwait(false);
             ThrowIfNotConfirmed(confirmation, plan);
@@ -731,22 +762,41 @@ namespace OpenAstroAra.Server.Services {
                 cts?.Dispose();
                 if (!unwound && end is { MountStopped: null } && endRequest != TakenOver) {
                     // The run is stuck in a call that ignores cancellation and never reached its exit: confirm the stop here,
-                    // and turn tracking off now (it may never unwind; a mount left tracking runs on toward the pier). An end
-                    // that hands tracking back leaves it as it is: the run gives it back when it unwinds.
-                    var stopped = await StopMountMotionAsync(outcome).ConfigureAwait(false);
-                    end.MountStopped = stopped;
-                    if (!stopped || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding)) {
-                        TrackingOffBestEffort(outcome);
+                    // and set tracking now as the exit would (it may never unwind; a mount left tracking runs on toward the
+                    // pier). #2066 — an end that hands tracking back does the hand-back here too: this end fences the run
+                    // below, so its exit writes nothing when it unwinds. A takeover that gave up waiting fenced the run's
+                    // stops meanwhile (null): the mount is its own, nothing is written.
+                    var stopped = await StopMountMotionAsync(outcome, end.Fence).ConfigureAwait(false);
+                    if (stopped is not null) {
+                        NotePoseUnverifiedAfterRun(end, stopped);
                     }
+                    lock (_gate) {
+                        // #2066 — a finding the run's own exit made meanwhile stands: a "not confirmed" is never overwritten.
+                        end.MountStopped ??= stopped;
+                    }
+                    if (stopped is not null && !StopsFenced(end.Fence)) {
+                        ApplyExitTracking(end.PriorTracking, finished: outcome == "complete",
+                            handedToGuiding: endRequest == HandedToGuiding, stopped, outcome);
+                    }
+                }
+                if (!unwound && end is not null && !StopsFenced(end.Fence)) {
+                    // #2066 — the stuck run may unwind at any later time; its exit would then stop the mount and turn tracking
+                    // off in the middle of whatever the mount does by then (a park, a GoTo, the user's imaging). This end
+                    // answered for the mount: fence the run's stops.
+                    FenceStops();
+                    LogAbandonedRunFenced();
                 }
                 // #2066 (ARA-2) — the run is over: the mount's motion owner goes back (a run that unwound gave it back in its
                 // exit already; a stuck one gives it back here, after the stop above).
                 end?.ReleaseHold();
-                var mountNotStopped = end?.MountStopped == false;
+                bool mountNotStopped;
                 bool becameStopped;
                 bool reportNotStopped = false;
                 bool wasActive;
                 lock (_gate) {
+                    // #2066 — read under the lock the run's exit records its finding in (ExitMountOnceAsync): a finding that
+                    // lands after this read is told below, as this end marks the run reported, or by the run after the mark.
+                    mountNotStopped = end?.MountStopped == false;
                     wasActive = _active;
                     _active = false;
                     if (wasActive && outcome != EndedBySequence) {
@@ -767,7 +817,7 @@ namespace OpenAstroAra.Server.Services {
                         // Never "stopped" for a mount that may still move: the client shows the failure and its sentence.
                         _state = "failed";
                         becameStopped = false;
-                        reportNotStopped = true;
+                        reportNotStopped = end is not null && ClaimNotStoppedReportLocked(end);
                     } else if (becameStopped) {
                         _state = "stopped";
                     }
@@ -784,7 +834,21 @@ namespace OpenAstroAra.Server.Services {
                 } else if (becameStopped) {
                     await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
                 }
-                end?.MarkReported();
+                bool notStoppedLate = false;
+                lock (_gate) {
+                    // #2066 — marked under the lock the run's exit records its finding in: a "not confirmed" that landed after
+                    // the read above is told here, one after this mark by the run, never by neither and never twice.
+                    if (end is not null) {
+                        end.MarkReported();
+                        notStoppedLate = ClaimNotStoppedReportLocked(end);
+                        if (notStoppedLate && _state == "stopped") {
+                            _state = "failed";
+                        }
+                    }
+                }
+                if (notStoppedLate) {
+                    await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
+                }
                 return Accepted(operationType, idempotencyKey);
             } finally {
                 _opLock.Release();
@@ -867,11 +931,14 @@ namespace OpenAstroAra.Server.Services {
         /// task is reported as reason <c>internal_error</c>.</summary>
         [SuppressMessage("Design", "CA1032:Implement standard exception constructors",
             Justification = "Private, never serialized or thrown without a reason code; the standard ctors would allow constructing it without one.")]
-        private sealed class RoutineFailedException(string reason, string message, bool mountTakenOver = false) : Exception(message) {
+        private sealed class RoutineFailedException(string reason, string message, bool mountTakenOver = false, string? stoppedBy = null) : Exception(message) {
             public string Reason { get; } = reason;
             /// <summary>#2066 — the stop that ended the run handed the mount to its sender (Emergency Stop, a park, a Find
             /// Home): the exit leaves the mount to it.</summary>
             public bool MountTakenOver { get; } = mountTakenOver;
+            /// <summary>#2107 — for <see cref="SlewAbortedExternally"/>: the reason the stop from outside was counted with
+            /// (<see cref="MountStopReasons"/>), sent as the error event's <c>stopped_by</c>; null when not known.</summary>
+            public string? StoppedBy { get; } = stoppedBy;
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -895,6 +962,7 @@ namespace OpenAstroAra.Server.Services {
             // check's verdict is reported (the mount is safe by the time the client hears of the end), else in the finally.
             var exited = false;
             bool? exitStopped = null;
+            var tellNotStopped = false;
             async Task<bool?> ExitMountOnceAsync(bool finished, string why, bool handedToGuiding = false, bool takenOver = false) {
                 if (exited) {
                     return exitStopped;
@@ -905,10 +973,11 @@ namespace OpenAstroAra.Server.Services {
                     LogExitLeftToSuccessor();
                     return null;
                 }
-                if (takenOver || end.Requested == TakenOver) {
+                if (takenOver || end.Requested == TakenOver || StopsFenced(end.Fence)) {
                     // #2066 — Emergency Stop, the safety park, a park or a Find Home owns the mount now: it stops and checks
                     // the mount itself (Emergency Stop's second pass), or moves it on purpose. A stop round from here would
-                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound.
+                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound. A
+                    // fenced run (a takeover gave up waiting for it, or an end abandoned it) is in the same place.
                     LogExitLeftToTakeover(why);
                     return null;
                 }
@@ -916,10 +985,35 @@ namespace OpenAstroAra.Server.Services {
                     _exitsInFlight++;
                 }
                 try {
-                    exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
-                    end.MountStopped = exitStopped;
+                    exitStopped = await StopMountMotionAsync(why, end.Fence).ConfigureAwait(false);
+                    if (exitStopped is null) {
+                        // Fenced while it stopped the mount: the mount is a takeover's now, no tracking write.
+                        LogExitLeftToTakeover(why);
+                        return null;
+                    }
+                    // #2066 — an unconfirmed stop (or a mount that reconnected while the run ran) leaves the pose unverified.
+                    NotePoseUnverifiedAfterRun(end, exitStopped);
+                    lock (_gate) {
+                        // #2066 — recorded under the lock the stop path reads it and marks the run reported in
+                        // (EndRoutineAsync): once the stop path has told the client the run ended, the finding is this run's
+                        // to tell; before, the stop path tells it. Never by neither, never twice.
+                        end.MountStopped = exitStopped;
+                        tellNotStopped = end.Reported && ClaimNotStoppedReportLocked(end);
+                        if (tellNotStopped && _state == "stopped" && _startSeq == startSeq) {
+                            _state = "failed"; // never "stopped" for a mount that may still move (no newer run owns the state)
+                        }
+                    }
                     // #2089 — where this run left the mount: the next start tells a continued pose from a moved one by it.
                     await NoteMountLeftAfterStopAsync().ConfigureAwait(false);
+                    if (StopsFenced(end.Fence)) {
+                        // #2066 — fenced during that read (it may hang): the mount is a takeover's now, its park may be under
+                        // way, and a tracking write would land between the park's tracking on and its Park.
+                        LogExitLeftToTakeover(why);
+                        if (tellNotStopped) {
+                            await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
+                        }
+                        return exitStopped;
+                    }
                     // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into
                     // a stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
                     var requested = end.Requested;
@@ -932,7 +1026,7 @@ namespace OpenAstroAra.Server.Services {
                         _exitsInFlight--;
                     }
                 }
-                if (exitStopped == false && end.Reported) {
+                if (tellNotStopped) {
                     // The stop path already told the client this run ended: the finding is this run's to report.
                     await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
                 }
@@ -953,6 +1047,7 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("mount_parked", MountParkedMessage);
                 }
                 priorTracking = mountInfo.TrackingEnabled;
+                end.PriorTracking = priorTracking;
                 // One PA-session lease renewer for the whole run: the stages share its clock, so a
                 // hand-off never renews twice back to back.
                 Func<Task> renew = () => RenewLeaseAsync(ct);
@@ -983,11 +1078,12 @@ namespace OpenAstroAra.Server.Services {
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
                 // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
                 // surface the solver's own actionable message, not internal_error.
-                await FailRoutineAsync("solver_configuration", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                await FailRoutineAsync("solver_configuration", ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver)).ConfigureAwait(false);
+                await FailRoutineAsync(ex.Reason, ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver),
+                    stoppedBy: ex.StoppedBy).ConfigureAwait(false);
             } catch (Exception ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync("internal_error", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                await FailRoutineAsync("internal_error", ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (Exception ex) {
                 // A superseded (zombie) run: its failure must not touch state, events, the lease, or
                 // the session log the successor run now owns — log and drain quietly.
@@ -1478,12 +1574,15 @@ namespace OpenAstroAra.Server.Services {
         // #2048: the state turns failed at once (a Stop meanwhile must not relabel it), then the mount is stopped and
         // confirmed (exitMount), and only then is the failure reported — with the cut-power sentence when the stop was not
         // confirmed.
-        private async Task FailRoutineAsync(string reason, Exception ex, int gen, Func<Task<bool?>> exitMount) {
+        private async Task FailRoutineAsync(string reason, Exception ex, int gen, RunEnd end, Func<Task<bool?>> exitMount, string? stoppedBy = null) {
             LogRoutineFailed(reason, ex);
             bool claimed;
             lock (_gate) {
                 claimed = _generation == gen; // superseded between the catch filter and here — the successor owns state
                 if (claimed) {
+                    // #2066 — this failure is the run's last event and carries an unconfirmed stop itself (the sentence below):
+                    // neither the stop path nor the exit tells mount_did_not_stop for it again.
+                    end.ReportsItself = true;
                     _state = "failed";
                     _active = false;
                     RememberRunReadoutLocked(); // #2082 — a failed run that had a readout is still the last run
@@ -1505,8 +1604,9 @@ namespace OpenAstroAra.Server.Services {
             if (!claimed) {
                 return;
             }
-            var message = mountStopped == false && reason != MountDidNotStop ? ex.Message + " " + CutPowerSentence : ex.Message;
-            await PublishErrorAsync(reason, message).ConfigureAwait(false);
+            var notStopped = mountStopped == false && reason != MountDidNotStop;
+            var message = notStopped ? ex.Message + " " + CutPowerSentence : ex.Message;
+            await PublishErrorAsync(reason, message, stoppedBy, stopUnconfirmed: notStopped).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("failed", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
@@ -1690,11 +1790,35 @@ namespace OpenAstroAra.Server.Services {
             return PublishAsync(WsEventCatalog.PolarAlignFrameComplete, payload);
         }
 
-        private Task PublishErrorAsync(string reason, string message) =>
-            PublishAsync(WsEventCatalog.PolarAlignError, new JsonObject {
+        /// <param name="stoppedBy">#2107 — for <see cref="SlewAbortedExternally"/>: what stopped the mount
+        /// (<see cref="MountStopReasons"/>), so the app words the end in its own language; left out when not known.</param>
+        /// <param name="stopUnconfirmed">#2066 — the run's exit could not confirm its stop, and this error carries the
+        /// cut-power sentence itself (no <c>mount_did_not_stop</c> follows): an app that words the end from
+        /// <paramref name="stoppedBy"/> keeps the warning. Sent only when true.</param>
+        private Task PublishErrorAsync(string reason, string message, string? stoppedBy = null, bool stopUnconfirmed = false) {
+            var payload = new JsonObject {
                 ["reason"] = reason,
                 ["message"] = message,
-            });
+            };
+            if (stoppedBy is not null) {
+                payload["stopped_by"] = stoppedBy;
+            }
+            if (stopUnconfirmed) {
+                payload["stop_unconfirmed"] = true;
+            }
+            return PublishAsync(WsEventCatalog.PolarAlignError, payload);
+        }
+
+        /// <summary>#2066 — under <c>_gate</c>: whether the caller is the one to tell the client that the run's stop was not
+        /// confirmed (<c>mount_did_not_stop</c>), and if so claims it. Not when the stop was confirmed or is not known yet,
+        /// when the run's own failure report carries it, or when it was told already.</summary>
+        private static bool ClaimNotStoppedReportLocked(RunEnd end) {
+            if (end.MountStopped != false || end.ReportsItself || end.NotStoppedTold) {
+                return false;
+            }
+            end.NotStoppedTold = true;
+            return true;
+        }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "WS publish is best-effort; a broadcaster fault must not abort the routine. Log-and-recover boundary.")]

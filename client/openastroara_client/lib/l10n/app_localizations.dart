@@ -10329,6 +10329,12 @@ abstract class AppLocalizations {
   /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.'**
   String polarAlignerConverged(int moves, String tolerance);
 
+  /// Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.'**
+  String polarAlignerConvergedPlain(int moves);
+
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
   ///
   /// In en, this message translates to:
@@ -11089,6 +11095,12 @@ abstract class AppLocalizations {
   /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
   String get refusalMountPositionNotReadYet;
 
+  /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park, Home and Polar Align are blocked because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionStopUnconfirmed;
+
   /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
   ///
   /// In en, this message translates to:
@@ -11106,6 +11118,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.'**
   String get mountPositionUnverifiedRunZeroSearch;
+
+  /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionStopUnconfirmedBody;
 
   /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again
   ///
@@ -11154,6 +11172,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
+
+  /// Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token
+  ///
+  /// In en, this message translates to:
+  /// **'{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}'**
+  String polarAlignStoppedFromOutside(String by);
+
+  /// Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.'**
+  String get polarAlignStopNotConfirmed;
 
   /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
   ///
@@ -11292,6 +11322,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'west'**
   String get polarDirectionWest;
+
+  /// Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.'**
+  String get refusalMountClockNotVerified;
 
   /// Add your devices: heading above the detected devices
   ///
