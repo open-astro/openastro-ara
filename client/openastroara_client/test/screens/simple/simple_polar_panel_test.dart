@@ -19,19 +19,42 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart' show Tagged;
+
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
+
+import '../../support/imaging_sections.dart' show staleSave;
+import '../../support/polar_align_section.dart';
+
+/// The profile's polar-align section (ADR 0015), each save sent also in [calls].
+class _Section extends FakePolarAlignSection {
+  // In from the rig from the first frame: these tests are about the routine.
+  _Section(this.calls) : super(loaded: true);
+  final List<String> calls;
+  @override
+  Future<Tagged<PolarAlignSettings>> send(ProfileApi api, PolarAlignSettings value, String? etag) {
+    calls.add('save ${value.exposureSeconds} ${value.loopMode}');
+    return super.send(api, value, etag);
+  }
+}
 
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
+  late final section = _Section(calls);
+
   /// The stage of each start the user confirmed (null: the default measurement).
   final stages = <String?>[];
-  PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 1.0);
+
+  /// The rig's copy of the profile's polar-align section.
+  PolarAlignSettings get settings => section.initial!;
+  set settings(PolarAlignSettings s) => section.initial = s;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async => settings;
   @override
   Future<void> start(PolarAlignStartPlan plan) async {
     calls.add('start');
@@ -46,18 +69,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<Uint8List?> getLiveFrame() async => null;
   @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    calls.add('save ${next.exposureSeconds} ${next.loopMode}');
-    return settings = next;
-  }
-  @override
   void close() {}
-}
-
-/// A rig whose settings read fails.
-class _NoSettingsApi extends _Api {
-  @override
-  Future<PolarAlignSettings> getSettings() async => throw StateError('rig gone');
 }
 
 class _FailingApi extends _Api {
@@ -114,11 +126,12 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
   final api = server
       ? (_Api()
         ..settings = tolerance == null
-            ? PolarAlignSettings(loopMode: loopMode)
-            : PolarAlignSettings(loopMode: loopMode, targetToleranceArcmin: tolerance))
+            ? rigPolarAlign.copyWith(loopMode: loopMode)
+            : rigPolarAlign.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
       : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      if (api != null) ...polarAlignSectionOverrides(api.section) else profileApiProvider.overrideWithValue(null),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(live)),
     ],
@@ -131,9 +144,10 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
     final en = lookupAppLocalizations(const Locale('en'));
-    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s\nLoop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
+    expect(simplePolarSummary(rigPolarAlign, en), '1 s\nLoop');
+    expect(simplePolarSummary(rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
         '45 s\nSingle');
+    expect(simplePolarSummary(null, en), '', reason: 'not loaded from the rig: no made-up setup');
   });
 
   test('simplePolarSideText names the side of the pole in the chosen language', () {
@@ -414,19 +428,49 @@ void main() {
     },
   );
 
-  testWidgets('after a failed settings load a changed value sends no PUT (#1736)', (tester) async {
-    final api = _NoSettingsApi();
+  testWidgets("the setup rows wait for the profile from the rig: Not loaded with Retry, then save over the rig's copy (ADR 0015)",
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        ...polarAlignSectionOverrides(api.section),
         polarAlignApiProvider.overrideWithValue(api),
         polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
       ],
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('Single'), findsNothing, reason: 'no made-up Loop/Single');
+    expect(find.text('1 s'), findsNothing, reason: 'no made-up exposure');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+
+    api.settings = rigPolarAlign;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+    expect(api.calls, ['save 1.0 single'], reason: "saved over the rig's copy once it is in");
+  });
+
+  testWidgets("a Setup row refused as stale shows the rig's copy again, and the next change saves (ADR 0015)",
+      (tester) async {
+    final api = (await _pump(tester, const PolarAlignLive()))!;
+    api.section.refuse = staleSave();
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts, isEmpty);
+    expect(api.section.loads, 1, reason: "the rig's copy is loaded again");
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    expect(container.read(polarAlignSettingsProvider).value!.loopMode, PolarAlignLoopModes.loop,
+        reason: 'the rig still loops: Single must not stay on screen');
+    expect(container.read(polarAlignSettingsProvider).conflict, isFalse, reason: 'no Reload here to clear it');
+
+    api.section.refuse = null;
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts.single.loopMode, PolarAlignLoopModes.single);
   });
 
   testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
@@ -647,6 +691,33 @@ void main() {
     },
   );
 
+  testWidgets("Check again names only the rig's own step: no caption until the profile loads (ADR 0015)",
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        ...polarAlignSectionOverrides(api.section),
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
+            phase: PolarAlignStates.stopped, stage: PolarAlignStages.fine, totalErrorArcmin: 0.8))),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-check-again-caption')), findsNothing,
+        reason: 'no made-up step is said before the mount turns');
+    expect(find.byKey(const Key('simple-polar-check-again')), findsOneWidget);
+
+    api.settings = rigPolarAlign.copyWith(checkStepDeg: 20);
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Check turns the mount 2 × 20° and takes three frames to measure the alignment.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets(
     'checked: Done completes the routine and leaves the verdict alone',
     (tester) async {
@@ -679,8 +750,9 @@ void main() {
   });
 
   testWidgets('in Preflight, polar align is the last step: Done reads Done · Start imaging', (tester) async {
-    final api = _Api()..settings = PolarAlignSettings();
+    final api = _Api();
     final c = ProviderContainer(overrides: [
+      ...polarAlignSectionOverrides(api.section),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),

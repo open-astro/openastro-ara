@@ -88,10 +88,10 @@ import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
-import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -163,6 +163,9 @@ import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/polar_align_section.dart';
 
 /// The session's rigs, without storage.
 class _SavedRigs extends SavedServersNotifier {
@@ -240,7 +243,7 @@ final _en = lookupAppLocalizations(const Locale('en'));
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
     ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true, bool rigOptics = true,
-    SiteSettings? rigSite = const SiteSettings(), Object? siteRefuse}) async {
+    SiteSettings? rigSite = const SiteSettings(), Object? siteRefuse, FakePolarAlignSection? polar, bool rigPolar = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -260,6 +263,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (rigOptics) opticsSettingsProvider.overrideWith(_RigOptics.new),
     // The profile's site as the rig's copy (ADR 0015), saved with no HTTP.
     if (rigSite != null) siteSettingsProvider.overrideWith(() => _RigSite(rigSite, refuse: siteRefuse)),
+    // The profile's polar-align section as the rig's copy (ADR 0015), with no HTTP.
+    if (rigPolar) polarAlignSettingsProvider.overrideWith(() => polar ?? FakePolarAlignSection(loaded: true)),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -720,20 +725,12 @@ class _PolarAlignerDown extends _PolarAligner {
   Future<PolarAligner?> get() async => throw StateError('The rig did not answer.');
 }
 
-/// The profile's polar-align section: [puts] records each save.
+/// The polar-align routine on a rig: none runs. (Its profile section is
+/// [FakePolarAlignSection], ADR 0015.)
 class _PolarProfile implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarAlignerAuto: true);
-  final puts = <Map<String, dynamic>>[];
-  @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    puts.add(next.toJson());
-    return settings = next;
-  }
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
@@ -1814,10 +1811,9 @@ void main() {
   testWidgets('the P.A. chip stacks exposure over Loop/Single under the icon, never cut', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    final container = await _pump(tester, const Size(1024, 768));
-    await container.read(polarAlignSettingsProvider.future);
-    await container.read(polarAlignSettingsProvider.notifier)
-        .save(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single));
+    await _pump(tester, const Size(1024, 768),
+        polar: FakePolarAlignSection(
+            initial: rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), loaded: true));
     await openMode(tester, 'polarAlign');
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsOneWidget);
@@ -4672,11 +4668,12 @@ void main() {
   });
 
   testWidgets('Devices shows the Polar Aligner the daemon found, read-only, with Turned by under it', (tester) async {
-    final profile = _PolarProfile();
-    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+    final profile = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4), loaded: true);
+    await _pump(tester, const Size(1024, 768), linkUp: true, polar: profile, gear: [
       polarAlignerApiProvider.overrideWithValue(_PolarAligner(
           const PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true))),
-      polarAlignApiProvider.overrideWithValue(profile),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
     ]);
     await _openSection(tester, 'Devices');
     await tester.pumpAndSettle();
@@ -4687,9 +4684,34 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('simple-gear-polaraligner-hand')));
     await tester.tap(find.byKey(const Key('simple-gear-polaraligner-hand')));
     await tester.pumpAndSettle();
-    expect(profile.puts.single['polar_aligner_auto'], isFalse);
-    expect(profile.puts.single['exposure_seconds'], 4, reason: 'saved over the loaded section, not defaults');
+    expect(profile.puts.single.polarAlignerAuto, isFalse);
+    expect(profile.puts.single.exposureSeconds, 4, reason: 'saved over the loaded section, not defaults');
     expect(find.text('Polar align shows the turns and you make them.'), findsOneWidget);
+  });
+
+  testWidgets('Devices: Turned by with the profile not loaded from the rig sends nothing and says why (ADR 0015)',
+      (tester) async {
+    final profile = FakePolarAlignSection(initial: null); // the rig does not answer the read
+    // Simple Mode on (the Experimental switch too): the message card, not a snackbar.
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true, polar: profile, gear: [
+      polarAlignerApiProvider.overrideWithValue(_PolarAligner(
+          const PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true))),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text('Polar align turns the motors after each measurement.'), findsNothing,
+        reason: 'no made-up Motors or By hand');
+    final loads = profile.loads;
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-polaraligner-hand')));
+    await tester.tap(find.byKey(const Key('simple-gear-polaraligner-hand')));
+    await tester.pumpAndSettle();
+    expect(profile.sent, isEmpty);
+    expect(profile.loads, greaterThan(loads), reason: 'the press loads the section once more first');
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.detail, startsWith('Settings not loaded from the rig; nothing was saved'));
   });
 
   testWidgets('Devices: a Polar Aligner Ara cannot drive shows why and has no Turned by', (tester) async {

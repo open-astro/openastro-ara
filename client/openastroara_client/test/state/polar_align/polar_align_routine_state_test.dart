@@ -7,9 +7,8 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
-import 'package:openastroara/state/settings/loaded_section.dart' show SectionNotLoadedException;
 
-/// Fake rig: frame fetches wait on [frames] in order; settings and status scripted.
+/// Fake rig: frame fetches wait on [frames] in order; status scripted.
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
@@ -17,11 +16,6 @@ class _Api implements PolarAlignClient {
   final frames = <Completer<Uint8List?>>[];
   int frameCalls = 0;
   PolarAlignStatus? status;
-  PolarAlignSettings settings = const PolarAlignSettings();
-  Object? putError;
-  Object? getError;
-  int getCalls = 0;
-  int putCalls = 0;
 
   @override
   Future<Uint8List?> getLiveFrame() {
@@ -33,20 +27,6 @@ class _Api implements PolarAlignClient {
 
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
-  @override
-  Future<PolarAlignSettings> getSettings() async {
-    getCalls++;
-    if (getError != null) throw getError!;
-    return settings;
-  }
-
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async {
-    putCalls++;
-    if (putError != null) throw putError!;
-    return settings = s;
-  }
-
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
@@ -114,35 +94,6 @@ void main() {
     api.frames[1].completeError(StateError('rig gone'));
     await pumpEventQueue();
     expect(c.read(polarAlignFrameProvider), [7]);
-  });
-
-  test('a failed settings save rolls back to what the rig uses', () async {
-    await c.read(polarAlignSettingsProvider.future);
-    api.putError = StateError('refused');
-    await expectLater(
-      c.read(polarAlignSettingsProvider.notifier).save(const PolarAlignSettings(exposureSeconds: 30)),
-      throwsStateError,
-    );
-    expect(c.read(polarAlignSettingsProvider).value?.exposureSeconds, const PolarAlignSettings().exposureSeconds);
-  });
-
-  test('a save with nothing loaded loads once more, then writes nothing (#1736)', () async {
-    api.getError = StateError('rig gone');
-    await expectLater(c.read(polarAlignSettingsProvider.future), throwsStateError);
-    final notifier = c.read(polarAlignSettingsProvider.notifier);
-    await expectLater(
-      notifier.save(const PolarAlignSettings(checkStepDeg: 15)),
-      throwsA(isA<SectionNotLoadedException>()),
-    );
-    expect(api.getCalls, 2, reason: 'the save loads once more');
-    // The retry loads, but the edit was built on no loaded copy: still nothing written.
-    api.getError = null;
-    await expectLater(
-      notifier.save(const PolarAlignSettings(checkStepDeg: 15)),
-      throwsA(isA<SectionNotLoadedException>()),
-    );
-    expect(api.putCalls, 0);
-    expect(c.read(polarAlignSettingsProvider).value?.checkStepDeg, 10.0);
   });
 
   test('opening a panel seeds the live view from the rig', () async {
