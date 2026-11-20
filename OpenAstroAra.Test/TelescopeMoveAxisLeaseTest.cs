@@ -93,7 +93,28 @@ namespace OpenAstroAra.Test {
     public class TelescopeMoveAxisLeaseTest {
 
         private sealed class ManualClock : TimeProvider {
-            public DateTimeOffset Now { get; set; } = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+            private readonly object _lock = new();
+            private DateTimeOffset _now = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+
+            public DateTimeOffset Now {
+                get {
+                    lock (_lock) {
+                        return _now;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _now = value;
+                    }
+                }
+            }
+
+            public void Advance(TimeSpan by) {
+                lock (_lock) {
+                    _now += by;
+                }
+            }
+
             public override DateTimeOffset GetUtcNow() => Now;
         }
 
@@ -195,11 +216,17 @@ namespace OpenAstroAra.Test {
             await using var _ = box;
             using var __ = svc;
             var mount = Mount();
+            // Every Dec read takes 3 s on the stamp's clock (a stalled Wi-Fi link): a reading stamped when it ended would
+            // look 3 s younger than it is. The refresh's own reads move the clock too, so only the gap is checked.
             box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5"
-                : path.EndsWith("/declination", StringComparison.Ordinal) ? "90.9"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? Slow("90.9")
                 : path.EndsWith("/slewing", StringComparison.Ordinal) ? "true"
                 : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "1"
                 : mount(path));
+            string Slow(string answer) {
+                stamp.Advance(TimeSpan.FromSeconds(3));
+                return answer;
+            }
 
             var now = await svc.ReadNowAsync(CancellationToken.None);
 
@@ -207,7 +234,7 @@ namespace OpenAstroAra.Test {
             Assert.That((now!.RaHours, now.DecDegrees), Is.EqualTo((7.5, 90.9)), "the driver's answer, never folded");
             Assert.That(now.Slewing, Is.True, "Slewing read now, not the cached false");
             Assert.That(now.SideOfPier, Is.EqualTo(PierSide.pierWest), "pointing state 1 (through the pole)");
-            Assert.That(now.ReadAtUtc, Is.EqualTo(stamp.Now), "stamped when the read began");
+            Assert.That(stamp.Now - now.ReadAtUtc, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(3)), "stamped when the read began, before its slow Dec");
             Assert.That(now.SessionEpoch, Is.EqualTo(svc.SessionEpoch).And.Not.Zero, "the session the read came from");
         }
 
