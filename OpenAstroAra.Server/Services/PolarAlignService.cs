@@ -699,7 +699,16 @@ namespace OpenAstroAra.Server.Services {
                 } else if (becameStopped) {
                     await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
                 }
-                end?.MarkReported();
+                bool alignerNotStoppedLate;
+                lock (_gate) {
+                    // #2069 — marked under the lock the run notes its aligner end in (NoteAlignerEndAsync): a note that landed
+                    // after the read above is told here, and one after this mark by the run.
+                    end?.MarkReported();
+                    alignerNotStoppedLate = AlignerNotStoppedUntoldLocked(end, alreadyRead: alignerNotStopped);
+                }
+                if (alignerNotStoppedLate) {
+                    await PublishErrorAsync(AlignerDidNotStop, AlignerCutPowerSentence).ConfigureAwait(false);
+                }
                 return Accepted(operationType, idempotencyKey);
             } finally {
                 _opLock.Release();

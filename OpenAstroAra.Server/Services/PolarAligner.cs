@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Server.Services;
@@ -134,11 +135,16 @@ internal readonly record struct PolarAlignerStopOutcome(bool Confirmed, int Send
 /// move sent before a link drop may yet start).
 /// Not confirmed at the end of the window: the caller
 /// reports <c>stop_not_confirmed</c> and owes the device a Stop.
+/// The window bounds the whole stop, a slow link included: no call starts after it, and a call still waiting at its end
+/// is left to finish on its own (a Stop that lands late is harmless) and counts as no answer, so Emergency Stop's aligner
+/// step (the routine's stop, then the route's: two windows) stays well inside its 10 s bound.
 /// </summary>
 internal static class PolarAlignerVerifiedStop {
     internal static readonly TimeSpan DefaultWindow = TimeSpan.FromSeconds(3);
     internal static readonly TimeSpan DefaultPoll = TimeSpan.FromMilliseconds(250);
     internal const int Sends = 3;
+
+    private const string NoAnswerInWindow = "the Polar Aligner did not answer within the stop's window";
 
     /// <summary>The device calls block (HTTP): call this off a caller's thread.</summary>
     public static async Task<PolarAlignerStopOutcome> StopAsync(IPolarAligner device, TimeSpan window, TimeSpan poll) {
@@ -148,10 +154,11 @@ internal static class PolarAlignerVerifiedStop {
         var delivered = false;
         string? error = null;
         while (true) {
-            if (sends < Sends && clock.Elapsed >= resendEvery * sends) {
+            // The first Stop always goes out; a resend only inside the window.
+            if (sends == 0 || (sends < Sends && clock.Elapsed >= resendEvery * sends && clock.Elapsed < window)) {
                 sends++;
                 try {
-                    device.Stop();
+                    await WithinAsync(() => { device.Stop(); return true; }, window - clock.Elapsed).ConfigureAwait(false);
                     delivered = true;
                 } catch (PolarAlignerException ex) {
                     error = ex.Message;
@@ -159,20 +166,38 @@ internal static class PolarAlignerVerifiedStop {
                     // read from here on confirms the stop. A device that does not implement Stop (often one whose
                     // canStop is false) would otherwise owe a Stop for ever, and no later run could move it.
                     delivered |= ex.Failure == PolarAlignerFailure.Refused;
+                } catch (TimeoutException) {
+                    error = NoAnswerInWindow;
                 }
-            }
-            try {
-                if (delivered && !device.Status().Moving) {
-                    return new PolarAlignerStopOutcome(true, sends, null);
-                }
-            } catch (PolarAlignerException ex) {
-                error = ex.Message;
             }
             if (clock.Elapsed >= window) {
                 return new PolarAlignerStopOutcome(false, sends, error);
             }
-            await Task.Delay(poll).ConfigureAwait(false);
+            try {
+                if (delivered && !(await WithinAsync(device.Status, window - clock.Elapsed).ConfigureAwait(false)).Moving) {
+                    return new PolarAlignerStopOutcome(true, sends, null);
+                }
+            } catch (PolarAlignerException ex) {
+                error = ex.Message;
+            } catch (TimeoutException) {
+                error = NoAnswerInWindow;
+            }
+            var left = window - clock.Elapsed;
+            if (left <= TimeSpan.Zero) {
+                return new PolarAlignerStopOutcome(false, sends, error);
+            }
+            await Task.Delay(poll < left ? poll : left).ConfigureAwait(false);
         }
+    }
+
+    // One blocking device call, waited on for at most what is left of the window (TimeoutException past it). The call
+    // itself cannot be cut short: it finishes on its own thread, and its failure is observed there. A thread of its own,
+    // not the pool's: on a starved pool (Emergency Stop's ladder, #1985) a queued call would not even start in the window.
+    private static Task<T> WithinAsync<T>(Func<T> call, TimeSpan left) {
+        var running = Task.Factory.StartNew(call, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+        _ = running.ContinueWith(static t => _ = t.Exception, CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+        return running.WaitAsync(left > TimeSpan.Zero ? left : TimeSpan.Zero);
     }
 }
 

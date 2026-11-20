@@ -365,6 +365,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_verified_stop_on_a_slow_link_ends_within_its_window() {
+            // #2069 — Emergency Stop's aligner step runs two verified stops inside its 10 s bound: a Status read that takes
+            // longer than the window (a slow link) must not hold the stop past it.
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => {
+                Thread.Sleep(TimeSpan.FromSeconds(6));
+                return StillStatus;
+            };
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+
+            Assert.That(clock.Elapsed, Is.LessThan(TimeSpan.FromSeconds(3)), "the 150 ms window bounds the stop, not the 6 s read");
+            Assert.That(service.StopOwed, Is.True, "a read that did not answer in time confirms nothing");
+        }
+
+        [Test]
         public async Task Stop_with_nothing_connected_is_refused() {
             await Assert.ThatAsync(() => Build().StopAsync(null, CancellationToken.None),
                 Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));

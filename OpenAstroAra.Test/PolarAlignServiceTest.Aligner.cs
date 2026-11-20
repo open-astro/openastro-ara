@@ -555,6 +555,8 @@ namespace OpenAstroAra.Test {
             using var _ = svc;
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Converged).ConfigureAwait(false);
             IPolarAlignerDriver driver = svc;
+            // #2069 — a window long enough that the verified stop still waits on the held Stop when the test releases it.
+            svc.AlignerStopWindow = TimeSpan.FromSeconds(10);
             aligner.StopAnswers.Reset();
             try {
                 var returned = Task.Factory.StartNew(() => driver.StopPolarAlignerAsync(), CancellationToken.None, TaskCreationOptions.None, TaskScheduler.Default);
@@ -871,6 +873,158 @@ namespace OpenAstroAra.Test {
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
             Assert.That(aligner.SourceStopOwed, Is.False, "the stop was confirmed");
             Assert.That(aligner.Moves, Is.Not.Empty);
+        }
+
+        /// <summary>The fake sky, with a hold the test can put on the next solve: the run waits there, between two
+        /// measurements, so nothing of its own (an owed resend) runs while the test drives a route.</summary>
+        private sealed class HoldableSky(IPolarAlignFrameSolver inner) : IPolarAlignFrameSolver {
+            private volatile TaskCompletionSource? _hold;
+            private readonly TaskCompletionSource _held = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>Completes once a solve waits on the hold.</summary>
+            public Task Held => _held.Task;
+            public void Hold() => _hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            public void Release() => _hold?.TrySetResult();
+            public Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) =>
+                inner.MeasureFocalLengthAsync(fitsPath, binning, hintRa, hintDec, ct);
+            public async Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                if (_hold is { } hold) {
+                    _held.TrySetResult();
+                    await hold.Task.WaitAsync(ct).ConfigureAwait(false);
+                }
+                return await inner.SolveAsync(fitsPath, binning, hintRa, hintDec, ct).ConfigureAwait(false);
+            }
+        }
+
+        [Test]
+        public async Task The_correction_Stop_route_sends_an_owed_Stop_to_the_device_before_the_run_has_read_it() {
+            // #2069 — a Stop owed from before the run is resent before the run reads its device, so the run's own device is
+            // still unknown when it reports stop_not_confirmed. The app's Stop button (POST …/correction/stop) must still
+            // reach the device, and its confirmation turns the run to stop_confirmed: it waits for Resume.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { SourceStopOwed = true, StopFails = true };
+            var sky = new HoldableSky(new CorrectedSky(aligner));
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), sky, ws: ws, aligner: aligner);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.StopNotConfirmed)).ConfigureAwait(false);
+            sky.Hold();
+            await sky.Held.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            aligner.StopFails = false;
+
+            await svc.StopAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(aligner.Stops, Is.GreaterThanOrEqualTo(1), "the route's Stop reached the device");
+            Assert.That(aligner.SourceStopOwed, Is.False, "and its confirmation clears the owed Stop");
+            Assert.That((await AlignerStatusAsync(svc).ConfigureAwait(false))?.Cause, Is.EqualTo(PolarAlignCorrectionCauses.StopConfirmed));
+
+            // The run measures on and sends nothing by itself; Resume is accepted now.
+            sky.Release();
+            var progress = ws.Count(WsEventCatalog.PolarAlignProgress);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignProgress, progress + 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            Assert.That(aligner.Moves, Is.Empty, "no move until Resume");
+            Assert.That((await AlignerStatusAsync(svc).ConfigureAwait(false))?.Cause, Is.EqualTo(PolarAlignCorrectionCauses.StopConfirmed));
+            await svc.ResumeAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task The_correction_Stop_route_sends_an_owed_Stop_to_the_reconnected_device() {
+            // #2069 — after a lost link and a reconnect, the run's own device object is the dead connection: the app's Stop
+            // button goes to the device that answers now, as the run's owed resend does.
+            var dead = new FakeAligner(azOffset: 20, altOffset: 10) { StopFails = true };
+            dead.OnMove = n => {
+                if (n != 2) {
+                    return null;
+                }
+                dead.StatusFails = true;
+                return new PolarAlignerException(PolarAlignerFailure.LinkLost, "connection refused");
+            };
+            var source = new SwappableSource(dead);
+            var sky = new HoldableSky(new CorrectedSky(dead));
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), sky, ws: ws, aligner: source);
+            svc.AlignerPoll = TimeSpan.FromMilliseconds(5);
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(60);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await AlignerEventAsync(ws, e => IsStoppedWith(e, PolarAlignCorrectionCauses.LinkLost)).ConfigureAwait(false);
+            sky.Hold();
+            await sky.Held.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
+            source.Device = reconnected;
+
+            await svc.StopAlignerAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(reconnected.Stops, Is.GreaterThanOrEqualTo(1), "the Stop reached the device that answers now");
+            Assert.That(reconnected.Moves, Is.Empty);
+            await svc.ResumeAlignerAsync(null, CancellationToken.None).ConfigureAwait(false); // confirmed: no Stop is owed
+            sky.Release();
+        }
+
+        [Test]
+        public async Task A_Status_read_that_loses_the_link_before_a_move_stops_the_run_with_link_lost() {
+            // #2069 — the follow check reads where each axis stands before the move: a lost link there is a stop, and no
+            // move goes out.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { StatusFails = true };
+            var (svc, stopped, _) = await RunUntilStoppedAsync(aligner).ConfigureAwait(false);
+            using var __ = svc;
+
+            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.LinkLost));
+            Assert.That(aligner.Moves, Is.Empty, "stopped before any move");
+        }
+
+        /// <summary>Logs nothing; completes <see cref="Logged"/> on the first entry with the event id.</summary>
+        private sealed class EventSignalLogger(int eventId) : Microsoft.Extensions.Logging.ILogger<PolarAlignService> {
+            private readonly TaskCompletionSource _logged = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            public Task Logged => _logged.Task;
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId id,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (id.Id == eventId) {
+                    _logged.TrySetResult();
+                }
+            }
+        }
+
+        /// <summary>A night log whose row write waits on <see cref="Gate"/>: it holds the stop path between its read of the
+        /// run's findings and its last event.</summary>
+        private sealed class GatedLog : IPolarAlignmentLog {
+            public Func<Task>? Gate { get; set; }
+            public async Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) {
+                if (Gate is { } gate) {
+                    await gate().ConfigureAwait(false);
+                }
+            }
+            public Task<PolarAlignmentRecord?> GetLatestMeasuredAsync(DateTimeOffset since, CancellationToken ct) =>
+                Task.FromResult<PolarAlignmentRecord?>(null);
+        }
+
+        [Test]
+        public async Task An_unconfirmed_aligner_stop_noted_after_the_stop_path_read_it_is_still_told_once() {
+            // #2069 — a run that outlives the unwind grace notes its unconfirmed end stop after the stop path read the run's
+            // findings (and found none) but before it marked its end reported. The stop path tells it as it marks.
+            var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { NeverFinishes = true };
+            var logger = new EventSignalLogger(4641); // the run's end could not confirm the stop
+            var log = new GatedLog();
+            var (svc, ws) = await StartWithAlignerAsync(aligner, log: log, logger: logger).ConfigureAwait(false);
+            using var _ = svc;
+            await AlignerEventAsync(ws, PolarAlignCorrectionStates.Probing).ConfigureAwait(false);
+            aligner.StopsIgnored = int.MaxValue;
+            svc.RunUnwindGrace = TimeSpan.FromMilliseconds(20);   // the stop path goes on while the run's end stop polls
+            svc.AlignerStopWindow = TimeSpan.FromMilliseconds(400);
+            // The stop path's row write waits until the run has noted its end (just after the log line).
+            log.Gate = async () => {
+                await logger.Logged.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                await Task.Delay(200).ConfigureAwait(false);
+            };
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            static bool IsAlignerDidNotStop((string Type, JsonElement Payload) e) => e.Type == WsEventCatalog.PolarAlignError
+                && e.Payload.GetProperty("reason").GetString() == PolarAlignService.AlignerDidNotStop;
+            await ws.WhenAsync(events => events.Any(IsAlignerDidNotStop)).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await Task.Delay(100).ConfigureAwait(false);
+            Assert.That(ws.Events.Count(IsAlignerDidNotStop), Is.EqualTo(1), "told once");
         }
     }
 }
