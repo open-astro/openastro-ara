@@ -188,6 +188,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_mount_whose_only_rate_is_0_53_degrees_a_second_completes_its_turns_inside_the_bound_planned_on_it() {
+            // Both requests (3°/s and 1°/s) match the mount's only 0.53°/s: a healthy 10° turn takes 18.9 s, inside the 39.7 s
+            // bound planned on the matched rate, but far past the 12.7 s one the requested rates would give.
+            var mount = PolledGemAt(-4.0);
+            mount.AxisRateBands = [(0.53, 0.53)];
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws, benchMotors: false);
+
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignError), Is.False, "no slew_timeout");
+            Assert.That(RaMotorRates(mount).Select(Math.Abs).Distinct().Single(), Is.EqualTo(0.53));
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(2), mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
         public async Task A_mount_with_no_rate_at_or_below_the_slow_rate_fails_before_the_motor_starts() {
             var mount = PolledGemAt(-4.0);
             mount.AxisRateBands = [(1.07, 2.13)];
