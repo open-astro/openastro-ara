@@ -289,6 +289,28 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public async Task A_park_or_find_home_after_a_raced_GoTo_is_not_aborted_by_it(string later) {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) {
+                    Thread.Sleep(200); // the PUT on the wire
+                    svc!.FenceMotion("user_request"); // a Stop Mount, then a park or Find Home before the PUT returns
+                    svc.FenceMotion(later);
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("aborted again", StringComparison.Ordinal)), "the raced GoTo never finished");
+            Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the GoTo's re-abort would stop the " + later + " that came after it");
+        }
+
         [Test]
         public async Task A_find_home_with_no_stop_reaches_the_mount() {
             await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));

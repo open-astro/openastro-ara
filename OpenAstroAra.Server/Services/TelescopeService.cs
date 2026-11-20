@@ -509,6 +509,19 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return null;
     }
 
+    /// <summary>#2066 — the park or Find Home counted since <paramref name="abortEpoch"/>, if any: a move that a later
+    /// AbortSlew would stop.</summary>
+    private string? MoveCountedSince(long abortEpoch) {
+        lock (_abortReasonsGate) {
+            foreach (var (epoch, reason) in _abortReasons) {
+                if (epoch > abortEpoch && reason is "park" or "findhome") {
+                    return reason;
+                }
+            }
+        }
+        return null;
+    }
+
     // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
     private long _sessionEpoch;
 
@@ -871,7 +884,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 client.SlewToCoordinatesAsync(raHours, decDeg);
                 // #2066 (ADR rule 3) — a stop that landed while the GoTo's PUT was on the wire (Emergency Stop's latch, Stop
                 // Mount, the watchdog) may have reached the mount before the GoTo did: the mount then slews after the stop.
-                // Abort it again, under the stop's own reason; the stop is already counted.
+                // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home that came
+                // since is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it.
+                if (AbortedSince(abortEpoch) && MoveCountedSince(abortEpoch) is { } move) {
+                    LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
+                    return;
+                }
                 if (AbortedSince(abortEpoch)) {
                     var by = AbortReasonSince(abortEpoch, except: null) ?? "user_request";
                     LogSlewAbortedAgain(raHours, decDeg, by);
@@ -1757,6 +1775,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a stop ({By}) landed while the GoTo was being sent; the mount was aborted again")]
     private partial void LogSlewAbortedAgain(double ra, double dec, string by);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a {Move} came while the GoTo was being sent; the GoTo is not aborted again, so the {Move} is not stopped")]
+    private partial void LogSlewNotAbortedAgainMoveWins(double ra, double dec, string move);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();
