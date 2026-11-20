@@ -243,7 +243,10 @@ namespace OpenAstroAra.Test {
             private readonly TaskCompletionSource _firstRow = new(TaskCreationOptions.RunContinuationsAsynchronously);
             /// <summary>Completes when the first row is written.</summary>
             public Task FirstRow => _firstRow.Task;
+            /// <summary>Runs as each row is written, before it is recorded (the writer still holds its locks).</summary>
+            public Action<PolarAlignmentRecord>? OnInsert { get; set; }
             public Task InsertAsync(PolarAlignmentRecord record, CancellationToken ct) {
+                OnInsert?.Invoke(record);
                 Rows.Enqueue(record);
                 _firstRow.TrySetResult();
                 return Task.CompletedTask;
@@ -2589,6 +2592,39 @@ namespace OpenAstroAra.Test {
             var trackingWrites = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled)).ToArray();
             Assert.That(trackingWrites.Last().Arguments[0], Is.False, "tracking off after the verdict");
             NoHomeNoGoTo(mount);
+        }
+
+        [Test]
+        public async Task A_Stop_while_a_Check_ends_the_adjust_loop_starts_no_check() {
+            // #2082 review — the Check's own end of the loop counts as one end request. A Stop tapped while that end runs
+            // (the shutter still shows Stop) is a second one: the Check must start nothing, as for a Stop during any Start.
+            var fake = NewFake();
+            var stops = new ConcurrentQueue<Coordinates>();
+            var mount = NewPoleMount(stops);
+            var ws = new WsRecorder();
+            var log = new RecordingLog();
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, CheckStepDeg = 10.0 });
+            using var svc = NewService(fake, new HintFollowingSolver(), mount, ws, log: log, store: store);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var turnsBefore = stops.Count;
+
+            Task? userStop = null;
+            log.OnInsert = row => {
+                if (row.Outcome == "aborted" && userStop is null) {
+                    userStop = svc.StopAsync(null, CancellationToken.None); // lands while the loop's end holds the lock
+                }
+            };
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(
+                PolarAlignStages.Check, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None));
+            await userStop!.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(refused!.Message, Does.Contain("stopped while it was starting"));
+            Assert.That(stops.Count, Is.EqualTo(turnsBefore), "no check turn after the Stop");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignChecked), Is.Zero);
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
         }
 
         private static async Task AssertThrowsAsync<T>(Func<Task> act) where T : Exception {

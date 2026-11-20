@@ -384,18 +384,22 @@ namespace OpenAstroAra.Server.Services {
             // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
             var abortEpochAtCall = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
             var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
-            if (stage == PolarAlignStages.Check && IsAdjusting()
-                    && await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false) is { } adjustWatch) {
-                // The check from the adjust loop keeps the loop's reading, taken at its Start: a stop from outside that
-                // the loop had not seen yet (Emergency Stop latched while it solved a frame) ends the check before it
-                // moves, as it ended the stage that Next used to lead into.
-                (abortEpochAtCall, ownAbortsAtCall) = adjustWatch;
-            }
-            // #2048 — an end request from here on (a Stop while this Start waits for the lock or takes the camera)
-            // means no run is launched. Read after the adjust loop's own end above.
+            // #2048 — an end request from here on (a Stop while this Start waits for the lock or takes the camera, or
+            // while a Check ends the adjust loop) means no run is launched. Read at the call, before that end.
             long endRequestsAtCall;
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
+            }
+            if (stage == PolarAlignStages.Check && IsAdjusting()) {
+                var adjustWatch = await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false);
+                // The loop's end is the one end request this Start makes itself; any other since the call still counts.
+                endRequestsAtCall++;
+                if (adjustWatch is { } watch) {
+                    // The check from the adjust loop keeps the loop's reading, taken at its Start: a stop from outside that
+                    // the loop had not seen yet (Emergency Stop latched while it solved a frame) ends the check before it
+                    // moves, as it ended the stage that Next used to lead into.
+                    (abortEpochAtCall, ownAbortsAtCall) = watch;
+                }
             }
             // The reading the run keeps (_abortWatch). Re-read at the launch when only Polar Align's own stops moved the
             // count since the call: a Start pressed right after a failed turn must not inherit the old run's resent
@@ -574,7 +578,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>#2082 — the Check button of the adjust screen: a confirmed Start(check) through the session's sweep plan
         /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The check is planned and its
         /// confirmation verified while the loop still runs (a refusal leaves it running), then the loop ends like Stop (the
-        /// mount stopped and confirmed, its readout kept as the last run's) before the check starts.</summary>
+        /// mount stopped and confirmed, its readout kept as the last run's) before the check starts. It makes exactly one
+        /// end request (<see cref="StartAsync"/> allows that one and no other).</summary>
         /// <returns>The loop's reading of the mount's stop count (<c>_abortWatch</c>), for the check to keep; null when the
         /// loop had none (a mount that keeps no count).</returns>
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
