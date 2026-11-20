@@ -168,6 +168,40 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_stop_during_the_tracking_write_drops_the_goto_and_turns_tracking_off_again() {
+            // The stop lands while the GoTo's own Tracking=true write is on the wire (after the first abort
+            // check passed). Stop Mount sends only AbortSlew, so the mount would be left tracking unless the
+            // GoTo turns tracking back off; the GoTo itself must not follow.
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            var armed = 0;
+            Task? stop = null;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false), putResponder: path => {
+                if (path.EndsWith("/tracking", StringComparison.Ordinal) && Interlocked.Exchange(ref armed, 0) == 1) {
+                    // The abort epoch moves synchronously, before AbortSlewAsync's first await; its AbortSlew
+                    // PUT then queues behind this one on the serial scripted device.
+                    stop = svc!.AbortSlewAsync(CancellationToken.None);
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            Volatile.Write(ref armed, 1);
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the goto was not dropped after the stop");
+            await WaitForAsync(() => PutIndex(box, "tracking", b => !TrackingOn(b)) >= 0, "tracking was never turned back off");
+            await stop!.WaitAsync(TimeSpan.FromSeconds(15));
+            var on = PutIndex(box, "tracking", TrackingOn);
+            Assert.Multiple(() => {
+                Assert.That(on, Is.GreaterThanOrEqualTo(0), "the GoTo's tracking write reached the mount");
+                Assert.That(PutIndex(box, "tracking", b => !TrackingOn(b)), Is.GreaterThan(on), "tracking is turned off after the GoTo turned it on");
+                Assert.That(PutIndex(box, GotoVerb), Is.EqualTo(-1), "the goto never reaches the mount after the stop");
+            });
+        }
+
+        [Test]
         public async Task A_stop_that_lands_after_the_park_was_accepted_drops_the_park() {
             // The REST Park has the GoTo's window: it waits for the guider and turns tracking on before the
             // park. A Stop Mount or emergency stop in that window must not be undone by it.
