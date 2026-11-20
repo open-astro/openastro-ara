@@ -470,6 +470,85 @@ namespace OpenAstroAra.Test {
             Assert.That(refusal, Is.Null, "a failed read is no clutch turn: the motor start goes ahead");
         }
 
+        /// <summary>A plate solve of where the tube really points that, on the second solve after the true RA axis has
+        /// turned <see cref="TurnedDeg"/> from where it first stood, turns the mount's tracking off: the user (or the mount)
+        /// changing tracking between two frames of a hand-turn wait. <see cref="FlippedAtEvent"/>: the event count then.</summary>
+        private sealed class TrackingFlipSolver(FakeGemMount mount, WsRecorder ws) : IPolarAlignFrameSolver {
+            public const double TurnedDeg = 8.0;
+            private double? _firstHaDeg;
+            private int _turnedSolves;
+            public volatile int FlippedAtEvent = -1;
+
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+                var ha = mount.TruePose.MechHaDeg;
+                _firstHaDeg ??= ha;
+                if (Math.Abs(ha - _firstHaDeg.Value) >= TurnedDeg && ++_turnedSolves == 2) {
+                    FlippedAtEvent = ws.Events.Count;
+                    mount.SetTrackingEnabled(false);
+                }
+                var (ra, dec) = mount.TrueSky;
+                return Task.FromResult(new PolarAlignSolveOutcome(true, ra, dec));
+            }
+        }
+
+        private static readonly bool[] RestartedThenTaken = { true, false };
+
+        [Test]
+        public async Task A_frame_where_tracking_changed_is_not_measured_and_the_still_solves_start_again() {
+            // A 10° hand-pad turn is taken on the second still solve. Tracking turns off on the frame after the turn is first
+            // solved, a frame that would be the second still solve: it is not measured, and the count of still solves
+            // starts again, so the frame after it waits (one still solve) and the next takes the turn.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var solver = new TrackingFlipSolver(mount, ws);
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, TenDegreeStore());
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, encodersFollow: true).ConfigureAwait(false);
+            static bool Point((string Type, System.Text.Json.JsonElement Payload) e, int point) =>
+                IsHandTurn(e) && e.Payload.GetProperty("point").GetInt32() == point;
+            await ws.WhenAsync(events => events.Any(e => Point(e, 3))).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(solver.FlippedAtEvent, Is.GreaterThanOrEqualTo(0), "tracking changed during the wait");
+            var afterFlip = ws.Events.Skip(solver.FlippedAtEvent).Where(e => Point(e, 2))
+                .Select(e => e.Payload.GetProperty("waiting").GetBoolean()).ToArray();
+            Assert.That(afterFlip, Is.EqualTo(RestartedThenTaken),
+                "the changed frame not measured, then one still solve that waits, then the turn taken: " + string.Join(", ", afterFlip));
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+        }
+
+        [Test]
+        public async Task A_hand_turn_wait_whose_mount_reads_hang_goes_on_solving_and_publishing() {
+            // An AlpacaBridge read stuck on the wire: each solved frame's RA/Dec read gives up after HandTurnReadTimeout and
+            // counts as a failed read, so the wait loop keeps solving and telling the app rather than stalling on the read.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            svc.HandTurnReadTimeout = TimeSpan.FromMilliseconds(200);
+            var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await ws.WhenAsync(events => events.Any(IsHandTurn)).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            mount.HangReads = hang;
+            await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var hungFrom = ws.Events.Count;
+            Exception? stalled = null;
+            try {
+                await ws.WhenAsync(events => events.Skip(hungFrom).Count(IsHandTurn) >= 3).WaitAsync(SignalTimeout).ConfigureAwait(false);
+            } catch (TimeoutException ex) {
+                stalled = ex;
+            }
+            var waiting = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            mount.HangReads = null;
+            hang.SetResult();
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(stalled, Is.Null, "the wait loop stalled on a hung mount read");
+            Assert.That(waiting.HandTurnWait?.Point, Is.EqualTo(2), "still waiting for the turn");
+        }
+
         private static (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) HandAt(
                 double raDeg, double decDeg, double seconds, (double RaDeg, double DecDeg)? reading) =>
             (raDeg, decDeg, DateTimeOffset.UnixEpoch.AddSeconds(seconds), reading);

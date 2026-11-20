@@ -11329,10 +11329,10 @@ abstract class AppLocalizations {
   /// **'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'**
   String get polarConfirmGuideMeridian;
 
-  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn
+  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn. With the hand pad the turn is measured from the mount's RA reading (and its angle shown); with the clutch open the reading stands, so it is judged from the frames and no angle is shown
   ///
   /// In en, this message translates to:
-  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and sees it in the frames.'**
+  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.'**
   String get polarConfirmHandTurnHint;
 
   /// Polar align start confirm dialog (#2083): button that starts a run in which the user turns the RA axis by hand and the mount's motors never move
@@ -11347,7 +11347,7 @@ abstract class AppLocalizations {
   /// **'Turn RA by hand about {step}° toward the {direction}, then let go.'**
   String polarHandTurnAsk(String step, String direction);
 
-  /// Polar align hand-turn run (#2083): how far the frames show the RA axis turned the asked way, one decimal
+  /// Polar align hand-turn run (#2083): how far the mount's own RA reading shows the axis turned the asked way (hand pad), one decimal; not shown with the clutch open, where the mount's reading does not move
   ///
   /// In en, this message translates to:
   /// **'Turned {turned}° so far.'**

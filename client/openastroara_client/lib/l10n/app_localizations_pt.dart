@@ -6782,7 +6782,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarConfirmHandTurnHint =>
-      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and sees it in the frames.';
+      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.';
 
   @override
   String get polarConfirmHandTurn => 'Turn RA by hand';
@@ -13889,7 +13889,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarConfirmHandTurnHint =>
-      'Ou gire a AR você mesmo: com Girar a AR à mão, o Ara não move nada. Ele pede cada giro e o vê nos quadros.';
+      'Ou gire a AR você mesmo: com Girar a AR à mão, o Ara não move nada. Ele pede cada giro e o mede: com o controle de mão, pela leitura da montagem; com a embreagem solta, pelos quadros.';
 
   @override
   String get polarConfirmHandTurn => 'Girar a AR à mão';

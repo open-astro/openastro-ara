@@ -46,7 +46,7 @@ namespace OpenAstroAra.Server.Services {
     /// the least distance from the axis it allows for (<see cref="HandTurnPolarErrorAllowanceDeg"/>). Either way the
     /// mount must have stopped: two solves in a row within <see cref="HandTurnStillDeg"/>, and with the clutch open three,
     /// with <see cref="HandTurnClutchMinWait"/> gone since the turn was asked (<see cref="HandTurnSettled"/>). A frame
-    /// whose mount read fails is not measured: only a reading read at both ends that stood means the clutch is open. A
+    /// whose mount read fails, or takes over <see cref="HandTurnReadTimeout"/>, is not measured: only a reading read at both ends that stood means the clutch is open. A
     /// frame where the mount's tracking changed is not measured either. A turn that takes the axis
     /// past the run's band (its two turns plus <see cref="BandToleranceDeg"/>) fails the run (<c>hand_turn_too_far</c>),
     /// and a clutch turn leaves the mount's reading wrong, so a motor start is refused until the mount is synced or
@@ -256,7 +256,7 @@ namespace OpenAstroAra.Server.Services {
                         lastTracking = tracking;
                         var at = DateTimeOffset.UtcNow;
                         hint = (s.RaDegJnow, s.DecDegJnow);
-                        var now = new HandPoint(s, at, await DriverPointingJnowAsync(ct).ConfigureAwait(false));
+                        var now = new HandPoint(s, at, await HandTurnReadingAsync(ct).ConfigureAwait(false));
                         var sample = MeasureHandTurn(Flat(start), Flat(from), Flat(now), dirSign, stepDeg, tracking);
                         if (sample.ByClutch) {
                             NoteClutchTurned();
@@ -293,6 +293,23 @@ namespace OpenAstroAra.Server.Services {
                         _handTurnWait = null;
                     }
                 }
+            }
+        }
+
+        /// <summary>How long a hand-turn run waits for the mount's reading on each solved frame; tests shorten it.</summary>
+        internal TimeSpan HandTurnReadTimeout { get; set; } = TimeSpan.FromSeconds(3);
+
+        /// <summary>The mount's reading for one solved frame of a hand-turn wait (<see cref="DriverPointingJnowAsync"/>),
+        /// bounded by <see cref="HandTurnReadTimeout"/>: a slow AlpacaBridge must not stall the wait loop. A read that
+        /// times out is a failed read (null): the frame is not measured, and the next one reads again.</summary>
+        private async Task<(double RaDeg, double DecDeg)?> HandTurnReadingAsync(CancellationToken ct) {
+            var read = DriverPointingJnowAsync(ct);
+            try {
+                return await read.WaitAsync(HandTurnReadTimeout, ct).ConfigureAwait(false);
+            } catch (TimeoutException) {
+                _ = read.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
+                LogHandTurnReadTimedOut(HandTurnReadTimeout.TotalSeconds);
+                return null;
             }
         }
 
@@ -333,6 +350,7 @@ namespace OpenAstroAra.Server.Services {
         /// none since. Guarded by <c>_gate</c>.</summary>
         private (long SessionEpoch, long SyncEpoch)? _clutchTurned;
 
+        // 0 off a TelescopeService (only a reconnect clears a clutch turn then); SyncEpoch moves onto IMountMotionControl with the mount members (PA PR 6).
         private long MountSyncEpoch => (_mount as ITelescopeService)?.SyncEpoch ?? 0;
 
         /// <summary>The refusal's sentence (<c>polar-align-clutch-turned</c>).</summary>
@@ -447,5 +465,8 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4605, Level = LogLevel.Warning, Message = "§45 polar-align: the solves turned while the mount's RA reading stood (the clutch is open); its reading is off by the user's turns, so the sweep origin is forgotten and a motor start is refused until the mount is synced or reconnected")]
         private partial void LogClutchTurned();
+
+        [LoggerMessage(EventId = 4606, Level = LogLevel.Warning, Message = "§45 polar-align hand turn: the mount's RA/Dec read took over {TimeoutSeconds:F0} s; this frame is not measured")]
+        private partial void LogHandTurnReadTimedOut(double timeoutSeconds);
     }
 }

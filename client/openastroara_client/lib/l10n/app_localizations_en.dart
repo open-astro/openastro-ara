@@ -6782,7 +6782,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarConfirmHandTurnHint =>
-      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and sees it in the frames.';
+      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.';
 
   @override
   String get polarConfirmHandTurn => 'Turn RA by hand';
