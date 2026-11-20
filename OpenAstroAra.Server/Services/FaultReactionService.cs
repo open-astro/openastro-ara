@@ -162,6 +162,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     /// mismatch must not lose its one notification just because the same device type happens
     /// to be mid-reconnect (review finding).</summary>
     internal void OnFault(EquipmentFaultEvent fault) {
+        // #1589 — the guider publishes its faults while it holds its own _gate, and its listener
+        // methods (Paused, Released) take that _gate. So never call _guiderEpisodes
+        // inside this service's lock(_gate): a guider thread holding its _gate would wait here for
+        // ours while we wait for its _gate — a deadlock. Call the listener after the lock is released.
         if (!TryStartEpisode(fault) && fault.DeviceType == DeviceType.Guider) {
             // #1589 — joined the running guider episode (or none started): no episode holds this fault.
             _guiderEpisodes?.Invoke()?.Released(fault);

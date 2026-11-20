@@ -551,5 +551,54 @@ namespace OpenAstroAra.Test {
 
             AssertNoRunaway(rig, fake);
         }
+
+        // Connected again to the same fake (PHD2 still guiding); no guide step, so a streak is not broken.
+        private static async Task ReconnectAsync(Rig rig, FakeGuider fake) {
+            await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Service.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected).ConfigureAwait(false),
+                Is.True, "the guider never reached Connected again");
+        }
+
+        // #1589 review — a user disconnect drops the open runaway fault without Recovered: settled guiding
+        // after the reconnect has no old fault to recover.
+        [Test]
+        public async Task A_user_disconnect_drops_the_open_runaway_fault_without_recovering_it() {
+            using var rig = new Rig();
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 1 && rig.Paused() == 1).ConfigureAwait(false), Is.True);
+
+            await rig.Service.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await ReconnectAsync(rig, fake).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await StepAsync(rig, fake, dec: 0.1, decMs: 20).ConfigureAwait(false);
+            await StepAsync(rig, fake, dec: 0.1, decMs: 20).ConfigureAwait(false);
+
+            lock (rig.Recovered) {
+                Assert.That(rig.Recovered, Is.Empty, "the user took the guider back: the fault is dropped, not recovered");
+            }
+            Assert.That(rig.Resumed(), Is.Zero, "the run stays paused");
+        }
+
+        // #1589 review — a new guider connection watches afresh: frames before a reconnect and frames after it
+        // do not add up to a runaway.
+        [Test]
+        public async Task A_growing_streak_across_a_guider_reconnect_does_not_trip() {
+            using var rig = new Rig();
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+
+            for (var n = 1; n <= 5; n++) {
+                await StepAsync(rig, fake, dec: 0.5 * n, decMs: MaxPulseMs).ConfigureAwait(false);
+            }
+            await rig.Service.DisconnectAsync(idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
+            await ReconnectAsync(rig, fake).ConfigureAwait(false);
+            for (var n = 6; n <= GuideAxisRunaway.Steps + 2; n++) {
+                await StepAsync(rig, fake, dec: 0.5 * n, decMs: MaxPulseMs).ConfigureAwait(false);
+            }
+
+            AssertNoRunaway(rig, fake);
+        }
     }
 }
