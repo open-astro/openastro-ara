@@ -17,6 +17,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System;
 using System.Globalization;
 using System.Net.Http;
@@ -180,7 +181,7 @@ namespace OpenAstroAra.Test {
                     ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0));
                 var ws = new WsRecorder();
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
-                    new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
+                    new SimulatedSkySolver(http), mount.Object, MediatorMotionControl.For(mount.Object), store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
                     AxisMovePoll = TimeSpan.FromMilliseconds(5),
                     AxisSettle = TimeSpan.Zero,
                 };

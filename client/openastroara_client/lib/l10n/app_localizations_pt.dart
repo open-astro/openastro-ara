@@ -6699,6 +6699,14 @@ class AppLocalizationsPt extends AppLocalizations {
       'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.';
 
   @override
+  String get refusalPolarAlignPointingUnknown =>
+      'Polar Align got no fresh reading of where the mount points. Check the mount\'s connection, then start again.';
+
+  @override
+  String get refusalPolarAlignPoseAmbiguous =>
+      'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.';
+
+  @override
   String get actionConfirmFlip => 'confirm the meridian flip';
 
   @override
@@ -13814,6 +13822,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignOnAxis =>
       'A luneta aponta a menos de 3° do polo. Aponte-a de 2 a 5° do polo, com os contrapesos para baixo, e inicie de novo.';
+
+  @override
+  String get refusalPolarAlignPointingUnknown =>
+      'O alinhamento polar não recebeu uma leitura atual de para onde a montagem aponta. Verifique a conexão da montagem e inicie de novo.';
+
+  @override
+  String get refusalPolarAlignPoseAmbiguous =>
+      'A montagem informa uma declinação além do polo, então o lado do pilar não é conhecido. Aponte o tubo de 2 a 5° do polo, com os contrapesos para baixo, pelo controle de mão (ou mande a montagem para a posição inicial), e inicie de novo.';
 
   @override
   String get actionConfirmFlip => 'confirmar a virada de meridiano';

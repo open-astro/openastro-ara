@@ -249,6 +249,15 @@ framing/focus loop when you need to point or focus by eye.
   A measurement that starts more than 2° from the pole warns that the correction is less reliable (get
   closer, then run again); over 10°, check the site location, the start field, and that the mount
   turned only in RA.
+- **Polar Align moves only from a fresh reading of the mount.** Every turn starts and stops on where
+  the mount says it points right now, never on the app's last known position. When the mount gives
+  no fresh reading (no answer, a blank 0, 0 position, or one more than 2 s old), Polar Align refuses
+  to start ("got no fresh reading of where the mount points"), or stops the motor and ends the run:
+  check the mount's connection and start again. A mount that reconnects during a run (Wi-Fi drop,
+  power blip) ends the run too, even while you turn the knobs: it may have been moved or re-homed
+  meanwhile. A mount that reports a Dec past the pole (some mounts do after a sync) is refused before
+  anything moves, because its pier side is not known: point the tube 2–5° from the pole with the
+  counterweights down using the hand controller, or send the mount Home, then start again.
 - **Polar Align keeps RA near where it first started.** The first start after the mount connects is
   Polar Align's start for the session. Every later run (**Adjust again**, **Check**, or a new Start) turns back
   toward it, and the confirm step says how far RA is from it ("RA is 20° east of where Polar Align

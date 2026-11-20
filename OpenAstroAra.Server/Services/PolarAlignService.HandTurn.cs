@@ -121,7 +121,7 @@ namespace OpenAstroAra.Server.Services {
                 (PolarAlignSolveOutcome S, DateTimeOffset At) C)> ThreePointsByHandAsync(
                 LiveCapture capture, string[] names, double stepDeg, RunBand band, Func<Task> renew,
                 PolarAlignSettingsDto settings, int gen, CancellationToken ct, Func<int, Task>? noteSolve = null) {
-            var hint = await StartPointingOffTheAxisAsync(ct).ConfigureAwait(false);
+            var hint = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
             var a = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
             var aAt = DateTimeOffset.UtcNow;
             LogSeedSolve(names[0], a.RaDegJnow, a.DecDegJnow);
@@ -256,7 +256,7 @@ namespace OpenAstroAra.Server.Services {
                         lastTracking = tracking;
                         var at = DateTimeOffset.UtcNow;
                         hint = (s.RaDegJnow, s.DecDegJnow);
-                        var now = new HandPoint(s, at, await HandTurnReadingAsync(ct).ConfigureAwait(false));
+                        var now = new HandPoint(s, at, await HandTurnReadingAsync(gen, ct).ConfigureAwait(false));
                         var sample = MeasureHandTurn(Flat(start), Flat(from), Flat(now), dirSign, stepDeg, tracking);
                         if (sample.ByClutch) {
                             NoteClutchTurned();
@@ -299,17 +299,31 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>How long a hand-turn run waits for the mount's reading on each solved frame; tests shorten it.</summary>
         internal TimeSpan HandTurnReadTimeout { get; set; } = TimeSpan.FromSeconds(3);
 
-        /// <summary>The mount's reading for one solved frame of a hand-turn wait (<see cref="DriverPointingJnowAsync"/>),
-        /// bounded by <see cref="HandTurnReadTimeout"/>: a slow AlpacaBridge must not stall the wait loop. A read that
-        /// times out is a failed read (null): the frame is not measured, and the next one reads again.</summary>
-        private async Task<(double RaDeg, double DecDeg)?> HandTurnReadingAsync(CancellationToken ct) {
-            var read = DriverPointingJnowAsync(ct);
+        /// <summary>The mount's reading for one solved frame of a hand-turn wait: a fresh position read
+        /// (<see cref="ReadFreshPointingAsync"/>), bounded by <see cref="HandTurnReadTimeout"/>: a slow AlpacaBridge must not
+        /// stall the wait loop. A read that times out, or one that cannot be trusted (no answer, the (0, 0) placeholder, too
+        /// old), is a failed read (null): the frame is not measured, and the next one reads again. A reconnect since the
+        /// run's start ends the run (<see cref="ThrowIfMountReconnected"/>), and a Dec past the pole fails it as a motor
+        /// run's turn does (<see cref="PoseAmbiguous"/>).</summary>
+        private async Task<(double RaDeg, double DecDeg)?> HandTurnReadingAsync(int gen, CancellationToken ct) {
+            var read = ReadFreshPointingAsync(RunSessionEpoch(gen), ct, positionOnly: true);
             try {
-                return await read.WaitAsync(HandTurnReadTimeout, ct).ConfigureAwait(false);
+                var p = await read.WaitAsync(HandTurnReadTimeout, ct).ConfigureAwait(false);
+                if (p.DecPastPoleDeg is double dec) {
+                    LogPoseAmbiguous(dec);
+                    throw new RoutineFailedException(PoseAmbiguous, PoseAmbiguousMessage(dec));
+                }
+                if (p.Why is not null) {
+                    ThrowIfMountReconnected(gen);
+                    return null;
+                }
+                return (p.RaDeg, p.DecDeg);
             } catch (TimeoutException) {
-                _ = read.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
                 LogHandTurnReadTimedOut(HandTurnReadTimeout.TotalSeconds);
                 return null;
+            } finally {
+                // A read left behind (timed out, or the run cancelled meanwhile) may still fault: observe it.
+                _ = read.ContinueWith(t => _ = t.Exception, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted, TaskScheduler.Default);
             }
         }
 
@@ -350,9 +364,6 @@ namespace OpenAstroAra.Server.Services {
         /// none since. Guarded by <c>_gate</c>.</summary>
         private (long SessionEpoch, long SyncEpoch)? _clutchTurned;
 
-        // 0 off a TelescopeService (only a reconnect clears a clutch turn then); SyncEpoch moves onto IMountMotionControl with the mount members (PA PR 6).
-        private long MountSyncEpoch => (_mount as ITelescopeService)?.SyncEpoch ?? 0;
-
         /// <summary>The refusal's sentence (<c>polar-align-clutch-turned</c>).</summary>
         internal const string ClutchTurnedMessage =
             "RA was turned by hand with the clutch open, so the mount's reading no longer shows where it points and a motor turn could go too far — sync the mount with a plate solve (Center does it), or reconnect it once it is homed, or turn RA by hand again";
@@ -365,7 +376,7 @@ namespace OpenAstroAra.Server.Services {
             bool first;
             lock (_gate) {
                 first = _clutchTurned is null;
-                _clutchTurned = (MountSessionEpoch, MountSyncEpoch);
+                _clutchTurned = (_motionControl.SessionEpoch, _motionControl.SyncEpoch);
                 _sweepOrigin = null;
                 _sweepLastLeft = null;
             }
@@ -380,8 +391,8 @@ namespace OpenAstroAra.Server.Services {
             if (confirmation is null || confirmation.HandTurn) {
                 return;
             }
-            var session = MountSessionEpoch;
-            var sync = MountSyncEpoch;
+            var session = _motionControl.SessionEpoch;
+            var sync = _motionControl.SyncEpoch;
             lock (_gate) {
                 if (_clutchTurned is not { } c) {
                     return;

@@ -40,8 +40,10 @@ namespace OpenAstroAra.Test {
         /// resent every 2 s, an 8 s window, 3 s per command), read from a service built with its defaults, in place of the
         /// bench's compressed ones.</summary>
         private static void UseTheContractsStopTimings(PolarAlignService svc) {
+            var mount = NewMount().Object;
             using var daemon = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
-                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+                mount, MediatorMotionControl.For(mount), NewStore(), new WsRecorder(), log: null,
+                new FakeFrameFetcher());
             svc.StopCommandTimeout = daemon.StopCommandTimeout;
             svc.StopVerifyPoll = daemon.StopVerifyPoll;
             svc.StopVerifyStillFor = daemon.StopVerifyStillFor;
@@ -290,10 +292,10 @@ namespace OpenAstroAra.Test {
             svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5);
             svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
             var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            var pointingAfterStop = 0;
+            var readsAfterStop = 0;
             mount.OnFreshRead = kind => {
-                // The exit's confirmation reads position twice (the anchor, then the still read); its third is the last read.
-                if (kind == "pointing" && mount.Stops.Count > 0 && Interlocked.Increment(ref pointingAfterStop) == 3) {
+                // The exit's confirmation reads the mount twice (the anchor, then the still read); its third is the last read.
+                if (kind == "now" && mount.Stops.Count > 0 && Interlocked.Increment(ref readsAfterStop) == 3) {
                     mount.HangReads = hang;
                 }
             };
@@ -337,7 +339,7 @@ namespace OpenAstroAra.Test {
             svc.StopCommandTimeout = TimeSpan.FromSeconds(1.5); // the hung read gives up inside the park
             var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             mount.OnFreshRead = kind => {
-                if (kind == "pointing" && mount.Stops.Count > 0) {
+                if (kind == "now" && mount.Stops.Count > 0) {
                     mount.HangReads = hang; // the exit's first confirmation read
                 }
             };
