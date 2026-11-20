@@ -66,8 +66,40 @@ namespace OpenAstroAra.Server.Services {
 
         // ── the run-wide watch for a stop from outside (#2066, #2067) ─────────────────────────
 
-        // Polar Align's own AbortSlew sends, counted before each send: the run tells its own stop from one it did not raise.
+        // Polar Align's own AbortSlew sends: the run tells its own stop from one it did not raise.
         private long _ownAborts;
+
+        // The mount's stop count up to which _ownAborts has looked at the reasons. Guarded by _ownAbortsGate.
+        private long _ownAbortsCountedThrough;
+        private readonly object _ownAbortsGate = new();
+
+        /// <summary>The farthest the stop count may move during one AbortSlew send and still be read count by count: the
+        /// telescope service keeps the last 32 reasons. Past it, none is counted as Polar Align's own (a stop from outside
+        /// then ends the run, never the other way round).</summary>
+        private const long OwnAbortsReadable = 16;
+
+        /// <summary>
+        /// #2066 — after Polar Align's AbortSlew send, count as its own only the stops the telescope service tagged
+        /// <see cref="AbortReason"/> since <paramref name="before"/> (the count when the send began). The count moving is
+        /// not enough: a send refused before it counts (a mount not connected) while Stop Mount lands would hide the Stop
+        /// Mount from the run-wide watch, and a Start's baseline would skip past it. Each count is read once, whichever of
+        /// two sends that overlap reads it first.
+        /// </summary>
+        private void CountOwnAborts(ITelescopeService service, long before) {
+            lock (_ownAbortsGate) {
+                var after = service.AbortEpoch;
+                var from = Math.Max(before, _ownAbortsCountedThrough);
+                if (after - from <= OwnAbortsReadable) {
+                    for (var count = from; count < after; count++) {
+                        // The first reason after `count`: the one the count after it was raised with.
+                        if (string.Equals(service.AbortReasonSince(count, except: null), AbortReason, StringComparison.Ordinal)) {
+                            Interlocked.Increment(ref _ownAborts);
+                        }
+                    }
+                }
+                _ownAbortsCountedThrough = Math.Max(_ownAbortsCountedThrough, after);
+            }
+        }
 
         // The telescope's AbortEpoch and _ownAborts when the run's Start was called, for the run of this generation. Guarded by _gate.
         private (int Gen, long Epoch, long OwnAborts)? _abortWatch;
@@ -310,17 +342,17 @@ namespace OpenAstroAra.Server.Services {
             var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
             LogMountStopSent(why, abort, motion);
             if (abort) {
-                // Counted once the send moved the mount's stop count, so the run-wide watch never reads Polar Align's own stop
-                // as one from outside. Never before: a send that is refused before it counts (a mount not connected) would
-                // then hide a later stop from outside. A watch that reads between the count and this line sees one stop more
-                // than Polar Align's own; only a run that is already stopping (its generation moved) or a Start's baseline
-                // (re-read at the launch, RunAbortBaseline) can read then.
+                // Polar Align's own stops are counted from the reason the telescope service tagged each count with, so the
+                // run-wide watch never reads them as a stop from outside, and never reads a stop from outside that landed
+                // during this send as one of them (CountOwnAborts). A watch that reads between the count and the tally sees
+                // one stop more than Polar Align's own; only a run that is already stopping (its generation moved) or a
+                // Start's baseline (re-read at the launch, RunAbortBaseline) can read then.
                 var countBefore = (_mount as ITelescopeService)?.AbortEpoch;
                 await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
                     ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
                     : Task.Run(_mount.StopSlew, CancellationToken.None)).ConfigureAwait(false);
-                if (countBefore is long before && _mount is ITelescopeService counted && counted.AbortEpoch != before) {
-                    Interlocked.Increment(ref _ownAborts);
+                if (countBefore is long before && _mount is ITelescopeService counted) {
+                    CountOwnAborts(counted, before);
                 }
             }
             await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
