@@ -605,14 +605,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-op aid: a goto needs Tracking, and some mounts (e.g. iOptron) won't park from a stationary/home state — both want Tracking enabled first. A mount that rejects the write may still accept the op (or fail it with its own clear error, which the op path logs); swallowing the write failure keeps the op attempt authoritative. CA1031's log-and-recover boundary applies.")]
-    private void TryEnableTracking(ITelescopeDevice client) {
+    /// <returns>True when this call turned tracking on (it read off and the write went through).</returns>
+    private bool TryEnableTracking(ITelescopeDevice client) {
         try {
             if (!client.Tracking) {
                 client.Tracking = true;
+                return true;
             }
         } catch (Exception ex) {
             LogTrackingWriteIgnored(ex);
         }
+        return false;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

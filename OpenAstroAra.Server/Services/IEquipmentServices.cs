@@ -127,6 +127,11 @@ public interface ITelescopeService {
     /// itself reads it when a move starts, and treats any change as a stop it must obey.</summary>
     long AbortEpoch => 0;
 
+    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
+    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
+    /// German equatorial mount, and treats null as one (fail-safe).</summary>
+    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
+
     /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
     /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
     /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal

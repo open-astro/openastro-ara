@@ -344,6 +344,9 @@ namespace OpenAstroAra.Test {
         public bool IsPulseGuiding => false;
         public PointingState SideOfPier { get => PointingState.Normal; set => Interlocked.Increment(ref _pierSideWrites); }
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
+        /// <summary>#2073 — the mount type; null makes the read throw, as a driver that does not implement it.</summary>
+        public AlignmentMode? Alignment { get; set; } = AlignmentMode.GermanPolar;
+        public AlignmentMode AlignmentMode => Alignment ?? throw new ASCOM.NotImplementedException("AlignmentMode");
         public bool CanSlewAsync => true;
         public bool CanSlew => true;
         public bool CanSync => true;

@@ -6606,6 +6606,15 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'That target is below the pole, at hour angle $hourAngle h: the counterweight would swing $angle° up from hanging straight down, past the $limit° limit. Pick another target, or wait until this one is higher.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
 

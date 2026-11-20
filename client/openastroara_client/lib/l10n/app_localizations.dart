@@ -11085,6 +11085,16 @@ abstract class AppLocalizations {
   /// **'That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.'**
   String refusalBelowHorizonLimit(String altitude, String limit);
 
+  /// Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.'**
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  );
+
   /// Refusal (end-night-in-progress): End Night was started while it is already running
   ///
   /// In en, this message translates to:
