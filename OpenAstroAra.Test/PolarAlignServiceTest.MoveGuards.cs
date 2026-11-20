@@ -410,6 +410,67 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignError), CounterweightLimitDeg, expectLimitHit: true);
         }
 
+        // ── the settle after the stop: two still readings 1.5 s apart, within 8 s ────────────
+
+        [Test]
+        public void The_daemons_settle_needs_two_still_readings_1_5_s_apart_and_gives_up_after_8_s() {
+            // 1.5 s outlasts AlpacaBridge iOptron's 1 s cache: two cached readings never pass for a mount standing still.
+            var mount = PolledGemAt(-4.0);
+            using var daemon = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new TrueSkySolver(mount), mount,
+                MediatorMotionControl.For(mount), NewStore());
+
+            Assert.That(daemon.AxisSettle, Is.EqualTo(TimeSpan.FromSeconds(1.5)));
+            Assert.That(daemon.AxisSteadyWindow, Is.EqualTo(TimeSpan.FromSeconds(8)));
+        }
+
+        [Test]
+        public async Task Behind_a_1_s_driver_cache_a_mount_still_turning_after_the_stop_is_never_taken_for_still() {
+            // iOptron's 1 s cache, a Slewing that already reads false, and a mount that runs on slowly after the turn's
+            // MoveAxis 0: two readings 10 ms apart are the same cached one. The settle wants two still readings 1.5 s apart,
+            // so the cache refreshes between them, the motion shows, and the run fails on this turn (never a second one).
+            var mount = PolledGemAt(-4.0);
+            mount.DriverCache = TimeSpan.FromSeconds(1);
+            mount.SlewingFalseAfter = TimeSpan.Zero;
+            mount.MoveAxisStopIgnored = 1;
+            mount.RunawayDegPerSec = 0.5;
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws);
+            svc.AxisSettle = TimeSpan.FromSeconds(1.5); // the daemon's (the bench runs with none)
+            svc.AxisFastRateDegPerSec = 3.0; // and its motor speeds: a 1 s cache trails them by a degree or so
+            svc.AxisSlowRateDegPerSec = 1.0;
+
+            var (reason, message) = await GuardedRunFailureAsync(mount, ws, svc).ConfigureAwait(false);
+
+            Assert.That(reason, Is.EqualTo(PolarAlignService.TurnMismatch), message);
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(1), "no second turn on a mount that never stood still. " + mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public async Task A_mount_that_never_reads_still_after_the_stop_fails_after_the_8_s_window_with_the_confirmed_stop() {
+            // Slewing stays true after the turn's stop: the turn never stands still, so after 8 s (on the mount's clock) the
+            // confirmed stop goes out, cannot confirm either, and the run fails mount_did_not_stop.
+            var mount = PolledGemAt(-4.0);
+            mount.SlewingStuck = true;
+            var ws = new WsRecorder();
+            using var svc = NewGuardedService(mount, ws);
+            svc.AxisSteadyWindow = TimeSpan.FromSeconds(8); // the daemon's
+            TimeSpan? stoppedAt = null;
+            mount.OnFullRead = () => {
+                if (stoppedAt is null && LastCommand(mount) == "move primary 0") {
+                    stoppedAt = mount.Commands[^1].At;
+                }
+            };
+
+            var (reason, message) = await GuardedRunFailureAsync(mount, ws, svc).ConfigureAwait(false);
+
+            Assert.That(reason, Is.EqualTo(PolarAlignService.MountDidNotStop), message);
+            Assert.That(message, Does.Contain("did not stand still within 8 s"));
+            var abort = mount.Stops.First(s => s.Kind == StopKind.Abort);
+            Assert.That(abort.At - stoppedAt!.Value, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(8)).And.LessThan(TimeSpan.FromSeconds(8.1)),
+                "the confirmed stop 8 s after the turn's own. " + mount.Describe());
+        }
+
         // ── the motion stays marked until the mount stands still (ARA-3) ─────────────────────
 
         [Test]
