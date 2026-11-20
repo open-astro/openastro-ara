@@ -73,9 +73,13 @@ public static class RefusalCatalog {
     // axis any more. Point it 2–5° from the pole and start again.
     public static readonly RefusalCause PolarAlignOnAxis = new("polar-align-on-axis", 409, "The scope points too close to the pole");
 
+    // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
+    public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
+        FirstFlipNotCompleted,
     ];
 }

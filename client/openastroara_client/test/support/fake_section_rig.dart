@@ -287,6 +287,8 @@ const rigDefaults = <String, Map<String, Object?>>{
     'flip_safety_enabled': true,
     'expected_flip_slew_seconds': 90,
     'first_flip_confirmed': false,
+    'first_flip_completed_utc': null,
+    'first_flip_pier_side_changed': false,
     'unattended_escalation': true,
     'unattended_shutdown_enabled': true,
     'unattended_shutdown_wait_minutes': 30,

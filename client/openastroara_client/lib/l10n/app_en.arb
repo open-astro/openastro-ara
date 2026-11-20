@@ -8572,6 +8572,32 @@
   "@refusalPolarAlignMovingMount": {"description": "Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too"},
   "refusalPolarAlignOnAxis": "The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.",
   "@refusalPolarAlignOnAxis": {"description": "Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more"},
+  "actionConfirmFlip": "confirm the meridian flip",
+  "@actionConfirmFlip": {
+    "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
+  },
+  "safetyFirstFlipConfirmedStatus": "Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.",
+  "@safetyFirstFlipConfirmedStatus": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): the user confirmed a completed flip"},
+  "safetyFirstFlipUnconfirmedStatus": "Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.",
+  "@safetyFirstFlipUnconfirmedStatus": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): no flip confirmed and none completed since the last re-arm"},
+  "safetyFirstFlipCompletedPierChanged": "A flip completed at {when}: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.",
+  "@safetyFirstFlipCompletedPierChanged": {
+    "description": "Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported a new pier side. {when} is a local date and time like 2026-11-20 23:15",
+    "placeholders": {"when": {"type": "String"}}
+  },
+  "safetyFirstFlipCompletedCheckByEye": "A flip completed at {when}: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.",
+  "@safetyFirstFlipCompletedCheckByEye": {
+    "description": "Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported no pier side, or the same one. {when} is a local date and time like 2026-11-20 23:15",
+    "placeholders": {"when": {"type": "String"}}
+  },
+  "safetyFirstFlipConfirmButton": "Confirm",
+  "@safetyFirstFlipConfirmButton": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): button that confirms the completed flip"},
+  "safetyFirstFlipConfirmedSnack": "Meridian flip confirmed. Later flips run without the alert.",
+  "@safetyFirstFlipConfirmedSnack": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Confirm succeeds"},
+  "safetyFirstFlipRearmedSnack": "Re-armed. Every flip alerts and waits 60 s again until you confirm one.",
+  "@safetyFirstFlipRearmedSnack": {"description": "Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Re-arm succeeds; the confirmation and any completed-flip record are cleared"},
+  "refusalFirstFlipNotCompleted": "No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.",
+  "@refusalFirstFlipNotCompleted": {"description": "Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change"},
   "polarConfirmTitle": "Before the mount moves",
   "@polarConfirmTitle": {"description": "Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis"},
   "polarConfirmPoint": "Point the tube 2–5° from the pole, with the counterweights down.",
