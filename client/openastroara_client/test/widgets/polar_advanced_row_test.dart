@@ -14,32 +14,15 @@ import 'package:openastroara/state/saved_server_state.dart'
     show activeServerProvider;
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
-/// The fake Polar Align client of the Settings panel's tests: scripted
-/// settings, every PUT recorded.
+import '../support/polar_align_section.dart';
+
+/// The routine's fake Polar Align client: no routine runs.
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  PolarAlignSettings settings = const PolarAlignSettings();
-  final saved = <PolarAlignSettings>[];
-  Object? getError;
-  Object? putError;
-  Completer<void>? putGate;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async {
-    if (getError != null) throw getError!;
-    return settings;
-  }
-
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    saved.add(next);
-    if (putGate != null) await putGate!.future;
-    if (putError != null) throw putError!;
-    return settings = next;
-  }
 
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
@@ -70,20 +53,21 @@ const _check = Key('polar-advanced-check-step');
 const _coarse = Key('polar-advanced-coarse');
 
 /// The Start card and, under it, the Settings panel: one rig, one module.
-Future<_Api> _pump(
+Future<FakePolarAlignSection> _pump(
   WidgetTester tester, {
-  _Api? rig,
+  FakePolarAlignSection? rig,
   PolarAlignLive live = const PolarAlignLive(),
   bool open = true,
 }) async {
   tester.view.physicalSize = const Size(1200, 2400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  final api = rig ?? _Api();
+  final api = rig ?? FakePolarAlignSection();
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        polarAlignApiProvider.overrideWithValue(api),
+        ...polarAlignSectionOverrides(api),
+        polarAlignApiProvider.overrideWithValue(_Api()),
         polarAlignLiveProvider.overrideWith(() => _Live(live)),
         activeServerProvider.overrideWithValue(
           const AraServer(hostname: 'rig', port: 1),
@@ -149,7 +133,7 @@ void main() {
     (tester) async {
       final api = await _pump(tester);
       await _enter(tester, _seed, '25');
-      expect(api.saved.single.seedRotationDeg, 25.0);
+      expect(api.puts.single.seedRotationDeg, 25.0);
       // Settings rows, in order: tolerance, turn, verify step, rough exposure.
       final settingsFields = find.descendant(
         of: find.byType(ImagingPolarPanel),
@@ -165,12 +149,13 @@ void main() {
   testWidgets(
     'collapsed: the row sums up the rig\'s turn, step and exposure (#1736)',
     (tester) async {
-      final rig = _Api()
-        ..settings = const PolarAlignSettings(
+      final rig = FakePolarAlignSection(
+        initial: rigPolarAlign.copyWith(
           seedRotationDeg: 25,
           checkStepDeg: 20,
           coarseExposureSeconds: 5,
-        );
+        ),
+      );
       await _pump(tester, rig: rig, open: false);
       final row = find.byKey(const Key('polar-advanced-row'));
       expect(
@@ -186,7 +171,7 @@ void main() {
   testWidgets(
     'collapsed after a failed load: no summary, never the client\'s defaults (#1736)',
     (tester) async {
-      final rig = _Api()..getError = StateError('rig gone');
+      final rig = FakePolarAlignSection(initial: null);
       await _pump(tester, rig: rig, open: false);
       final row = find.byKey(const Key('polar-advanced-row'));
       expect(
@@ -208,17 +193,18 @@ void main() {
     await tester.enterText(settingsFields.at(2), '20');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pumpAndSettle();
-    expect(api.saved.single.checkStepDeg, 20.0);
+    expect(api.puts.single.checkStepDeg, 20.0);
     expect(_text(tester, _check), '20');
   });
 
   testWidgets(
     'a failed save puts the row\'s field back to the rig\'s value and says so (#1736)',
     (tester) async {
-      final rig = _Api()..putError = StateError('rig said no');
+      final rig = FakePolarAlignSection()..refuse = StateError('rig said no');
       await _pump(tester, rig: rig);
       await _enter(tester, _coarse, '9');
-      expect(rig.saved, hasLength(1));
+      expect(rig.sent, hasLength(1));
+      expect(rig.puts, isEmpty);
       expect(_text(tester, _coarse), '3');
       expect(
         find.byKey(const Key('polar-advanced-save-error')),
@@ -233,7 +219,7 @@ void main() {
       final api = await _pump(tester);
       await _enter(tester, _seed, '4');
       await _enter(tester, _check, '31');
-      expect(api.saved, isEmpty);
+      expect(api.sent, isEmpty);
       expect(find.textContaining('5 to 30'), findsWidgets);
       expect(_text(tester, _seed), '4');
       expect(find.text('Out of range: use 5 to 30'), findsNWidgets(2));
@@ -243,7 +229,7 @@ void main() {
   testWidgets(
     'not loaded: Retry instead of the knobs, nothing saved; Retry loads them (#1736)',
     (tester) async {
-      final rig = _Api()..getError = StateError('rig gone');
+      final rig = FakePolarAlignSection(initial: null);
       await _pump(tester, rig: rig);
       final advanced = find.descendant(
         of: find.byKey(const Key('polar-advanced-row')),
@@ -251,8 +237,8 @@ void main() {
       );
       expect(advanced, findsOneWidget);
       expect(find.byKey(_seed), findsNothing);
-      expect(rig.saved, isEmpty);
-      rig.getError = null;
+      expect(rig.sent, isEmpty);
+      rig.initial = rigPolarAlign;
       await tester.tap(advanced);
       await tester.pumpAndSettle();
       expect(find.byKey(_seed), findsOneWidget);
@@ -262,7 +248,7 @@ void main() {
   testWidgets('Start waits while a knob save is in flight (#1736)', (
     tester,
   ) async {
-    final rig = _Api()..putGate = Completer<void>();
+    final rig = FakePolarAlignSection()..gate = Completer<void>();
     await _pump(tester, rig: rig);
     const start = Key('polar-align-start');
     bool enabled() =>
@@ -272,9 +258,9 @@ void main() {
     await tester.enterText(find.byKey(_check), '20');
     await tester.testTextInput.receiveAction(TextInputAction.done);
     await tester.pump();
-    expect(rig.saved, hasLength(1));
+    expect(rig.sent, hasLength(1));
     expect(enabled(), isFalse);
-    rig.putGate!.complete();
+    rig.gate!.complete();
     await tester.pumpAndSettle();
     expect(enabled(), isTrue);
   });
@@ -328,7 +314,7 @@ void main() {
       await tester.enterText(settingsFields.at(1), '25');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
-      expect(api.saved.single.seedRotationDeg, 25.0);
+      expect(api.puts.single.seedRotationDeg, 25.0);
       expect(_text(tester, _seed), '25');
       expect(find.textContaining('Out of range'), findsNothing);
     },

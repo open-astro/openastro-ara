@@ -7972,6 +7972,15 @@
       }
     }
   },
+  "polarAlignerConvergedPlain": "{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.",
+  "@polarAlignerConvergedPlain": {
+    "description": "Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig",
+    "placeholders": {
+      "moves": {
+        "type": "int"
+      }
+    }
+  },
   "polarAlignerAxisAzimuth": "azimuth",
   "@polarAlignerAxisAzimuth": {
     "description": "Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case"

@@ -13,14 +13,21 @@ import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
 
-/// Pure fake — records calls; scripted status/settings.
+import '../support/polar_align_section.dart';
+
+/// Pure fake — records calls; scripted status. The profile's polar-align
+/// settings are a profile section (ADR 0015): [section], with no HTTP.
 class _FakePolarAlignClient implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   PolarAlignStatus? status;
-  PolarAlignSettings settings = const PolarAlignSettings();
+  final section = FakePolarAlignSection();
+
+  /// The rig's copy of the section.
+  PolarAlignSettings get settings => section.initial!;
+  set settings(PolarAlignSettings s) => section.initial = s;
 
   @override
   Future<PolarAlignStatus?> getStatus() async => status;
@@ -40,15 +47,6 @@ class _FakePolarAlignClient implements PolarAlignClient {
     calls.add('frame');
     return frame;
   }
-  @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings s) async {
-    calls.add('put');
-    if (putError != null) throw putError!;
-    return settings = s;
-  }
-  Object? putError;
   @override
   void close() {}
 }
@@ -70,6 +68,7 @@ class _NightOn extends NightModeController {
 Widget _harness(_FakePolarAlignClient api, PolarAlignLive live) {
   return ProviderScope(
     overrides: [
+      ...polarAlignSectionOverrides(api.section),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _StubLiveNotifier(live)),
     ],
@@ -515,7 +514,7 @@ void main() {
 
     testWidgets('single mode shows Take Frame and posts a capture request', (tester) async {
       final api = _FakePolarAlignClient()
-        ..settings = const PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
+        ..settings = rigPolarAlign.copyWith(loopMode: PolarAlignLoopModes.single);
       await tester.pumpWidget(_harness(
           api,
           const PolarAlignLive(
@@ -543,13 +542,14 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Single'));
       await tester.pumpAndSettle();
-      expect(api.calls, ['put']);
+      expect(api.section.sent, hasLength(1));
       expect(api.settings.loopMode, PolarAlignLoopModes.single);
       expect(find.byKey(const Key('polar-align-take-frame')), findsOneWidget);
     });
 
     testWidgets('a failed save rolls the mode back to what the server has', (tester) async {
-      final api = _FakePolarAlignClient()..putError = Exception('network down');
+      final api = _FakePolarAlignClient();
+      api.section.refuse = Exception('network down');
       await tester.pumpWidget(_harness(
           api,
           const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 30)));
@@ -559,7 +559,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(find.text('Single'));
       await tester.pumpAndSettle();
-      expect(api.calls, ['put']);
+      expect(api.section.sent, hasLength(1));
+      expect(api.section.puts, isEmpty);
       expect(api.settings.loopMode, PolarAlignLoopModes.loop);
       expect(find.byKey(const Key('polar-align-take-frame')), findsNothing,
           reason: 'the server still loops, so the panel must not offer Take Frame');
@@ -580,6 +581,30 @@ void main() {
       await tester.pumpAndSettle();
       expect(api.settings.exposureSeconds, 2.5);
       expect(find.textContaining('Exposure must be'), findsOneWidget);
+    });
+
+    testWidgets(
+        'the capture settings wait for the profile from the rig: Not loaded with Retry, and nothing is sent (ADR 0015)',
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      api.section.initial = null; // the rig does not answer
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 0.5)));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-exposure')), findsNothing, reason: 'no default exposure shows');
+      expect(find.byKey(const Key('polar-align-mode')), findsNothing);
+      expect(find.byKey(const Key('section-retry')), findsOneWidget);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-align-done'))).enabled, isFalse,
+          reason: 'no tolerance is made up to judge the error against');
+      expect(api.section.sent, isEmpty);
+
+      api.settings = rigPolarAlign;
+      await tester.ensureVisible(find.byKey(const Key('section-retry')));
+      await tester.tap(find.byKey(const Key('section-retry')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-exposure')), findsOneWidget);
+      expect(tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-align-done'))).enabled, isTrue);
     });
 
     const solvedFrame = PolarAlignLive(

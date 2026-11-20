@@ -22,6 +22,8 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
 
+import '../../support/polar_align_section.dart';
+
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
@@ -29,10 +31,6 @@ class _Api implements PolarAlignClient {
   final calls = <String>[];
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async => const PolarAlignSettings(targetToleranceArcmin: 2);
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => next;
   @override
   Future<void> start(PolarAlignStartPlan plan) async {}
   @override
@@ -112,6 +110,9 @@ Future<_Aligner> _pump(WidgetTester tester, PolarAlignLive live, {PolarAligner? 
   await tester.pumpWidget(ProviderScope(
     overrides: [
       polarAlignApiProvider.overrideWithValue(_Api()),
+      // The profile's section: the rig's copy, a 2′ tolerance (ADR 0015).
+      ...polarAlignSectionOverrides(
+          FakePolarAlignSection(initial: rigPolarAlign.copyWith(targetToleranceArcmin: 2), loaded: true)),
       polarAlignerApiProvider.overrideWithValue(aligner),
       polarAlignLiveProvider.overrideWith(() => _liveNotifier),
     ],

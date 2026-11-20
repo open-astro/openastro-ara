@@ -10353,6 +10353,12 @@ abstract class AppLocalizations {
   /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
   String polarAlignerConverged(int moves, String tolerance);
 
+  /// Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
+  String polarAlignerConvergedPlain(int moves);
+
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
   ///
   /// In en, this message translates to:

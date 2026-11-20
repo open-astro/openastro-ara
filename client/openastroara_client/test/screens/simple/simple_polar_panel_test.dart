@@ -19,17 +19,36 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart' show Tagged;
+
+import '../../support/polar_align_section.dart';
+
+/// The profile's polar-align section (ADR 0015), each save sent also in [calls].
+class _Section extends FakePolarAlignSection {
+  // In from the rig from the first frame: these tests are about the routine.
+  _Section(this.calls) : super(loaded: true);
+  final List<String> calls;
+  @override
+  Future<Tagged<PolarAlignSettings>> send(ProfileApi api, PolarAlignSettings value, String? etag) {
+    calls.add('save ${value.exposureSeconds} ${value.loopMode}');
+    return super.send(api, value, etag);
+  }
+}
 
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
-  PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 1.0);
+  late final section = _Section(calls);
+
+  /// The rig's copy of the profile's polar-align section.
+  PolarAlignSettings get settings => section.initial!;
+  set settings(PolarAlignSettings s) => section.initial = s;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async => settings;
   @override
   Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
   @override
@@ -43,18 +62,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<Uint8List?> getLiveFrame() async => null;
   @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    calls.add('save ${next.exposureSeconds} ${next.loopMode}');
-    return settings = next;
-  }
-  @override
   void close() {}
-}
-
-/// A rig whose settings read fails.
-class _NoSettingsApi extends _Api {
-  @override
-  Future<PolarAlignSettings> getSettings() async => throw StateError('rig gone');
 }
 
 class _FailingApi extends _Api {
@@ -111,11 +119,12 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
   final api = server
       ? (_Api()
         ..settings = tolerance == null
-            ? PolarAlignSettings(loopMode: loopMode)
-            : PolarAlignSettings(loopMode: loopMode, targetToleranceArcmin: tolerance))
+            ? rigPolarAlign.copyWith(loopMode: loopMode)
+            : rigPolarAlign.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
       : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      if (api != null) ...polarAlignSectionOverrides(api.section) else profileApiProvider.overrideWithValue(null),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(live)),
     ],
@@ -128,9 +137,10 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
     final en = lookupAppLocalizations(const Locale('en'));
-    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s\nLoop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
+    expect(simplePolarSummary(rigPolarAlign, en), '1 s\nLoop');
+    expect(simplePolarSummary(rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
         '45 s\nSingle');
+    expect(simplePolarSummary(null, en), '', reason: 'not loaded from the rig: no made-up setup');
   });
 
   test('simplePolarSideText names the side of the pole in the chosen language', () {
@@ -441,19 +451,30 @@ void main() {
     },
   );
 
-  testWidgets('after a failed settings load a changed value sends no PUT (#1736)', (tester) async {
-    final api = _NoSettingsApi();
+  testWidgets('the setup rows wait for the profile from the rig: Not loaded with Retry, nothing is sent (ADR 0015)',
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        ...polarAlignSectionOverrides(api.section),
         polarAlignApiProvider.overrideWithValue(api),
         polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
       ],
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('Single'), findsNothing, reason: 'no made-up Loop/Single');
+    expect(find.text('1 s'), findsNothing, reason: 'no made-up exposure');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+
+    api.settings = rigPolarAlign;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+    expect(api.calls, ['save 1.0 single'], reason: "saved over the rig's copy once it is in");
   });
 
   testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
@@ -683,8 +704,9 @@ void main() {
   });
 
   testWidgets('in Preflight, polar align is the last step: Done reads Done · Start imaging', (tester) async {
-    final api = _Api()..settings = PolarAlignSettings();
+    final api = _Api();
     final c = ProviderContainer(overrides: [
+      ...polarAlignSectionOverrides(api.section),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
@@ -726,6 +748,7 @@ void main() {
 
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
+    for (final t in tester.widgetList<Text>(find.byType(Text))) { debugPrint('TXT ${t.data}'); }
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);
   });
 

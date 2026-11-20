@@ -317,48 +317,5 @@ void main() {
       expect(homing.waitingForHome, isTrue);
       expect(homing.isActive, isTrue);
     });
-
-    test('settings carry the stage knobs and default the turn to 10°', () {
-      const defaults = PolarAlignSettings();
-      expect(defaults.seedRotationDeg, 10.0);
-      expect(defaults.checkStepDeg, 10.0);
-      expect(defaults.coarseExposureSeconds, 3.0);
-      final json = defaults.copyWith(checkStepDeg: 15).toJson();
-      expect(json.containsKey('use_home'), isFalse, reason: '#2048 retired use_home: the routine never sends the mount Home');
-      expect(PolarAlignSettings.fromJson(json).checkStepDeg, 15.0);
-      expect(PolarAlignSettings.fromJson({...json, 'use_home': true}).checkStepDeg, 15.0, reason: "an older daemon's use_home is ignored");
-    });
-
-    test('settings carry stop_tracking_when_done, on unless the daemon says off (#2048)', () {
-      expect(const PolarAlignSettings().stopTrackingWhenDone, isTrue, reason: "NINA's default");
-      expect(PolarAlignSettings.fromJson(const {}).stopTrackingWhenDone, isTrue, reason: 'an older daemon');
-      final json = const PolarAlignSettings().copyWith(stopTrackingWhenDone: false).toJson();
-      expect(json['stop_tracking_when_done'], isFalse);
-      expect(PolarAlignSettings.fromJson(json).stopTrackingWhenDone, isFalse);
-    });
-  });
-
-  group('PolarAlignSettings', () {
-    test('loop_mode round-trips and unknown values fall back to loop', () {
-      const single = PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, PolarAlignLoopModes.loop);
-      expect(PolarAlignSettings.fromJson({}).loopMode, PolarAlignLoopModes.loop);
-    });
-
-    test('round-trips through json with playbook defaults for missing keys', () {
-      const defaults = PolarAlignSettings();
-      expect(PolarAlignSettings.fromJson(const {}).toJson(), defaults.toJson());
-
-      const custom = PolarAlignSettings(
-        exposureSeconds: 0.5,
-        binning: 2,
-        targetToleranceArcmin: 0.5,
-        seedRotationDeg: 60,
-        loopCadenceMs: 750,
-        settleSeconds: 3,
-      );
-      expect(PolarAlignSettings.fromJson(custom.toJson()).toJson(), custom.toJson());
-    });
   });
 }

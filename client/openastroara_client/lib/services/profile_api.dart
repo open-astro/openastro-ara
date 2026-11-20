@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/guider_twin.dart';
+import '../models/polar_align.dart';
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
 import '../models/profile_share_export.dart';
@@ -615,6 +616,13 @@ class ProfileApi {
     );
   }
 
+  Future<({PolarAlignSettings value, String? etag})> getPolarAlignSection() =>
+      _getTagged('polar-align', _polarAlignFromRig);
+  Future<({PolarAlignSettings value, String? etag})> putPolarAlignSection(
+    PolarAlignSettings v, {
+    String? ifMatch,
+  }) => _putTagged('polar-align', v.toJson(), _polarAlignFromRig, ifMatch);
+
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
@@ -932,6 +940,31 @@ class ProfileApi {
       skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
       skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
       unmodeled: _safetyUnmodeled(j),
+    );
+  }
+
+  // Strict like the readers above: a missing key, or a loop mode the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (1 s, Loop, motors on), which a Save would then write over the
+  // rig's polar-align knobs (#1807).
+  static PolarAlignSettings _polarAlignFromRig(Map<String, dynamic> j) {
+    final mode = j['loop_mode'];
+    if (mode != PolarAlignLoopModes.loop &&
+        mode != PolarAlignLoopModes.single) {
+      throw FormatException('unknown loop_mode', mode);
+    }
+    return PolarAlignSettings(
+      exposureSeconds: (j['exposure_seconds'] as num).toDouble(),
+      binning: (j['binning'] as num).toInt(),
+      targetToleranceArcmin: (j['target_tolerance_arcmin'] as num).toDouble(),
+      seedRotationDeg: (j['seed_rotation_deg'] as num).toDouble(),
+      loopCadenceMs: (j['loop_cadence_ms'] as num).toInt(),
+      settleSeconds: (j['settle_seconds'] as num).toDouble(),
+      loopMode: mode as String,
+      checkStepDeg: (j['check_step_deg'] as num).toDouble(),
+      coarseExposureSeconds: (j['coarse_exposure_seconds'] as num).toDouble(),
+      polarAlignerAuto: j['polar_aligner_auto'] as bool,
+      stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
     );
   }
 

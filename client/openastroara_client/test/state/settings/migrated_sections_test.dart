@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
@@ -48,6 +49,7 @@ const _paths = [
   'notifications',
   'optics',
   'plate-solve',
+  'polar-align',
   'safety',
   'site',
   'storage',
@@ -63,6 +65,7 @@ final _selfLoading = {
   filterWheelPolicyProvider,
   imagingDefaultsProvider,
   opticsSettingsProvider,
+  polarAlignSettingsProvider,
   safetyPoliciesProvider,
   siteSettingsProvider,
 };
@@ -186,6 +189,9 @@ void main() {
         c.read(siteSettingsProvider.notifier).setLatitudeDeg(-33.856784),
     'safety': (c) =>
         c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
+    'polar-align': (c) => c
+        .read(polarAlignSettingsProvider.notifier)
+        .edit((v) => v.copyWith(exposureSeconds: 4)),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -291,6 +297,11 @@ void main() {
       {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
     ],
     'optics': [null, ...without(rigDefaults['optics']!)],
+    'polar-align': [
+      null,
+      ...without(rigDefaults['polar-align']!),
+      {...rigDefaults['polar-align']!, 'loop_mode': 'bogus'},
+    ],
     'site': [
       null,
       ...without(rigDefaults['site']!),
@@ -362,6 +373,7 @@ void main() {
     'imaging-defaults': 'cooler_target_c',
     'optics': 'focal_length_mm',
     'plate-solve': 'center_after_slew',
+    'polar-align': 'exposure_seconds',
     'safety': 'meridian_pause_min',
     'site': 'latitude_deg',
     'unguided': 'guard_enabled',

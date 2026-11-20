@@ -66,9 +66,9 @@ import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/camera_status.dart' show CameraStatus;
 import '../../models/equipment_device_status.dart';
-import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
+import '../../models/polar_align.dart' show PolarAligner;
 import '../../state/equipment/camera_state.dart';
-import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
@@ -4160,13 +4160,17 @@ class _PolarAlignerGearRows extends ConsumerWidget {
     Future<void> pick(bool next) async {
       final notify = userNotifier(context);
       try {
-        // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
-        final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarAlignerAuto: next));
+        // On the rig's copy (ADR 0015): not loaded, it is loaded once more and
+        // nothing is sent when that fails; a 412 shows the rig's newer copy.
+        await ref
+            .read(polarAlignSettingsProvider.notifier)
+            .changeAndSave((s) => s.copyWith(polarAlignerAuto: next));
       } catch (e) {
         notify(
           l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
-          detail: failureReason(l10n, e),
+          detail: e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : failureReason(l10n, e),
           error: true,
         );
       }

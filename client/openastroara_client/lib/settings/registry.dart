@@ -1442,7 +1442,8 @@ const List<Setting> settingsRegistry = [
     defaultValue: '',
   ),
   // #1736 Imaging → Polar align — the routine's knobs. State lives in
-  // `polarAlignSettingsProvider` (profile section `polar_align`).
+  // `polarAlignSettingsProvider` (profile section `polar_align`); the rig owns
+  // their defaults (ADR 0015 rule 3, #1807).
   Setting(
     id: 'img.polar.target_tolerance_arcmin',
     tier: SettingTier.advanced,
@@ -1451,7 +1452,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tolerance', 'done', 'arcmin', 'error'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 10.0, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'polar_align.target_tolerance_arcmin',
   ),
   Setting(
@@ -1462,7 +1463,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'polar aligner', 'motors', 'by hand', 'turned by', 'rpa'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.polar_aligner_auto',
   ),
   Setting(
@@ -1473,7 +1474,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tracking', 'stop', 'pier', 'collision', 'nina'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.stop_tracking_when_done',
   ),
   Setting(
@@ -1484,7 +1485,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'rotation', 'turn', 'ra', 'seed'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.seed_rotation_deg',
   ),
   Setting(
@@ -1495,7 +1496,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.check_step_deg',
   ),
   Setting(
@@ -1513,7 +1514,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 60, step: 0.5),
-    defaultValue: 3.0,
+    defaultValue: null,
     profilePath: 'polar_align.coarse_exposure_seconds',
   ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig

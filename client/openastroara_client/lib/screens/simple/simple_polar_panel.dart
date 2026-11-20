@@ -12,6 +12,10 @@ import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
+import '../../state/settings/polar_align_settings_state.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
 import '../../widgets/imaging/polar_aligner_block.dart';
 import '../../widgets/imaging/polar_start_confirm.dart';
@@ -37,9 +41,10 @@ Duration _exposure(PolarAlignSettings s) =>
 bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
 
 /// "45 s" over "Single": the rail chip's caption in Polar align, the
-/// routine's setup on two lines (one doesn't fit the 60 px chip). Pure —
-/// unit-tested.
-String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) {
+/// routine's setup on two lines (one doesn't fit the 60 px chip). Empty while
+/// the profile's copy is not in from the rig (ADR 0015). Pure — unit-tested.
+String simplePolarSummary(PolarAlignSettings? s, AppLocalizations l10n) {
+  if (s == null) return '';
   return '${formatExposure(_exposure(s))}\n'
       '${_single(s) ? l10n.polarSingle : l10n.polarLoop}';
 }
@@ -173,10 +178,20 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         .run(op, describe: (e) => friendlyError(l10n, e, action: action));
   }
 
-  void _save(PolarAlignSettings next) => _run(
-    context.l10n.polarActionSave,
-    (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
-  );
+  /// [change] on the rig's copy of the profile section (ADR 0015): refused,
+  /// nothing sent, when it is not loaded; the module rolls a failed save back.
+  void _save(PolarAlignSettings Function(PolarAlignSettings) change) {
+    final l10n = context.l10n;
+    ref
+        .read(polarAlignActionProvider.notifier)
+        .run(
+          (_) => ref.read(polarAlignSettingsProvider.notifier).saveKnob(change),
+          describe: (e) =>
+              e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : friendlyError(l10n, e, action: l10n.polarActionSave),
+        );
+  }
 
   /// Finish the routine. In Preflight, Done moves on (the routine is complete:
   /// nothing to stop).
@@ -207,9 +222,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       polarAlignLiveProvider,
       (_, next) => setState(() => _bolt.track(next)),
     );
-    final settings =
-        ref.watch(polarAlignSettingsProvider).value ??
-        const PolarAlignSettings();
+    // Null until the profile's copy is in from the rig (ADR 0015): Setup
+    // says so, with Retry, and nothing is judged against a made-up tolerance.
+    final loaded = ref.watch(polarAlignSettingsProvider);
+    final settings = loaded.value;
     final command = ref.watch(polarAlignActionProvider);
     final busy = command.busy;
     final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
@@ -219,7 +235,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     // Verifying and Verified show only the phase line and the verdict.
     final verifying = step == 2;
     final inTolerance =
-        total != null && total <= settings.targetToleranceArcmin;
+        total != null &&
+        settings != null &&
+        total <= settings.targetToleranceArcmin;
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
@@ -357,44 +375,57 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               // The settings for the next frame: a row each like the Focus
               // panel's choices (user, 2026-11-04: one row read oddly); side by
               // side while it runs, so the bullseye panel still fits an iPad.
-              Flex(
-                key: const Key('simple-polar-setup'),
-                direction: active && !stack ? Axis.horizontal : Axis.vertical,
-                crossAxisAlignment: active && !stack
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.stretch,
-                spacing: AraSpace.s8,
-                children: [
-                  for (final w in <Widget>[
-                    SimpleSegments<String>(
-                      options: [
-                        (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
-                        (
-                          PolarAlignLoopModes.single,
-                          l10n.polarSingle,
-                          'single',
-                        ),
-                      ],
-                      selected: settings.loopMode,
-                      onPick: (mode) =>
-                          _save(settings.copyWith(loopMode: mode)),
-                    ),
-                    SimplePresetTile<Duration>(
-                      key: const Key('simple-polar-exposure'),
-                      label: l10n.polarExposure,
-                      value: _exposure(settings),
-                      options: exposurePresets(minSec: 0, maxSec: 60),
-                      format: formatExposure,
-                      onSelected: (d) => _save(
-                        settings.copyWith(
-                          exposureSeconds: d.inMilliseconds / 1000,
+              if (settings == null)
+                SectionNotLoaded(
+                  key: const Key('simple-polar-setup-not-loaded'),
+                  section: loaded,
+                  padding: EdgeInsets.zero,
+                  onRetry: () {
+                    final api = ref.read(profileApiProvider);
+                    if (api != null) {
+                      ref.read(polarAlignSettingsProvider.notifier).load(api);
+                    }
+                  },
+                )
+              else
+                Flex(
+                  key: const Key('simple-polar-setup'),
+                  direction: active && !stack ? Axis.horizontal : Axis.vertical,
+                  crossAxisAlignment: active && !stack
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.stretch,
+                  spacing: AraSpace.s8,
+                  children: [
+                    for (final w in <Widget>[
+                      SimpleSegments<String>(
+                        options: [
+                          (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
+                          (
+                            PolarAlignLoopModes.single,
+                            l10n.polarSingle,
+                            'single',
+                          ),
+                        ],
+                        selected: settings.loopMode,
+                        onPick: (mode) =>
+                            _save((s) => s.copyWith(loopMode: mode)),
+                      ),
+                      SimplePresetTile<Duration>(
+                        key: const Key('simple-polar-exposure'),
+                        label: l10n.polarExposure,
+                        value: _exposure(settings),
+                        options: exposurePresets(minSec: 0, maxSec: 60),
+                        format: formatExposure,
+                        onSelected: (d) => _save(
+                          (s) => s.copyWith(
+                            exposureSeconds: d.inMilliseconds / 1000,
+                          ),
                         ),
                       ),
-                    ),
-                  ])
-                    active && !stack ? Expanded(child: w) : w,
-                ],
-              ),
+                    ])
+                      active && !stack ? Expanded(child: w) : w,
+                  ],
+                ),
               // Its own fixed slot between Setup and Error (user, 2026-11-16).
               if (aligner) const PolarAlignerBlock(),
             ],
@@ -490,7 +521,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 !live.waitingForHome) ...[
               // Inside the tolerance (#1875): the rough alignment may be enough.
               // Fine stays the green primary, Done is outlined.
-              if (total != null)
+              if (total != null && settings != null)
                 Text(
                   inTolerance
                       ? l10n.polarInsideTolerance(
@@ -557,7 +588,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 children: [
                   // Single waits for a tap before each frame; Loop shoots on
                   // its own.
-                  if (_single(settings))
+                  if (settings != null && _single(settings))
                     Expanded(
                       child: FilledButton.tonal(
                         key: const Key('simple-polar-capture'),
