@@ -212,6 +212,14 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// time and ignores the caller's token: a slow Alpaca GET (#2048 M06's 1 s variant). The physics runs on meanwhile.</summary>
         public TimeSpan SlowReads { get; set; }
 
+        /// <summary>While set, each fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) hangs until the
+        /// source completes, ignoring the caller's token: an Alpaca GET stuck on the wire. <see cref="ReadHung"/> completes
+        /// when the first read hangs on it.</summary>
+        public TaskCompletionSource? HangReads { get; set; }
+
+        /// <summary>Completes when a fresh read first hangs on <see cref="HangReads"/>.</summary>
+        public TaskCompletionSource ReadHung { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         /// <summary>Called with each AbortSlew's reason before the mount sees it; true refuses it the way the daemon refuses a
         /// stop it cannot send (InvalidOperationException "not connected", not counted in <see cref="AbortEpoch"/>). The hook
         /// may act on the mount itself: another caller's stop racing the refused one.</summary>
@@ -557,7 +565,15 @@ namespace OpenAstroAra.Test.PolarAlign {
         }
 
         /// <summary>A slow GET (<see cref="SlowReads"/>): the wait ignores the caller's token, as a blocking HTTP call does.</summary>
-        private Task SlowReadAsync() => SlowReads > TimeSpan.Zero ? Task.Delay(SlowReads, CancellationToken.None) : Task.CompletedTask;
+        private async Task SlowReadAsync() {
+            if (HangReads is { } hang) {
+                ReadHung.TrySetResult();
+                await hang.Task.ConfigureAwait(false);
+            }
+            if (SlowReads > TimeSpan.Zero) {
+                await Task.Delay(SlowReads, CancellationToken.None).ConfigureAwait(false);
+            }
+        }
 
         private void TakeFreshReadTime() {
             if (FreshReadTakes <= TimeSpan.Zero) {

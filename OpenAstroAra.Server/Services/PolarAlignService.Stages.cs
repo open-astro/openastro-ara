@@ -608,6 +608,10 @@ namespace OpenAstroAra.Server.Services {
                         }
                         var reversedRate = Rate();
                         LogAxisMoveReversed(axis, reversedRate);
+                        if (RunStopsFenced(gen)) {
+                            // #2066 — a takeover or an end gave up on this run: the mount is someone else's, no stop from here.
+                            throw new OperationCanceledException("the run was fenced while the mount reversed");
+                        }
                         await RunAxisAsync(axis, 0).ConfigureAwait(false);
                         if (!IsCurrent(gen)) {
                             // A Stop during the stop above must not get the motor restarted the other way.
@@ -657,7 +661,11 @@ namespace OpenAstroAra.Server.Services {
                 throw new RoutineFailedException("slew_failed",
                     "the mount refused to turn its motor for the measurement — check it is unparked and free to move, then start again");
             } finally {
-                await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                // #2066 — not once a takeover or an end gave up on this run and fenced it: a late MoveAxis 0 (a read that
+                // hung past the takeover's bound) would land on the park or the move that came after.
+                if (!RunStopsFenced(gen)) {
+                    await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                }
             }
             // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();

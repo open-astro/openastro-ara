@@ -198,6 +198,41 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // A turn's read hangs on the wire (an Alpaca GET that ignores cancellation). The takeover gives up on the run at its
+        // bound and fences it, and the park goes out. When the read finally returns, the turn's own clean-up stop (MoveAxis 0
+        // in its finally) went out regardless of the fence and landed on the park.
+        [Test]
+        public async Task A_turn_stuck_on_a_hung_read_sends_no_motor_stop_after_a_takeover_fenced_it() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.GoToRateDegPerSec = 15.0;
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws, benchMotors: false); // the daemon's speeds: the hang lands mid-turn
+            svc.RunUnwindGrace = TimeSpan.FromSeconds(2.5);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(500);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await mount.FirstMove.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var hang = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            mount.HangReads = hang;
+            await mount.ReadHung.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            try {
+                await svc.StopForTakeoverAsync("safety_park", CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
+                var parkAt = mount.Now;
+                var park = mount.ParkTelescope(new Progress<ApplicationStatus>(), CancellationToken.None);
+                mount.HangReads = null;
+                hang.TrySetResult(); // the turn's read returns now, in the middle of the park
+                var parked = await park.WaitAsync(SignalTimeout).ConfigureAwait(false);
+                await Task.Delay(TimeSpan.FromMilliseconds(500)).ConfigureAwait(false); // the turn's finally has run by now
+
+                Assert.That(parked, Is.True, "the park arrived. " + mount.Describe());
+                Assert.That(mount.Stops.Where(s => s.At >= parkAt && s.Kind != StopKind.LeaseStop), Is.Empty,
+                    "no stop from the fenced turn. " + mount.Describe());
+            } finally {
+                mount.HangReads = null;
+                hang.TrySetResult();
+            }
+        }
+
         // The Stop gave up on a run stuck past its grace and stopped the mount itself. The run unwinds whenever its call
         // returns: its exit then stopped the mount again and turned tracking off in the middle of whatever came next (here
         // the user's park). The end that abandoned it fences its stops.

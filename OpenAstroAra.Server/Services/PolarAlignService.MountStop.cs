@@ -104,6 +104,23 @@ namespace OpenAstroAra.Server.Services {
         // The telescope's AbortEpoch and _ownAborts when the run's Start was called, for the run of this generation. Guarded by _gate.
         private (int Gen, long Epoch, long OwnAborts)? _abortWatch;
 
+        // #2066 — the stop fence a run was launched under (RunEnd.Fence), by generation, for its turns' own clean-up stops.
+        // Guarded by _gate.
+        private (int Gen, long Fence)? _runFence;
+
+        /// <summary>#2066 — whether the stops of the run launched as generation <paramref name="gen"/> are fenced. A run
+        /// that a newer launch replaced keeps no record: its turns' stops go out as before.</summary>
+        private bool RunStopsFenced(int gen) {
+            long fence;
+            lock (_gate) {
+                if (_runFence is not { } f || f.Gen != gen) {
+                    return false;
+                }
+                fence = f.Fence;
+            }
+            return StopsFenced(fence);
+        }
+
         /// <summary>The run's AbortEpoch reading (taken when its Start was called), for the leased motor commands; null for
         /// a superseded run or a mount that keeps no count.</summary>
         private long? RunAbortEpoch(int gen) {

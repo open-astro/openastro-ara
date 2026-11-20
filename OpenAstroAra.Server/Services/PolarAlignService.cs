@@ -544,6 +544,7 @@ namespace OpenAstroAra.Server.Services {
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                         gen = ++_generation;
                         runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
+                        _runFence = (gen, runEnd.Fence);
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
                         _abortWatch = (gen, baselineEpoch, baselineOwn);
                         // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
