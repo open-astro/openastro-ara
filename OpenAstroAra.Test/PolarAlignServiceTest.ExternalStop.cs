@@ -74,6 +74,33 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Tracking, Is.False, "the run's exit leaves tracking off");
         }
 
+        // A stage switches tracking on before its turns. A Stop Mount that lands after the check between the stages, while
+        // the stage still waits on the guider (its frame size), must leave tracking off: the switch-on checks the run's
+        // reading itself, so no tracking write and no turn follow the stop.
+        [Test]
+        public async Task Stop_Mount_just_before_a_stages_tracking_switch_on_leaves_tracking_off() {
+            var mount = new FakeStopMount(tracking: false);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var stoppedAt = -1;
+            var guider = NewFake();
+            guider.OnFrameSizeRead = () => {
+                if (Interlocked.CompareExchange(ref stoppedAt, mount.Count, -1) == -1) {
+                    mount.StopMount();
+                }
+            };
+            using var svc = NewService(guider, new HookedSolver(), mount.Mock, ws, store: NewStore());
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(Volatile.Read(ref stoppedAt), Is.GreaterThanOrEqualTo(0), "the stop landed while the stage read the frame size");
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(mount.Log, Does.Not.Contain("tracking on"), string.Join(", ", mount.Log));
+            AssertNoMotionAfter(mount, stoppedAt);
+            Assert.That(mount.Tracking, Is.False);
+        }
+
         // Emergency Stop latches the stop before its first rung. While a slow rung (here the sequence-run abort) still holds
         // the ladder, the user's Next moves the run to the check stage: it must not turn tracking on or turn the mount.
         [Test]

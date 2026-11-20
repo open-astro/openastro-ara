@@ -310,6 +310,25 @@ namespace OpenAstroAra.Test {
             await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
         }
 
+        // #2066 — a Park or Find Home counts as a stop only when no stop came since its request read the count: a Stop Mount or
+        // Emergency Stop's latch that landed while the request checked the pose keeps the request's reading, so the park or
+        // homing is still dropped before it goes out. Counting over it would hide that stop and send the move after it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public void A_stop_since_the_request_keeps_its_reading_and_is_not_counted_over(string what) {
+            using var svc = new TelescopeService();
+            var request = svc.AbortEpoch;
+            svc.FenceMotion("emergency_stop");
+
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(request, what), Is.EqualTo(request), "the request keeps its own reading");
+            Assert.That(svc.AbortEpoch, Is.EqualTo(request + 1), "no count of its own over the stop");
+            Assert.That(svc.AbortReasonSince(request, except: null), Is.EqualTo("emergency_stop"));
+
+            var quiet = svc.AbortEpoch;
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(quiet, what), Is.EqualTo(quiet + 1), "no stop since: it counts as one");
+            Assert.That(svc.AbortReasonSince(quiet, except: null), Is.EqualTo(what));
+        }
+
         // #2066 — a Find Home ends the leases, as a Park does: a lease left to run out would send MoveAxis 0 in the middle
         // of the homing.
         [Test]

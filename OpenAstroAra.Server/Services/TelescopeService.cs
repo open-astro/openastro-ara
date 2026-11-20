@@ -487,7 +487,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// <summary>#2066 — a park or Find Home counts as a stop for the routines that drive the motors, unless a stop came since
     /// <paramref name="abortEpoch"/> (the request's own reading): then the request is dropped later, as before, and the count
     /// stays. Returns the reading the request fences its own steps on from here.</summary>
-    private long BumpAbortEpochUnlessAbortedSince(long abortEpoch, string reason) {
+    internal long BumpAbortEpochUnlessAbortedSince(long abortEpoch, string reason) {
         lock (_abortReasonsGate) {
             return Interlocked.Read(ref _abortEpoch) != abortEpoch ? abortEpoch : BumpAbortEpoch(reason);
         }

@@ -411,11 +411,15 @@ public static partial class EquipmentEndpoints {
         // "Park does nothing"). Reason defaults to null when absent.
         // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align turns the mount.
         telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
-            TelescopeParkAsync(request, key, svc, polarAlign, ct));
+            TelescopeParkAsync(request, key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
-            TelescopeFindHomeAsync(key, svc, polarAlign, ct));
+            TelescopeFindHomeAsync(key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
         // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
         telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
             .Produces(StatusCodes.Status204NoContent)
@@ -432,7 +436,10 @@ public static partial class EquipmentEndpoints {
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
         telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
-            await MoveAxisAsync(request, svc, ct, polarAlign));
+            await MoveAxisAsync(request, svc, ct, polarAlign))
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict); // not connected, a rate the mount cannot run, or the polar-align-moving-mount Refusal
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });
