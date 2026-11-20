@@ -447,6 +447,25 @@ namespace OpenAstroAra.Test {
                 $"the client waits {client.TotalSeconds} s; the daemon may take {svc.EndWorstCase.TotalSeconds} s before the end's last writes");
         }
 
+        // #2066 — the takeover fences a stuck run before it answers, and only that keeps the run's late stops off the park.
+        // Its bound must end inside every caller's own bound, with margin: a caller that gives up first parks while the run
+        // is still unfenced.
+        [Test]
+        public void The_takeovers_stop_bound_ends_inside_every_callers_bound() {
+            using var svc = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
+                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+            using var safety = new SafetyReactionService();
+            using var fault = new FaultReactionService();
+            var emergency = new EmergencyStopService();
+            var margin = TimeSpan.FromSeconds(1);
+
+            Assert.Multiple(() => {
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(safety.StopPolarAlignBeforeParkTimeout), "the safety park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(fault.StopPolarAlignBeforeParkTimeout), "the fault park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(emergency.RungTimeout), "Emergency Stop's rung");
+            });
+        }
+
         // ── user Stop ────────────────────────────────────────────────────────────────────────
 
         [Test]

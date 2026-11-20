@@ -230,6 +230,7 @@ namespace OpenAstroAra.Test {
         [TestCase("emergency_stop", "Emergency Stop", true)]
         [TestCase("park", "parked", true)]
         [TestCase("findhome", "sent Home", true)]
+        [TestCase("pad_stop", "direction pad", false)]
         [TestCase(null, "Stop Mount", false)]
         public void Each_stop_from_outside_is_named_and_only_its_owners_take_the_mount_over(string? by, string named, bool takesOver) {
             Assert.That(PolarAlignService.StoppedFromOutsideMessage(by), Does.Contain(named));
