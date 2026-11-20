@@ -1,6 +1,8 @@
+> **Draft.** This page is not a release. It will be folded into [`docs/releases/1.0.0-beta.1.md`](releases/README.md), the notes for the first release (see [RELEASES.md](RELEASES.md)).
+
 # Release Notes
 
-## v0.0.1-ara.1 — first pre-release
+## Pre-release draft (before 1.0.0-beta.1)
 
 **Status:** pre-release. The daemon drives real ASCOM Alpaca equipment end-to-end — discover → connect → capture → FITS → catalog → preview — and executes saved sequences through the ported NINA engine. Guiding runs against the external `openastro-guider` daemon. A few subsystems remain placeholders (see below).
 
@@ -41,7 +43,7 @@ DSLR RAW frames are decoded upstream by AlpacaBridge's gPhoto driver (libraw), w
 
 ### Deployment
 
-- Distributable `.deb` packaging in CI; releases are served from the **apt.openastro.net** APT repository (`sudo apt install openastroara-server` — see `docs/DEPLOY.md`).
+- `.deb` packaging in CI for testing only; releases are source only, and you build the `.deb` from a release tag (see `docs/DEPLOY.md` and `docs/RELEASES.md`).
 - systemd `openastroara-server.service` unit (sample in §13). Guiding requires the sibling `openastro-guider` daemon on the Pi.
 - Reference platform: Raspberry Pi 4 (4 GB+) or Pi 5 on 64-bit Debian Trixie.
 

@@ -111,6 +111,9 @@ internal sealed partial class ProfileSectionChangePublisher {
     private void OnChanged(object? sender, EventArgs e) {
         try {
             List<ProfileSection>? moved = null;
+            // Cost: every store write hashes every section here, on the writer's thread. All daemon writers
+            // are rare (connect, solve-learn, flip confirm, guiding assistant, dome, label mirror). A writer
+            // on a per-frame or per-poll path would pay this each time: give it its own event instead.
             lock (_gate) {
                 foreach (var section in ProfileSections.All) {
                     var tag = ProfileEndpoints.SectionETag(section, _store);

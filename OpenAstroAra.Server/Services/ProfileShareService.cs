@@ -135,7 +135,7 @@ public sealed class ProfileShareService : IProfileShareService {
             GuideScopeFocalLengthMm: s.Phd2.GuideFocalLength);
 
     /// <summary>The assembly version (the part before any <c>+gitSha</c> suffix in
-    /// the informational version), e.g. <c>0.0.1-ara.6</c>; <c>unknown</c> if absent.
+    /// the informational version), e.g. <c>1.0.0-beta.1</c>; <c>unknown</c> if absent.
     /// Computed once at class load — the value never changes at runtime, so this
     /// avoids reflecting on every export.</summary>
     private static readonly string SourceAraVersion = ComputeSourceAraVersion();
@@ -144,8 +144,8 @@ public sealed class ProfileShareService : IProfileShareService {
         var info = typeof(ProfileShareService).Assembly
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
         if (string.IsNullOrEmpty(info)) return "unknown";
-        var plus = info.IndexOf('+');
-        return plus >= 0 ? info[..plus] : info;
+        // The same rule as /server/info, so the export and the API agree.
+        return OpenAstroAra.Core.Utility.AraDisplayVersion.FromInformationalVersion(info, null);
     }
 
     // ─── §70.4 import (preview + commit) ───

@@ -8739,5 +8739,10 @@
   "clockWrongStartAnyway": "Start anyway",
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
+  },
+  "versionMismatchWarning": "Server {server} and app {app} differ; update both from the same release.",
+  "@versionMismatchWarning": {
+    "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",
+    "placeholders": {"server": {"type": "String"}, "app": {"type": "String"}}
   }
 }

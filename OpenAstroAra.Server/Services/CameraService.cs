@@ -1498,7 +1498,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // in a shared frame reveal where someone lives.
             var prefs = ReadHeaderPrefsBestEffort();
 
-            fits.SetHeader("SWCREATE", FrameAlbumFields.AraSoftware, "capture software");
+            // Name and display version (#2093), as the library FITS/XISF writers spell it; the album
+            // matches the name prefix (FrameAlbumFields.FromHeaders).
+            fits.SetHeader("SWCREATE", $"{FrameAlbumFields.AraSoftware} {OpenAstroAra.Core.Utility.CoreUtil.Version}", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != ManualCaptureTarget) {
                 fits.SetHeader("OBJECT", targetName!, "target name");
             }
