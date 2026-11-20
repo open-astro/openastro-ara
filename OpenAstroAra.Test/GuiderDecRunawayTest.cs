@@ -517,5 +517,39 @@ namespace OpenAstroAra.Test {
                 Assert.That(rig.Recovered, Has.Member(rig.RunawayFaults()[0]), "the first runaway fault is closed for the second");
             }
         }
+
+        // #1589 review — a paused guider's frames are not guiding: a Dec-limited growing streak sent while
+        // PHD2 is paused does not trip the watch.
+        [Test]
+        public async Task A_dec_limited_growing_streak_while_the_guider_is_paused_does_not_trip() {
+            using var rig = new Rig();
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.Paused()).ConfigureAwait(false);
+
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            AssertNoRunaway(rig, fake);
+        }
+
+        // #1589 review — a resume starts the streak afresh: frames before the pause and frames after the
+        // resume do not add up to a runaway.
+        [Test]
+        public async Task A_growing_streak_across_a_pause_and_resume_does_not_trip() {
+            using var rig = new Rig();
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+
+            for (var n = 1; n <= 5; n++) {
+                await StepAsync(rig, fake, dec: 0.5 * n, decMs: MaxPulseMs).ConfigureAwait(false);
+            }
+            await fake.BroadcastAsync(PhdEvents.Paused()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.Resumed()).ConfigureAwait(false);
+            for (var n = 6; n <= GuideAxisRunaway.Steps + 2; n++) {
+                await StepAsync(rig, fake, dec: 0.5 * n, decMs: MaxPulseMs).ConfigureAwait(false);
+            }
+
+            AssertNoRunaway(rig, fake);
+        }
     }
 }
