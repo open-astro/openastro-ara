@@ -19,6 +19,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,7 +37,7 @@ namespace OpenAstroAra.Test {
             var gate = new Mock<IMountClockGate>();
             gate.Setup(g => g.MountClockMotionRefusal()).Returns("Mount clock not verified: the rig clock has not been synced from the app or a GPS.");
             using var svc = new PolarAlignService(fake, NullLogger<PolarAlignService>.Instance, new ScriptedSolver(), mount.Object,
-                NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher(), mountClock: gate.Object);
+                MediatorMotionControl.For(mount.Object), NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher(), mountClock: gate.Object);
 
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None));
 

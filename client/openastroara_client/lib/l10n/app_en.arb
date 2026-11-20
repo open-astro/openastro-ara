@@ -8610,6 +8610,10 @@
   },
   "refusalPolarAlignOnAxis": "The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.",
   "@refusalPolarAlignOnAxis": {"description": "Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more"},
+  "refusalPolarAlignPointingUnknown": "Polar Align got no fresh reading of where the mount points. Check the mount's connection, then start again.",
+  "@refusalPolarAlignPointingUnknown": {"description": "Refusal (polar-align-pointing-unknown, #2066): polar alignment plans only from a reading of the mount taken now; none came, it was the (0, 0) placeholder, or it was more than 2 s old"},
+  "refusalPolarAlignPoseAmbiguous": "The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.",
+  "@refusalPolarAlignPoseAmbiguous": {"description": "Refusal (polar-align-pose-ambiguous, #2066): the mount reads a declination beyond ±90° (its Dec axis over the pole, e.g. after a sync), so which side of the pier it is on is ambiguous; polar alignment moves nothing"},
   "actionConfirmFlip": "confirm the meridian flip",
   "@actionConfirmFlip": {
     "description": "Error message tail after \"Couldn't \" (friendlyError action); lower-case verb phrase, no period"
