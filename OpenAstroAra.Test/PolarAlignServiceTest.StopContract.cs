@@ -159,6 +159,49 @@ namespace OpenAstroAra.Test {
             Assert.That(RaTurns(mount), Is.Empty, "no turn after the Stop Mount. " + mount.Describe());
         }
 
+        // The same resend, but the count moves by more than Polar Align can read one by one (OwnAbortsReadable, 16) while it
+        // is on its way. Even when every one of those counts is tagged polar_align, none is taken as Polar Align's own: a
+        // stop from outside then ends the run, never the other way round.
+        [Test]
+        public async Task A_send_that_moves_the_count_past_what_it_can_read_counts_none_as_own_and_the_next_run_ends() {
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0);
+            mount.MoveAxisRefused = true; // the first run fails at its first turn
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            svc.StopResendAfter = TimeSpan.FromSeconds(1); // the old exit resends after the next Start was called
+            svc.StopVerifyNotBefore = TimeSpan.FromSeconds(3);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var watch = Stopwatch.StartNew();
+            while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
+                Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
+                await Task.Delay(5).ConfigureAwait(false);
+            }
+            mount.MoveAxisRefused = false;
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+
+            var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None);
+            var burst = 0;
+            mount.RefuseAbort = reason => {
+                if (reason != PolarAlignService.AbortReason || Interlocked.Exchange(ref burst, 1) == 1) {
+                    return false;
+                }
+                for (var i = 0; i < 17; i++) {
+                    mount.FenceMotion(PolarAlignService.AbortReason); // 17 counts, then the send's own: 18 in one send
+                }
+                return false;
+            };
+            await start.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var mark = Mark(svc);
+            var status = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(Volatile.Read(ref burst), Is.EqualTo(1), "the old exit resent its stop after the Start was called");
+            Assert.That(status.State, Is.EqualTo("failed"), mount.Describe());
+            var error = ws.Events.Skip(mark).First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(RaTurns(mount), Is.Empty, "no turn after a send whose counts could not be read. " + mount.Describe());
+        }
+
         // ── a takeover that gives up waiting fences the run ──────────────────────────────────
 
         // The user's Stop waits for a run stuck in a call that ignores cancellation; the safety park's first step (bounded at
