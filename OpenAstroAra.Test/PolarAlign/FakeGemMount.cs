@@ -615,14 +615,14 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// the mount's own.</summary>
         public PierSide? ReportedSideOverride { get; set; }
 
-        /// <summary>#2067 — the position and the pier side, no Slewing (a turn's poll). Counted as a position read.</summary>
+        /// <summary>#2067 — the position and the pier side, no Slewing (a turn's poll). Counted on its own.</summary>
         public Task<MountReading?> ReadPoseNowAsync(CancellationToken ct) {
             OnPoseRead?.Invoke();
             TakeFreshReadTime();
             lock (_lock) {
                 IntegrateLocked();
                 if (TrulyMovingLocked()) {
-                    _positionReadsWhileMoving++;
+                    _poseReadsWhileMoving++;
                 }
                 return Task.FromResult(ReadLocked(readSlewing: false, readSide: true));
             }
@@ -636,18 +636,20 @@ namespace OpenAstroAra.Test.PolarAlign {
         public double? MatchMoveAxisRate(int axis, double requested) =>
             AxisRateBands is null ? requested : TelescopeService.MatchMoveAxisRateAtOrBelow(requested, AxisRateBands);
 
-        /// <summary>#2066 — how often <see cref="ReadNowAsync"/> (position, Slewing and pier side) and
-        /// <see cref="ReadPositionNowAsync"/> were called while a motor or a GoTo truly moved the mount.</summary>
-        public (int Full, int PositionOnly) FreshReadsWhileMoving {
+        /// <summary>#2066 — how often <see cref="ReadNowAsync"/> (position, Slewing and pier side),
+        /// <see cref="ReadPositionNowAsync"/> and (#2067) <see cref="ReadPoseNowAsync"/> (position and pier side) were called
+        /// while a motor or a GoTo truly moved the mount.</summary>
+        public (int Full, int PositionOnly, int Pose) FreshReadsWhileMoving {
             get {
                 lock (_lock) {
-                    return (_fullReadsWhileMoving, _positionReadsWhileMoving);
+                    return (_fullReadsWhileMoving, _positionReadsWhileMoving, _poseReadsWhileMoving);
                 }
             }
         }
 
         private int _fullReadsWhileMoving;
         private int _positionReadsWhileMoving;
+        private int _poseReadsWhileMoving;
 
         private MountReading? ReadLocked(bool readSlewing, bool readSide) {
             if (FreshReadFailsLocked()) {

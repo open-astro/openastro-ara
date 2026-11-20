@@ -253,9 +253,10 @@ namespace OpenAstroAra.Test {
         // ── the turn's poll ──────────────────────────────────────────────────────────────────
 
         [Test]
-        public async Task A_turn_polls_the_mount_with_the_position_only_read() {
-            // Slewing and the pier side are two driver round trips more per poll that the turn never uses: a longer poll
-            // can skip the last 3° slow zone and stop the motor further past the target.
+        public async Task A_turn_polls_the_mount_with_the_pose_read_never_the_Slewing_read() {
+            // #2067 — every poll reads the position and the pier side (a pier side that changes mid-turn stops it), never
+            // Slewing: one driver round trip more per poll that the turn never uses, and a longer poll can skip the last 3°
+            // slow zone and stop the motor further past the target.
             var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
@@ -265,8 +266,9 @@ namespace OpenAstroAra.Test {
 
             Assert.That(RaTurns(mount), Has.Length.EqualTo(2), mount.Describe());
             var reads = mount.FreshReadsWhileMoving;
-            Assert.That(reads.PositionOnly, Is.GreaterThan(0), "the turns' polls");
-            Assert.That(reads.Full, Is.Zero, "no Slewing or pier-side read while a turn runs");
+            Assert.That(reads.Pose, Is.GreaterThan(0), "the turns' polls read the position and the pier side");
+            Assert.That(reads.PositionOnly, Is.Zero, "never a position-only poll: it has no pier side to check");
+            Assert.That(reads.Full, Is.Zero, "no Slewing read while a turn runs");
         }
 
         // ── the cache ────────────────────────────────────────────────────────────────────────
