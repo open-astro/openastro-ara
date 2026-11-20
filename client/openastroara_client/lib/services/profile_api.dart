@@ -594,6 +594,34 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('site', siteSettingsToJson(v), _siteFromRig, ifMatch);
 
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
+      _getTagged('safety', _safetyFromRig);
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies v, {
+    String? ifMatch,
+  }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
+
+  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
+  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
+  /// executor ever confirms a flip). Answers the rig's policies with their new
+  /// tag (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profile/safety/first-flip/rearm',
+    );
+    return (
+      value: _safetyFromRig(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
+      _getTagged('phd2', _phd2FromRig);
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) => _putTagged('phd2', phd2SettingsToJson(v), _phd2FromRig, ifMatch);
+
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
@@ -817,6 +845,115 @@ class ProfileApi {
     permanentPier: j['permanent_pier'] as bool,
   );
 
+  // Strict like the readers above: a missing key, or an action the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (pause and park, auto flip on), which a Save would then write over
+  // the rig's unattended running rules. The guider mode of a profile from
+  // before the mode and a blank unattended window come as null, but their keys
+  // are there.
+  static SafetyPolicies _safetyFromRig(Map<String, dynamic> j) {
+    E pick<E>(List<E> values, String Function(E) wire, String key) {
+      final raw = j[key];
+      return values.firstWhere(
+        (v) => wire(v) == raw,
+        orElse: () => throw FormatException('unknown $key', raw),
+      );
+    }
+
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final recal = nullable('meridian_guider_recal');
+    return SafetyPolicies(
+      onUnsafe: pick(UnsafeAction.values, _unsafeActionToString, 'on_unsafe'),
+      autoResumeWhenSafe: j['auto_resume_when_safe'] as bool,
+      resumeDelayMin: (j['resume_delay_min'] as num).toInt(),
+      meridianFlipAuto: j['meridian_flip_auto'] as bool,
+      meridianPauseMin: (j['meridian_pause_min'] as num).toInt(),
+      meridianRecenter: j['meridian_recenter'] as bool,
+      meridianRecalGuider: j['meridian_recal_guider'] as bool,
+      meridianRefocus: pick(
+        MeridianRefocusMode.values,
+        _meridianRefocusToString,
+        'meridian_refocus',
+      ),
+      meridianRefocusTempThresholdC:
+          (j['meridian_refocus_temp_threshold_c'] as num).toDouble(),
+      meridianGuiderRecal: recal == null
+          ? null
+          : pick<GuiderRecalMode>(
+              GuiderRecalMode.values,
+              _guiderRecalToString,
+              'meridian_guider_recal',
+            ),
+      unattendedWindowStart:
+          (nullable('unattended_window_start') as String?) ?? '',
+      unattendedWindowEnd: (nullable('unattended_window_end') as String?) ?? '',
+      onAltitudeLimit: pick(
+        AltitudeLimitAction.values,
+        _altitudeLimitActionToString,
+        'on_altitude_limit',
+      ),
+      parkIfNoMoreTargets: j['park_if_no_more_targets'] as bool,
+      onGuiderLost: pick(
+        GuiderLostAction.values,
+        _guiderLostActionToString,
+        'on_guider_lost',
+      ),
+      guiderRetryTimeoutSec: (j['guider_retry_timeout_sec'] as num).toInt(),
+      skipTargetIfRecoveryFails: j['skip_target_if_recovery_fails'] as bool,
+      // The lenient reader takes any case here; so does this one.
+      onDiskSpaceCritical: DiskSpaceCriticalAction.values.firstWhere(
+        (a) => a.name == (j['on_disk_space_critical'] as String).toLowerCase(),
+        orElse: () => throw FormatException(
+          'unknown on_disk_space_critical',
+          j['on_disk_space_critical'],
+        ),
+      ),
+      flipSafetyEnabled: j['flip_safety_enabled'] as bool,
+      expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
+      firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      unattendedEscalation: j['unattended_escalation'] as bool,
+      unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
+      unattendedShutdownWaitMinutes:
+          (j['unattended_shutdown_wait_minutes'] as num).toInt(),
+      calibrationCaptureDefault: pick(
+        CalibrationCaptureDefault.values,
+        _calibrationCaptureDefaultToString,
+        'calibration_capture_default',
+      ),
+      weatherTriggersEnabled: j['weather_triggers_enabled'] as bool,
+      maxWindKmh: (j['max_wind_kmh'] as num).toInt(),
+      maxHumidityPct: (j['max_humidity_pct'] as num).toInt(),
+      minDewDeltaC: (j['min_dew_delta_c'] as num).toDouble(),
+      flatTargetAdu: (j['flat_target_adu'] as num).toInt(),
+      flatTargetPercent: (j['flat_target_percent'] as num).toDouble(),
+      flatTargetAduTolerancePct: (j['flat_target_adu_tolerance_pct'] as num)
+          .toDouble(),
+      flatFramesPerFilter: (j['flat_frames_per_filter'] as num).toInt(),
+      postFlatParkMount: j['post_flat_park_mount'] as bool,
+      skyFlatTargetAdu: (j['sky_flat_target_adu'] as num).toInt(),
+      skyFlatFramesPerFilter: (j['sky_flat_frames_per_filter'] as num).toInt(),
+      skyFlatTargetAzimuth: (j['sky_flat_target_azimuth'] as num).toDouble(),
+      skyFlatTargetAltitude: (j['sky_flat_target_altitude'] as num).toDouble(),
+      skyFlatStopAtMaxAdu: (j['sky_flat_stop_at_max_adu'] as num).toDouble(),
+      skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
+      skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
+      unmodeled: _safetyUnmodeled(j),
+    );
+  }
+
+  /// Every safety key the client has a field for.
+  static final Set<String> _safetyModeledKeys = safetyPoliciesToJson(
+    const SafetyPolicies(),
+  ).keys.toSet();
+
+  /// The keys of a safety reply the client has no field for, as served, so a
+  /// Save sends them back unchanged (SafetyPolicies.unmodeled).
+  static Map<String, Object?> _safetyUnmodeled(Map<String, dynamic> j) => {
+    for (final e in j.entries)
+      if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
+  };
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -856,16 +993,6 @@ class ProfileApi {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
       data: safetyPoliciesToJson(value),
-    );
-    return safetyPoliciesFromJson(res.data ?? const {});
-  }
-
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Returns the updated policies.
-  Future<SafetyPolicies> rearmFirstFlip() async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
     );
     return safetyPoliciesFromJson(res.data ?? const {});
   }
@@ -1244,6 +1371,53 @@ class ProfileApi {
     guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
   );
 
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as the client's own default (localhost, dither every frame, no
+  // guide camera), which a Save would then write over the rig's guider
+  // settings. The Dec minimum move of a profile from before the split and an
+  // Automatic guider profile come as null, but their keys are there.
+  static Phd2Settings _phd2FromRig(Map<String, dynamic> j) {
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final decMinimumMove = nullable('dec_minimum_move') as num?;
+    final profileId = nullable('phd2_profile_id') as num?;
+    return Phd2Settings(
+      host: j['host'] as String,
+      port: (j['port'] as num).toInt(),
+      phd2Profile: j['phd2_profile'] as String,
+      ditherEnabled: j['dither_enabled'] as bool,
+      ditherEveryNFrames: (j['dither_every_n_frames'] as num).toInt(),
+      ditherPixels: (j['dither_pixels'] as num).toDouble(),
+      settlePixels: (j['settle_pixels'] as num).toDouble(),
+      settleTimeSec: (j['settle_time_sec'] as num).toInt(),
+      settleTimeoutSec: (j['settle_timeout_sec'] as num).toInt(),
+      forceCalibrationEachSession: j['force_calibration_each_session'] as bool,
+      guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
+        j['guider_setup_type'] as String,
+      ),
+      guideFocalLength: (j['guide_focal_length'] as num).toInt(),
+      guidePixelSize: (j['guide_pixel_size'] as num).toDouble(),
+      raAggressiveness: (j['ra_aggressiveness'] as num).toDouble(),
+      decAggressiveness: (j['dec_aggressiveness'] as num).toDouble(),
+      minimumMove: (j['minimum_move'] as num).toDouble(),
+      decMinimumMove: (decMinimumMove ?? j['minimum_move'] as num).toDouble(),
+      decGuideMode: j['dec_guide_mode'] as String,
+      guiderCamera: j['guider_camera'] as String,
+      guiderCameraId: j['guider_camera_id'] as String,
+      guiderCameraAlpacaUniqueId: j['guider_camera_alpaca_unique_id'] as String,
+      guiderMount: j['guider_mount'] as String,
+      guiderAuxMount: j['guider_aux_mount'] as String,
+      guiderRotator: j['guider_rotator'] as String,
+      guiderAlpacaHost: j['guider_alpaca_host'] as String,
+      guiderAlpacaPort: (j['guider_alpaca_port'] as num).toInt(),
+      guideExposureMinMs: (j['guide_exposure_min_ms'] as num).toInt(),
+      guideExposureMaxMs: (j['guide_exposure_max_ms'] as num).toInt(),
+      guideExposureMs: (j['guide_exposure_ms'] as num).toInt(),
+      guideCameraGain: (j['guide_camera_gain'] as num).toInt(),
+      guiderProfileId: profileId?.toInt() ?? 0,
+    );
+  }
+
   /// The guider settings as sent on PUT (also how the guider panel tells a
   /// real edit from a write that changes nothing).
   static Map<String, dynamic> phd2SettingsToJson(Phd2Settings v) => {
@@ -1508,10 +1682,11 @@ class ProfileApi {
         (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
     skyFlatSunAltitude:
         (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
+    unmodeled: _safetyUnmodeled(j),
   );
 
-  @visibleForTesting
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
+    ...v.unmodeled,
     'on_unsafe': _unsafeActionToString(v.onUnsafe),
     'auto_resume_when_safe': v.autoResumeWhenSafe,
     'resume_delay_min': v.resumeDelayMin,

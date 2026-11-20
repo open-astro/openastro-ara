@@ -28,6 +28,7 @@ import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
@@ -125,7 +126,10 @@ class _Clock extends MonitorClock {
 
 class _Policies extends SafetyPoliciesNotifier {
   @override
-  SafetyPolicies build() => const SafetyPolicies(weatherTriggersEnabled: true);
+  LoadedSection<SafetyPolicies> build() => const LoadedSection(
+    value: SafetyPolicies(weatherTriggersEnabled: true),
+    source: SectionSource.rig,
+  );
 }
 
 class _Link extends Notifier<bool> {

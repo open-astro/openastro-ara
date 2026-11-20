@@ -109,7 +109,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // Charge the night's REAL overheads from the user's own settings, so the
     // sub counts describe a session with dithering, guiding settles, plate
     // solving and autofocus in it — not an idealized shutter-open number.
-    final phd2 = ref.read(phd2SettingsProvider);
+    final phd2 = ref.read(phd2SettingsProvider).value ?? const Phd2Settings();
     final af =
         ref.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
     final overheads = SessionOverheads(

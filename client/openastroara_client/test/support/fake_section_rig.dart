@@ -34,6 +34,12 @@ class FakeSectionRig implements HttpClientAdapter {
   /// Every write that landed, in order.
   final List<LandedPut> puts = [];
 
+  /// A POST path under the profile -> the section it writes and the change it
+  /// makes there (the safety first-flip re-arm). The copy and its tag move,
+  /// and the answer carries the new copy with its tag, as the daemon's does.
+  final Map<String, ({String section, Object? Function(Object? copy) change})>
+  actions = {};
+
   /// Every `If-Match` sent with a PUT (null when none), landed or refused.
   final List<String?> ifMatches = [];
 
@@ -73,6 +79,12 @@ class FakeSectionRig implements HttpClientAdapter {
     final section = options.path.startsWith(_prefix)
         ? options.path.substring(_prefix.length)
         : options.path;
+    if (options.method.toUpperCase() == 'POST' && actions[section] != null) {
+      final a = actions[section]!;
+      _sections[a.section] = a.change(_sections[a.section]);
+      savedElsewhere(a.section);
+      return _json(_sections[a.section], 200, etag: etagOf(a.section));
+    }
     if (!_sections.containsKey(section)) {
       return _json({'title': 'no such section'}, 404);
     }
@@ -203,6 +215,41 @@ const rigDefaults = <String, Map<String, Object?>>{
     'aperture_mm': 0,
     'telescope_name': '',
   },
+  // The daemon sends null for a profile's Dec minimum move from before the
+  // split and for an Automatic guider profile; the keys are there.
+  'phd2': {
+    'host': 'localhost',
+    'port': 4400,
+    'phd2_profile': 'Default',
+    'dither_enabled': true,
+    'dither_every_n_frames': 1,
+    'dither_pixels': 5.0,
+    'settle_pixels': 1.5,
+    'settle_time_sec': 10,
+    'settle_timeout_sec': 60,
+    'force_calibration_each_session': false,
+    'guide_focal_length': 0,
+    'guide_pixel_size': 0.0,
+    'ra_aggressiveness': 0.7,
+    'dec_aggressiveness': 0.7,
+    'minimum_move': 0.15,
+    'dec_guide_mode': 'auto',
+    'guider_camera': '',
+    'guider_camera_id': '',
+    'guider_camera_alpaca_unique_id': '',
+    'guider_mount': '',
+    'guider_aux_mount': '',
+    'guider_rotator': '',
+    'guider_alpaca_host': '',
+    'guider_alpaca_port': 0,
+    'guider_setup_type': 'guide_scope',
+    'guide_exposure_min_ms': 1000,
+    'guide_exposure_max_ms': 6000,
+    'guide_exposure_ms': 0,
+    'dec_minimum_move': null,
+    'guide_camera_gain': 50,
+    'phd2_profile_id': null,
+  },
   'plate-solve': {
     'engine': 'astap',
     'path_or_endpoint': '/opt/openastroara/astap_cli',
@@ -215,6 +262,58 @@ const rigDefaults = <String, Map<String, Object?>>{
     'sync_to_coordinates': true,
     'max_iterations': 5,
     'convergence_tolerance_arcsec': 60,
+  },
+  // The daemon sends null for a profile's unset guider mode and a blank
+  // unattended window; the keys are there.
+  'safety': {
+    'on_unsafe': 'pause_and_park',
+    'auto_resume_when_safe': true,
+    'resume_delay_min': 10,
+    'meridian_flip_auto': true,
+    'meridian_pause_min': 5,
+    'meridian_recenter': true,
+    'meridian_recal_guider': true,
+    'meridian_refocus': 'if_temp_drifted',
+    'meridian_refocus_temp_threshold_c': 2.0,
+    'meridian_guider_recal': null,
+    'unattended_window_start': null,
+    'unattended_window_end': null,
+    'on_altitude_limit': 'skip_target',
+    'park_if_no_more_targets': true,
+    'on_guider_lost': 'pause_and_retry',
+    'guider_retry_timeout_sec': 60,
+    'skip_target_if_recovery_fails': true,
+    'on_disk_space_critical': 'warn',
+    'flip_safety_enabled': true,
+    'expected_flip_slew_seconds': 90,
+    'first_flip_confirmed': false,
+    'unattended_escalation': true,
+    'unattended_shutdown_enabled': true,
+    'unattended_shutdown_wait_minutes': 30,
+    'calibration_capture_default': 'ask',
+    'weather_triggers_enabled': false,
+    'max_wind_kmh': 36,
+    'max_humidity_pct': 85,
+    'min_dew_delta_c': 2.0,
+    'flat_target_adu': 30000,
+    'flat_target_percent': 50.0,
+    'flat_target_adu_tolerance_pct': 5.0,
+    'flat_frames_per_filter': 30,
+    'post_flat_park_mount': false,
+    'sky_flat_target_adu': 25000,
+    'sky_flat_frames_per_filter': 20,
+    'sky_flat_target_azimuth': 90.0,
+    'sky_flat_target_altitude': 75.0,
+    'sky_flat_stop_at_max_adu': 50000.0,
+    'sky_flat_stop_at_min_adu': 5000.0,
+    'sky_flat_sun_altitude': -9.0,
+    // The daemon's fault policies, which the client neither reads nor edits
+    // (kept as served and sent back on a Save).
+    'hot_reconnect_enabled': true,
+    'on_camera_lost': 'reconnect_then_pause',
+    'on_mount_lost': 'reconnect_then_abort_park',
+    'on_tracking_lost': 'reenable_then_pause',
+    'switch_value_tolerance_pct': 5.0,
   },
   'site': {
     'site_name': 'Backyard',

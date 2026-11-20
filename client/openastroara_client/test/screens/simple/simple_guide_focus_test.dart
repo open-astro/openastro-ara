@@ -9,6 +9,8 @@ import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
+import '../../support/phd2_section.dart';
+
 class _Guider extends GuiderStatusNotifier {
   _Guider(this.state0);
   final String state0;
@@ -58,6 +60,8 @@ Future<void> _pump(WidgetTester tester,
     guideFocusProvider.overrideWith(() => _g),
     guiderStatusProvider.overrideWith(() => _Guider(guider)),
     autofocusLiveProvider.overrideWith(() => _af),
+    // The guider settings as the rig's copy (ADR 0015).
+    phd2FromRig(),
   ]);
   addTearDown(_c.dispose);
   if (oag) _c.read(phd2SettingsProvider.notifier).setGuiderSetupType('oag');

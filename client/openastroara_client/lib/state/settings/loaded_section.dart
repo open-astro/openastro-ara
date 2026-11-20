@@ -107,8 +107,39 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     }
   }
 
-  /// Same as [load], for the live-sync table.
+  /// Same as [load], for a screen that reads the rig's copy again.
   Future<void> hydrateFromServer(ProfileApi api) => load(api);
+
+  /// Live sync (`profile.updated`): after any save in flight lands, fetch the
+  /// rig's copy and take it only when its tag differs from the one held here.
+  /// The announcement of this device's own save then changes nothing (edits
+  /// made since stay), while a write by the daemon or another device in the
+  /// same moments still lands. A save started while the fetch ran answers
+  /// with the newer tag itself, so the fetched copy is dropped.
+  Future<void> syncFromServer(ProfileApi api) async {
+    await (_saveChain ?? Future<void>.value()).catchError((Object _) {});
+    if (!ref.mounted) return;
+    final gen = _generation;
+    final chain = _saveChain;
+    try {
+      final r = await fetch(api);
+      if (!ref.mounted || gen != _generation || !identical(chain, _saveChain)) {
+        return;
+      }
+      if (state.canSave && r.etag != null && r.etag == state.etag) return;
+      _generation++;
+      _held = r.value;
+      state = LoadedSection(
+        value: r.value,
+        source: SectionSource.rig,
+        etag: r.etag,
+      );
+    } catch (e) {
+      if (ref.mounted && gen == _generation) {
+        state = state.copyWith(lastFailure: e);
+      }
+    }
+  }
 
   /// Apply an edit; ignored unless the value came from the rig. An offline
   /// cache seed is read-only: an edit on it would be replaced by the retry-load
@@ -181,6 +212,14 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
     }
   }
 
+  /// The rig's copy for a dialog that forks a draft from it (the guider's
+  /// Tune Guiding and setup wizard), never an unsaved edit: loaded once more
+  /// first when it isn't in, as [save] does; null when that fails too.
+  Future<T?> rigCopy() async {
+    if (!state.canSave) await _loadOnce();
+    return state.canSave ? (_held ?? state.value) : null;
+  }
+
   /// One switch beside a form (the permanent pier next to the site fields):
   /// save [change] applied to the rig's copy alone, so edits not saved yet are
   /// not sent, then apply it to the shown value too, which keeps those edits.
@@ -209,6 +248,55 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
           value: identical(shown, held) ? r.value : change(shown),
           source: SectionSource.rig,
           etag: r.etag,
+        );
+      }
+    });
+    _saveChain = run;
+    return run;
+  }
+
+  /// A rig action that writes the section by a route of its own (the safety
+  /// first-flip re-arm) and answers the rig's new copy with its tag. Runs after
+  /// a save in flight; loaded once more first when not in, refused with
+  /// nothing sent when that fails. [apply] puts the action's change on the
+  /// shown copy, so edits not saved yet stay. The answered tag is kept only
+  /// when [onlyAction] finds the rig's new copy is the one loaded here with
+  /// that change; otherwise another device saved in between, so the old tag
+  /// stays and the conflict is flagged: the next Save is refused as stale
+  /// instead of writing over that copy.
+  Future<void> actOnRig(
+    Future<Tagged<T>> Function(ProfileApi api) action, {
+    required T Function(T shown, T rig) apply,
+    required bool Function(T loaded, T rig) onlyAction,
+  }) async {
+    if (!state.canSave) await _loadOnce();
+    if (!state.canSave) throw SectionNotLoadedException(state.lastFailure);
+    final api = _activeApi();
+    final previous = (_saveChain ?? Future<void>.value()).catchError(
+      (Object _) {},
+    );
+    final run = previous.then((_) async {
+      final held = _held ?? state.value;
+      if (held == null || !state.canSave) {
+        throw SectionNotLoadedException(state.lastFailure);
+      }
+      final gen = _generation;
+      final r = await action(api);
+      if (!ref.mounted || gen != _generation) return;
+      final shown = state.value as T;
+      if (onlyAction(held, r.value)) {
+        _held = r.value;
+        state = LoadedSection(
+          value: identical(shown, held) ? r.value : apply(shown, r.value),
+          source: SectionSource.rig,
+          etag: r.etag,
+        );
+      } else {
+        state = LoadedSection(
+          value: apply(shown, r.value),
+          source: SectionSource.rig,
+          etag: state.etag,
+          conflict: true,
         );
       }
     });
