@@ -1,13 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../models/guider_pick.dart';
 import '../../services/profile_api.dart';
 import '../guider/guider_choice_state.dart' show applyGuiderPick;
 
-/// §63 OpenAstro Guider settings. Phase 12h.6k wires the daemon round-trip
-/// via [ProfileApi] (`/api/v1/profile/phd2`). The §35 meridian-flip
+/// §63 OpenAstro Guider settings. Backed by the daemon's `GET`/`PUT
+/// /api/v1/profile/phd2` section through the section module
+/// (loaded_section.dart): the rig's copy, loaded before it is saved. The §35 meridian-flip
 /// re-cal-guider policy lives in `safetyPoliciesProvider` (crosses the
 /// §35/§63 boundary, belongs with the rest of meridian behavior).
 
@@ -200,18 +201,19 @@ class Phd2Settings {
       );
 }
 
-class Phd2SettingsNotifier extends Notifier<Phd2Settings>
-    with SettingsSyncMixin<Phd2Settings> {
-  @override
-  Phd2Settings build() => const Phd2Settings();
-
+/// ADR 0015 — a value only once the rig has answered. Loads itself: Simple
+/// Mode's guider rows, the Live tab's guiding strip and the planners read it
+/// with no Settings panel open first. The daemon's own writes (the guide
+/// camera's pixel size and train on connect, a Guiding Assistant Apply) reach
+/// it as `profile.updated`.
+class Phd2SettingsNotifier extends SelfLoadingSection<Phd2Settings> {
   /// Writes a Guide Camera pick (ADR 0013 rule 4): see [applyGuiderPick].
-  void applyPick(GuiderPick pick) => state = applyGuiderPick(state, pick);
+  void applyPick(GuiderPick pick) => edit((c) => applyGuiderPick(c, pick));
 
   void setHost(String s) {
     final v = s.trim();
     if (v.isEmpty) return;
-    state = state.copyWith(host: v);
+    edit((c) => c.copyWith(host: v));
   }
 
   void setPort(int v) {
@@ -219,44 +221,44 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
     // is 4400; non-default deployments may rebind to other unprivileged
     // ports.
     if (v < 1024 || v > 65535) return;
-    state = state.copyWith(port: v);
+    edit((c) => c.copyWith(port: v));
   }
 
   /// The guider profile to select on connect; 0 = Automatic.
   void setGuiderProfileId(int v) {
     if (v < 0) return;
-    state = state.copyWith(guiderProfileId: v);
+    edit((c) => c.copyWith(guiderProfileId: v));
   }
 
-  void setDitherEnabled(bool v) => state = state.copyWith(ditherEnabled: v);
+  void setDitherEnabled(bool v) => edit((c) => c.copyWith(ditherEnabled: v));
 
   void setDitherEveryNFrames(int v) {
     if (v < 1) return;
-    state = state.copyWith(ditherEveryNFrames: v);
+    edit((c) => c.copyWith(ditherEveryNFrames: v));
   }
 
   void setDitherPixels(double v) {
     if (v < 0) return;
-    state = state.copyWith(ditherPixels: v);
+    edit((c) => c.copyWith(ditherPixels: v));
   }
 
   void setSettlePixels(double v) {
     if (v < 0) return;
-    state = state.copyWith(settlePixels: v);
+    edit((c) => c.copyWith(settlePixels: v));
   }
 
   void setSettleTimeSec(int v) {
     if (v < 0) return;
-    state = state.copyWith(settleTimeSec: v);
+    edit((c) => c.copyWith(settleTimeSec: v));
   }
 
   void setSettleTimeoutSec(int v) {
     if (v < 1) return;
-    state = state.copyWith(settleTimeoutSec: v);
+    edit((c) => c.copyWith(settleTimeoutSec: v));
   }
 
   void setForceCalibrationEachSession(bool v) =>
-      state = state.copyWith(forceCalibrationEachSession: v);
+      edit((c) => c.copyWith(forceCalibrationEachSession: v));
 
   // §63.5 — guider-engine config. Ranges mirror the server's ApplyPhd2 normalization
   // (aggressiveness ∈ [0,1], non-negative focal/pixel/min-move, dec-mode in the known set).
@@ -281,12 +283,11 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
   /// scope, and a guide scope would keep it as if it were its own (#1715).
   void setGuiderSetupType(String v) {
     final norm = normalizeGuiderSetupType(v);
-    final leavingOag = state.guiderSetupType == 'oag' && norm != 'oag';
-    state = state.copyWith(
+    edit((c) => c.copyWith(
       guiderSetupType: norm,
-      guiderRotator: norm == 'oag' ? state.guiderRotator : '',
-      guideFocalLength: leavingOag ? 0 : null,
-    );
+      guiderRotator: norm == 'oag' ? c.guiderRotator : '',
+      guideFocalLength: c.guiderSetupType == 'oag' && norm != 'oag' ? 0 : null,
+    ));
   }
 
   /// True when the guide camera turns with the imaging rotator — the only
@@ -296,96 +297,96 @@ class Phd2SettingsNotifier extends Notifier<Phd2Settings>
 
   void setGuideFocalLength(int v) {
     if (v < 0) return;
-    state = state.copyWith(guideFocalLength: v);
+    edit((c) => c.copyWith(guideFocalLength: v));
   }
 
   void setGuidePixelSize(double v) {
     if (v < 0) return;
-    state = state.copyWith(guidePixelSize: v);
+    edit((c) => c.copyWith(guidePixelSize: v));
   }
 
   void setRaAggressiveness(double v) {
     if (v < 0 || v > 1) return;
-    state = state.copyWith(raAggressiveness: v);
+    edit((c) => c.copyWith(raAggressiveness: v));
   }
 
   void setDecAggressiveness(double v) {
     if (v < 0 || v > 1) return;
-    state = state.copyWith(decAggressiveness: v);
+    edit((c) => c.copyWith(decAggressiveness: v));
   }
 
   void setMinimumMove(double v) {
     if (v < 0) return;
-    state = state.copyWith(minimumMove: v);
+    edit((c) => c.copyWith(minimumMove: v));
   }
 
   void setDecMinimumMove(double v) {
     if (v < 0) return;
-    state = state.copyWith(decMinimumMove: v);
+    edit((c) => c.copyWith(decMinimumMove: v));
   }
 
   void setDecGuideMode(String v) {
     final m = v.trim().toLowerCase();
     if (!decGuideModes.contains(m)) return;
-    state = state.copyWith(decGuideMode: m);
+    edit((c) => c.copyWith(decGuideMode: m));
   }
 
   /// Guide exposure in ms; 0 = unset (leave the guider's own). Negative is
   /// rejected, mirroring the server's floor.
   void setGuideExposureMs(int v) {
     if (v < 0) return;
-    state = state.copyWith(guideExposureMs: v);
+    edit((c) => c.copyWith(guideExposureMs: v));
   }
 
   /// Guide camera gain, 0..100 % of the camera's range (the guider's own
   /// scale); anything outside is rejected, mirroring the server's 400.
   void setGuideCameraGain(int v) {
     if (v < 0 || v > 100) return;
-    state = state.copyWith(guideCameraGain: v);
+    edit((c) => c.copyWith(guideCameraGain: v));
   }
 
   // §63.17 — guider equipment selection. "" / 0 mean unset (the daemon keeps
   // its own selection), so empty values are ACCEPTED here — trimming only.
 
   void setGuiderCamera(String s) =>
-      state = state.copyWith(guiderCamera: s.trim());
+      edit((c) => c.copyWith(guiderCamera: s.trim()));
 
   void setGuiderCameraId(String s) =>
-      state = state.copyWith(guiderCameraId: s.trim());
+      edit((c) => c.copyWith(guiderCameraId: s.trim()));
 
   void setGuiderCameraAlpacaUniqueId(String s) =>
-      state = state.copyWith(guiderCameraAlpacaUniqueId: s.trim());
+      edit((c) => c.copyWith(guiderCameraAlpacaUniqueId: s.trim()));
 
-  void setGuiderMount(String s) => state = state.copyWith(guiderMount: s.trim());
+  void setGuiderMount(String s) => edit((c) => c.copyWith(guiderMount: s.trim()));
 
   void setGuiderAuxMount(String s) =>
-      state = state.copyWith(guiderAuxMount: s.trim());
+      edit((c) => c.copyWith(guiderAuxMount: s.trim()));
 
   void setGuiderRotator(String s) =>
-      state = state.copyWith(guiderRotator: s.trim());
+      edit((c) => c.copyWith(guiderRotator: s.trim()));
 
   void setGuiderAlpacaHost(String s) =>
-      state = state.copyWith(guiderAlpacaHost: s.trim());
+      edit((c) => c.copyWith(guiderAlpacaHost: s.trim()));
 
   void setGuiderAlpacaPort(int v) {
     // 0 = unset; otherwise any valid TCP port (Alpaca commonly uses 11111 but
     // simulators bind wherever).
     if (v < 0 || v > 65535) return;
-    state = state.copyWith(guiderAlpacaPort: v);
+    edit((c) => c.copyWith(guiderAlpacaPort: v));
   }
 
-  // No hydrate memo here: shared state must always be safe to re-hydrate.
-  // Transient surfaces (the §63.18 tune dialog) keep their in-progress edits
-  // in a LOCAL draft and only write here on Apply, so a hydrate from any
-  // caller (Settings → Guider, the sequencer's planning hydrate) can never
-  // clobber an unapplied edit — there are none in this provider by design.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getPhd2Settings());
+  @override
+  Future<Tagged<Phd2Settings>> fetch(ProfileApi api) => api.getPhd2Section();
 
-  Future<Phd2Settings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putPhd2Settings(sent));
+  @override
+  Future<Tagged<Phd2Settings>> send(
+    ProfileApi api,
+    Phd2Settings value,
+    String? etag,
+  ) => api.putPhd2Section(value, ifMatch: etag);
 }
 
 final phd2SettingsProvider =
-    NotifierProvider<Phd2SettingsNotifier, Phd2Settings>(
-        Phd2SettingsNotifier.new);
+    NotifierProvider<Phd2SettingsNotifier, LoadedSection<Phd2Settings>>(
+      Phd2SettingsNotifier.new,
+    );

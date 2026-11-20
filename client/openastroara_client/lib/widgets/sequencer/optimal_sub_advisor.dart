@@ -378,7 +378,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           if (unguidedCeilingLine(
                 guided: guiderConfigured(
                   ref.watch(guiderStatusProvider).asData?.value,
-                  ref.watch(phd2SettingsProvider),
+                  ref.watch(phd2SettingsProvider).value ??
+                      const Phd2Settings(),
                 ),
                 calibration:
                     ref.watch(trackingCalibrationProvider).asData?.value,

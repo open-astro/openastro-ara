@@ -39,6 +39,7 @@ import 'package:openastroara/widgets/focus/v_curve_chart.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/phd2_section.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -146,6 +147,8 @@ Future<(_Focuser, _Live)> _pump(WidgetTester tester,
   _c = ProviderContainer(overrides: [
     profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
     autofocusSettingsProvider.overrideWith(() => af),
+    // The guider settings as the rig's copy (ADR 0015), with no HTTP.
+    phd2FromRig(),
     focuserProvider.overrideWith(() => f),
     autofocusLiveProvider.overrideWith(() => l),
     ...extra,

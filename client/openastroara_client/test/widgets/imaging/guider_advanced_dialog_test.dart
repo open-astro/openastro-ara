@@ -18,17 +18,35 @@ class _Fake implements GuiderAdvancedClient {
   int multiStarApplies = 0;
   Object? applyError;
   _Fake(this.profile, this.guider);
+
+  /// The rig's tag for its copy; [savedElsewhere] moves it on.
+  int version = 1;
+  void savedElsewhere() => version++;
+  final List<String?> ifMatches = [];
+
   @override
-  Future<GuiderAdvancedSettings> getProfile() async {
+  Future<({GuiderAdvancedSettings value, String? etag})> getProfile() async {
     if (failProfileRead) throw Exception('profile read timed out');
-    return profile;
+    return (value: profile, etag: '"v$version"');
   }
 
   @override
-  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings s) async {
+  Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
+    GuiderAdvancedSettings s, {
+    String? ifMatch,
+  }) async {
+    if (ifMatch != null && ifMatch != '"v$version"') {
+      final req = RequestOptions(path: '/api/v1/profile/guider-advanced');
+      throw DioException(
+        requestOptions: req,
+        response: Response<void>(requestOptions: req, statusCode: 412),
+      );
+    }
+    ifMatches.add(ifMatch);
     putBody = s.toJson();
     profile = s;
-    return s;
+    version++;
+    return (value: s, etag: '"v$version"');
   }
 
   @override
@@ -193,6 +211,43 @@ void main() {
     expect(fake.multiStarApplies, 1, reason: 'the guider reports on, the profile says off');
     final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;
     expect(status, isNot(contains('next guider connect')));
+  });
+
+  testWidgets('Guider advanced: Apply sends the tag of the copy it loaded (ADR 0015)', (t) async {
+    final fake = await _pump(t, profile: const GuiderAdvancedSettings({'min_star_snr': 7.0}));
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.ifMatches, ['"v1"']);
+  });
+
+  testWidgets('Guider advanced: Apply over a copy another device saved since is '
+      'refused, nothing written or pushed, and Reload shows the rig\'s copy (ADR 0015)', (t) async {
+    final fake = await _pump(t);
+    await t.enterText(find.byKey(const Key('ga-min_star_snr')), '9');
+    await t.pump();
+    fake
+      ..profile = const GuiderAdvancedSettings({'min_star_snr': 12.0})
+      ..savedElsewhere();
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.putBody, isNull);
+    expect(fake.pushes, 0);
+    expect(find.textContaining('changed on the rig'), findsWidgets);
+    await t.tap(find.text('Reload'));
+    await t.pumpAndSettle();
+    expect(find.widgetWithText(TextField, '12'), findsOneWidget);
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.ifMatches, ['"v2"']);
+  });
+
+  test('Guider advanced: the multi-star chip writes over the copy it '
+      'loaded, with its tag (ADR 0015)', () async {
+    final fake = _Fake(const GuiderAdvancedSettings({'min_star_snr': 7.0}), _guider());
+    await setMultiStar(fake, false);
+    expect(fake.ifMatches, ['"v1"']);
+    expect(fake.putBody, {...const GuiderAdvancedSettings({'min_star_snr': 7.0}).toJson(), 'multi_star_enabled': false});
+    expect(fake.multiStarApplies, 1);
   });
 
   testWidgets('an unset multi-star matches a guider that reports on: no reconnect', (t) async {

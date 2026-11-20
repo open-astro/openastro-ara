@@ -11,6 +11,7 @@ import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import '../../support/imaging_sections.dart';
 
@@ -63,8 +64,9 @@ class _ThrowingClient implements SequenceClient {
 
 class _GuiderPhd2 extends Phd2SettingsNotifier {
   @override
-  Phd2Settings build() =>
-      const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]');
+  LoadedSection<Phd2Settings> build() => LoadedSection(
+      value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      source: SectionSource.rig);
 }
 
 void main() {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -102,24 +103,45 @@ final _apiSwitchProvider =
 class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi([this._load]) : super(_server);
   final Future<Phd2Settings> Function()? _load;
+  /// The rig's tag for its copy; [savedElsewhere] moves it on.
+  int version = 1;
+  void savedElsewhere() => version++;
   @override
-  Future<Phd2Settings> getPhd2Settings() =>
-      _load != null ? _load() : Future.value(const Phd2Settings());
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async => (
+    value: await (_load != null ? _load() : Future.value(const Phd2Settings())),
+    etag: '"v$version"',
+  );
   /// Every PUT body, in order — Apply's persisted object is asserted on it.
   final List<Phd2Settings> puts = [];
+  final List<String?> ifMatches = [];
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings value, {
+    String? ifMatch,
+  }) async {
+    if (ifMatch != null && ifMatch != '"v$version"') {
+      final req = RequestOptions(path: '/api/v1/profile/phd2');
+      throw DioException(
+        requestOptions: req,
+        response: Response<void>(requestOptions: req, statusCode: 412),
+      );
+    }
     puts.add(value);
-    return value;
+    ifMatches.add(ifMatch);
+    version++;
+    return (value: value, etag: '"v$version"');
   }
 }
 
 /// A PUT that fails from the second call on: a re-Apply that does not land.
 class _FailsAfterFirstProfileApi extends _FakeProfileApi {
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings value, {
+    String? ifMatch,
+  }) async {
     if (puts.isNotEmpty) throw Exception('the daemon went away');
-    return super.putPhd2Settings(value);
+    return super.putPhd2Section(value, ifMatch: ifMatch);
   }
 }
 
@@ -130,9 +152,13 @@ class _FakeAdvanced implements GuiderAdvancedClient {
   @override
   Future<GuiderAdvancedView> getGuider() async => view;
   @override
-  Future<GuiderAdvancedSettings> getProfile() async => GuiderAdvancedSettings.empty;
+  Future<({GuiderAdvancedSettings value, String? etag})> getProfile() async =>
+      (value: GuiderAdvancedSettings.empty, etag: '"v1"');
   @override
-  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings settings) async => settings;
+  Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
+    GuiderAdvancedSettings settings, {
+    String? ifMatch,
+  }) async => (value: settings, etag: '"v2"');
   @override
   Future<void> pushTuning() async {}
   @override
@@ -742,8 +768,8 @@ void main() {
     gate.complete(const Phd2Settings(host: 'daemon.local'));
     await tester.pump();
     expect(applyButton(tester).onPressed, isNotNull);
-    expect(container.read(phd2SettingsProvider).host, 'localhost',
-        reason: 'the dialog seeds its own draft — the shared provider is untouched');
+    expect(container.read(phd2SettingsProvider).value?.host, 'daemon.local',
+        reason: 'the shared section holds the rig\'s copy, never a client default');
 
     await _teardownPanel(tester, container);
   });
@@ -809,7 +835,7 @@ void main() {
     await tester.drag(find.byType(Slider).first, const Offset(400, 0));
     await tester.pump();
     expect(find.text('100%'), findsOneWidget);
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 0.7,
+    expect(container.read(phd2SettingsProvider).value!.raAggressiveness, 0.7,
         reason: 'provider unchanged until Apply');
 
     // Done discards the draft; reopening shows the provider values again.
@@ -838,7 +864,7 @@ void main() {
 
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
-    expect(container.read(phd2SettingsProvider).host, 'edited.local',
+    expect(container.read(phd2SettingsProvider).value!.host, 'edited.local',
         reason: 'the dialog hydrates its own draft, never the shared provider');
 
     // Apply persists daemon-copy + tuning fields and touches only the six
@@ -848,8 +874,8 @@ void main() {
     await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
-    expect(container.read(phd2SettingsProvider).host, 'edited.local');
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0);
+    expect(container.read(phd2SettingsProvider).value!.host, 'edited.local');
+    expect(container.read(phd2SettingsProvider).value!.raAggressiveness, 1.0);
 
     await _teardownPanel(tester, container);
   });
@@ -875,8 +901,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, '0.15'), findsNWidgets(2),
         reason: 'invalid input snaps back to the last good value');
-    expect(container.read(phd2SettingsProvider).minimumMove, 0.15);
-    expect(container.read(phd2SettingsProvider).decMinimumMove, 0.15);
+    expect(container.read(phd2SettingsProvider).value!.minimumMove, 0.15);
+    expect(container.read(phd2SettingsProvider).value!.decMinimumMove, 0.15);
 
     await _teardownPanel(tester, container);
   });
@@ -909,14 +935,14 @@ void main() {
     await tester.ensureVisible(find.text('Apply'));
     await tester.tap(find.text('Apply'));
     await tester.pumpAndSettle();
-    expect(container.read(phd2SettingsProvider).raAggressiveness, 1.0,
+    expect(container.read(phd2SettingsProvider).value!.raAggressiveness, 1.0,
         reason: 'Apply commits the draft, then persists');
-    expect(container.read(phd2SettingsProvider).guideExposureMs, 2000);
+    expect(container.read(phd2SettingsProvider).value!.guideExposureMs, 2000);
     // The PUT carries the chosen guide exposure…
     expect(profileApi.puts, hasLength(1));
     expect(profileApi.puts.single.guideExposureMs, 2000);
     expect(profileApi.puts.single.guideCameraGain, 30);
-    expect(container.read(phd2SettingsProvider).guideCameraGain, 30);
+    expect(container.read(phd2SettingsProvider).value!.guideCameraGain, 30);
     expect(profileApi.puts.single.raAggressiveness, 1.0);
     // …and the re-push is the tuning-only one: the full push re-sends the
     // equipment selections and stops guiding mid-run.
@@ -924,6 +950,67 @@ void main() {
         reason: 'Apply must request pushProfile(tuningOnly: true)');
     expect(find.text('Applied — guiding continues uninterrupted.'),
         findsOneWidget);
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('Tune Guiding: Apply sends the tuning over the rig\'s copy with '
+      'its tag, never an edit staged elsewhere (ADR 0015)', (tester) async {
+    final profileApi = _FakeProfileApi(
+      () async => const Phd2Settings(host: 'rig.lan', guiderCamera: 'ZWO'),
+    );
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ),
+        profileApi: profileApi);
+    await tester.pump();
+    // An edit staged in the shared section, not saved yet.
+    container.read(phd2SettingsProvider.notifier).setHost('edited.local');
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Apply'));
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(profileApi.ifMatches, ['"v1"']);
+    final put = profileApi.puts.single;
+    expect(put.raAggressiveness, 1.0);
+    expect(put.host, 'rig.lan', reason: 'the staged host is not sent');
+    expect(put.guiderCamera, 'ZWO');
+    expect(container.read(phd2SettingsProvider).value!.host, 'edited.local');
+
+    await _teardownPanel(tester, container);
+  });
+
+  testWidgets('Tune Guiding: Apply over a copy another device saved since is '
+      'refused, nothing written or pushed (ADR 0015)', (tester) async {
+    final profileApi = _FakeProfileApi();
+    final equipment = _RecordingEquipmentClient();
+    final container = await _pump(tester,
+        status: const GuiderStatus(
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.guiding,
+          rmsTotal: 0.5,
+        ),
+        profileApi: profileApi,
+        equipment: equipment);
+    await tester.tap(find.byTooltip('Tune guiding…'));
+    await tester.pumpAndSettle();
+    profileApi.savedElsewhere();
+    await tester.drag(find.byType(Slider).first, const Offset(400, 0));
+    await tester.pump();
+    await tester.ensureVisible(find.text('Apply'));
+    await tester.tap(find.text('Apply'));
+    await tester.pumpAndSettle();
+    expect(profileApi.puts, isEmpty);
+    expect(equipment.pushes, isEmpty);
+    expect(find.textContaining('changed on the rig'), findsOneWidget);
 
     await _teardownPanel(tester, container);
   });
@@ -1071,7 +1158,7 @@ void main() {
       final tip = tester.widget<Tooltip>(find.ancestor(
           of: find.text('PA ≥ 48″ · Excellent'), matching: find.byType(Tooltip)));
       expect(tip.message, contains('at least 48″'));
-      expect(tip.message, contains('Polar Align measured 41″'));
+      expect(tip.message, contains("Polar Align's figure: 41″"));
       await _teardownPanel(tester, container);
     });
 
@@ -1116,10 +1203,11 @@ void main() {
               alignErrorArcmin: 0.9,
             ),
           ));
-      expect(find.text('PA ≥ 17′ · above Polar Align'), findsOneWidget);
+      expect(find.text('PA ≥ 17′ · disagrees with Polar Align'), findsOneWidget);
       final tip = tester.widget<Tooltip>(find.ancestor(
-          of: find.text('PA ≥ 17′ · above Polar Align'), matching: find.byType(Tooltip)));
+          of: find.text('PA ≥ 17′ · disagrees with Polar Align'), matching: find.byType(Tooltip)));
       expect(tip.message, isNot(contains('too noisy')));
+      expect(tip.message, contains('Polar Align and guiding disagree'));
       await _teardownPanel(tester, container);
     });
 

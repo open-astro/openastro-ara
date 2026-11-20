@@ -31,6 +31,14 @@ abstract final class PolarAlignStates {
       state == checking;
 }
 
+/// #2072 `readout_caution` tokens (`PolarAlignStateDto.readout_caution`, the
+/// `polar_align.progress` payload).
+abstract final class PolarAlignReadoutCautions {
+  /// The camera sits nearly due east or west of the pole: the live readout
+  /// reads the altitude bolt poorly, so the Check is the number to trust.
+  static const altitudeWeak = 'altitude_weak';
+}
+
 /// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, then the
 /// three-point seed — two RA-motor turns — + live loop on the main camera), fine (the same on the guide
 /// camera), check (Home, three guide-camera solves, an exact fit).
@@ -319,6 +327,10 @@ class PolarAlignStatus {
   /// #1971 null without a Polar Aligner Ara drives, or before its first measurement.
   final PolarAlignerRun? correction;
 
+  /// #2072 [PolarAlignReadoutCautions]; null when the readout is sound or
+  /// from an older daemon.
+  final String? readoutCaution;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -334,6 +346,7 @@ class PolarAlignStatus {
     this.checkResult,
     this.lastResult,
     this.correction,
+    this.readoutCaution,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -356,6 +369,7 @@ class PolarAlignStatus {
             : null,
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
         correction: PolarAlignerRun.tryParse(json['correction']),
+        readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
       );
 
   /// True while the server is running any phase of the routine.

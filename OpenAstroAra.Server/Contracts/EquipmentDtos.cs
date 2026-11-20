@@ -760,7 +760,9 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// hour angle sees one component of the error. <c>Reliable</c> is false when the 1σ
 /// <c>UncertaintyArcmin</c> exceeds max(1′, half the value), or when the value less twice that
 /// uncertainty is more than 2′ above <c>AlignErrorArcmin</c> (#1731). <c>AlignErrorArcmin</c> is the last
-/// Polar Align result in the 12 h before, for comparison. Hour angle / Dec are the mount's at the end.
+/// Polar Align result in the 12 h before, for comparison. <c>AboveAlign</c> (#2072) is that second rule on its own:
+/// the two numbers disagree (Dec lost motion inflated the guiding figure, or the mount shifted or the alignment was
+/// wrong); null with no Polar Align result to compare. Hour angle / Dec are the mount's at the end.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,
@@ -779,7 +781,8 @@ public sealed record PaResidualDto(
     double? AlignErrorArcmin = null,
     DateTimeOffset? AlignEndedUtc = null,
     Guid? SessionId = null,
-    string? Reason = null);
+    string? Reason = null,
+    bool? AboveAlign = null);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at
@@ -912,11 +915,11 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
-/// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — from where the user
-/// pointed the mount, the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower
-/// frames, for the big moves); <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — three
-/// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting. No stage sends the mount Home or
-/// slews it (#2048, NINA's start).</summary>
+/// <summary>The routine's measurements (<see cref="PolarAlignStateDto.Stage"/>), one per Start (#2082): <c>coarse</c> —
+/// from where the user pointed the mount, the three-point seed (two RA-motor turns, three solves) + live adjust loop on the
+/// main camera (slower frames, for the big moves); <c>fine</c> — the same seed + live adjust loop on the guide camera;
+/// <c>check</c> — three guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting. No stage sends
+/// the mount Home, slews it or moves its Dec axis (#2048, NINA's start), and none leads into another.</summary>
 public static class PolarAlignStages {
     public const string Coarse = "coarse";
     public const string Fine = "fine";
@@ -925,8 +928,8 @@ public static class PolarAlignStages {
     public static bool IsValid(string? stage) => stage is Coarse or Fine or Check;
 }
 
-/// <summary><c>POST /polaralign/start</c> body: the stage to begin at (null/absent = coarse, or fine when the coarse
-/// stage cannot run: main camera off, optics unset, no solver), and the user's confirmation of the start (#2048). The
+/// <summary><c>POST /polaralign/start</c> body: the measurement to make (null/absent = fine, #2082), and the user's
+/// confirmation of the start (#2048). The
 /// routine starts from where the mount points now; it moves only with <c>Confirmed</c> true and <c>Direction</c> equal
 /// to the <see cref="PolarAlignStartPlanDto.Direction"/> the user was shown. Without them the start is refused
 /// (<c>polar-align-unconfirmed</c>, with the direction the run would turn now). <c>NewOrigin</c> echoes the plan's
@@ -937,8 +940,8 @@ public sealed record PolarAlignStartRequestDto(string? Stage = null, bool Confir
 /// <summary>#2048 — what a confirmed start will do, for the confirm step the user answers before the mount moves
 /// (<c>GET /polaralign/start-plan</c>). <c>Direction</c> (<c>east</c> | <c>west</c>) is the way the RA axis turns
 /// first, chosen away from the meridian from the mount's current pointing; <c>StepDeg</c> is each of the
-/// <c>Turns</c> turns; <c>MaxSweepDeg</c> bounds how far the run turns the RA axis from where it starts, over every
-/// stage the user moves on to. <c>Stage</c> echoes the request.
+/// <c>Turns</c> turns; <c>MaxSweepDeg</c> is how far the run turns the RA axis from where it starts (its two turns:
+/// one measurement per Start, #2082). <c>Stage</c> echoes the request.
 /// <para>#2089 — the session's sweep origin, from RA differences the mount reports (never its clock, LST or absolute
 /// RA): <c>NewOrigin</c> is true when this start's pose becomes Polar Align's origin (the first start since the mount
 /// connected, or the mount was moved by other means since Polar Align last turned it); otherwise
@@ -963,9 +966,10 @@ public static class PolarAlignDirections {
 
 /// <summary>The check stage's three-point result: the axis error against the apparent pole, the
 /// cone half-angle the three pointings sat at (conditioning), how far the solved turns disagreed
-/// with the mount's reported RA turns, the fine stage's last error for comparison (<c>FineDeltaArcmin</c>
-/// is the distance between the two measured axes — alt and az both — so a fine readout of the same
-/// size on the other side of the pole still reads as a disagreement), and the verdict band
+/// with the mount's reported RA turns, the last run's readout for comparison (#2082: <c>FineErrorArcmin</c> keeps its
+/// wire name from when the fine stage led into the check; it is the readout of the last run that ended with one, null
+/// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
+/// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), and the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>).</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
@@ -979,8 +983,7 @@ public sealed record PolarAlignCheckResultDto(
     DateTimeOffset MeasuredAt);
 
 public sealed record PolarAlignStateDto(
-    // §45 engine states: homing (Find Home running, or — WaitingForHome — waiting for the user to
-    // put the mount at Home and tap Continue), seeding (3-point axis measurement: the Dec-motor tilt and two RA-motor turns),
+    // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
     // adjusting (live loop, error fields populated — every stage reaches it through seeding), paused
     // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
     // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).
@@ -1006,7 +1009,18 @@ public sealed record PolarAlignStateDto(
     PolarAlignLastResultDto? LastResult = null,
     // #1971 — what the Polar Aligner is doing in this run; null when the rig has none, when Ara cannot
     // drive the one it has, or before the run's first measurement.
-    PolarAlignCorrectionDto? Correction = null);
+    PolarAlignCorrectionDto? Correction = null,
+    // #2072 — a caution on the live readout from the last seed (PolarAlignReadoutCautions), also on each
+    // polar_align.progress event; null when the readout is sound, before the first seed, and outside adjusting/paused.
+    string? ReadoutCaution = null);
+
+/// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
+public static class PolarAlignReadoutCautions {
+    /// <summary>The camera sits nearly due east or west of the pole's azimuth (|cos ψ| under 0.2): the live readout
+    /// amplifies solve noise in altitude five times or more, and near ψ = ±90° it under-reads the altitude knob. The
+    /// Check (a fresh three-point measurement) is the number to trust.</summary>
+    public const string AltitudeWeak = "altitude_weak";
+}
 
 /// <summary>#1971 the Polar Aligner in a running routine, also the payload of <c>polar_align.correction</c>.
 /// <c>State</c>: <c>manual</c> (the person turns the bolts), <c>probing</c> / <c>moving</c> (with <c>Axis</c>
