@@ -952,6 +952,18 @@ class _OpticsApi extends ProfileApi {
   }
 }
 
+/// #2041 — each optics read waits until the test answers it, so reads overlap.
+class _GatedOpticsApi extends _OpticsApi {
+  _GatedOpticsApi(super.optics);
+  final reads = <Completer<OpticsSettings>>[];
+  @override
+  Future<OpticsSettings> getOptics() {
+    final read = Completer<OpticsSettings>();
+    reads.add(read);
+    return read.future;
+  }
+}
+
 /// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
 class _CoolingCamera extends CameraStatusNotifier {
   _CoolingCamera(this.ccd, {this.on = true});
@@ -3856,6 +3868,33 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(api.puts, isEmpty);
+  });
+
+  testWidgets('#2041 two optics reads overlap at the mount connect: no save sends the rig\'s sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      profileApiProvider.overrideWithValue(api),
+      mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 1260, 'aperture_diameter_mm': 200})),
+    ]);
+    await tester.pump();
+    expect(api.reads, hasLength(1), reason: 'the shell reads the optics when the mount connects');
+    // Another reader (the Rig setup, live sync) starts while that read is in flight.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    api.reads[0].complete(rig); // the older read lands second-to-last: its result is dropped
+    await tester.pump();
+    await tester.pump();
+    api.reads[1].complete(rig);
+    await other;
+    await tester.pump();
+    // The rig had every field: nothing may be written, least of all its sensor as 0.
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], isEmpty);
+    expect(c.read(opticsSettingsProvider).sensorWidthPx, 800);
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
