@@ -930,7 +930,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_announce_is_independent_of_the_flip_safety_toggle() {
             // §58.8 is its own net — a rig that turned the §58.9 layers off (misreporting pier
-            // side) still gets the one-time first-flip announce.
+            // side) still gets the unconfirmed-flip announce, on every flip until the user confirms one.
             SetupProfile(recenter: true);
             SetupSafety(Safety(enabled: false, firstFlipConfirmed: false));
             SetupHealthyTrackingMount();
