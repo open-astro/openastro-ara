@@ -252,6 +252,14 @@ framing/focus loop when you need to point or focus by eye.
   started over an open run needs a slew or *Set Tracking* before it guides or images. Starting
   guiding while Polar Align is still open stops the mount the same way, then gives back the tracking
   Polar Align found, because guiding needs it.
+- **Stop Mount and Emergency Stop end Polar Align.** Any stop Polar Align did not send itself ends
+  the run at once, even between two turns while it solves a frame or while you turn the knobs:
+  **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**. The card
+  says what stopped it, and no further turn starts. Emergency Stop latches before any of its other
+  steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
+  While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
+  ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
+  turns unsafe, the safety park stops Polar Align and the Polar Aligner before it parks.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the
@@ -300,8 +308,9 @@ Ara assumes you're asleep while it works:
 - **Emergency stop**: the red **Emergency Stop** button on the app's bottom status bar is always
   there, on every tab. Press and hold it for 2 s ("Hold to confirm"; letting go early sends nothing).
   With a keyboard or screen reader, activating it opens a "Stop everything now?" confirmation
-  instead (in Simple Mode, press it again within 3 s). It then makes the daemon abort the running sequence, stop the mount where it is (it never parks), halt the rotator (it stops where it is), abort
-  the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout, a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment was running, switch the flat panel light off, and switch the camera's cooler off — then reports honestly what each step did (an unreachable mount is called out loudly so you go check,
+  instead (in Simple Mode, press it again within 3 s). Before anything else it latches the stop, so a
+  polar alignment cannot start another turn meanwhile. It then makes the daemon abort the running sequence, stop the mount where it is (it never parks), halt the rotator (it stops where it is), abort
+  the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout, a running autofocus and polar alignment, stop guiding, stop the mount and the Polar Aligner again if a polar alignment was running, switch the flat panel light off, and switch the camera's cooler off — then reports honestly what each step did (an unreachable mount is called out loudly so you go check,
   never papered over). A panicked double-press is ignored while the first stop is running.
 - **Audible alarm**: when anything above reports UNSAFE, the app pops a safety modal at once and,
   after a short silent delay (default 5 s — silence it from the screen before it ever rings),

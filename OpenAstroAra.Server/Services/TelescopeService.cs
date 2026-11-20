@@ -341,6 +341,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // not trusted, before the leases end or the guider stops. The safety and fault parks fall back to
         // stopping tracking on this refusal.
         await ThrowIfPoseUnverifiedAsync(client, "park", ct).ConfigureAwait(false);
+        // #2066 — a park ends any routine that drives the motors (Polar Align): it counts as a stop, so the routine starts
+        // no further move and fails at its next check. A Stop Mount that landed since the request still wins (below).
+        abortEpoch = BumpAbortEpochUnlessAbortedSince(abortEpoch, "park");
         Lease.CancelAll();
         await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
@@ -369,13 +372,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
-        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, ct);
+        var abortEpoch = AbortEpoch; // #2066 — read at the request, as Park does
+        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, ct);
     }
 
-    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, CancellationToken ct) {
+    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, CancellationToken ct) {
         // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
         // sends :MH#, a no-op at a false zero), so it is refused while the position is unverified.
         await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+        // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
+        // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
+        _ = BumpAbortEpochUnlessAbortedSince(abortEpoch, "findhome");
+        Lease.CancelAll();
         await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
         // FindHome blocks until the mount reaches its home switch; run it off the request
@@ -450,6 +458,49 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
 
+    // #2066 — who raised the latest counts (Stop Mount, Emergency Stop, the watchdog, a park, a Find Home, Polar Align's own
+    // stop), so a routine that sees the count change can say what stopped it. Only the last few are kept: a routine reads
+    // them right after the change. Every increment happens under this lock, so a conditional bump can test and count in one step.
+    private readonly object _abortReasonsGate = new();
+    private readonly Queue<(long Epoch, string Reason)> _abortReasons = new();
+    private const int AbortReasonsKept = 32;
+
+    private long BumpAbortEpoch(string reason) {
+        lock (_abortReasonsGate) {
+            var epoch = Interlocked.Increment(ref _abortEpoch);
+            _abortReasons.Enqueue((epoch, reason));
+            while (_abortReasons.Count > AbortReasonsKept) {
+                _abortReasons.Dequeue();
+            }
+            return epoch;
+        }
+    }
+
+    /// <summary>#2066 — a park or Find Home counts as a stop for the routines that drive the motors, unless a stop came since
+    /// <paramref name="abortEpoch"/> (the request's own reading): then the request is dropped later, as before, and the count
+    /// stays. Returns the reading the request fences its own steps on from here.</summary>
+    private long BumpAbortEpochUnlessAbortedSince(long abortEpoch, string reason) {
+        lock (_abortReasonsGate) {
+            return Interlocked.Read(ref _abortEpoch) != abortEpoch ? abortEpoch : BumpAbortEpoch(reason);
+        }
+    }
+
+    public void FenceMotion(string reason) {
+        BumpAbortEpoch(reason);
+        LogMotionFenced(reason);
+    }
+
+    public string? AbortReasonSince(long abortEpoch, string? except) {
+        lock (_abortReasonsGate) {
+            foreach (var (epoch, reason) in _abortReasons) {
+                if (epoch > abortEpoch && !string.Equals(reason, except, StringComparison.Ordinal)) {
+                    return reason;
+                }
+            }
+        }
+        return null;
+    }
+
     // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
     private long _sessionEpoch;
 
@@ -498,17 +549,18 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
         // leased move starts its deadline only once the mount took it. A renewal at the speed the
         // axis already moves at only extends the lease: the driver is not asked again.
+        // A routine's renewal after a stop (Stop Mount, Emergency Stop, a park or Find Home) would extend or restart its
+        // motor: refuse it. #2066 — checked before the renewal, not after it: Emergency Stop's first step and a park count
+        // the stop without cancelling the leases, so a renewal that only extended a lease would outlive them. A refused
+        // renewal lets the lease run out, and the lease timer stops the axis.
+        if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
+            throw new InvalidOperationException("the mount was stopped (Stop Mount) after this move began; the move is not restarted");
+        }
         if (effective == 0 || leaseMs is null) {
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
             NotePoseAxis(axis, moving: true); // #2070 — still Ara's move
             return;
-        }
-        // A routine's renewal after Stop Mount finds its lease gone and would start the motor again: refuse it.
-        // This sits after the TryRenew early return on purpose: it relies on AbortSlewCoreAsync cancelling every
-        // lease right after it bumps the count, so a renewal that returned early never outlives an abort.
-        if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
-            throw new InvalidOperationException("the mount was stopped (Stop Mount) after this move began; the move is not restarted");
         }
         // Logged once per driver call, not on every lease renewal (a polar-align move renews four times a second).
         if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
@@ -720,7 +772,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
         // Before the lease goes: a routine's renewal must see the abort first. A renewal landing between the two only
         // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe.
-        Interlocked.Increment(ref _abortEpoch);
+        BumpAbortEpoch(reason);
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
@@ -1685,6 +1737,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "telescope: motion fenced ({Reason}) — every routine that drives the motors stops, and no queued GoTo or Park goes out")]
+    private partial void LogMotionFenced(string reason);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed: {Reason}")]
     private partial void LogControlFailed(Exception ex, string op, string reason);

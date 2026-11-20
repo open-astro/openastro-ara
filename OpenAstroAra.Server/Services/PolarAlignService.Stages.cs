@@ -565,9 +565,11 @@ namespace OpenAstroAra.Server.Services {
                 learnedSign = axis == TelescopeAxes.Primary ? _raMotorSign : 1.0;
             }
             var direction = (sign >= 0 ? 1.0 : -1.0) * learnedSign;
-            // Stop Mount (or Emergency Stop) during the move aborts the mount from outside this routine: every
-            // renewal checks for it, and the telescope service refuses a renewal that would restart the motor.
-            var abortEpoch = (_mount as ITelescopeService)?.AbortEpoch;
+            // Stop Mount (or Emergency Stop, a park, a Find Home) aborts the mount from outside this routine: every poll
+            // checks for it, and the telescope service refuses a renewal that would restart the motor. #2066 — the run's
+            // reading from its Start, not a fresh one per move: a stop between two moves (during a solve, a settle) is a
+            // stop too, and the next move must not start under a count read after it.
+            var abortEpoch = RunAbortEpoch(gen);
             var fast = degrees > AxisSlowZoneDeg;
             double Rate() => direction * (fast ? AxisFastRateDegPerSec : AxisSlowRateDegPerSec);
             var began = Stopwatch.GetTimestamp();
@@ -585,9 +587,7 @@ namespace OpenAstroAra.Server.Services {
                     if (!IsCurrent(gen)) {
                         throw new OperationCanceledException("the run was superseded while the mount moved");
                     }
-                    if (AbortedSince(abortEpoch)) {
-                        throw new RoutineFailedException("slew_failed", ExternalStopMessage);
-                    }
+                    ThrowIfStoppedFromOutside(gen);
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
                     var now = await DriverPointingJnowAsync(ct).ConfigureAwait(false)
                         ?? throw new RoutineFailedException("mount_fault", MoveReadFailedMessage);
@@ -646,7 +646,9 @@ namespace OpenAstroAra.Server.Services {
             } catch (RoutineFailedException) {
                 throw;
             } catch (Exception) when (AbortedSince(abortEpoch)) {
-                throw new RoutineFailedException("slew_failed", ExternalStopMessage);
+                // A refused renewal after a stop: from outside, the run-wide watch's failure; Polar Align's own, a stop.
+                ThrowIfStoppedFromOutside(gen);
+                throw new OperationCanceledException("the run was stopped while the mount moved");
             } catch (Exception ex) {
                 // #1536 — the user gets the recovery; the driver's own text goes to the log.
                 LogAxisMoveRefused(axis, ex);
@@ -677,9 +679,6 @@ namespace OpenAstroAra.Server.Services {
 
         private const string MoveReadFailedMessage =
             "the mount did not report where it points during the turn, so the motor was stopped — check its connection, then start again";
-
-        private const string ExternalStopMessage =
-            "the mount was stopped from outside polar alignment (Stop Mount) — start again when ready";
 
         private bool AbortedSince(long? abortEpoch) =>
             abortEpoch is long since && _mount is ITelescopeService service && service.AbortEpoch != since;

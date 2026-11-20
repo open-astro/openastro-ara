@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 
@@ -72,6 +73,27 @@ namespace OpenAstroAra.Test {
             var quiet = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, idle.Object, null, CancellationToken.None);
             Assert.That(quiet, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), "k1", It.IsAny<CancellationToken>()), Times.Once, "the idempotency key rides through");
+        }
+
+        // #2066 — a GoTo while Polar Align turns the mount would drive the motors twice at once: refused before the mount,
+        // force or not. A sync moves nothing and goes through.
+        [Test]
+        public async Task A_goto_while_polar_align_turns_the_mount_is_refused_and_a_sync_goes_through() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
+            var idle = new Mock<ISequencerService>();
+            idle.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Force: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            var sync = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25, Sync: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object);
+            Assert.That(sync, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
         }
 
         [Test]

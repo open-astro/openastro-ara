@@ -1,0 +1,172 @@
+#region "copyright"
+
+/*
+    Copyright (c) 2026 Open Astro and the OpenAstro Ara contributors
+
+    This file is part of OpenAstro Ara (forked from N.I.N.A.).
+
+    This Source Code Form is subject to the terms of the Mozilla Public
+    License, v. 2.0. If a copy of the MPL was not distributed with this
+    file, You can obtain one at http://mozilla.org/MPL/2.0/.
+*/
+
+#endregion "copyright"
+
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.WsEvents;
+using OpenAstroAra.Server.Services;
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace OpenAstroAra.Test {
+
+    /// <summary>
+    /// #2066 / #2067 — any stop Polar Align did not raise ends its run: Stop Mount, Emergency Stop (whose first step latches
+    /// the stop before any rung), a park or a Find Home. The run reads the mount's stop count once, at its Start, and checks
+    /// it before every motor move and tracking switch-on, after every seed frame, and between the stages, so a stop between
+    /// two turns (during a solve) starts no further turn. Emergency Stop and the safety park take the mount over: the run
+    /// leaves the stop and its confirmation to them.
+    /// </summary>
+    public partial class PolarAlignServiceTest {
+
+        /// <summary>A hint-following solver (the solve lands where the mount points) that runs <see cref="BeforeSolve"/>
+        /// with the solve's number (1 = the first) before it answers.</summary>
+        private sealed class HookedSolver : IPolarAlignFrameSolver {
+            private int _calls;
+            public Action<int>? BeforeSolve { get; set; }
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                BeforeSolve?.Invoke(Interlocked.Increment(ref _calls));
+                return Task.FromResult(hintRa is double ra && hintDec is double dec ? new PolarAlignSolveOutcome(true, ra, dec) : SolveB);
+            }
+        }
+
+        // The hole the run-wide watch closes: the epoch was read afresh at each move, so a Stop Mount tapped while the run
+        // solved seed-b was read as the baseline of the next turn, and that turn started the motor after the stop.
+        [Test]
+        public async Task Stop_Mount_during_the_seed_solve_starts_no_further_turn() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var stoppedAt = -1;
+            var solver = new HookedSolver {
+                BeforeSolve = n => {
+                    if (n == 2) { // seed-b, after the first turn
+                        stoppedAt = mount.Count;
+                        mount.StopMount();
+                    }
+                },
+            };
+            using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: NewStore());
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(stoppedAt, Is.GreaterThan(0), "the run reached the seed-b solve");
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Stop Mount"));
+            AssertNoMotionAfter(mount, stoppedAt);
+            Assert.That(mount.Since(stoppedAt), Does.Not.Contain("tracking on"));
+            Assert.That(mount.Tracking, Is.False, "the run's exit leaves tracking off");
+        }
+
+        // Emergency Stop latches the stop before its first rung. While a slow rung (here the sequence-run abort) still holds
+        // the ladder, the user's Next moves the run to the check stage: it must not turn tracking on or turn the mount.
+        [Test]
+        public async Task Emergency_Stop_during_PA_leaves_tracking_off() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+            Assert.That(mount.Tracking, Is.False, "the adjust loop runs with tracking off");
+
+            var runAbortEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var runAbortGate = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var sequencer = new Mock<ISequencerService>();
+            sequencer.Setup(s => s.AbortActiveRunsAsync(It.IsAny<CancellationToken>())).Returns(() => {
+                runAbortEntered.TrySetResult();
+                return runAbortGate.Task;
+            });
+            var es = new EmergencyStopService(sequencerResolver: () => sequencer.Object,
+                telescope: (ITelescopeService)mount.Mock.Object, polarAlign: svc);
+
+            var at = mount.Count;
+            var stop = es.ExecuteAsync();
+            await runAbortEntered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            try {
+                await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            } catch (InvalidOperationException) {
+                // The run already saw the latch and ended: nothing is waiting for a Next.
+            }
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+            runAbortGate.SetResult(0);
+            var result = await stop.WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            Assert.That(mount.Since(at), Does.Not.Contain("tracking on"), string.Join(", ", mount.Since(at)));
+            AssertNoMotionAfter(mount, at);
+            Assert.That(mount.Tracking, Is.False);
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Emergency Stop"));
+            Assert.That(result.FailedRungs, Does.Not.Contain("stop_polar_align"));
+        }
+
+        // Emergency Stop tells the run to leave the mount to it: a mount that ignores its stop is not confirmed (and resent)
+        // for 8 s inside Emergency Stop's 10 s rung. The ladder stops and checks the mount itself.
+        [Test]
+        public async Task A_takeover_ends_the_run_without_waiting_for_the_stops_confirmation() {
+            var mount = new FakeStopMount(tracking: true) { IgnoresStops = true };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(5);
+            await InFirstTurnAsync(svc, mount).ConfigureAwait(false);
+
+            var at = mount.Count;
+            var watch = Stopwatch.StartNew();
+            await svc.StopForTakeoverAsync("emergency_stop", CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(watch.Elapsed, Is.LessThan(svc.StopVerifyWindow), "no confirmation window");
+            Assert.That(mount.Since(at).Count(c => c == "abort polar_align"), Is.EqualTo(1), "the first round only, never resent");
+            Assert.That(ws.Count(WsEventCatalog.PolarAlignError), Is.Zero, "no mount_did_not_stop: the ladder checks the mount");
+            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
+        }
+
+        // A park from outside while the user adjusts ends the run, and the run's exit sends no stop of its own: an AbortSlew
+        // or MoveAxis 0 from it would abort the park, and a tracking write could make the mount refuse it.
+        [Test]
+        public async Task A_park_from_outside_ends_the_run_and_its_exit_leaves_the_mount_to_the_park() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            await AdjustingAsync(svc, mount).ConfigureAwait(false);
+
+            var at = mount.Count;
+            mount.ParkFromOutside();
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewAbortedExternally));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("parked"));
+            Assert.That(mount.Since(at + 1), Is.Empty, $"nothing after the park: {string.Join(", ", mount.Since(at))}");
+        }
+
+        // The telescope endpoints refuse a GoTo, a pad move, Home and Park only while a turn runs (or its stop is not
+        // confirmed yet), not while the run exposes, solves or the user adjusts.
+        [Test]
+        public async Task IsMovingMount_reads_true_only_while_a_turn_runs() {
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws);
+            Assert.That(svc.IsMovingMount, Is.False, "no run");
+
+            await InFirstTurnAsync(svc, mount).ConfigureAwait(false);
+            Assert.That(svc.IsMovingMount, Is.True, "mid-turn");
+
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(svc.IsMovingMount, Is.False, "stopped and confirmed");
+        }
+    }
+}

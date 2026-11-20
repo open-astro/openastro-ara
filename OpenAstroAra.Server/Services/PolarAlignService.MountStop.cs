@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Server.Contracts;
 using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
 using System;
 using System.Diagnostics;
@@ -53,9 +54,81 @@ namespace OpenAstroAra.Server.Services {
             if (!IsCurrent(gen)) {
                 throw new OperationCanceledException("the run was stopped before the mount moved");
             }
+            ThrowIfStoppedFromOutside(gen);
         }
 
         private void EndMotion() => Volatile.Write(ref _motion, (int)MountMotion.None);
+
+        /// <summary>#2066 — a motor move of a live run, or its stop not confirmed yet: the telescope endpoints refuse the
+        /// user's GoTo, pad move, Home and Park meanwhile (<c>polar-align-moving-mount</c>). A run that ended with its stop
+        /// unconfirmed no longer counts: the user must be able to move the mount away by hand.</summary>
+        public bool IsMovingMount => CurrentMotion != MountMotion.None && IsActive;
+
+        // ── the run-wide watch for a stop from outside (#2066, #2067) ─────────────────────────
+
+        // Polar Align's own AbortSlew sends, counted before each send: the run tells its own stop from one it did not raise.
+        private long _ownAborts;
+
+        // The telescope's AbortEpoch and _ownAborts when the run's Start was called, for the run of this generation. Guarded by _gate.
+        private (int Gen, long Epoch, long OwnAborts)? _abortWatch;
+
+        /// <summary>The run's AbortEpoch reading (taken when its Start was called), for the leased motor commands; null for
+        /// a superseded run or a mount that keeps no count.</summary>
+        private long? RunAbortEpoch(int gen) {
+            lock (_gate) {
+                return _abortWatch is { } w && w.Gen == gen ? w.Epoch : null;
+            }
+        }
+
+        /// <summary>
+        /// The run-wide watch: any stop the run did not raise since its Start — Stop Mount, Emergency Stop, the meridian
+        /// watchdog, a park, a Find Home — fails it with <see cref="SlewAbortedExternally"/>, so it starts no further turn
+        /// and turns tracking on no more. Checked before every motor move, before every tracking switch-on, after every seed
+        /// frame and each live frame, between the stages, and on every poll of a move.
+        /// </summary>
+        private void ThrowIfStoppedFromOutside(int gen) {
+            if (_mount is not ITelescopeService service) {
+                return;
+            }
+            (long Epoch, long OwnAborts) watch;
+            lock (_gate) {
+                if (_abortWatch is not { } w || w.Gen != gen) {
+                    return;
+                }
+                watch = (w.Epoch, w.OwnAborts);
+            }
+            var own = Interlocked.Read(ref _ownAborts) - watch.OwnAborts;
+            if (service.AbortEpoch - watch.Epoch <= own) {
+                return;
+            }
+            var by = service.AbortReasonSince(watch.Epoch, except: AbortReason);
+            LogStoppedFromOutside(by ?? "unknown");
+            throw new RoutineFailedException(SlewAbortedExternally, StoppedFromOutsideMessage(by), mountTakenOver: TakesTheMountOver(by));
+        }
+
+        /// <summary>The <c>polar_align.error</c> reason when a stop Polar Align did not raise ended the run.</summary>
+        internal const string SlewAbortedExternally = "slew_aborted_externally";
+
+        /// <summary>A stop that hands the mount to its sender: Emergency Stop stops and checks it itself, a park or Find Home
+        /// moves it on purpose. The run's exit then sends no stop of its own (it would abort the park) and confirms none.</summary>
+        private static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
+
+        private static string StoppedFromOutsideMessage(string? by) => by switch {
+            "emergency_stop" => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
+            "watchdog" => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
+            "park" => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
+            "findhome" => "the mount was sent Home from outside polar alignment — polar alignment ended. Start again when ready",
+            _ => "the mount was stopped from outside polar alignment (Stop Mount) — polar alignment ended. Start again when ready",
+        };
+
+        /// <summary>The end request when Emergency Stop or the safety park takes the mount over (<see cref="StopForTakeoverAsync"/>).</summary>
+        internal const string TakenOver = "taken_over";
+
+        /// <inheritdoc />
+        public Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) {
+            LogTakenOver(by);
+            return EndRoutineAsync("polar-align.stop", outcome: "aborted", null, ct, endRequest: TakenOver);
+        }
 
         // Instance (not const) so tests shrink them. The defaults follow the abort contract of #2048: a stop is never
         // confirmed within 2 s of the last command (AlpacaBridge iOptron caches status and position for 1 s), needs two
@@ -237,6 +310,8 @@ namespace OpenAstroAra.Server.Services {
             var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
             LogMountStopSent(why, abort, motion);
             if (abort) {
+                // Counted before the send: the run-wide watch must never read Polar Align's own stop as one from outside.
+                Interlocked.Increment(ref _ownAborts);
                 await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
                     ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
                     : Task.Run(_mount.StopSlew, CancellationToken.None)).ConfigureAwait(false);
@@ -404,5 +479,14 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4565, Level = LogLevel.Information, Message = "§45 polar-align: a newer run owns the mount — this superseded run leaves the stop and tracking to it")]
         private partial void LogExitLeftToSuccessor();
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: the mount was stopped from outside the routine ({By}) — the run ends and starts no further move")]
+        private partial void LogStoppedFromOutside(string by);
+
+        [LoggerMessage(Level = LogLevel.Warning, Message = "§45 polar-align: {By} takes the mount over — the run ends; its exit leaves the stop and its check to {By}")]
+        private partial void LogTakenOver(string by);
+
+        [LoggerMessage(Level = LogLevel.Information, Message = "§45 polar-align ({Why}): the mount was taken over — no stop of the routine's own, no tracking write")]
+        private partial void LogExitLeftToTakeover(string why);
     }
 }

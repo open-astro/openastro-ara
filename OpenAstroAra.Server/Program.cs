@@ -1058,7 +1058,10 @@ public partial class Program {
                 () => sp.GetService<ICenteringService>(),
                 sp.GetService<TargetRecenter>(),
                 // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
-                () => sp.GetService<DomeFollower>()));
+                () => sp.GetService<DomeFollower>(),
+                // #2066 — the park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
