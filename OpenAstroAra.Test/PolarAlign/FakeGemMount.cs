@@ -99,6 +99,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         private int _abortCount;
         private string? _motionOwner;
         private bool _inhibited;
+        private readonly List<(long Epoch, string Reason)> _abortReasons = new();
 
         /// <param name="truePose">Where the mount really is.</param>
         /// <param name="lstHours">The true local sidereal time at the fake's start (hours); it then runs with the clock.</param>
@@ -206,6 +207,15 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// routine that polls the mount then sees it move a fixed amount per poll, whatever the scheduler does, so where a
         /// turn lands does not depend on the test machine's load. Zero (the default) leaves the clock alone.</summary>
         public TimeSpan FreshReadTakes { get; set; }
+
+        /// <summary>Each fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) first waits this long in real
+        /// time and ignores the caller's token: a slow Alpaca GET (#2048 M06's 1 s variant). The physics runs on meanwhile.</summary>
+        public TimeSpan SlowReads { get; set; }
+
+        /// <summary>Called with each AbortSlew's reason before the mount sees it; true refuses it the way the daemon refuses a
+        /// stop it cannot send (InvalidOperationException "not connected", not counted in <see cref="AbortEpoch"/>). The hook
+        /// may act on the mount itself: another caller's stop racing the refused one.</summary>
+        public Func<string, bool>? RefuseAbort { get; set; }
 
         /// <summary>How many WS events were published when a command arrived: orders the ledger against a run's events.</summary>
         public Func<int>? EventCount { get; set; }
@@ -455,7 +465,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
 
         public Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) {
-            // As TelescopeService: the token is not honoured, a stop always reaches the mount.
+            // As TelescopeService: the token is not honoured, a stop always reaches the mount (when it is connected).
             _ = ct;
             try {
                 MoveAxisCore(axis, rate, leaseMs, unlessAbortedSince);
@@ -469,43 +479,85 @@ namespace OpenAstroAra.Test.PolarAlign {
 
         public Task AbortSlewAsync(string reason, CancellationToken ct) {
             _ = ct;
+            // As TelescopeService: a mount that is not connected refuses the stop before it is counted.
+            if (RefuseAbort?.Invoke(reason) == true || !IsConnected) {
+                lock (_lock) {
+                    CommandLocked("abort refused " + reason, isMotion: false);
+                }
+                return Task.FromException(new InvalidOperationException("telescope is not connected"));
+            }
             Abort(reason);
             return Task.CompletedTask;
         }
 
-        public Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
+        /// <summary>As TelescopeService (#2066): a stop counted in <see cref="AbortEpoch"/> with no command to the mount.</summary>
+        public void FenceMotion(string reason) {
+            lock (_lock) {
+                IntegrateLocked();
+                CommandLocked("fence " + reason, isMotion: false);
+                CountStopLocked(reason);
+            }
+        }
+
+        /// <summary>As TelescopeService (#2066): the first reason counted after <paramref name="abortEpoch"/>, other than
+        /// <paramref name="except"/>.</summary>
+        public string? AbortReasonSince(long abortEpoch, string? except) {
+            lock (_lock) {
+                return _abortReasons.Where(r => r.Epoch > abortEpoch && !string.Equals(r.Reason, except, StringComparison.Ordinal))
+                    .Select(r => r.Reason).FirstOrDefault();
+            }
+        }
+
+        private void CountStopLocked(string reason) => _abortReasons.Add((Interlocked.Increment(ref _abortEpoch), reason));
+
+        /// <summary>Whether the daemon has the mount: false between <see cref="Disconnect"/> and <see cref="Connect"/>.</summary>
+        public bool IsConnected {
+            get {
+                lock (_lock) {
+                    return _connected;
+                }
+            }
+        }
+
+        public async Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
+            await SlowReadAsync().ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (!_connected || SlewingReadFails || _slewReadsThrow) {
-                    return Task.FromResult<bool?>(null);
+                    return null;
                 }
-                return Task.FromResult<bool?>(ReportedSlewingLocked(SampleLocked()));
+                return ReportedSlewingLocked(SampleLocked());
             }
         }
 
-        public Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+        public async Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+            await SlowReadAsync().ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
-                    return Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+                    return null;
                 }
                 var s = SampleLocked();
-                return Task.FromResult<(double RaHours, double DecDegrees)?>((s.RaDeg / 15.0, s.DecDeg));
+                return (s.RaDeg / 15.0, s.DecDeg);
             }
         }
 
-        public Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+        public async Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+            await SlowReadAsync().ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
                 if (FreshReadFailsLocked()) {
-                    return Task.FromResult<MountReading?>(null);
+                    return null;
                 }
                 var s = SampleLocked();
                 bool? slewing = SlewingReadFails || _slewReadsThrow ? null : ReportedSlewingLocked(s);
-                return Task.FromResult<MountReading?>(new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing,
-                    PierSource == PierSideSource.Error ? PierSide.pierUnknown : s.Side, _t0 + s.At, _sessionEpoch));
+                return new MountReading(s.RaDeg / 15.0, s.DecDeg, slewing,
+                    PierSource == PierSideSource.Error ? PierSide.pierUnknown : s.Side, _t0 + s.At, _sessionEpoch);
             }
         }
+
+        /// <summary>A slow GET (<see cref="SlowReads"/>): the wait ignores the caller's token, as a blocking HTTP call does.</summary>
+        private Task SlowReadAsync() => SlowReads > TimeSpan.Zero ? Task.Delay(SlowReads, CancellationToken.None) : Task.CompletedTask;
 
         private void TakeFreshReadTime() {
             if (FreshReadTakes <= TimeSpan.Zero) {
@@ -814,6 +866,11 @@ namespace OpenAstroAra.Test.PolarAlign {
                 IntegrateLocked();
                 var text = string.Create(CultureInfo.InvariantCulture, $"move {(axis == 0 ? "primary" : "secondary")} {rate}");
                 if (rate == 0) {
+                    if (!_connected) {
+                        // As TelescopeService: a stop to a mount it lost is refused, and the axis runs on.
+                        CommandLocked(text + " refused", isMotion: false);
+                        throw new InvalidOperationException("telescope is not connected");
+                    }
                     CommandLocked(text, isMotion: false);
                     _slewReadsThrow = false;
                     StopAxisLocked(axis, StopKind.AxisStop, reason: null);
@@ -863,7 +920,7 @@ namespace OpenAstroAra.Test.PolarAlign {
                 IntegrateLocked();
                 CommandLocked("abort " + reason, isMotion: false);
                 _slewReadsThrow = false;
-                Interlocked.Increment(ref _abortEpoch);
+                CountStopLocked(reason);
                 _abortCount++;
                 _leaseUntil[0] = null; // TelescopeService cancels every lease on an abort
                 _leaseUntil[1] = null;
@@ -1080,7 +1137,10 @@ namespace OpenAstroAra.Test.PolarAlign {
             for (var axis = 0; axis < 2; axis++) {
                 if (_leaseUntil[axis] is TimeSpan until && until <= _t) {
                     _leaseUntil[axis] = null;
-                    StopAxisLocked(axis, StopKind.LeaseStop, "lease lapsed");
+                    // As TelescopeService's lease timer: with no client it drops the lease and cannot stop the axis.
+                    if (_connected) {
+                        StopAxisLocked(axis, StopKind.LeaseStop, "lease lapsed");
+                    }
                 }
             }
         }
