@@ -154,10 +154,18 @@ class OpticsSettingsNotifier extends Notifier<OpticsSettings>
     state = state.copyWith(telescopeName: v.trim());
   }
 
+  /// #2041 — a read from the rig has landed (an offline cache seed does not
+  /// count), so a save sends the rig's values, not the constructor defaults.
+  // shortcut: stays true across a rig change; move optics to the section
+  // module (ADR 0015, #1807) for a real per-rig loaded state.
+  bool get loadedFromRig => _loadedFromRig;
+  bool _loadedFromRig = false;
+
   /// Replace local state with what the daemon currently holds. Called when the
   /// Planning/Settings surface mounts. Errors bubble up for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getOptics());
+  Future<void> hydrateFromServer(ProfileApi api) async {
+    if (await hydrateGuarded(() => api.getOptics())) _loadedFromRig = true;
+  }
 
   /// Send the current local state to the daemon; returns its echo so the caller
   /// can confirm (and update state if the daemon normalized any field).

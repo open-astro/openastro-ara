@@ -3860,6 +3860,7 @@ void main() {
     await tester.pump();
     expect(value('sensor', '6248 × 4176 px'), findsOneWidget);
     expect(value('pixel', '3.76 µm'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsNothing, reason: 'filled: no longer to come');
     for (final id in ['sensor', 'pixel']) {
       expect(tester.widget<TextButton>(find.byKey(Key('simple-rig-$id'))).onPressed, isNull, reason: '$id is read only');
     }
@@ -3964,6 +3965,11 @@ void main() {
         '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
     ], everyElement(endsWith('800x600 px, 5.6 µm')));
     expect(api.puts, isNotEmpty, reason: 'the wheel is still saved, once the rig\'s optics are in');
+    expect(api.puts.last.apertureMm, 82, reason: 'the wheel\'s value, on top of the rig\'s optics');
+    // The Rig page's other reads fail on this fake and retry: stop them.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {

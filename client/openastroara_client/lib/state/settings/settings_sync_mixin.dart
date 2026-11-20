@@ -32,11 +32,14 @@ mixin SettingsSyncMixin<T> on Notifier<T> {
   Future<void>? _persistChain;
 
   /// Hydrate local state from [fetch], ignoring the result if a newer hydrate
-  /// started or the notifier was disposed while it was in flight.
-  Future<void> hydrateGuarded(Future<T> Function() fetch) async {
+  /// started or the notifier was disposed while it was in flight. Returns
+  /// whether the result landed.
+  Future<bool> hydrateGuarded(Future<T> Function() fetch) async {
     final gen = ++_syncGeneration;
     final loaded = await fetch();
-    if (ref.mounted && gen == _syncGeneration) state = loaded;
+    if (!ref.mounted || gen != _syncGeneration) return false;
+    state = loaded;
+    return true;
   }
 
   /// Persist the current state via [put] (called with the snapshot that is

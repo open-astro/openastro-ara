@@ -48,6 +48,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
+import '../../state/settings/loaded_section.dart' show SectionNotLoadedException;
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
@@ -422,6 +423,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // sensor from the main camera when one connects: read them again then.
     // Never written from here: a save sent from a read that had not landed
     // put the rig's sensor back to 0.
+    // A reconnect of the same device reads again because the rig reports no
+    // capabilities while it is disconnected: never cache them here.
     void readOpticsOnConnect((Object?, String?)? was, (Object?, String?)? now) {
       if (now?.$1 == null || (was?.$1 != null && was?.$2 == now?.$2)) return;
       final api = ref.read(profileApiProvider);
@@ -4746,6 +4749,12 @@ class _ThisRig extends ConsumerWidget {
   static String _micrometres(AppLocalizations l10n, double um) =>
       um > 0 ? '${um.toStringAsFixed(2)} µm' : l10n.shellNotSet;
 
+  /// A sensor size in pixels, or null while the rig has none.
+  static String? _sensor(OpticsSettings o) =>
+      o.sensorWidthPx > 0 && o.sensorHeightPx > 0
+      ? '${o.sensorWidthPx} × ${o.sensorHeightPx} px'
+      : null;
+
   /// Scrolls the Rig page so [key]'s block shows: [alignment] 0 puts it at
   /// the top, 1 at the bottom.
   static void _reveal(GlobalKey key, double alignment) {
@@ -4991,9 +5000,19 @@ class _ThisRig extends ConsumerWidget {
               context,
               ref,
               () => set(v),
-              (api) => ref
-                  .read(opticsSettingsProvider.notifier)
-                  .persistToServer(api),
+              // #2041 — the section goes whole: never over values not yet
+              // read from the rig (the sensor would go back to 0).
+              (api) async {
+                final optics = ref.read(opticsSettingsProvider.notifier);
+                if (!optics.loadedFromRig) {
+                  await optics.hydrateFromServer(api);
+                  if (!optics.loadedFromRig) {
+                    throw const SectionNotLoadedException(null);
+                  }
+                  set(v);
+                }
+                return optics.persistToServer(api);
+              },
             ),
           ),
         // #2041 — read only: the rig takes the sensor from the main camera
@@ -5001,12 +5020,11 @@ class _ThisRig extends ConsumerWidget {
         _RigReadOnlyRow(
           id: 'sensor',
           label: l10n.shellMainSensor,
-          hint: l10n.shellFromMainCamera,
-          value: switch (ref.watch(opticsSettingsProvider)) {
-            final o when o.sensorWidthPx > 0 && o.sensorHeightPx > 0 =>
-              '${o.sensorWidthPx} × ${o.sensorHeightPx} px',
-            _ => l10n.shellNotSet,
-          },
+          // The hint only while the sensor is still to come.
+          hint: _sensor(ref.watch(opticsSettingsProvider)) == null
+              ? l10n.shellFromMainCamera
+              : null,
+          value: _sensor(ref.watch(opticsSettingsProvider)) ?? l10n.shellNotSet,
         ),
         _RigReadOnlyRow(
           id: 'pixel',
