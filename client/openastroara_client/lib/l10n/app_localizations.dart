@@ -11173,6 +11173,48 @@ abstract class AppLocalizations {
   /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
   String refusalPolarAlignSweepLimit(String offset);
 
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'confirm the meridian flip'**
+  String get actionConfirmFlip;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): the user confirmed a completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.'**
+  String get safetyFirstFlipConfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): no flip confirmed and none completed since the last re-arm
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.'**
+  String get safetyFirstFlipUnconfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported a new pier side. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedPierChanged(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported no pier side, or the same one. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedCheckByEye(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): button that confirms the completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get safetyFirstFlipConfirmButton;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Confirm succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed. Later flips run without the alert.'**
+  String get safetyFirstFlipConfirmedSnack;
+
   /// Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change
   ///
   /// In en, this message translates to:

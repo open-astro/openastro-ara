@@ -6664,6 +6664,34 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get actionConfirmFlip => 'confirm the meridian flip';
+
+  @override
+  String get safetyFirstFlipConfirmedStatus =>
+      'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.';
+
+  @override
+  String get safetyFirstFlipUnconfirmedStatus =>
+      'Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.';
+
+  @override
+  String safetyFirstFlipCompletedPierChanged(String when) {
+    return 'A flip completed at $when: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.';
+  }
+
+  @override
+  String safetyFirstFlipCompletedCheckByEye(String when) {
+    return 'A flip completed at $when: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.';
+  }
+
+  @override
+  String get safetyFirstFlipConfirmButton => 'Confirm';
+
+  @override
+  String get safetyFirstFlipConfirmedSnack =>
+      'Meridian flip confirmed. Later flips run without the alert.';
+
+  @override
   String get refusalFirstFlipNotCompleted =>
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
@@ -13526,6 +13554,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalPolarAlignSweepLimit(String offset) {
     return 'A montagem girou $offset° desde onde o alinhamento polar começou. Leve-a de volta perto do polo, com os contrapesos para baixo, e inicie de novo.';
   }
+
+  @override
+  String get actionConfirmFlip => 'confirmar a virada de meridiano';
+
+  @override
+  String get safetyFirstFlipConfirmedStatus =>
+      'Virada de meridiano confirmada: as próximas viradas rodam sem o alerta. Rearme depois de rebalancear ou mudar o setup.';
+
+  @override
+  String get safetyFirstFlipUnconfirmedStatus =>
+      'Virada de meridiano ainda não confirmada: toda virada alerta e espera 60 s. Acompanhe uma virada do início ao fim e depois confirme aqui.';
+
+  @override
+  String safetyFirstFlipCompletedPierChanged(String when) {
+    return 'Uma virada terminou em $when: a montagem informou que o lado do pilar mudou. Confirme se o tubo passou livre da montagem e do tripé, e se os quadros e a guiagem voltaram.';
+  }
+
+  @override
+  String safetyFirstFlipCompletedCheckByEye(String when) {
+    return 'Uma virada terminou em $when: a montagem não informou mudança do lado do pilar, então confira a olho. Confirme se o tubo passou livre da montagem e do tripé, e se os quadros e a guiagem voltaram.';
+  }
+
+  @override
+  String get safetyFirstFlipConfirmButton => 'Confirmar';
+
+  @override
+  String get safetyFirstFlipConfirmedSnack =>
+      'Virada de meridiano confirmada. As próximas viradas rodam sem o alerta.';
 
   @override
   String get refusalFirstFlipNotCompleted =>

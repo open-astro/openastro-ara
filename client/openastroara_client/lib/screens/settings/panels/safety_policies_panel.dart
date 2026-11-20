@@ -74,11 +74,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
       await ref.read(safetyPoliciesProvider.notifier).confirmFirstFlip();
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Meridian flip confirmed — later flips run without the alert.',
-          ),
-        ),
+        SnackBar(content: Text(l10n.safetyFirstFlipConfirmedSnack)),
       );
     } catch (e) {
       if (!mounted) return;
@@ -87,7 +83,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           content: Text(
             e is SectionNotLoadedException || e is SectionConflictException
                 ? e.toString()
-                : friendlyError(l10n, e, action: l10n.actionSave),
+                : friendlyError(l10n, e, action: l10n.actionConfirmFlip),
           ),
         ),
       );
@@ -96,22 +92,18 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
 
   /// #1589 — what the first-flip row says: not confirmed and no completed
   /// flip, a completed flip waiting for the user's confirm, or confirmed.
-  static String _firstFlipStatus(SafetyPolicies s) {
+  static String _firstFlipStatus(AppLocalizations l10n, SafetyPolicies s) {
     final completed = s.firstFlipCompletedUtc;
     if (s.firstFlipConfirmed) {
-      return 'Meridian flip confirmed: later flips run without the alert. '
-          'Re-arm after re-balancing or a rig change.';
+      return l10n.safetyFirstFlipConfirmedStatus;
     }
     if (completed == null) {
-      return 'Meridian flip not confirmed yet: every flip alerts and waits '
-          '60 s. Watch one flip from start to end, then confirm it here.';
+      return l10n.safetyFirstFlipUnconfirmedStatus;
     }
     final when = DateFormat('yyyy-MM-dd HH:mm').format(completed.toLocal());
-    final pier = s.firstFlipPierSideChanged
-        ? 'the mount reported its pier side changed'
-        : 'the mount did not report a pier side change — check by eye';
-    return 'A flip completed at $when: $pier. Confirm if the scope cleared '
-        'the mount and the tripod, and frames and guiding came back.';
+    return s.firstFlipPierSideChanged
+        ? l10n.safetyFirstFlipCompletedPierChanged(when)
+        : l10n.safetyFirstFlipCompletedCheckByEye(when);
   }
 
   @override
@@ -339,7 +331,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             children: [
               Expanded(
                 child: Text(
-                  _firstFlipStatus(s),
+                  _firstFlipStatus(context.l10n, s),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
@@ -352,7 +344,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
                         s.firstFlipCompletedUtc != null
                     ? _confirmFirstFlip
                     : null,
-                child: const Text('Confirm'),
+                child: Text(context.l10n.safetyFirstFlipConfirmButton),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
