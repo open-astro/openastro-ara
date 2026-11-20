@@ -178,10 +178,11 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     } catch (_) {
       if (!on) {
         // A refused switch-off shows what the rig holds again. Still on there,
-        // or not known (the site never loaded): throw, so the screen can say
-        // so, and write nothing to the file.
-        final onRig =
-            ref.read(siteSettingsProvider).value?.permanentPier ?? true;
+        // or not known (the site never loaded, or only the offline cache's
+        // copy is there): throw, so the screen can say so, and write nothing
+        // to the file.
+        final site = ref.read(siteSettingsProvider);
+        final onRig = site.canSave ? site.value!.permanentPier : true;
         state = AsyncData(onRig);
         if (onRig) rethrow;
       }

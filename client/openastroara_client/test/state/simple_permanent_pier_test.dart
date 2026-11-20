@@ -217,6 +217,33 @@ void main() {
     },
   );
 
+  test(
+    'a switch-off with only the cache copy of the site (pier off) sends '
+    'nothing and stays on (ADR 0015)',
+    () async {
+      final rig = _Rig(pier: true);
+      rig.http.failGet.add('site');
+      final file = _File(true);
+      final c = _app(file, rig);
+      // The offline cache says off; the rig (unreachable) still holds on.
+      c
+          .read(siteSettingsProvider.notifier)
+          .seed(const SiteSettings(permanentPier: false));
+      expect(await c.read(simplePermanentPierProvider.future), isTrue);
+      expect(c.read(siteSettingsProvider).value!.permanentPier, isFalse);
+
+      await expectLater(
+        c.read(simplePermanentPierProvider.notifier).set(false),
+        throwsA(isA<SectionNotLoadedException>()),
+        reason: 'a cache copy is not what the rig holds',
+      );
+
+      expect(c.read(simplePermanentPierProvider).value, isTrue);
+      expect(rig.puts, 0);
+      expect(file.value, isTrue, reason: 'the refused off is not written down');
+    },
+  );
+
   test('no rig: the file alone decides', () async {
     final file = _File(false);
     final c = _app(file, null);
