@@ -342,7 +342,9 @@ namespace OpenAstroAra.Server.Services {
             // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
             // are both read here. #2066 — a reading that cannot be trusted (none, the placeholder, too old) or one past the
             // pole is refused before anything moves.
-            var (raDeg, decDeg, session, side) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
+            var (raDeg, decDeg, session, side, slewing) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
+            // #2066 (ARA-2) — a mount that slews, or a guider that guides, would move beside Polar Align's turns.
+            ThrowIfBusyAtStart(slewing);
             if (Math.Abs(decDeg) > OnAxisDecDeg) {
                 throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage);
             }
@@ -466,12 +468,15 @@ namespace OpenAstroAra.Server.Services {
                 var (priorCts, priorRun) = (_runCts, _runTask);
                 _runCts = null;
                 _runTask = null;
+                RunEnd? priorEnd;
                 lock (_gate) {
+                    priorEnd = _liveRun?.End;
                     _liveRun = null; // that run ended by itself (failed or checked): its exit stopped the mount
                 }
                 if (priorRun is not null) {
                     await AwaitRunUnwindAsync(priorRun).ConfigureAwait(false);
                 }
+                priorEnd?.ReleaseHold(); // #2066 — a run that never unwound gives the mount's motion owner back here
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
@@ -522,6 +527,15 @@ namespace OpenAstroAra.Server.Services {
                     await claim.ReleaseAsync().ConfigureAwait(false);
                     throw;
                 }
+                // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
+                // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
+                IDisposable hold;
+                try {
+                    hold = AcquireMountForRun();
+                } catch {
+                    await claim.ReleaseAsync().ConfigureAwait(false);
+                    throw;
+                }
                 lock (_gate) {
                     _claim = claim;
                 }
@@ -529,6 +543,7 @@ namespace OpenAstroAra.Server.Services {
                 int startSeq = 0;
                 var runCts = new CancellationTokenSource();
                 var runEnd = new RunEnd();
+                runEnd.Hold(hold);
                 bool endedWhileStarting;
                 lock (_gate) {
                     // Checked with the run's publication in one critical section: an end request either lands first
@@ -572,6 +587,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 if (endedWhileStarting) {
                     runCts.Dispose();
+                    runEnd.ReleaseHold();
                     await claim.ReleaseAsync().ConfigureAwait(false);
                     LogStartStoppedBeforeRun();
                     throw new InvalidOperationException("polar alignment was stopped while it was starting — the mount was not moved");
@@ -721,6 +737,9 @@ namespace OpenAstroAra.Server.Services {
                         TrackingOffBestEffort(outcome);
                     }
                 }
+                // #2066 (ARA-2) — the run is over: the mount's motion owner goes back (a run that unwound gave it back in its
+                // exit already; a stuck one gives it back here, after the stop above).
+                end?.ReleaseHold();
                 var mountNotStopped = end?.MountStopped == false;
                 bool becameStopped;
                 bool reportNotStopped = false;
@@ -980,6 +999,8 @@ namespace OpenAstroAra.Server.Services {
                     await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
                         handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
                 }
+                // #2066 (ARA-2) — the exit has stopped the mount (or left it to a takeover): the motion owner goes back.
+                end.ReleaseHold();
                 TryDeleteWorkDir(workDir);
             }
         }

@@ -20,6 +20,7 @@ using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using System;
@@ -161,9 +162,11 @@ namespace OpenAstroAra.Test {
             var guider = new FakeGuideCapture { AppState = state };
             using var svc = NewPolarAlign(guider);
 
-            var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
+            // #2066 (ARA-2) — refused at the start's plan with the mount-busy cause, before the custody module is asked.
+            var ex = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None)).ConfigureAwait(false);
 
-            Assert.That(ex!.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"));
+            Assert.That(ex!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy));
+            Assert.That(ex.Message, Does.Contain(state).IgnoreCase.And.Contain("stop guiding"));
             Assert.That(guider.LeaseCalls, Is.Empty);
             Assert.That(guider.Captures, Is.Empty);
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("idle"));

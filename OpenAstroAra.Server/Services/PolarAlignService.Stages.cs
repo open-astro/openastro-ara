@@ -483,7 +483,9 @@ namespace OpenAstroAra.Server.Services {
             // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
             // it away from the band (and the session's origin) until the stall bound. #2066 — a reading the run cannot trust
             // (none, the placeholder, another mount session, older than 2 s, Dec past the pole) stops the move and fails it.
-            var (startRa, startDec, startSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
+            // #2066 (ARA-2) — and nothing else moves the mount, nor guides, when the turn starts: two readings 1 s apart
+            // (mount_busy otherwise). The second is where the turn starts.
+            var (startRa, startDec, startSide) = await EnsureMountSteadyAsync(gen, ct).ConfigureAwait(false);
             var start = (startRa, startDec);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
             double learnedSign;

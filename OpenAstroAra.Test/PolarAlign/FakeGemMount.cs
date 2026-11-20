@@ -99,6 +99,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         private string? _limitReason;
         private int _abortCount;
         private string? _motionOwner;
+        private object? _motionClaim;
         private bool _inhibited;
         private int _cachedReadsWhileMoving;
         private int _sentinelReads;
@@ -575,7 +576,12 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        /// <summary>#2066 (ARA-2) — runs at the start of every <see cref="ReadNowAsync"/>, before the mount is read: something
+        /// that happens between two of the routine's full readings (the mount moved by other means).</summary>
+        public Action? OnFullRead { get; set; }
+
         public Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+            OnFullRead?.Invoke();
             TakeFreshReadTime();
             lock (_lock) {
                 IntegrateLocked();
@@ -661,20 +667,25 @@ namespace OpenAstroAra.Test.PolarAlign {
                 if (_inhibited) {
                     throw new InvalidOperationException("the motion latch is set (Emergency Stop): no new motion");
                 }
-                if (_motionOwner is not null) {
+                // As TelescopeService: another owner refuses; the same owner's new hold replaces its old one.
+                if (_motionOwner is not null && _motionOwner != owner) {
                     throw new InvalidOperationException($"{_motionOwner} is moving the mount");
                 }
                 _motionOwner = owner;
                 CommandLocked("acquire motion " + owner, isMotion: false);
-                return new MotionClaim(this, owner);
+                var claim = new MotionClaim(this);
+                _motionClaim = claim;
+                return claim;
             }
         }
 
-        private sealed class MotionClaim(FakeGemMount mount, string owner) : IDisposable {
+        private sealed class MotionClaim(FakeGemMount mount) : IDisposable {
             public void Dispose() {
                 lock (mount._lock) {
-                    if (mount._motionOwner == owner) {
+                    if (ReferenceEquals(mount._motionClaim, this)) {
+                        mount._motionClaim = null;
                         mount._motionOwner = null;
+                        mount.CommandLocked("release motion", isMotion: false);
                     }
                 }
             }
@@ -752,14 +763,28 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The mediator's fire-and-forget abort (tagged <c>watchdog</c> on the daemon).</summary>
         public void StopSlew() => Abort("watchdog");
 
+        /// <summary>The mediator's GoTo (the sequencer's, Center's). As TelescopeService (#2066 ARA-2): refused, with
+        /// nothing sent, while a routine holds the motion owner.</summary>
         public async Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
             ArgumentNullException.ThrowIfNull(coords);
             var jnow = coords.Epoch == Epoch.JNOW ? coords : coords.Transform(Epoch.JNOW);
             int? entry;
             lock (_lock) {
+                if (_motionOwner is { } owner) {
+                    CommandLocked("goto refused: " + owner + " holds the mount", isMotion: false);
+                    throw new SequenceEntityFailedException(TelescopeService.MotionOwnedMessage(owner, "GoTo"));
+                }
                 entry = BeginGoToLocked(MotionKind.GoTo, (jnow.RADegrees, jnow.Dec), fixedTrueTarget: null);
             }
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
+        }
+
+        /// <summary>A GoTo by other means (the hand controller, another program on the driver): the daemon's motion owner
+        /// does not see it. Starts it (JNOW RA and Dec, degrees) and returns at once; false when the mount refused it.</summary>
+        public bool GoToByOtherMeans(double raDeg, double decDeg) {
+            lock (_lock) {
+                return BeginGoToLocked(MotionKind.GoTo, (raDeg, decDeg), fixedTrueTarget: null) is int e && !_motions[e].Refused;
+            }
         }
 
         public async Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) {

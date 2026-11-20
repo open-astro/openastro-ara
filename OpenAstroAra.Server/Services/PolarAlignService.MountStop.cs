@@ -197,6 +197,15 @@ namespace OpenAstroAra.Server.Services {
             public bool Reported => Volatile.Read(ref _reported) == 1;
 
             public void MarkReported() => Volatile.Write(ref _reported, 1);
+
+            private IDisposable? _hold;
+
+            /// <summary>#2066 (ARA-2) — the run's hold of the mount's motion owner, taken before it launched.</summary>
+            public void Hold(IDisposable hold) => Volatile.Write(ref _hold, hold);
+
+            /// <summary>Give the run's motion owner back, once: when its exit has stopped the mount, when an end gives up
+            /// waiting for a stuck run, or when the next Start drains it.</summary>
+            public void ReleaseHold() => Interlocked.Exchange(ref _hold, null)?.Dispose();
         }
 
         // The current run's cancellation and end request, for the stop path, which must not wait on _opLock. Guarded by _gate.

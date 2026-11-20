@@ -326,6 +326,8 @@ namespace OpenAstroAra.Test {
                 StopResendAfter = TimeSpan.FromMilliseconds(20),
                 StopVerifyWindow = TimeSpan.FromMilliseconds(500),
                 ShutdownGrace = TimeSpan.FromSeconds(2),
+                // #2066 (ARA-2) — the two readings before each turn back to back (the daemon waits 1 s between them).
+                MountSteadyFor = TimeSpan.Zero,
             };
             if (mount is FakeGemMount gem) {
                 svc.Clock = gem.Clock; // #2066 — a reading's age on the fake's own clock
