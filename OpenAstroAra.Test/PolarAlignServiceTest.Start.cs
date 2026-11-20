@@ -258,6 +258,31 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Tracking, Is.False);
         }
 
+        [Test]
+        public async Task A_run_whose_first_reading_is_within_3_degrees_of_the_pole_fails_as_on_axis_and_moves_nothing() {
+            // The plan read Dec 86.9° (3.1° from the pole) and the user confirmed it; the mount was moved to Dec 87.5° before
+            // the run's own first reading. The run must fail as on_axis before anything moves: nothing tilts it off any more.
+            var mount = new FakeStopMount(tracking: true) { DecDeg = 86.9 };
+            var fake = NewFake();
+            fake.LeaseGate = active => {
+                if (active) {
+                    mount.DecDeg = 87.5; // after the plan, before the run's first reading
+                }
+                return Task.CompletedTask;
+            };
+            var ws = new WsRecorder();
+            using var svc = NewStopService(mount, ws, guider: fake);
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("on_axis"));
+            Assert.That(error.GetProperty("message").GetString(), Is.EqualTo(PolarAlignService.OnAxisMessage));
+            Assert.That(mount.Log.Where(IsMotion), Is.Empty, "zero motions: " + string.Join(", ", mount.Log));
+            Assert.That(mount.AtRest, Is.True);
+        }
+
         // ── the retired use_home setting ─────────────────────────────────────────────────────
 
         [Test]

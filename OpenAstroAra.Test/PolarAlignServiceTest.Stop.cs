@@ -323,6 +323,20 @@ namespace OpenAstroAra.Test {
                 }
             }
 
+            /// <summary>The mount's Dec reading; set it to put the scope somewhere else between two of the routine's reads.</summary>
+            public double DecDeg {
+                get {
+                    lock (_lock) {
+                        return _decDeg;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _decDeg = value;
+                    }
+                }
+            }
+
             public int Count {
                 get {
                     lock (_lock) {
