@@ -14,6 +14,7 @@
     { "name": "TelescopeSlewStarted", "type": "telescope.slew_started" },
     { "name": "TelescopeSlewComplete", "type": "telescope.slew_complete" },
     { "name": "TelescopeSlewAborted", "type": "telescope.slew_aborted" },
+    { "name": "TelescopeLimitReached", "type": "telescope.limit_reached", "payload": [ { "field": "limit", "type": "string", "nullable": false }, { "field": "minutes", "type": "integer", "nullable": false }, { "field": "tracking_stopped", "type": "boolean", "nullable": false }, { "field": "runs_paused", "type": "integer", "nullable": false }, { "field": "detail", "type": "string", "nullable": false } ] },
     { "name": "GuiderStep", "type": "guider.step" },
     { "name": "GuiderEvent", "type": "guider.event" },
     { "name": "GuiderPaResidual", "type": "guider.pa_residual" },

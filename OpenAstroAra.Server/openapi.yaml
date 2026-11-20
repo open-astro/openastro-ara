@@ -15597,6 +15597,27 @@ components:
             - string
           format: double
           default: 50
+        minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 5
+        max_minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 10
+        stop_before_meridian_min:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     SavedTargetDto:
       required:
         - name

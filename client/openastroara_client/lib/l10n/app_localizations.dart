@@ -11364,6 +11364,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start anyway'**
   String get clockWrongStartAnyway;
+
+  /// Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch
+  ///
+  /// In en, this message translates to:
+  /// **'Limits'**
+  String get limitsTitle;
+
+  /// Simple Mode Mount window, Limits: the row for the lowest altitude Ara points at (the profile's flat horizon)
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude'**
+  String get limitsLowestAltitude;
+
+  /// Screen-reader label of the + button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise lowest altitude'**
+  String get limitsLowestRaise;
+
+  /// Screen-reader label of the - button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower lowest altitude'**
+  String get limitsLowestLower;
+
+  /// Simple Mode Mount window, Limits: an altitude in whole degrees, like '20°'
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}°'**
+  String limitsDegrees(int deg);
+
+  /// Simple Mode Mount window, Limits: the read-only Lowest altitude when the profile uses a measured (custom) horizon
+  ///
+  /// In en, this message translates to:
+  /// **'Your measured horizon'**
+  String get limitsMeasuredHorizon;
+
+  /// Caption under 'Your measured horizon': where the measured horizon is edited
+  ///
+  /// In en, this message translates to:
+  /// **'Change it in Advanced Mode › Settings › Site.'**
+  String get limitsMeasuredHorizonCaption;
+
+  /// Simple Mode Mount window, Limits (flip Auto): the row for when the flip runs, before or after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'At the meridian'**
+  String get limitsAtMeridian;
+
+  /// Screen-reader label of the + button of the At the meridian stepper (moves the flip later)
+  ///
+  /// In en, this message translates to:
+  /// **'Later at the meridian'**
+  String get limitsAtMeridianLater;
+
+  /// Screen-reader label of the - button of the At the meridian stepper (moves the flip earlier)
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier at the meridian'**
+  String get limitsAtMeridianEarlier;
+
+  /// At the meridian value: stop tracking n minutes before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min before'**
+  String limitsMinBefore(int n);
+
+  /// At the meridian value: flip as the target crosses the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'On it'**
+  String get limitsOnMeridian;
+
+  /// At the meridian value: keep tracking n minutes after the meridian, then flip
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min after'**
+  String limitsMinAfter(int n);
+
+  /// Caption under At the meridian when it is before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.'**
+  String limitsCaptionBefore(int n);
+
+  /// Caption under At the meridian when it is on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips as soon as the target crosses the meridian.'**
+  String get limitsCaptionOn;
+
+  /// Caption under At the meridian when it is after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Keeps tracking {n} min past the meridian, then flips.'**
+  String limitsCaptionAfter(int n);
+
+  /// Simple Mode Mount window, Limits (flip Off): minutes before the meridian at which Ara stops tracking and pauses the plan
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian'**
+  String get limitsStopBefore;
+
+  /// Screen-reader label of the + button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise stop before meridian'**
+  String get limitsStopBeforeRaise;
+
+  /// Screen-reader label of the - button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower stop before meridian'**
+  String get limitsStopBeforeLower;
+
+  /// Stop before meridian value: a number of minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min'**
+  String limitsMinutes(int n);
+
+  /// Caption under Stop before meridian when it is set
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking and pauses the plan {n} min before the meridian.'**
+  String limitsStopCaption(int n);
+
+  /// Caption under Stop before meridian when it is Off
+  ///
+  /// In en, this message translates to:
+  /// **'The mount tracks through the meridian. Only its own firmware limit stops it.'**
+  String get limitsStopCaptionOff;
+
+  /// Pill after the Lowest altitude was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude {deg}°'**
+  String limitsPillLowest(int deg);
+
+  /// Pill after At the meridian was saved as before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, flips after it'**
+  String limitsPillBefore(int n);
+
+  /// Pill after At the meridian was saved as on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips at the meridian'**
+  String get limitsPillOn;
+
+  /// Pill after At the meridian was saved as after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips {n} min after the meridian'**
+  String limitsPillAfter(int n);
+
+  /// Pill after Stop before meridian was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian {n} min'**
+  String limitsPillStop(int n);
+
+  /// Pill after Stop before meridian was turned off
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian off'**
+  String get limitsPillStopOff;
+
+  /// Error pill when a Limits row could not be saved; the old value is back
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the limit'**
+  String get limitsCouldntSave;
+
+  /// Screen-reader label of the Limits sky arc
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed sky from {deg}° to the zenith'**
+  String limitsArcLabel(int deg);
+
+  /// Sky arc label: the band under the lowest altitude
+  ///
+  /// In en, this message translates to:
+  /// **'too low'**
+  String get limitsArcTooLow;
+
+  /// Sky arc label: the band where the mount may point
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get limitsArcOk;
+
+  /// Sky arc label: the horizon line
+  ///
+  /// In en, this message translates to:
+  /// **'horizon'**
+  String get limitsArcHorizon;
+
+  /// Error pill: the rig stopped tracking n minutes before the meridian (meridian flip off, Stop before meridian set)
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking stopped {n} min before the meridian.'**
+  String limitStoppedMeridian(int n);
+
+  /// Error pill: the rig asked the mount to stop tracking before the meridian and the mount did not
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t stop tracking {n} min before the meridian. Stop it by hand.'**
+  String limitNotStoppedMeridian(int n);
+
+  /// Added to the meridian stop pill when the plan was paused
+  ///
+  /// In en, this message translates to:
+  /// **'Plan paused.'**
+  String get limitPlanPaused;
+
+  /// Ends the meridian stop pill: Ara never slews or parks for a limit
+  ///
+  /// In en, this message translates to:
+  /// **'Ara didn\'t move the mount.'**
+  String get limitDidntMove;
+
+  /// Simple Mode search: the Limits group of the Mount window
+  ///
+  /// In en, this message translates to:
+  /// **'Mount limits'**
+  String get searchSettingMountLimits;
+
+  /// Simple Mode search keywords for Mount limits, space-separated
+  ///
+  /// In en, this message translates to:
+  /// **'limit horizon altitude lowest meridian stop flip'**
+  String get searchWordsMountLimits;
 }
 
 class _AppLocalizationsDelegate

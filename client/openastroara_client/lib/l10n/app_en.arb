@@ -8720,5 +8720,175 @@
   "clockWrongStartAnyway": "Start anyway",
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
+  },
+  "limitsTitle": "Limits",
+  "@limitsTitle": {
+    "description": "Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch"
+  },
+  "limitsLowestAltitude": "Lowest altitude",
+  "@limitsLowestAltitude": {
+    "description": "Simple Mode Mount window, Limits: the row for the lowest altitude Ara points at (the profile's flat horizon)"
+  },
+  "limitsLowestRaise": "Raise lowest altitude",
+  "@limitsLowestRaise": {
+    "description": "Screen-reader label of the + button of the Lowest altitude stepper"
+  },
+  "limitsLowestLower": "Lower lowest altitude",
+  "@limitsLowestLower": {
+    "description": "Screen-reader label of the - button of the Lowest altitude stepper"
+  },
+  "limitsDegrees": "{deg}°",
+  "@limitsDegrees": {
+    "description": "Simple Mode Mount window, Limits: an altitude in whole degrees, like '20°'",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsMeasuredHorizon": "Your measured horizon",
+  "@limitsMeasuredHorizon": {
+    "description": "Simple Mode Mount window, Limits: the read-only Lowest altitude when the profile uses a measured (custom) horizon"
+  },
+  "limitsMeasuredHorizonCaption": "Change it in Advanced Mode › Settings › Site.",
+  "@limitsMeasuredHorizonCaption": {
+    "description": "Caption under 'Your measured horizon': where the measured horizon is edited"
+  },
+  "limitsAtMeridian": "At the meridian",
+  "@limitsAtMeridian": {
+    "description": "Simple Mode Mount window, Limits (flip Auto): the row for when the flip runs, before or after the meridian"
+  },
+  "limitsAtMeridianLater": "Later at the meridian",
+  "@limitsAtMeridianLater": {
+    "description": "Screen-reader label of the + button of the At the meridian stepper (moves the flip later)"
+  },
+  "limitsAtMeridianEarlier": "Earlier at the meridian",
+  "@limitsAtMeridianEarlier": {
+    "description": "Screen-reader label of the - button of the At the meridian stepper (moves the flip earlier)"
+  },
+  "limitsMinBefore": "{n} min before",
+  "@limitsMinBefore": {
+    "description": "At the meridian value: stop tracking n minutes before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsOnMeridian": "On it",
+  "@limitsOnMeridian": {
+    "description": "At the meridian value: flip as the target crosses the meridian"
+  },
+  "limitsMinAfter": "{n} min after",
+  "@limitsMinAfter": {
+    "description": "At the meridian value: keep tracking n minutes after the meridian, then flip",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsCaptionBefore": "Stops tracking {n} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.",
+  "@limitsCaptionBefore": {
+    "description": "Caption under At the meridian when it is before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsCaptionOn": "Flips as soon as the target crosses the meridian.",
+  "@limitsCaptionOn": {
+    "description": "Caption under At the meridian when it is on the meridian"
+  },
+  "limitsCaptionAfter": "Keeps tracking {n} min past the meridian, then flips.",
+  "@limitsCaptionAfter": {
+    "description": "Caption under At the meridian when it is after the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopBefore": "Stop before meridian",
+  "@limitsStopBefore": {
+    "description": "Simple Mode Mount window, Limits (flip Off): minutes before the meridian at which Ara stops tracking and pauses the plan"
+  },
+  "limitsStopBeforeRaise": "Raise stop before meridian",
+  "@limitsStopBeforeRaise": {
+    "description": "Screen-reader label of the + button of the Stop before meridian stepper"
+  },
+  "limitsStopBeforeLower": "Lower stop before meridian",
+  "@limitsStopBeforeLower": {
+    "description": "Screen-reader label of the - button of the Stop before meridian stepper"
+  },
+  "limitsMinutes": "{n} min",
+  "@limitsMinutes": {
+    "description": "Stop before meridian value: a number of minutes",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopCaption": "Stops tracking and pauses the plan {n} min before the meridian.",
+  "@limitsStopCaption": {
+    "description": "Caption under Stop before meridian when it is set",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopCaptionOff": "The mount tracks through the meridian. Only its own firmware limit stops it.",
+  "@limitsStopCaptionOff": {
+    "description": "Caption under Stop before meridian when it is Off"
+  },
+  "limitsPillLowest": "Lowest altitude {deg}°",
+  "@limitsPillLowest": {
+    "description": "Pill after the Lowest altitude was saved",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsPillBefore": "Stops tracking {n} min before the meridian, flips after it",
+  "@limitsPillBefore": {
+    "description": "Pill after At the meridian was saved as before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillOn": "Flips at the meridian",
+  "@limitsPillOn": {
+    "description": "Pill after At the meridian was saved as on the meridian"
+  },
+  "limitsPillAfter": "Flips {n} min after the meridian",
+  "@limitsPillAfter": {
+    "description": "Pill after At the meridian was saved as after the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillStop": "Stop before meridian {n} min",
+  "@limitsPillStop": {
+    "description": "Pill after Stop before meridian was saved",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillStopOff": "Stop before meridian off",
+  "@limitsPillStopOff": {
+    "description": "Pill after Stop before meridian was turned off"
+  },
+  "limitsCouldntSave": "Couldn't save the limit",
+  "@limitsCouldntSave": {
+    "description": "Error pill when a Limits row could not be saved; the old value is back"
+  },
+  "limitsArcLabel": "Allowed sky from {deg}° to the zenith",
+  "@limitsArcLabel": {
+    "description": "Screen-reader label of the Limits sky arc",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsArcTooLow": "too low",
+  "@limitsArcTooLow": {
+    "description": "Sky arc label: the band under the lowest altitude"
+  },
+  "limitsArcOk": "OK",
+  "@limitsArcOk": {
+    "description": "Sky arc label: the band where the mount may point"
+  },
+  "limitsArcHorizon": "horizon",
+  "@limitsArcHorizon": {
+    "description": "Sky arc label: the horizon line"
+  },
+  "limitStoppedMeridian": "Tracking stopped {n} min before the meridian.",
+  "@limitStoppedMeridian": {
+    "description": "Error pill: the rig stopped tracking n minutes before the meridian (meridian flip off, Stop before meridian set)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitNotStoppedMeridian": "The mount didn't stop tracking {n} min before the meridian. Stop it by hand.",
+  "@limitNotStoppedMeridian": {
+    "description": "Error pill: the rig asked the mount to stop tracking before the meridian and the mount did not",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitPlanPaused": "Plan paused.",
+  "@limitPlanPaused": {
+    "description": "Added to the meridian stop pill when the plan was paused"
+  },
+  "limitDidntMove": "Ara didn't move the mount.",
+  "@limitDidntMove": {
+    "description": "Ends the meridian stop pill: Ara never slews or parks for a limit"
+  },
+  "searchSettingMountLimits": "Mount limits",
+  "@searchSettingMountLimits": {
+    "description": "Simple Mode search: the Limits group of the Mount window"
+  },
+  "searchWordsMountLimits": "limit horizon altitude lowest meridian stop flip",
+  "@searchWordsMountLimits": {
+    "description": "Simple Mode search keywords for Mount limits, space-separated"
   }
 }

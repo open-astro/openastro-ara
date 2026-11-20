@@ -1907,3 +1907,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Services/CounterweightGuard.cs`, `Services/TelescopeService.cs` (`SlewInBackground`), `Endpoints/EquipmentEndpoints.cs` (`SlewAsync`), `Contracts/Refusals/RefusalCatalog.cs`. Tests `GotoCounterweightRefusalTest`, `TelescopeRestGotoTrackingTest`, `RefusalHandlerTest`; client `lib/services/refusal.dart`.
 
 **Related:** #2073, #2048, #2070, ADR 0022
+
+---
+
+## 2026-11-20 — #2044 meridian timing on the wire, and a stop before the meridian with the flip off: `telescope.limit_reached`
+
+**Endpoint(s) or area:** profile JSON `safety` (`SafetyPoliciesDto`): `minutes_after_meridian` (int, default 5), `max_minutes_after_meridian` (int, default 10), `stop_before_meridian_min` (int, nullable, default null). WebSocket `telescope.limit_reached` (typed payload `TelescopeLimitReachedPayload`: `limit`, `minutes`, `tracking_stopped`, `runs_paused`, `detail`).
+
+**Decision:** `minutes_after_meridian` and `max_minutes_after_meridian` are NINA's `MinutesAfterMeridian` and `MaxMinutesAfterMeridian`, applied to the flip settings with the existing `meridian_pause_min` (negative values read as 0; minutes-after is clamped to the max). The defaults are NINA's, so an older profile flips as before. A non-zero `meridian_pause_min` still overrides both (a hard stop before the meridian). Simple Mode's "At the meridian" writes one signed value onto the three: N min before → pause N, after 0, max 5; on it → all 0 but max 5; N min after → pause 0, after N, max N + 5. `stop_before_meridian_min` is read only with `meridian_flip_auto` false: the daemon's `MeridianStopWatch` (15 s tick) stops tracking and pauses the active runs once when the mount tracks and its pointing is that many minutes or less before the upper meridian, then publishes `telescope.limit_reached` with `limit` `stop_before_meridian`. It runs with or without a plan (`runs_paused` 0), never slews or parks, re-arms when the pointing leaves the window, and does nothing with the flip on, with null or 0, with no site or with no position. `tracking_stopped` is false when the mount did not take the command.
+
+**Reasoning:** with the flip off nothing but the mount's own firmware stopped a mount tracking into the pier; the flip trigger is inert with AutoFlip off. The two flip-window values existed in the daemon but not on the wire, so the client could not set when a flip runs after the meridian.
+
+**Spec ref:** `Contracts/ProfileDtos.cs`, `Services/StoreBackedProfileService.cs` (`ApplyMeridian`), `Services/MeridianStopWatch.cs`, `Contracts/WsEvents/TelescopePayloads.cs`. Tests `MeridianStopWatchTest`, `StoreBackedProfileServiceMeridianTest`; client `state/settings/safety_policies_state.dart`, `screens/simple/simple_mount_limits.dart`.
+
+**Related:** #2044, #1589, ADR 0014
