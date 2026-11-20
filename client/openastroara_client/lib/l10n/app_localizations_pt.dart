@@ -6741,6 +6741,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarDirectionWest => 'west';
 
   @override
+  String get refusalMountClockNotVerified =>
+      'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
+
+  @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
 
   @override
@@ -13764,6 +13768,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarDirectionWest => 'oeste';
+
+  @override
+  String get refusalMountClockNotVerified =>
+      'O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do setup: espere um momento e tente de novo, ou sincronize a hora em Configurações.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';
