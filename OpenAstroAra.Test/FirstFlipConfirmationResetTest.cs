@@ -162,6 +162,63 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_created_profile_starts_unconfirmed() {
+            // #1589 review — the wizard and duplicate-current create a profile with no settings, which
+            // clones the live store. The new profile is usually for another mount, and no flip ran on it,
+            // so it must not inherit the source's confirmation or completed flip. The source keeps both.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-firstflip-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                var store = new FileProfileStore(dir);
+                using var repo = new FileProfileRepository(dir, store);
+                var rigA = repo.Create("Rig A", settings: null, makeActive: true);
+                store.UpdateSafetyPolicies(Confirmed);
+
+                var twin = repo.Create("Rig A twin", settings: null, makeActive: false);
+                AssertUnconfirmed(repo.GetProfile(twin.Id)!.Settings.SafetyPolicies, "a duplicate");
+                Assert.That(store.GetSafetyPolicies().FirstFlipConfirmed, Is.True,
+                    "a duplicate that is not activated leaves the active profile confirmed");
+
+                var rigB = repo.Create("Rig B (new mount)", settings: null, makeActive: true);
+                AssertUnconfirmed(store.GetSafetyPolicies(), "the live store after a wizard create");
+                AssertUnconfirmed(repo.GetProfile(rigB.Id)!.Settings.SafetyPolicies, "a wizard create");
+                Assert.That(repo.GetProfile(rigA.Id)!.Settings.SafetyPolicies.FirstFlipConfirmed, Is.True,
+                    "the source profile keeps its own confirmation");
+            } finally {
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        [Test]
+        public void A_create_body_cannot_carry_a_confirmation() {
+            // #1589 review — only the flip executor and the confirm endpoint write the first-flip
+            // fields. A create body with settings (a client that sends a snapshot) starts unconfirmed too.
+            var dir = Path.Combine(Path.GetTempPath(), "ara-firstflip-" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            try {
+                var store = new FileProfileStore(dir);
+                using var repo = new FileProfileRepository(dir, store);
+                repo.Create("Rig A", settings: null, makeActive: true);
+                var body = ProfileStoreSnapshot.Capture(store);
+                body = body with { SafetyPolicies = Confirmed(body.SafetyPolicies) };
+
+                var created = repo.Create("Rig B", body, makeActive: true);
+                AssertUnconfirmed(repo.GetProfile(created.Id)!.Settings.SafetyPolicies, "a create with a body");
+                AssertUnconfirmed(store.GetSafetyPolicies(), "the live store after a create with a body");
+            } finally {
+                try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
+
+        private static void AssertUnconfirmed(SafetyPoliciesDto s, string what) {
+            Assert.That(s.FirstFlipConfirmed, Is.False, $"{what} has had no flip, so it is not confirmed");
+            Assert.That(s.FirstFlipCompletedUtc, Is.Null, $"{what} has no completed flip on record");
+            Assert.That(s.FirstFlipPierSideChanged, Is.False, $"{what} has no pier-side change on record");
+        }
+
+        [Test]
         public void InMemory_store_resets_on_optics_change_only() =>
             AssertResetSemantics(new InMemoryProfileStore());
 

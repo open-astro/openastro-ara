@@ -358,8 +358,8 @@ Ara assumes you're asleep while it works:
   waits 60 s; stop the run in that window if the scope could hit the mount. Watch one flip from
   start to end. When it completes, Ara asks you to confirm it under **Settings → Unattended
   running → When to stop**: press **Confirm** if the scope cleared the mount and tripod and
-  frames and guiding came back on target. Ara never confirms on its own; an optics change or
-  **Re-arm** asks again.
+  frames and guiding came back on target. Ara never confirms on its own; an optics change,
+  **Re-arm** or a new profile (also a duplicate) asks again.
 - **Set the meridian pause per rig.** **Stop before meridian** is when imaging stops before the
   meridian. Where the camera or rotator can reach the tripod or pier, measure how long the target
   takes from a safe angle to the meridian and add a margin. Ara has no clearance limit yet (#1589).
