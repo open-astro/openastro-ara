@@ -293,7 +293,7 @@ Phase 13  — Image preview pipeline end-to-end (server JPEG gen + client displa
             §12.5, §40.2
 Phase 14  — Tests + GitHub Actions CI matrix
             §14, §14.3
-Phase 15  — TODO sweep + RPi smoke test + release v0.0.1-ara.1
+Phase 15  — TODO sweep + RPi smoke test + first release (now v1.0.0-beta.1, source only: docs/RELEASES.md)
             §22, docs/DEPLOY.md + README written, .deb published, .dmg/.exe/.AppImage on GitHub Releases (desktop only per §18.G; mobile deferred — see the `P1`–`P5` issue backlog)
 ```
 
@@ -1084,9 +1084,7 @@ sudo chown root:openastroara /etc/openastroara
 sudo chmod 750 /etc/openastroara
 ```
 
-Per release, GitHub Actions builds:
-- `linux-arm64` self-contained, gzipped as `openastroara-server-0.0.1-ara.N-linux-arm64.tar.gz`.
-- Optional `.deb` via `dotnet-packaging` (lower priority; tarball works).
+Releases are source only (#2093): `release.yml` publishes the notes and `openastro-ara-<version>-source.tar.gz` with its `.sha256`, and users build the server themselves (`docs/RELEASES.md`, `docs/RUNNING.md`). CI's `.deb` is a dev artifact and is never published.
 
 systemd unit at `/etc/systemd/system/openastroara-server.service` (installed by .deb postinst per §34.3):
 
@@ -1554,9 +1552,9 @@ If the gate fails and you cannot fix it within ~5 attempts, revert the last comm
 | Server log path | Linux: `/var/log/openastroara/`; macOS dev: `~/Library/Logs/OpenAstroAra/`; Windows dev: `%LOCALAPPDATA%\OpenAstroAra\Logs\` |
 | Server config path | `/etc/openastroara/` (Linux); equivalents on dev OSes |
 | Client local storage | platform-default app data dir, scoped to bundle ID |
-| Version | Server: `0.0.1-ara.1` (assembly: `0.0.1.0`); Client: `0.0.1+1` (Flutter format) |
+| Version | One root `VERSION` file (`X.Y.Z` or `X.Y.Z~betaN`) drives the daemon, the client constant and `pubspec.yaml`; spellings in `docs/RELEASES.md` |
 | Phase tags | `phase-N-complete` |
-| Release tag form | `v0.0.1-ara.N` |
+| Release tag form | `vX.Y.Z` or `vX.Y.Z-beta.N`, on `stable/X.Y` (`docs/RELEASES.md`) |
 | App icon / branding assets | placeholder during AI port; `TODO(branding): replace before public release` markers wherever icons are referenced |
 
 ### 17.2 MPL 2.0 preservation
@@ -4139,9 +4137,9 @@ WILMA's Help menu adds "Release notes" → opens the side panel with the full ch
 
 **Release process integration:**
 
-- The Phase 15 PR (final port → master) adds the `## [0.0.1-ara.1] - <date>` section to CHANGELOG.md with `--release`
+- A stable release adds its dated `## [X.Y.Z] - <date>` section to CHANGELOG.md with `--release` (betas do not; `docs/RELEASES.md`)
 - Any PR with user-visible changes adds a `changelog.d/` fragment; the Sanity job's `scripts/changelog-fragments.py --check` validates every fragment (#1812)
-- Release tags (manual, user-driven): `scripts/changelog-fragments.py --release <version> --date <date>`, push tag, GitHub Actions builds the .deb with the updated CHANGELOG.md
+- Release tags (manual, user-driven, `/bump-release`): push the tag on `stable/X.Y`, and `release.yml` publishes the notes and the source tarball (no binaries)
 - Cross-ref with COMMIT-PR-RULES "Things still to decide" — release cadence post-release entry (future-scope section) inherits the changelog discipline
 
 **Cross-references:**
@@ -12582,7 +12580,9 @@ Server-side distribution (.deb via apt.openastro.net) is §34 — completely sep
 
 ### 75.1 Build matrix
 
-GitHub Actions (`.github/workflows/release.yml`, fires on tag push matching `v0.0.1-ara.*`) produces three artifacts per release:
+**Superseded (#2093):** releases are source only, so no client binaries are built or published. The real `release.yml` is described in `docs/RELEASES.md`. The plan below is kept as history.
+
+The original plan: a `release.yml` firing on a release tag would produce three artifacts per release:
 
 | Platform | Artifact | Build runner | Build command | Approx size |
 |---|---|---|---|---|
@@ -12738,7 +12738,7 @@ Implementation: `path_provider` package's `getApplicationSupportDirectory()` ret
 
 ### 75.8 CI release pipeline (`.github/workflows/release.yml`)
 
-Triggered by tag push matching `v*-ara.*`. Three parallel jobs (one per OS):
+**Superseded (#2093):** the real `release.yml` publishes a source tarball only (`docs/RELEASES.md`). This was the original binary plan, kept as history. Three parallel jobs (one per OS):
 
 ```yaml
 name: Release
