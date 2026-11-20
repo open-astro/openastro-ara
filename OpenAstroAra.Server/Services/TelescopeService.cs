@@ -266,7 +266,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 SlewWatch.NoteSlewTarget(ra, dec);
             }
         }
-        _ = Task.Run(() => SlewInBackground(client, ra, dec, sync, abortEpoch), CancellationToken.None);
+        _ = Task.Run(() => SlewInBackgroundAsync(client, ra, dec, sync, abortEpoch), CancellationToken.None);
         return Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey);
     }
 
@@ -777,10 +777,13 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// every abort source gets the same watch-noting races and lifecycle guarantees.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
-    private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
+    private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow, bool counted = false) {
         // Before the lease goes: a routine's renewal must see the abort first. A renewal landing between the two only
-        // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe.
-        BumpAbortEpoch(reason);
+        // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe. A stop that
+        // is already counted (the GoTo's abort again, SlewInBackgroundAsync) is not counted twice.
+        if (!counted) {
+            BumpAbortEpoch(reason);
+        }
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
@@ -845,7 +848,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void SlewInBackground(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch) {
+    private async Task SlewInBackgroundAsync(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch) {
         try {
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
@@ -866,6 +869,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
                 // State="slewing" until the mount settles.
                 client.SlewToCoordinatesAsync(raHours, decDeg);
+                // #2066 (ADR rule 3) — a stop that landed while the GoTo's PUT was on the wire (Emergency Stop's latch, Stop
+                // Mount, the watchdog) may have reached the mount before the GoTo did: the mount then slews after the stop.
+                // Abort it again, under the stop's own reason; the stop is already counted.
+                if (AbortedSince(abortEpoch)) {
+                    var by = AbortReasonSince(abortEpoch, except: null) ?? "user_request";
+                    LogSlewAbortedAgain(raHours, decDeg, by);
+                    await AbortSlewCoreAsync(client, by, rethrow: false, counted: true).ConfigureAwait(false);
+                    return;
+                }
             }
             RefreshCacheOnce();
         } catch (Exception ex) {
@@ -1742,6 +1754,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° dropped: the mount was stopped after the GoTo was accepted")]
     private partial void LogSlewDroppedAfterAbort(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a stop ({By}) landed while the GoTo was being sent; the mount was aborted again")]
+    private partial void LogSlewAbortedAgain(double ra, double dec, string by);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();

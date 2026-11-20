@@ -262,6 +262,33 @@ namespace OpenAstroAra.Test {
             Assert.That(PutIndex(box, "findhome"), Is.EqualTo(-1), "the homing never reaches the mount after the stop");
         }
 
+        // #2066 (ADR rule 3, #2048 ARA-2) — the GoTo's PUT is slow to reach the mount, and a stop lands meanwhile (Emergency
+        // Stop's latch; its AbortSlew, or Stop Mount's, can reach the mount before the GoTo does). The mount would then slew
+        // after the stop: the GoTo is aborted again once its PUT returns.
+        [Test]
+        public async Task Abort_racing_a_delayed_slew_PUT_aborts_again() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) {
+                    Thread.Sleep(200); // the PUT on the wire
+                    svc!.FenceMotion("emergency_stop");
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => PutIndex(box, "abortslew") >= 0, "the GoTo that raced the stop was never aborted again");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, GotoVerb), Is.GreaterThanOrEqualTo(0), "the GoTo reached the mount");
+                Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(PutIndex(box, GotoVerb)), "the abort follows the GoTo");
+                Assert.That(log.Messages, Has.Some.Contains("aborted again"));
+            });
+        }
+
         [Test]
         public async Task A_find_home_with_no_stop_reaches_the_mount() {
             await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
