@@ -258,7 +258,7 @@ class ReleaseLineCiTest(unittest.TestCase):
     def deb_version(self, version_file, tags=(), branch="master", release_tag_script=None, expect_fail=False):
         """Run the workflow's .deb version step in a throwaway repository; return its version output."""
         step = steps(job(self.text, "server-build"))["Compute .deb version"]
-        self.assertIn("BUILD_BRANCH: ${{ github.base_ref || github.ref_name }}", step)
+        self.assertIn("BUILD_BRANCH: ${{ github.base_ref || github.event.merge_group.base_ref || github.ref_name }}", step)
         script = textwrap.dedent(step.split("        run: |\n", 1)[1])
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -319,6 +319,11 @@ class ReleaseLineCiTest(unittest.TestCase):
         out = self.deb_version("1.0.0", tags=["v1.0.0"], expect_fail=True,
                                release_tag_script="import sys\nsys.exit(1)\n")
         self.assertIn("release-tag.py failed on tag v1.0.0", out)
+
+    def test_a_merge_group_into_a_stable_branch_stays_on_that_line(self):
+        # A merge group's base arrives as refs/heads/stable/1.0; ref_name would be the queue branch.
+        self.assertEqual(self.deb_version("1.0.0~beta1", branch="refs/heads/stable/1.0"),
+                         "nightly --branch stable/1.0")
 
     def test_an_untagged_build_passes_its_branch_to_the_nightly_version(self):
         self.assertEqual(self.deb_version("1.0.0~beta2", branch="stable/1.0"), "nightly --branch stable/1.0")
