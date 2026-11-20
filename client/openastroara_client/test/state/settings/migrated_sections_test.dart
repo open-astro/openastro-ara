@@ -358,6 +358,35 @@ void main() {
     expect(rig.puts, isEmpty);
   });
 
+  test('diagnostics-mode: a tap after one failed load loads again and saves '
+      'when the rig answers', () async {
+    final rig = _rig()..failGet.add(mode);
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    expect(c.read(diagnosticsModeProvider).canSave, isFalse);
+    rig.failGet.remove(mode);
+    await n.replaceAndSave(tapped);
+    expect(rig.puts, hasLength(1));
+    expect(c.read(diagnosticsModeProvider).source, SectionSource.rig);
+  });
+
+  test('diagnostics-mode: a tap made from the offline cache copy is refused '
+      'even when the rig answers, and nothing is sent', () async {
+    final rig = _rig()..failGet.add(mode);
+    final c = _container(rig);
+    final n = c.read(diagnosticsModeProvider.notifier);
+    await n.load(rig.api());
+    n.seed(DiagnosticsMode.notifyOnly);
+    expect(c.read(diagnosticsModeProvider).source, SectionSource.cache);
+    rig.failGet.remove(mode);
+    await expectLater(
+      n.replaceAndSave(tapped),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
   test('diagnostics-mode: a radio tap refused as stale keeps the choice and '
       'flags the conflict', () async {
     final rig = _rig();
