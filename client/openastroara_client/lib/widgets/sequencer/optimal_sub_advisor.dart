@@ -206,7 +206,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       final skyCalibrationK = await _skyCalibrationK();
       if (!mounted || seq != _fetchSeq) return; // superseded
       final outcome = resolveOptimalSubLocal(
-        optics: ref.read(opticsSettingsProvider),
+        optics:
+            ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
         electronics:
             ref.read(cameraElectronicsProvider).value ??
             const CameraElectronics(),

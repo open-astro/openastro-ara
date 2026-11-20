@@ -580,6 +580,13 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _getTagged('optics', _opticsFromRig);
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
+
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
@@ -762,6 +769,21 @@ class ProfileApi {
         ),
         backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
         backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
+      );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as 0 ("unset") or a 1.0 reducer, which a Save would then write
+  // over the rig's sensor or focal length (#2041). The reducer is read as the
+  // rig holds it; the daemon refuses a Save of one at or below 0.
+  static OpticsSettings _opticsFromRig(Map<String, dynamic> j) =>
+      OpticsSettings(
+        focalLengthMm: (j['focal_length_mm'] as num).toDouble(),
+        reducerFactor: (j['reducer_factor'] as num).toDouble(),
+        sensorWidthPx: (j['sensor_width_px'] as num).toInt(),
+        sensorHeightPx: (j['sensor_height_px'] as num).toInt(),
+        pixelSizeUm: (j['pixel_size_um'] as num).toDouble(),
+        apertureMm: (j['aperture_mm'] as num).toDouble(),
+        telescopeName: j['telescope_name'] as String,
       );
 
   /// PUT the active profile's storage-settings section.

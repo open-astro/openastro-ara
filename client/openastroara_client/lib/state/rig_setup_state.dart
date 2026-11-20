@@ -82,11 +82,17 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   if (api == null) return false;
   try {
     // Read here, not through the planner's bootstrap: it swallows a failed read.
-    await Future.wait([
+    // Optics is on the section module (it loads itself): its load reports a
+    // failure instead of throwing, and a copy already in from the rig is kept.
+    final optics = ref.read(opticsSettingsProvider);
+    final (_, _, opticsLoaded) = await (
       ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
-      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
       ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
-    ]);
+      optics.canSave
+          ? Future.value(true)
+          : ref.read(opticsSettingsProvider.notifier).load(api),
+    ).wait;
+    if (!opticsLoaded) return false;
     // Kept until the rig changes: a read when a dropped link comes back would
     // undo a Settings edit not saved yet.
     if (ref.mounted) ref.keepAlive();
@@ -116,7 +122,9 @@ final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
   if (!ref.watch(serverLinkUpProvider)) return null;
   if (!(ref.watch(rigSetupHydratedProvider).value ?? false)) return null;
   final site = ref.watch(siteSettingsProvider);
-  final optics = ref.watch(opticsSettingsProvider);
+  // Back to not loaded (a rig or profile change): not trusted until it is in.
+  final optics = ref.watch(opticsSettingsProvider).value;
+  if (optics == null) return null;
   final guide = ref.watch(phd2SettingsProvider);
   final guider = ref.watch(guiderStatusProvider).value;
   final connected = guider?.isConnected ?? false;

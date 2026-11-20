@@ -194,6 +194,15 @@ const rigDefaults = <String, Map<String, Object?>>{
     'cooler_ramp_c_per_min': 1.0,
     'warmup_at_session_end': false,
   },
+  'optics': {
+    'focal_length_mm': 0,
+    'reducer_factor': 1.0,
+    'sensor_width_px': 0,
+    'sensor_height_px': 0,
+    'pixel_size_um': 0,
+    'aperture_mm': 0,
+    'telescope_name': '',
+  },
   'plate-solve': {
     'engine': 'astap',
     'path_or_endpoint': '/opt/openastroara/astap_cli',

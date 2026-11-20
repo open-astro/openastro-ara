@@ -4,6 +4,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
 
 /// The profile's imaging defaults for a widget test, with no HTTP (a Dio
 /// request leaves a timer pending in a test that only pumps). The section
@@ -49,6 +50,30 @@ class FakeAutofocusSection extends AutofocusSettingsNotifier {
   Future<Tagged<AutofocusSettings>> send(
     ProfileApi api,
     AutofocusSettings value,
+    String? etag,
+  ) async {
+    if (refuse case final e?) throw e;
+    puts.add(value);
+    return (value: value, etag: '"v${puts.length + 1}"');
+  }
+}
+
+/// [FakeImagingDefaultsSection] for the optics section.
+class FakeOpticsSection extends OpticsSettingsNotifier {
+  FakeOpticsSection({this.initial = const OpticsSettings()});
+
+  OpticsSettings? initial;
+  final List<OpticsSettings> puts = [];
+  Object? refuse;
+
+  @override
+  Future<Tagged<OpticsSettings>> fetch(ProfileApi api) async =>
+      (value: initial ?? (throw StateError('rig unreachable')), etag: '"v1"');
+
+  @override
+  Future<Tagged<OpticsSettings>> send(
+    ProfileApi api,
+    OpticsSettings value,
     String? etag,
   ) async {
     if (refuse case final e?) throw e;

@@ -125,7 +125,7 @@ double suggestedSubSeconds(
   Map<String, double> skyCalibrationK = const {},
 }) {
   final outcome = resolveOptimalSubLocal(
-    optics: ref.read(opticsSettingsProvider),
+    optics: ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
     electronics:
         ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
     site: ref.read(siteSettingsProvider),

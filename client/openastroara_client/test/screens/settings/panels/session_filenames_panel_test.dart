@@ -8,6 +8,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/storage_fixture.dart';
 
@@ -40,11 +41,21 @@ class _FakeRig extends FakeStorageApi {
   @override
   Future<SiteSettings> putSiteSettings(SiteSettings value) async => value;
 
-  @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  /// Every optics save that reached the rig.
+  final opticsPuts = <OpticsSettings>[];
 
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings value) async => value;
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(focalLengthMm: 382), etag: '"o1"');
+
+  @override
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings value, {
+    String? ifMatch,
+  }) async {
+    opticsPuts.add(value);
+    return (value: value, etag: '"o2"');
+  }
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeRig api) async {
@@ -130,6 +141,26 @@ void main() {
       isSemantics(isLiveRegion: true),
     );
   });
+
+  testWidgets(
+    'File naming: the telescope name is saved with the optics copy from the rig (ADR 0015)',
+    (tester) async {
+      final api = _FakeRig();
+      final container = await _pump(tester, api);
+      expect(find.widgetWithText(EditableTextRow, 'Telescope'), findsOneWidget);
+      container
+          .read(opticsSettingsProvider.notifier)
+          .setTelescopeName('RedCat 51');
+      await container.read(panelSaveActionProvider)!();
+      await tester.pumpAndSettle();
+      expect(api.opticsPuts.single.telescopeName, 'RedCat 51');
+      expect(
+        api.opticsPuts.single.focalLengthMm,
+        382,
+        reason: 'the rest of the rig\'s copy goes back unchanged',
+      );
+    },
+  );
 
   testWidgets('Save that retries the other loads keeps the Storage edits', (
     tester,
