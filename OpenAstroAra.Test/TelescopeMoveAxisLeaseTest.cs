@@ -310,6 +310,23 @@ namespace OpenAstroAra.Test {
             await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
         }
 
+        // #2066 — a Find Home ends the leases, as a Park does: a lease left to run out would send MoveAxis 0 in the middle
+        // of the homing.
+        [Test]
+        public async Task A_find_home_ends_the_leases_so_no_lease_stop_lands_on_the_homing() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None); // a pad press, leased
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            var stopsBefore = MoveAxisPuts(box).Count(b => IsStop(b, 0));
+            clock.Now = clock.Now.AddSeconds(5);
+            svc.CheckLeases();
+
+            Assert.That(MoveAxisPuts(box).Count(b => IsStop(b, 0)), Is.EqualTo(stopsBefore), "no lease-expiry stop after the Find Home");
+        }
+
         // The race the check before the driver call cannot see: Stop Mount lands while the move's own PUT is in flight,
         // so the move may reach the mount after the AbortSlew. The service stops the axis again and refuses the move.
         [Test]

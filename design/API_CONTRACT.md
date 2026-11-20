@@ -1932,7 +1932,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #2048, #2089, #2070, #2071, ADR 0022
 
-## 2026-11-21 — Emergency Stop latches first; any stop from outside ends Polar Align; `polar-align-moving-mount` (#2066, #2067)
+## 2026-11-20 — Emergency Stop latches first; any stop from outside ends Polar Align; `polar-align-moving-mount` (#2066, #2067)
 
 **Endpoint(s) or area:** new Refusal cause `polar-align-moving-mount` (409, no parameters) at `POST /equipment/telescope/slew` (not a sync), `/moveaxis` (a non-zero rate), `/home` and `/park`; new `polar_align.error` reason `slew_aborted_externally` (replaces `slew_failed` for a stop from outside); `POST /server/emergency-stop` gains a step 0. Server-internal: `ITelescopeService.FenceMotion(reason)` and `AbortReasonSince(epoch, except)`; `IPolarAlignService.StopForTakeoverAsync(by)` and `IsMovingMount`.
 

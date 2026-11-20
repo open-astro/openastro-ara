@@ -96,6 +96,41 @@ namespace OpenAstroAra.Test {
             Assert.That(sync, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
         }
 
+        // #2066 — Park and Home while Polar Align turns the mount: refused before the mount; accepted once it is still.
+        [Test]
+        public async Task A_park_while_polar_align_turns_the_mount_is_refused() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.park", DateTimeOffset.UtcNow, null));
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false);
+            var accepted = await EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+        }
+
+        [Test]
+        public async Task A_find_home_while_polar_align_turns_the_mount_is_refused() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.findhome", DateTimeOffset.UtcNow, null));
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false);
+            var accepted = await EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+        }
+
         [Test]
         public async Task Confirm_home_answers_204_when_the_mount_reports_home() {
             // #2070 — the user confirmed Home and the rig trusts the position again.

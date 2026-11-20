@@ -406,6 +406,16 @@ namespace OpenAstroAra.Server.Services {
             // Emergency Stop, park or Find Home from here on ends the run before it moves (ThrowIfStoppedFromOutside).
             var abortEpochAtCall = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
             var ownAbortsAtCall = Interlocked.Read(ref _ownAborts);
+            // The reading the run keeps (_abortWatch). Re-read at the launch when only Polar Align's own stops moved the
+            // count since the call: a Start pressed right after a failed turn must not inherit the old run's resent
+            // AbortSlew, or the telescope service would refuse the new run's first motor command.
+            (long Epoch, long OwnAborts) RunAbortBaseline() {
+                var epochNow = (_mount as ITelescopeService)?.AbortEpoch ?? 0;
+                var ownNow = Interlocked.Read(ref _ownAborts);
+                return epochNow - abortEpochAtCall <= ownNow - ownAbortsAtCall
+                    ? (epochNow, ownNow)
+                    : (abortEpochAtCall, ownAbortsAtCall);
+            }
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
             try {
                 lock (_gate) {
@@ -533,7 +543,8 @@ namespace OpenAstroAra.Server.Services {
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
                         gen = ++_generation;
-                        _abortWatch = (gen, abortEpochAtCall, ownAbortsAtCall);
+                        var (baselineEpoch, baselineOwn) = RunAbortBaseline();
+                        _abortWatch = (gen, baselineEpoch, baselineOwn);
                         _lastCaptureFault = null; // fresh run — stale capture faults must not color its failures
                         // _abandonedCaptureDebts was cleared above, after the guider reported idle: a capture
                         // abandoned by the just-stopped run has delivered its event by now.

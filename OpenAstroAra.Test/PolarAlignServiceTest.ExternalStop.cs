@@ -153,6 +153,50 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.Since(at + 1), Is.Empty, $"nothing after the park: {string.Join(", ", mount.Since(at))}");
         }
 
+        // Each stop from outside is named, and only the senders that own the mount afterwards take it over: Emergency Stop
+        // checks it itself, a park and a Find Home move it on purpose (an AbortSlew from the exit would abort them).
+        [TestCase("user_request", "Stop Mount", false)]
+        [TestCase("watchdog", "watchdog", false)]
+        [TestCase("emergency_stop", "Emergency Stop", true)]
+        [TestCase("park", "parked", true)]
+        [TestCase("findhome", "sent Home", true)]
+        [TestCase(null, "Stop Mount", false)]
+        public void Each_stop_from_outside_is_named_and_only_its_owners_take_the_mount_over(string? by, string named, bool takesOver) {
+            Assert.That(PolarAlignService.StoppedFromOutsideMessage(by), Does.Contain(named));
+            Assert.That(PolarAlignService.TakesTheMountOver(by), Is.EqualTo(takesOver));
+        }
+
+        // A Start pressed right after a failed turn, while the old run's exit still resends its AbortSlew: those sends are
+        // Polar Align's own, so the new run must not start under a count they make stale (the telescope service would then
+        // refuse its first motor command).
+        [Test]
+        public async Task A_Start_while_the_last_runs_exit_resends_its_stop_still_turns_the_mount() {
+            var mount = new FakeStopMount(tracking: true) { RefusesMotor = true };
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HookedSolver(), mount.Mock, ws, store: NewStore());
+            svc.StopResendAfter = TimeSpan.FromMilliseconds(300); // the resends land after the next Start was called
+            svc.StopVerifyNotBefore = TimeSpan.FromSeconds(1.5);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var watch = Stopwatch.StartNew();
+            while ((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State != "failed") {
+                Assert.That(watch.Elapsed, Is.LessThan(SignalTimeout), "the refused move never failed the run");
+                await Task.Delay(5).ConfigureAwait(false);
+            }
+            mount.RefusesMotor = false;
+
+            var at = mount.Count;
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var mark = Mark(svc); // the Start waited for the old run, whose error event is out by now
+            var status = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(mount.Since(at).Count(c => c == "abort polar_align"), Is.GreaterThanOrEqualTo(2), "the old exit resent its stop meanwhile");
+            Assert.That(mount.Since(at).Where(c => c.EndsWith(" refused", StringComparison.Ordinal)), Is.Empty, string.Join(", ", mount.Since(at)));
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                string.Join(" | ", ws.Events.Skip(mark).Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.ToString())));
+        }
+
         // The telescope endpoints refuse a GoTo, a pad move, Home and Park only while a turn runs (or its stop is not
         // confirmed yet), not while the run exposes, solves or the user adjusts.
         [Test]

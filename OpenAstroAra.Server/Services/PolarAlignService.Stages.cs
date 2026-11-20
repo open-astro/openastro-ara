@@ -646,9 +646,11 @@ namespace OpenAstroAra.Server.Services {
             } catch (RoutineFailedException) {
                 throw;
             } catch (Exception) when (AbortedSince(abortEpoch)) {
-                // A refused renewal after a stop: from outside, the run-wide watch's failure; Polar Align's own, a stop.
+                // A refused motor command after a stop: from outside, the run-wide watch's failure. Only Polar Align's own
+                // stop moved the count (a superseded run's late resend): the mount still refused the move.
                 ThrowIfStoppedFromOutside(gen);
-                throw new OperationCanceledException("the run was stopped while the mount moved");
+                throw new RoutineFailedException("slew_failed",
+                    "the mount refused the motor move right after a stop — check it is still, then start again");
             } catch (Exception ex) {
                 // #1536 — the user gets the recovery; the driver's own text goes to the log.
                 LogAxisMoveRefused(axis, ex);

@@ -111,9 +111,9 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A stop that hands the mount to its sender: Emergency Stop stops and checks it itself, a park or Find Home
         /// moves it on purpose. The run's exit then sends no stop of its own (it would abort the park) and confirms none.</summary>
-        private static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
+        internal static bool TakesTheMountOver(string? by) => by is "emergency_stop" or "park" or "findhome";
 
-        private static string StoppedFromOutsideMessage(string? by) => by switch {
+        internal static string StoppedFromOutsideMessage(string? by) => by switch {
             "emergency_stop" => "Emergency Stop stopped the mount — polar alignment ended. Start again when ready",
             "watchdog" => "the meridian-flip watchdog stopped the mount — polar alignment ended. Check the mount, then start again",
             "park" => "the mount was parked from outside polar alignment — polar alignment ended. Unpark it and start again when ready",
@@ -310,11 +310,18 @@ namespace OpenAstroAra.Server.Services {
             var abort = forceAbort || motion != MountMotion.None || SlewingByTheCache();
             LogMountStopSent(why, abort, motion);
             if (abort) {
-                // Counted before the send: the run-wide watch must never read Polar Align's own stop as one from outside.
-                Interlocked.Increment(ref _ownAborts);
+                // Counted once the send moved the mount's stop count, so the run-wide watch never reads Polar Align's own stop
+                // as one from outside. Never before: a send that is refused before it counts (a mount not connected) would
+                // then hide a later stop from outside. A watch that reads between the count and this line sees one stop more
+                // than Polar Align's own; only a run that is already stopping (its generation moved) or a Start's baseline
+                // (re-read at the launch, RunAbortBaseline) can read then.
+                var countBefore = (_mount as ITelescopeService)?.AbortEpoch;
                 await StopCommandAsync("AbortSlew", () => _mount is ITelescopeService service
                     ? service.AbortSlewAsync(AbortReason, CancellationToken.None)
                     : Task.Run(_mount.StopSlew, CancellationToken.None)).ConfigureAwait(false);
+                if (countBefore is long before && _mount is ITelescopeService counted && counted.AbortEpoch != before) {
+                    Interlocked.Increment(ref _ownAborts);
+                }
             }
             await StopCommandAsync("MoveAxis primary 0", () => RunAxisAsync(TelescopeAxes.Primary, 0)).ConfigureAwait(false);
             await StopCommandAsync("MoveAxis secondary 0", () => RunAxisAsync(TelescopeAxes.Secondary, 0)).ConfigureAwait(false);

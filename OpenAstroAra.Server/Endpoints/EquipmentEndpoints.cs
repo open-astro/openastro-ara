@@ -95,6 +95,22 @@ public static partial class EquipmentEndpoints {
         }
     }
 
+    /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "park");
+        return Results.Accepted(value: await telescope.ParkAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+    }
+
+    /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    internal static async Task<IResult> TelescopeFindHomeAsync(string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "home");
+        return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
+    }
+
     /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
     /// position is trusted again; 409 when it is not connected or does not report AtHome now.</summary>
     internal static async Task<IResult> ConfirmHomeAsync(ITelescopeService telescope, CancellationToken ct) {
@@ -394,16 +410,12 @@ public static partial class EquipmentEndpoints {
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
         // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align turns the mount.
-        telescope.MapPost("/park", async ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) => {
-            ThrowIfPolarAlignMovesTheMount(polarAlign, "park");
-            return Results.Accepted(value: await svc.ParkAsync(request ?? new ParkRequestDto(), key, ct));
-        });
+        telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeParkAsync(request, key, svc, polarAlign, ct));
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
-        telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) => {
-            ThrowIfPolarAlignMovesTheMount(polarAlign, "home");
-            return Results.Accepted(value: await svc.FindHomeAsync(key, ct));
-        });
+        telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeFindHomeAsync(key, svc, polarAlign, ct));
         // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
         telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
             .Produces(StatusCodes.Status204NoContent)
