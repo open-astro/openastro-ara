@@ -18,6 +18,8 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/preference_sync_listener.dart';
 
+import '../support/fake_section_rig.dart';
+
 /// Counts reads; every merge gets the same stamp the daemon would return.
 class _Settings implements ClientSettingsClient {
   int fetches = 0;
@@ -44,6 +46,7 @@ class _Settings implements ClientSettingsClient {
 /// The rig's profile endpoints: counts site reads, answers the profile list.
 class _Rig implements HttpClientAdapter {
   int siteReads = 0;
+  String siteName = 'Backyard';
 
   @override
   Future<ResponseBody> fetch(
@@ -54,7 +57,8 @@ class _Rig implements HttpClientAdapter {
     Object body = <String, Object>{};
     if (options.path.endsWith('/profile/site')) {
       siteReads++;
-      body = {'site_name': 'Seen on the other device'};
+      // The whole section, as the rig serves it (ADR 0015: no client default).
+      body = {...rigDefaults['site']!, 'site_name': siteName};
     } else if (options.path.endsWith('/profiles')) {
       body = {'active_id': null, 'profiles': <Object>[]};
     }
@@ -164,14 +168,17 @@ void main() {
 
   testWidgets('profile.updated re-reads that section', (tester) async {
     final (_, rig, events, _, container) = await pump(tester);
-    expect(rig.siteReads, 0);
+    container.read(siteSettingsProvider); // the section loads itself
+    await tester.pumpAndSettle();
+    final before = rig.siteReads;
+    rig.siteName = 'Seen on the other device';
 
     events.add(_event('profile.updated', {'section': 'site'}));
     await tester.pumpAndSettle();
 
-    expect(rig.siteReads, 1);
+    expect(rig.siteReads, before + 1);
     expect(
-      container.read(siteSettingsProvider).siteName,
+      container.read(siteSettingsProvider).value!.siteName,
       'Seen on the other device',
     );
   });

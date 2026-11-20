@@ -659,7 +659,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final storage = ref.watch(storageSpaceProvider).value;
     final coolerOff = ref.watch(monitorCoolerOffProvider);
     final trends = ref.watch(monitorTrendsProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final guidingRms = ref.watch(guidingRmsProvider).value;
     ref.watch(skyClockProvider);
 

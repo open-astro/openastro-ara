@@ -36,6 +36,7 @@ namespace OpenAstroAra.Test.PolarAlign {
             "Sync", "Sync", "MeridianFlip", "Action telescope:setpierside", "CommandString", "CommandBool", "CommandBlind",
         };
         private static readonly TimeSpan OneSecond = TimeSpan.FromSeconds(1);
+        private static readonly bool[] HonouredThenIgnored = { true, false };
 
         private static (FakeGemMount Mount, ManualMountClock Clock) At(double haHours, double decDeg, bool tracking = false, double latitudeDeg = 45.0) {
             var clock = new ManualMountClock();
@@ -463,6 +464,38 @@ namespace OpenAstroAra.Test.PolarAlign {
             Assert.That(mount.AbortCount, Is.EqualTo(n + 1));
             Assert.That(mount.AbortEpoch, Is.EqualTo(n + 1));
             Assert.That(mount.Motions.Single().TrueDeltaHaDeg, Is.EqualTo(-2.0 * n).Within(1e-6));
+        }
+
+        [Test]
+        public async Task FakeGemMount_abort_ignored_counts_only_aborts_with_something_to_stop() {
+            var (mount, clock) = At(-4.0, 85.0);
+            mount.AbortIgnored = 1;
+            await mount.AbortSlewAsync("polar_align", CancellationToken.None); // a still mount: nothing to ignore
+            await mount.MoveAxisAsync(0, 2.0, leaseMs: null, CancellationToken.None);
+            await mount.AbortSlewAsync("polar_align", CancellationToken.None);
+            Run(mount, clock, OneSecond);
+
+            Assert.That(mount.IsMoving, Is.True, "the one ignored abort is the one sent while the motor ran");
+            Assert.That(mount.Stops.Select(s => s.Honoured), Is.EqualTo(HonouredThenIgnored));
+        }
+
+        [Test]
+        public async Task FakeGemMount_fresh_read_takes_its_time_on_the_manual_clock() {
+            var (mount, clock) = At(-4.0, 85.0);
+            mount.FreshReadTakes = TimeSpan.FromMilliseconds(10);
+            var ha0 = mount.TruePose.MechHaDeg;
+            var t0 = clock.GetUtcNow();
+            await mount.MoveAxisAsync(0, 10.0, leaseMs: null, CancellationToken.None);
+            for (var i = 0; i < 5; i++) {
+                await mount.ReadPointingNowAsync(CancellationToken.None);
+            }
+            await mount.ReadSlewingNowAsync(CancellationToken.None);
+            await mount.ReadNowAsync(CancellationToken.None);
+
+            Assert.That(clock.GetUtcNow() - t0, Is.EqualTo(TimeSpan.FromMilliseconds(70)), "seven reads of 10 ms");
+            Assert.That(GemGeometry.Wrap180(mount.TruePose.MechHaDeg - ha0), Is.EqualTo(-0.7).Within(1e-9), "10°/s for the 70 ms they took");
+            Assert.That(mount.GetCurrentPosition(), Is.Not.Null);
+            Assert.That(clock.GetUtcNow() - t0, Is.EqualTo(TimeSpan.FromMilliseconds(70)), "a cached read takes no time");
         }
 
         [TestCase(1)]

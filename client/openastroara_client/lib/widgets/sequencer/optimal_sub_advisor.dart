@@ -211,7 +211,7 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
         electronics:
             ref.read(cameraElectronicsProvider).value ??
             const CameraElectronics(),
-        site: ref.read(siteSettingsProvider),
+        site: ref.read(siteSettingsProvider).value ?? const SiteSettings(),
         filterSet:
             ref.read(filterSetProvider).value ?? const FilterSetSettings(),
         filterName: widget.filterName,

@@ -19,6 +19,7 @@ import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
 import 'optics_settings_state.dart';
 import 'plate_solve_settings_state.dart';
+import 'site_settings_state.dart';
 import 'storage_settings_state.dart';
 import 'unguided_settings_state.dart';
 
@@ -62,6 +63,7 @@ final List<MigratedSection> migratedSections = [
   (route: 'notifications', provider: notificationsSettingsProvider),
   (route: 'optics', provider: opticsSettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),
+  (route: 'site', provider: siteSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
   (route: 'unguided', provider: unguidedSettingsProvider),
 ];

@@ -587,6 +587,13 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
 
+  Future<({SiteSettings value, String? etag})> getSiteSection() =>
+      _getTagged('site', _siteFromRig);
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) => _putTagged('site', siteSettingsToJson(v), _siteFromRig, ifMatch);
+
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
       _getTagged('autofocus', _autofocusSettingsFromRig);
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
@@ -785,6 +792,30 @@ class ProfileApi {
         apertureMm: (j['aperture_mm'] as num).toDouble(),
         telescopeName: j['telescope_name'] as String,
       );
+
+  // Strict like the readers above: a missing key, or a twilight line the
+  // client does not know, fails the load instead of reading as "Backyard" at
+  // 0/0, which a Save would then write over the rig's site.
+  static SiteSettings _siteFromRig(Map<String, dynamic> j) => SiteSettings(
+    siteName: j['site_name'] as String,
+    latitudeDeg: (j['latitude_deg'] as num).toDouble(),
+    longitudeDeg: (j['longitude_deg'] as num).toDouble(),
+    elevationM: (j['elevation_m'] as num).roundToDouble(),
+    timeZone: j['time_zone'] as String,
+    useCustomHorizon: j['use_custom_horizon'] as bool,
+    defaultHorizonAltitudeDeg: (j['default_horizon_altitude_deg'] as num)
+        .toDouble(),
+    bortleClass: (j['bortle_class'] as num).toInt(),
+    sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num).toDouble(),
+    typicalSeeingArcsec: (j['typical_seeing_arcsec'] as num).toDouble(),
+    twilightDefinition: TwilightDefinition.values.byName(
+      j['twilight_definition'] as String,
+    ),
+    maxSequenceRuntimeMin: (j['max_sequence_runtime_min'] as num).toInt(),
+    softWarningAltitudeDeg: (j['soft_warning_altitude_deg'] as num).toDouble(),
+    observerName: j['observer_name'] as String,
+    permanentPier: j['permanent_pier'] as bool,
+  );
 
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {

@@ -147,7 +147,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
           debugPrint('StellariumView: daemon site unavailable, using cached: $e');
         }
         if (!mounted) return;
-        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider));
+        final site = planetariumSiteFor(serverSite, ref.read(siteSettingsProvider).value ?? const SiteSettings());
         final optics = planetariumOpticsFor(
           ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
         );
@@ -572,7 +572,7 @@ class _StellariumViewState extends ConsumerState<StellariumView> {
     // to poll (online, the page's own polling of the profile endpoints does
     // the same job; the push is harmless there — same values).
     ref.listen(siteSettingsProvider, (_, next) {
-      final site = planetariumSiteFor(null, next);
+      final site = planetariumSiteFor(null, next.value ?? const SiteSettings());
       if (site == null) return;
       _pushCmd({
         'type': 'site',

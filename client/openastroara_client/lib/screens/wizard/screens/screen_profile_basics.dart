@@ -107,7 +107,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
 
   /// The sky in effect: what the draft holds, else the saved site settings.
   SkyState _sky() {
-    final saved = ref.read(siteSettingsProvider);
+    final saved = ref.read(siteSettingsProvider).value ?? const SiteSettings();
     return SkyState(
       bortleClass: _draft.site.bortleClass ?? saved.bortleClass,
       sqmMagPerArcsec2: _draft.site.sqmMagPerArcsec2 ?? saved.sqmMagPerArcsec2,

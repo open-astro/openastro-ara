@@ -184,7 +184,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   /// Facing the south celestial pole: east and west swap sides on screen.
-  bool get _southern => ref.watch(siteSettingsProvider).latitudeDeg < 0;
+  bool get _southern => (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
 
   @override
   Widget build(BuildContext context) {

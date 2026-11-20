@@ -2282,7 +2282,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ),
       // #1971 the Polar Aligner's motors, their own line under the routine's.
       if (polarAlignerStatusLine(l10n, polar,
-              southern: ref.watch(siteSettingsProvider).latitudeDeg < 0)
+              southern: (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0)
           case final c?)
         _PillData(
           SimpleStatusOrigin.polarAligner,

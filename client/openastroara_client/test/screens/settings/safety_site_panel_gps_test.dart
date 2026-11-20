@@ -16,6 +16,8 @@ import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/gps_site_fill.dart';
 
+import '../../support/site_section.dart';
+
 class _NoServers implements SavedServerService {
   @override
   Future<List<AraServer>> loadAll() async => const [];
@@ -96,6 +98,8 @@ void main() {
       ProviderScope(
         overrides: [
           savedServerServiceProvider.overrideWithValue(_NoServers()),
+          // The site as the rig's copy (ADR 0015): the fields show.
+          siteFromRig(),
           // No server → no dongle fix → the Mac fallback path runs (unless a test passes one).
           timeSyncApiProvider.overrideWithValue(server),
           if (dongle != null) serialGpsSourceProvider.overrideWithValue(dongle),
@@ -135,7 +139,7 @@ void main() {
     await tester.tap(find.text('Fill from GPS'));
     await tester.pumpAndSettle();
 
-    final s = container.read(siteSettingsProvider);
+    final s = container.read(siteSettingsProvider).value!;
     expect(s.latitudeDeg, 30.5);
     expect(s.longitudeDeg, -97.75);
     expect(s.elevationM, 240.0);
@@ -164,7 +168,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
     }
 
-    final s = container.read(siteSettingsProvider);
+    final s = container.read(siteSettingsProvider).value!;
     expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'rounded to 2 dp like every fill');
     expect(s.longitudeDeg, closeTo(-77.04, 1e-9));
     expect(s.elevationM, 121, reason: 'whole metres');
@@ -190,7 +194,7 @@ void main() {
     for (var i = 0; i < 8; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    final s = container.read(siteSettingsProvider);
+    final s = container.read(siteSettingsProvider).value!;
     expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'the dongle, not the server echo');
     expect(find.textContaining('Filled from the GPS dongle on this'), findsOneWidget);
   });
@@ -207,7 +211,7 @@ void main() {
     for (var i = 0; i < 12; i++) {
       await tester.pump(const Duration(milliseconds: 100));
     }
-    final s = container.read(siteSettingsProvider);
+    final s = container.read(siteSettingsProvider).value!;
     expect(s.latitudeDeg, closeTo(38.85, 1e-9), reason: 'the probed dongle, not the device location');
     expect(s.elevationM, 121, reason: 'whole metres');
     expect(find.textContaining('now enabled in Settings'), findsOneWidget);
@@ -229,7 +233,7 @@ void main() {
     // No server → base note "No server connected", then the Mac location
     // fails, so the message explains the fallback is unavailable.
     expect(find.textContaining("couldn't provide a location"), findsOneWidget);
-    expect(container.read(siteSettingsProvider).latitudeDeg, 0.0);
+    expect(container.read(siteSettingsProvider).value!.latitudeDeg, 0.0);
   });
 
   testWidgets(
@@ -246,7 +250,7 @@ void main() {
     // suspends on the gate's future.
     await tester.pump();
     await tester.pump();
-    expect(container.read(siteSettingsProvider).latitudeDeg, 0.0,
+    expect(container.read(siteSettingsProvider).value!.latitudeDeg, 0.0,
         reason: 'fill is in flight; nothing applied yet');
 
     // "User" edits latitude while the lookup is pending (a valid value so
@@ -256,7 +260,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The fetched fix is NOT applied; the manual value stays.
-    expect(container.read(siteSettingsProvider).latitudeDeg, 12.5);
+    expect(container.read(siteSettingsProvider).value!.latitudeDeg, 12.5);
     expect(
       find.textContaining('not overwritten'),
       findsOneWidget,
