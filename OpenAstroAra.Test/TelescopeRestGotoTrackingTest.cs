@@ -233,6 +233,47 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        // #2107 — two parks in flight (a second Park while the first still waits for the guider): one goes to the mount, the
+        // other is dropped with a log line that names the park it lost to (its 202 stands), and no AbortSlew: neither park
+        // aborts the other.
+        [Test]
+        public async Task Two_parks_in_flight_send_one_park_and_name_the_dropped_one() {
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true));
+            var asked = 0;
+            var bothAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                if (Interlocked.Increment(ref asked) == 2) {
+                    bothAsked.TrySetResult();
+                }
+                return stopDone.Task;
+            });
+            using var svc = await ConnectedAsync(box, log, () => guider.Object);
+            var before = svc.AbortEpoch;
+
+            var first = svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            var second = svc.ParkAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            await bothAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            stopDone.SetResult(true);
+            await first;
+            await second;
+
+            await WaitForAsync(() => PutIndex(box, "park") >= 0, "no park reached the mount");
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("park dropped", StringComparison.Ordinal)), "the other park was not dropped");
+            await Task.Delay(200);
+            Assert.Multiple(() => {
+                Assert.That(box.Puts.Count(p => p.Path.EndsWith("/park", StringComparison.Ordinal)), Is.EqualTo(1), "one park reaches the mount");
+                Assert.That(PutIndex(box, "abortslew"), Is.EqualTo(-1), "neither park aborts the other");
+                // One park counts as a stop; the other either found that count (it read the count first) or was requested
+                // after it and counted its own, which drops the first: both ways one park goes out.
+                Assert.That(svc.AbortReasonSince(before, except: null), Is.EqualTo(MountStopReasons.Park));
+                Assert.That(log.Messages, Has.Some.Contains("park dropped: the mount was stopped (a park)"), "the dropped park says what took the mount");
+            });
+        }
+
         // #2066 — a Find Home has the park's window (it waits for the guider before the homing): Emergency Stop's latch, or a
         // Stop Mount, that lands in it must not be followed by the homing.
         [TestCase("emergency_stop")]
@@ -443,20 +484,22 @@ namespace OpenAstroAra.Test {
             var gotos = 0;
             var mount = Mount(tracking: true);
             await using var box = ScriptedAlpacaDevice.Start(
-                path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" : mount(path), // JNOW
+                // J2000, not JNOW: GetInfo reports JNOW for a system not read yet too, so only J2000 shows the read landed. Unread,
+                // the slew reads it itself, an await that lets A's PUT return before the slew reaches its send.
+                path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "2" : mount(path),
                 putResponder: path => {
                     if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
                         Thread.Sleep(200); // A's PUT on the wire
                         svc!.FenceMotion("user_request"); // a Stop Mount
                         // The sequencer's slew goes out before A's PUT returns: everything it reads first is cached, so it
                         // reaches its send synchronously; its PUT follows A's.
-                        slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW), CancellationToken.None);
+                        slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.J2000), CancellationToken.None);
                     }
                     return null;
                 });
             svc = await ConnectedAsync(box, log);
             using var _ = svc;
-            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.JNOW, "the mount's coordinate system was never read");
+            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.J2000, "the mount's coordinate system was never read");
 
             await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
 

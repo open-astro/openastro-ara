@@ -64,8 +64,10 @@ public sealed partial class TelescopeService : IMountClockGate {
     }
 
     /// <summary>A check of the mount's clock, and the wall and monotonic clocks when it was made: a host
-    /// clock step after it shows up as the two drifting apart.</summary>
-    private sealed record MountClockCheck(bool Verified, string Reason, DateTimeOffset WallAtCheck, long TickAtCheck);
+    /// clock step after it shows up as the two drifting apart. <paramref name="WriteOwed"/>: no trusted time
+    /// has landed in the mount's clock yet (never written, the write failed, or the mount still cannot report
+    /// its clock), so the 30 s recheck writes it again instead of only reading it.</summary>
+    private sealed record MountClockCheck(bool Verified, string Reason, DateTimeOffset WallAtCheck, long TickAtCheck, bool WriteOwed);
 
     // Tolerances. The mount's UTC and LST within 5 s (Ara's LST is mean sidereal time; a driver's may be
     // apparent, about 1 s apart). The site within 0.01° (the profile holds two decimals).
@@ -185,7 +187,7 @@ public sealed partial class TelescopeService : IMountClockGate {
                     if (write) {
                         await PushMountClockCoreAsync(clock, reason, session).ConfigureAwait(false);
                     } else {
-                        VerifyMountClockCore(clock, session, utcRead: null, alwaysLog: false);
+                        VerifyMountClockCore(clock, session, utcRead: null, alwaysLog: false, writeFailed: false);
                     }
                 } finally {
                     _sitePushGate.Release();
@@ -204,7 +206,7 @@ public sealed partial class TelescopeService : IMountClockGate {
         var timeSync = _timeSyncResolver?.Invoke();
         if (timeSync is null || !timeSync.TryGetTrustedUtc(out _)) {
             LogMountClockNoTrustedTime(reason);
-            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false);
+            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false, writeOwed: true);
             return;
         }
         // #2087 review — while this waits out a slew (up to ~3 min), a GoTo that times out waiting for it
@@ -223,7 +225,7 @@ public sealed partial class TelescopeService : IMountClockGate {
         }
         if (!slewEnded) {
             LogMountClockSlewing(reason);
-            RecordMountClock(session, verified: false, SlewingReason, alwaysLog: false);
+            RecordMountClock(session, verified: false, SlewingReason, alwaysLog: false, writeOwed: true);
             return;
         }
         var before = ReadMountUtc(clock);
@@ -231,14 +233,20 @@ public sealed partial class TelescopeService : IMountClockGate {
         // (year 1) must never be written into the mount.
         if (!timeSync.TryGetTrustedUtc(out var pushed)) {
             LogMountClockNoTrustedTime(reason);
-            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false);
+            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog: false, writeOwed: true);
             return;
         }
         string? refused = null;
+        // #2087 review — a write that failed (a transient bridge error) is tried again by the 30 s recheck; one the
+        // driver does not implement never will succeed, so its rechecks only read.
+        var writeFailed = false;
         try {
             clock.SetUtcDate(pushed.UtcDateTime);
+        } catch (ASCOM.NotImplementedException ex) {
+            refused = ex.Message;
         } catch (Exception ex) {
             refused = ex.Message;
+            writeFailed = true;
         }
         var after = ReadMountUtc(clock);
         var afterAt = TrustedUtcOrNull(timeSync);
@@ -248,7 +256,7 @@ public sealed partial class TelescopeService : IMountClockGate {
         if (refused is not null) {
             LogMountClockWriteRefused(refused);
         }
-        VerifyMountClockCore(clock, session, (after, afterAt), alwaysLog: true);
+        VerifyMountClockCore(clock, session, (after, afterAt), alwaysLog: true, writeFailed);
     }
 
     private static DateTimeOffset? TrustedUtcOrNull(ITimeSyncService? timeSync) =>
@@ -256,8 +264,9 @@ public sealed partial class TelescopeService : IMountClockGate {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort profile read: a store fault leaves the check to the mount's own longitude.")]
+    /// <param name="writeFailed">The push just before this check tried to write the clock and the write failed.</param>
     private void VerifyMountClockCore(IMountClock clock, long session,
-            ((DateTime? Utc, bool NotImplemented) Read, DateTimeOffset? At)? utcRead, bool alwaysLog) {
+            ((DateTime? Utc, bool NotImplemented) Read, DateTimeOffset? At)? utcRead, bool alwaysLog, bool writeFailed) {
         var timeSync = _timeSyncResolver?.Invoke();
         // Each mount reading is compared with the trusted time taken right after it: on a slow bridge the
         // round trips of the reads that follow would otherwise count as clock error (5 s tolerance).
@@ -267,7 +276,7 @@ public sealed partial class TelescopeService : IMountClockGate {
         var lat = TryRead(() => clock.Latitude);
         var lng = TryRead(() => clock.Longitude);
         if (utcAt is not { } now || lstAt is not { } lstNow) {
-            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog);
+            RecordMountClock(session, verified: false, NoTrustedTimeReason, alwaysLog, writeOwed: true);
             return;
         }
         double? siteLat = null, siteLng = null;
@@ -280,7 +289,10 @@ public sealed partial class TelescopeService : IMountClockGate {
         }
         var mountUtc = utc.Utc is { } u ? new DateTimeOffset(AlpacaTelescopeDevice.AsUtc(u)) : (DateTimeOffset?)null;
         var (verified, why) = EvaluateMountClock(mountUtc, utc.NotImplemented, lst, lat, lng, now, siteLat, siteLng, lstNow);
-        RecordMountClock(session, verified, why, alwaysLog);
+        // #2087 review — a mount that cannot report its clock (AlpacaBridge's "not established" after a write that
+        // failed, or before any) is written again by the recheck; a read-only recheck would never open the gate.
+        var unreadable = utc.Utc is null && !utc.NotImplemented;
+        RecordMountClock(session, verified, why, alwaysLog, writeOwed: !verified && (writeFailed || unreadable));
     }
 
     /// <summary>The check itself, pure. Verified when the mount's UTC is within 5 s of the synced clock,
@@ -333,14 +345,14 @@ public sealed partial class TelescopeService : IMountClockGate {
             : string.Create(CultureInfo.InvariantCulture, $"{sign}{(int)(a / 3600)} h {(int)(a % 3600 / 60)} min");
     }
 
-    private void RecordMountClock(long session, bool verified, string reason, bool alwaysLog) {
+    private void RecordMountClock(long session, bool verified, string reason, bool alwaysLog, bool writeOwed) {
         bool flipped;
         lock (_gate) {
             if (session != _mountClockSession) {
                 return; // a reconnect since: that session runs its own check
             }
             flipped = _mountClock is null || _mountClock.Verified != verified;
-            _mountClock = new MountClockCheck(verified, reason, UtcNow(), TickMs());
+            _mountClock = new MountClockCheck(verified, reason, UtcNow(), TickMs(), writeOwed);
         }
         if (!alwaysLog && !flipped) {
             return;
@@ -437,8 +449,15 @@ public sealed partial class TelescopeService : IMountClockGate {
             }
             var stepMs = (UtcNow() - check.WallAtCheck).TotalMilliseconds - (TickMs() - check.TickAtCheck);
             LogHostClockStepped(stepMs / 1000.0);
-            RecordMountClock(session, verified: false, "the rig clock stepped since the mount's clock was checked", alwaysLog: false);
-            PushTrustedMountClock("rig clock stepped");
+            // #2087 review — counted as a push before the check goes unverified, so a GoTo that reads the gate in
+            // between waits for the push (MountClockSettling) instead of being refused. The push counts itself too.
+            Interlocked.Increment(ref _mountClockPushes);
+            try {
+                RecordMountClock(session, verified: false, "the rig clock stepped since the mount's clock was checked", alwaysLog: false, writeOwed: true);
+                PushTrustedMountClock("rig clock stepped");
+            } finally {
+                Interlocked.Decrement(ref _mountClockPushes);
+            }
             return;
         }
         // Each check records a fresh anchor, so this runs about every 30 s while the clock stays wrong.
@@ -446,9 +465,10 @@ public sealed partial class TelescopeService : IMountClockGate {
                 || _timeSyncResolver.Invoke() is not { } timeSync || !timeSync.TryGetTrustedUtc(out _)) {
             return;
         }
-        // A clock never written (the mount was slewing, or no trusted time had reached it) is written
-        // now; otherwise the check is read-only.
-        RunMountClockJob("recheck", write: check.Reason is SlewingReason or NoTrustedTimeReason);
+        // A clock no trusted time has landed in (the mount was slewing, no trusted time had reached it, the
+        // write failed, or the mount could not report its clock) is written now; otherwise the check is
+        // read-only. The write itself still takes only trusted time.
+        RunMountClockJob("recheck", write: check.WriteOwed);
     }
 
     /// <summary>A sequencer GoTo right after a reconnect, a REST GoTo or Sync and a Center wait, up to
