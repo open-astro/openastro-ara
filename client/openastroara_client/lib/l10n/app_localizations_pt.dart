@@ -6809,6 +6809,135 @@ class AppLocalizationsPt extends AppLocalizations {
   String get clockWrongStartAnyway => 'Start anyway';
 
   @override
+  String paResidualChipMeasuring(String elapsed, String target) {
+    return 'PA residual · measuring $elapsed / $target';
+  }
+
+  @override
+  String paResidualTipMeasuring(String target) {
+    return 'Guiding\'s figure for polar alignment: measuring the error left after Align from the Dec corrections over the first $target of clean guiding (dithers and settling are left out).';
+  }
+
+  @override
+  String get paResidualChipUnavailable => 'PA residual n/a';
+
+  @override
+  String paResidualTipUnavailable(String reason) {
+    return 'No polar alignment residual for this guiding run. $reason';
+  }
+
+  @override
+  String paResidualChipRated(String value, String rating) {
+    return 'PA ≥ $value · $rating';
+  }
+
+  @override
+  String paResidualChipDisagrees(String value) {
+    return 'PA ≥ $value · disagrees with Polar Align';
+  }
+
+  @override
+  String paResidualChipNoisy(String value) {
+    return 'PA ≥ $value · noisy';
+  }
+
+  @override
+  String get paResidualReasonLockShift =>
+      'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.';
+
+  @override
+  String get paResidualReasonAo =>
+      'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.';
+
+  @override
+  String get paResidualReasonGuidingNotHolding =>
+      'Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.';
+
+  @override
+  String get paResidualReasonSettleFailed =>
+      'A settle failed during this run, so guiding was not holding the star.';
+
+  @override
+  String get paResidualReasonMountNotTracking =>
+      'The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.';
+
+  @override
+  String get paResidualReasonNoCalibration =>
+      'The guider\'s calibration data could not be read.';
+
+  @override
+  String get paResidualReasonNoPixelScale =>
+      'The guider has not reported its pixel scale.';
+
+  @override
+  String get paResidualReasonNoFit =>
+      'Not enough clean guiding to fit the drift.';
+
+  @override
+  String paResidualDetailFigure(String duration, String value) {
+    return 'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over $duration of guiding: at least $value.';
+  }
+
+  @override
+  String paResidualDetailFigureSigma(
+    String duration,
+    String value,
+    String sigma,
+  ) {
+    return 'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over $duration of guiding: at least $value (± $sigma).';
+  }
+
+  @override
+  String paResidualDetailDrift(String drift) {
+    return 'Dec drift $drift″/min';
+  }
+
+  @override
+  String paResidualDetailHourAngle(String hours) {
+    return 'hour angle $hours h';
+  }
+
+  @override
+  String paResidualDetailDriftAtHourAngle(String drift, String hours) {
+    return 'Dec drift $drift″/min at hour angle $hours h';
+  }
+
+  @override
+  String get paResidualDetailLowerBound =>
+      'Guiding at one hour angle sees only part of the error, so the total can be larger.';
+
+  @override
+  String paResidualDetailDisagree(String align, String guiding) {
+    return 'Polar Align and guiding disagree ($align vs at least $guiding). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about $align again points at backlash, much more points at the mount or the alignment.';
+  }
+
+  @override
+  String get paResidualDetailNoisy =>
+      'Guiding was too noisy for a firm figure.';
+
+  @override
+  String paResidualDetailAlign(String value) {
+    return 'Polar Align\'s figure: $value, from plate solves at the time of the run.';
+  }
+
+  @override
+  String paResidualDetailAlignAt(String value, String time) {
+    return 'Polar Align\'s figure: $value, from plate solves at $time.';
+  }
+
+  @override
+  String get polarReadoutMeasures =>
+      'Polar Align\'s figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).';
+
+  @override
+  String get polarCheckMeasures =>
+      'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).';
+
+  @override
+  String get polarReadoutCautionAltitudeWeak =>
+      'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
+
+  @override
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
@@ -13672,6 +13801,135 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get clockWrongStartAnyway => 'Iniciar mesmo assim';
+
+  @override
+  String paResidualChipMeasuring(String elapsed, String target) {
+    return 'Resíduo de PA · medindo $elapsed / $target';
+  }
+
+  @override
+  String paResidualTipMeasuring(String target) {
+    return 'Número da guiagem para o alinhamento polar: medindo o erro que restou após o Align pelas correções em Dec nos primeiros $target de guiagem limpa (dithers e assentamento ficam de fora).';
+  }
+
+  @override
+  String get paResidualChipUnavailable => 'Resíduo de PA indisponível';
+
+  @override
+  String paResidualTipUnavailable(String reason) {
+    return 'Sem resíduo de alinhamento polar nesta guiagem. $reason';
+  }
+
+  @override
+  String paResidualChipRated(String value, String rating) {
+    return 'PA ≥ $value · $rating';
+  }
+
+  @override
+  String paResidualChipDisagrees(String value) {
+    return 'PA ≥ $value · diverge do Polar Align';
+  }
+
+  @override
+  String paResidualChipNoisy(String value) {
+    return 'PA ≥ $value · ruidoso';
+  }
+
+  @override
+  String get paResidualReasonLockShift =>
+      'O deslocamento da posição de trava (rastreio de cometa) está ligado, então a estrela-guia deriva em Dec de propósito.';
+
+  @override
+  String get paResidualReasonAo =>
+      'Uma unidade de óptica adaptativa faz as correções em Dec, então a deriva da montagem não pode ser lida delas.';
+
+  @override
+  String get paResidualReasonGuidingNotHolding =>
+      'A guiagem não segurava a estrela (os pulsos estavam no máximo e a estrela continuava derivando), então a deriva não é um sinal de alinhamento polar.';
+
+  @override
+  String get paResidualReasonSettleFailed =>
+      'Um assentamento falhou nesta guiagem, então a guiagem não segurava a estrela.';
+
+  @override
+  String get paResidualReasonMountNotTracking =>
+      'A montagem não estava rastreando quando a guiagem começou, então a deriva da estrela não é um sinal de alinhamento polar.';
+
+  @override
+  String get paResidualReasonNoCalibration =>
+      'Não foi possível ler os dados de calibração do guiador.';
+
+  @override
+  String get paResidualReasonNoPixelScale =>
+      'O guiador não informou sua escala de pixel.';
+
+  @override
+  String get paResidualReasonNoFit =>
+      'Guiagem limpa insuficiente para ajustar a deriva.';
+
+  @override
+  String paResidualDetailFigure(String duration, String value) {
+    return 'Número da guiagem: o alinhamento polar que restou após o Align, lido das correções em Dec do guiador em $duration de guiagem: pelo menos $value.';
+  }
+
+  @override
+  String paResidualDetailFigureSigma(
+    String duration,
+    String value,
+    String sigma,
+  ) {
+    return 'Número da guiagem: o alinhamento polar que restou após o Align, lido das correções em Dec do guiador em $duration de guiagem: pelo menos $value (± $sigma).';
+  }
+
+  @override
+  String paResidualDetailDrift(String drift) {
+    return 'Deriva em Dec de $drift″/min';
+  }
+
+  @override
+  String paResidualDetailHourAngle(String hours) {
+    return 'ângulo horário $hours h';
+  }
+
+  @override
+  String paResidualDetailDriftAtHourAngle(String drift, String hours) {
+    return 'Deriva em Dec de $drift″/min no ângulo horário $hours h';
+  }
+
+  @override
+  String get paResidualDetailLowerBound =>
+      'A guiagem em um só ângulo horário vê só parte do erro, então o total pode ser maior.';
+
+  @override
+  String paResidualDetailDisagree(String align, String guiding) {
+    return 'Polar Align e guiagem divergem ($align contra pelo menos $guiding). Ou a folga em Dec engoliu pulsos de guiagem, e o número da guiagem está alto demais, ou a montagem se moveu desde o alinhamento ou a referência dele estava errada, e o número do Polar Align está baixo demais. Rode o Polar Align de novo: cerca de $align outra vez aponta para a folga, muito mais aponta para a montagem ou o alinhamento.';
+  }
+
+  @override
+  String get paResidualDetailNoisy =>
+      'A guiagem estava ruidosa demais para um número firme.';
+
+  @override
+  String paResidualDetailAlign(String value) {
+    return 'Número do Polar Align: $value, por plate solve na hora da execução.';
+  }
+
+  @override
+  String paResidualDetailAlignAt(String value, String time) {
+    return 'Número do Polar Align: $value, por plate solve às $time.';
+  }
+
+  @override
+  String get polarReadoutMeasures =>
+      'Número do Polar Align: o eixo de AR contra o polo refratado, por plate solve, ao vivo enquanto você gira os parafusos. O azimute é o arco real no céu (cos alt aplicado).';
+
+  @override
+  String get polarCheckMeasures =>
+      'Número da verificação: uma nova medição em três pontos do eixo de AR contra o polo refratado. O azimute é o arco real no céu (cos alt aplicado).';
+
+  @override
+  String get polarReadoutCautionAltitudeWeak =>
+      'A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo.';
 
   @override
   String versionMismatchWarning(String server, String app) {

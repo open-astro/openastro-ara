@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/l10n.dart';
 import '../../models/pa_residual.dart';
 import '../../theme/ara_colors.dart';
 
@@ -75,38 +76,54 @@ String _localTime(DateTime utc) {
   return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 }
 
-/// #1311 — a finished polar-alignment residual in words: the figure (a lower
-/// bound) with its uncertainty, the drift and hour angle it came from, and
-/// tonight's Polar Align result to compare. For tooltips.
-String paResidualDetail(PaResidual r) {
-  final error = r.paErrorMinArcmin ?? 0;
+/// #1311 / #2072 — a finished polar-alignment residual in words: what the
+/// figure measures (a lower bound from the guider's Dec corrections, taken
+/// after Align) with its uncertainty, the drift and hour angle it came from,
+/// and tonight's Polar Align result to compare. When the two disagree, both
+/// causes are named. For tooltips.
+String paResidualDetail(AppLocalizations l, PaResidual r) {
+  final error = formatPoleOffset(r.paErrorMinArcmin ?? 0).$1;
   final uncertainty = r.uncertaintyArcmin;
-  final drift = r.driftArcsecPerMin;
+  final duration = _clock(r.sampleSeconds);
+  final drift = r.driftArcsecPerMin?.abs().toStringAsFixed(2);
   final ha = r.hourAngleHours;
+  final hours = ha == null ? null : '${ha < 0 ? '−' : '+'}${ha.abs().toStringAsFixed(1)}';
   final align = r.alignErrorArcmin;
+  final alignText = align == null ? null : formatPoleOffset(align).$1;
   final lines = <String>[
-    "Polar alignment left after Align, from the guider's Dec corrections over "
-        '${_clock(r.sampleSeconds)} of guiding: at least '
-        '${formatPoleOffset(error).$1}'
-        '${uncertainty == null ? '' : ' (± ${formatPoleOffset(uncertainty).$1})'}.',
-    [
-      if (drift != null) 'Dec drift ${drift.abs().toStringAsFixed(2)}″/min',
-      if (ha != null)
-        'hour angle ${ha < 0 ? '−' : '+'}${ha.abs().toStringAsFixed(1)} h',
-    ].join(' at '),
-    'Guiding at one hour angle sees only part of the error, so the total can '
-        'be larger.',
-    if (r.aboveAlign)
-      'This is more than Polar Align measured, which a lower bound cannot be: '
-          'Dec backlash eating guide pulses is the likelier cause.'
+    uncertainty == null
+        ? l.paResidualDetailFigure(duration, error)
+        : l.paResidualDetailFigureSigma(duration, error, formatPoleOffset(uncertainty).$1),
+    if (drift != null && hours != null)
+      l.paResidualDetailDriftAtHourAngle(drift, hours)
+    else if (drift != null)
+      l.paResidualDetailDrift(drift)
+    else if (hours != null)
+      l.paResidualDetailHourAngle(hours),
+    l.paResidualDetailLowerBound,
+    if (r.aboveAlign && alignText != null)
+      l.paResidualDetailDisagree(alignText, error)
     else if (!r.reliable)
-      'Guiding was too noisy for a firm figure.',
-    if (align != null)
-      'Polar Align measured ${formatPoleOffset(align).$1}'
-          '${r.alignEndedUtc == null ? '' : ' at ${_localTime(r.alignEndedUtc!)}'}.',
+      l.paResidualDetailNoisy,
+    if (alignText != null)
+      r.alignEndedUtc == null
+          ? l.paResidualDetailAlign(alignText)
+          : l.paResidualDetailAlignAt(alignText, _localTime(r.alignEndedUtc!)),
   ];
-  return lines.where((l) => l.isNotEmpty).join('\n');
+  return lines.join('\n');
 }
+
+/// What an `unavailable` reason means, in the user's words.
+String paResidualReasonText(AppLocalizations l, String? reason) => switch (reason) {
+  'lock_shift' => l.paResidualReasonLockShift,
+  'ao' => l.paResidualReasonAo,
+  'guiding_not_holding' => l.paResidualReasonGuidingNotHolding,
+  'settle_failed' => l.paResidualReasonSettleFailed,
+  'mount_not_tracking' => l.paResidualReasonMountNotTracking,
+  'no_calibration' => l.paResidualReasonNoCalibration,
+  'no_pixel_scale' => l.paResidualReasonNoPixelScale,
+  _ => l.paResidualReasonNoFit,
+};
 
 /// "m:ss" for a measurement's progress.
 String paResidualClock(double seconds) => _clock(seconds);
