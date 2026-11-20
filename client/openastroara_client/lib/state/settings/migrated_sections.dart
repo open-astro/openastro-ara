@@ -32,8 +32,8 @@ import 'unguided_settings_state.dart';
 ///
 /// [read] is a `ref.read`, so a widget's `WidgetRef` can reset after a wizard
 /// save and a replay: they write sections from this device without a version
-/// and live-sync skips its own `profile.updated`, so a section loaded before
-/// would keep a stale tag (a false 412 on the next Save).
+/// and outside the section notifier, so a section loaded before would keep a
+/// stale tag until live sync lands (a false 412 on the next Save).
 void resetMigratedSections(T Function<T>(ProviderListenable<T>) read) {
   for (final section in migratedSections) {
     read(section.provider.notifier).reset();

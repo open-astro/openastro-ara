@@ -213,11 +213,11 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   }
 
   /// The rig's copy for a dialog that forks a draft from it (the guider's
-  /// Tune Guiding and setup wizard): loaded once more first when it isn't in,
-  /// as [save] does; null when that fails too.
+  /// Tune Guiding and setup wizard), never an unsaved edit: loaded once more
+  /// first when it isn't in, as [save] does; null when that fails too.
   Future<T?> rigCopy() async {
     if (!state.canSave) await _loadOnce();
-    return state.canSave ? state.value : null;
+    return state.canSave ? (_held ?? state.value) : null;
   }
 
   /// One switch beside a form (the permanent pier next to the site fields):
