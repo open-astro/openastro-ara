@@ -369,8 +369,9 @@ class PolarAlignStatus {
   bool get isActive => PolarAlignStates.isActive(state);
 }
 
-/// §45.12 profile section. Field defaults are the playbook defaults, matching
-/// the server's ctor defaults for a missing key.
+/// §45.12 profile section. No field has a client default (ADR 0015 rule 3):
+/// the daemon's section table owns them, and the client holds the rig's copy
+/// or nothing (`polarAlignSettingsProvider`).
 class PolarAlignSettings {
   final double exposureSeconds;
 
@@ -400,37 +401,18 @@ class PolarAlignSettings {
   final bool stopTrackingWhenDone;
 
   const PolarAlignSettings({
-    this.exposureSeconds = 1.0,
-    this.binning = 0,
-    this.targetToleranceArcmin = 1.0,
-    this.seedRotationDeg = 10.0,
-    this.loopCadenceMs = 1000,
-    this.settleSeconds = 2.0,
-    this.loopMode = PolarAlignLoopModes.loop,
-    this.checkStepDeg = 10.0,
-    this.coarseExposureSeconds = 3.0,
-    this.polarAlignerAuto = true,
-    this.stopTrackingWhenDone = true,
+    required this.exposureSeconds,
+    required this.binning,
+    required this.targetToleranceArcmin,
+    required this.seedRotationDeg,
+    required this.loopCadenceMs,
+    required this.settleSeconds,
+    required this.loopMode,
+    required this.checkStepDeg,
+    required this.coarseExposureSeconds,
+    required this.polarAlignerAuto,
+    required this.stopTrackingWhenDone,
   });
-
-  factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
-      PolarAlignSettings(
-        exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 1.0,
-        binning: (json['binning'] as num?)?.toInt() ?? 0,
-        targetToleranceArcmin:
-            (json['target_tolerance_arcmin'] as num?)?.toDouble() ?? 1.0,
-        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 10.0,
-        loopCadenceMs: (json['loop_cadence_ms'] as num?)?.toInt() ?? 1000,
-        settleSeconds: (json['settle_seconds'] as num?)?.toDouble() ?? 2.0,
-        loopMode: json['loop_mode'] == PolarAlignLoopModes.single
-            ? PolarAlignLoopModes.single
-            : PolarAlignLoopModes.loop,
-        checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 10.0,
-        coarseExposureSeconds:
-            (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
-        polarAlignerAuto: json['polar_aligner_auto'] != false,
-        stopTrackingWhenDone: json['stop_tracking_when_done'] != false,
-      );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'exposure_seconds': exposureSeconds,

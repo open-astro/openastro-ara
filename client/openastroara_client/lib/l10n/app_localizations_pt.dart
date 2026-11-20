@@ -6149,6 +6149,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your tolerance after $moves moves.',
+      one: 'Inside your tolerance after 1 move.',
+    );
+    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+  }
+
+  @override
   String get polarAlignerAxisAzimuth => 'azimuth';
 
   @override
@@ -13189,6 +13200,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       one: 'Dentro da sua tolerância de $tolerance′ após 1 movimento.',
     );
     return '$_temp0 Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
+  }
+
+  @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Dentro da sua tolerância após $moves movimentos.',
+      one: 'Dentro da sua tolerância após 1 movimento.',
+    );
+    return '$_temp0 Verificar e Concluir aguardam o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override

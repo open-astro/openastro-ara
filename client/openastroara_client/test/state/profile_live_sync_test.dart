@@ -5,19 +5,16 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/server.dart';
-import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
-import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
-import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/dome_settings_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../support/fake_section_rig.dart';
@@ -120,11 +117,9 @@ class _Cache extends ProfileCacheService {
 
 ProviderContainer _container(_Rig rig, {_Cache? cache}) {
   final api = ProfileApi(_server, dio: Dio()..httpClientAdapter = rig);
-  final polar = PolarAlignApi(_server, dio: Dio()..httpClientAdapter = rig);
   final c = ProviderContainer(
     overrides: [
       profileApiProvider.overrideWithValue(api),
-      polarAlignApiProvider.overrideWithValue(polar),
       if (cache != null) profileCacheServiceProvider.overrideWithValue(cache),
     ],
   );
@@ -283,20 +278,17 @@ void main() {
     'profile.updated for polar-align reads the routine settings again',
     () async {
       const path = '/api/v1/profile/polar-align';
-      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final rig = _Rig()
+        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
       final c = _container(rig);
-      expect(
-        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
-        2,
-      );
-      rig.stored[path] = {'exposure_seconds': 5};
+      c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
+      await settleLoaded(c, polarAlignSettingsProvider);
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 2);
+      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
 
       await applyProfileUpdated(c, 'polar-align');
 
-      expect(
-        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
-        5,
-      );
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 5);
     },
   );
 
@@ -304,23 +296,28 @@ void main() {
     'a polar-align save from this device is not read back over it',
     () async {
       const path = '/api/v1/profile/polar-align';
-      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final rig = _Rig()
+        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
       final c = _container(rig);
       c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
-      await c.read(polarAlignSettingsProvider.future);
+      await settleLoaded(c, polarAlignSettingsProvider);
       rig.holdWrites = Completer<void>();
       final save = c
           .read(polarAlignSettingsProvider.notifier)
-          .save(const PolarAlignSettings(exposureSeconds: 5));
+          .saveKnob((s) => s.copyWith(exposureSeconds: 5));
       await _sent(rig, 1); // the answer is still held
+      // The daemon wrote it and announced it before answering the PUT.
+      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
       final reads = rig.reads[path];
 
-      await applyProfileUpdated(c, 'polar-align');
+      final event = applyProfileUpdated(c, 'polar-align');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(rig.reads[path], reads, reason: 'nothing is read over a save in flight');
       rig.holdWrites!.complete();
       await save;
-      await c.read(polarAlignSettingsProvider.future);
+      await event;
 
-      expect(rig.reads[path], reads);
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 5);
     },
   );
 

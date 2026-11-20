@@ -6149,6 +6149,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your tolerance after $moves moves.',
+      one: 'Inside your tolerance after 1 move.',
+    );
+    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
+  }
+
+  @override
   String get polarAlignerAxisAzimuth => 'azimuth';
 
   @override

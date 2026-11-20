@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../services/profile_api.dart';
-import 'polar_align/polar_align_routine_state.dart';
 import 'profile_cache_state.dart';
 import 'profile_management_state.dart';
 import 'settings/migrated_sections.dart';
@@ -30,10 +29,7 @@ Future<void> applyProfileUpdated(
   final migrated = _migratedRoutes.contains(section);
   if (own && !migrated) return;
   try {
-    final hydrate = migrated
-        ? (ProviderContainer c, ProfileApi a) => _syncMigrated(c, a, section)
-        : _hydrators[section];
-    if (hydrate != null) await hydrate(container, api);
+    if (migrated) await _syncMigrated(container, api, section);
     if (own) return; // the cache already holds what this device wrote
     final list = await api.listProfiles();
     await captureProfileCache(
@@ -47,15 +43,9 @@ Future<void> applyProfileUpdated(
   }
 }
 
-typedef _Hydrate = Future<void> Function(ProviderContainer c, ProfileApi api);
-
-// Wire section name (first path segment under /api/v1/profile/) → the
-// notifier holding that section. A section on the section module is not
-// listed: its route comes from `migratedSections` and it syncs by tag.
-final Map<String, _Hydrate> _hydrators = {
-  'polar-align': (c, _) async => c.invalidate(polarAlignSettingsProvider),
-};
-
+// Wire section names (first path segment under /api/v1/profile/) held in
+// memory: every one is on the section module, so its route comes from
+// `migratedSections` and it syncs by tag.
 final Set<String> _migratedRoutes = {for (final s in migratedSections) s.route};
 
 Future<void> _syncMigrated(
