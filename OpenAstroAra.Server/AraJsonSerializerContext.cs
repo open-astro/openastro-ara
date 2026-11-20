@@ -164,6 +164,7 @@ namespace OpenAstroAra.Server;
 [JsonSerializable(typeof(EndNightStartRequestDto))]
 [JsonSerializable(typeof(EndNightStatusDto))]
 [JsonSerializable(typeof(EndNightProgressPayload))]
+[JsonSerializable(typeof(TelescopeLimitReachedPayload))]
 [JsonSerializable(typeof(ExposureStartedPayload))]
 [JsonSerializable(typeof(ExposureCompletePayload))]
 [JsonSerializable(typeof(ExposureFailedPayload))]
