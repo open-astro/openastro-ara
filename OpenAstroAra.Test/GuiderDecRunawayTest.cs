@@ -489,5 +489,33 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.NotificationTitles().Count == 2).ConfigureAwait(false), Is.True);
             Assert.That(rig.NotificationTitles()[1], Is.EqualTo("Dec guiding ran away — sequence paused"));
         }
+
+        // #1589 review — a lost star's episode is still holding the run paused when Dec runs away: the runaway
+        // fault joins that episode, so no episode holds it. Guiding is started again on the same calibration
+        // and runs away again: the old runaway fault is closed and the second gets a fault of its own.
+        [Test]
+        public async Task A_runaway_that_joined_a_running_guider_episode_leaves_the_next_runaway_a_fault_of_its_own() {
+            using var rig = new Rig(settleTime: 10);
+            rig.Service.StarLostGrace = TimeSpan.FromMilliseconds(50);
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.StarLost(status: "low SNR")).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the lost star's episode pauses the run");
+
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 1).ConfigureAwait(false), Is.True, "the first runaway stops guiding");
+            Assert.That(rig.RunawayFaults(), Has.Count.EqualTo(1));
+            Assert.That(rig.Paused(), Is.EqualTo(1), "the runaway joined the lost star's episode: no second pause");
+
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+            await RunAwayAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => StopCaptures(fake) == 2).ConfigureAwait(false), Is.True, "the second runaway stops guiding");
+            Assert.That(await WaitUntilAsync(() => rig.RunawayFaults().Count == 2).ConfigureAwait(false), Is.True,
+                "the second runaway gets a fault of its own: no episode held the first");
+            lock (rig.Recovered) {
+                Assert.That(rig.Recovered, Has.Member(rig.RunawayFaults()[0]), "the first runaway fault is closed for the second");
+            }
+        }
     }
 }
