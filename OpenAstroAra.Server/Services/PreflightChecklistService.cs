@@ -240,6 +240,10 @@ public sealed class PreflightChecklistService {
         if (!rt.CoolerStateKnown || rt.CcdTemperature is not double temp) {
             return new PreflightItemDto("cooler", Unknown, "Cooler", "The cooler state could not be read.");
         }
+        if (rt.CoolerNotResponding) {
+            // #2076 — the same sentence as the Simple Mode pill and the inbox warning.
+            return new PreflightItemDto("cooler", Warn, "Cooler", $"{CameraService.CoolerNotRespondingSentence} Sensor at {FormatC(temp)}.");
+        }
         if (!rt.CoolerOn) {
             return new PreflightItemDto("cooler", Warn, "Cooler", $"Cooler off; sensor at {FormatC(temp)}.");
         }

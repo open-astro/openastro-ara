@@ -67,7 +67,7 @@ namespace OpenAstroAra.Test {
             Directory.CreateDirectory(profileDir);
             previousProfileDir = Environment.GetEnvironmentVariable("OPENASTROARA_PROFILE_DIR");
             Environment.SetEnvironmentVariable("OPENASTROARA_PROFILE_DIR", profileDir);
-            app = Program.BuildApp([]);
+            app = Program.BuildApp([], TestHostSeams.Replace);
             // The spec generator reads the DI EndpointDataSource, which WebApplication only fills
             // from its mapped routes when the host starts and auto-inserts routing. Register them
             // the same way here without starting Kestrel or the hosted services.

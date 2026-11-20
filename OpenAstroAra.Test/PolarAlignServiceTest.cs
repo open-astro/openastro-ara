@@ -383,6 +383,25 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.LeaseCalls, Is.Empty, "a failed preflight must not acquire the lease");
         }
 
+        // #2070 — a false zero after a power loss made the routine slew below the pole (RC51, 2026-11-19).
+        [Test]
+        public async Task Start_is_refused_while_the_mount_position_is_unverified_and_nothing_moves() {
+            var fake = NewFake();
+            var mount = NewMount();
+            mount.As<ITelescopeService>().Setup(t => t.PositionUnverifiedReasonAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MountPoseTrust.AtHomeOnConnect);
+            using var svc = NewService(fake, new ScriptedSolver(), mount);
+
+            var refusal = await Assert.ThrowsAsync<OpenAstroAra.Server.Contracts.Refusals.RefusalException>(
+                () => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.MountPositionUnverified));
+            Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never);
+        }
+
         [Test]
         public async Task Start_acquires_the_lease_and_publishes_started() {
             var fake = NewFake(answerCaptures: false);

@@ -51,7 +51,8 @@ public static partial class EquipmentEndpoints {
     /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
     /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
-    /// with the <c>below-horizon-limit</c> Refusal (#2044); <c>force</c> does not bypass it. Testable
+    /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
+    /// meridian on a German equatorial mount with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
     /// without the host.</summary>
     internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null) {
         ArgumentNullException.ThrowIfNull(telescope);
@@ -67,8 +68,28 @@ public static partial class EquipmentEndpoints {
                     string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
                     new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
             }
+            // #2073 — the daemon now turns tracking on before a GoTo, so the mount's "tracking is off"
+            // refusal no longer stops a target below the pole that would put the counterweight up. Only a
+            // German equatorial mount (or one whose type is unknown) is checked.
+            if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, telescope.MountAlignmentMode, logger) is { } cw) {
+                throw new RefusalException(RefusalCatalog.CounterweightLimit,
+                    string.Create(CultureInfo.InvariantCulture, $"The target is below the pole at hour angle {cw.HourAngleHours:F1} h: the counterweight would be {cw.CounterweightAngleDeg:F0}° from down, past the {cw.LimitDeg:F0}° limit."),
+                    new Dictionary<string, object?> { ["hour_angle_hours"] = cw.HourAngleHours, ["counterweight_angle_deg"] = cw.CounterweightAngleDeg, ["limit_deg"] = cw.LimitDeg });
+            }
         }
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
+    }
+
+    /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
+    /// position is trusted again; 409 when it is not connected or does not report AtHome now.</summary>
+    internal static async Task<IResult> ConfirmHomeAsync(ITelescopeService telescope, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        try {
+            await telescope.ConfirmHomeAsync(ct);
+            return Results.NoContent();
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
@@ -353,7 +374,7 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
                 SlewAsync(request, key, svc, sequencer, profiles, ct, logger))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced) or the below-horizon-limit Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit or counterweight-limit Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
@@ -363,6 +384,12 @@ public static partial class EquipmentEndpoints {
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
         telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
+        // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
+        telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("ConfirmTelescopeHome")
+            .WithSummary("Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.");
         telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
             // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
             // abort throws); the ordering contract lives in MountStopHandler where tests pin it.
@@ -1191,7 +1218,8 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (System.InvalidOperationException ex) {
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            // A declared Refusal (#2070's unverified mount position) keeps its own answer (RefusalHandler).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }

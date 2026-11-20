@@ -75,6 +75,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Confirm_home_answers_204_when_the_mount_reports_home() {
+            // #2070 — the user confirmed Home and the rig trusts the position again.
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.ConfirmHomeAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+            var result = await EquipmentEndpoints.ConfirmHomeAsync(telescope.Object, CancellationToken.None);
+
+            Assert.That(result, Is.InstanceOf<NoContent>());
+            telescope.Verify(t => t.ConfirmHomeAsync(It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Confirm_home_answers_409_with_the_sentence_when_the_mount_does_not_report_home() {
+            // #2070 — a mount that is not connected or not at Home is the caller's state, not a daemon fault (500).
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.ConfirmHomeAsync(It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new InvalidOperationException("the mount does not report Home"));
+
+            var result = await EquipmentEndpoints.ConfirmHomeAsync(telescope.Object, CancellationToken.None);
+
+            Assert.That((result as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status409Conflict));
+            Assert.That((result as ProblemHttpResult)?.ProblemDetails.Detail, Is.EqualTo("the mount does not report Home"));
+        }
+
+        [Test]
         public void A_forced_slew_and_a_sync_go_ahead_during_a_run() {
             Assert.That(EquipmentEndpoints.SlewDuringRunRefusal(new SlewRequestDto(5.5, -12.25, Force: true), One), Is.Null, "the caller was told and said yes");
             Assert.That(EquipmentEndpoints.SlewDuringRunRefusal(new SlewRequestDto(5.5, -12.25, Sync: true), One), Is.Null, "a sync does not move the mount");
