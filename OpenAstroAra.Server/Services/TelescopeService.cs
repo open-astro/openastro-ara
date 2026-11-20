@@ -257,6 +257,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     private OperationAcceptedDto DispatchSlew(ITelescopeDevice client, double ra, double dec, bool sync, string? idempotencyKey, long abortEpoch) {
         NoteMountCommand(w => w.NoteMotionCommanded());
+        if (!sync) {
+            NoteMotionDispatched(abortEpoch); // #2066 — a raced GoTo's second abort must not stop this one
+        }
         lock (_gate) {
             // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
             TargetLatch.NoteTargetCommand();
@@ -348,6 +351,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
         lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
         NoteMountCommand(w => w.NoteParkCommanded());
+        NoteMotionDispatched(abortEpoch); // #2066 — a raced GoTo's second abort must not stop this park
         _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
             // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
             // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
@@ -396,6 +400,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // idle-not-parked with tracking off, so a motion note would leave the old expectation
         // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
         NoteMountCommand(w => w.NoteParkCommanded());
+        NoteMotionDispatched(fence); // #2066 — a raced GoTo's second abort must not stop this homing
         _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => {
             // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the watchdog)
             // wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount after the stop.
@@ -509,12 +514,32 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return null;
     }
 
+    // #2066 — the abort-count reading of the newest motion command (a GoTo or slew, a park, a Find Home; REST, sequencer or
+    // mediator) that went out to the mount. A REST command carries its request's reading (a stop counted since then drops
+    // it, so it is no newer than that stop); a mediator one, the count when it is sent. A raced GoTo whose latest count is a
+    // stop is not aborted again when a command is at least as new as that stop: the user moved the mount after the stop,
+    // and an AbortSlew now would stop the newer move. Guarded by _abortReasonsGate.
+    private long _newestMotionFrom = -1;
+
+    /// <summary>#2066 — notes a motion command going out. <paramref name="abortEpoch"/> is its own reading; null = the
+    /// count now (a sequencer or mediator command, which no stop drops).</summary>
+    private void NoteMotionDispatched(long? abortEpoch) {
+        lock (_abortReasonsGate) {
+            var from = abortEpoch ?? Interlocked.Read(ref _abortEpoch);
+            if (from > _newestMotionFrom) {
+                _newestMotionFrom = from;
+            }
+        }
+    }
+
     /// <summary>#2066 — what the counts since <paramref name="abortEpoch"/> leave in force. <c>Move</c> is the park or Find
     /// Home, when one was the LATEST count: a move that a later AbortSlew would stop. A park or Find Home that a stop then
     /// stopped is not in force, so <c>Move</c> is null and the GoTo is aborted again. <c>Stop</c> is the first count that
-    /// is not a park or Find Home, the reason the re-abort carries.</summary>
-    private (string? Move, string? Stop) CountedSince(long abortEpoch) {
+    /// is not a park or Find Home, the reason the re-abort carries. <c>NewerCommand</c>: a motion command went out at or
+    /// after the latest count (<see cref="_newestMotionFrom"/>), so the user moved the mount after the stop.</summary>
+    private (string? Move, string? Stop, bool NewerCommand) CountedSince(long abortEpoch) {
         string? latest = null;
+        long latestEpoch = 0;
         string? stop = null;
         lock (_abortReasonsGate) {
             foreach (var (epoch, reason) in _abortReasons) {
@@ -522,12 +547,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     continue;
                 }
                 latest = reason;
+                latestEpoch = epoch;
                 if (stop is null && reason is not ("park" or "findhome")) {
                     stop = reason;
                 }
             }
+            var newer = latest is not null && _newestMotionFrom >= latestEpoch;
+            return (latest is "park" or "findhome" ? latest : null, stop, newer);
         }
-        return (latest is "park" or "findhome" ? latest : null, stop);
     }
 
     // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
@@ -894,11 +921,16 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // Mount, the watchdog) may have reached the mount before the GoTo did: the mount then slews after the stop.
                 // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home counted
                 // LAST is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it. One
-                // that a later stop stopped wins nothing: the GoTo is aborted again.
+                // that a later stop stopped wins nothing: the GoTo is aborted again. A GoTo, park or Find Home sent after
+                // the latest stop (REST, sequencer or mediator) is the user's newer move: it is not aborted either.
                 if (AbortedSince(abortEpoch)) {
-                    var (move, stop) = CountedSince(abortEpoch);
+                    var (move, stop, newerCommand) = CountedSince(abortEpoch);
                     if (move is not null) {
                         LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
+                        return;
+                    }
+                    if (newerCommand) {
+                        LogSlewNotAbortedAgainNewerCommand(raHours, decDeg);
                         return;
                     }
                     var by = stop ?? "user_request";
@@ -1788,6 +1820,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a {Move} came while the GoTo was being sent; the GoTo is not aborted again, so the {Move} is not stopped")]
     private partial void LogSlewNotAbortedAgainMoveWins(double ra, double dec, string move);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a newer move was sent after the stop that landed while the GoTo was being sent; the GoTo is not aborted again, so that move is not stopped")]
+    private partial void LogSlewNotAbortedAgainNewerCommand(double ra, double dec);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped after the Park was accepted")]
     private partial void LogParkDroppedAfterAbort();

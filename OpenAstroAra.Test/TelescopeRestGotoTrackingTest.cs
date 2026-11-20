@@ -15,6 +15,7 @@
 using AlignmentMode = ASCOM.Common.DeviceInterfaces.AlignmentMode;
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
@@ -335,6 +336,71 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(PutIndex(box, "abortslew"), Is.GreaterThan(PutIndex(box, GotoVerb)), "the abort follows the GoTo");
                 Assert.That(log.Messages, Has.Some.Contains("a stop (user_request) landed"), "the abort is the stop's, not the " + earlier + "'s");
+            });
+        }
+
+        // #2066 — a Stop Mount lands while GoTo A's PUT is on the wire, and the user sends GoTo B before that PUT returns. A's
+        // second abort would stop B, the user's newer move: A is not aborted again.
+        [Test]
+        public async Task A_newer_GoTo_after_the_stop_is_not_aborted_by_the_raced_GoTo() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            var gotos = 0;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: true), putResponder: path => {
+                if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                    Thread.Sleep(200); // A's PUT on the wire
+                    svc!.FenceMotion("user_request"); // a Stop Mount
+                    // GoTo B is accepted before A's PUT returns (the pose check is cached and there is no guider, so
+                    // nothing reaches this busy device yet); its own PUT follows A's.
+                    svc.SlewAsync(new SlewRequestDto(7.0, 7.0), idempotencyKey: null, CancellationToken.None).GetAwaiter().GetResult();
+                }
+                return null;
+            });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("aborted again", StringComparison.Ordinal)), "the raced GoTo never finished");
+            await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/" + GotoVerb, StringComparison.Ordinal)) >= 2, "GoTo B never reached the mount");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would stop GoTo B");
+                Assert.That(log.Messages, Has.None.Contains("the mount was aborted again"));
+            });
+        }
+
+        // #2066 — the same race with a sequencer (mediator) slew sent after the stop: it is not stopped by A's second abort.
+        [Test]
+        public async Task A_sequencer_slew_after_the_stop_is_not_aborted_by_the_raced_GoTo() {
+            var log = new WarningLog();
+            TelescopeService? svc = null;
+            Task<bool>? slewB = null;
+            var gotos = 0;
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(
+                path => path.EndsWith("/equatorialsystem", StringComparison.Ordinal) ? "1" : mount(path), // JNOW
+                putResponder: path => {
+                    if (path.EndsWith("/" + GotoVerb, StringComparison.Ordinal) && Interlocked.Increment(ref gotos) == 1) {
+                        Thread.Sleep(200); // A's PUT on the wire
+                        svc!.FenceMotion("user_request"); // a Stop Mount
+                        // The sequencer's slew goes out before A's PUT returns: everything it reads first is cached, so it
+                        // reaches its send synchronously; its PUT follows A's.
+                        slewB = svc.SlewToCoordinatesAsync(new Coordinates(Angle.ByHours(6.0), Angle.ByDegree(6.0), Epoch.JNOW), CancellationToken.None);
+                    }
+                    return null;
+                });
+            svc = await ConnectedAsync(box, log);
+            using var _ = svc;
+            await WaitForAsync(() => svc.GetInfo().EquatorialSystem == Epoch.JNOW, "the mount's coordinate system was never read");
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 6.0), idempotencyKey: null, CancellationToken.None);
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("aborted again", StringComparison.Ordinal)), "the raced GoTo never finished");
+            await WaitForAsync(() => slewB is not null, "the sequencer slew was never sent");
+            Assert.That(await slewB!.WaitAsync(TimeSpan.FromSeconds(15)), Is.True, "the sequencer slew arrives");
+            Assert.Multiple(() => {
+                Assert.That(PutIndex(box, "abortslew"), Is.LessThan(0), "the raced GoTo's second abort would stop the sequencer slew");
+                Assert.That(log.Messages, Has.None.Contains("the mount was aborted again"));
             });
         }
 
