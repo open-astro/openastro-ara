@@ -502,6 +502,35 @@ const Map<String, Help> helpRegistry = {
         'On a mount where the scope or camera can touch the pier, set this to the time the target takes to get from a safe angle to the meridian, and leave a little extra. 0 turns the early stop off: the flip then runs inside the after-meridian window.',
     relatedSettings: ['safety.policies.meridian_flip_auto'],
   ),
+  'safety.policies.minutes_after_meridian': Help(
+    key: 'safety.policies.minutes_after_meridian',
+    title: 'Flip after the meridian',
+    body:
+        'How many minutes the mount keeps tracking past the meridian before the automatic flip. The flip can run from then until the latest flip time. '
+        'It is ignored while Stop before meridian (min) is above 0: that early stop is a hard stop, and the flip then runs once the meridian has passed. Simple Mode sets it from Mount › At the meridian.',
+    relatedSettings: [
+      'safety.policies.max_minutes_after_meridian',
+      'safety.policies.meridian_pause_min',
+    ],
+  ),
+  'safety.policies.max_minutes_after_meridian': Help(
+    key: 'safety.policies.max_minutes_after_meridian',
+    title: 'Latest flip after the meridian',
+    body:
+        'The end of the flip window: the latest the automatic flip may run, in minutes past the meridian. It is never below Flip after the meridian (min). Simple Mode sets it 5 min after that value.',
+    relatedSettings: ['safety.policies.minutes_after_meridian'],
+  ),
+  'safety.policies.stop_before_meridian_min': Help(
+    key: 'safety.policies.stop_before_meridian_min',
+    title: 'Stop before meridian, flip off',
+    body:
+        'Only with Auto flip off. That many minutes before the meridian, Ara stops tracking and pauses the plan, and says why. It never moves the mount. 0 is off: the mount tracks through the meridian and only its own firmware limit stops it. '
+        'With Auto flip on, Stop before meridian (min) does the early stop instead.',
+    relatedSettings: [
+      'safety.policies.meridian_flip_auto',
+      'safety.policies.meridian_pause_min',
+    ],
+  ),
   'safety.policies.on_altitude_limit': Help(
     key: 'safety.policies.on_altitude_limit',
     title: 'On altitude limit',

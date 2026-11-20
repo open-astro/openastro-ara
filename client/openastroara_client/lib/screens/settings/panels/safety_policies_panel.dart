@@ -211,6 +211,43 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             if (v != null) n.setMeridianPauseMin(v);
           },
         ),
+        // #2044 — the flip window after the meridian, and the flip-off stop
+        // (also set from Simple Mode's Mount window).
+        EditableNumberRow(
+          label: 'Flip after the meridian (min)',
+          helpKey: 'safety.policies.minutes_after_meridian',
+          currentValue: s.minutesAfterMeridian.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).minutesAfterMeridian.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setMinutesAfterMeridian(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Latest flip after the meridian (min)',
+          helpKey: 'safety.policies.max_minutes_after_meridian',
+          currentValue: s.maxMinutesAfterMeridian.toString(),
+          getCanonical: () => ref
+              .read(safetyPoliciesProvider)
+              .maxMinutesAfterMeridian
+              .toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setMaxMinutesAfterMeridian(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Stop before meridian, flip off (min)',
+          helpKey: 'safety.policies.stop_before_meridian_min',
+          currentValue: s.stopBeforeMeridianMin.toString(),
+          getCanonical: () =>
+              ref.read(safetyPoliciesProvider).stopBeforeMeridianMin.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setStopBeforeMeridianMin(v);
+          },
+        ),
         SettingsSwitchRow(
           label: 'Re-center after flip',
           value: s.meridianRecenter,

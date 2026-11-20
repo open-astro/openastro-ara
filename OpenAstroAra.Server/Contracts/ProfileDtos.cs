@@ -379,7 +379,16 @@ public sealed record SafetyPoliciesDto(
     string? UnattendedWindowEnd = null,
     // Panel flats aim for this share of the camera's own full scale (its MaxADU, so 12-, 14- and
     // 16-bit cameras all land mid-range), measured as the median of the frame's central area.
-    double FlatTargetPercent = 50);
+    double FlatTargetPercent = 50,
+    // #2044 — the automatic flip's window after the meridian, NINA's MinutesAfterMeridian (the earliest flip) and
+    // MaxMinutesAfterMeridian (the latest). A non-zero MeridianPauseMin overrides both: the pause is a hard stop
+    // before the meridian (MeridianFlipTrigger.FlipWindow). Simple Mode's "At the meridian" writes one of the two
+    // sides and zeroes the other. The defaults are NINA's, so an older profile keeps flipping as it did.
+    int MinutesAfterMeridian = 5,
+    int MaxMinutesAfterMeridian = 10,
+    // #2044 — with the flip off: the minutes before the meridian at which MeridianStopWatch stops tracking and
+    // pauses the run. Null (or 0) = off: the mount tracks through the meridian.
+    int? StopBeforeMeridianMin = null);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime
