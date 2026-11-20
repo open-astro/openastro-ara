@@ -29,7 +29,7 @@ namespace OpenAstroAra.Test {
     /// #2066 (ARA-5, #2048 M18) — Polar Align plans and moves only from a fresh reading of the mount's current session,
     /// through the <see cref="IMountMotionControl"/> seam, on the fake GEM mount. A reading it cannot trust (none, the (0, 0)
     /// placeholder, another mount session, older than 2 s) ends the run with <c>pointing_unknown</c>; a Dec past the pole
-    /// with <c>pose_ambiguous</c>; either before anything moves. The daemon's cached position is never read mid-move.
+    /// with <c>pose_ambiguous</c>; either before anything moves. The daemon's refresh cache is never read mid-move.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
@@ -245,7 +245,8 @@ namespace OpenAstroAra.Test {
         // ── the cache ────────────────────────────────────────────────────────────────────────
 
         [Test]
-        public async Task The_cached_position_is_never_read_while_the_mount_moves() {
+        public async Task The_cache_is_never_read_while_the_mount_moves() {
+            // Neither the cached position nor the cached state (its pier side): the 2 s refresh is stale or a placeholder.
             var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();
             using var svc = NewGemService(mount, ws);
@@ -254,7 +255,7 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(RaTurns(mount), Has.Length.EqualTo(2), mount.Describe());
-            Assert.That(mount.CachedPositionReadsWhileMoving, Is.Zero, "every reading of a turn comes from the driver");
+            Assert.That(mount.CachedReadsWhileMoving, Is.Zero, "every reading of a turn comes from the driver");
         }
     }
 }

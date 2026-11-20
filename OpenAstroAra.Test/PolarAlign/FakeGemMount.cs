@@ -326,9 +326,9 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// axis zero is off reads past ±90° near the pole (an iOptron HAE29C read 90.9°, #2075).</summary>
         public double ReportedDecOffsetDeg { get; set; }
 
-        /// <summary>#2066 — how often the daemon's cached position (<see cref="GetCurrentPosition"/>) was read while a motor
-        /// or a GoTo truly moved the mount.</summary>
-        public int CachedPositionReadsWhileMoving {
+        /// <summary>#2066 — how often the daemon's refresh cache (<see cref="GetCurrentPosition"/>, <see cref="GetInfo"/>) was
+        /// read while a motor or a GoTo truly moved the mount.</summary>
+        public int CachedReadsWhileMoving {
             get {
                 lock (_lock) {
                     return _cachedReadsWhileMoving;
@@ -685,6 +685,9 @@ namespace OpenAstroAra.Test.PolarAlign {
         public TelescopeInfo GetInfo() {
             lock (_lock) {
                 IntegrateLocked();
+                if (TrulyMovingLocked()) {
+                    _cachedReadsWhileMoving++;
+                }
                 if (!_connected) {
                     return new TelescopeInfo { Connected = false };
                 }

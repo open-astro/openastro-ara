@@ -86,9 +86,10 @@ namespace OpenAstroAra.Server.Services {
         /// the mount connected, or the mount was moved by other means), whose first turn goes away from the meridian as
         /// before (<see cref="AwayFromMeridianSign"/>); or the offset from the origin, with the turns back toward it.
         /// Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would take the axis past the limit.
-        /// <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it).</summary>
-        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch) {
-            var pose = new SweepPose(raDeg, decDeg, Stopwatch.GetTimestamp(), _mount.GetInfo().SideOfPier);
+        /// <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it), and
+        /// <paramref name="side"/> the pier side that reading reported (never the refresh cache's).</summary>
+        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch, PierSide side) {
+            var pose = new SweepPose(raDeg, decDeg, Stopwatch.GetTimestamp(), side);
             SweepOrigin? origin;
             SweepPose? lastLeft;
             lock (_gate) {
@@ -145,9 +146,10 @@ namespace OpenAstroAra.Server.Services {
             _sweepLastLeft = plan.Pose;
         }
 
-        /// <summary>Where Polar Align's own move left the mount (a motor reading): the next start compares with it.</summary>
-        private void NoteMountLeft((double RaDeg, double DecDeg) reading) {
-            var pose = new SweepPose(reading.RaDeg, reading.DecDeg, Stopwatch.GetTimestamp(), _mount.GetInfo().SideOfPier);
+        /// <summary>Where Polar Align's own move left the mount (a motor reading, with the pier side of a fresh reading): the
+        /// next start compares with it. Never the refresh cache (#2066): it is read on every poll of a turn.</summary>
+        private void NoteMountLeft((double RaDeg, double DecDeg) reading, PierSide side) {
+            var pose = new SweepPose(reading.RaDeg, reading.DecDeg, Stopwatch.GetTimestamp(), side);
             lock (_gate) {
                 _sweepLastLeft = pose;
             }
@@ -159,7 +161,7 @@ namespace OpenAstroAra.Server.Services {
         private async Task NoteMountLeftAfterStopAsync() {
             try {
                 if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now) {
-                    NoteMountLeft(now);
+                    NoteMountLeft((now.RaDeg, now.DecDeg), now.Side);
                 }
             } catch (Exception ex) {
                 LogSweepExitReadFailed(ex);

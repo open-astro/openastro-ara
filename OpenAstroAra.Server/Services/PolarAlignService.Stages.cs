@@ -483,7 +483,8 @@ namespace OpenAstroAra.Server.Services {
             // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
             // it away from the band (and the session's origin) until the stall bound. #2066 — a reading the run cannot trust
             // (none, the placeholder, another mount session, older than 2 s, Dec past the pole) stops the move and fails it.
-            var start = await RunPointingJnowAsync(gen, ct).ConfigureAwait(false);
+            var (startRa, startDec, startSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
+            var start = (startRa, startDec);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
             double learnedSign;
             lock (_gate) {
@@ -514,8 +515,9 @@ namespace OpenAstroAra.Server.Services {
                     }
                     ThrowIfStoppedFromOutside(gen);
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
+                    // The poll reads the position only: the pier side is the turn's start reading's until its end reading.
                     var now = await RunPointingJnowAsync(gen, ct, positionOnly: true).ConfigureAwait(false);
-                    NoteMountLeft(now);
+                    NoteMountLeft(now, startSide);
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {
                         break;
@@ -586,8 +588,9 @@ namespace OpenAstroAra.Server.Services {
             // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();
             await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
-            var after = await RunPointingJnowAsync(gen, ct).ConfigureAwait(false);
-            NoteMountLeft(after);
+            var (afterRa, afterDec, afterSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
+            var after = (afterRa, afterDec);
+            NoteMountLeft(after, afterSide);
             var moved = progress(start, after);
             LogAxisMoveDone(axis, moved);
             return after;

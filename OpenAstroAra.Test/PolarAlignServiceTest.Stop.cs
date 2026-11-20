@@ -116,7 +116,7 @@ namespace OpenAstroAra.Test {
                     lock (_lock) {
                         return new TelescopeInfo {
                             Connected = true, SiderealTime = Lst, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(), SideOfPier = _side ?? CounterweightDownSide(Lst, _raDeg),
+                            Slewing = SlewingLocked(), SideOfPier = CachePierSideFailed ? PierSide.pierUnknown : SideLocked(),
                         };
                     }
                 });
@@ -194,7 +194,7 @@ namespace OpenAstroAra.Test {
                             _decDeg = _decDeg >= 0 ? _decDeg - dec : _decDeg + dec;
                         }
                         return Task.FromResult<MountReading?>(new MountReading(_raDeg / 15.0, _decDeg, SlewingLocked(),
-                            PierSide.pierWest, DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
+                            SideLocked(), DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
                     }
                 }
                 service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
@@ -304,6 +304,12 @@ namespace OpenAstroAra.Test {
 
             /// <summary>#2089 — the mount disconnects and connects again: a new mount session.</summary>
             public void Reconnect() => Interlocked.Increment(ref _sessionEpoch);
+
+            private PierSide SideLocked() => _side ?? CounterweightDownSide(Lst, _raDeg);
+
+            /// <summary>#2066 — the daemon's refresh cache holds <c>pierUnknown</c> (its last SideOfPier read failed); a fresh
+            /// read still reports the side. Guarded by the lock.</summary>
+            public bool CachePierSideFailed { get; set; }
 
             /// <summary>The pier side the mount reports, in place of the hour-angle model's.</summary>
             public PierSide Side {

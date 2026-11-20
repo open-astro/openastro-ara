@@ -342,14 +342,14 @@ namespace OpenAstroAra.Server.Services {
             // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
             // are both read here. #2066 — a reading that cannot be trusted (none, the placeholder, too old) or one past the
             // pole is refused before anything moves.
-            var (raDeg, decDeg, session) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
+            var (raDeg, decDeg, session, side) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
             if (Math.Abs(decDeg) > OnAxisDecDeg) {
                 throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage);
             }
             // #2082 — one measurement per Start: its own two turns, nothing after them.
             var stepDeg = stage == PolarAlignStages.Check ? settings.CheckStepDeg : settings.SeedRotationDeg;
             var maxSweepDeg = 2.0 * stepDeg;
-            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session);
+            var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session, side);
             var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
                 stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg);

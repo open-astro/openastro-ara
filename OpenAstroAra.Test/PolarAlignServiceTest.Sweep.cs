@@ -278,6 +278,22 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false)).NewOrigin, Is.True);
         }
 
+        [Test]
+        public async Task A_pier_flip_the_refresh_cache_missed_is_a_new_start() {
+            // The cache's last SideOfPier read failed (pierUnknown): only the fresh reading shows the flip.
+            var mount = new FakeStopMount(tracking: true) { Side = PierSide.pierEast, CachePierSideFailed = true };
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false)).NewOrigin, Is.False);
+
+            mount.Side = PierSide.pierWest; // a flip GoTo that came back to the same RA reading
+
+            Assert.That((await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false)).NewOrigin, Is.True);
+        }
+
         // ── reconnect ────────────────────────────────────────────────────────────────────────
 
         [Test]
