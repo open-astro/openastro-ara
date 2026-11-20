@@ -3872,6 +3872,18 @@
   "@shellGuidePixelSize": {
     "description": "Settings › Rig: the guide camera's pixel size (µm), read from AlpacaBridge through the guider"
   },
+  "shellMainSensor": "Main camera sensor",
+  "@shellMainSensor": {
+    "description": "Settings › Rig: the main camera's sensor size in pixels, read only (#2041)"
+  },
+  "shellMainPixelSize": "Main camera pixel size",
+  "@shellMainPixelSize": {
+    "description": "Settings › Rig: the main camera's pixel size (µm), read only (#2041)"
+  },
+  "shellFromMainCamera": "Filled in when the main camera connects",
+  "@shellFromMainCamera": {
+    "description": "Settings › Rig: the hint under the main camera sensor row; the rig reads it from the camera"
+  },
   "searchWordsGuideScope": "guide scope guider camera pixel focal polar",
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
@@ -6833,7 +6845,7 @@
   },
   "rigSetupOpticsAction": "Set up optics",
   "@rigSetupOpticsAction": {
-    "description": "Rig setup: button that opens the optics panel"
+    "description": "Rig setup: button that opens Simple Mode's Settings › Rig at the telescope rows"
   },
   "rigSetupGuideScope": "Guide scope",
   "@rigSetupGuideScope": {

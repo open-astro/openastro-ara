@@ -952,6 +952,29 @@ class _OpticsApi extends ProfileApi {
   }
 }
 
+/// #2041 — a main camera that connects when the test says, with its sensor.
+class _SensorCamera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async =>
+      CameraStatus.fromJson(_wire('ASI2600MM', EquipmentConnectionState.disconnected));
+  void plugIn() => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('ASI2600MM', EquipmentConnectionState.connected),
+        'capabilities': {'sensor_width': 6248, 'sensor_height': 4176, 'pixel_size_um': 3.76},
+      }));
+}
+
+/// #2041 — each optics read waits until the test answers it, so reads overlap.
+class _GatedOpticsApi extends _OpticsApi {
+  _GatedOpticsApi(super.optics);
+  final reads = <Completer<OpticsSettings>>[];
+  @override
+  Future<OpticsSettings> getOptics() {
+    final read = Completer<OpticsSettings>();
+    reads.add(read);
+    return read.future;
+  }
+}
+
 /// A camera cooling to −10 °C from [ccd]; [set] moves the reading.
 class _CoolingCamera extends CameraStatusNotifier {
   _CoolingCamera(this.ccd, {this.on = true});
@@ -3822,6 +3845,27 @@ void main() {
     expect(value('aperture', '80 mm'), findsOneWidget);
   });
 
+  testWidgets('#2041 Rig shows the main camera\'s sensor and pixel size read only, Not set until the camera fills them',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    Finder value(String id, String text) => find.descendant(of: find.byKey(Key('simple-rig-$id')), matching: find.text(text));
+    expect(value('sensor', 'Not set'), findsOneWidget);
+    expect(value('pixel', 'Not set'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsOneWidget);
+    c.read(opticsSettingsProvider.notifier)
+      ..setSensorWidthPx(6248)
+      ..setSensorHeightPx(4176)
+      ..setPixelSizeUm(3.76);
+    await tester.pump();
+    expect(value('sensor', '6248 × 4176 px'), findsOneWidget);
+    expect(value('pixel', '3.76 µm'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsNothing, reason: 'filled: no longer to come');
+    for (final id in ['sensor', 'pixel']) {
+      expect(tester.widget<TextButton>(find.byKey(Key('simple-rig-$id'))).onPressed, isNull, reason: '$id is read only');
+    }
+  });
+
   testWidgets('Rig\'s Name and Profile read like its other rows, a 44 pt row each', (tester) async {
     await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
@@ -3833,18 +3877,26 @@ void main() {
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
   });
 
-  testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
-      (tester) async {
-    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
+  testWidgets('#2041 a mount or camera connect reads the optics the rig filled; the app writes none', (tester) async {
+    // The rig filled the aperture from the mount (#1994); the focal length was the profile's.
+    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600, apertureMm: 80));
+    final camera = _SensorCamera();
     final c = await _pump(tester, const Size(1024, 768), gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
+      cameraStatusProvider.overrideWith(() => camera),
     ]);
     await tester.pump();
     await tester.pump();
-    expect(api.puts.single.apertureMm, 80, reason: 'unknown: the mount\'s, saved to the profile');
-    expect(api.puts.single.focalLengthMm, 600, reason: 'the profile\'s own value wins');
     expect(c.read(opticsSettingsProvider).apertureMm, 80);
+    expect(c.read(opticsSettingsProvider).focalLengthMm, 600);
+    // The camera connects: the rig takes its sensor, and the shell reads it.
+    api.optics = api.optics.copyWith(sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76);
+    camera.plugIn();
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(opticsSettingsProvider).isConfigured, isTrue);
+    expect(api.puts, isEmpty);
   });
 
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
@@ -3856,6 +3908,103 @@ void main() {
     await tester.pump();
     await tester.pump();
     expect(api.puts, isEmpty);
+  });
+
+  testWidgets('#2041 two optics reads overlap at the mount connect: no save sends the rig\'s sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      profileApiProvider.overrideWithValue(api),
+      mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 1260, 'aperture_diameter_mm': 200})),
+    ]);
+    await tester.pump();
+    expect(api.reads, hasLength(1), reason: 'the shell reads the optics when the mount connects');
+    // Another reader (the Rig setup, live sync) starts while that read is in flight.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    api.reads[0].complete(rig); // the older read lands second-to-last: its result is dropped
+    await tester.pump();
+    await tester.pump();
+    api.reads[1].complete(rig);
+    await other;
+    await tester.pump();
+    // The rig had every field: nothing may be written, least of all its sensor as 0.
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], isEmpty);
+    expect(c.read(opticsSettingsProvider).sensorWidthPx, 800);
+  });
+
+  testWidgets('#2041 a wheel moved before the optics loaded from the rig never sends the sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), gear: [profileApiProvider.overrideWithValue(api)]);
+    // Two reads overlap; the older one lands and is dropped, the newer one is still in flight.
+    final optics = c.read(opticsSettingsProvider.notifier);
+    unawaited(optics.hydrateFromServer(api));
+    unawaited(optics.hydrateFromServer(api));
+    api.reads[0].complete(rig);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    for (final read in api.reads) {
+      if (!read.isCompleted) read.complete(rig);
+    }
+    await tester.pumpAndSettle();
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], everyElement(endsWith('800x600 px, 5.6 µm')));
+    expect(api.puts, isNotEmpty, reason: 'the wheel is still saved, once the rig\'s optics are in');
+    expect(api.puts.last.apertureMm, 82, reason: 'the wheel\'s value, on top of the rig\'s optics');
+    // The Rig page's other reads fail on this fake and retry: stop them.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('#2041 a wheel whose own optics read is overtaken by a newer read saves nothing and says Couldn\'t save',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), feature: true, gear: [profileApiProvider.overrideWithValue(api)]);
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    final before = api.reads.length;
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    expect(api.reads, hasLength(before + 1), reason: 'the wheel reads the optics before it saves');
+    final wheelRead = api.reads.last;
+    // A newer reader starts while the wheel's read is in flight: the wheel's result is dropped.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    wheelRead.complete(rig);
+    await tester.pumpAndSettle();
+    expect(api.puts, isEmpty, reason: 'the wheel\'s read did not land: nothing may be written');
+    expect([for (final m in c.read(simpleMessagesProvider)) (m.kind, m.title)],
+        contains((SimpleMessageKind.error, "Couldn't save that")));
+    for (final read in api.reads) {
+      if (!read.isCompleted) read.complete(rig);
+    }
+    await other;
+    await tester.pumpAndSettle();
+    expect(api.puts, isEmpty);
+    // The Rig page's other reads fail on this fake and retry: stop them.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
@@ -8188,7 +8337,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header next fix for the optics opens the optics panel',
+      '#2041 Set up optics in the Rig page header stays in Simple Mode and brings the telescope rows into view',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8198,12 +8347,25 @@ void main() {
             opticsConfigured: false,
           ),
           dismissed: true,
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(find.byTooltip('Settings'));
         await tester.pump();
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(
+          view.contains(tester.getCenter(sensor)),
+          isFalse,
+          reason: 'precondition: the telescope rows start below the fold',
+        );
         await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
         await end(tester);
       },
     );
@@ -8325,7 +8487,7 @@ void main() {
     );
 
     testWidgets(
-      'the Main camera and telescope line opens the optics panel over Simple Mode',
+      '#2041 the Main camera and telescope line opens Settings › Rig at the telescope rows, in Simple Mode',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8334,12 +8496,20 @@ void main() {
             longitudeDeg: 151.215297,
             opticsConfigured: false,
           ),
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(
           find.byKey(const Key('simple-rig-setup-optics-action')),
         );
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
         await end(tester);
       },
     );

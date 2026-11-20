@@ -2792,6 +2792,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellGuidePixelSize => 'Guide camera pixel size';
 
   @override
+  String get shellMainSensor => 'Main camera sensor';
+
+  @override
+  String get shellMainPixelSize => 'Main camera pixel size';
+
+  @override
+  String get shellFromMainCamera => 'Filled in when the main camera connects';
+
+  @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
 
