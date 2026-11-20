@@ -159,11 +159,11 @@ namespace OpenAstroAra.Test {
         }
 
         // One guide step, sent and handled: the daemon publishes guider.step after it has fed the watch.
-        // A positive Dec offset gets a South pulse, PHD2's way.
+        // A positive Dec offset gets a South pulse, PHD2's way; a pulse at the cap is flagged DecLimited.
         private static async Task StepAsync(Rig rig, FakeGuider fake, double dec, double decMs, double ra = 0, double raMs = 0) {
             var before = rig.StepsSeen();
             await fake.BroadcastAsync(PhdEvents.GuideStep(ra, dec, decDurationMs: decMs, decDirection: dec >= 0 ? "South" : "North",
-                raDurationMs: raMs, raDirection: raMs > 0 ? "West" : null)).ConfigureAwait(false);
+                raDurationMs: raMs, raDirection: raMs > 0 ? "West" : null, decLimited: decMs >= MaxPulseMs)).ConfigureAwait(false);
             Assert.That(await WaitUntilAsync(() => rig.StepsSeen() > before, pollMs: 2).ConfigureAwait(false), Is.True, "the guide step never landed");
         }
 
@@ -361,6 +361,23 @@ namespace OpenAstroAra.Test {
 
             for (var n = 0; n < 3 * GuideAxisRunaway.Steps; n++) {
                 await StepAsync(rig, fake, 2.0, MaxPulseMs).ConfigureAwait(false);
+            }
+
+            AssertNoRunaway(rig, fake);
+        }
+
+        // #1589 review — Dec backlash after a centre or flip: the first corrections land in the backlash, so
+        // the error creeps up with proportional pulses that are each the largest of the run so far, but far
+        // below the guider's Max Dec Duration. PHD2 never reports them Dec-limited, so it is not a runaway.
+        [Test]
+        public async Task Growing_dec_pulses_below_the_dec_limit_are_not_a_runaway() {
+            using var rig = new Rig();
+            await using var fake = await GuidingFakeAsync(rig).ConfigureAwait(false);
+            await StartGuidingAsync(fake).ConfigureAwait(false);
+
+            for (var n = 1; n <= GuideAxisRunaway.Steps + 5; n++) {
+                var dec = 0.1 + 0.1 * n; // 0.2, 0.3 ... 1.6 px: the pulses are all lost in the backlash
+                await StepAsync(rig, fake, dec, Aggressiveness * dec / (DecRatePxPerSec / 1000)).ConfigureAwait(false);
             }
 
             AssertNoRunaway(rig, fake);

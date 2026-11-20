@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Core.Interfaces;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.PhdEvents;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -27,7 +28,8 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #1589 — Dec running away under correction: the Dec error keeps growing while the Dec pulses sit at
 /// their maximum (<see cref="GuideAxisRunaway"/>, the rule the polar alignment residual uses). A wrong Dec
-/// direction after a meridian flip does this: each pulse pushes the star further away. The watch stops
+/// direction after a meridian flip does this: each pulse pushes the star further away, until PHD2 cuts it
+/// to the Max Dec Duration (<c>DecLimited</c>, required on the tripping frame). The watch stops
 /// guiding and publishes a guider fault (<c>tracking_lost</c>, details <c>dec_runaway</c>), so the shared
 /// reaction runs on_guider_lost (an adoptable pause by default) and notifies. Guiding that is started
 /// again and settles recovers the fault, which resumes the runs the reaction paused.
@@ -67,7 +69,11 @@ public sealed partial class GuiderService {
                 RecoverFaultLocked(ref _decRunawayFault);
                 LogDecRunawayRecovered();
             }
-            if (_decRunawayTripped || _decRunawayPaused || !_decRunaway.Step(step.DECDistanceRaw, step.DECDuration)) {
+            // The streak's "maximum" is the largest pulse since guiding started, so growing proportional
+            // pulses (Dec backlash after a centre or flip) count too: the tripping frame must also be one
+            // PHD2 cut to its Max Dec Duration, as a wrong Dec direction soon is.
+            if (_decRunawayTripped || _decRunawayPaused || !_decRunaway.Step(step.DECDistanceRaw, step.DECDuration)
+                    || step is not PhdEventGuideStep { DecLimited: true }) {
                 return;
             }
             _decRunawayTripped = true;
