@@ -14006,6 +14006,10 @@ components:
           type:
             - 'null'
             - string
+        above_align:
+          type:
+            - 'null'
+            - boolean
     ParkRequestDto:
       type: object
       properties:
