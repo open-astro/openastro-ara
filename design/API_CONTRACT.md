@@ -1949,6 +1949,18 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 **Related:** #2048, #2066, #2067, #2086, #2089, ADR 0022
 
+## 2026-11-20 — Guider fault details `dec_runaway` (#1589)
+
+**Endpoint(s) or area:** WebSocket event `equipment.fault` (`device_type: "guider"`).
+
+**Decision:** a fourth guider `details` value, `dec_runaway`, with `kind` `tracking_lost`. The daemon publishes it when the Dec error grows for 10 guide frames in a row with the Dec pulses at their maximum, and stops guiding. The reaction is the existing guider one (`on_guider_lost`), and its `recovered` comes once guiding is started again and has settled. No new field, event or kind.
+
+**Reasoning:** `details` is free text that the client shows but does not map, so an added value needs no client change.
+
+**Spec ref:** `Services/GuiderService.DecRunaway.cs`, `Services/GuideAxisRunaway.cs`, `Services/FaultReactionService.cs` (`RunGuiderEpisodeAsync`). Tests `GuiderDecRunawayTest`, `GuideAxisRunawayTest`.
+
+**Related:** #1589, #1588, #1716
+
 ## 2026-11-20 — A daemon write of a client section publishes `profile.updated`; the first-flip re-arm answers an `ETag` (#1807)
 
 **Endpoint(s) or area:** WebSocket `profile.updated { section }`; `POST /api/v1/profile/safety/first-flip/rearm`.
