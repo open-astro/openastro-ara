@@ -282,11 +282,12 @@ framing/focus loop when you need to point or focus by eye.
   says what stopped it, and no further turn starts. Emergency Stop latches before any of its other
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
   From Start until it ends (its solves and the live adjust loop too), Polar Align holds the mount: a
-  GoTo, Center, Home and Park are refused ("Polar alignment is using the mount"), and so is a
-  sequence's GoTo; a direction-pad move is refused while it turns the mount. Stop Polar Align first,
-  tap **Done**, or tap Stop Mount. Emergency Stop, Stop Mount, a pad release and Tracking off always
-  get through. When the sky turns unsafe, or a device fault ends in a park, the park stops Polar Align
-  and the Polar Aligner first. A Home you tap just before Stop Mount or Emergency Stop does not start
+  GoTo, a sync, Center, Home and Park are refused ("Polar alignment is using the mount"), and so are a
+  sequence's GoTo, Park, Find Home and meridian flip; a direction-pad move is refused while it turns
+  the mount. Stop Polar Align first, tap **Done**, or tap Stop Mount. Emergency Stop, Stop Mount, a pad
+  release and Tracking off always get through. When the sky turns unsafe, a device fault ends in a
+  park, or End Night (or the unattended shutdown) homes and parks the mount, it stops Polar Align and
+  the Polar Aligner first. A Home you tap just before Stop Mount or Emergency Stop does not start
   after the stop.
 - **Polar Align turns only a still mount.** It refuses to start while the mount is slewing (or does
   not say whether it is), or while the guider is guiding or calibrating ("the mount is moving or the
