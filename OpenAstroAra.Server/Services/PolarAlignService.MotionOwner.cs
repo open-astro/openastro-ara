@@ -27,9 +27,10 @@ namespace OpenAstroAra.Server.Services {
     /// (<see cref="IMountMotionControl.AcquireMotion"/>) for its whole run, the adjust loop included (Joey, 2026-11-20 on
     /// #2048), and gives it back once the run's exit has stopped the mount: meanwhile the REST GoTo, Center, Park and Home and
     /// every mediator GoTo (the sequencer's) are refused. Nothing that stops the mount is (Emergency Stop, Stop Mount,
-    /// AbortSlew, a pad stop, tracking off, the safety, fault and shutdown parks). A motion that slipped in all the same
-    /// (the hand controller, another program, a GoTo accepted just before the run took the owner) is caught before each of
-    /// the run's turns: two fresh readings <see cref="MountSteadyFor"/> apart must both say "not slewing" and agree within
+    /// AbortSlew, a pad stop, tracking off, the safety, fault and shutdown parks). The run takes the owner before its start
+    /// reading, and the daemon checks it in one step with each GoTo's send: a GoTo sent before shows on that reading, and one
+    /// accepted before but not yet sent is dropped. A motion the daemon does not send (the hand controller, another
+    /// program) is caught before each of the run's turns: two fresh readings <see cref="MountSteadyFor"/> apart must both say "not slewing" and agree within
     /// <see cref="StopStillDeg"/>, and the guider must not be guiding or calibrating, or the run fails with
     /// <see cref="MountBusy"/> before the motor starts. A start refuses the same on its one reading
     /// (<c>polar-align-mount-busy</c>).

@@ -12,14 +12,19 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Equipment.MyGuider;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
 using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,10 +45,10 @@ namespace OpenAstroAra.Test {
             HostName: box.BaseUri.Host, IpAddress: box.BaseUri.Host, IpPort: box.BaseUri.Port,
             AlpacaDeviceNumber: 0, UseHttps: false);
 
-        private static Func<string, string?> Mount() => path =>
+        private static Func<string, string?> Mount(bool tracking = true) => path =>
             path.EndsWith("/connected", StringComparison.Ordinal) ? "true"
             : path.EndsWith("/slewing", StringComparison.Ordinal) ? "false"
-            : path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+            : path.EndsWith("/tracking", StringComparison.Ordinal) ? (tracking ? "true" : "false")
             : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
             : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
             : path.EndsWith("/canmoveaxis", StringComparison.Ordinal) ? "true"
@@ -65,10 +70,27 @@ namespace OpenAstroAra.Test {
 
         private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc)> ConnectedAsync() {
             var box = ScriptedAlpacaDevice.Start(Mount());
-            var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100) };
+            return (box, await ConnectAsync(box));
+        }
+
+        private static async Task<TelescopeService> ConnectAsync(ScriptedAlpacaDevice box, WarningLog? log = null, Func<IGuiderMediator?>? guider = null) {
+            var svc = new TelescopeService(logger: log, guiderResolver: guider) { RefreshPeriod = TimeSpan.FromMilliseconds(100) };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             await WaitForAsync(() => svc.GetAsync(CancellationToken.None).Result?.State == EquipmentConnectionState.Connected, "never connected");
-            return (box, svc);
+            return svc;
+        }
+
+        /// <summary>The telescope service's warnings, in order.</summary>
+        private sealed class WarningLog : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
+            public ConcurrentQueue<string> Messages { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (logLevel >= Microsoft.Extensions.Logging.LogLevel.Warning) {
+                    Messages.Enqueue(formatter(state, exception));
+                }
+            }
         }
 
         private static bool Put(ScriptedAlpacaDevice box, string verb, Func<string, bool>? body = null) =>
@@ -108,6 +130,70 @@ namespace OpenAstroAra.Test {
             _ = svc.SlewToCoordinatesAsync(target, cts.Token);
             await WaitForAsync(() => Put(box, "slewtocoordinatesasync"), "the GoTo never went out once the owner was given back");
             await cts.CancelAsync();
+        }
+
+        // A REST GoTo is checked against the owner when it is accepted, then waits for the guider to stop (up to 3 s): Polar
+        // Align may take the mount in that wait. The GoTo is dropped when it would go out, not sent beside the run.
+        [Test]
+        public async Task A_REST_GoTo_accepted_before_Polar_Align_takes_the_mount_is_dropped_before_it_goes_out() {
+            var log = new WarningLog();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            var stopAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                stopAsked.TrySetResult();
+                return stopDone.Task;
+            });
+            using var svc = await ConnectAsync(box, log, () => guider.Object);
+
+            var slew = svc.SlewAsync(new SlewRequestDto(6.0, 45.0), idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            using var hold = svc.AcquireMotion(MotionOwners.PolarAlign);
+            stopDone.SetResult(true);
+            await slew;
+
+            await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the GoTo was not dropped once Polar Align held the mount");
+            Assert.Multiple(() => {
+                Assert.That(Put(box, "slewtocoordinatesasync"), Is.False, "the GoTo never reached the mount");
+                Assert.That(Put(box, "tracking"), Is.False, "nor its tracking write");
+                Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign));
+            });
+        }
+
+        // The owner check and the send are one step: while a REST or mediator GoTo is on its way (here, during its tracking
+        // write), Polar Align cannot take the mount; its start is refused (mount_busy) and reads the slewing mount next time.
+        [Test]
+        public async Task Polar_Align_cannot_take_the_mount_while_a_GoTo_is_being_sent() {
+            TelescopeService? svc = null;
+            var attempts = new ConcurrentQueue<Exception?>();
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false), putResponder: path => {
+                if (path.EndsWith("/tracking", StringComparison.Ordinal)) {
+                    try {
+                        svc!.AcquireMotion(MotionOwners.PolarAlign).Dispose();
+                        attempts.Enqueue(null);
+                    } catch (InvalidOperationException ex) {
+                        attempts.Enqueue(ex);
+                    }
+                }
+                return null;
+            });
+            svc = await ConnectAsync(box);
+            using var _ = svc;
+            var target = new Coordinates(6.0, 45.0, Epoch.J2000, Coordinates.RAType.Hours);
+
+            await svc.SlewAsync(new SlewRequestDto(6.0, 45.0), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(() => Put(box, "slewtocoordinatesasync"), "the REST GoTo never went out");
+            Assert.That(await svc.SlewToCoordinatesAsync(target, CancellationToken.None), Is.True, "the mediator GoTo went out");
+
+            var tried = attempts.ToArray();
+            Assert.That(tried, Has.Length.EqualTo(2), "one try during each GoTo's tracking write");
+            Assert.That(tried, Has.All.InstanceOf<InvalidOperationException>(), "refused while each GoTo was being sent");
+            Assert.That(svc.MotionOwner, Is.Null);
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "free again once both were sent");
+            }
         }
 
         // #2048 ARA-2 — the owner never blocks a stop: Emergency Stop's and Stop Mount's AbortSlew, a pad stop (rate 0),

@@ -98,6 +98,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Polar_Align_reads_its_start_pose_only_once_it_holds_the_mount() {
+            // The run's turns and its 30° sweep limit start from the start reading. Read before the run held the mount, a
+            // GoTo sent between that reading and the hold would move the mount away from it unseen.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            var owners = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            mount.OnFullRead = () => owners.Enqueue(mount.MotionOwner ?? "nobody");
+
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(owners, Is.Not.Empty, "the start read the mount");
+            Assert.That(owners.First(), Is.EqualTo(MotionOwners.PolarAlign), "the start reading came after the hold");
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
         public async Task A_GoTo_accepted_mid_solve_does_not_run_beside_the_next_turn() {
             // A sequencer or Center GoTo that comes while the run solves seed-b (between its two turns): the mount is the
             // run's, so the GoTo is refused and the run's second turn goes out on a still mount.

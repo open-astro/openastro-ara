@@ -321,9 +321,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
-            // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo would run
-            // beside its next turn. It throws, like the refusals below, so a blind SlewScopeToRaDec shows it.
-            ThrowIfMotionOwned("telescope.slew");
             // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
             // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
             // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
@@ -522,6 +519,11 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo would run beside
+        // its next turn. Refused before the try (never an op fault), and it throws, so a blind SlewScopeToRaDec shows it.
+        // Checked and counted with the owner in one step, right before the send: a routine that took the mount while
+        // this GoTo read the pose or the coordinate system still refuses it, and none can take it while it goes out.
+        using var dispatch = op == "telescope.slew" ? BeginMotionDispatchOrThrow(op, "GoTo") : null;
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {

@@ -858,6 +858,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
                 // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
                 // a refused write is logged at Debug and the slew attempt stays authoritative.
+                // #2066 (ARA-2) — the owner was checked when the GoTo was accepted; Polar Align may have taken the mount
+                // since (the guider stop above waits up to 3 s). Checked again and counted in one step with the owner, so
+                // Polar Align cannot take the mount while this GoTo goes out, and it is dropped once Polar Align has it.
+                using var dispatch = TryBeginMotionDispatch(out var owner);
+                if (dispatch is null) {
+                    LogSlewDroppedOwned(raHours, decDeg, owner!);
+                    ClearPendingSlewTarget();
+                    return;
+                }
                 if (!TryEnableTrackingUnlessAborted(client, abortEpoch)) {
                     LogSlewDroppedAfterAbort(raHours, decDeg);
                     ClearPendingSlewTarget();

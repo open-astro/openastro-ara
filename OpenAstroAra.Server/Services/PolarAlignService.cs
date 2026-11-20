@@ -452,6 +452,7 @@ namespace OpenAstroAra.Server.Services {
                     : (abortEpochAtCall, ownAbortsAtCall);
             }
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
+            IDisposable? startHold = null;
             try {
                 lock (_gate) {
                     if (_active) {
@@ -486,6 +487,12 @@ namespace OpenAstroAra.Server.Services {
                 if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
                     throw TelescopeService.PositionUnverifiedRefusal(unverified);
                 }
+                // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
+                // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
+                // Taken before the start reading below: a GoTo the daemon sent before is seen on it (slewing, or where it
+                // ended), and none is sent after it, so the turns and the sweep limit start from the pose read here. Given
+                // back (the catch below) when the start fails before the run takes it over.
+                startHold = AcquireMountForRun();
                 var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 // #2048 — nothing moves without the user's confirmation of this start and its RA turn direction, read from
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
@@ -527,15 +534,6 @@ namespace OpenAstroAra.Server.Services {
                     await claim.ReleaseAsync().ConfigureAwait(false);
                     throw;
                 }
-                // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
-                // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
-                IDisposable hold;
-                try {
-                    hold = AcquireMountForRun();
-                } catch {
-                    await claim.ReleaseAsync().ConfigureAwait(false);
-                    throw;
-                }
                 lock (_gate) {
                     _claim = claim;
                 }
@@ -543,7 +541,8 @@ namespace OpenAstroAra.Server.Services {
                 int startSeq = 0;
                 var runCts = new CancellationTokenSource();
                 var runEnd = new RunEnd();
-                runEnd.Hold(hold);
+                runEnd.Hold(startHold);
+                startHold = null; // the run's now: its exit (or the end that drains it) gives it back
                 bool endedWhileStarting;
                 lock (_gate) {
                     // Checked with the run's publication in one critical section: an end request either lands first
@@ -601,6 +600,9 @@ namespace OpenAstroAra.Server.Services {
                 await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
+            } catch {
+                startHold?.Dispose(); // #2066 — a start that failed before its run took the mount gives it back
+                throw;
             } finally {
                 _opLock.Release();
             }
