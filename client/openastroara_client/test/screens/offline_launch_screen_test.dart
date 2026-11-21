@@ -29,8 +29,8 @@ class _MemCache extends ProfileCacheService {
   }
 
   @override
-  Future<void> saveSections(
-      String profileId, Map<String, dynamic> sections) async {
+  Future<void> saveSections(String profileId, Map<String, dynamic> sections,
+      {Set<String> keep = const {}}) async {
     (store['sections'] ??= <String, dynamic>{})[profileId] = sections;
   }
 }
