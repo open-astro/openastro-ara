@@ -409,14 +409,8 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
                 rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
                 flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
             [typeof(ConnectEquipment)] = () => new ConnectEquipment(equipmentConnections),
-            [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(
-                cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
-                telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
-                weatherDataMediator, domeMediator, safetyMonitorMediator),
-            [typeof(DisconnectEquipment)] = () => new DisconnectEquipment(
-                cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
-                telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
-                weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(equipmentConnections),
+            [typeof(DisconnectEquipment)] = () => new DisconnectEquipment(equipmentConnections),
             [typeof(SwitchProfile)] = () => new SwitchProfile(
                 profileService, cameraMediator, filterWheelMediator, focuserMediator,
                 rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
@@ -493,6 +487,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         public bool IsDisconnectedByUser(EquipmentRole role) => false;
         public Task ConnectAsync(EquipmentRole role, CancellationToken ct) => throw Unwired();
         public Task RecoverAsync(EquipmentRole role, CancellationToken ct) => throw Unwired();
+        public Task DisconnectAsync(EquipmentRole role, CancellationToken ct) => throw Unwired();
         private static EquipmentRefusedException Unwired() =>
             new(EquipmentRefusalCause.NotSupported, "This sequencer was built without equipment connections");
     }

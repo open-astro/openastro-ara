@@ -153,7 +153,7 @@ namespace OpenAstroAra.Test {
             Track(new RotatorService { DeviceFactory = _ => fake });
 
         // The construction points of the instructions: Connect Equipment and the Reconnect trigger take the
-        // connections port (the reconnector); the others still take the mediators until their slices move them.
+        // connections port (the reconnector); Disconnect Equipment takes it too; the others still take the mediators until their slices move them.
         private static ConnectEquipment ConnectItem(string device, Rig rig) =>
             new(rig.Reconnector) { SelectedDevice = device };
 
@@ -164,10 +164,7 @@ namespace OpenAstroAra.Test {
                 rig.SafetyMonitor);
 
         private static DisconnectEquipment DisconnectItem(string device, Rig rig) =>
-            new(new HeadlessCameraMediator(), new HeadlessFilterWheelMediator(), new HeadlessFocuserMediator(),
-                rig.Rotator, new HeadlessTelescopeMediator(), rig.GuiderOrNone, new HeadlessSwitchMediator(),
-                new HeadlessFlatDeviceMediator(), new HeadlessWeatherDataMediator(), new HeadlessDomeMediator(),
-                rig.SafetyMonitor) { SelectedDevice = device };
+            new(rig.Reconnector) { SelectedDevice = device };
 
         private static ReconnectTrigger ReconnectTriggerFor(string device, Rig rig) =>
             new(rig.Reconnector) { SelectedDevice = device };
@@ -252,6 +249,48 @@ namespace OpenAstroAra.Test {
 
             await Assert.CatchAsync<OperationCanceledException>(() => item.Execute(new Progress<ApplicationStatus>(), stop.Token),
                 "a stopped connect throws OperationCanceledException, not SequenceEntityFailedException");
+        }
+
+        // ── Disconnect Equipment (B3c: a Sequencer disconnect is a user disconnect, #1539) ──
+
+        [Test]
+        public async Task DisconnectEquipment_disconnects_a_connected_safety_monitor() {
+            var fake = Track(new FakeSafetyMonitorDevice());
+            var rig = BuildRig(SafetyMonitorOver(fake), RotatorOver(Track(new FakeRotatorDevice())));
+            await ConnectedAsync(rig.SafetyMonitor, "rig-safety");
+
+            await DisconnectItem("Safety Monitor", rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(rig.SafetyMonitor.GetInfo().Connected, Is.False, "the instruction must disconnect the device it reports on");
+            // The lifecycle reads Disconnected at once and tears the client down on a background task.
+            await WaitForAsync(() => fake.Disconnects == 1, "the teardown never reached the device");
+        }
+
+        [Test]
+        public async Task DisconnectEquipment_disconnects_a_connected_rotator() {
+            var fake = Track(new FakeRotatorDevice());
+            var rig = BuildRig(SafetyMonitorOver(Track(new FakeSafetyMonitorDevice())), RotatorOver(fake));
+            await ConnectedAsync(rig.Rotator, "rig-rotator");
+
+            await DisconnectItem("Rotator", rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(rig.Rotator.GetInfo().Connected, Is.False, "the instruction must disconnect the device it reports on");
+            // The lifecycle reads Disconnected at once and tears the client down on a background task.
+            await WaitForAsync(() => fake.Disconnects == 1, "the teardown never reached the device");
+        }
+
+        [Test]
+        public async Task DisconnectEquipment_is_a_user_disconnect_that_recovery_leaves_alone() {
+            var fake = Track(new FakeRotatorDevice());
+            var rig = BuildRig(SafetyMonitorOver(Track(new FakeSafetyMonitorDevice())), RotatorOver(fake));
+            await ConnectedAsync(rig.Rotator, "rig-rotator");
+
+            await DisconnectItem("Rotator", rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            var outcome = await rig.Reconnector.RecoverAsync(DeviceType.Rotator, CancellationToken.None);
+
+            Assert.That(rig.Rotator.DesiredConnection, Is.EqualTo(DesiredConnection.DisconnectedByUser));
+            Assert.That(outcome.Dispatched, Is.EqualTo(0), "the §42.3 ladder must not bring back a device the sequence disconnected");
+            Assert.That(fake.Connects, Is.EqualTo(1));
         }
 
         // Guard (passes on master): the Reconnect trigger recovers; it does not override a user disconnect.

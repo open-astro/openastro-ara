@@ -46,6 +46,13 @@ public interface IEquipmentConnections {
     /// <summary>The trigger's connect: like <see cref="ConnectAsync"/>, but a device the user disconnected is not dialled.</summary>
     /// <exception cref="EquipmentRefusedException">Nothing is known for the role, or the user disconnected it.</exception>
     Task RecoverAsync(EquipmentRole role, CancellationToken ct);
+
+    /// <summary>The user's disconnect: the service's own disconnect, which records <see cref="IsDisconnectedByUser"/>
+    /// so recovery leaves the device alone, then waits until the service reads Disconnected.</summary>
+    /// <exception cref="EquipmentRefusedException">Nothing is remembered or retained for the role.</exception>
+    /// <exception cref="SequenceEntityFailedException">The device was not Disconnected within the settle budget.</exception>
+    /// <exception cref="OperationCanceledException"><paramref name="ct"/> was cancelled.</exception>
+    Task DisconnectAsync(EquipmentRole role, CancellationToken ct);
 }
 
 /// <summary>Why a command was refused before it touched a device.</summary>

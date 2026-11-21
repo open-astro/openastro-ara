@@ -320,6 +320,7 @@ namespace OpenAstroAra.Test {
         private static readonly EquipmentConnectionState[] ConnectingThenError = { EquipmentConnectionState.Connecting, EquipmentConnectionState.Error };
         private static readonly EquipmentConnectionState[] StaysConnecting = { EquipmentConnectionState.Connecting };
         private static readonly EquipmentConnectionState[] StaysConnected = { EquipmentConnectionState.Connected };
+        private static readonly EquipmentConnectionState[] ConnectedThenDisconnected = { EquipmentConnectionState.Connected, EquipmentConnectionState.Disconnected };
         private static readonly EquipmentConnectionState[] StaysDisconnected = { EquipmentConnectionState.Disconnected };
         private static readonly bool[] CleanOnThirdRead = { false, false, true };
 
@@ -399,6 +400,92 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ex!.Cause, Is.EqualTo(EquipmentRefusalCause.DisconnectedByUser));
             Assert.That(r.IsDisconnectedByUser(EquipmentRole.SafetyMonitor), Is.True);
+        }
+
+        // ── The port's disconnect (#1545): the service's DisconnectAsync, then the settle ──
+
+        [Test]
+        public async Task Port_disconnect_calls_the_service_disconnect_and_settles_once_it_reads_Disconnected() {
+            var (r, svc) = MonitorRig(ConnectedThenDisconnected);
+            svc.Setup(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+
+            await r.DisconnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None);
+
+            svc.Verify(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+            svc.Verify(s => s.GetAsync(It.IsAny<CancellationToken>()), Times.AtLeast(2));
+        }
+
+        [Test]
+        public async Task Port_disconnect_that_never_reads_Disconnected_fails_at_the_settle_timeout() {
+            var (r, _) = MonitorRig(StaysConnected);
+            r.SettleTimeout = TimeSpan.FromMilliseconds(300);
+
+            var ex = await Assert.CatchAsync<SequenceEntityFailedException>(() => r.DisconnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Message, Is.EqualTo("Failed to disconnect Safety Monitor"));
+            Assert.That(ex, Is.Not.InstanceOf<EquipmentRefusedException>(), "a disconnect that ran and failed is not a refusal");
+        }
+
+        [Test]
+        public async Task Port_disconnect_with_a_cancelled_token_throws_cancellation_not_a_failure() {
+            var (r, _) = MonitorRig(StaysConnected);
+            using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+            await Assert.CatchAsync<OperationCanceledException>(() => r.DisconnectAsync(EquipmentRole.SafetyMonitor, stop.Token));
+        }
+
+        [Test]
+        public async Task Port_disconnect_with_nothing_remembered_or_retained_refuses_NotKnown_and_disconnects_nothing() {
+            var (r, svc) = MonitorRig(StaysConnected, remember: false);
+
+            var ex = await Assert.CatchAsync<EquipmentRefusedException>(() => r.DisconnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Cause, Is.EqualTo(EquipmentRefusalCause.NotKnown));
+            svc.Verify(s => s.DisconnectAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Port_disconnect_of_the_Switch_role_disconnects_each_known_switch_by_its_device_id() {
+            var states = new[] { EquipmentConnectionState.Connected, EquipmentConnectionState.Disconnected };
+            var reads = 0;
+            var sw = new Mock<ISwitchService>();
+            sw.Setup(s => s.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() => {
+                var state = states[Math.Min(reads++, states.Length - 1)];
+                return (IReadOnlyList<SwitchDto>)new[] {
+                    new SwitchDto("sw-0", 0, "sw-0", state, Array.Empty<SwitchPortDto>()),
+                    new SwitchDto("sw-1", 1, "sw-1", state, Array.Empty<SwitchPortDto>()),
+                };
+            });
+            sw.Setup(s => s.DisconnectAsync(It.IsAny<string>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(), (typeof(ISwitchService), sw.Object));
+
+            await r.DisconnectAsync(EquipmentRole.Switch, CancellationToken.None);
+
+            sw.Verify(s => s.DisconnectAsync("sw-0", null, It.IsAny<CancellationToken>()), Times.Once);
+            sw.Verify(s => s.DisconnectAsync("sw-1", null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Port_disconnect_of_the_Guider_role_calls_the_guider_service_disconnect() {
+            var guider = new Mock<IGuiderService>();
+            guider.Setup(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(), (typeof(IGuiderService), guider.Object));
+
+            await r.DisconnectAsync(EquipmentRole.Guider, CancellationToken.None);
+
+            guider.Verify(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+        }
+
+        [Test]
+        public async Task Port_disconnect_of_the_Dome_role_is_the_user_disconnect_not_the_profile_switch_one() {
+            var dome = new Mock<IDomeService>();
+            dome.Setup(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(Device(DeviceType.Dome, "dome")), (typeof(IDomeService), dome.Object));
+
+            await r.DisconnectAsync(EquipmentRole.Dome, CancellationToken.None);
+
+            dome.Verify(s => s.DisconnectAsync(null, It.IsAny<CancellationToken>()), Times.Once);
+            dome.Verify(s => s.DisconnectForProfileSwitchAsync(It.IsAny<CancellationToken>()), Times.Never);
         }
 
         // Remembers a device of `type` and mocks the one service that type answers to; the role's connect must

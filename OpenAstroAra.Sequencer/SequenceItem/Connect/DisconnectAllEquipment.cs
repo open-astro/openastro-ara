@@ -1,53 +1,21 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Equipment;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
     [JsonObject(MemberSerialization.OptIn)]
     public sealed class DisconnectAllEquipment : SequenceItem, IValidatable {
-        private ICameraMediator cameraMediator;
-        private IFilterWheelMediator fwMediator;
-        private IFocuserMediator focuserMediator;
-        private IRotatorMediator rotatorMediator;
-        private ITelescopeMediator telescopeMediator;
-        private IGuiderMediator guiderMediator;
-        private ISwitchMediator switchMediator;
-        private IFlatDeviceMediator flatDeviceMediator;
-        private IWeatherDataMediator weatherDataMediator;
-        private IDomeMediator domeMediator;
-        private ISafetyMonitorMediator safetyMonitorMediator;
+        private readonly IEquipmentConnections connections;
 
-        public DisconnectAllEquipment(ICameraMediator cameraMediator,
-                                IFilterWheelMediator fwMediator,
-                                IFocuserMediator focuserMediator,
-                                IRotatorMediator rotatorMediator,
-                                ITelescopeMediator telescopeMediator,
-                                IGuiderMediator guiderMediator,
-                                ISwitchMediator switchMediator,
-                                IFlatDeviceMediator flatDeviceMediator,
-                                IWeatherDataMediator weatherDataMediator,
-                                IDomeMediator domeMediator,
-                                ISafetyMonitorMediator safetyMonitorMediator) {
-            this.cameraMediator = cameraMediator;
-            this.fwMediator = fwMediator;
-            this.focuserMediator = focuserMediator;
-            this.rotatorMediator = rotatorMediator;
-            this.telescopeMediator = telescopeMediator;
-            this.guiderMediator = guiderMediator;
-            this.switchMediator = switchMediator;
-            this.flatDeviceMediator = flatDeviceMediator;
-            this.weatherDataMediator = weatherDataMediator;
-            this.domeMediator = domeMediator;
-            this.safetyMonitorMediator = safetyMonitorMediator;
+        public DisconnectAllEquipment(IEquipmentConnections connections) {
+            this.connections = connections;
             Devices = new List<string>() {
                 "Camera",
                 "Filter Wheel",
@@ -65,36 +33,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public IReadOnlyList<string> Devices { get; }
 
-
-        private object? GetMediator(string device) {
-            switch (device) {
-                case "Camera": return cameraMediator;
-                case "Filter Wheel": return fwMediator;
-                case "Focuser": return focuserMediator;
-                case "Rotator": return rotatorMediator;
-                case "Telescope": return telescopeMediator;
-                case "Mount": return telescopeMediator;
-                case "Guider": return guiderMediator;
-                case "Switch": return switchMediator;
-                case "Flat Panel": return flatDeviceMediator;
-                case "Weather": return weatherDataMediator;
-                case "Dome": return domeMediator;
-                case "Safety Monitor": return safetyMonitorMediator;
-                default: return null;
-            }
-        }
-
-        private DisconnectAllEquipment(DisconnectAllEquipment copyMe) : this(copyMe.cameraMediator,
-                                                                 copyMe.fwMediator,
-                                                                 copyMe.focuserMediator,
-                                                                 copyMe.rotatorMediator,
-                                                                 copyMe.telescopeMediator,
-                                                                 copyMe.guiderMediator,
-                                                                 copyMe.switchMediator,
-                                                                 copyMe.flatDeviceMediator,
-                                                                 copyMe.weatherDataMediator,
-                                                                 copyMe.domeMediator,
-                                                                 copyMe.safetyMonitorMediator) {
+        private DisconnectAllEquipment(DisconnectAllEquipment copyMe) : this(copyMe.connections) {
             CopyMetaData(copyMe);
         }
 
@@ -112,25 +51,18 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             var errors = new List<Exception>();
 
             foreach (var device in Devices) {
-                var mediator = GetMediator(device);
-                if (mediator == null) { continue; }
+                if (ConnectEquipment.RoleOf(device) is not { } role) { continue; }
 
-                var type = mediator.GetType();
-                var GetInfo = type.GetMethod("GetInfo");
-                DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-
-
-                if (info.Connected) {
-                    var Disconnect = type.GetMethod("Disconnect");
-                    await (Task)Disconnect!.Invoke(mediator, null)!;
-
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-                    var success = !infoAfterConnect.Connected;
-                    if (!success) {
-                        errors.Add(new SequenceEntityFailedException($"Failed to disconnect from {device}"));
-                    }
-                } else {
+                if (!connections.IsConnected(role)) {
                     Logger.Info($"{device} is already disconnected");
+                    continue;
+                }
+                try {
+                    await connections.DisconnectAsync(role, token).ConfigureAwait(false);
+                } catch (EquipmentRefusedException ex) when (ex.Cause == EquipmentRefusalCause.NotKnown) {
+                    Logger.Info($"{device} is not known to this rig, so there is nothing to disconnect");
+                } catch (SequenceEntityFailedException ex) {
+                    errors.Add(ex);
                 }
             }
 
