@@ -102,12 +102,21 @@ public static class RefusalCatalog {
     // app. max_cw_angle_deg is the limit the confirmation is for.
     public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "max_cw_angle_deg");
 
+    // #2083 — the site has no usable longitude, sits at latitude 0° and longitude 0° (a site never set), or its local
+    // sidereal time cannot be worked out: Polar Align steers by the hour angle, so it refuses rather than guess.
+    public static readonly RefusalCause PolarAlignSiteNotSet = new("polar-align-site-not-set", 409, "The site's longitude is not set");
+    // #2083 — the mount reports AlignmentMode altAz: its first axis turns azimuth, not RA, so the RA turns cannot run.
+    public static readonly RefusalCause PolarAlignAltAzMount = new("polar-align-alt-az-mount", 409, "Polar Align needs an equatorial mount");
+    // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so no motor start (a Turn
+    // RA by hand start goes ahead).
+    public static readonly RefusalCause PolarAlignCannotMoveAxis = new("polar-align-cannot-move-axis", 409, "The mount cannot turn its RA axis by rate");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
-        PolarAlignClearanceNotConfirmed,
+        PolarAlignClearanceNotConfirmed, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
     ];
 }
