@@ -78,6 +78,7 @@ import 'package:openastroara/state/library/live_library_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import 'selection_tint_contrast.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import '../../support/imaging_sections.dart';
 import '../../support/settings_values.dart';
 
@@ -879,14 +880,14 @@ void main() {
   }
 
   group('the Queue, through its own interface (no sheet)', () {
-    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale}) async {
+    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale, bool defaults = true}) async {
       final seq = _Seq()..createFails = createFails;
       final c = ProviderContainer(overrides: [
         ..._rig.cast(),
         if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
         tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
-        ...imagingSectionsFromRig(),
+        if (defaults) ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
@@ -900,6 +901,16 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       return (c, seq);
     }
+
+    test('the imaging defaults not loaded: no rows, and Add to queue says why with nothing sent', () async {
+      // ADR 0015 rule 3: no client default sub stands in for the profile's.
+      final (c, seq) = await queue(defaults: false);
+      expect(c.read(imagingDefaultsProvider).value, isNull, reason: 'precondition: not loaded');
+      expect(c.read(simpleRunPlanProvider), isEmpty);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(seq.calls, isEmpty);
+      expect(c.read(simpleRunProvider).error, contains('Not loaded'));
+    });
 
     test('every path that writes a Simple Mode target asks the Guider to calibrate (#1716)', () async {
       final (c, seq) = await queue();

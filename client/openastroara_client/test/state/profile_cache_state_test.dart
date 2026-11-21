@@ -406,6 +406,56 @@ void main() {
     expect(c.read(opticsSettingsProvider), before);
   });
 
+  test(
+      'a cached section missing a key stays not loaded; the others plan from '
+      'the cache, and a Save is refused with nothing sent', () async {
+    // A snapshot from before a field existed: no client default fills it in.
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings(focalLengthMm: 382))
+        ..remove('telescope_name'),
+      'site': ProfileApi.siteSettingsToJson(const TestSiteSettings(siteName: 'South GA')),
+    });
+    final rig = FakeSectionRig({'site': rigDefaults['site']})..failGet.add('site');
+    final c = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+      profileApiProvider.overrideWithValue(rig.api()),
+    ]);
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(opticsSettingsProvider).value, isNull,
+        reason: 'not loaded, never the old client default');
+    expect(c.read(siteSettingsProvider).source, SectionSource.cache);
+    expect(c.read(siteSettingsProvider).value!.siteName, 'South GA',
+        reason: 'planning reads the cached site');
+    await expectLater(
+      c.read(siteSettingsProvider.notifier).replaceAndSave(
+          c.read(siteSettingsProvider).value!.copyWith(bortleClass: 3)),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a rig with no unguided section (404) leaves it out of the capture, '
+      'never the client defaults', () async {
+    final rig = FakeSectionRig({
+      for (final s in const [
+        'optics',
+        'imaging-defaults',
+        'autofocus',
+        'site',
+        'filter-set',
+        'camera-electronics',
+        'custom-horizon',
+      ])
+        s: rigDefaults[s],
+    });
+    await captureProfileCache(cache, rig.api(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1.containsKey('optics'), isTrue, reason: 'the rest is captured');
+    expect(p1.containsKey('unguided'), isFalse);
+  });
+
   test('saveList drops sections of profiles the daemon no longer has',
       () async {
     await captureProfileCache(cache, _FakeApi(), list);
