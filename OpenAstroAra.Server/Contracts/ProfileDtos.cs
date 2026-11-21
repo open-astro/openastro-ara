@@ -390,7 +390,15 @@ public sealed record SafetyPoliciesDto(
     // POST /safety/first-flip/confirm needs them, and re-arm, a share and an optics change clear
     // them. Optional ctor defaults keep an older profile.json deserializing.
     DateTimeOffset? FirstFlipCompletedUtc = null,
-    bool FirstFlipPierSideChanged = false);
+    bool FirstFlipPierSideChanged = false,
+    // #1589 — the clearance limit: the highest altitude (degrees) this rig may point at before the
+    // camera, rotator or tube can reach the pier or tripod. Off by default (D9): a profile that
+    // upgrades keeps its old behaviour. On: a GoTo (REST, sequence, Center, the meridian flip) to a
+    // target at or above it is refused, and MountClearanceWatch stops guiding and tracking and pauses
+    // the run when the mount tracks up to it. One value per profile: it does not follow the rotator
+    // angle. Optional ctor defaults keep an older profile.json deserializing.
+    bool ClearanceLimitEnabled = false,
+    double ClearanceMaxAltitudeDeg = 80);
 
 /// <summary>
 /// §37.11 autofocus settings — method + sweep params + filter/runtime

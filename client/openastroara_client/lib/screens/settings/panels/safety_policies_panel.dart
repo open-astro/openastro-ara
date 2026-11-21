@@ -205,6 +205,28 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             if (v != null) n.setMeridianPauseMin(v);
           },
         ),
+        // #1589 — the clearance limit (the rig's value, off until turned on).
+        SettingsSwitchRow(
+          key: const Key('safety-clearance-limit'),
+          label: context.l10n.safetyClearanceLimitLabel,
+          helpKey: 'safety.policies.clearance_limit_enabled',
+          hint: context.l10n.safetyClearanceLimitHint,
+          value: s.clearanceLimitEnabled,
+          onChanged: n.setClearanceLimitEnabled,
+        ),
+        if (s.clearanceLimitEnabled)
+          EditableNumberRow(
+            key: const Key('safety-clearance-max-altitude'),
+            label: context.l10n.safetyClearanceMaxAltitudeLabel,
+            helpKey: 'safety.policies.clearance_max_altitude_deg',
+            currentValue: s.clearanceMaxAltitudeDeg.toStringAsFixed(1),
+            getCanonical: () =>
+                now().clearanceMaxAltitudeDeg.toStringAsFixed(1),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setClearanceMaxAltitudeDeg(v);
+            },
+          ),
         SettingsSwitchRow(
           label: 'Re-center after flip',
           value: s.meridianRecenter,

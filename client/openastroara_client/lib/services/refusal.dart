@@ -30,7 +30,8 @@ enum RefusalCause {
   mountClockNotVerified('mount-clock-not-verified'),
   polarAlignAlreadyRunning('polar-align-already-running'),
   polarAlignClutchTurned('polar-align-clutch-turned'),
-  polarAlignClearanceNotConfirmed('polar-align-clearance-not-confirmed');
+  polarAlignClearanceNotConfirmed('polar-align-clearance-not-confirmed'),
+  aboveClearanceLimit('above-clearance-limit');
 
   const RefusalCause(this.token);
 

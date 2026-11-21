@@ -343,6 +343,11 @@ public static partial class ProfileEndpoints {
             .WithSummary("Get the active profile's safety policies.");
 
         profile.MapPut("/safety", (SafetyPoliciesDto body, IProfileStore store) => {
+            // #1589 — a clearance limit the guard cannot use: at or past 90° it never trips, at or under 0° it
+            // refuses every GoTo. Refused whether or not the limit is on, so turning it on later cannot pick it up.
+            if (ClearanceLimitRangeError(body) is { } clearanceError) {
+                return Results.Problem(detail: clearanceError, statusCode: StatusCodes.Status400BadRequest);
+            }
             // §58.8 — FirstFlipConfirmed and the completed-flip record are DAEMON-owned, not
             // client-editable: the flip executor records a completed flip out-of-band and the
             // user confirms it through the dedicated endpoint, so a client Save PUTting back a
@@ -357,6 +362,7 @@ public static partial class ProfileEndpoints {
         })
             .Accepts<SafetyPoliciesDto>("application/json")
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
             .WithSection(ProfileSections.SafetyPolicies)
             .WithName("PutSafetyPolicies")
             .WithSummary("Replace the active profile's safety policies. first_flip_confirmed, " +
@@ -803,6 +809,17 @@ public static partial class ProfileEndpoints {
             FirstFlipCompletedUtc = stored.FirstFlipCompletedUtc,
             FirstFlipPierSideChanged = stored.FirstFlipPierSideChanged,
         };
+
+    /// <summary>#1589 — the PUT check of the clearance limit: null when <c>clearance_max_altitude_deg</c> is a
+    /// usable altitude (above 0° and under 90°), else the 400 detail. Extracted for unit tests.</summary>
+    internal static string? ClearanceLimitRangeError(SafetyPoliciesDto body) {
+        ArgumentNullException.ThrowIfNull(body);
+        var limit = body.ClearanceMaxAltitudeDeg;
+        return double.IsFinite(limit) && limit > 0 && limit < 90
+            ? null
+            : string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"clearance_max_altitude_deg must be above 0 and under 90 degrees (got {limit}).");
+    }
 
     /// <summary>§58.8 (#1589) — the user's confirm of a completed flip: the policies with
     /// <c>FirstFlipConfirmed</c> set and the record kept; <paramref name="current"/> itself when it

@@ -1087,6 +1087,18 @@ public partial class Program {
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
+        // #1589 — the clearance limit while the mount tracks: stop tracking and guiding, pause the run, say why.
+        // Inert while the profile's clearance limit is off (the default).
+        builder.Services.AddSingleton<MountClearanceWatch>(sp => new MountClearanceWatch(
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            sp.GetService<IProfileStore>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<IGuiderService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<ILogger<MountClearanceWatch>>(),
+            // The mount's RA follows its own clock: while that clock is unverified the watch reads the mount's LST.
+            sp.GetService<IMountClockGate>()));
+        builder.Services.AddHostedService(sp => sp.GetRequiredService<MountClearanceWatch>());
         // §42.2 row 18 — dew formation advisory: humidity + dew-point gap + the HFR trend → the
         // dew_formation diagnostic (which defers autofocus) and one Warning per episode. Advisory only.
         builder.Services.AddSingleton<DewFormationAdvisor>(sp => new DewFormationAdvisor(

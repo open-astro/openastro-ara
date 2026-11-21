@@ -211,6 +211,8 @@ const Map<String, List<String>> _panelKeywords = {
     'unsafe',
     'session',
     'end',
+    'clearance',
+    'zenith',
   ],
   'safety.diagnostics': [
     'diagnostics',

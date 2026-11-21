@@ -158,6 +158,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get deviceMeridianFlip => 'Meridian flip';
 
   @override
+  String get deviceClearanceLimit => 'Clearance limit';
+
+  @override
+  String deviceClearanceLimitAt(String limit) {
+    return 'Stops at $limit°';
+  }
+
+  @override
+  String get deviceClearanceLimitHint =>
+      'Set in the full app: Settings › Unattended running › When to stop.';
+
+  @override
   String get deviceAuto => 'Auto';
 
   @override
@@ -6683,6 +6695,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String refusalAboveClearanceLimit(String altitude, String limit) {
+    return 'That target is at $altitude°, at or above your $limit° clearance limit, where the camera can reach the mount. Pick a lower target, or try again when it is lower.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
 
@@ -6785,6 +6802,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get safetyFirstFlipConfirmedStatus =>
       'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.';
+
+  @override
+  String get safetyClearanceLimitLabel => 'Clearance limit';
+
+  @override
+  String get safetyClearanceLimitHint =>
+      'Stops the mount before the camera or rotator can reach the pier or tripod. While on, Ara refuses a GoTo or a flip to a target at or above the highest safe altitude, and stops tracking and guiding and pauses the run when the mount tracks up to it. It never moves the mount.';
+
+  @override
+  String get safetyClearanceMaxAltitudeLabel => 'Highest safe altitude (°)';
 
   @override
   String get safetyFirstFlipUnconfirmedStatus =>

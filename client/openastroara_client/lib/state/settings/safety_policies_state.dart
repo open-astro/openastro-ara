@@ -90,6 +90,14 @@ class SafetyPolicies {
   final DateTime? firstFlipCompletedUtc;
   final bool firstFlipPierSideChanged;
 
+  // #1589 — the clearance limit: the highest altitude this rig may point at
+  // before the camera or rotator can reach the pier or tripod. While it is on,
+  // the rig refuses a GoTo (and a meridian flip) to a target at or above it,
+  // and stops tracking and guiding and pauses the run when the mount tracks up
+  // to it. The rig owns the value; it is off until the user turns it on.
+  final bool clearanceLimitEnabled;
+  final double clearanceMaxAltitudeDeg;
+
   // §58.10 — bump equipment-impacting notification severities one level while
   // the site sits in astronomical darkness. Default on.
   final bool unattendedEscalation;
@@ -172,6 +180,8 @@ class SafetyPolicies {
     required this.firstFlipConfirmed,
     required this.firstFlipCompletedUtc,
     required this.firstFlipPierSideChanged,
+    required this.clearanceLimitEnabled,
+    required this.clearanceMaxAltitudeDeg,
     required this.unattendedEscalation,
     required this.unattendedShutdownEnabled,
     required this.unattendedShutdownWaitMinutes,
@@ -220,6 +230,8 @@ class SafetyPolicies {
     DateTime? firstFlipCompletedUtc,
     bool clearFirstFlipCompletedUtc = false,
     bool? firstFlipPierSideChanged,
+    bool? clearanceLimitEnabled,
+    double? clearanceMaxAltitudeDeg,
     bool? unattendedEscalation,
     bool? unattendedShutdownEnabled,
     int? unattendedShutdownWaitMinutes,
@@ -276,6 +288,10 @@ class SafetyPolicies {
             : firstFlipCompletedUtc ?? this.firstFlipCompletedUtc,
         firstFlipPierSideChanged:
             firstFlipPierSideChanged ?? this.firstFlipPierSideChanged,
+        clearanceLimitEnabled:
+            clearanceLimitEnabled ?? this.clearanceLimitEnabled,
+        clearanceMaxAltitudeDeg:
+            clearanceMaxAltitudeDeg ?? this.clearanceMaxAltitudeDeg,
         unattendedEscalation:
             unattendedEscalation ?? this.unattendedEscalation,
         unattendedShutdownEnabled:
@@ -376,6 +392,16 @@ class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
 
   void setFlipSafetyEnabled(bool v) =>
       edit((c) => c.copyWith(flipSafetyEnabled: v));
+
+  void setClearanceLimitEnabled(bool v) =>
+      edit((c) => c.copyWith(clearanceLimitEnabled: v));
+
+  /// Above 0° and under 90°, as the rig accepts it (#1589); anything else is
+  /// dropped, so the shown value stays the rig's.
+  void setClearanceMaxAltitudeDeg(double v) {
+    if (v.isNaN || v <= 0 || v >= 90) return;
+    edit((c) => c.copyWith(clearanceMaxAltitudeDeg: v));
+  }
 
   void setUnattendedEscalation(bool v) =>
       edit((c) => c.copyWith(unattendedEscalation: v));

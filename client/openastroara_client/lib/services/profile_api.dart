@@ -888,6 +888,9 @@ class ProfileApi {
         ),
       },
       firstFlipPierSideChanged: j['first_flip_pier_side_changed'] as bool,
+      clearanceLimitEnabled: j['clearance_limit_enabled'] as bool,
+      clearanceMaxAltitudeDeg: (j['clearance_max_altitude_deg'] as num)
+          .toDouble(),
       unattendedEscalation: j['unattended_escalation'] as bool,
       unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
       unattendedShutdownWaitMinutes:
@@ -1019,6 +1022,8 @@ class ProfileApi {
     'first_flip_confirmed',
     'first_flip_completed_utc',
     'first_flip_pier_side_changed',
+    'clearance_limit_enabled',
+    'clearance_max_altitude_deg',
     'unattended_escalation',
     'unattended_shutdown_enabled',
     'unattended_shutdown_wait_minutes',
@@ -1488,6 +1493,8 @@ class ProfileApi {
         ?.toUtc()
         .toIso8601String(),
     'first_flip_pier_side_changed': v.firstFlipPierSideChanged,
+    'clearance_limit_enabled': v.clearanceLimitEnabled,
+    'clearance_max_altitude_deg': v.clearanceMaxAltitudeDeg,
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
