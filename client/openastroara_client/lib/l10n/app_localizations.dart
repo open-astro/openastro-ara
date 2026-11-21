@@ -10239,6 +10239,54 @@ abstract class AppLocalizations {
   /// **'Rough first (main camera)'**
   String get polarRoughFirst;
 
+  /// Polar align (#2082): caption with the Rough first button, how far it turns the mount (the profile's turn, whole degrees) before it moves
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first turns the mount 2 × {step}° and measures with the main camera.'**
+  String polarRoughFirstCaption(String step);
+
+  /// Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake
+  ///
+  /// In en, this message translates to:
+  /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
+  String get polarNoisyMeasurement;
+
+  /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get polarKnobCamera;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the guide camera (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera'**
+  String get polarKnobCameraGuide;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the main camera with its own solver
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera'**
+  String get polarKnobCameraMain;
+
+  /// Settings > Imaging > Polar align (#2082): how many frames are averaged at each of the three points, with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Frames per point (1 to 5)'**
+  String get polarKnobFramesPerPoint;
+
+  /// Settings > Imaging > Polar align (#2082): hint under frames per point
+  ///
+  /// In en, this message translates to:
+  /// **'Averaged; a point scattered over 3″ is retaken once'**
+  String get polarKnobFramesPerPointHint;
+
+  /// Polar align start confirm dialog (#2082): shown when the run measures with the main camera (Rough first, or the profile's camera)
+  ///
+  /// In en, this message translates to:
+  /// **'This measurement uses the main camera.'**
+  String get polarConfirmMainCamera;
+
   /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
   ///
   /// In en, this message translates to:

@@ -6087,6 +6087,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarRoughFirst => 'Rough first (main camera)';
 
   @override
+  String polarRoughFirstCaption(String step) {
+    return 'Rough first turns the mount 2 × $step° and measures with the main camera.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
+
+  @override
+  String get polarKnobCamera => 'Camera';
+
+  @override
+  String get polarKnobCameraGuide => 'Guide camera';
+
+  @override
+  String get polarKnobCameraMain => 'Main camera';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Frames per point (1 to 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Averaged; a point scattered over 3″ is retaken once';
+
+  @override
+  String get polarConfirmMainCamera => 'This measurement uses the main camera.';
+
+  @override
   String get polarStepDone => 'Done';
 
   @override
@@ -13362,6 +13390,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarRoughFirst => 'Primeiro o grosso (câmera principal)';
+
+  @override
+  String polarRoughFirstCaption(String step) {
+    return 'Primeiro o grosso gira a montagem 2 × $step° e mede com a câmera principal.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Medição ruidosa: os plate solves de um ponto se espalharam mais de 3″, mesmo depois de refeitos. Verifique o foco e o seeing, ou use mais quadros por ponto.';
+
+  @override
+  String get polarKnobCamera => 'Câmera';
+
+  @override
+  String get polarKnobCameraGuide => 'Câmera de guiagem';
+
+  @override
+  String get polarKnobCameraMain => 'Câmera principal';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Quadros por ponto (1 a 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Calculada a média; um ponto espalhado mais de 3″ é refeito uma vez';
+
+  @override
+  String get polarConfirmMainCamera => 'Esta medição usa a câmera principal.';
 
   @override
   String get polarStepDone => 'Concluído';

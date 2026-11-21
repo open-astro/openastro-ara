@@ -274,9 +274,10 @@ namespace OpenAstroAra.Test {
         private static InMemoryProfileStore NewStore() {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = SiteLatDeg, LongitudeDeg = SiteLonDeg });
-            // Bench cadences: the real §45.12 defaults would make loop tests take minutes.
+            // Bench cadences: the real §45.12 defaults would make loop tests take minutes. One frame per point (#2082): a
+            // scripted solver's answers map one to one onto the measurement's points.
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
             return store;
         }
 
@@ -2347,6 +2348,8 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.StopTrackingWhenDone, Is.True, "#2048: tracking off at the end of a run, as NINA's default");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
+            Assert.That(defaults.Camera, Is.EqualTo(PolarAlignCameras.Guide), "#2082: the guide camera measures unless told otherwise");
+            Assert.That(defaults.FramesPerPoint, Is.EqualTo(3), "#2082: three frames averaged at each point");
 
             store.PutPolarAlignSettings(defaults with { ExposureSeconds = 0.5, Binning = 2 });
             var updated = store.GetPolarAlignSettings();

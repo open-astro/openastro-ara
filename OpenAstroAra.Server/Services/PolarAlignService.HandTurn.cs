@@ -52,6 +52,9 @@ namespace OpenAstroAra.Server.Services {
     /// and a clutch turn leaves the mount's reading wrong, so a motor start is refused until the mount is synced or
     /// reconnected (<see cref="NoteClutchTurned"/>). Frames that do not solve while the user turns (trailed stars) are
     /// expected and only retried.</para>
+    /// <para>#2082 — each point averages <c>polar_align.frames_per_point</c> frames as a motor run's does
+    /// (<see cref="SolveSeedFrameAsync"/>): the first where the mount points, the next two once the turn is taken and the
+    /// mount still (with one frame per point, the solve that took the turn is the point).</para>
     /// </summary>
     public sealed partial class PolarAlignService {
 
@@ -122,8 +125,7 @@ namespace OpenAstroAra.Server.Services {
                 LiveCapture capture, string[] names, double stepDeg, RunBand band, Func<Task> renew,
                 PolarAlignSettingsDto settings, int gen, CancellationToken ct, Func<int, Task>? noteSolve = null) {
             var hint = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
-            var a = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
-            var aAt = DateTimeOffset.UtcNow;
+            var (a, aAt) = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve(names[0], a.RaDegJnow, a.DecDegJnow);
             LogHandTurnMeasurement(band.AwaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, stepDeg);
             if (noteSolve is not null) {
@@ -209,6 +211,13 @@ namespace OpenAstroAra.Server.Services {
 
         private static double PoleDistanceDeg(double decDeg) => 90.0 - Math.Min(90.0, Math.Abs(decDeg));
 
+        /// <summary>#2082 — the mount's reading read at <paramref name="readAt"/>, as it stands at <paramref name="at"/> with the
+        /// axis still: with tracking off the RA reading runs on with the Earth's turn (<see cref="HandTurnDeg"/>). A point
+        /// averaged over several frames is taken at their mean time, after the reading.</summary>
+        internal static (double RaDeg, double DecDeg)? ReadingAt((double RaDeg, double DecDeg)? reading, DateTimeOffset readAt,
+                DateTimeOffset at, bool tracking) =>
+            reading is { } r && !tracking ? (r.RaDeg + (at - readAt).TotalSeconds * SiderealDegPerSecond, r.DecDeg) : reading;
+
         private static (double RaDeg, double DecDeg, DateTimeOffset At, (double RaDeg, double DecDeg)? Reading) Flat(HandPoint p) =>
             (p.S.RaDegJnow, p.S.DecDegJnow, p.At, p.Reading);
 
@@ -274,10 +283,19 @@ namespace OpenAstroAra.Server.Services {
                         var turned = sample.TurnedDeg is double t ? Math.Round(t, 1) : sample.ReadingUnknown ? lastTurned : null;
                         lastTurned = turned;
                         if (sample.Reached && HandTurnSettled(sample.TurnedDeg is not null, atRest, at - askedAt, HandTurnClutchMinWait)) {
-                            LogSeedSolve(frameId, s.RaDegJnow, s.DecDegJnow);
                             LogHandTurnTaken(point, sample.TurnedDeg ?? double.NaN, sample.ByClutch);
                             await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, turned, Waiting: false)).ConfigureAwait(false);
-                            return now;
+                            if (FramesPerPoint(settings) == 1) {
+                                LogSeedSolve(frameId, s.RaDegJnow, s.DecDegJnow);
+                                return now;
+                            }
+                            // #2082 — the turn is in and the mount still: the point is measured as a motor run's is, from
+                            // polar_align.frames_per_point frames averaged (retaken once when scattered, else flagged
+                            // noisy), its frame ids going on from the wait's.
+                            var (mean, meanAt) = await SolveSeedFrameAsync(capture, frameId, (s.RaDegJnow, s.DecDegJnow), settings, gen, ct,
+                                attemptsBefore: frame).ConfigureAwait(false);
+                            LogSeedSolve(frameId, mean.RaDegJnow, mean.DecDegJnow);
+                            return new HandPoint(mean, meanAt, ReadingAt(now.Reading, at, meanAt, tracking));
                         }
                         last = now;
                         await PublishHandTurnAsync(gen, new PolarAlignHandTurnDto(point, direction, stepDeg, turned)).ConfigureAwait(false);

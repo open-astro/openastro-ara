@@ -6608,6 +6608,14 @@ session's sweep plan (`PlanSweep`, #2089) and its confirm step, so the 30° limi
 Checks. Check on the adjust screen ends the live loop like Stop, then starts the confirmed check; the
 check compares with the last run's readout. The Dec tilt is gone too: a start within 3° of the pole is
 refused before anything moves, and the user points the tube 2–5° off it, as NINA's start does.
+Part 2 (2026-11-20): `polar_align.camera` (guide, the default, or main) picks the camera of the
+measurement, its live loop and the check; "Rough first" is the coarse stage, always on the main camera,
+offered only after `seed_solve_failed` and confirmed like any start (its plan names the camera and the
+turns). `polar_align.frames_per_point` (1–5, default 3): each point's frames, taken with the mount
+still, are averaged as unit vectors and their rms scatter is logged; a point over 3″ is retaken once,
+then the result is flagged noisy (`measurement_noisy`, the check's `noisy`); a retake with no solve keeps the first
+set, flagged noisy. The scatter feeds #2072's σ. Each turn first checks the axis's offset from the sweep origin
+(the tracking turn while the frames were taken included): past the run's limit plus 2° fails it as `sweep_limit`.
 
 ---
 

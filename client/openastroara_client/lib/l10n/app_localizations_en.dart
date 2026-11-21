@@ -6087,6 +6087,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarRoughFirst => 'Rough first (main camera)';
 
   @override
+  String polarRoughFirstCaption(String step) {
+    return 'Rough first turns the mount 2 × $step° and measures with the main camera.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
+
+  @override
+  String get polarKnobCamera => 'Camera';
+
+  @override
+  String get polarKnobCameraGuide => 'Guide camera';
+
+  @override
+  String get polarKnobCameraMain => 'Main camera';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Frames per point (1 to 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Averaged; a point scattered over 3″ is retaken once';
+
+  @override
+  String get polarConfirmMainCamera => 'This measurement uses the main camera.';
+
+  @override
   String get polarStepDone => 'Done';
 
   @override

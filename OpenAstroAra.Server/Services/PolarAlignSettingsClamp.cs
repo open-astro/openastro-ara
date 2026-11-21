@@ -31,10 +31,14 @@ public static class PolarAlignSettingsClamp {
     public const double DefaultCheckStepDeg = 10.0;
     public const double MaxCoarseExposureSeconds = 60.0;
     public const double DefaultCoarseExposureSeconds = 3.0;
+    public const int MinFramesPerPoint = 1;
+    public const int MaxFramesPerPoint = 5;
+    public const int DefaultFramesPerPoint = 3;
 
-    /// <summary>The same settings with the three knobs in range: a non-finite or out-of-range turn is
-    /// clamped (a non-finite one takes the default), and a rough exposure that is not positive takes
-    /// the default — one meaning for "no value", never "use the guide exposure on the main camera".</summary>
+    /// <summary>The same settings with the knobs in range: a non-finite or out-of-range turn is
+    /// clamped (a non-finite one takes the default), a rough exposure that is not positive takes
+    /// the default — one meaning for "no value", never "use the guide exposure on the main camera" —, the frames
+    /// per point are held to 1–5, and an unknown camera is the guide camera (#2082).</summary>
     public static PolarAlignSettingsDto Apply(PolarAlignSettingsDto settings) {
         ArgumentNullException.ThrowIfNull(settings);
         return settings with {
@@ -47,6 +51,10 @@ public static class PolarAlignSettingsClamp {
             CoarseExposureSeconds = double.IsFinite(settings.CoarseExposureSeconds) && settings.CoarseExposureSeconds > 0
                 ? Math.Min(settings.CoarseExposureSeconds, MaxCoarseExposureSeconds)
                 : DefaultCoarseExposureSeconds,
+            // #2082 — 1–5 frames per point; a camera the daemon does not know is the guide camera (the PUT refuses one,
+            // an older or hand-edited profile.json may still hold it).
+            FramesPerPoint = Math.Clamp(settings.FramesPerPoint, MinFramesPerPoint, MaxFramesPerPoint),
+            Camera = PolarAlignCameras.IsValid(settings.Camera) ? settings.Camera : PolarAlignCameras.Guide,
         };
     }
 }
