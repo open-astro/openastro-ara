@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 
+import '../../support/section_load.dart';
+
 void main() {
   group('OpticsSettings geometry', () {
     test('an unset profile is not configured and yields null geometry', () {
@@ -55,11 +57,14 @@ void main() {
 
   group('OpticsSettingsNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      container = ProviderContainer();
+      await loadSection(container, opticsSettingsProvider, 'optics');
+    });
     tearDown(() => container.dispose());
 
     test('starts unset (reducer defaults to 1.0)', () {
-      final o = container.read(opticsSettingsProvider);
+      final o = container.read(opticsSettingsProvider).value!;
       expect(o.focalLengthMm, 0);
       expect(o.reducerFactor, 1.0);
       expect(o.sensorWidthPx, 0);
@@ -70,9 +75,9 @@ void main() {
       final n = container.read(opticsSettingsProvider.notifier);
       n.setReducerFactor(0);
       n.setReducerFactor(-1);
-      expect(container.read(opticsSettingsProvider).reducerFactor, 1.0);
+      expect(container.read(opticsSettingsProvider).value!.reducerFactor, 1.0);
       n.setReducerFactor(0.8);
-      expect(container.read(opticsSettingsProvider).reducerFactor, 0.8);
+      expect(container.read(opticsSettingsProvider).value!.reducerFactor, 0.8);
     });
 
     test('numeric setters reject negatives but accept zero (unset)', () {
@@ -80,12 +85,12 @@ void main() {
       n.setFocalLengthMm(-5);
       n.setPixelSizeUm(-1);
       n.setSensorWidthPx(-10);
-      final after = container.read(opticsSettingsProvider);
+      final after = container.read(opticsSettingsProvider).value!;
       expect(after.focalLengthMm, 0);
       expect(after.pixelSizeUm, 0);
       expect(after.sensorWidthPx, 0);
       n.setFocalLengthMm(530);
-      expect(container.read(opticsSettingsProvider).focalLengthMm, 530);
+      expect(container.read(opticsSettingsProvider).value!.focalLengthMm, 530);
     });
   });
 }

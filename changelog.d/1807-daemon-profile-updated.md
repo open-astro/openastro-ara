@@ -1,0 +1,3 @@
+### Fixed (Settings)
+
+- **No false "changed on the rig" after the rig updates a setting itself** (#1807): when the rig changes a section of the profile on its own (the site after a time sync, the focal length a plate solve learned, the sensor and telescope values a camera or mount connect fills in, the first meridian flip's confirmation, the auto-flats choice, the guide camera and the guiding assistant's values, the dome follower, the filter-wheel names), it now tells every app the same way a save from an app does, so an open settings panel reloads the new values and its next Save goes through instead of being refused with "changed on the rig". Re-arming the first-flip announcement also answers the safety section's new version.

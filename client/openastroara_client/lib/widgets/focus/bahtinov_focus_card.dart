@@ -98,13 +98,14 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final measured = status.hasMeasurement;
     final (headline, headlineColor) = BahtinovFocusCard.headlineFor(context.l10n, live);
 
+    // Null until the profile's copy is in from the rig: the line leaves it out.
     final exposure = active && status.exposureSec > 0
         ? status.exposureSec
-        : _exposureSec ?? ref.watch(autofocusSettingsProvider.select((s) => s.exposureSeconds)).toDouble();
+        : _exposureSec ?? ref.watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds))?.toDouble();
     final subhead = [
       if (focuserConnected && focuser != null) 'Focuser at ${focuser.position ?? '—'} · ${focuser.name}' else 'Manual focuser',
       'Bahtinov mask',
-      '${_seconds(exposure)} frames',
+      if (exposure != null) '${_seconds(exposure)} frames',
     ].join(' · ');
 
     final busySpinner = const SizedBox(

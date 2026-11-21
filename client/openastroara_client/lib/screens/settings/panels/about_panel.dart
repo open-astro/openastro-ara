@@ -11,12 +11,14 @@ import '../../../services/server_maintenance_api.dart';
 import '../../../state/night_mode_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/version_mismatch_warning.dart';
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 
-/// App version read at runtime from `package_info_plus` so pubspec.yaml is the
-/// single source of truth (same pattern as the help dialog's provider — kept
-/// separate because that one is private to its library).
+/// The About panel's version line: `kAraAppVersion` with its stage marker,
+/// plus the build number `package_info_plus` reports (same pattern as the help
+/// dialog's provider — kept separate because that one is private to its
+/// library).
 final aboutAppVersionProvider = FutureProvider<String>((ref) async {
   return formatFullVersion(await PackageInfo.fromPlatform());
 });
@@ -176,6 +178,13 @@ class _DaemonIdentity extends ConsumerWidget {
             '${platform.isEmpty ? '' : '\n$platform'}';
       },
     );
-    return Text(text, style: dim);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(text, style: dim),
+        // #2093: a server from another X.Y release line than this app.
+        VersionMismatchWarning(serverVersion: async.value?.daemonVersion),
+      ],
+    );
   }
 }

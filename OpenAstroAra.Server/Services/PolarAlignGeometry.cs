@@ -203,6 +203,43 @@ public static class PolarAlignGeometry {
         return Math.Acos(Math.Clamp(Dot(a, b), -1.0, 1.0)) * 180.0 / Math.PI;
     }
 
+    /// <summary>#2082 — the mean of several solves of one field as unit vectors (so RA 359.99° and 0.01° average to 0°,
+    /// and a field near the pole averages as the sky does, not in RA), and their rms scatter about that mean in
+    /// arcseconds: √(mean of each solve's angle to the mean²). One solve: itself, scatter 0.</summary>
+    /// <exception cref="ArgumentException">No solves, a non-finite one, or solves that cancel (no mean direction).</exception>
+    public static (double RaDeg, double DecDeg, double RmsArcsec) MeanDirection(
+            System.Collections.Generic.IReadOnlyList<(double RaDeg, double DecDeg)> solves) {
+        ArgumentNullException.ThrowIfNull(solves);
+        if (solves.Count == 0) {
+            throw new ArgumentException("at least one solve is needed", nameof(solves));
+        }
+        if (solves.Count == 1) {
+            // Itself, exactly: no round trip through a unit vector.
+            RequireFinite(solves[0].RaDeg, nameof(solves));
+            RequireFinite(solves[0].DecDeg, nameof(solves));
+            return (solves[0].RaDeg, solves[0].DecDeg, 0.0);
+        }
+        var sum = (X: 0.0, Y: 0.0, Z: 0.0);
+        foreach (var (ra, dec) in solves) {
+            RequireFinite(ra, nameof(solves));
+            RequireFinite(dec, nameof(solves));
+            sum = Add(sum, UnitVector(ra, dec));
+        }
+        if (Norm(sum) < 1e-12) {
+            throw new ArgumentException("the solves cancel out: they have no mean direction", nameof(solves));
+        }
+        var mean = Normalize(sum);
+        var squares = 0.0;
+        foreach (var (ra, dec) in solves) {
+            // atan2(|a×b|, a·b): exact for the sub-arcsecond angles a still mount gives, where acos of a dot near 1 is not.
+            var v = UnitVector(ra, dec);
+            var arcsec = Math.Atan2(Norm(Cross(v, mean)), Dot(v, mean)) * 180.0 / Math.PI * 3600.0;
+            squares += arcsec * arcsec;
+        }
+        var (meanRa, meanDec) = RaDec(mean);
+        return (meanRa, meanDec, Math.Sqrt(squares / solves.Count));
+    }
+
     /// <summary>
     /// The signed angle (degrees, −180..180) the pointing turned about <paramref name="axisRaDeg"/>/<paramref name="axisDecDeg"/>
     /// from (<paramref name="ra1Deg"/>, <paramref name="dec1Deg"/>) to (<paramref name="ra2Deg"/>, <paramref name="dec2Deg"/>),
@@ -354,6 +391,19 @@ public static class PolarAlignGeometry {
         return AltAz(decDeg, latitudeDeg, lst - raDeg);
     }
 
+    /// <summary>The floor <see cref="AxisShiftFromPointingShift"/> puts under |cos ψ|.</summary>
+    public const double ReadoutCosPsiFloor = 0.1;
+
+    /// <summary>#2072 — cos ψ of the §45.8 readout: ψ is the camera's azimuth from the pole's at the seed. The
+    /// altitude knob moves the camera in altitude by cos ψ of its own move, so near ψ = ±90° (the camera due east or
+    /// west of the pole's azimuth) the readout divides by a small number: solve noise grows by 1 / |cos ψ|, and under
+    /// <see cref="ReadoutCosPsiFloor"/> the altitude knob is under-read.</summary>
+    public static double ReadoutCosPsi(double seedAzDeg, double latitudeDeg) =>
+        Math.Cos(CameraAzimuthFromPoleRad(seedAzDeg, latitudeDeg));
+
+    private static double CameraAzimuthFromPoleRad(double seedAzDeg, double latitudeDeg) =>
+        Deg2Rad(seedAzDeg - (latitudeDeg > 0 ? 0.0 : 180.0));
+
     /// <summary>
     /// §45.8 — the camera's alt/az shift since the seed (<paramref name="dAltDeg"/>, <paramref name="dAzDeg"/>,
     /// azimuth wrapped to ±180°) mapped back to the shift of the polar axis: the altitude knob's raise of the
@@ -363,13 +413,13 @@ public static class PolarAlignGeometry {
     /// </summary>
     public static (double AltShiftDeg, double AzShiftDeg) AxisShiftFromPointingShift(
             double seedAltDeg, double seedAzDeg, double dAltDeg, double dAzDeg, double latitudeDeg) {
-        var poleAzDeg = latitudeDeg > 0 ? 0.0 : 180.0;
-        var psi = Deg2Rad(seedAzDeg - poleAzDeg);
-        // shortcut: |cos ψ| is floored at 0.1 (keeping its sign), so a camera within ~6° of ψ = ±90° under-reads the
-        // altitude knob; the fine stage can leave the camera there. Upgrade if that band needs a real reading.
+        var psi = CameraAzimuthFromPoleRad(seedAzDeg, latitudeDeg);
+        // shortcut: |cos ψ| is floored at ReadoutCosPsiFloor (keeping its sign), so a camera within ~6° of ψ = ±90°
+        // under-reads the altitude knob; the fine stage can leave the camera there. The routine warns in that band and
+        // near it (#2072, PolarAlignService.WeakReadoutCosPsi). Upgrade if that band needs a real reading.
         var cosPsi = Math.Cos(psi);
-        if (Math.Abs(cosPsi) < 0.1) {
-            cosPsi = Math.CopySign(0.1, cosPsi);
+        if (Math.Abs(cosPsi) < ReadoutCosPsiFloor) {
+            cosPsi = Math.CopySign(ReadoutCosPsiFloor, cosPsi);
         }
         var altShiftDeg = dAltDeg / cosPsi;
         var tanAlt = Math.Tan(Deg2Rad(Math.Min(seedAltDeg, 89.9)));

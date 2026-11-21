@@ -82,11 +82,24 @@ final rigSetupHydratedProvider = FutureProvider.autoDispose<bool>((ref) async {
   if (api == null) return false;
   try {
     // Read here, not through the planner's bootstrap: it swallows a failed read.
-    await Future.wait([
-      ref.read(siteSettingsProvider.notifier).hydrateFromServer(api),
-      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api),
-      ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api),
-    ]);
+    // Site, optics and the guider are on the section module (they load
+    // themselves): a load reports a failure instead of throwing, and a copy
+    // already in from the rig is kept.
+    final site = ref.read(siteSettingsProvider);
+    final optics = ref.read(opticsSettingsProvider);
+    final guide = ref.read(phd2SettingsProvider);
+    final (siteLoaded, guideLoaded, opticsLoaded) = await (
+      site.canSave
+          ? Future.value(true)
+          : ref.read(siteSettingsProvider.notifier).load(api),
+      guide.canSave
+          ? Future.value(true)
+          : ref.read(phd2SettingsProvider.notifier).load(api),
+      optics.canSave
+          ? Future.value(true)
+          : ref.read(opticsSettingsProvider.notifier).load(api),
+    ).wait;
+    if (!siteLoaded || !guideLoaded || !opticsLoaded) return false;
     // Kept until the rig changes: a read when a dropped link comes back would
     // undo a Settings edit not saved yet.
     if (ref.mounted) ref.keepAlive();
@@ -115,9 +128,11 @@ final rigSetupCalibrationProvider =
 final rigSetupFactsProvider = Provider.autoDispose<RigSetupFacts?>((ref) {
   if (!ref.watch(serverLinkUpProvider)) return null;
   if (!(ref.watch(rigSetupHydratedProvider).value ?? false)) return null;
-  final site = ref.watch(siteSettingsProvider);
-  final optics = ref.watch(opticsSettingsProvider);
-  final guide = ref.watch(phd2SettingsProvider);
+  // Back to not loaded (a rig or profile change): not trusted until it is in.
+  final site = ref.watch(siteSettingsProvider).value;
+  final optics = ref.watch(opticsSettingsProvider).value;
+  final guide = ref.watch(phd2SettingsProvider).value;
+  if (site == null || optics == null || guide == null) return null;
   final guider = ref.watch(guiderStatusProvider).value;
   final connected = guider?.isConnected ?? false;
   GuiderCalibrationView? calibration;

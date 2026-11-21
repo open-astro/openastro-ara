@@ -72,7 +72,7 @@ namespace OpenAstroAra.Test {
                 new FITSHeaderCard("YBINNING",1, "Y axis binning factor"),
                 new FITSHeaderCard("ROWORDER","TOP-DOWN", "FITS Image Orientation"),
                 new FITSHeaderCard("EQUINOX", 2000d, "Equinox of celestial coordinate system"),
-                new FITSHeaderCard("SWCREATE",string.Format(System.Globalization.CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", OpenAstroAra.Core.Utility.CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file"),
+                new FITSHeaderCard("SWCREATE",string.Format(System.Globalization.CultureInfo.InvariantCulture, "OpenAstro Ara {0}", OpenAstroAra.Core.Utility.CoreUtil.Version), "Software that created this file"),
             };
 
             //Act

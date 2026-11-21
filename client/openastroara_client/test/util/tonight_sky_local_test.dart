@@ -6,6 +6,7 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
@@ -1601,5 +1602,6 @@ class _SeededSite extends SiteSettingsNotifier {
   _SeededSite(this._seed);
   final SiteSettings _seed;
   @override
-  SiteSettings build() => _seed;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _seed, source: SectionSource.rig);
 }

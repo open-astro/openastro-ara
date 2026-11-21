@@ -53,6 +53,10 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly IWsBroadcaster? _ws;
     // #1689 — an unsafe reaction wins over following the mount.
     private readonly Func<DomeFollower?>? _domeFollower;
+    // #2066 — the park stops a running polar alignment and the Polar Aligner first. Func<>: polar alignment is built from
+    // services registered around this one.
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly IPolarAlignerService? _polarAligner;
     private readonly ILogger<SafetyReactionService> _logger;
 
     private readonly object _lock = new();
@@ -104,6 +108,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     internal TimeSpan RecenterTimeout { get; set; } = TimeSpan.FromMinutes(10);
     /// <summary>Cadence of the unpark read-back poll inside <see cref="UnparkTimeout"/>.</summary>
     internal TimeSpan UnparkPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
+    /// hangs must not hold the park back: the park also counts as a stop, so the routine starts no move after it.</summary>
+    internal TimeSpan StopPolarAlignBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     public SafetyReactionService(
             ISafetyMonitorService? safetyMonitor = null,
@@ -117,8 +124,12 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             ILogger<SafetyReactionService>? logger = null,
             Func<ICenteringService?>? centeringResolver = null,
             TargetRecenter? recenter = null,
-            Func<DomeFollower?>? domeFollower = null) {
+            Func<DomeFollower?>? domeFollower = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null,
+            IPolarAlignerService? polarAligner = null) {
         _domeFollower = domeFollower;
+        _polarAlignResolver = polarAlignResolver;
+        _polarAligner = polarAligner;
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -653,6 +664,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             if (_telescope is null) {
                 return false;
             }
+            // #2066 — a polar alignment turning the RA motor (and its Polar Aligner) is stopped before the park: its next
+            // turn, or its own stop, would otherwise land on the park.
+            await StopPolarAlignQuietlyAsync().ConfigureAwait(false);
             await _telescope.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None).ConfigureAwait(false);
             return true;
         } catch (RefusalException refusal) when (refusal.Cause == RefusalCatalog.MountPositionUnverified) {
@@ -665,28 +679,19 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
         }
     }
 
+    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopPolarAlignBeforeParkAsync"/>, shared with the
+    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>.</summary>
+    private Task StopPolarAlignQuietlyAsync() =>
+        ReactionMountStops.StopPolarAlignBeforeParkAsync(_polarAlignResolver, _polarAligner, MountStopReasons.SafetyPark,
+            StopPolarAlignBeforeParkTimeout, LogRungFailed);
+
     // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
     // tracking (best effort) and say so loudly, since the mount is now unparked in unsafe conditions. The
     // abort also ends any axis lease (a pad move): the refused park no longer cancels them itself.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort rung: a motion or tracking stop that fails is logged and named in the alert, never thrown.")]
     private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
-        var motionStopped = false;
-        var stopped = false;
-        if (_telescope is not null) {
-            try {
-                await _telescope.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
-                motionStopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("abort_slew", ex);
-            }
-            try {
-                await _telescope.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
-                stopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("tracking_off", ex);
-            }
-        }
+        // #2107 — counted under its own reason: a polar alignment this stop ends names this reaction, not Stop Mount.
+        var (motionStopped, stopped) = await ReactionMountStops.StopMotionAndTrackingAsync(_telescope, MountStopReasons.PoseUnverified, LogRungFailed)
+            .ConfigureAwait(false);
         LogParkRefusedUnverified(stopped);
         await NotifyQuietlyAsync(NotificationSeverity.Critical, "Unsafe — mount NOT parked (position unverified)",
             "Conditions are UNSAFE, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "

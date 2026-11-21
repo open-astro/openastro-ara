@@ -99,6 +99,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void The_fit_reports_the_Dec_pulses_it_added_back() {
+            // #2072 — for the log: how much of the figure is rebuilt from pulses (net North-positive, and in all).
+            var estimator = new PaResidualEstimator();
+            double[] pulsesMs = [100, -40, 60, -20, 0, 30, -10, 50];
+            for (var k = 0; k < pulsesMs.Length; k++) {
+                estimator.Add(k * FrameSec, 0.1 * k, pulsesMs[k]);
+            }
+
+            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec)!.Value;
+
+            Assert.That(fit.DecPulseNetMs, Is.EqualTo(170).Within(1e-9));
+            Assert.That(fit.DecPulseTotalMs, Is.EqualTo(310).Within(1e-9));
+        }
+
+        [Test]
         public void A_drift_south_reads_as_the_same_error() {
             var estimator = new PaResidualEstimator();
             Guide(estimator, -0.01, frames: 150, noisePx: 0.2);

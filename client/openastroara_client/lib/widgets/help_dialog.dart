@@ -25,9 +25,9 @@ Future<void> showHelpDialog(BuildContext context) async {
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
 
-/// App version read at runtime from `package_info_plus` so pubspec.yaml is
-/// the single source of truth. FutureProvider so the async fetch is cached
-/// across rebuilds of the help dialog.
+/// The help dialog's version line: `kAraAppVersion` with its stage marker,
+/// plus the build number `package_info_plus` reports. FutureProvider so the
+/// async fetch is cached across rebuilds of the help dialog.
 final _appVersionProvider = FutureProvider<String>((ref) async {
   // The shared formatter puts the build date into §54 bug reports too —
   // exactly where "which alpha are you on?" gets asked.

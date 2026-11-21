@@ -48,7 +48,6 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
-import '../../state/settings/loaded_section.dart' show SectionNotLoadedException;
 import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
@@ -67,9 +66,9 @@ import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
 import '../../models/camera_status.dart' show CameraStatus;
 import '../../models/equipment_device_status.dart';
-import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
+import '../../models/polar_align.dart' show PolarAligner;
 import '../../state/equipment/camera_state.dart';
-import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
@@ -82,11 +81,12 @@ import '../../state/equipment/mount_state.dart';
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/optics_settings_state.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../util/gps_site_fill.dart';
 import '../../util/friendly_error.dart';
-import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
@@ -109,6 +109,7 @@ import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
 import '../../widgets/sky_atlas/target_preview.dart'
     show SurveyThumb, surveyPicture;
+import '../../widgets/version_mismatch_warning.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../stats/stats_dashboard_screen.dart';
@@ -118,7 +119,7 @@ import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
-    show phd2SettingsProvider;
+    show Phd2Settings, phd2SettingsProvider;
 import 'simple_message_pills.dart' show kSimpleMessageHeight;
 import 'simple_status_card.dart';
 import '../album/sky_album_screen.dart';
@@ -431,8 +432,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       if (now?.$1 == null || (was?.$1 != null && was?.$2 == now?.$2)) return;
       final api = ref.read(profileApiProvider);
       if (api == null) return;
-      ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api).catchError(
-          (Object e) => debugPrint('[simple] optics after a connect: $e'));
+      // Never a load: that would drop an edit not saved yet. Takes the
+      // rig's copy only when its tag moved; failures stay in the section.
+      unawaited(ref.read(opticsSettingsProvider.notifier).syncFromServer(api));
     }
     ref.listenManual(mountProvider.select((m) => (m.value?.capabilities, m.value?.deviceId)),
         readOpticsOnConnect, fireImmediately: true);
@@ -4161,13 +4163,17 @@ class _PolarAlignerGearRows extends ConsumerWidget {
     Future<void> pick(bool next) async {
       final notify = userNotifier(context);
       try {
-        // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
-        final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarAlignerAuto: next));
+        // On the rig's copy (ADR 0015): not loaded, it is loaded once more and
+        // nothing is sent when that fails; a 412 shows the rig's newer copy.
+        await ref
+            .read(polarAlignSettingsProvider.notifier)
+            .changeAndSave((s) => s.copyWith(polarAlignerAuto: next));
       } catch (e) {
         notify(
           l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
-          detail: failureReason(l10n, e),
+          detail: e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : failureReason(l10n, e),
           error: true,
         );
       }
@@ -4786,19 +4792,17 @@ class _ThisRig extends ConsumerWidget {
     );
   }
 
-  /// Apply a value and keep it in the profile; a failed save says so.
-  static Future<void> _save(
+  /// Keep [change] in the profile's optics: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveOptics(
     BuildContext context,
     WidgetRef ref,
-    void Function() apply,
-    Future<Object?> Function(ProfileApi api) persist,
+    OpticsSettings Function(OpticsSettings) change,
   ) async {
-    apply();
     final notify = userNotifier(context);
     final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
-      // Shown, not kept: the next read from the rig puts the old value back.
+    if (ref.read(profileApiProvider) == null) {
       notify(
         l10n.shellCouldntSave,
         detail: l10n.shellRigNotConnected,
@@ -4807,13 +4811,49 @@ class _ThisRig extends ConsumerWidget {
       return;
     }
     try {
-      await persist(api);
+      await ref.read(opticsSettingsProvider.notifier).changeAndSave(change);
     } catch (e) {
       notify(
         l10n.shellCouldntSave,
-        detail: friendlyError(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
         error: true,
       );
+    }
+  }
+
+  /// Keep [change] in the profile's site: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015). Returns whether it
+  /// was saved.
+  static Future<bool> _saveSite(
+    BuildContext context,
+    WidgetRef ref,
+    SiteSettings Function(SiteSettings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return false;
+    }
+    try {
+      await ref.read(siteSettingsProvider.notifier).changeAndSave(change);
+      return true;
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
+        error: true,
+      );
+      return false;
     }
   }
 
@@ -4842,55 +4882,49 @@ class _ThisRig extends ConsumerWidget {
       notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;
     }
-    final site = ref.read(siteSettingsProvider.notifier);
-    site.setLatitudeDeg(r.lat);
-    site.setLongitudeDeg(r.lng);
-    if (r.alt != null) site.setElevationM(r.alt!);
-    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
+    final saved = await _saveSite(
+      context,
+      ref,
+      (c) => SiteSettingsNotifier.withFix(
+        c,
+        lat: r.lat,
+        lng: r.lng,
+        alt: r.alt,
+        timeZone: tz_map.latLngToTimezoneString(r.lat, r.lng),
+      ),
+    );
+    if (saved) notify(l10n.shellSiteFrom(r.sourceLabel));
+  }
+
+  /// Keep [change] in the profile's guider settings: applied to the rig's
+  /// copy (loaded once more first when it isn't in) and saved whole, so a
+  /// pixel size the rig filled is sent back as the rig holds it (ALP-4982).
+  /// Not loaded, refused or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveGuider(
+    BuildContext context,
+    WidgetRef ref,
+    Phd2Settings Function(Phd2Settings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
       notify(
-        l10n.shellCouldntSaveSite,
+        l10n.shellCouldntSave,
         detail: l10n.shellRigNotConnected,
         error: true,
       );
       return;
     }
     try {
-      await site.persistToServer(api);
+      await ref.read(phd2SettingsProvider.notifier).changeAndSave(change);
     } catch (e) {
       notify(
-        l10n.shellCouldntSaveSite,
-        detail: friendlyError(l10n, e),
+        l10n.shellCouldntSave,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
         error: true,
       );
-      return;
-    }
-    notify(l10n.shellSiteFrom(r.sourceLabel));
-  }
-
-  /// The profile's guide optics. With [retry] (the guider connected): the
-  /// rig fills unset ones a few guider round trips later, so one read then
-  /// usually beats it: read again each second, up to ten times, until both
-  /// are set.
-  static Future<void> _readGuideOptics(
-    BuildContext context,
-    WidgetRef ref, {
-    bool retry = true,
-  }) async {
-    for (var i = 0; i < (retry ? 10 : 1); i++) {
-      if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
-      if (!context.mounted) return;
-      final api = ref.read(profileApiProvider);
-      if (api == null) return;
-      try {
-        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      } catch (_) {
-        // Unreachable for a moment: the next try reads again.
-      }
-      if (!context.mounted) return;
-      final s = ref.read(phd2SettingsProvider);
-      if (s.guideFocalLength > 0 && s.guidePixelSize > 0) return;
     }
   }
 
@@ -4989,90 +5023,94 @@ class _ThisRig extends ConsumerWidget {
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
         const Divider(key: opticsKey, height: AraSpace.s16),
-        for (final (id, label, digits, value, set)
-            in <(String, String, int?, double, void Function(double))>[
-              // Aperture on one wheel of millimetres; focal length per digit.
-              (
-                'aperture',
-                l10n.shellAperture,
-                null,
-                ref.watch(opticsSettingsProvider).apertureMm,
-                ref.read(opticsSettingsProvider.notifier).setApertureMm,
-              ),
-              (
-                'focal',
-                l10n.shellFocalLength,
-                4,
-                ref.watch(opticsSettingsProvider).focalLengthMm,
-                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
-              ),
-            ])
-          _RigWheelRow.millimetres(
-            l10n,
-            id: id,
-            label: label,
-            digits: digits,
-            value: value,
-            onSet: (v) => _save(
-              context,
-              ref,
-              () => set(v),
-              // #2041 — the section goes whole: never over values not yet
-              // read from the rig (the sensor would go back to 0).
-              (api) async {
-                final optics = ref.read(opticsSettingsProvider.notifier);
-                if (!optics.loadedFromRig) {
-                  await optics.hydrateFromServer(api);
-                  if (!optics.loadedFromRig) {
-                    throw const SectionNotLoadedException(null);
-                  }
-                  set(v);
-                }
-                return optics.persistToServer(api);
-              },
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(opticsSettingsProvider) case final optics
+            when optics.value == null)
+          SectionNotLoaded(
+            section: optics,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(opticsSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else ...[
+          for (final (id, label, digits, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  int?,
+                  double,
+                  OpticsSettings Function(OpticsSettings, double),
+                )
+              >[
+                // Aperture on one wheel of millimetres; focal length per digit.
+                (
+                  'aperture',
+                  l10n.shellAperture,
+                  null,
+                  ref.watch(opticsSettingsProvider).value!.apertureMm,
+                  (c, v) => c.copyWith(apertureMm: v),
+                ),
+                (
+                  'focal',
+                  l10n.shellFocalLength,
+                  4,
+                  ref.watch(opticsSettingsProvider).value!.focalLengthMm,
+                  (c, v) => c.copyWith(focalLengthMm: v),
+                ),
+              ])
+            _RigWheelRow.millimetres(
+              l10n,
+              id: id,
+              label: label,
+              digits: digits,
+              value: value,
+              onSet: (v) => _saveOptics(context, ref, (c) => change(c, v)),
+            ),
+          // #2041 — read only: the rig takes the sensor from the main camera
+          // when it connects.
+          _RigReadOnlyRow(
+            id: 'sensor',
+            label: l10n.shellMainSensor,
+            // The hint only while the sensor is still to come.
+            hint: _sensor(ref.watch(opticsSettingsProvider).value!) == null
+                ? l10n.shellFromMainCamera
+                : null,
+            value:
+                _sensor(ref.watch(opticsSettingsProvider).value!) ??
+                l10n.shellNotSet,
+          ),
+          _RigReadOnlyRow(
+            id: 'pixel',
+            label: l10n.shellMainPixelSize,
+            value: _micrometres(
+              l10n,
+              ref.watch(opticsSettingsProvider).value!.pixelSizeUm,
             ),
           ),
-        // #2041 — read only: the rig takes the sensor from the main camera
-        // when it connects.
-        _RigReadOnlyRow(
-          id: 'sensor',
-          label: l10n.shellMainSensor,
-          // The hint only while the sensor is still to come.
-          hint: _sensor(ref.watch(opticsSettingsProvider)) == null
-              ? l10n.shellFromMainCamera
-              : null,
-          value: _sensor(ref.watch(opticsSettingsProvider)) ?? l10n.shellNotSet,
-        ),
-        _RigReadOnlyRow(
-          id: 'pixel',
-          label: l10n.shellMainPixelSize,
-          value: _micrometres(l10n, ref.watch(opticsSettingsProvider).pixelSizeUm),
-        ),
-        // The guide scope: read from the guider when the profile left it
-        // unset, kept in the profile (polar alignment solves with it).
-        _GuideOpticsReader(
+        ],
+        // The guide scope: the rig fills it from the guider when the
+        // profile left it unset (its profile.updated reloads it here), kept
+        // in the profile (polar alignment solves with it).
+        KeyedSubtree(
           key: _guideKey,
           child: _RigWheelRow.millimetres(
             l10n,
             id: 'guidefocal',
             label: l10n.shellGuideFocalLength,
             digits: 4,
-            value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
-            onSet: (v) => _save(
+            value: (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guideFocalLength
+                .toDouble(),
+            onSet: (v) => _saveGuider(
               context,
               ref,
-              () => ref
-                  .read(phd2SettingsProvider.notifier)
-                  .setGuideFocalLength(v.round()),
-              // The save sends the whole section: re-read it first so a
-              // pixel size the rig filled since Rig's read isn't sent back
-              // as 0 (ALP-4982).
-              (api) async {
-                final guider = ref.read(phd2SettingsProvider.notifier);
-                await guider.hydrateFromServer(api);
-                guider.setGuideFocalLength(v.round());
-                return guider.persistToServer(api);
-              },
+              (c) => c.copyWith(guideFocalLength: math.max(0, v.round())),
             ),
           ),
         ),
@@ -5080,49 +5118,68 @@ class _ThisRig extends ConsumerWidget {
         _RigReadOnlyRow(
           id: 'guidepixel',
           label: l10n.shellGuidePixelSize,
-          value: _micrometres(l10n, ref.watch(phd2SettingsProvider).guidePixelSize),
-        ),
-        for (final (id, label, value, set)
-            in <(String, String, double, void Function(double))>[
-              (
-                'lat',
-                l10n.shellLatitude,
-                ref.watch(siteSettingsProvider).latitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
-              ),
-              (
-                'lng',
-                l10n.shellLongitude,
-                ref.watch(siteSettingsProvider).longitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
-              ),
-            ])
-          _RigWheelRow.coordinate(
+          value: _micrometres(
             l10n,
-            id: id,
-            label: label,
-            value: value,
-            onSet: (v) => _save(
+            (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guidePixelSize,
+          ),
+        ),
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(siteSettingsProvider) case final site
+            when site.value == null)
+          SectionNotLoaded(
+            section: site,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(siteSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else ...[
+          for (final (id, label, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  double,
+                  SiteSettings Function(SiteSettings, double),
+                )
+              >[
+                (
+                  'lat',
+                  l10n.shellLatitude,
+                  ref.watch(siteSettingsProvider).value!.latitudeDeg,
+                  SiteSettingsNotifier.withLatitude,
+                ),
+                (
+                  'lng',
+                  l10n.shellLongitude,
+                  ref.watch(siteSettingsProvider).value!.longitudeDeg,
+                  SiteSettingsNotifier.withLongitude,
+                ),
+              ])
+            _RigWheelRow.coordinate(
+              l10n,
+              id: id,
+              label: label,
+              value: value,
+              onSet: (v) => _saveSite(context, ref, (c) => change(c, v)),
+            ),
+          _RigStepper(
+            id: 'elevation',
+            label: l10n.shellElevation,
+            unit: 'm',
+            value: ref.watch(siteSettingsProvider).value!.elevationM,
+            onSet: (v) => _saveSite(
               context,
               ref,
-              () => set(v),
-              (api) =>
-                  ref.read(siteSettingsProvider.notifier).persistToServer(api),
+              (c) => SiteSettingsNotifier.withElevation(c, v),
             ),
           ),
-        _RigStepper(
-          id: 'elevation',
-          label: l10n.shellElevation,
-          unit: 'm',
-          value: ref.watch(siteSettingsProvider).elevationM,
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref.read(siteSettingsProvider.notifier).setElevationM(v),
-            (api) =>
-                ref.read(siteSettingsProvider.notifier).persistToServer(api),
-          ),
-        ),
+        ],
         Align(
           key: _siteKey,
           alignment: Alignment.centerLeft,
@@ -5194,38 +5251,45 @@ class _ThisRig extends ConsumerWidget {
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out. Last, as in each device's
-        // window in Settings.
-        SimpleVersions(
-          key: const Key('simple-versions'),
-          rows: [
-            for (final (name, v) in <(String, String?)>[
-              (l10n.shellThisApp, version),
-              (l10n.shellAraServer, rig?.daemonVersion),
-              if (rig?.guiderVersion != null)
-                (l10n.deviceGuider, rig!.guiderVersion),
-              for (final a in servers)
-                (
-                  servers.length > 1
-                      ? '${a.label} (${a.host}:${a.port})'
-                      : a.label,
-                  a.version,
-                ),
-              if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
-              if (stars != null && stars.isNotEmpty)
-                (
-                  l10n.shellStarDatabase,
-                  stars.map((d) => d.toUpperCase()).join(', '),
-                ),
-              if (rig != null && rig.osRelease.isNotEmpty)
-                (
-                  l10n.shellSystem,
-                  [
-                    rig.osRelease,
-                    if (rig.boardModel != null) rig.boardModel!,
-                  ].join(' · '),
-                ),
-            ])
-              (name, v ?? '—'),
+        // window in Settings. Under it, #2093's warning when the server is
+        // from another release line (no gap when there is none).
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SimpleVersions(
+              key: const Key('simple-versions'),
+              rows: [
+                for (final (name, v) in <(String, String?)>[
+                  (l10n.shellThisApp, version),
+                  (l10n.shellAraServer, rig?.daemonVersion),
+                  if (rig?.guiderVersion != null)
+                    (l10n.deviceGuider, rig!.guiderVersion),
+                  for (final a in servers)
+                    (
+                      servers.length > 1
+                          ? '${a.label} (${a.host}:${a.port})'
+                          : a.label,
+                      a.version,
+                    ),
+                  if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+                  if (stars != null && stars.isNotEmpty)
+                    (
+                      l10n.shellStarDatabase,
+                      stars.map((d) => d.toUpperCase()).join(', '),
+                    ),
+                  if (rig != null && rig.osRelease.isNotEmpty)
+                    (
+                      l10n.shellSystem,
+                      [
+                        rig.osRelease,
+                        if (rig.boardModel != null) rig.boardModel!,
+                      ].join(' · '),
+                    ),
+                ])
+                  (name, v ?? '—'),
+              ],
+            ),
+            VersionMismatchWarning(serverVersion: rig?.daemonVersion),
           ],
         ),
       ],
@@ -5248,37 +5312,6 @@ class _SettingsPage extends ConsumerWidget {
       body: const SettingsShell(),
     );
   }
-}
-
-/// Reads the profile's guide optics when Rig opens, and again each time the
-/// guider connects (the rig fills unset ones then); draws [child].
-class _GuideOpticsReader extends ConsumerStatefulWidget {
-  const _GuideOpticsReader({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  ConsumerState<_GuideOpticsReader> createState() => _GuideOpticsReaderState();
-}
-
-class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
-  @override
-  void initState() {
-    super.initState();
-    ref.listenManual(
-      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
-      (was, now) {
-        // Open (was null), or the guider just connected.
-        if (was == null || (now && !was)) {
-          unawaited(_ThisRig._readGuideOptics(context, ref, retry: now));
-        }
-      },
-      fireImmediately: true,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }
 
 /// A value the rig keeps, set by wheels: tap it and one wheel per digit
@@ -5867,6 +5900,11 @@ class _AraSheet extends ConsumerWidget {
                 if (rig?.guiderVersion != null)
                   (l10n.deviceGuider, rig!.guiderVersion!),
               ],
+            ),
+            // #2093: a server from another release line. Wraps to the sheet's
+            // width rather than widening it.
+            _NoIntrinsicWidth(
+              child: VersionMismatchWarning(serverVersion: rig?.daemonVersion),
             ),
             // Half of the version table's 4 px line gap on each side.
             Padding(

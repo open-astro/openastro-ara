@@ -408,7 +408,7 @@ final simpleLibraryNeedProvider = Provider.autoDispose<LibraryNeed?>((ref) {
         exposure.gain,
     offset: exposure.offset >= 0 ? exposure.offset : null,
     temperatureC: cools
-        ? ref.watch(imagingDefaultsProvider).coolerTargetC
+        ? ref.watch(imagingDefaultsProvider).value?.coolerTargetC
         : null,
   );
 });

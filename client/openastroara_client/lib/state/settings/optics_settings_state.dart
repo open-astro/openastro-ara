@@ -1,16 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 
 /// §36/§25.5 imaging-train optics + sensor geometry — the inputs the Planning
 /// tab's Frame mode needs to draw the field-of-view box without a live camera.
-/// Backed by the daemon's `GET`/`PUT /api/v1/profile/optics` section (#467):
-/// [OpticsSettingsNotifier.hydrateFromServer] runs when the Planning/Settings
-/// surface mounts, [persistToServer] from the Settings Save button. The
-/// on-first-camera-connect auto-population is a later slice; this is the model
-/// + geometry the FOV overlay consumes.
+/// Backed by the daemon's `GET`/`PUT /api/v1/profile/optics` section (#467),
+/// through the section module (loaded_section.dart): the rig's copy, loaded
+/// before it is saved. This is the model + geometry the FOV overlay consumes.
 ///
 /// Framing math (the FOV box this feeds):
 ///   pixelScale[arcsec/px] = 206.265 × pixelSize_µm ÷ (focalLength_mm × reducer)
@@ -109,70 +107,63 @@ class OpticsSettings {
       );
 }
 
-class OpticsSettingsNotifier extends Notifier<OpticsSettings>
-    with SettingsSyncMixin<OpticsSettings> {
-  @override
-  OpticsSettings build() => const OpticsSettings();
-
+/// ADR 0015 — a value only once the rig has answered. Loads itself: planning,
+/// Tonight's Sky, Simple Mode's Rig page and the guider's OAG focal length
+/// read it with no Settings panel open first. The daemon's own writes (a
+/// camera or mount connect, a plate solve) reach it as `profile.updated`.
+class OpticsSettingsNotifier extends SelfLoadingSection<OpticsSettings> {
   // Setters validate at the boundary so the daemon never sees a physically
   // impossible value. 0 is allowed (it means "unset") except for the reducer,
   // which multiplies the focal length in the pixel-scale denominator.
-  // NOTE: a rejection here is silent (the setter no-ops), so the future Settings
-  // UI must mirror these guards in its own input validation — otherwise a rejected
+  // NOTE: a rejection here is silent (the setter no-ops), so the Settings UI
+  // mirrors these guards in its own input validation — otherwise a rejected
   // value leaves the text field and the stored state showing different numbers.
   void setFocalLengthMm(double v) {
     if (v < 0) return;
-    state = state.copyWith(focalLengthMm: v);
+    edit((c) => c.copyWith(focalLengthMm: v));
   }
 
   void setReducerFactor(double v) {
     if (v <= 0) return;
-    state = state.copyWith(reducerFactor: v);
+    edit((c) => c.copyWith(reducerFactor: v));
   }
 
   void setSensorWidthPx(int v) {
     if (v < 0) return;
-    state = state.copyWith(sensorWidthPx: v);
+    edit((c) => c.copyWith(sensorWidthPx: v));
   }
 
   void setSensorHeightPx(int v) {
     if (v < 0) return;
-    state = state.copyWith(sensorHeightPx: v);
+    edit((c) => c.copyWith(sensorHeightPx: v));
   }
 
   void setPixelSizeUm(double v) {
     if (v < 0) return;
-    state = state.copyWith(pixelSizeUm: v);
+    edit((c) => c.copyWith(pixelSizeUm: v));
   }
 
   void setApertureMm(double v) {
     if (v < 0) return;
-    state = state.copyWith(apertureMm: v);
+    edit((c) => c.copyWith(apertureMm: v));
   }
 
-  void setTelescopeName(String v) {
-    state = state.copyWith(telescopeName: v.trim());
-  }
+  void setTelescopeName(String v) =>
+      edit((c) => c.copyWith(telescopeName: v.trim()));
 
-  /// #2041 — a read from the rig has landed (an offline cache seed does not
-  /// count), so a save sends the rig's values, not the constructor defaults.
-  // shortcut: stays true across a rig change; move optics to the section
-  // module (ADR 0015, #1807) for a real per-rig loaded state.
-  bool get loadedFromRig => _loadedFromRig;
-  bool _loadedFromRig = false;
+  @override
+  Future<Tagged<OpticsSettings>> fetch(ProfileApi api) =>
+      api.getOpticsSection();
 
-  /// Replace local state with what the daemon currently holds. Called when the
-  /// Planning/Settings surface mounts. Errors bubble up for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) async {
-    if (await hydrateGuarded(() => api.getOptics())) _loadedFromRig = true;
-  }
-
-  /// Send the current local state to the daemon; returns its echo so the caller
-  /// can confirm (and update state if the daemon normalized any field).
-  Future<OpticsSettings> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putOptics(sent));
+  @override
+  Future<Tagged<OpticsSettings>> send(
+    ProfileApi api,
+    OpticsSettings value,
+    String? etag,
+  ) => api.putOpticsSection(value, ifMatch: etag);
 }
 
 final opticsSettingsProvider =
-    NotifierProvider<OpticsSettingsNotifier, OpticsSettings>(
-        OpticsSettingsNotifier.new);
+    NotifierProvider<OpticsSettingsNotifier, LoadedSection<OpticsSettings>>(
+      OpticsSettingsNotifier.new,
+    );

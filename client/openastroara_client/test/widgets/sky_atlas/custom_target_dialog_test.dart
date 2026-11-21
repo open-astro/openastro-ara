@@ -10,6 +10,7 @@ import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/util/apparent_place.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/widgets/sky_atlas/custom_target_dialog.dart';
+import '../../support/imaging_sections.dart';
 
 /// In-memory recents: real file IO never completes under the widget test
 /// binding's fake async zone, so the dialog's remember/forget go here.
@@ -91,6 +92,7 @@ void main() {
     client = _RecordingClient();
     targets = _MemoryTargets();
     container = ProviderContainer(overrides: [
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => client),
       customTargetsServiceProvider.overrideWithValue(targets),
     ]);

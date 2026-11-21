@@ -55,10 +55,11 @@ void main() {
     return ServerApi(server, dio: dio);
   }
 
-  test('Emergency Stop waits longer than the ladder can take: 15 rungs at 10 s each', () async {
+  // #2066 — the ladder's worst case is 17 rungs (EmergencyStopService's RungTimeout comment).
+  test('Emergency Stop waits longer than the ladder can take: 17 rungs at 10 s each', () async {
     final adapter = _CannedAdapter(200, const <String, dynamic>{});
     await apiWith(adapter).emergencyStop();
-    expect(adapter.lastRequest!.receiveTimeout, greaterThan(const Duration(seconds: 150)));
+    expect(adapter.lastRequest!.receiveTimeout, greaterThan(const Duration(seconds: 170)));
   });
 
   group('ServerApi §27 connect/disconnect', () {

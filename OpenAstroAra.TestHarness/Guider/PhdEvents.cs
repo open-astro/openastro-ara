@@ -88,11 +88,12 @@ public static class PhdEvents {
     /// A single guide step. <paramref name="raDistanceRaw"/>/<paramref name="decDistanceRaw"/>
     /// are the RA/Dec raw distances (what the ARA client folds into guiding RMS);
     /// <paramref name="dx"/>/<paramref name="dy"/> are the pixel offsets (default 0 —
-    /// pass them when a test needs pixel-vs-arcsec separation).
+    /// pass them when a test needs pixel-vs-arcsec separation). <paramref name="decLimited"/> is
+    /// PHD2's <c>DecLimited</c> flag: the Dec pulse was cut to the Max Dec Duration (omitted when not).
     /// </summary>
     public static JsonObject GuideStep(double raDistanceRaw, double decDistanceRaw, double dx = 0, double dy = 0,
             int? frame = null, double decDurationMs = 0, string? decDirection = null,
-            double raDurationMs = 0, string? raDirection = null) {
+            double raDurationMs = 0, string? raDirection = null, bool decLimited = false) {
         var e = Base("GuideStep");
         e["dx"] = dx;
         e["dy"] = dy;
@@ -108,6 +109,9 @@ public static class PhdEvents {
         if (raDirection is not null) {
             e["RADuration"] = raDurationMs;
             e["RADirection"] = raDirection;
+        }
+        if (decLimited) {
+            e["DecLimited"] = true;
         }
         return e;
     }

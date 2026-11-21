@@ -1,11 +1,14 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+
+import '../support/fake_section_rig.dart';
 
 class _File extends SimpleModePrefsService {
   _File(this.value);
@@ -16,33 +19,43 @@ class _File extends SimpleModePrefsService {
   Future<void> save(bool enabled) async => value = enabled;
 }
 
-/// The rig's site section, with the made-up site the tests share.
-class _Rig extends ProfileApi {
+/// The rig's site section, with the made-up site the tests share, served
+/// with its tag (ADR 0015).
+class _Rig {
   _Rig({bool pier = false})
-    : site = SiteSettings(
-        latitudeDeg: -33.856784,
-        longitudeDeg: 151.215297,
-        permanentPier: pier,
-      ),
-      super(const AraServer(hostname: '192.0.2.10', port: 5000));
-  SiteSettings site;
-  bool failPut = false;
-  int puts = 0;
-  @override
-  Future<SiteSettings> getSiteSettings() async => site;
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async {
-    puts++;
-    if (failPut) throw StateError('rig unreachable');
-    return site = value;
+    : http = FakeSectionRig({
+        'site': {
+          ...rigDefaults['site']!,
+          'latitude_deg': -33.856784,
+          'longitude_deg': 151.215297,
+          'permanent_pier': pier,
+        },
+      });
+  final FakeSectionRig http;
+
+  /// Every PUT of the site fails (nothing written) while on.
+  set failPut(bool on) {
+    http.failPut.removeWhere((s) => s == 'site');
+    if (on) http.failPut.addAll(List.filled(20, 'site'));
   }
+
+  int get puts => http.puts.length;
+  ({bool permanentPier, double latitudeDeg}) get site {
+    final m = http.sectionOf('site')! as Map;
+    return (
+      permanentPier: m['permanent_pier'] as bool,
+      latitudeDeg: (m['latitude_deg'] as num).toDouble(),
+    );
+  }
+
+  ProfileApi api() => http.api();
 }
 
 ProviderContainer _app(_File file, _Rig? rig) {
   final c = ProviderContainer(
     overrides: [
       simplePermanentPierPrefsProvider.overrideWithValue(file),
-      profileApiProvider.overrideWithValue(rig),
+      profileApiProvider.overrideWithValue(rig?.api()),
     ],
   );
   addTearDown(c.dispose);
@@ -88,8 +101,8 @@ void main() {
 
       await c.read(simplePermanentPierProvider.notifier).set(true);
 
-      expect(c.read(siteSettingsProvider).latitudeDeg, 51.477833);
-      expect(c.read(siteSettingsProvider).permanentPier, isTrue);
+      expect(c.read(siteSettingsProvider).value!.latitudeDeg, 51.477833);
+      expect(c.read(siteSettingsProvider).value!.permanentPier, isTrue);
       expect(
         rig.site.latitudeDeg,
         -33.856784,
@@ -149,7 +162,7 @@ void main() {
 
       await expectLater(
         c.read(simplePermanentPierProvider.notifier).set(false),
-        throwsA(isA<StateError>()),
+        throwsA(isA<DioException>()),
         reason: 'so the screen can say the save failed',
       );
 
@@ -181,6 +194,55 @@ void main() {
       reason: 'the off was the last word',
     );
   });
+
+  test(
+    'a switch-off with the site not loaded from the rig sends nothing and '
+    'stays on (ADR 0015)',
+    () async {
+      final rig = _Rig(pier: true);
+      rig.http.failGet.add('site');
+      final file = _File(true);
+      final c = _app(file, rig);
+      expect(await c.read(simplePermanentPierProvider.future), isTrue);
+
+      await expectLater(
+        c.read(simplePermanentPierProvider.notifier).set(false),
+        throwsA(isA<SectionNotLoadedException>()),
+        reason: 'so the screen can say nothing was saved',
+      );
+
+      expect(c.read(simplePermanentPierProvider).value, isTrue);
+      expect(rig.puts, 0);
+      expect(file.value, isTrue, reason: 'the refused off is not written down');
+    },
+  );
+
+  test(
+    'a switch-off with only the cache copy of the site (pier off) sends '
+    'nothing and stays on (ADR 0015)',
+    () async {
+      final rig = _Rig(pier: true);
+      rig.http.failGet.add('site');
+      final file = _File(true);
+      final c = _app(file, rig);
+      // The offline cache says off; the rig (unreachable) still holds on.
+      c
+          .read(siteSettingsProvider.notifier)
+          .seed(const SiteSettings(permanentPier: false));
+      expect(await c.read(simplePermanentPierProvider.future), isTrue);
+      expect(c.read(siteSettingsProvider).value!.permanentPier, isFalse);
+
+      await expectLater(
+        c.read(simplePermanentPierProvider.notifier).set(false),
+        throwsA(isA<SectionNotLoadedException>()),
+        reason: 'a cache copy is not what the rig holds',
+      );
+
+      expect(c.read(simplePermanentPierProvider).value, isTrue);
+      expect(rig.puts, 0);
+      expect(file.value, isTrue, reason: 'the refused off is not written down');
+    },
+  );
 
   test('no rig: the file alone decides', () async {
     final file = _File(false);

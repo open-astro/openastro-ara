@@ -11,6 +11,8 @@ import 'package:openastroara/state/profile_management_state.dart' show profileAp
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
+import '../../support/phd2_section.dart';
+
 class _Guider extends GuiderStatusNotifier {
   _Guider(this.json);
   final Map<String, dynamic> json;
@@ -33,7 +35,8 @@ Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guidin
 
 class _Profile implements ProfileApi {
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async => s;
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(Phd2Settings s, {String? ifMatch}) async =>
+      (value: s, etag: '"v2"');
   @override
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
@@ -50,6 +53,8 @@ Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
     {DeviceDriver? camera, bool inSettings = false, _GuiderEquipment? equipment}) async {
   final c = ProviderContainer(overrides: [
     guiderStatusProvider.overrideWith(() => _Guider(wire)),
+    // The guider settings as the rig's copy (ADR 0015: the gain saves over it).
+    phd2FromRig(),
     deviceDriverProvider.overrideWith((ref, type) async => type == 'guidecamera' ? camera : null),
     if (equipment != null) ...[
       profileApiProvider.overrideWithValue(_Profile()),
@@ -93,12 +98,13 @@ void main() {
   });
 
   testWidgets('the guide camera\'s gain is a slider, 0-100 % in 5s, kept in the profile', (tester) async {
-    final c = await _pump(tester, _wire());
+    final c = await _pump(tester, _wire(), equipment: _GuiderEquipment());
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-guider-gain')));
     expect((slider.min, slider.max, slider.divisions, slider.value), (0.0, 100.0, 20, 50.0));
     slider.onChangeEnd!(70);
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).guideCameraGain, 70);
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.guideCameraGain, 70);
     expect(find.descendant(of: find.byKey(const Key('simple-window-row-Gain')), matching: find.text('70 %')), findsOneWidget);
   });
 }

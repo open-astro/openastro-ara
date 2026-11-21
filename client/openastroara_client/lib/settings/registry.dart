@@ -163,7 +163,7 @@ const List<Setting> settingsRegistry = [
       'Abort + park',
       'Ignore',
     ]),
-    defaultValue: 'Pause + park',
+    defaultValue: null,
     profilePath: 'safety.on_unsafe',
   ),
   Setting(
@@ -207,7 +207,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['resume', 'safe', 'automatic', 'weather', 'restart'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.auto_resume',
   ),
   Setting(
@@ -227,7 +227,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.weather_triggers_enabled',
   ),
   Setting(
@@ -238,7 +238,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['wind', 'gust', 'speed', 'kmh', 'threshold', 'weather'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 200),
-    defaultValue: 36,
+    defaultValue: null,
     profilePath: 'safety.max_wind_kmh',
   ),
   Setting(
@@ -256,7 +256,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 100),
-    defaultValue: 85,
+    defaultValue: null,
     profilePath: 'safety.max_humidity_pct',
   ),
   Setting(
@@ -275,7 +275,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.5),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'safety.min_dew_delta_c',
   ),
   Setting(
@@ -286,7 +286,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['delay', 'wait', 'resume', 'safe', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 60),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'safety.resume_delay_min',
   ),
   Setting(
@@ -305,7 +305,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.meridian_flip_auto',
   ),
   Setting(
@@ -316,7 +316,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['meridian', 'flip', 'pause', 'stop', 'wait', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 30),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'safety.meridian_pause_min',
   ),
   // #2044 — set from Simple Mode's Mount window (Limits); no Advanced row.
@@ -328,7 +328,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['meridian', 'flip', 'after', 'minutes', 'past', 'limit'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 30),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'safety.minutes_after_meridian',
   ),
   Setting(
@@ -339,7 +339,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['meridian', 'flip', 'latest', 'window', 'after', 'minutes'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 60),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'safety.max_minutes_after_meridian',
   ),
   Setting(
@@ -350,7 +350,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['meridian', 'stop', 'tracking', 'flip off', 'pier', 'limit'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 30),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'safety.stop_before_meridian_min',
   ),
   Setting(
@@ -368,7 +368,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.meridian_recenter',
   ),
   Setting(
@@ -386,7 +386,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.enumValue(['if_temp_drifted', 'always', 'never']),
-    defaultValue: 'if_temp_drifted',
+    defaultValue: null,
     profilePath: 'safety.meridian_refocus',
     relatedSettings: ['safety.policies.meridian_refocus_temp_threshold_c'],
   ),
@@ -405,7 +405,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.doubleRange(min: 0.5, max: 10, step: 0.5),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'safety.meridian_refocus_temp_threshold_c',
     relatedSettings: ['safety.policies.meridian_refocus'],
   ),
@@ -425,7 +425,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.enumValue(['auto_restore', 'full', 'skip']),
-    defaultValue: 'auto_restore',
+    defaultValue: null,
     profilePath: 'safety.meridian_guider_recal',
     relatedSettings: ['safety.policies.meridian_recenter'],
   ),
@@ -447,7 +447,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'safety.unattended_window_start',
     relatedSettings: [
       'safety.policies.unattended_window_end',
@@ -472,7 +472,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'safety.unattended_window_end',
     relatedSettings: [
       'safety.policies.unattended_window_start',
@@ -496,7 +496,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.flip_safety_enabled',
     relatedSettings: [
       'safety.policies.meridian_flip_auto',
@@ -519,7 +519,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 300),
-    defaultValue: 90,
+    defaultValue: null,
     profilePath: 'safety.expected_flip_slew_seconds',
     relatedSettings: ['safety.policies.flip_safety_enabled'],
   ),
@@ -541,7 +541,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.unattended_escalation',
     relatedSettings: [
       'safety.policies.unattended_window_start',
@@ -568,7 +568,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.unattended_shutdown_enabled',
     relatedSettings: [
       'safety.policies.unattended_shutdown_wait_minutes',
@@ -592,15 +592,15 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 1, max: 120),
-    defaultValue: 30,
+    defaultValue: null,
     profilePath: 'safety.unattended_shutdown_wait_minutes',
     relatedSettings: ['safety.policies.unattended_shutdown_enabled'],
   ),
   Setting(
     id: 'safety.policies.first_flip_confirmed',
     tier: SettingTier.advanced,
-    label: 'First-flip announce',
-    description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
+    label: 'Meridian flip confirmation',
+    description: 'Until you confirm a meridian flip on this profile, every flip posts a critical alert and waits 60 seconds before it starts — stop the run in that window if the scope could hit the mount. After a flip runs to the end, press Confirm here if the scope cleared the mount and the tripod and frames and guiding came back. Ara never confirms on its own; changing the optics train (or the Re-arm button here) asks again.',
     keywords: [
       'meridian',
       'flip',
@@ -614,27 +614,12 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.first_flip_confirmed',
     relatedSettings: [
       'safety.policies.flip_safety_enabled',
       'safety.policies.meridian_flip_auto',
     ],
-  ),
-  Setting(
-    id: 'safety.policies.on_altitude_limit',
-    tier: SettingTier.advanced,
-    label: 'On altitude limit',
-    description: 'Action when a target drops below the minimum-altitude floor.',
-    keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
-    path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.enumValue([
-      'Skip target',
-      'Pause sequence',
-      'Abort sequence',
-    ]),
-    defaultValue: 'Skip target',
-    profilePath: 'safety.on_altitude_limit',
   ),
   Setting(
     id: 'safety.policies.park_if_no_more_targets',
@@ -644,7 +629,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['park', 'no targets', 'sequence end', 'idle'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.park_if_no_more_targets',
   ),
   Setting(
@@ -659,7 +644,7 @@ const List<Setting> settingsRegistry = [
       'Skip target',
       'Abort sequence',
     ]),
-    defaultValue: 'Pause + retry',
+    defaultValue: null,
     profilePath: 'safety.on_guider_lost',
   ),
   Setting(
@@ -685,7 +670,7 @@ const List<Setting> settingsRegistry = [
       'Pause the running sequence',
       'Abort the running sequence',
     ]),
-    defaultValue: 'Warn only',
+    defaultValue: null,
     profilePath: 'safety.on_disk_space_critical',
   ),
   Setting(
@@ -696,7 +681,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guider', 'retry', 'timeout', 'phd2', 'seconds'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.intRange(min: 0, max: 600),
-    defaultValue: 60,
+    defaultValue: null,
     profilePath: 'safety.guider_retry_timeout_sec',
   ),
   Setting(
@@ -707,7 +692,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['skip', 'target', 'recovery', 'guider', 'fail', 'continue'],
     path: ['Settings', 'Unattended running', 'When to stop'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'safety.skip_target_if_recovery_fails',
   ),
 
@@ -747,7 +732,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['exposure', 'time', 'seconds', 'default', 'shutter'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 1, max: 3600),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'imaging.default_exposure_s',
   ),
   Setting(
@@ -758,7 +743,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['gain', 'sensitivity', 'iso', 'amplification', 'cmos'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 0, max: 1000),
-    defaultValue: 100,
+    defaultValue: null,
     profilePath: 'imaging.default_gain',
   ),
   Setting(
@@ -769,7 +754,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['offset', 'pedestal', 'bias', 'black level', 'cmos'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 0, max: 500),
-    defaultValue: 50,
+    defaultValue: null,
     profilePath: 'imaging.default_offset',
   ),
   Setting(
@@ -780,7 +765,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['bin', 'binning', 'resolution', 'pixel', 'downsample'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.intRange(min: 1, max: 4),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'imaging.default_bin',
   ),
   Setting(
@@ -791,7 +776,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['frame', 'type', 'light', 'dark', 'bias', 'flat', 'calibration'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.enumValue(['Light', 'Dark', 'Bias', 'Flat']),
-    defaultValue: 'Light',
+    defaultValue: null,
     profilePath: 'imaging.default_frame_kind',
   ),
   Setting(
@@ -802,7 +787,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['cooler', 'temperature', 'target', 'celsius', 'cooling', 'tec'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.doubleRange(min: -60, max: 30, step: 1),
-    defaultValue: -10.0,
+    defaultValue: null,
     profilePath: 'imaging.cooler_target_c',
   ),
   Setting(
@@ -813,7 +798,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['ramp', 'cooler', 'thermal shock', 'condensation', 'cooldown'],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.5),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'imaging.cooler_ramp_c_per_min',
   ),
   Setting(
@@ -832,7 +817,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Defaults'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'imaging.warmup_at_session_end',
   ),
 
@@ -854,7 +839,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 10000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.focal_length_mm',
   ),
   Setting(
@@ -872,7 +857,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0.1, max: 5, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'optics.reducer_factor',
   ),
   Setting(
@@ -891,7 +876,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_width_px',
   ),
   Setting(
@@ -910,7 +895,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.intRange(min: 0, max: 100000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'optics.sensor_height_px',
   ),
   Setting(
@@ -929,7 +914,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 50, step: 0.1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.pixel_size_um',
   ),
   Setting(
@@ -949,7 +934,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Optics'],
     type: SettingType.doubleRange(min: 0, max: 2000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'optics.aperture_mm',
     relatedSettings: [
       'img.optics.focal_length_mm',
@@ -1256,7 +1241,7 @@ const List<Setting> settingsRegistry = [
       'Sky flats at twilight',
       'Never',
     ]),
-    defaultValue: 'Ask at each sequence start',
+    defaultValue: null,
     profilePath: 'safety.calibration_capture_default',
   ),
   Setting(
@@ -1276,7 +1261,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 1, max: 99),
-    defaultValue: 50.0,
+    defaultValue: null,
     profilePath: 'safety.flat_target_percent',
   ),
   Setting(
@@ -1287,7 +1272,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'tolerance', 'adu', 'target', 'percent'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0.1, max: 50),
-    defaultValue: 5.0,
+    defaultValue: null,
     profilePath: 'safety.flat_target_adu_tolerance_pct',
   ),
   Setting(
@@ -1298,7 +1283,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'frames', 'count', 'filter', 'per filter'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 500),
-    defaultValue: 30,
+    defaultValue: null,
     profilePath: 'safety.flat_frames_per_filter',
   ),
   Setting(
@@ -1309,7 +1294,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['flats', 'park', 'mount', 'end of night'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'safety.post_flat_park_mount',
   ),
   Setting(
@@ -1328,7 +1313,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 65535),
-    defaultValue: 25000,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_adu',
   ),
   Setting(
@@ -1346,7 +1331,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.intRange(min: 1, max: 500),
-    defaultValue: 20,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_frames_per_filter',
   ),
   Setting(
@@ -1365,7 +1350,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 360),
-    defaultValue: 90.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_azimuth',
   ),
   Setting(
@@ -1384,7 +1369,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 90),
-    defaultValue: 75.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_target_altitude',
   ),
   Setting(
@@ -1403,7 +1388,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 1, max: 65535),
-    defaultValue: 50000.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_stop_at_max_adu',
   ),
   Setting(
@@ -1414,7 +1399,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['sky flats', 'twilight', 'stop', 'floor', 'too dark', 'adu'],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: 0, max: 65535),
-    defaultValue: 5000.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_stop_at_min_adu',
   ),
   Setting(
@@ -1434,7 +1419,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Your night', 'Calibration'],
     type: SettingType.doubleRange(min: -90, max: 90),
-    defaultValue: -9.0,
+    defaultValue: null,
     profilePath: 'safety.sky_flat_sun_altitude',
   ),
   Setting(
@@ -1476,7 +1461,8 @@ const List<Setting> settingsRegistry = [
     defaultValue: '',
   ),
   // #1736 Imaging → Polar align — the routine's knobs. State lives in
-  // `polarAlignSettingsProvider` (profile section `polar_align`).
+  // `polarAlignSettingsProvider` (profile section `polar_align`); the rig owns
+  // their defaults (ADR 0015 rule 3, #1807).
   Setting(
     id: 'img.polar.target_tolerance_arcmin',
     tier: SettingTier.advanced,
@@ -1485,19 +1471,8 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tolerance', 'done', 'arcmin', 'error'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 10.0, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'polar_align.target_tolerance_arcmin',
-  ),
-  Setting(
-    id: 'img.polar.use_home',
-    tier: SettingTier.advanced,
-    label: 'Send the mount Home first',
-    description: 'Every polar align stage starts by sending the mount Home. Off uses where the mount points now as Home, for a mount whose Home is not on the pole or whose Find Home is unreliable.',
-    keywords: ['polar', 'alignment', 'home', 'find home', 'paramount'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.bool(),
-    defaultValue: true,
-    profilePath: 'polar_align.use_home',
   ),
   Setting(
     id: 'img.polar.polar_aligner_auto',
@@ -1507,7 +1482,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'polar aligner', 'motors', 'by hand', 'turned by', 'rpa'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.polar_aligner_auto',
   ),
   Setting(
@@ -1518,7 +1493,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tracking', 'stop', 'pier', 'collision', 'nina'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.stop_tracking_when_done',
   ),
   Setting(
@@ -1529,25 +1504,25 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'rotation', 'turn', 'ra', 'seed'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.seed_rotation_deg',
   ),
   Setting(
     id: 'img.polar.check_step_deg',
     tier: SettingTier.advanced,
-    label: 'Verify step (°)',
-    description: 'The RA turn between the three frames of Verify. Kept between 5° and 30°.',
+    label: 'Check step (°)',
+    description: 'The RA turn between the three frames of a Check, which turns the mount 2 × this step. Kept between 5° and 30°.',
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.check_step_deg',
   ),
   Setting(
     id: 'img.polar.coarse_exposure_seconds',
     tier: SettingTier.advanced,
     label: 'Rough step exposure (s)',
-    description: 'The main camera\'s exposure in the rough step. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
+    description: 'The main camera\'s exposure in the rough step, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
     keywords: [
       'polar',
       'alignment',
@@ -1558,8 +1533,30 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 60, step: 0.5),
-    defaultValue: 3.0,
+    defaultValue: null,
     profilePath: 'polar_align.coarse_exposure_seconds',
+  ),
+  Setting(
+    id: 'img.polar.camera',
+    tier: SettingTier.advanced,
+    label: 'Polar align camera',
+    description: 'The camera that measures the RA axis, runs the live readout and takes the Check: the guide camera (the default), or the main camera with its own plate solver at the rough step exposure. Rough first always uses the main camera.',
+    keywords: ['polar', 'alignment', 'camera', 'guide camera', 'main camera', 'solver'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.enumValue(['guide', 'main']),
+    defaultValue: null,
+    profilePath: 'polar_align.camera',
+  ),
+  Setting(
+    id: 'img.polar.frames_per_point',
+    tier: SettingTier.advanced,
+    label: 'Frames per point',
+    description: 'How many frames Polar align takes at each of the three points of a measurement, with the mount still, and averages. A point whose solves scatter more than 3″ is retaken once; if it is still scattered, the result is marked noisy. 1 to 5, 3 by default.',
+    keywords: ['polar', 'alignment', 'frames', 'average', 'scatter', 'noisy', 'solves'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.intRange(min: 1, max: 5),
+    defaultValue: null,
+    profilePath: 'polar_align.frames_per_point',
   ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig
   // without a guider. State lives in `unguidedSettingsProvider` (profile
@@ -2041,7 +2038,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['site', 'name', 'location', 'place', 'observatory'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'Backyard',
+    defaultValue: null,
     profilePath: 'site.name',
   ),
   Setting(
@@ -2059,7 +2056,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -90, max: 90, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.latitude_deg',
   ),
   Setting(
@@ -2078,7 +2075,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -180, max: 180, step: 0.000001),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.longitude_deg',
   ),
   Setting(
@@ -2089,7 +2086,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['elevation', 'altitude', 'height', 'meters', 'sea level', 'asl'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: -500, max: 9000, step: 1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'site.elevation_m',
   ),
   Setting(
@@ -2100,7 +2097,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['time zone', 'timezone', 'iana', 'tz', 'utc', 'dst'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.string(),
-    defaultValue: 'UTC',
+    defaultValue: null,
     profilePath: 'site.time_zone',
   ),
   Setting(
@@ -2117,7 +2114,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.permanent_pier',
   ),
   Setting(
@@ -2136,7 +2133,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'site.use_custom_horizon',
   ),
   // §36 custom skyline — one composite list setting (the panel embeds a
@@ -2171,7 +2168,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['horizon', 'altitude', 'floor', 'minimum', 'limit', 'degrees'],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 20.0,
+    defaultValue: null,
     profilePath: 'site.default_horizon_altitude_deg',
   ),
   Setting(
@@ -2191,7 +2188,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 1, max: 9),
-    defaultValue: 6,
+    defaultValue: null,
     profilePath: 'site.bortle_class',
   ),
   Setting(
@@ -2209,7 +2206,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
-    defaultValue: 2.5,
+    defaultValue: null,
     profilePath: 'site.typical_seeing_arcsec',
   ),
   Setting(
@@ -2233,7 +2230,7 @@ const List<Setting> settingsRegistry = [
       'Nautical (−12°)',
       'Astronomical (−18°)',
     ]),
-    defaultValue: 'Astronomical (−18°)',
+    defaultValue: null,
     profilePath: 'site.twilight_definition',
   ),
   Setting(
@@ -2253,7 +2250,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.doubleRange(min: 0, max: 90, step: 1),
-    defaultValue: 30.0,
+    defaultValue: null,
     profilePath: 'site.soft_warning_altitude_deg',
   ),
   Setting(
@@ -2274,7 +2271,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Location & sky', 'Where you observe'],
     type: SettingType.intRange(min: 0, max: 10080),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'site.max_sequence_runtime_min',
   ),
 
@@ -2685,7 +2682,7 @@ const List<Setting> settingsRegistry = [
       'Brightest-star HFR',
       'FWHM (Gaussian fit)',
     ]),
-    defaultValue: 'HFR V-curve',
+    defaultValue: null,
     profilePath: 'autofocus.method',
   ),
   Setting(
@@ -2712,7 +2709,7 @@ const List<Setting> settingsRegistry = [
       'Newtonian',
       'Other / unknown',
     ]),
-    defaultValue: 'Other / unknown',
+    defaultValue: null,
     profilePath: 'autofocus.telescope_type',
   ),
   Setting(
@@ -2723,7 +2720,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['steps', 'samples', 'positions', 'count', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 3, max: 31),
-    defaultValue: 7,
+    defaultValue: null,
     profilePath: 'autofocus.steps',
   ),
   Setting(
@@ -2742,7 +2739,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.step_size_auto',
   ),
   Setting(
@@ -2754,7 +2751,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['step size', 'distance', 'increment', 'focuser', 'cfz'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 1000),
-    defaultValue: 50,
+    defaultValue: null,
     profilePath: 'autofocus.step_size',
   ),
   Setting(
@@ -2765,7 +2762,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['exposure', 'time', 'seconds', 'duration', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 60),
-    defaultValue: 5,
+    defaultValue: null,
     profilePath: 'autofocus.exposure_seconds',
   ),
   Setting(
@@ -2776,7 +2773,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['binning', 'bin', 'resolution', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 1, max: 4),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'autofocus.binning',
   ),
   // #1544 — the Simple tier's two views over the four triggers below; no
@@ -2789,7 +2786,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['autofocus', 'refocus', 'plan', 'automatic', 'off', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
   ),
   Setting(
     id: 'img.autofocus.keep_focus_sharp',
@@ -2807,7 +2804,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.enumValue(['Relaxed', 'Normal', 'Tight']),
-    defaultValue: 'Normal',
+    defaultValue: null,
   ),
   Setting(
     id: 'img.autofocus.af_filter',
@@ -2817,7 +2814,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['filter', 'af', 'luminance', 'l', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.string(),
-    defaultValue: 'L',
+    defaultValue: null,
     profilePath: 'autofocus.af_filter',
   ),
   Setting(
@@ -2829,7 +2826,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['filter change', 'trigger', 'auto', 'offset', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.run_after_filter_change',
   ),
   Setting(
@@ -2841,7 +2838,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['temperature', 'delta', 'trigger', 'thermal', 'drift', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
-    defaultValue: 2.0,
+    defaultValue: null,
     profilePath: 'autofocus.trigger_temp_delta_c',
   ),
   Setting(
@@ -2853,7 +2850,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['hfr', 'drift', 'trigger', 'percent', 'focus', 'quality'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 1),
-    defaultValue: 15.0,
+    defaultValue: null,
     profilePath: 'autofocus.trigger_hfr_drift_pct',
   ),
   Setting(
@@ -2865,7 +2862,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['hours', 'interval', 'periodic', 'time', 'trigger', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.intRange(min: 0, max: 12),
-    defaultValue: 2,
+    defaultValue: null,
     profilePath: 'autofocus.every_n_hours',
   ),
   Setting(
@@ -2876,7 +2873,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['abort', 'sequence', 'failure', 'fail', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.abort_sequence_on_af_failure',
   ),
   Setting(
@@ -2887,7 +2884,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['restore', 'position', 'failure', 'rollback', 'focus'],
     path: ['Settings', 'Imaging', 'Autofocus'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'autofocus.restore_position_on_failure',
   ),
 
@@ -3027,7 +3024,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'host', 'hostname', 'ip', 'guider', 'remote'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: 'localhost',
+    defaultValue: null,
     profilePath: 'phd2.host',
   ),
   Setting(
@@ -3038,7 +3035,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'port', 'tcp', 'guider', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1024, max: 65535),
-    defaultValue: 4400,
+    defaultValue: null,
     profilePath: 'phd2.port',
   ),
   Setting(
@@ -3049,7 +3046,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['phd2', 'profile', 'equipment', 'guider'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.complex(),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.phd2_profile_id',
   ),
   Setting(
@@ -3067,7 +3064,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'phd2.dither_enabled',
   ),
   Setting(
@@ -3078,7 +3075,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dither', 'interval', 'frames', 'every', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1, max: 100),
-    defaultValue: 1,
+    defaultValue: null,
     profilePath: 'phd2.dither_every_n_frames',
   ),
   Setting(
@@ -3089,7 +3086,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['dither', 'pixels', 'amplitude', 'phd2'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 100, step: 0.5),
-    defaultValue: 5.0,
+    defaultValue: null,
     profilePath: 'phd2.dither_pixels',
   ),
   Setting(
@@ -3100,7 +3097,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'threshold', 'pixels', 'rms', 'phd2', 'tolerance'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 10, step: 0.1),
-    defaultValue: 1.5,
+    defaultValue: null,
     profilePath: 'phd2.settle_pixels',
   ),
   Setting(
@@ -3111,7 +3108,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'time', 'seconds', 'phd2', 'wait'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 120),
-    defaultValue: 10,
+    defaultValue: null,
     profilePath: 'phd2.settle_time_sec',
   ),
   Setting(
@@ -3122,7 +3119,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['settle', 'timeout', 'seconds', 'phd2', 'limit'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 1, max: 600),
-    defaultValue: 60,
+    defaultValue: null,
     profilePath: 'phd2.settle_timeout_sec',
   ),
   Setting(
@@ -3133,7 +3130,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['calibration', 'force', 'session', 'phd2', 'recalibrate'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.bool(),
-    defaultValue: false,
+    defaultValue: null,
     profilePath: 'phd2.force_calibration_each_session',
   ),
   // §63.19 guide setup type — guide scope (focal length user-entered) vs
@@ -3154,7 +3151,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Guide scope', 'Off-axis guider (OAG)']),
-    defaultValue: 'Guide scope',
+    defaultValue: null,
     profilePath: 'phd2.guider_setup_type',
   ),
   // §63.5 guider-engine config — pushed to the guider daemon on connect.
@@ -3166,7 +3163,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guide', 'focal', 'length', 'scope', 'phd2', 'scale', 'mm'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 5000),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.guide_focal_length',
   ),
   Setting(
@@ -3177,7 +3174,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['guide', 'pixel', 'size', 'camera', 'phd2', 'scale', 'micron'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 20, step: 0.1),
-    defaultValue: 0.0,
+    defaultValue: null,
     profilePath: 'phd2.guide_pixel_size',
   ),
   Setting(
@@ -3188,7 +3185,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['ra', 'aggressiveness', 'guiding', 'phd2', 'hysteresis', 'gain'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
-    defaultValue: 0.7,
+    defaultValue: null,
     profilePath: 'phd2.ra_aggressiveness',
   ),
   Setting(
@@ -3206,7 +3203,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 1, step: 0.05),
-    defaultValue: 0.7,
+    defaultValue: null,
     profilePath: 'phd2.dec_aggressiveness',
   ),
   Setting(
@@ -3226,7 +3223,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 5, step: 0.05),
-    defaultValue: 0.15,
+    defaultValue: null,
     profilePath: 'phd2.minimum_move',
   ),
   Setting(
@@ -3246,7 +3243,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.doubleRange(min: 0, max: 5, step: 0.05),
-    defaultValue: 0.15,
+    defaultValue: null,
     profilePath: 'phd2.dec_minimum_move',
   ),
   Setting(
@@ -3266,7 +3263,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.enumValue(['Auto', 'North', 'South', 'Off']),
-    defaultValue: 'Auto',
+    defaultValue: null,
     profilePath: 'phd2.dec_guide_mode',
   ),
   // §63.17 guider equipment selection — device picks pushed to the guider
@@ -3289,7 +3286,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_camera',
   ),
   Setting(
@@ -3308,7 +3305,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_camera_id',
   ),
   Setting(
@@ -3327,7 +3324,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_mount',
   ),
   Setting(
@@ -3347,7 +3344,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_aux_mount',
   ),
   Setting(
@@ -3358,7 +3355,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['rotator', 'guider', 'equipment', 'phd2', 'angle', 'select'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_rotator',
   ),
   Setting(
@@ -3377,7 +3374,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.string(),
-    defaultValue: '',
+    defaultValue: null,
     profilePath: 'phd2.guider_alpaca_host',
   ),
   Setting(
@@ -3388,7 +3385,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['alpaca', 'port', 'guider', 'equipment', 'phd2', 'network'],
     path: ['Settings', 'Equipment', 'Guider'],
     type: SettingType.intRange(min: 0, max: 65535),
-    defaultValue: 0,
+    defaultValue: null,
     profilePath: 'phd2.guider_alpaca_port',
   ),
 ];

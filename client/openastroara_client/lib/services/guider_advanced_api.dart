@@ -5,9 +5,16 @@ import '../models/server.dart';
 
 /// #1364 item 3 — the guider-advanced profile block and the guider's current
 /// values. An interface so the dialog can be tested with a fake.
+///
+/// ADR 0015 — the block is read with the rig's `ETag` and written back with
+/// the loaded one as `If-Match`, so a copy another device saved since is
+/// refused (412) instead of written over.
 abstract interface class GuiderAdvancedClient {
-  Future<GuiderAdvancedSettings> getProfile();
-  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings settings);
+  Future<({GuiderAdvancedSettings value, String? etag})> getProfile();
+  Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
+    GuiderAdvancedSettings settings, {
+    String? ifMatch,
+  });
   Future<GuiderAdvancedView> getGuider();
 
   /// The runtime-safe push (`?scope=tuning`): applies while guiding.
@@ -32,26 +39,34 @@ class GuiderAdvancedApi implements GuiderAdvancedClient {
       );
 
   @override
-  Future<GuiderAdvancedSettings> getProfile() async {
+  Future<({GuiderAdvancedSettings value, String? etag})> getProfile() async {
     final res = await _dio.get<dynamic>('/api/v1/profile/guider-advanced');
     final data = res.data;
-    return data is Map<String, dynamic>
-        ? GuiderAdvancedSettings.fromJson(data)
-        : GuiderAdvancedSettings.empty;
+    return (
+      value: data is Map<String, dynamic>
+          ? GuiderAdvancedSettings.fromJson(data)
+          : GuiderAdvancedSettings.empty,
+      etag: res.headers.value('etag'),
+    );
   }
 
   @override
-  Future<GuiderAdvancedSettings> putProfile(
-    GuiderAdvancedSettings settings,
-  ) async {
+  Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
+    GuiderAdvancedSettings settings, {
+    String? ifMatch,
+  }) async {
     final res = await _dio.put<dynamic>(
       '/api/v1/profile/guider-advanced',
       data: settings.toJson(),
+      options: Options(headers: {'If-Match': ?ifMatch}),
     );
     final data = res.data;
-    return data is Map<String, dynamic>
-        ? GuiderAdvancedSettings.fromJson(data)
-        : settings;
+    return (
+      value: data is Map<String, dynamic>
+          ? GuiderAdvancedSettings.fromJson(data)
+          : settings,
+      etag: res.headers.value('etag'),
+    );
   }
 
   @override

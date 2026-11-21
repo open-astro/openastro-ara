@@ -666,7 +666,7 @@ class _SessionPaResidualBadge extends ConsumerWidget {
     final error = latest.paErrorMinArcmin!;
     final color = latest.reliable ? zoneColor(error) : AraColors.textSecondary;
     return Tooltip(
-      message: rows.map(paResidualDetail).join('\n\n'),
+      message: rows.map((r) => paResidualDetail(context.l10n, r)).join('\n\n'),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         child: Row(

@@ -1,16 +1,14 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'settings_sync_mixin.dart';
+import 'loaded_section.dart';
 
 import '../../services/profile_api.dart';
 import '../imaging/exposure_state.dart' show FrameKind;
 
 /// Profile-level imaging defaults (§37.11 + §29). These seed the
 /// `ExposureController` on first build of the Imaging tab; changes from the
-/// Settings panel persist back here. Phase 12h.6b wires the daemon round-
-/// trip via [ProfileApi]: [ImagingDefaultsNotifier.hydrateFromServer] runs
-/// on panel mount, [ImagingDefaultsNotifier.persistToServer] runs from the
-/// Save button. Local state is still the source of truth between syncs.
+/// Settings panel persist back here, through the section module
+/// (loaded_section.dart): the rig's copy, loaded before it is saved.
 
 class ImagingDefaults {
   final Duration defaultExposure;
@@ -56,64 +54,65 @@ class ImagingDefaults {
       );
 }
 
-class ImagingDefaultsNotifier extends Notifier<ImagingDefaults>
-    with SettingsSyncMixin<ImagingDefaults> {
-  @override
-  ImagingDefaults build() => const ImagingDefaults();
-
+/// ADR 0015 — a value only once the rig has answered. Loads itself: Simple
+/// Mode's camera window, plans and calibration read it with no Settings panel
+/// open first.
+class ImagingDefaultsNotifier extends SelfLoadingSection<ImagingDefaults> {
   // Setters validate at the boundary so the daemon never sees physically
   // impossible defaults. Matches the round-2 ExposureController contract.
   void setExposure(Duration d) {
     if (d <= Duration.zero) return;
-    state = state.copyWith(defaultExposure: d);
+    edit((c) => c.copyWith(defaultExposure: d));
   }
 
   void setGain(int v) {
     if (v < 0) return;
-    state = state.copyWith(defaultGain: v);
+    edit((c) => c.copyWith(defaultGain: v));
   }
 
   void setOffset(int v) {
     if (v < 0) return;
-    state = state.copyWith(defaultOffset: v);
+    edit((c) => c.copyWith(defaultOffset: v));
   }
 
   void setBin(int v) {
     if (v < 1) return;
-    state = state.copyWith(defaultBin: v);
+    edit((c) => c.copyWith(defaultBin: v));
   }
 
   void setFrameKind(FrameKind k) =>
-      state = state.copyWith(defaultFrameKind: k);
+      edit((c) => c.copyWith(defaultFrameKind: k));
+
+  /// Sensor cooler practical floor — even high-end mono cameras stop around
+  /// -45°C (delta from ambient).
+  static bool validCoolerTargetC(double v) => v >= -60 && v <= 30;
 
   void setCoolerTargetC(double v) {
-    // Sensor cooler practical floor — even high-end mono cameras stop
-    // around -45°C (delta from ambient).
-    if (v < -60 || v > 30) return;
-    state = state.copyWith(coolerTargetC: v);
+    if (!validCoolerTargetC(v)) return;
+    edit((c) => c.copyWith(coolerTargetC: v));
   }
 
   void setCoolerRampRate(double v) {
     if (v <= 0 || v > 10) return;
-    state = state.copyWith(coolerRampRatePerMin: v);
+    edit((c) => c.copyWith(coolerRampRatePerMin: v));
   }
 
   void setWarmupAtSessionEnd(bool v) =>
-      state = state.copyWith(warmupAtSessionEnd: v);
+      edit((c) => c.copyWith(warmupAtSessionEnd: v));
 
-  /// Replace local state with what the daemon currently holds. Called on
-  /// Settings panel mount so the user sees the persisted values, not the
-  /// in-process defaults. Errors bubble up to the caller for snackbar UI.
-  Future<void> hydrateFromServer(ProfileApi api) =>
-      hydrateGuarded(() => api.getImagingDefaults());
+  @override
+  Future<Tagged<ImagingDefaults>> fetch(ProfileApi api) =>
+      api.getImagingDefaultsSection();
 
-  /// Send the current local state to the daemon. Returns the daemon's echo
-  /// so the panel can confirm what was persisted (and update state if the
-  /// daemon normalized any field).
-  Future<ImagingDefaults> persistToServer(ProfileApi api) =>
-      persistGuarded((sent) => api.putImagingDefaults(sent));
+  @override
+  Future<Tagged<ImagingDefaults>> send(
+    ProfileApi api,
+    ImagingDefaults value,
+    String? etag,
+  ) => api.putImagingDefaultsSection(value, ifMatch: etag);
 }
 
 final imagingDefaultsProvider =
-    NotifierProvider<ImagingDefaultsNotifier, ImagingDefaults>(
-        ImagingDefaultsNotifier.new);
+    NotifierProvider<ImagingDefaultsNotifier, LoadedSection<ImagingDefaults>>(
+      ImagingDefaultsNotifier.new,
+    );
