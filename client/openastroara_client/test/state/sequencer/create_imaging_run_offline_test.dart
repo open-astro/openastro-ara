@@ -14,6 +14,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
 /// Captures the key a degraded create stamps into the draft.
@@ -65,7 +66,7 @@ class _ThrowingClient implements SequenceClient {
 class _GuiderPhd2 extends Phd2SettingsNotifier {
   @override
   LoadedSection<Phd2Settings> build() => LoadedSection(
-      value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      value: const TestPhd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
       source: SectionSource.rig);
 }
 
@@ -155,6 +156,36 @@ void main() {
     expect(drafts.store.values.single.body.toString(),
         contains(startGuidingType));
     // Drain the feedback SnackBar's timer before the tree goes away.
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('no server, no guider: a cache with no unguided section stops '
+      'the create, and no draft is saved', (tester) async {
+    final c = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(unguided: null),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(c.dispose);
+    final outcome = await run(tester, api: null, container: c);
+    expect(outcome.error, isA<SectionNotLoadedException>(),
+        reason: 'an unguided run needs the guard and probe settings');
+    expect(drafts.store, isEmpty);
+  });
+
+  testWidgets('no server, a guider named: the draft is built with no unguided '
+      'section, which a guided run never reads', (tester) async {
+    final c = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(unguided: null),
+      sequenceApiProvider.overrideWith((ref) => null),
+      phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
+    ]);
+    addTearDown(c.dispose);
+    final outcome = await run(tester, api: null, container: c);
+    expect(outcome.error, isNull);
+    expect(drafts.store.values.single.body.toString(),
+        contains(startGuidingType));
     await tester.pump(const Duration(seconds: 5));
   });
 

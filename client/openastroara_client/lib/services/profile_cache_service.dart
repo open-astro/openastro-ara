@@ -21,7 +21,8 @@ import 'package:path_provider/path_provider.dart';
 /// round-trip them), captured whenever a profile's sections are fetched while
 /// connected. Sections accumulate per profile id, so any profile that has been
 /// active at least once on this machine can seed an offline session; merges
-/// are whole-section (a refresh replaces that profile's snapshot).
+/// are whole-section (a refresh replaces that profile's snapshot, apart from
+/// the sections that refresh could not read, which keep their cached copy).
 ///
 /// Reads degrade to an empty cache; writes are best-effort but chained so
 /// rapid captures can't interleave.
@@ -71,13 +72,27 @@ class ProfileCacheService {
   }
 
   /// Merge one profile's section snapshot (wire-shape JSON) into the cache.
-  Future<void> saveSections(String profileId, Map<String, dynamic> sections) {
+  /// The snapshot replaces the profile's old one, except for the sections
+  /// named in [keep] (ones this capture could not read): those keep the copy
+  /// the cache already holds.
+  Future<void> saveSections(
+    String profileId,
+    Map<String, dynamic> sections, {
+    Set<String> keep = const {},
+  }) {
     return _mutate((cache) {
       final all = cache['sections'];
       final map = all is Map ? Map<String, dynamic>.from(all) : <String, dynamic>{};
+      final old = map[profileId];
       // Stamp when this gear snapshot was taken so offline surfaces can say
       // "cached N days ago" — a stale ranking should look stale.
-      map[profileId] = {...sections, 'captured_utc': DateTime.now().toUtc().toIso8601String()};
+      map[profileId] = {
+        if (old is Map)
+          for (final k in keep)
+            if (old[k] != null) k: old[k],
+        ...sections,
+        'captured_utc': DateTime.now().toUtc().toIso8601String(),
+      };
       cache['sections'] = map;
       return cache;
     });

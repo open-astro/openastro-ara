@@ -12,6 +12,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/widgets/simple_mode_switch_button.dart';
+import '../support/settings_values.dart';
 
 class _MemPrefs extends SimpleModePrefsService {
   _MemPrefs(this.value);
@@ -27,7 +28,7 @@ class _RefusingRig extends ProfileApi {
   _RefusingRig() : super(const AraServer(hostname: '192.0.2.10', port: 5000));
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() async =>
-      (value: const SiteSettings(permanentPier: true), etag: '"v1"');
+      (value: const TestSiteSettings(permanentPier: true), etag: '"v1"');
   @override
   Future<({SiteSettings value, String? etag})> putSiteSection(
     SiteSettings value, {

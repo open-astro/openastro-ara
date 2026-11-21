@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/screens/offline_launch_screen.dart';
+import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
 import 'package:openastroara/state/launch_gate_state.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
+
+import '../support/settings_values.dart';
 
 /// In-memory cache double — widget tests can't await real file IO (it doesn't
 /// advance under the test binding's fake clock, so pumpAndSettle times out).
@@ -26,8 +29,8 @@ class _MemCache extends ProfileCacheService {
   }
 
   @override
-  Future<void> saveSections(
-      String profileId, Map<String, dynamic> sections) async {
+  Future<void> saveSections(String profileId, Map<String, dynamic> sections,
+      {Set<String> keep = const {}}) async {
     (store['sections'] ??= <String, dynamic>{})[profileId] = sections;
   }
 }
@@ -85,12 +88,15 @@ void main() {
       (id: 'p1', name: 'RedCat 91'),
       (id: 'p2', name: 'Travel Rig'),
     ]);
+    // As the client writes it (every key: the seed reads it strictly).
     await cache.saveSections('p1', {
-      'optics': {
-        'focal_length_mm': 382,
-        'aperture_mm': 51,
-        'pixel_size_um': 3.76,
-      },
+      'optics': ProfileApi.opticsToJson(
+        const TestOpticsSettings(
+          focalLengthMm: 382,
+          apertureMm: 51,
+          pixelSizeUm: 3.76,
+        ),
+      ),
     });
     final container = await pump(tester);
     expect(find.text('RedCat 91'), findsOneWidget); // pre-selected

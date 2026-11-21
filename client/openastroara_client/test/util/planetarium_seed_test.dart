@@ -1,13 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/site_location_state.dart';
 import 'package:openastroara/util/planetarium_seed.dart';
+import '../support/settings_values.dart';
 
 void main() {
   test('the daemon site wins; offline the cached site seeds the observer', () {
     const server = SiteLocation(latitudeDeg: 1, longitudeDeg: 2, elevationM: 3);
-    const belen = SiteSettings(
+    const belen = TestSiteSettings(
         latitudeDeg: 34.67, longitudeDeg: -106.79, elevationM: 1483.7);
     expect(planetariumSiteFor(server, belen), server);
     final offline = planetariumSiteFor(null, belen)!;
@@ -15,11 +14,11 @@ void main() {
     expect(offline.longitudeDeg, -106.79);
     expect(offline.elevationM, 1483.7);
     // The (0, 0) "not set" sentinel never becomes a Gulf-of-Guinea observer.
-    expect(planetariumSiteFor(null, const SiteSettings()), isNull);
+    expect(planetariumSiteFor(null, const TestSiteSettings()), isNull);
   });
 
   test('optics seed matches the profile endpoint shape, null when unconfigured', () {
-    const redcat = OpticsSettings(
+    const redcat = TestOpticsSettings(
         focalLengthMm: 250,
         reducerFactor: 1,
         sensorWidthPx: 6248,
@@ -33,6 +32,6 @@ void main() {
       'sensor_height_px': 4176,
       'pixel_size_um': 3.76,
     });
-    expect(planetariumOpticsFor(const OpticsSettings()), isNull);
+    expect(planetariumOpticsFor(const TestOpticsSettings()), isNull);
   });
 }

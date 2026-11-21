@@ -33,21 +33,23 @@ class NotificationsSettings {
   final bool onPlateSolveFailed;
   final bool onDiskSpaceLow;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const NotificationsSettings({
-    this.inAppBanner = true,
-    this.osDesktop = true,
-    this.soundAlert = true,
-    this.pushoverToken = '',
-    this.pushoverUserKey = '',
-    this.telegramChatId = '',
-    this.telegramBotToken = '',
-    this.onSequenceComplete = true,
-    this.onSequencePaused = true,
-    this.onCriticalDiagnostic = true,
-    this.onSafetyEvent = true,
-    this.onAutofocusFailed = true,
-    this.onPlateSolveFailed = true,
-    this.onDiskSpaceLow = true,
+    required this.inAppBanner,
+    required this.osDesktop,
+    required this.soundAlert,
+    required this.pushoverToken,
+    required this.pushoverUserKey,
+    required this.telegramChatId,
+    required this.telegramBotToken,
+    required this.onSequenceComplete,
+    required this.onSequencePaused,
+    required this.onCriticalDiagnostic,
+    required this.onSafetyEvent,
+    required this.onAutofocusFailed,
+    required this.onPlateSolveFailed,
+    required this.onDiskSpaceLow,
   });
 
   NotificationsSettings copyWith({

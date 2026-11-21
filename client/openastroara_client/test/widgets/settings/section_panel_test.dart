@@ -10,6 +10,7 @@ import 'package:openastroara/state/settings/notifications_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
 
 import '../../support/fake_section_rig.dart';
+import '../../support/settings_values.dart';
 
 // The shared panel scaffold (SectionPanel) on a fake rig, exercised through
 // the notifications panel; the cached-copy case uses the camera electronics
@@ -40,7 +41,7 @@ Future<ProviderContainer> _pump(
 }
 
 FakeSectionRig _rig() => FakeSectionRig({
-  _section: {'pushover_token': 'rig-token'},
+  _section: {...rigDefaults[_section]!, 'pushover_token': 'rig-token'},
 });
 
 void main() {
@@ -69,7 +70,7 @@ void main() {
       'until the rig loads', (tester) async {
     final c = await _pump(tester, null, const CameraElectronicsPanel());
     final n = c.read(cameraElectronicsProvider.notifier);
-    n.seed(const CameraElectronics(readNoiseE: 1.5));
+    n.seed(const TestCameraElectronics(readNoiseE: 1.5));
     await tester.pump();
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byType(TextField), findsNothing);
@@ -161,7 +162,7 @@ void main() {
       'the loaded one checked', (tester) async {
     await _pump(
       tester,
-      FakeSectionRig({'diagnostics-mode': <String, Object?>{}}),
+      FakeSectionRig({'diagnostics-mode': rigDefaults['diagnostics-mode']}),
       const DiagnosticsModePanel(),
     );
     final row = tester.getSemantics(find.text('Notify only (default)'));

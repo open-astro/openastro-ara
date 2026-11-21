@@ -53,22 +53,24 @@ class SiteSettings {
   // agrees.
   final bool permanentPier;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const SiteSettings({
-    this.siteName = 'Backyard',
-    this.latitudeDeg = 0,
-    this.longitudeDeg = 0,
-    this.elevationM = 0,
-    this.timeZone = 'UTC',
-    this.useCustomHorizon = false,
-    this.defaultHorizonAltitudeDeg = 20,
-    this.bortleClass = 6,
-    this.sqmMagPerArcsec2 = 0,
-    this.typicalSeeingArcsec = 2.5,
-    this.twilightDefinition = TwilightDefinition.astronomical,
-    this.maxSequenceRuntimeMin = 0,
-    this.softWarningAltitudeDeg = 30,
-    this.observerName = '',
-    this.permanentPier = false,
+    required this.siteName,
+    required this.latitudeDeg,
+    required this.longitudeDeg,
+    required this.elevationM,
+    required this.timeZone,
+    required this.useCustomHorizon,
+    required this.defaultHorizonAltitudeDeg,
+    required this.bortleClass,
+    required this.sqmMagPerArcsec2,
+    required this.typicalSeeingArcsec,
+    required this.twilightDefinition,
+    required this.maxSequenceRuntimeMin,
+    required this.softWarningAltitudeDeg,
+    required this.observerName,
+    required this.permanentPier,
   });
 
   SiteSettings copyWith({

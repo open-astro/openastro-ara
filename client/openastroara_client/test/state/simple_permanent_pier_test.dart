@@ -9,6 +9,7 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 
 import '../support/fake_section_rig.dart';
+import '../support/settings_values.dart';
 
 class _File extends SimpleModePrefsService {
   _File(this.value);
@@ -228,7 +229,7 @@ void main() {
       // The offline cache says off; the rig (unreachable) still holds on.
       c
           .read(siteSettingsProvider.notifier)
-          .seed(const SiteSettings(permanentPier: false));
+          .seed(const TestSiteSettings(permanentPier: false));
       expect(await c.read(simplePermanentPierProvider.future), isTrue);
       expect(c.read(siteSettingsProvider).value!.permanentPier, isFalse);
 

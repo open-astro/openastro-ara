@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../support/fake_section_rig.dart';
 import '../support/section_load.dart';
+import '../support/settings_values.dart';
 
 /// The rig this device talks to, null until it connects.
 class _Api extends Notifier<ProfileApi?> {
@@ -36,7 +37,7 @@ class _FakeApi extends ProfileApi {
   _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings(
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings(
       focalLengthMm: 382,
       reducerFactor: 1.0,
       sensorWidthPx: 6248,
@@ -46,19 +47,19 @@ class _FakeApi extends ProfileApi {
 
   @override
   Future<ImagingDefaults> getImagingDefaults() async =>
-      const ImagingDefaults(defaultGain: 101);
+      const TestImagingDefaults(defaultGain: 101);
 
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings(steps: 9);
+      const TestAutofocusSettings(steps: 9);
 
   @override
   Future<UnguidedSettings> getUnguidedSettings() async =>
-      const UnguidedSettings(stepDownAfter: 3);
+      const TestUnguidedSettings(stepDownAfter: 3);
 
   @override
   Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(siteName: 'South GA', bortleClass: 4);
+      const TestSiteSettings(siteName: 'South GA', bortleClass: 4);
 
   @override
   Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings(
@@ -68,7 +69,7 @@ class _FakeApi extends ProfileApi {
 
   @override
   Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics(
+      const TestCameraElectronics(
           sensorName: 'IMX571',
           readNoiseE: 1.5,
           fullWellE: 51000,
@@ -85,6 +86,12 @@ class _FailingUnguidedApi extends _FakeApi {
   @override
   Future<UnguidedSettings> getUnguidedSettings() async =>
       throw StateError('500 from /profile/unguided');
+}
+
+class _FailingFilterSetApi extends _FakeApi {
+  @override
+  Future<FilterSetSettings> getFilterSet() async =>
+      throw ArgumentError('unknown filter kind');
 }
 
 void main() {
@@ -146,9 +153,39 @@ void main() {
     expect(p1.containsKey('unguided'), isFalse);
   });
 
+  test('one section the rig answers unreadably keeps its cached copy; the '
+      'other sections are refreshed', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(
+          const TestOpticsSettings(focalLengthMm: 200)),
+      'filter_set': ProfileApi.filterSetToJson(const FilterSetSettings(
+          filters: [
+            PlanningFilter(name: 'OIII', kind: FilterKind.oiii, bandwidthNm: 6)
+          ])),
+    });
+    await captureProfileCache(cache, _FailingFilterSetApi(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1['optics'], containsPair('focal_length_mm', 382),
+        reason: 'the readable sections are refreshed');
+    expect(p1['site'], containsPair('site_name', 'South GA'));
+    expect(
+        ((p1['filter_set'] as Map)['filters'] as List).single,
+        containsPair('name', 'OIII'),
+        reason: 'the failed one keeps what the cache held');
+  });
+
+  test('#1264: a failed unguided read keeps the unguided copy the cache '
+      'already holds', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    await captureProfileCache(cache, _FailingUnguidedApi(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1['unguided'], containsPair('step_down_after', 3));
+  });
+
   test('a snapshot without camera electronics leaves the section not loaded, never defaults', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final c = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -160,7 +197,7 @@ void main() {
 
   test('#1264: a snapshot without an unguided section leaves a staged knob alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final container = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -174,7 +211,7 @@ void main() {
 
   test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final container = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -220,7 +257,7 @@ void main() {
     () async {
       await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
       await cache.saveSections('p1', {
-        'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+        'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
       });
       final c = ProviderContainer(
         overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -289,7 +326,7 @@ void main() {
       'loaded (ADR 0015)', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -348,7 +385,7 @@ void main() {
       () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'site': ProfileApi.siteSettingsToJson(const SiteSettings()),
+      'site': ProfileApi.siteSettingsToJson(const TestSiteSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -382,7 +419,7 @@ void main() {
       () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -403,6 +440,56 @@ void main() {
     final before = c.read(opticsSettingsProvider);
     expect(await seedPlanningFromCache(c, 'p2'), isFalse);
     expect(c.read(opticsSettingsProvider), before);
+  });
+
+  test(
+      'a cached section missing a key stays not loaded; the others plan from '
+      'the cache, and a Save is refused with nothing sent', () async {
+    // A snapshot from before a field existed: no client default fills it in.
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings(focalLengthMm: 382))
+        ..remove('telescope_name'),
+      'site': ProfileApi.siteSettingsToJson(const TestSiteSettings(siteName: 'South GA')),
+    });
+    final rig = FakeSectionRig({'site': rigDefaults['site']})..failGet.add('site');
+    final c = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+      profileApiProvider.overrideWithValue(rig.api()),
+    ]);
+    addTearDown(c.dispose);
+    expect(await seedPlanningFromCache(c, 'p1'), isTrue);
+    expect(c.read(opticsSettingsProvider).value, isNull,
+        reason: 'not loaded, never the old client default');
+    expect(c.read(siteSettingsProvider).source, SectionSource.cache);
+    expect(c.read(siteSettingsProvider).value!.siteName, 'South GA',
+        reason: 'planning reads the cached site');
+    await expectLater(
+      c.read(siteSettingsProvider.notifier).replaceAndSave(
+          c.read(siteSettingsProvider).value!.copyWith(bortleClass: 3)),
+      throwsA(isA<SectionNotLoadedException>()),
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  test('a rig with no unguided section (404) leaves it out of the capture, '
+      'never the client defaults', () async {
+    final rig = FakeSectionRig({
+      for (final s in const [
+        'optics',
+        'imaging-defaults',
+        'autofocus',
+        'site',
+        'filter-set',
+        'camera-electronics',
+        'custom-horizon',
+      ])
+        s: rigDefaults[s],
+    });
+    await captureProfileCache(cache, rig.api(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1.containsKey('optics'), isTrue, reason: 'the rest is captured');
+    expect(p1.containsKey('unguided'), isFalse);
   });
 
   test('saveList drops sections of profiles the daemon no longer has',

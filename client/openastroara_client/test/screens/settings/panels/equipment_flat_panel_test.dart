@@ -11,6 +11,13 @@ import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/flat_panel_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/widgets/settings/section_load_state.dart';
+
+import '../../../support/fake_section_rig.dart';
+import '../../../support/safety_section.dart';
+import '../../../support/settings_values.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -83,7 +90,7 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status) async {
+Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status, {FakeSafetySection? safety}) async {
   await _wideSurface(tester);
   final api = _FakeFlatApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -92,6 +99,11 @@ Future<_FakeFlatApi> _pump(WidgetTester tester, FlatPanelStatus? status) async {
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       flatPanelApiFactoryProvider.overrideWithValue((_) => api),
+      if (safety != null) ...[
+        // The rig's safety policies, loaded as in the app (ADR 0015).
+        profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+        safetyPoliciesProvider.overrideWith(() => safety),
+      ],
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentFlatPanel())),
   ));
@@ -395,5 +407,21 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, 'Open'));
     await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't drive the flat panel"), findsOneWidget);
+  });
+
+  testWidgets('the flat capture rows wait for the safety policies from the rig: Not loaded with Retry, and Retry loads them (ADR 0015)',
+      (tester) async {
+    final safety = FakeSafetySection(initial: null); // the rig does not answer the read
+    await _pump(tester, null, safety: safety);
+    final notLoaded = find.byType(SectionNotLoadedRows);
+    expect(find.descendant(of: notLoaded, matching: find.textContaining('Not loaded')), findsOneWidget);
+    expect(find.text('Frames per filter'), findsNothing, reason: 'no default shows');
+    safety.initial = const TestSafetyPolicies(flatFramesPerFilter: 17);
+    await tester.tap(find.descendant(of: notLoaded, matching: find.byKey(const Key('section-retry'))));
+    await tester.pumpAndSettle();
+    expect(notLoaded, findsNothing);
+    expect(find.text('Frames per filter'), findsOneWidget, reason: 'Retry loads it');
+    expect(find.text('17'), findsOneWidget, reason: "the rig's value");
+    expect(safety.puts, isEmpty, reason: 'read only');
   });
 }

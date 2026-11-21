@@ -20,6 +20,7 @@ import 'package:openastroara/widgets/settings/section_load_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/fake_section_rig.dart';
+import '../../../support/settings_values.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -319,7 +320,7 @@ void main() {
     c
         .read(filterWheelLabelsProvider.notifier)
         .seed(FilterWheelLabels(labels: const ['L', 'Hα']));
-    c.read(filterWheelPolicyProvider.notifier).seed(const FilterWheelPolicy());
+    c.read(filterWheelPolicyProvider.notifier).seed(const TestFilterWheelPolicy());
     await tester.pumpAndSettle();
     expect(find.byType(SectionNotLoaded), findsNWidgets(2));
     expect(find.text('Slot 1'), findsNothing);

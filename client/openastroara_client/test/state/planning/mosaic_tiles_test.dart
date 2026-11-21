@@ -12,18 +12,19 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import '../../support/settings_values.dart';
 
 /// #1622 — the mosaic size: prefs parse, and the ranking follows it.
 class _Seeded extends SiteSettingsNotifier {
   @override
   LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: const SiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015), source: SectionSource.rig);
+      LoadedSection(value: const TestSiteSettings(latitudeDeg: 51.477833, longitudeDeg: -0.0015), source: SectionSource.rig);
 }
 
 class _Optics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() => const LoadedSection(
-    value: OpticsSettings(
+    value: TestOpticsSettings(
     focalLengthMm: 1000,
     reducerFactor: 1.0,
     sensorWidthPx: 6248,

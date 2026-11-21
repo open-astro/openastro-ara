@@ -165,10 +165,9 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     final section = ref.watch(siteSettingsProvider);
     final s = section.canSave ? section.value : null;
     final n = ref.read(siteSettingsProvider.notifier);
-    // A field's canonical text only; a reset mid-edit reads the plain
-    // values, and no save can send them (the section is not loaded).
-    SiteSettings now() =>
-        ref.read(siteSettingsProvider).value ?? const SiteSettings();
+    // A field's canonical text only; a reset mid-edit reads the values this
+    // build showed, and no save can send them (the section is not loaded).
+    SiteSettings? now() => ref.read(siteSettingsProvider).value;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -215,7 +214,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           label: 'Site name',
           helpKey: 'safety.site.site_name',
           currentValue: s.siteName,
-          getCanonical: () => now().siteName,
+          getCanonical: () => (now() ?? s).siteName,
           parse: n.setSiteName,
         ),
         EditableNumberRow(
@@ -224,7 +223,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-lat-$_gpsFill'),
           currentValue: s.latitudeDeg.toString(),
           getCanonical: () =>
-              now().latitudeDeg.toString(),
+              (now() ?? s).latitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) {
@@ -239,7 +238,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-lng-$_gpsFill'),
           currentValue: s.longitudeDeg.toString(),
           getCanonical: () =>
-              now().longitudeDeg.toString(),
+              (now() ?? s).longitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) {
@@ -254,7 +253,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-alt-$_gpsFill'),
           currentValue: s.elevationM.toString(),
           getCanonical: () =>
-              now().elevationM.toString(),
+              (now() ?? s).elevationM.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setElevationM(v);
@@ -265,7 +264,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.time_zone',
           key: ValueKey('site-gps-tz-$_gpsFill'),
           currentValue: s.timeZone,
-          getCanonical: () => now().timeZone,
+          getCanonical: () => (now() ?? s).timeZone,
           parse: (v) {
             _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
             n.setTimeZone(v);
@@ -319,7 +318,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
             label: 'Default horizon altitude (°)',
             helpKey: 'safety.site.default_horizon_altitude_deg',
             currentValue: s.defaultHorizonAltitudeDeg.toString(),
-            getCanonical: () => now().defaultHorizonAltitudeDeg
+            getCanonical: () => (now() ?? s).defaultHorizonAltitudeDeg
                 .toString(),
             parse: (str) {
               final v = double.tryParse(str);
@@ -340,7 +339,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.typical_seeing_arcsec',
           currentValue: s.typicalSeeingArcsec.toString(),
           getCanonical: () =>
-              now().typicalSeeingArcsec.toString(),
+              (now() ?? s).typicalSeeingArcsec.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setTypicalSeeingArcsec(v);
@@ -364,7 +363,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.soft_warning_altitude_deg',
           currentValue: s.softWarningAltitudeDeg.toString(),
           getCanonical: () =>
-              now().softWarningAltitudeDeg.toString(),
+              (now() ?? s).softWarningAltitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSoftWarningAltitudeDeg(v);
@@ -377,7 +376,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.max_sequence_runtime_min',
           currentValue: s.maxSequenceRuntimeMin.toString(),
           getCanonical: () =>
-              now().maxSequenceRuntimeMin.toString(),
+              (now() ?? s).maxSequenceRuntimeMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setMaxSequenceRuntimeMin(v);

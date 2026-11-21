@@ -52,8 +52,10 @@ class TonightsBestScreen extends ConsumerWidget {
     final list = ref.watch(tonightsBestListProvider);
     final ranked = ref.watch(tonightsBestProvider);
     final choices = ref.watch(tonightsBestChoicesProvider);
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
-    final noSite = site.latitudeDeg == 0 && site.longitudeDeg == 0;
+    // A site not loaded shows as no site (ADR 0015: no client default).
+    final site = ref.watch(siteSettingsProvider).value;
+    final noSite =
+        site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0);
     final linkUp = ref.watch(serverLinkUpProvider);
     final rows = list.value;
     // Hide the controls when there is nothing to sort: no site, or nothing

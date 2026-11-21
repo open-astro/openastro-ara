@@ -10,7 +10,6 @@ import 'package:openastroara/services/pending_profile_draft_service.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/pending_profile_drafts_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
-
 import '../support/fake_section_rig.dart';
 
 /// A ProfileApi double for the replay: records creates, can fail one section.

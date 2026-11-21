@@ -13,6 +13,7 @@ import 'package:openastroara/state/simple_mode_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/site_section.dart';
+import '../../support/settings_values.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -75,7 +76,7 @@ Future<ProviderContainer> _pumpPanel(
 }
 
 void main() {
-  const sydney = SiteSettings(
+  const sydney = TestSiteSettings(
     latitudeDeg: -33.856784,
     longitudeDeg: 151.215297,
   );

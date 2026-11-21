@@ -28,10 +28,14 @@ CLIENT_DEFAULTS = (
     # The row's own default, never a later row's (the match stops at the next Setting( row).
     (CLIENT / "settings" / "registry.dart",
      r"id: 'img\.platesolve\.path_or_endpoint',(?:(?!Setting\().)*?defaultValue: (?:null|'([^']+)')"),
+)
+# Since #1807 (ADR 0015 rule 3) the client keeps no default for a rig-owned field: the reader
+# and the model must hold no copy of the solver path at all, so none can drift from the daemon's.
+CLIENT_NO_COPY = (
     (CLIENT / "services" / "profile_api.dart",
-     r"pathOrEndpoint:\s*\(j\['path_or_endpoint'\] as String\?\) \?\? '([^']+)'"),
+     r"j\['path_or_endpoint'\] as String\?\) \?\? '"),
     (CLIENT / "state" / "settings" / "plate_solve_settings_state.dart",
-     r"this\.pathOrEndpoint = '([^']+)'"),
+     r"this\.pathOrEndpoint = '"),
 )
 
 
@@ -63,6 +67,11 @@ class ClientDefaults(unittest.TestCase):
             self.assertIsNotNone(m, f"{path.relative_to(REPO_ROOT)}: default not found")
             if m[1] is not None:  # a null registry row holds no copy that could drift
                 self.assertEqual(m[1], expected, f"{path.relative_to(REPO_ROOT)} default")
+
+    def test_the_client_reader_and_model_hold_no_copy_of_the_solver_path(self) -> None:
+        for path, pattern in CLIENT_NO_COPY:
+            self.assertIsNone(re.search(pattern, path.read_text()),
+                              f"{path.relative_to(REPO_ROOT)}: a client default for the solver path is back")
 
 
 if __name__ == "__main__":

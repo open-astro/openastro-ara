@@ -22,6 +22,7 @@ import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/tracking/tracking_calibration_state.dart';
+import '../../support/settings_values.dart';
 
 const _switchFilter =
     'OpenAstroAra.Sequencer.SequenceItem.FilterWheel.SwitchFilter, OpenAstroAra.Sequencer';
@@ -414,7 +415,7 @@ void main() {
         (tester) async {
       // Huge read noise over a tiny well: floor >> ceiling.
       await pumpAdvisor(tester,
-          electronics: const CameraElectronics(
+          electronics: const TestCameraElectronics(
               readNoiseE: 100, fullWellE: 500, quantumEfficiencyPeak: 0.8));
       expect(find.textContaining('longer subs just saturate'), findsOneWidget);
       expect(find.text('Apply'), findsOneWidget); // still applicable
@@ -422,7 +423,7 @@ void main() {
 
     testWidgets('unset electronics render the generic-defaults hint',
         (tester) async {
-      await pumpAdvisor(tester, electronics: const CameraElectronics());
+      await pumpAdvisor(tester, electronics: const TestCameraElectronics());
       expect(find.textContaining('generic defaults for'), findsOneWidget);
       expect(find.textContaining('read noise'), findsWidgets);
     });
@@ -478,7 +479,7 @@ void main() {
 
     testWidgets('an incomplete imaging train points at optics', (tester) async {
       await pumpAdvisor(tester,
-          optics: const OpticsSettings(
+          optics: const TestOpticsSettings(
               focalLengthMm: 0,
               reducerFactor: 1,
               sensorWidthPx: 0,
@@ -494,14 +495,14 @@ void main() {
 
 // ── Seeded-notifier doubles + the reference rig ──────────────────────────────
 
-const _rigOptics = OpticsSettings(
+const _rigOptics = TestOpticsSettings(
     focalLengthMm: 250,
     reducerFactor: 1.0,
     sensorWidthPx: 6248,
     sensorHeightPx: 4176,
     pixelSizeUm: 3.76,
     apertureMm: 51);
-const _rigElectronics = CameraElectronics(
+const _rigElectronics = TestCameraElectronics(
     sensorName: 'IMX571',
     readNoiseE: 1.5,
     fullWellE: 51000,
@@ -517,7 +518,7 @@ const _rigFilters = FilterSetSettings(filters: [
   PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha, bandwidthNm: 7),
   PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),
 ]);
-const _rigSite = SiteSettings(
+const _rigSite = TestSiteSettings(
     siteName: 'test',
     latitudeDeg: 34,
     longitudeDeg: -84,

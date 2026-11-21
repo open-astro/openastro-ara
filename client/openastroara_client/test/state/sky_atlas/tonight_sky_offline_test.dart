@@ -13,6 +13,7 @@ import 'package:openastroara/state/planning/sky_model_calibration_state.dart';
 import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
+import '../../support/settings_values.dart';
 
 /// Pins savedServersProvider to an empty list = genuinely no server.
 class _NoServers extends SavedServersNotifier {
@@ -72,7 +73,7 @@ void main() {
   test('no server + cached site → ranks locally', () async {
     final c = ProviderContainer(overrides: [
       savedServersProvider.overrideWith(_NoServers.new),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+      siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(
             siteName: 'cached',
             latitudeDeg: 34.0,
             longitudeDeg: -84.0,
@@ -110,7 +111,7 @@ void main() {
         savedServersProvider.overrideWith(_NoServers.new),
         planningPrefsServiceProvider
             .overrideWithValue(_SavedPrefs(PlanningPrefs(noiseTolerancePct: pct))),
-        siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+        siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(
               siteName: 'cached',
               latitudeDeg: 34.0,
               longitudeDeg: -84.0,
@@ -118,10 +119,10 @@ void main() {
               defaultHorizonAltitudeDeg: 20,
               twilightDefinition: TwilightDefinition.astronomical,
             ))),
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
               focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
               sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const TestCameraElectronics(
               readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
         filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
               filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
@@ -145,13 +146,13 @@ void main() {
       final c = ProviderContainer(overrides: [
         savedServersProvider.overrideWith(_NoServers.new),
         skyModelCalibrationProvider.overrideWith(() => _SeededCalibration(record)),
-        siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+        siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(
               siteName: 'cached', latitudeDeg: 34.0, longitudeDeg: -84.0, bortleClass: 6,
               defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
               focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
               sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const TestCameraElectronics(
               readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
         filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
               filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
@@ -177,10 +178,10 @@ void main() {
   test('camera electronics not loaded: ranks with unset electronics, no optimal sub', () async {
     final c = ProviderContainer(overrides: [
       savedServersProvider.overrideWith(_NoServers.new),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
+      siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(
             siteName: 'cached', latitudeDeg: -33.856784, longitudeDeg: 151.215297, bortleClass: 6,
             defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
-      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+      opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
             focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
             sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
       filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
@@ -207,7 +208,7 @@ void main() {
           savedServersProvider.overrideWith(_NoServers.new),
           siteSettingsProvider.overrideWith(
             () => _SeededSite(
-              const SiteSettings(
+              const TestSiteSettings(
                 siteName: 'cached',
                 latitudeDeg: -33.856784,
                 longitudeDeg: 151.215297,
@@ -219,7 +220,7 @@ void main() {
           ),
           opticsSettingsProvider.overrideWith(
             () => _SeededOptics(
-              const OpticsSettings(
+              const TestOpticsSettings(
                 focalLengthMm: 447,
                 reducerFactor: 1.0,
                 sensorWidthPx: 6248,
@@ -231,7 +232,7 @@ void main() {
           ),
           cameraElectronicsProvider.overrideWith(
             () => _SeededElectronics(
-              const CameraElectronics(
+              const TestCameraElectronics(
                 readNoiseE: 1.5,
                 fullWellE: 50000,
                 electronsPerAdu: 0.8,

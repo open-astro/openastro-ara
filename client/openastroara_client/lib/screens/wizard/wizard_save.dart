@@ -275,21 +275,21 @@ Phd2Settings applyDraftToPhd2(
 /// plate-solve section. The screen stores trimmed-or-null values, so every field
 /// passes straight through: copyWith treats null as "keep", so a blank/untouched
 /// field preserves the base profile's value. A path the user explicitly RESET
-/// ([ClearableField] in [ProfileDraft.clearedFields]) writes the section
-/// default instead — the new profile clones the active one, so keep-on-blank
-/// alone would trap an old rig's path with no way to shed it.
+/// ([ClearableField] in [ProfileDraft.clearedFields]) writes it blank instead,
+/// which the daemon reads as its own default (the bundled solver and its
+/// database, ADR 0015 rule 3) — the new profile clones the active one, so
+/// keep-on-blank alone would trap an old rig's path with no way to shed it.
 PlateSolveSettings applyDraftToPlateSolve(
   PlateSolveSettings base,
   ProfileDraft d,
 ) {
   final ps = d.plateSolve;
-  const defaults = PlateSolveSettings();
   return base.copyWith(
     pathOrEndpoint: d.clearedFields.contains(ClearableField.astapBinaryPath)
-        ? defaults.pathOrEndpoint
+        ? ''
         : ps.astapBinaryPath,
     indexDownloadPath: d.clearedFields.contains(ClearableField.starDatabasePath)
-        ? defaults.indexDownloadPath
+        ? ''
         : ps.starDatabasePath,
     // Search radius is deliberately NOT derived (§76.1): it reflects mount
     // pointing uncertainty, not optics — image scale says nothing about how
@@ -303,6 +303,10 @@ PlateSolveSettings applyDraftToPlateSolve(
     downsampleFactor: ps.downsampleFactor,
   );
 }
+
+/// The autofocus step size of a fresh profile: the daemon's section default
+/// (ProfileSections.Autofocus), which the client compares with and never writes.
+const _freshProfileStepSize = 50;
 
 /// §37.4 screen 12 — map the draft's autofocus subset onto the profile's
 /// autofocus section. Every field is nullable, so copyWith's `??` keeps the base
@@ -321,7 +325,7 @@ AutofocusSettings applyDraftToAutofocus(
     // cloned profile's hand-tuned step size survives (null keeps the base).
     stepSize:
         af.stepSize ??
-        (base.stepSize == const AutofocusSettings().stepSize
+        (base.stepSize == _freshProfileStepSize
             ? derivedAutofocusStepSize(
                 focuserStepUm: d.focuser.stepSizeMicrons,
                 focalLengthMm: d.telescope.focalLengthMm,

@@ -14,9 +14,11 @@ class FilterWheelPolicy {
 
   /// #1667 — on a filter change, move the focuser by the two filters' offset difference.
   final bool useFilterWheelOffsets;
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const FilterWheelPolicy({
-    this.homeOnFirstConnect = true,
-    this.useFilterWheelOffsets = false,
+    required this.homeOnFirstConnect,
+    required this.useFilterWheelOffsets,
   });
 
   Map<String, dynamic> toJson() => {

@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Safety Monitor panel. Shows the device's live `is_safe` reading +
@@ -20,9 +21,8 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
-    final policies =
-        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
+    // Read only: the rig's copy once it loads (ADR 0015); not loaded until.
+    final policies = ref.watch(safetyPoliciesProvider).value;
     final status = ref.watch(safetyMonitorProvider);
     final notifier = ref.read(safetyMonitorProvider.notifier);
 
@@ -44,24 +44,28 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
         ),
         AutoConnectRow(EquipmentDeviceType.safetyMonitor),
         const SettingsSectionHeader('Behavior'),
-        SettingsRow(
-          label: 'On unsafe',
-          helpKey: 'eq.safety.on_unsafe',
-          value: _unsafeActionLabel(policies.onUnsafe),
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
-        SettingsRow(
-          label: 'Auto-resume when safe',
-          helpKey: 'eq.safety.auto_resume',
-          value: policies.autoResumeWhenSafe ? 'On' : 'Off',
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
-        SettingsRow(
-          label: 'Resume delay (min)',
-          helpKey: 'eq.safety.resume_delay',
-          value: policies.resumeDelayMin.toString(),
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
+        if (policies == null)
+          SectionNotLoadedRows(safetyPoliciesProvider)
+        else ...[
+          SettingsRow(
+            label: 'On unsafe',
+            helpKey: 'eq.safety.on_unsafe',
+            value: _unsafeActionLabel(policies.onUnsafe),
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+          SettingsRow(
+            label: 'Auto-resume when safe',
+            helpKey: 'eq.safety.auto_resume',
+            value: policies.autoResumeWhenSafe ? 'On' : 'Off',
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+          SettingsRow(
+            label: 'Resume delay (min)',
+            helpKey: 'eq.safety.resume_delay',
+            value: policies.resumeDelayMin.toString(),
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+        ],
       ],
     );
   }

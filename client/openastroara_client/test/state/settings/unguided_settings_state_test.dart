@@ -7,26 +7,14 @@ import '../../support/section_load.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart'
     show unguidedOptionsOf;
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
+import '../../support/settings_values.dart';
 
 /// #1264 Imaging → Unguided: the model's guards and the wire codec.
 void main() {
-  test('defaults are the shipped behaviour', () {
-    const u = UnguidedSettings();
-    expect(u.guardEnabled, isTrue);
-    expect(u.eccentricityTolerance, 0.5);
-    expect(u.goodEccentricity, 0.3);
-    expect(u.stepDownAfter, 2);
-    expect(u.stepUpAfter, 10);
-    expect(u.probeRungsSeconds, [10, 30, 60, 120]);
-    expect(u.recentreDriftArcmin, 10);
-    expect(u.recentreSolveEveryN, 1);
-    expect(u.priorToleranceBasis, 'max');
-    expect(u.probeRungsText, '10, 30, 60, 120');
-  });
-
-  test('codec round-trips and tolerates a sparse body', () {
-    const u = UnguidedSettings(
+  test('codec round-trips, and a sparse body fails the read', () {
+    const u = TestUnguidedSettings(
       guardEnabled: false,
       eccentricityTolerance: 0.6,
       goodEccentricity: 0.35,
@@ -46,15 +34,12 @@ void main() {
     expect(back.probeRungsSeconds, [5, 20, 80]);
     expect(back.recentreDriftArcmin, 4.5);
     expect(back.priorToleranceBasis, 'seeing');
-    final sparse = ProfileApi.unguidedSettingsFromJson(const {
-      'probe_rungs_seconds': [],
-    });
+    // ADR 0015 rule 3: a key the body leaves out is missing, not the old
+    // client default.
     expect(
-      sparse.probeRungsSeconds,
-      UnguidedSettings.defaultProbeRungsSeconds,
-      reason: 'an empty ladder is the default ladder',
+      () => ProfileApi.unguidedSettingsFromJson(const {'probe_rungs_seconds': []}),
+      throwsA(anything),
     );
-    expect(sparse.guardEnabled, isTrue);
   });
 
   test('parseRungs accepts an ascending positive list and nothing else', () {
@@ -134,14 +119,10 @@ void main() {
     expect(unguidedOptionsOf(c).probeRungsSeconds, [10, 30, 60, 120]);
   });
 
-  test('not loaded: the run builder reads the shipped defaults, never a saved value', () {
+  test('not loaded: the run builder refuses, never a client default', () {
     final c = ProviderContainer();
     addTearDown(c.dispose);
     expect(c.read(unguidedSettingsProvider).value, isNull);
-    final o = unguidedOptionsOf(c);
-    const u = UnguidedSettings();
-    expect(o.guardEnabled, u.guardEnabled);
-    expect(o.stepDownAfter, u.stepDownAfter);
-    expect(o.probeRungsSeconds, u.probeRungsSeconds);
+    expect(() => unguidedOptionsOf(c), throwsA(isA<SectionNotLoadedException>()));
   });
 }

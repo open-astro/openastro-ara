@@ -23,6 +23,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// A focuser that records where it was sent.
 class _Focuser extends FocuserNotifier {
@@ -112,7 +113,7 @@ Future<_Focuser> _pump(
   final focuser = _Focuser(wire);
   _live = _Live();
   _af = FakeAutofocusSection(
-    initial: afLoaded ? const AutofocusSettings() : null,
+    initial: afLoaded ? const TestAutofocusSettings() : null,
   );
   final c = _c = ProviderContainer(
     overrides: [
@@ -828,7 +829,7 @@ void main() {
     'a Keep focus sharp pick on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
     (tester) async {
       await _pump(tester, _wire(), afLoaded: false);
-      _c.read(autofocusSettingsProvider.notifier).seed(const AutofocusSettings());
+      _c.read(autofocusSettingsProvider.notifier).seed(const TestAutofocusSettings());
       await tester.pump();
       expect(_c.read(autofocusSettingsProvider).source, SectionSource.cache);
       await tester.tap(chipFor('simple-focuser-sharp-tight'));

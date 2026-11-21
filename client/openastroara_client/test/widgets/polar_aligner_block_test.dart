@@ -16,6 +16,7 @@ import 'package:openastroara/widgets/imaging/polar_aligner_block.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 import '../support/polar_align_section.dart';
+import '../support/settings_values.dart';
 
 class _Api implements PolarAlignClient {
   @override
@@ -71,7 +72,7 @@ class _Site extends SiteSettingsNotifier {
   final double lat;
   @override
   LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: SiteSettings(latitudeDeg: lat), source: SectionSource.rig);
+      LoadedSection(value: TestSiteSettings(latitudeDeg: lat), source: SectionSource.rig);
 }
 
 const _base = PolarAligner(

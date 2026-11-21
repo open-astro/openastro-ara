@@ -6,9 +6,9 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
+import '../support/settings_values.dart';
 
 /// Dio whose adapter serves a canned JSON body (or a status error).
 Dio _cannedDio({required int status, Object? body}) {
@@ -90,14 +90,14 @@ void main() {
   test('ranker scores real framing + surface brightness from a mirrored row',
       () {
     final list = computeTonightSkyLocal(
-      site: const SiteSettings(
+      site: const TestSiteSettings(
           siteName: 't',
           latitudeDeg: 34,
           longitudeDeg: -84,
           bortleClass: 6,
           defaultHorizonAltitudeDeg: 20,
           twilightDefinition: TwilightDefinition.astronomical),
-      optics: const OpticsSettings(
+      optics: const TestOpticsSettings(
           focalLengthMm: 250,
           reducerFactor: 1.0,
           sensorWidthPx: 6248,

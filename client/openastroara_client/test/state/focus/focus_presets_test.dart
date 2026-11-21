@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/focus/focus_presets.dart';
-import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   test('the three presets set all four triggers (#1544)', () {
-    const base = AutofocusSettings();
+    const base = TestAutofocusSettings();
     final relaxed = withKeepFocusSharp(base, KeepFocusSharp.relaxed);
     expect(
       (
@@ -28,7 +28,7 @@ void main() {
   });
 
   test('Normal is the profile default', () {
-    expect(keepFocusSharpOf(const AutofocusSettings()), KeepFocusSharp.normal);
+    expect(keepFocusSharpOf(const TestAutofocusSettings()), KeepFocusSharp.normal);
   });
 
   test('each preset round-trips; any one trigger changed reads Custom', () {
@@ -37,7 +37,7 @@ void main() {
       KeepFocusSharp.normal,
       KeepFocusSharp.tight,
     ]) {
-      final s = withKeepFocusSharp(const AutofocusSettings(), p);
+      final s = withKeepFocusSharp(const TestAutofocusSettings(), p);
       expect(keepFocusSharpOf(s), p);
       expect(
         keepFocusSharpOf(s.copyWith(triggerTempDeltaC: p.tempC + 0.5)),
@@ -59,7 +59,7 @@ void main() {
   });
 
   test('picking a preset over Custom overwrites the triggers', () {
-    final custom = const AutofocusSettings().copyWith(
+    final custom = const TestAutofocusSettings().copyWith(
       triggerTempDeltaC: 7,
       everyNHours: 9,
     );
@@ -73,7 +73,7 @@ void main() {
   });
 
   test('autofocus during plans is off only when all four triggers are', () {
-    final off = withAutofocusDuringPlansOff(const AutofocusSettings());
+    final off = withAutofocusDuringPlansOff(const TestAutofocusSettings());
     expect(autofocusDuringPlans(off), isFalse);
     expect(keepFocusSharpOf(off), isNull);
     for (final one in [
