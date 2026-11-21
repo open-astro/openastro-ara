@@ -52,6 +52,8 @@ public static class RefusalCatalog {
 
     // Slice 2: a GoTo below the pole that would turn the counterweight past its limit (#2073).
     public static readonly RefusalCause CounterweightLimit = new("counterweight-limit", 409, "The target would turn the counterweight past its limit", "hour_angle_hours", "counterweight_angle_deg", "limit_deg");
+    // A GoTo, Sync, Center or polar alignment before the mount's clock is set from the synced rig clock and checked (#2071).
+    public static readonly RefusalCause MountClockNotVerified = new("mount-clock-not-verified", 409, "Mount clock not verified");
 
     // Slice 2: End Night (#1901).
     public static readonly RefusalCause EndNightInProgress = new("end-night-in-progress", 409, "End Night is already running");
@@ -66,8 +68,10 @@ public static class RefusalCatalog {
     // #2089 — the RA axis has turned too far from where Polar Align started this session (offset_deg from the origin,
     // limit_deg the bound): slew it back near the pole and confirm again.
     public static readonly RefusalCause PolarAlignSweepLimit = new("polar-align-sweep-limit", 409, "The mount has turned too far from where Polar Align started", "offset_deg", "limit_deg");
-    // #2066 — a GoTo, a pad move, Home or Park while Polar Align turns the mount (or its stop is not confirmed yet): stop
-    // Polar Align first. A pad stop (rate 0) and Stop Mount are never refused.
+    // #2066 — Polar Align holds the mount's motion owner for its whole run (its solves and the adjust loop included): a GoTo,
+    // a sync, Center, Park or Home meanwhile is refused, a REST Park or Home whose checks were still running when it took the
+    // mount too. A pad move is refused only while a turn runs (or its stop is not confirmed yet). Stop Polar Align first. A
+    // pad stop (rate 0) and Stop Mount are never refused; the safety, fault and shutdown parks end Polar Align first.
     public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
     // #2082 — the scope points within 3° of the pole: the camera would look along the RA axis, and nothing tilts it off the
     // axis any more. Point it 2–5° from the pole and start again.
@@ -85,11 +89,19 @@ public static class RefusalCatalog {
     // #1589 — the user confirms a profile's meridian flip only after one ran to the end.
     public static readonly RefusalCause FirstFlipNotCompleted = new("first-flip-not-completed", 409, "No completed meridian flip to confirm");
 
+    // #2083 — a Start while a run is active that asks for the other way of turning RA (by hand, or with the motor): the
+    // user confirmed something the running run does not do. A matching retry is still a no-op accept.
+    public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
+
+    // #2083 — a hand-turn run saw RA turn with the clutch open, so the mount's reading is off by the user's turns: a start
+    // that turns RA with the motor is refused until the mount is synced or reconnected (a hand-turn start goes ahead).
+    public static readonly RefusalCause PolarAlignClutchTurned = new("polar-align-clutch-turned", 409, "RA was turned with the clutch open");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
-        FirstFlipNotCompleted,
+        FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
     ];
 }

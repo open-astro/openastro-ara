@@ -20,6 +20,7 @@ using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.TestHarness.Alpaca;
 using System;
@@ -162,6 +163,95 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        /// <summary>A guider that is guiding and stops only when the test lets it: a REST move waits in its checks.</summary>
+        private static (Mock<IGuiderMediator> Guider, TaskCompletionSource StopAsked, TaskCompletionSource<bool> StopDone) PausedGuider() {
+            var stopAsked = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopDone = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var guider = new Mock<IGuiderMediator>();
+            guider.Setup(g => g.GetInfo()).Returns(new GuiderInfo { Connected = true });
+            guider.Setup(g => g.StopGuiding(It.IsAny<CancellationToken>())).Returns(() => {
+                stopAsked.TrySetResult();
+                return stopDone.Task;
+            });
+            return (guider, stopAsked, stopDone);
+        }
+
+        private static async Task WaitForOwnerFreeAsync(TelescopeService svc) {
+            var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(15);
+            while (DateTime.UtcNow < deadline) {
+                try {
+                    svc.AcquireMotion(MotionOwners.PolarAlign).Dispose();
+                    return;
+                } catch (InvalidOperationException) {
+                    await Task.Delay(20);
+                }
+            }
+            Assert.Fail("the mount's motion owner was never free again");
+        }
+
+        // The REST park (POST /park) is counted in the dispatch as a REST GoTo is. While it waits for the guider to stop, Polar
+        // Align's start is refused, and the park goes out. Once Polar Align holds the mount when the park's checks end, the
+        // park is refused before it ends the leases, stops the guider or reaches the mount.
+        [Test]
+        public async Task A_REST_park_still_in_its_checks_when_Polar_Align_starts_is_dropped_or_refuses_the_start() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount(tracking: false));
+            var (guider, stopAsked, stopDone) = PausedGuider();
+            using var svc = await ConnectAsync(box, guider: () => guider.Object);
+
+            var park = svc.ParkUnlessMotionOwnedAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Throws<InvalidOperationException>(() => svc.AcquireMotion(MotionOwners.PolarAlign),
+                "Polar Align cannot take the mount while the park is on its way");
+            stopDone.SetResult(true);
+            await park;
+            await WaitForAsync(() => Put(box, "park"), "the park never went out");
+            await WaitForOwnerFreeAsync(svc);
+
+            var parks = box.Puts.Count(p => p.Path.EndsWith("/park", StringComparison.Ordinal));
+            var trackingWrites = box.Puts.Count(p => p.Path.EndsWith("/tracking", StringComparison.Ordinal));
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                var refused = await Assert.ThrowsAsync<RefusalException>(() => svc.ParkUnlessMotionOwnedAsync(new ParkRequestDto(), idempotencyKey: null, CancellationToken.None));
+                Assert.That(refused!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+                Assert.That(refused.Message, Does.Contain("Polar alignment is running").And.Contain("park"));
+                await Task.Delay(200);
+                Assert.Multiple(() => {
+                    Assert.That(box.Puts.Count(p => p.Path.EndsWith("/park", StringComparison.Ordinal)), Is.EqualTo(parks), "the dropped park never reached the mount");
+                    Assert.That(box.Puts.Count(p => p.Path.EndsWith("/tracking", StringComparison.Ordinal)), Is.EqualTo(trackingWrites), "nor its tracking write");
+                    Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign));
+                });
+                guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once, "the dropped park left the guider alone");
+            }
+        }
+
+        [Test]
+        public async Task A_REST_Find_Home_still_in_its_checks_when_Polar_Align_starts_is_dropped_or_refuses_the_start() {
+            await using var box = ScriptedAlpacaDevice.Start(Mount());
+            var (guider, stopAsked, stopDone) = PausedGuider();
+            using var svc = await ConnectAsync(box, guider: () => guider.Object);
+
+            var home = svc.FindHomeAsync(idempotencyKey: null, CancellationToken.None);
+            await stopAsked.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            Assert.Throws<InvalidOperationException>(() => svc.AcquireMotion(MotionOwners.PolarAlign),
+                "Polar Align cannot take the mount while the Find Home is on its way");
+            stopDone.SetResult(true);
+            await home;
+            await WaitForAsync(() => Put(box, "findhome"), "the Find Home never went out");
+            await WaitForOwnerFreeAsync(svc);
+
+            var homes = box.Puts.Count(p => p.Path.EndsWith("/findhome", StringComparison.Ordinal));
+            using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                var refused = await Assert.ThrowsAsync<RefusalException>(() => svc.FindHomeAsync(idempotencyKey: null, CancellationToken.None));
+                Assert.That(refused!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+                Assert.That(refused.Message, Does.Contain("Polar alignment is running").And.Contain("home"));
+                await Task.Delay(200);
+                Assert.Multiple(() => {
+                    Assert.That(box.Puts.Count(p => p.Path.EndsWith("/findhome", StringComparison.Ordinal)), Is.EqualTo(homes), "the dropped Find Home never reached the mount");
+                    Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign));
+                });
+                guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Once, "the dropped Find Home left the guider alone");
+            }
+        }
+
         // The owner check and the send are one step: while a REST or mediator GoTo is on its way (here, during its tracking
         // write), Polar Align cannot take the mount; its start is refused (mount_busy) and reads the slewing mount next time.
         [Test]
@@ -206,15 +296,18 @@ namespace OpenAstroAra.Test {
             using var svc = await ConnectAsync(box, log);
             var here = new Coordinates(6.0, 45.0, Epoch.J2000, Coordinates.RAType.Hours);
 
+            var syncsBefore = svc.SyncEpoch;
             using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
                 Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.False, "Center's sync is not sent");
                 await svc.SlewAsync(new SlewRequestDto(6.0, 45.0, Sync: true), idempotencyKey: null, CancellationToken.None);
                 await WaitForAsync(() => log.Messages.Any(m => m.Contains("dropped", StringComparison.Ordinal)), "the REST sync was not dropped");
                 Assert.That(Put(box, "synctocoordinates"), Is.False, "no sync reached the mount");
+                Assert.That(svc.SyncEpoch, Is.EqualTo(syncsBefore), "#2083 — no sync counted: a clutch turn's refusal stands");
             }
 
             Assert.That(await ((ITelescopeMediator)svc).Sync(here, CancellationToken.None), Is.True, "sent once the run gave the mount back");
             Assert.That(Put(box, "synctocoordinates"), Is.True);
+            Assert.That(svc.SyncEpoch, Is.EqualTo(syncsBefore + 1), "#2083 — the sync after counts: it clears a clutch turn");
         }
 
         // Joey, 2026-11-20 on #2048: Park and Home are refused for Polar Align's whole run, the sequencer's too (its Park
@@ -287,7 +380,7 @@ namespace OpenAstroAra.Test {
         }
 
         // #2048 ARA-2 — the owner never blocks a stop: Emergency Stop's and Stop Mount's AbortSlew, a pad stop (rate 0),
-        // tracking off, and the safety and fault parks (they call the service's ParkAsync, not the REST endpoint).
+        // tracking off, and the safety and fault parks (they call the service's ParkAsync, not the REST park, which yields).
         [Test]
         public async Task Emergency_Stop_and_the_safety_park_go_through_while_Polar_Align_holds_the_mount() {
             var (box, svc) = await ConnectedAsync();
@@ -299,8 +392,10 @@ namespace OpenAstroAra.Test {
                 await svc.MoveAxisAsync(0, 0.0, null, CancellationToken.None);
                 await svc.SetTrackingAsync(false, CancellationToken.None);
                 await svc.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None);
-
                 await WaitForAsync(() => Put(box, "park"), "the safety park never reached the mount");
+                await svc.ParkAsync(new ParkRequestDto("equipment.fault"), null, CancellationToken.None);
+
+                await WaitForAsync(() => box.Puts.Count(p => p.Path.EndsWith("/park", StringComparison.Ordinal)) == 2, "the fault park never reached the mount");
                 Assert.That(svc.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "the owner was held throughout");
             }
             Assert.That(Put(box, "abortslew"), Is.True, "Emergency Stop's AbortSlew");

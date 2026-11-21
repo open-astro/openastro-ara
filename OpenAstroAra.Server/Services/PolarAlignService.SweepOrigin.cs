@@ -64,6 +64,8 @@ namespace OpenAstroAra.Server.Services {
         // Align's own moves last left the mount (each motor reading, and the exit's after the stop).
         private SweepOrigin? _sweepOrigin;
         private SweepPose? _sweepLastLeft;
+        /// <summary>The limit of the run the last confirmed start launched (its plan's <see cref="SweepPlan.LimitDeg"/>).</summary>
+        private double _sweepLimitDeg = MaxSweepFromOriginDeg;
 
         /// <summary>The RA axis's mechanical turn between two readings, in RA-reading terms (+ east): the reading's change
         /// less the Earth's turn between them. Tracking keeps the reading still while the axis turns west; with tracking
@@ -144,6 +146,31 @@ namespace OpenAstroAra.Server.Services {
                 _sweepOrigin = new SweepOrigin(plan.Pose, plan.DirSign, plan.SessionEpoch);
             }
             _sweepLastLeft = plan.Pose;
+            _sweepLimitDeg = plan.LimitDeg;
+        }
+
+        /// <summary>#2082 review — before each turn of a run, from the mount's reading at the turn's start: refuses
+        /// (<c>sweep_limit</c>) a turn that would take the RA axis past the run's limit plus <see cref="BandToleranceDeg"/>.
+        /// The start's plan cannot see the time a run spends at its points: with several frames per point at long
+        /// exposures, tracking turns the axis many degrees between the turns. The offset counts that tracking turn
+        /// (<see cref="MechanicalTurnDeg"/>). No check without an origin of this mount session.</summary>
+        private void ThrowIfTurnPassesSweepLimit(double fromRaDeg, double signedDeltaDeg) {
+            SweepOrigin? origin;
+            double limitDeg;
+            lock (_gate) {
+                origin = _sweepOrigin;
+                limitDeg = _sweepLimitDeg;
+            }
+            if (origin is null || origin.SessionEpoch != _motionControl.SessionEpoch) {
+                return;
+            }
+            var offset = FoldTolerantSignedTurnDeg(MechanicalTurnDeg(origin.Pose.RaDeg, fromRaDeg,
+                SecondsBetween(origin.Pose.At, Stopwatch.GetTimestamp())));
+            var farDeg = Math.Abs(offset + signedDeltaDeg);
+            if (farDeg > limitDeg + BandToleranceDeg) {
+                throw new RoutineFailedException("sweep_limit",
+                    $"the RA axis is {Math.Abs(offset):F0}° from where Polar Align started (tracking turns it while the frames are taken), and the next {Math.Abs(signedDeltaDeg):F0}° turn would take it past the {limitDeg:F0}° limit — slew it back near the pole (counterweights down), or take fewer or shorter frames per point, and start again");
+            }
         }
 
         /// <summary>Where Polar Align's own move left the mount (a motor reading, with the pier side of a fresh reading): the
@@ -155,16 +182,27 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>The exit's reading after the mount stopped (best-effort: a failed read keeps the last motor reading).</summary>
+        /// <summary>The exit's reading after the mount stopped (best-effort: a failed read keeps the last motor reading).
+        /// #2083 — not while a clutch turn stands (<see cref="ClutchTurnStands"/>): the reading is off by the user's turns,
+        /// and the pose Polar Align left the mount at stays forgotten with the origin.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A best-effort read on the exit path: its fault must never mask the exit's outcome.")]
         private async Task NoteMountLeftAfterStopAsync() {
             try {
-                if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now) {
+                if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now && !ClutchTurnStands()) {
                     NoteMountLeft((now.RaDeg, now.DecDeg), now.Side);
                 }
             } catch (Exception ex) {
                 LogSweepExitReadFailed(ex);
+            }
+        }
+
+        /// <summary>Where Polar Align last left the mount (RA, degrees JNOW); null when forgotten. For the tests.</summary>
+        internal double? SweepLastLeftRaDeg {
+            get {
+                lock (_gate) {
+                    return _sweepLastLeft?.RaDeg;
+                }
             }
         }
 

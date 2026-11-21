@@ -6078,6 +6078,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarRoughFirst => 'Rough first (main camera)';
 
   @override
+  String polarRoughFirstCaption(String step) {
+    return 'Rough first turns the mount 2 × $step° and measures with the main camera.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
+
+  @override
+  String get polarKnobCamera => 'Camera';
+
+  @override
+  String get polarKnobCameraGuide => 'Guide camera';
+
+  @override
+  String get polarKnobCameraMain => 'Main camera';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Frames per point (1 to 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Averaged; a point scattered over 3″ is retaken once';
+
+  @override
+  String get polarConfirmMainCamera => 'This measurement uses the main camera.';
+
+  @override
   String get polarStepDone => 'Done';
 
   @override
@@ -6146,6 +6174,17 @@ class AppLocalizationsPt extends AppLocalizations {
       one: 'Inside your $tolerance′ tolerance after 1 move.',
     );
     return '$_temp0 Finish with Check or Done. If the error drifts out, the motors correct again.';
+  }
+
+  @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Inside your tolerance after $moves moves.',
+      one: 'Inside your tolerance after 1 move.',
+    );
+    return '$_temp0 Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.';
   }
 
   @override
@@ -6615,6 +6654,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'The mount\'s position has not been read since it connected. Try again in a few seconds.';
 
   @override
+  String get refusalMountPositionStopUnconfirmed =>
+      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
   String get mountPositionUnverifiedTitle => 'Mount position unverified';
 
   @override
@@ -6624,6 +6667,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
       'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountPositionStopUnconfirmedBody =>
+      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
 
   @override
   String get mountConfirmAtHome => 'The mount IS at Home';
@@ -6654,6 +6701,26 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get refusalPolarAlignMovingMount =>
       'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.';
+
+  @override
+  String polarAlignStoppedFromOutside(String by) {
+    String _temp0 = intl.Intl.selectLogic(by, {
+      'user_request': 'The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.',
+      'emergency_stop': 'Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.',
+      'watchdog': 'The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.',
+      'park': 'The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.',
+      'findhome': 'The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.',
+      'pad_stop': 'The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.',
+      'fault_reaction': 'The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.',
+      'pose_unverified': 'The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.',
+      'other': 'The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get polarAlignStopNotConfirmed =>
+      'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.';
 
   @override
   String get refusalPolarAlignOnAxis =>
@@ -6708,6 +6775,14 @@ class AppLocalizationsPt extends AppLocalizations {
       'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.';
 
   @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
+
+  @override
+  String get refusalPolarAlignClutchTurned =>
+      'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.';
+
+  @override
   String get polarConfirmTitle => 'Before the mount moves';
 
   @override
@@ -6743,6 +6818,60 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarDirectionWest => 'west';
+
+  @override
+  String get refusalMountClockNotVerified =>
+      'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.';
+
+  @override
+  String get polarConfirmGuideField =>
+      'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.';
+
+  @override
+  String get polarConfirmGuideMeridian =>
+      'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.';
+
+  @override
+  String get polarConfirmHandTurnHint =>
+      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.';
+
+  @override
+  String get polarConfirmHandTurn => 'Turn RA by hand';
+
+  @override
+  String polarHandTurnAsk(String step, String direction) {
+    return 'Turn RA by hand about $step° toward the $direction, then let go.';
+  }
+
+  @override
+  String polarHandTurnTurned(String turned) {
+    return 'Turned $turned° so far.';
+  }
+
+  @override
+  String polarHandTurnWrongWay(String direction) {
+    return 'That went the other way: turn toward the $direction.';
+  }
+
+  @override
+  String get polarHandTurnRunNote =>
+      'You turn RA by hand: Ara does not move the mount.';
+
+  @override
+  String get polarAzimuthArc => 'true arc (cos alt)';
+
+  @override
+  String polarAzimuthNina(String value) {
+    return 'NINA $value';
+  }
+
+  @override
+  String get polarInitialErrorLarge =>
+      'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.';
+
+  @override
+  String get polarInitialErrorHuge =>
+      'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
@@ -13104,6 +13233,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarRoughFirst => 'Primeiro o grosso (câmera principal)';
 
   @override
+  String polarRoughFirstCaption(String step) {
+    return 'Primeiro o grosso gira a montagem 2 × $step° e mede com a câmera principal.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Medição ruidosa: os plate solves de um ponto se espalharam mais de 3″, mesmo depois de refeitos. Verifique o foco e o seeing, ou use mais quadros por ponto.';
+
+  @override
+  String get polarKnobCamera => 'Câmera';
+
+  @override
+  String get polarKnobCameraGuide => 'Câmera de guiagem';
+
+  @override
+  String get polarKnobCameraMain => 'Câmera principal';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Quadros por ponto (1 a 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Calculada a média; um ponto espalhado mais de 3″ é refeito uma vez';
+
+  @override
+  String get polarConfirmMainCamera => 'Esta medição usa a câmera principal.';
+
+  @override
   String get polarStepDone => 'Concluído';
 
   @override
@@ -13174,6 +13331,17 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       one: 'Dentro da sua tolerância de $tolerance′ após 1 movimento.',
     );
     return '$_temp0 Termine com Verificar ou Concluir. Se o erro sair da tolerância, os motores corrigem de novo.';
+  }
+
+  @override
+  String polarAlignerConvergedPlain(int moves) {
+    String _temp0 = intl.Intl.pluralLogic(
+      moves,
+      locale: localeName,
+      other: 'Dentro da sua tolerância após $moves movimentos.',
+      one: 'Dentro da sua tolerância após 1 movimento.',
+    );
+    return '$_temp0 Verificar e Concluir aguardam o carregamento das suas configurações de alinhamento polar. Se o erro sair da tolerância, os motores corrigem de novo.';
   }
 
   @override
@@ -13647,6 +13815,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'A posição da montagem ainda não foi lida desde que ela conectou. Tente de novo em alguns segundos.';
 
   @override
+  String get refusalMountPositionStopUnconfirmed =>
+      'A posição da montagem não está verificada: o Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar. Rode a busca de zero da montagem pelo controle de mão ou app dela, ou confirme que ela está fisicamente em Home.';
+
+  @override
   String get mountPositionUnverifiedTitle =>
       'Posição da montagem não verificada';
 
@@ -13657,6 +13829,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
       'Rode a busca de zero da montagem pelo controle de mão ou app dela. Quando ela indicar Home, confirme aqui.';
+
+  @override
+  String get mountPositionStopUnconfirmedBody =>
+      'O Ara não conseguiu confirmar que a montagem parou depois que o alinhamento polar a moveu, ou a montagem reconectou durante o alinhamento polar, então ela pode ter continuado a se mover. GoTo, Estacionar, Home e Alinhamento polar estão bloqueados. Parar, o direcional e o rastreamento continuam funcionando.';
 
   @override
   String get mountConfirmAtHome => 'A montagem ESTÁ em Home';
@@ -13687,6 +13863,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignMovingMount =>
       'O alinhamento polar está usando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
+
+  @override
+  String polarAlignStoppedFromOutside(String by) {
+    String _temp0 = intl.Intl.selectLogic(by, {
+      'user_request': 'A montagem foi parada de fora do alinhamento polar (Parar montagem). O alinhamento polar terminou. Comece de novo quando estiver pronto.',
+      'emergency_stop': 'A parada de emergência parou a montagem. O alinhamento polar terminou. Comece de novo quando estiver pronto.',
+      'watchdog': 'O vigia da virada de meridiano parou a montagem. O alinhamento polar terminou. Verifique a montagem e comece de novo.',
+      'park': 'A montagem foi estacionada de fora do alinhamento polar. O alinhamento polar terminou. Tire-a do estacionamento e comece de novo quando estiver pronto.',
+      'findhome': 'A montagem foi enviada para Home de fora do alinhamento polar. O alinhamento polar terminou. Comece de novo quando estiver pronto.',
+      'pad_stop': 'A montagem foi parada pelo direcional. O alinhamento polar terminou. Comece de novo quando estiver pronto.',
+      'fault_reaction': 'A reação a falhas de dispositivo parou a montagem (o estacionamento foi recusado porque a posição da montagem não está verificada). O alinhamento polar terminou. Verifique o setup antes de começar de novo.',
+      'pose_unverified': 'A reação de segurança parou a montagem (as condições ficaram inseguras e o estacionamento foi recusado porque a posição da montagem não está verificada). O alinhamento polar terminou. Verifique o setup antes de começar de novo.',
+      'other': 'A montagem foi parada de fora do alinhamento polar. O alinhamento polar terminou. Comece de novo quando estiver pronto.',
+    });
+    return '$_temp0';
+  }
+
+  @override
+  String get polarAlignStopNotConfirmed =>
+      'O Ara não conseguiu confirmar que a montagem parou. Corte a energia da montagem agora e confira a montagem antes de começar de novo.';
 
   @override
   String get refusalPolarAlignOnAxis =>
@@ -13741,6 +13937,14 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Nenhuma virada de meridiano terminou neste perfil ainda. Acompanhe uma virada do início ao fim e depois confirme.';
 
   @override
+  String get refusalPolarAlignAlreadyRunning =>
+      'O alinhamento polar já está rodando e gira a AR do outro jeito que você escolheu (à mão ou com o motor). Pare-o primeiro e inicie de novo.';
+
+  @override
+  String get refusalPolarAlignClutchTurned =>
+      'A AR foi girada à mão com a embreagem solta, e a montagem não sabe mais para onde aponta. Sincronize-a (Centralizar faz isso) ou reconecte-a depois de levá-la à posição inicial e inicie de novo, ou use Girar a AR à mão.';
+
+  @override
   String get polarConfirmTitle => 'Antes de a montagem se mover';
 
   @override
@@ -13777,6 +13981,60 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarDirectionWest => 'oeste';
+
+  @override
+  String get refusalMountClockNotVerified =>
+      'O relógio da montagem ainda não foi verificado. O Ara o ajusta pelo relógio sincronizado do setup: espere um momento e tente de novo, ou sincronize a hora em Configurações.';
+
+  @override
+  String get polarConfirmGuideField =>
+      'Escolha um campo bem alto em direção ao polo do seu hemisfério, pelo menos uns 15° acima do horizonte quando der.';
+
+  @override
+  String get polarConfirmGuideMeridian =>
+      'Escolha um início cujos giros não cruzem o meridiano, para o tubo não bater no pilar.';
+
+  @override
+  String get polarConfirmHandTurnHint =>
+      'Ou gire a AR você mesmo: com Girar a AR à mão, o Ara não move nada. Ele pede cada giro e o mede: com o controle de mão, pela leitura da montagem; com a embreagem solta, pelos quadros.';
+
+  @override
+  String get polarConfirmHandTurn => 'Girar a AR à mão';
+
+  @override
+  String polarHandTurnAsk(String step, String direction) {
+    return 'Gire a AR à mão cerca de $step° em direção ao $direction e solte.';
+  }
+
+  @override
+  String polarHandTurnTurned(String turned) {
+    return 'Girou $turned° até agora.';
+  }
+
+  @override
+  String polarHandTurnWrongWay(String direction) {
+    return 'Isso foi para o outro lado: gire em direção ao $direction.';
+  }
+
+  @override
+  String get polarHandTurnRunNote =>
+      'Você gira a AR à mão: o Ara não move a montagem.';
+
+  @override
+  String get polarAzimuthArc => 'arco real (cos alt)';
+
+  @override
+  String polarAzimuthNina(String value) {
+    return 'NINA $value';
+  }
+
+  @override
+  String get polarInitialErrorLarge =>
+      'O erro no início passou de 2°: chegue mais perto e rode de novo. A leitura é menos confiável tão longe.';
+
+  @override
+  String get polarInitialErrorHuge =>
+      'O erro no início passou de 10°: confira a localização do site, o campo inicial e se a montagem girou só em AR.';
 
   @override
   String get bridgeSetupFoundTitle => 'Encontrado neste setup';

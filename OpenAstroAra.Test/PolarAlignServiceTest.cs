@@ -101,7 +101,12 @@ namespace OpenAstroAra.Test {
             public ConcurrentQueue<(string Type, JsonElement Payload)> Events { get; } = new();
             public long CurrentSequence => 0;
 
+            /// <summary>Called with each event's type before it is recorded, on the publisher's thread: a test can hold
+            /// the publisher there.</summary>
+            public Action<string>? OnPublish { get; set; }
+
             public Task PublishAsync(OpenAstroAra.Server.Contracts.WsEvents.WsEvent eventType, JsonElement payload, CancellationToken ct) {
+                OnPublish?.Invoke(eventType);
                 Events.Enqueue((eventType, payload.Clone()));
                 List<TaskCompletionSource> due;
                 lock (_gate) {
@@ -269,9 +274,10 @@ namespace OpenAstroAra.Test {
         private static InMemoryProfileStore NewStore() {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = SiteLatDeg, LongitudeDeg = SiteLonDeg });
-            // Bench cadences: the real §45.12 defaults would make loop tests take minutes.
+            // Bench cadences: the real §45.12 defaults would make loop tests take minutes. One frame per point (#2082): a
+            // scripted solver's answers map one to one onto the measurement's points.
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
             return store;
         }
 
@@ -299,8 +305,8 @@ namespace OpenAstroAra.Test {
                 Mock<ITelescopeMediator>? mount = null, WsRecorder? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
-                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
-            return NewServiceOn(guider, solver, (mount ?? NewMount()).Object, ws, store, log, fetcher, logger, mainCamera, aligner);
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null) {
+            return NewServiceOn(guider, solver, (mount ?? NewMount()).Object, ws, store, log, fetcher, logger, mainCamera, aligner, mountClock);
         }
 
         /// <summary><see cref="NewService"/> on any mount: a mock's object, or the fake GEM mount (#2064).</summary>
@@ -308,7 +314,7 @@ namespace OpenAstroAra.Test {
                 ITelescopeMediator mount, WsRecorder? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
-                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null) {
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null) {
             ws ??= new WsRecorder();
             if (mount is IMocked<ITelescopeMediator> mocked && mount is ITelescopeService service) {
                 // #2067 — a mock set up as the telescope service answers a turn's poll (position and pier side) with its
@@ -319,7 +325,7 @@ namespace OpenAstroAra.Test {
             }
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
                 mount, MediatorMotionControl.For(mount), store ?? NewStore(), ws, log,
-                fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner) {
+                fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner, mountClock: mountClock) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
@@ -335,6 +341,8 @@ namespace OpenAstroAra.Test {
                 ShutdownGrace = TimeSpan.FromSeconds(2),
                 // #2066 (ARA-2) — the two readings before each turn back to back (the daemon waits 1 s between them).
                 MountSteadyFor = TimeSpan.Zero,
+                // #2083: a clutch turn is taken on its solves at rest alone at bench speed (the daemon waits 5 s at least).
+                HandTurnClutchMinWait = TimeSpan.Zero,
             };
             if (mount is FakeGemMount gem) {
                 svc.Clock = gem.Clock; // #2066 — a reading's age on the fake's own clock
@@ -2350,6 +2358,8 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.StopTrackingWhenDone, Is.True, "#2048: tracking off at the end of a run, as NINA's default");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
+            Assert.That(defaults.Camera, Is.EqualTo(PolarAlignCameras.Guide), "#2082: the guide camera measures unless told otherwise");
+            Assert.That(defaults.FramesPerPoint, Is.EqualTo(3), "#2082: three frames averaged at each point");
 
             store.PutPolarAlignSettings(defaults with { ExposureSeconds = 0.5, Binning = 2 });
             var updated = store.GetPolarAlignSettings();

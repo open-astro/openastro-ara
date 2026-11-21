@@ -10221,6 +10221,54 @@ abstract class AppLocalizations {
   /// **'Rough first (main camera)'**
   String get polarRoughFirst;
 
+  /// Polar align (#2082): caption with the Rough first button, how far it turns the mount (the profile's turn, whole degrees) before it moves
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first turns the mount 2 × {step}° and measures with the main camera.'**
+  String polarRoughFirstCaption(String step);
+
+  /// Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake
+  ///
+  /// In en, this message translates to:
+  /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
+  String get polarNoisyMeasurement;
+
+  /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get polarKnobCamera;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the guide camera (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera'**
+  String get polarKnobCameraGuide;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the main camera with its own solver
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera'**
+  String get polarKnobCameraMain;
+
+  /// Settings > Imaging > Polar align (#2082): how many frames are averaged at each of the three points, with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Frames per point (1 to 5)'**
+  String get polarKnobFramesPerPoint;
+
+  /// Settings > Imaging > Polar align (#2082): hint under frames per point
+  ///
+  /// In en, this message translates to:
+  /// **'Averaged; a point scattered over 3″ is retaken once'**
+  String get polarKnobFramesPerPointHint;
+
+  /// Polar align start confirm dialog (#2082): shown when the run measures with the main camera (Rough first, or the profile's camera)
+  ///
+  /// In en, this message translates to:
+  /// **'This measurement uses the main camera.'**
+  String get polarConfirmMainCamera;
+
   /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
   ///
   /// In en, this message translates to:
@@ -10328,6 +10376,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.'**
   String polarAlignerConverged(int moves, String tolerance);
+
+  /// Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.'**
+  String polarAlignerConvergedPlain(int moves);
 
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
   ///
@@ -11089,6 +11143,12 @@ abstract class AppLocalizations {
   /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
   String get refusalMountPositionNotReadYet;
 
+  /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park, Home and Polar Align are blocked because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionStopUnconfirmed;
+
   /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
   ///
   /// In en, this message translates to:
@@ -11106,6 +11166,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.'**
   String get mountPositionUnverifiedRunZeroSearch;
+
+  /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionStopUnconfirmedBody;
 
   /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again
   ///
@@ -11154,6 +11220,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
+
+  /// Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token
+  ///
+  /// In en, this message translates to:
+  /// **'{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}'**
+  String polarAlignStoppedFromOutside(String by);
+
+  /// Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.'**
+  String get polarAlignStopNotConfirmed;
 
   /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
   ///
@@ -11233,6 +11311,18 @@ abstract class AppLocalizations {
   /// **'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.'**
   String get refusalFirstFlipNotCompleted;
 
+  /// Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.'**
+  String get refusalPolarAlignAlreadyRunning;
+
+  /// Refusal (polar-align-clutch-turned, #2083): a polar alignment start that turns RA with the motor, after a hand-turn run saw RA turned with the clutch open (the mount's reading is off by those turns); 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.'**
+  String get refusalPolarAlignClutchTurned;
+
   /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
   ///
   /// In en, this message translates to:
@@ -11292,6 +11382,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'west'**
   String get polarDirectionWest;
+
+  /// Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.'**
+  String get refusalMountClockNotVerified;
+
+  /// Polar align start confirm dialog (#2083): NINA's guidance on where to point before the start
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.'**
+  String get polarConfirmGuideField;
+
+  /// Polar align start confirm dialog (#2083): NINA's guidance, keep the RA turns on one side of the meridian (pier collision)
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'**
+  String get polarConfirmGuideMeridian;
+
+  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn. With the hand pad the turn is measured from the mount's RA reading (and its angle shown); with the clutch open the reading stands, so it is judged from the frames and no angle is shown
+  ///
+  /// In en, this message translates to:
+  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.'**
+  String get polarConfirmHandTurnHint;
+
+  /// Polar align start confirm dialog (#2083): button that starts a run in which the user turns the RA axis by hand and the mount's motors never move
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand'**
+  String get polarConfirmHandTurn;
+
+  /// Polar align hand-turn run (#2083): what the user must do now; step is whole degrees, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand about {step}° toward the {direction}, then let go.'**
+  String polarHandTurnAsk(String step, String direction);
+
+  /// Polar align hand-turn run (#2083): how far the mount's own RA reading shows the axis turned the asked way (hand pad), one decimal; not shown with the clutch open, where the mount's reading does not move
+  ///
+  /// In en, this message translates to:
+  /// **'Turned {turned}° so far.'**
+  String polarHandTurnTurned(String turned);
+
+  /// Polar align hand-turn run (#2083): the user turned RA the wrong way; direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'That went the other way: turn toward the {direction}.'**
+  String polarHandTurnWrongWay(String direction);
+
+  /// Polar align hand-turn run (#2083): reminder while it measures that the mount's motors are never used
+  ///
+  /// In en, this message translates to:
+  /// **'You turn RA by hand: Ara does not move the mount.'**
+  String get polarHandTurnRunNote;
+
+  /// Polar align readout (#2083): the azimuth error's convention, an arc on the sky (NINA shows the unscaled angle, larger by 1/cos(latitude))
+  ///
+  /// In en, this message translates to:
+  /// **'true arc (cos alt)'**
+  String get polarAzimuthArc;
+
+  /// Polar align readout (#2083): the same azimuth error as NINA would show it; value is a signed arcminute figure like +1.5′
+  ///
+  /// In en, this message translates to:
+  /// **'NINA {value}'**
+  String polarAzimuthNina(String value);
+
+  /// Polar align readout (#2083): NINA's large-error warning, the stage started more than 2° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.'**
+  String get polarInitialErrorLarge;
+
+  /// Polar align readout (#2083): NINA's huge-error warning, the stage started more than 10° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.'**
+  String get polarInitialErrorHuge;
 
   /// Add your devices: heading above the detected devices
   ///

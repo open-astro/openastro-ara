@@ -23,6 +23,10 @@ class _Daemon implements HttpClientAdapter {
 
 /// #2089 — a stub daemon that answers the start plan and records the start's body.
 class _PlanDaemon implements HttpClientAdapter {
+  _PlanDaemon({this.camera});
+
+  /// The plan's `camera`; null = an older daemon's plan, with no key.
+  final String? camera;
   Object? startBody;
 
   @override
@@ -33,7 +37,8 @@ class _PlanDaemon implements HttpClientAdapter {
     if (options.path.endsWith('/start-plan')) {
       return ResponseBody.fromString(
         '{"stage":"fine","direction":"west","step_deg":10,"turns":2,"max_sweep_deg":20,'
-        '"new_origin":false,"origin_offset_deg":20.3,"sweep_limit_deg":30}',
+        '"new_origin":false,"origin_offset_deg":20.3,"sweep_limit_deg":30'
+        '${camera == null ? '' : ',"camera":"$camera"'}}',
         200,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
@@ -53,6 +58,24 @@ void main() {
     expect((plan.newOrigin, plan.originOffsetDeg, plan.sweepLimitDeg), (false, 20.3, 30.0));
     await api.start(plan);
     expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false});
+  });
+
+  test('the start plan names the camera the run measures with; a plan without one is the guide camera (#2082)', () async {
+    final main = PolarAlignApi(const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = _PlanDaemon(camera: PolarAlignCameras.main));
+    final older = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = _PlanDaemon());
+    expect((await main.startPlan(stage: PolarAlignStages.coarse)).camera, PolarAlignCameras.main);
+    expect((await older.startPlan(stage: PolarAlignStages.fine)).camera, PolarAlignCameras.guide);
+  });
+
+  test('an older rig does not take a hand turn; a hand-turn start sends hand_turn, a motor start never does (#2083)', () async {
+    final d = _PlanDaemon();
+    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    final plan = await api.startPlan(stage: PolarAlignStages.fine);
+    expect(plan.handTurnAvailable, isFalse, reason: 'the stub plan has no hand_turn_available: an older rig');
+    await api.start(plan.byHand());
+    expect(d.startBody, {'stage': 'fine', 'confirmed': true, 'direction': 'west', 'new_origin': false, 'hand_turn': true});
+    expect(PolarAlignStartPlan.fromJson({'direction': 'east', 'hand_turn_available': true}).handTurnAvailable, isTrue);
   });
 
   test('Stop and Done wait for the daemon to confirm the mount stopped, past the 5 s default (#2048)', () async {

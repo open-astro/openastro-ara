@@ -211,12 +211,17 @@ namespace OpenAstroAra.Server.Services {
                 throw new OperationCanceledException("the run was stopped before its turn's runaway was stopped");
             }
             ThrowIfStoppedFromOutside(gen);
-            LogTurnNotStopped(what);
-            var stopped = await StopMountMotionAsync("turn_not_stopped").ConfigureAwait(false);
-            if (!IsCurrent(gen)) {
-                throw new OperationCanceledException("the run was stopped while its turn was stopped");
+            // #2066 — a takeover or an end that gave up on this run fenced its stops: the mount is someone else's now.
+            var fence = RunStopFence(gen);
+            if (StopsFenced(fence)) {
+                throw new OperationCanceledException("the run was fenced before its turn's runaway was stopped");
             }
-            if (!stopped) {
+            LogTurnNotStopped(what);
+            var stopped = await StopMountMotionAsync("turn_not_stopped", fence).ConfigureAwait(false);
+            if (!IsCurrent(gen) || stopped is null) {
+                throw new OperationCanceledException("the run was stopped or fenced while its turn was stopped");
+            }
+            if (stopped == false) {
                 throw new RoutineFailedException(MountDidNotStop, what + ". " + CutPowerSentence);
             }
             throw new RoutineFailedException(TurnMismatch,
@@ -358,34 +363,34 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        [LoggerMessage(EventId = 4600, Level = LogLevel.Warning, Message = "§45 polar-align: the mount offers no {Axis} motor rate at or below {Requested:F2}°/s — no turn (slew_failed)")]
+        [LoggerMessage(EventId = 4620, Level = LogLevel.Warning, Message = "§45 polar-align: the mount offers no {Axis} motor rate at or below {Requested:F2}°/s — no turn (slew_failed)")]
         private partial void LogNoRateAtOrBelow(TelescopeAxes axis, double requested);
 
-        [LoggerMessage(EventId = 4601, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} turn rate {Requested:F2}°/s matched to the mount's {Matched:F3}°/s (at or below, never above)")]
+        [LoggerMessage(EventId = 4621, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} turn rate {Requested:F2}°/s matched to the mount's {Matched:F3}°/s (at or below, never above)")]
         private partial void LogRateMatched(TelescopeAxes axis, double requested, double matched);
 
-        [LoggerMessage(EventId = 4602, Level = LogLevel.Warning, Message = "§45 polar-align: the Dec reading moved {MovedDeg:F3}° during an RA turn — stopped (dec_moved)")]
+        [LoggerMessage(EventId = 4622, Level = LogLevel.Warning, Message = "§45 polar-align: the Dec reading moved {MovedDeg:F3}° during an RA turn — stopped (dec_moved)")]
         private partial void LogTurnDecMoved(double movedDeg);
 
-        [LoggerMessage(EventId = 4603, Level = LogLevel.Warning, Message = "§45 polar-align: the pier side changed from {From} to {To} during an RA turn — stopped (pier_changed)")]
+        [LoggerMessage(EventId = 4623, Level = LogLevel.Warning, Message = "§45 polar-align: the pier side changed from {From} to {To} during an RA turn — stopped (pier_changed)")]
         private partial void LogTurnPierChanged(PierSide from, PierSide to);
 
-        [LoggerMessage(EventId = 4604, Level = LogLevel.Warning, Message = "§45 polar-align: the RA reading jumped {ChangeDeg:F2}° in one poll (at most {PossibleDeg:F2}° is motion) — stopped (turn_mismatch)")]
+        [LoggerMessage(EventId = 4624, Level = LogLevel.Warning, Message = "§45 polar-align: the RA reading jumped {ChangeDeg:F2}° in one poll (at most {PossibleDeg:F2}° is motion) — stopped (turn_mismatch)")]
         private partial void LogTurnReadingJumped(double changeDeg, double possibleDeg);
 
-        [LoggerMessage(EventId = 4605, Level = LogLevel.Critical, Message = "§45 polar-align: {What} — sending the confirmed stop now")]
+        [LoggerMessage(EventId = 4625, Level = LogLevel.Critical, Message = "§45 polar-align: {What} — sending the confirmed stop now")]
         private partial void LogTurnNotStopped(string what);
 
-        [LoggerMessage(EventId = 4606, Level = LogLevel.Warning, Message = "§45 polar-align: a {Degrees:F1}° turn ended at {Moved:F2}° with the Dec {DecDeg:F3}° off — turn_mismatch")]
+        [LoggerMessage(EventId = 4626, Level = LogLevel.Warning, Message = "§45 polar-align: a {Degrees:F1}° turn ended at {Moved:F2}° with the Dec {DecDeg:F3}° off — turn_mismatch")]
         private partial void LogTurnMismatch(double degrees, double moved, double decDeg);
 
-        [LoggerMessage(EventId = 4607, Level = LogLevel.Information, Message = "§45 polar-align {Measurement}: the mount's Dec across the three points spread {SpreadArcsec:F1}″")]
+        [LoggerMessage(EventId = 4627, Level = LogLevel.Information, Message = "§45 polar-align {Measurement}: the mount's Dec across the three points spread {SpreadArcsec:F1}″")]
         private partial void LogDecSpread(string measurement, double spreadArcsec);
 
-        [LoggerMessage(EventId = 4608, Level = LogLevel.Warning, Message = "§45 polar-align {Measurement}: the mount's Dec across the three points spread {SpreadArcsec:F1}″, over {LimitArcsec:F0}″ — the result may be off (check the Dec clutch)")]
+        [LoggerMessage(EventId = 4628, Level = LogLevel.Warning, Message = "§45 polar-align {Measurement}: the mount's Dec across the three points spread {SpreadArcsec:F1}″, over {LimitArcsec:F0}″ — the result may be off (check the Dec clutch)")]
         private partial void LogDecSpreadWarning(string measurement, double spreadArcsec, double limitArcsec);
 
-        [LoggerMessage(EventId = 4609, Level = LogLevel.Information, Message = "§45 polar-align {FrameId}: position angle {PositionAngleDeg:F1}° (turned {TurnedDeg:F1}° since the frame before)")]
+        [LoggerMessage(EventId = 4629, Level = LogLevel.Information, Message = "§45 polar-align {FrameId}: position angle {PositionAngleDeg:F1}° (turned {TurnedDeg:F1}° since the frame before)")]
         private partial void LogFieldRotation(string frameId, double positionAngleDeg, double turnedDeg);
 
         /// <summary><see cref="ThrowIfFieldRotated"/> with the log line of each compared frame.</summary>

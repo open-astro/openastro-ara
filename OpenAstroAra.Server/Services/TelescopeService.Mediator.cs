@@ -321,6 +321,26 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2071 — a sequencer slew, Center, the polar-alignment slews and the flip goto all come
+            // here: refuse before anything is sent while the mount's clock is not verified.
+            if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+                LogMountOpRejectedClock("telescope.slew", clockRefusal);
+                throw new SequenceEntityFailedException(clockRefusal);
+            }
+            // The wait above can span a reconnect: go on with the device connected now, never the one
+            // read before it (disposed by then), and check it again as GotoAsync did.
+            lock (_gate) {
+                var live = _lifecycle.Live;
+                if (live is null) {
+                    return false;
+                }
+                client = live;
+                parked = _runtime.Parked;
+            }
+            if (parked) {
+                LogMountOpRejectedParked("telescope.slew");
+                return false;
+            }
             // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
             // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
             // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
@@ -456,7 +476,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // so a watchdog-killed flip slew no longer reads as a normal slew_complete (the
         // #836 r4 follow-up from PORT_TODO).
         _ = Task.Run(
-            () => AbortSlewCoreAsync(client, reason: "watchdog", rethrow: false),
+            () => AbortSlewCoreAsync(client, reason: MountStopReasons.Watchdog, rethrow: false),
             CancellationToken.None);
     }
 
@@ -532,13 +552,21 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             "telescope.findhome" => BeginMotionDispatchOrThrow(op, "Find Home"),
             _ => null,
         };
+        // #2066 — a raced REST GoTo's second abort must not stop this move: noted here, it counts from its send (SendMotion,
+        // which first waits for a second abort already on its way) and is settled when its call returns or throws.
+        long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
         // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
         // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
-            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
-                // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
-                // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
-                stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
+            try {
+                await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
+                    // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
+                    // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
+                    stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
+            } catch {
+                NoteMotionFailed(motion!.Value, client);
+                throw;
+            }
         }
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is
@@ -547,9 +575,20 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             NoteMountCommand(op is "telescope.park" or "telescope.findhome"
                 ? w => w.NoteParkCommanded()
                 : w => w.NoteMotionCommanded());
+            // #2066 — the move's checks are done: from here a raced GoTo keeps its second abort back for it (SendMotion,
+            // on the op's thread, waits first for one already on its way).
+            if (motion is long sending) {
+                _ = NoteMotionOnTheWire(sending);
+            }
             // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
             // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
-            var opTask = Task.Run(() => action(client), CancellationToken.None);
+            var opTask = Task.Run(() => {
+                if (motion is long token) {
+                    SendMotion(token, client, () => action(client));
+                } else {
+                    action(client);
+                }
+            }, CancellationToken.None);
             using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
                 linked.CancelAfter(MountOpHardTimeout);
                 var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
@@ -835,6 +874,12 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogMountOpRejectedParked("telescope.sync");
             return false;
         }
+        // #2071 — a sync on a wrong mount clock bakes the error into the pointing model: a clean
+        // "not synced", so the centring loop offset-compensates (its re-slew is refused in turn).
+        if (MountClockMotionRefusal() is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.sync", clockRefusal);
+            return false;
+        }
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false;
@@ -873,6 +918,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 }
                 TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
                 client.SyncToCoordinates(syncRa, syncDec);
+                Interlocked.Increment(ref _syncEpoch); // #2083
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
                 return true;
             }, CancellationToken.None);
@@ -916,6 +962,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
+        }
+        // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
+        // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
+        if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {
+            LogMountOpRejectedClock("telescope.flip", clockRefusal);
+            throw new SequenceEntityFailedException(clockRefusal);
+        }
+        // The wait can span a reconnect: the pose check and the pier-side hint go to the device connected
+        // now, never the one read before it (disposed by then).
+        client = ConnectedClientOrNull();
+        if (client is null) {
+            return false;
         }
         // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
         await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);

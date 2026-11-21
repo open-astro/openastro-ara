@@ -95,20 +95,17 @@ public static partial class EquipmentEndpoints {
                 $"Polar alignment is turning the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it).");
         }
         if (mount?.MotionOwner is { } owner) {
-            var message = TelescopeService.MotionOwnedMessage(owner, what);
-            if (owner == MotionOwners.PolarAlign) {
-                throw new RefusalException(RefusalCatalog.PolarAlignMovingMount, message);
-            }
-            throw new InvalidOperationException(message);
+            throw TelescopeService.MotionOwnedRefusal(owner, what);
         }
     }
 
     /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
-    /// runs (#2066), else the 202 the telescope service answers. The safety and fault parks call the service, not this.</summary>
+    /// runs (#2066), else the 202 the telescope service answers. The service checks the owner again when the park's checks end
+    /// (<see cref="ITelescopeService.ParkUnlessMotionOwnedAsync"/>). The safety and fault parks call its ParkAsync, not this.</summary>
     internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
         ThrowIfPolarAlignMovesTheMount(polarAlign, "park", telescope);
-        return Results.Accepted(value: await telescope.ParkAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+        return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
     }
 
     /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
@@ -1273,7 +1270,7 @@ public static partial class EquipmentEndpoints {
     /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
     /// service refuses a start without one).</summary>
     internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
-        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin) : null;
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn) : null;
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
@@ -1287,7 +1284,7 @@ public static partial class EquipmentEndpoints {
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
-            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position) keeps its own answer (RefusalHandler, ADR 0022).
+            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
     }
@@ -1470,6 +1467,11 @@ public static partial class EquipmentEndpoints {
         // #2066 — outside the try below, whose 409 would drop the Refusal's reason. A stop (rate 0) always goes through.
         if (request.Rate != 0) {
             ThrowIfPolarAlignMovesTheMount(polarAlign, "move");
+        } else if (polarAlign is { IsMovingMount: true }) {
+            // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
+            // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
+            // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
+            svc.FenceMotion(MountStopReasons.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

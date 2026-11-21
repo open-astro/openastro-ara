@@ -1444,7 +1444,12 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             l10n.mountPositionUnverifiedTitle,
             style: kSimpleText.copyWith(color: AraColors.errorText),
           ),
-          Text(l10n.mountPositionUnverifiedBody, style: kSimpleCaption),
+          Text(
+            m.positionUnverifiedByStop
+                ? l10n.mountPositionStopUnconfirmedBody
+                : l10n.mountPositionUnverifiedBody,
+            style: kSimpleCaption,
+          ),
           if (!m.atHome)
             Text(
               l10n.mountPositionUnverifiedRunZeroSearch,

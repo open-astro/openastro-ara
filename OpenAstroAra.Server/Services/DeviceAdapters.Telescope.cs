@@ -15,6 +15,7 @@
 using ASCOM.Alpaca.Clients;
 using ASCOM.Common.DeviceInterfaces;
 using OpenAstroAra.Server.Contracts;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 
@@ -53,6 +54,10 @@ internal interface ITelescopeDevice : IDeviceAdapter {
     double SiteLatitude { get; set; }
     double SiteLongitude { get; set; }
     double SiteElevation { get; set; }
+    /// <summary>The mount's clock (#2071). Read as UTC whatever Kind the client hands back; written as UTC.</summary>
+    DateTime UTCDate { get; set; }
+    /// <summary>The mount's local sidereal time in hours, from its own clock and longitude (#2071).</summary>
+    double SiderealTime { get; }
     bool CanMoveAxis(TelescopeAxis axis);
     IAxisRates AxisRates(TelescopeAxis axis);
     string Action(string name, string parameters);
@@ -109,6 +114,13 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
     public double SiteLatitude { get => client.SiteLatitude; set => client.SiteLatitude = value; }
     public double SiteLongitude { get => client.SiteLongitude; set => client.SiteLongitude = value; }
     public double SiteElevation { get => client.SiteElevation; set => client.SiteElevation = value; }
+    // #2071 — the wire carries no offset, so a Local value read back or written would be off by the Pi's
+    // UTC offset: a read is normalised to UTC (Unspecified means UTC), and a write always sends UTC.
+    public DateTime UTCDate {
+        get => AsUtc(client.UTCDate);
+        set => client.UTCDate = AsUtc(value);
+    }
+    public double SiderealTime => client.SiderealTime;
     public bool CanMoveAxis(TelescopeAxis axis) => client.CanMoveAxis(axis);
     public IAxisRates AxisRates(TelescopeAxis axis) => client.AxisRates(axis);
     public string Action(string name, string parameters) => client.Action(name, parameters);
@@ -120,4 +132,10 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
     public void FindHome() => client.FindHome();
     public void SlewToCoordinatesAsync(double raHours, double decDegrees) => client.SlewToCoordinatesAsync(raHours, decDegrees);
     public void SyncToCoordinates(double raHours, double decDegrees) => client.SyncToCoordinates(raHours, decDegrees);
+
+    internal static DateTime AsUtc(DateTime value) => value.Kind switch {
+        DateTimeKind.Local => value.ToUniversalTime(),
+        DateTimeKind.Unspecified => DateTime.SpecifyKind(value, DateTimeKind.Utc),
+        _ => value,
+    };
 }

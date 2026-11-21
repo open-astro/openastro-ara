@@ -22,6 +22,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
@@ -50,6 +51,7 @@ const _paths = [
   'optics',
   'phd2',
   'plate-solve',
+  'polar-align',
   'safety',
   'site',
   'storage',
@@ -66,6 +68,7 @@ final _selfLoading = {
   imagingDefaultsProvider,
   opticsSettingsProvider,
   phd2SettingsProvider,
+  polarAlignSettingsProvider,
   safetyPoliciesProvider,
   siteSettingsProvider,
 };
@@ -190,6 +193,9 @@ void main() {
     'safety': (c) =>
         c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
     'phd2': (c) => c.read(phd2SettingsProvider.notifier).setSettleTimeSec(15),
+    'polar-align': (c) => c
+        .read(polarAlignSettingsProvider.notifier)
+        .edit((v) => v.copyWith(exposureSeconds: 4)),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -295,6 +301,12 @@ void main() {
       {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
     ],
     'optics': [null, ...without(rigDefaults['optics']!)],
+    'polar-align': [
+      null,
+      ...without(rigDefaults['polar-align']!),
+      {...rigDefaults['polar-align']!, 'loop_mode': 'bogus'},
+      {...rigDefaults['polar-align']!, 'camera': 'bogus'},
+    ],
     'site': [
       null,
       ...without(rigDefaults['site']!),
@@ -368,6 +380,7 @@ void main() {
     'optics': 'focal_length_mm',
     'phd2': 'settle_time_sec',
     'plate-solve': 'center_after_slew',
+    'polar-align': 'exposure_seconds',
     'safety': 'meridian_pause_min',
     'site': 'latitude_deg',
     'unguided': 'guard_enabled',

@@ -37,6 +37,10 @@ public interface IMountMotionControl {
     /// swapped meanwhile.</summary>
     long SessionEpoch => 0;
 
+    /// <summary>#2083 — counts the syncs the mount accepted (a plate solve's, Center's): a routine that stopped trusting the
+    /// mount's reading (Polar Align after a clutch turn) trusts it again once this changes.</summary>
+    long SyncEpoch => 0;
+
     /// <summary>#2066 — what raised the first count after <paramref name="abortEpoch"/> other than
     /// <paramref name="except"/>: <c>user_request</c> (Stop Mount), <c>emergency_stop</c>, <c>watchdog</c>, <c>park</c>,
     /// <c>findhome</c>, <c>polar_align</c>. Null when there is none, or it is no longer known.</summary>
@@ -101,8 +105,8 @@ public interface IMountMotionControl {
 public static class MotionOwners {
 
     /// <summary>The Polar Align routine: it holds the owner for its whole run, the adjust loop included, and gives it back
-    /// once its exit has stopped the mount.</summary>
-    public const string PolarAlign = "polar_align";
+    /// once its exit has stopped the mount. The same token as its own stop's reason (<see cref="MountStopReasons.PolarAlign"/>).</summary>
+    public const string PolarAlign = MountStopReasons.PolarAlign;
 }
 
 /// <summary>A hold of the motion owner that gives nothing back: a mount that keeps no owner.</summary>

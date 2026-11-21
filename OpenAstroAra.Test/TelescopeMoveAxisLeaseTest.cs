@@ -422,6 +422,27 @@ namespace OpenAstroAra.Test {
             Assert.That(box.Puts.Any(p => p.Path.EndsWith("/abortslew", StringComparison.Ordinal)), Is.False, "the latch sends nothing");
         }
 
+        // #2107 — the refused renewal says what stopped the mount (only Polar Align reads it, in its failure): a park, Emergency
+        // Stop's latch or the direction pad is no longer called "Stop Mount".
+        [TestCase(MountStopReasons.Park, "(a park)")]
+        [TestCase(MountStopReasons.EmergencyStop, "(Emergency Stop)")]
+        [TestCase(MountStopReasons.PadStop, "(the direction pad)")]
+        [TestCase(MountStopReasons.FaultReaction, "(the equipment-fault reaction)")]
+        [TestCase(MountStopReasons.UserRequest, "(Stop Mount)")]
+        public async Task A_refused_renewal_names_the_stop_that_came_since_it_began(string by, string named) {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            svc.FenceMotion(by);
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(refused!.Message, Does.Contain(named));
+        }
+
         // #2066 — a REST Park or Find Home ends a routine that drives the motors: it counts as a stop, named for what raised it.
         [TestCase("park")]
         [TestCase("findhome")]

@@ -27,6 +27,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -116,6 +117,10 @@ namespace OpenAstroAra.Server.Services {
 
         // Stages (PolarAlignStages): which one this run measures (#2082: one per Start).
         private string? _stage;
+        // #2082 — the camera this run measures with (PolarAlignCameras), and whether a point of its measurement stayed
+        // scattered after its retake. Guarded by _gate.
+        private string? _camera;
+        private bool _measurementNoisy;
         private int _checkSolvesDone;
         private PolarAlignCheckResultDto? _checkResult;
         // #2082 — the last run's readout (any measurement that ended with one: Stop, Done, a failure, a check's verdict), both
@@ -179,6 +184,8 @@ namespace OpenAstroAra.Server.Services {
         private Task? _runTask;
 
         private readonly IPolarAlignmentLog? _log;
+        // #2071 — the routine homes and slews against the mount's sidereal time: refuse to start while its clock is not verified.
+        private readonly IMountClockGate? _mountClock;
         // This routine's hold on the Guide Camera (ADR 0016); null when it holds none. Guarded by _gate.
         private GuideCameraCustody.Claim? _claim;
 
@@ -193,8 +200,10 @@ namespace OpenAstroAra.Server.Services {
                 IPolarAlignmentLog? log = null,
                 IPolarAlignFrameFetcher? frameFetcher = null,
                 IPolarAlignMainCameraSolver? mainCamera = null,
-                IPolarAlignerSource? aligner = null) {
+                IPolarAlignerSource? aligner = null,
+                IMountClockGate? mountClock = null) {
             _guider = guider;
+            _mountClock = mountClock;
             _alignerSource = aligner;
             _mainCamera = mainCamera;
             _logger = logger;
@@ -231,7 +240,11 @@ namespace OpenAstroAra.Server.Services {
                     LastResult: _lastResult,
                     Correction: _aligner,
                     // #2072 — the caution describes a live readout: shown only while one runs.
-                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null));
+                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null,
+                    Camera: _camera,
+                    MeasurementNoisy: _measurementNoisy,
+                    HandTurn: _handTurn,
+                    HandTurnWait: _handTurnWait));
             }
         }
 
@@ -258,6 +271,12 @@ namespace OpenAstroAra.Server.Services {
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The preview is best-effort; any fetch failure just means no image this time.")]
         public async Task<byte[]?> GetLiveFrameJpegAsync(CancellationToken ct) {
+            lock (_gate) {
+                if (_active && _camera == PolarAlignCameras.Main) {
+                    // #2082 — this run shoots the main camera: the guider's last frame is an older one, not this run's.
+                    return null;
+                }
+            }
             IGuideCaptureLink guiderClient;
             try {
                 guiderClient = _guider.ConnectedLink();
@@ -330,9 +349,18 @@ namespace OpenAstroAra.Server.Services {
             return site;
         }
 
+        /// <summary>#2070 — refuses (<c>mount-position-unverified</c>) while the mount's position is not trusted: a false zero
+        /// after a power loss, or a stop a run could not confirm (#2066, cleared only by a confirmed Home).</summary>
+        private async Task ThrowIfPoseUnverifiedAsync(CancellationToken ct) {
+            if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
+                throw TelescopeService.PositionUnverifiedRefusal(unverified);
+            }
+        }
+
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
-        /// they take the axis (this measurement's two turns).</summary>
-        private sealed record RunBand(double AwaySign, double MaxSweepDeg);
+        /// they take the axis (this measurement's two turns). <c>HandTurn</c> (#2083): the user makes those turns by hand,
+        /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).</summary>
+        private sealed record RunBand(double AwaySign, double MaxSweepDeg, bool HandTurn = false);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the turns the
         /// run makes and their place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
@@ -356,9 +384,16 @@ namespace OpenAstroAra.Server.Services {
             var sweep = PlanSweep(raDeg, decDeg, maxSweepDeg, session, side);
             var awaySign = sweep.DirSign;
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
-                stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg);
+                stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg,
+                CameraFor(stage ?? PolarAlignStages.Fine, settings));
             return (plan, new RunBand(awaySign, maxSweepDeg), sweep);
         }
+
+        /// <summary>#2082 — the camera a start at <paramref name="stage"/> measures with: the main camera for the coarse stage
+        /// ("Rough first (main camera)", offered after the guide camera could not solve the pole field), else the
+        /// profile's <c>polar_align.camera</c> — for the fine measurement, its live loop and the check alike.</summary>
+        internal static string CameraFor(string stage, PolarAlignSettingsDto settings) =>
+            stage == PolarAlignStages.Coarse ? PolarAlignCameras.Main : settings.Camera;
 
         /// <inheritdoc />
         public async Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct) {
@@ -366,6 +401,9 @@ namespace OpenAstroAra.Server.Services {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
             MountPreflight();
+            // #2066 — the same order as Start: an unverified position is refused before the plan reads the pointing, so a
+            // false Home at the pole after a power cycle names the unconfirmed stop, not the on-axis refusal (#2082).
+            await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             // A start that names no stage is the fine measurement (#2082); the plan echoes the request.
             var (plan, _, _) = await PlanStartAsync(stage ?? PolarAlignStages.Fine, settings, ct).ConfigureAwait(false);
@@ -378,9 +416,11 @@ namespace OpenAstroAra.Server.Services {
         /// measurement per Start (#2082); each starts from the current pointing (#2048: no Home, no GoTo). Preflight
         /// (connected guider, connected and unparked mount, a configured site latitude, a pointing 3° or more from the
         /// pole, the user's <paramref name="confirmation"/> of the turn direction), then the guide-camera PA-session lease,
-        /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept, except a
-        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which plans and confirms the check
-        /// first (a refusal leaves the loop running), then ends the loop like Stop and starts the check. Throws
+        /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept (refused
+        /// with <c>polar-align-already-running</c> when its confirmation picked the other way of turning RA, #2083), except a
+        /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which checks the mount's clock and
+        /// plans and confirms the check first (those refusals leave the loop running), then ends the loop like Stop and
+        /// starts the check. A mount clock push in flight is waited for first, as a GoTo waits (#2071). Throws
         /// <see cref="InvalidOperationException"/> on a failed preflight (409 by the endpoint; a <see cref="RefusalException"/>
         /// carries its cause). The lease is taken through the custody module before the guider's capture idles and its loop
         /// stops; when either fails, the lease is given back.
@@ -432,6 +472,11 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 endRequestsAtCall = _endRequests;
             }
+            // #2071 — like a GoTo, a Start just after the app connects waits (up to about 10 s) for the mount clock push in
+            // flight; the gate is read again below, after the preflight. Before the lock: a Stop must not wait behind it.
+            if (_mountClock is { } clockGate) {
+                await clockGate.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
+            }
             if (handOver) {
                 var adjustWatch = await EndAdjustForCheckAsync(confirmation, ct).ConfigureAwait(false);
                 // The loop's end is the one end request this Start makes itself; any other since the call still counts.
@@ -458,6 +503,16 @@ namespace OpenAstroAra.Server.Services {
             try {
                 lock (_gate) {
                     if (_active) {
+                        // #2083 — a retry of the same start is a no-op accept; a start that confirmed the other way of
+                        // turning RA (by hand while the motor turns it, or the reverse) is refused: the user was promised
+                        // something the running run does not do. _handTurn records the last run, so this comparison is
+                        // valid only here, inside if (_active): moved out, it would compare against a finished run.
+                        if (confirmation is not null && confirmation.HandTurn != _handTurn) {
+                            throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning,
+                                _handTurn
+                                    ? "polar alignment is already running, and in it you turn RA by hand — stop it first, then start again"
+                                    : "polar alignment is already running, and it turns RA with the mount's motor — stop it first, then start again");
+                        }
                         return Accepted("polar-align.start", idempotencyKey);
                     }
                 }
@@ -483,12 +538,11 @@ namespace OpenAstroAra.Server.Services {
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
+                ThrowIfMountClockNotVerified();
                 // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
-                if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
-                    throw TelescopeService.PositionUnverifiedRefusal(unverified);
-                }
+                await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
                 // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
                 // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
                 // Taken before the start reading below: a GoTo the daemon sent before is seen on it (slewing, or where it
@@ -502,15 +556,19 @@ namespace OpenAstroAra.Server.Services {
                 // pointed the mount, so the user has to see where it will turn.
                 var (plan, band, sweep) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
                 ThrowIfNotConfirmed(confirmation, plan);
+                ThrowIfClutchTurned(confirmation); // #2083 — the mount's reading is off by a clutch turn: no motor run
+                // #2083 — the user's choice in the confirm step: turn RA by hand, so the run moves nothing.
+                band = band with { HandTurn = confirmation!.HandTurn };
                 var mainCamera = _mainCamera;
-                if (stage == PolarAlignStages.Coarse) {
+                var camera = plan.Camera;
+                if (camera == PolarAlignCameras.Main) {
                     // Before the mount moves: a camera that is off would otherwise turn the mount and then
-                    // fail the seed as a sky problem.
-                    var coarseUnavailable = mainCamera is null
-                        ? "the coarse measurement needs the main camera's plate solver, which this daemon has not wired up — start the fine measurement instead"
+                    // fail the seed as a sky problem. The rough step, and every measurement with polar_align.camera = main.
+                    var mainUnavailable = mainCamera is null
+                        ? "a main-camera measurement needs the main camera's plate solver, which this daemon has not wired up — measure with the guide camera instead"
                         : await mainCamera.UnavailableReasonAsync(ct).ConfigureAwait(false);
-                    if (coarseUnavailable is not null) {
-                        throw new InvalidOperationException(coarseUnavailable);
+                    if (mainUnavailable is not null) {
+                        throw new InvalidOperationException(mainUnavailable);
                     }
                 }
                 // Every stage opens in its own first state: the run starts from where the mount points (#2048).
@@ -557,6 +615,8 @@ namespace OpenAstroAra.Server.Services {
                         _active = true;
                         _state = initialState;
                         _stage = stage;
+                        _camera = camera;
+                        _measurementNoisy = false;
                         _checkSolvesDone = 0;
                         _checkResult = null;
                         _readoutCaution = null;
@@ -571,9 +631,14 @@ namespace OpenAstroAra.Server.Services {
                         _waitingForCapture = false;
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
+                        _handTurn = band.HandTurn;
+                        _handTurnWait = null;
                         gen = ++_generation;
+                        runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
+                        _runFence = (gen, runEnd.Fence);
                         var (baselineEpoch, baselineOwn) = RunAbortBaseline();
-                        _abortWatch = (gen, baselineEpoch, baselineOwn);
+                        runEnd.MountSession = _motionControl.SessionEpoch; // #2066 — a change while the run runs leaves the pose unverified
+                        _abortWatch = (gen, baselineEpoch, baselineOwn, runEnd);
                         _runSession = (gen, sweep.SessionEpoch); // #2066 — a reading of another mount session fails the run
                         // #2066 — the last run is over (its exit ran above): a motion mark it left (a takeover, which confirms
                         // no stop; a stop that was never confirmed) is not this run's, which has moved nothing yet, and must
@@ -597,10 +662,15 @@ namespace OpenAstroAra.Server.Services {
                 var runToken = runCts.Token;
                 LogStarted(stage);
                 LogStartConfirmed(plan.Direction, plan.StepDeg, plan.MaxSweepDeg);
+                if (band.HandTurn) {
+                    LogHandTurnRun();
+                }
                 // `started` goes out BEFORE the run task exists: the run's first stage event is only a directory
                 // create and a few mount reads away, and a client must fold `started` first.
-                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
-                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
+                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject {
+                    ["state"] = initialState, ["stage"] = stage, ["camera"] = camera, ["hand_turn"] = band.HandTurn,
+                }).ConfigureAwait(false);
+                _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, camera, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
             } catch {
                 startHold?.Dispose(); // #2066 — a start that failed before its run took the mount gives it back
@@ -628,6 +698,13 @@ namespace OpenAstroAra.Server.Services {
                 new Dictionary<string, object?> { ["direction"] = plan.Direction });
         }
 
+        /// <summary>#2071 — the routine turns the mount against its sidereal time: refused while its clock is not verified.</summary>
+        private void ThrowIfMountClockNotVerified() {
+            if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
+                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+            }
+        }
+
         /// <summary>The run is in its live adjust loop (adjusting, or paused on failed solves).</summary>
         private bool IsAdjusting() {
             lock (_gate) {
@@ -636,17 +713,19 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>#2082 — the Check button of the adjust screen: a confirmed Start(check) through the session's sweep plan
-        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The check is planned and its
-        /// confirmation verified while the loop still runs (a refusal leaves it running), then the loop ends like Stop (the
-        /// mount stopped and confirmed, its readout kept as the last run's) before the check starts. It makes exactly one
-        /// end request (<see cref="StartAsync"/> allows that one and no other).</summary>
+        /// (<see cref="PlanSweep"/>), so the 30° limit holds across repeated Checks. The mount's clock is checked, the check
+        /// planned and its confirmation verified while the loop still runs (any of those refusals leaves it running), then
+        /// the loop ends like Stop (the mount stopped and confirmed, its readout kept as the last run's) before the check
+        /// starts. It makes exactly one end request (<see cref="StartAsync"/> allows that one and no other).</summary>
         /// <returns>The loop's reading of the mount's stop count (<c>_abortWatch</c>), for the check to keep; null when the
         /// loop had none (a mount that keeps no count).</returns>
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
             MountPreflight();
+            ThrowIfMountClockNotVerified(); // #2071: a refused Check leaves the loop running, the mount untouched
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             var (plan, _, _) = await PlanStartAsync(PolarAlignStages.Check, settings, ct).ConfigureAwait(false);
             ThrowIfNotConfirmed(confirmation, plan);
+            ThrowIfClutchTurned(confirmation); // #2083 — refused while the loop still runs
             (long Epoch, long OwnAborts)? watch;
             lock (_gate) {
                 watch = _abortWatch is { } w && w.Gen == _generation ? (w.Epoch, w.OwnAborts) : null;
@@ -733,22 +812,41 @@ namespace OpenAstroAra.Server.Services {
                 cts?.Dispose();
                 if (!unwound && end is { MountStopped: null } && endRequest != TakenOver) {
                     // The run is stuck in a call that ignores cancellation and never reached its exit: confirm the stop here,
-                    // and turn tracking off now (it may never unwind; a mount left tracking runs on toward the pier). An end
-                    // that hands tracking back leaves it as it is: the run gives it back when it unwinds.
-                    var stopped = await StopMountMotionAsync(outcome).ConfigureAwait(false);
-                    end.MountStopped = stopped;
-                    if (!stopped || !HandBackWanted(finished: outcome == "complete", handedToGuiding: endRequest == HandedToGuiding)) {
-                        TrackingOffBestEffort(outcome);
+                    // and set tracking now as the exit would (it may never unwind; a mount left tracking runs on toward the
+                    // pier). #2066 — an end that hands tracking back does the hand-back here too: this end fences the run
+                    // below, so its exit writes nothing when it unwinds. A takeover that gave up waiting fenced the run's
+                    // stops meanwhile (null): the mount is its own, nothing is written.
+                    var stopped = await StopMountMotionAsync(outcome, end.Fence).ConfigureAwait(false);
+                    if (stopped is not null) {
+                        NotePoseUnverifiedAfterRun(end, stopped);
                     }
+                    lock (_gate) {
+                        // #2066 — a finding the run's own exit made meanwhile stands: a "not confirmed" is never overwritten.
+                        end.MountStopped ??= stopped;
+                    }
+                    if (stopped is not null && !StopsFenced(end.Fence)) {
+                        ApplyExitTracking(end.PriorTracking, finished: outcome == "complete",
+                            handedToGuiding: endRequest == HandedToGuiding, stopped, outcome);
+                    }
+                }
+                if (!unwound && end is not null && !StopsFenced(end.Fence)) {
+                    // #2066 — the stuck run may unwind at any later time; its exit would then stop the mount and turn tracking
+                    // off in the middle of whatever the mount does by then (a park, a GoTo, the user's imaging). This end
+                    // answered for the mount: fence the run's stops.
+                    FenceStops();
+                    LogAbandonedRunFenced();
                 }
                 // #2066 (ARA-2) — the run is over: the mount's motion owner goes back (a run that unwound gave it back in its
                 // exit already; a stuck one gives it back here, after the stop above).
                 end?.ReleaseHold();
-                var mountNotStopped = end?.MountStopped == false;
+                bool mountNotStopped;
                 bool becameStopped;
                 bool reportNotStopped = false;
                 bool wasActive;
                 lock (_gate) {
+                    // #2066 — read under the lock the run's exit records its finding in (ExitMountOnceAsync): a finding that
+                    // lands after this read is told below, as this end marks the run reported, or by the run after the mark.
+                    mountNotStopped = end?.MountStopped == false;
                     wasActive = _active;
                     _active = false;
                     if (wasActive && outcome != EndedBySequence) {
@@ -759,6 +857,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                     // The run's own gen-fenced resets are no-ops once the generation moved on above.
                     _waitingForCapture = false;
+                    _handTurnWait = null; // #2083 — the wait's own reset is one of them: no run waits for a turn now
                     // A terminal "failed" or "checked" is a real outcome a polling client must still
                     // see — a late/stray Stop must not clobber it back to "stopped" (both already
                     // published their event, wrote their row and released the lease). The user's own
@@ -769,7 +868,7 @@ namespace OpenAstroAra.Server.Services {
                         // Never "stopped" for a mount that may still move: the client shows the failure and its sentence.
                         _state = "failed";
                         becameStopped = false;
-                        reportNotStopped = true;
+                        reportNotStopped = end is not null && ClaimNotStoppedReportLocked(end);
                     } else if (becameStopped) {
                         _state = "stopped";
                     }
@@ -786,7 +885,21 @@ namespace OpenAstroAra.Server.Services {
                 } else if (becameStopped) {
                     await PublishStateEventAsync(WsEventCatalog.PolarAlignStopped, "stopped").ConfigureAwait(false);
                 }
-                end?.MarkReported();
+                bool notStoppedLate = false;
+                lock (_gate) {
+                    // #2066 — marked under the lock the run's exit records its finding in: a "not confirmed" that landed after
+                    // the read above is told here, one after this mark by the run, never by neither and never twice.
+                    if (end is not null) {
+                        end.MarkReported();
+                        notStoppedLate = ClaimNotStoppedReportLocked(end);
+                        if (notStoppedLate && _state == "stopped") {
+                            _state = "failed";
+                        }
+                    }
+                }
+                if (notStoppedLate) {
+                    await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
+                }
                 return Accepted(operationType, idempotencyKey);
             } finally {
                 _opLock.Release();
@@ -869,18 +982,21 @@ namespace OpenAstroAra.Server.Services {
         /// task is reported as reason <c>internal_error</c>.</summary>
         [SuppressMessage("Design", "CA1032:Implement standard exception constructors",
             Justification = "Private, never serialized or thrown without a reason code; the standard ctors would allow constructing it without one.")]
-        private sealed class RoutineFailedException(string reason, string message, bool mountTakenOver = false) : Exception(message) {
+        private sealed class RoutineFailedException(string reason, string message, bool mountTakenOver = false, string? stoppedBy = null) : Exception(message) {
             public string Reason { get; } = reason;
             /// <summary>#2066 — the stop that ended the run handed the mount to its sender (Emergency Stop, a park, a Find
             /// Home): the exit leaves the mount to it.</summary>
             public bool MountTakenOver { get; } = mountTakenOver;
+            /// <summary>#2107 — for <see cref="SlewAbortedExternally"/>: the reason the stop from outside was counted with
+            /// (<see cref="MountStopReasons"/>), sent as the error event's <c>stopped_by</c>; null when not known.</summary>
+            public string? StoppedBy { get; } = stoppedBy;
         }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "The run task is the routine's top-level boundary: any escaped exception must land in the 'failed' state + WS error event, never fault an unobserved background task.")]
         private async Task RunRoutineAsync(
                 IGuideCaptureLink guiderClient, IPolarAlignMainCameraSolver? mainCamera, SiteSettingsDto site, PolarAlignSettingsDto settings, string stage,
-                RunBand band, int gen, int startSeq, RunEnd end, CancellationToken ct) {
+                string camera, RunBand band, int gen, int startSeq, RunEnd end, CancellationToken ct) {
             // Per-run unique dir: an abandoned (zombie) run and its successor must never share
             // files — this run's cleanup deletes only its own directory.
             var workDir = Path.Combine(Path.GetTempPath(), "ara-polar-align", Guid.NewGuid().ToString("N"));
@@ -897,6 +1013,7 @@ namespace OpenAstroAra.Server.Services {
             // check's verdict is reported (the mount is safe by the time the client hears of the end), else in the finally.
             var exited = false;
             bool? exitStopped = null;
+            var tellNotStopped = false;
             async Task<bool?> ExitMountOnceAsync(bool finished, string why, bool handedToGuiding = false, bool takenOver = false) {
                 if (exited) {
                     return exitStopped;
@@ -907,10 +1024,11 @@ namespace OpenAstroAra.Server.Services {
                     LogExitLeftToSuccessor();
                     return null;
                 }
-                if (takenOver || end.Requested == TakenOver) {
+                if (takenOver || end.Requested == TakenOver || StopsFenced(end.Fence)) {
                     // #2066 — Emergency Stop, the safety park, a park or a Find Home owns the mount now: it stops and checks
                     // the mount itself (Emergency Stop's second pass), or moves it on purpose. A stop round from here would
-                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound.
+                    // abort the park, and the confirmation (up to 8 s) would hold Emergency Stop's rung past its bound. A
+                    // fenced run (a takeover gave up waiting for it, or an end abandoned it) is in the same place.
                     LogExitLeftToTakeover(why);
                     return null;
                 }
@@ -918,10 +1036,35 @@ namespace OpenAstroAra.Server.Services {
                     _exitsInFlight++;
                 }
                 try {
-                    exitStopped = await StopMountMotionAsync(why).ConfigureAwait(false);
-                    end.MountStopped = exitStopped;
+                    exitStopped = await StopMountMotionAsync(why, end.Fence).ConfigureAwait(false);
+                    if (exitStopped is null) {
+                        // Fenced while it stopped the mount: the mount is a takeover's now, no tracking write.
+                        LogExitLeftToTakeover(why);
+                        return null;
+                    }
+                    // #2066 — an unconfirmed stop (or a mount that reconnected while the run ran) leaves the pose unverified.
+                    NotePoseUnverifiedAfterRun(end, exitStopped);
+                    lock (_gate) {
+                        // #2066 — recorded under the lock the stop path reads it and marks the run reported in
+                        // (EndRoutineAsync): once the stop path has told the client the run ended, the finding is this run's
+                        // to tell; before, the stop path tells it. Never by neither, never twice.
+                        end.MountStopped = exitStopped;
+                        tellNotStopped = end.Reported && ClaimNotStoppedReportLocked(end);
+                        if (tellNotStopped && _state == "stopped" && _startSeq == startSeq) {
+                            _state = "failed"; // never "stopped" for a mount that may still move (no newer run owns the state)
+                        }
+                    }
                     // #2089 — where this run left the mount: the next start tells a continued pose from a moved one by it.
                     await NoteMountLeftAfterStopAsync().ConfigureAwait(false);
+                    if (StopsFenced(end.Fence)) {
+                        // #2066 — fenced during that read (it may hang): the mount is a takeover's now, its park may be under
+                        // way, and a tracking write would land between the park's tracking on and its Park.
+                        LogExitLeftToTakeover(why);
+                        if (tellNotStopped) {
+                            await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
+                        }
+                        return exitStopped;
+                    }
                     // Read again after the stop: a Stop or a sequence start that landed during it turns a finished run into
                     // a stopped one (tracking off), and Guiding taking the camera meanwhile still gets its hand-back.
                     var requested = end.Requested;
@@ -934,7 +1077,7 @@ namespace OpenAstroAra.Server.Services {
                         _exitsInFlight--;
                     }
                 }
-                if (exitStopped == false && end.Reported) {
+                if (tellNotStopped) {
                     // The stop path already told the client this run ended: the finding is this run's to report.
                     await PublishErrorAsync(MountDidNotStop, CutPowerSentence).ConfigureAwait(false);
                 }
@@ -955,6 +1098,7 @@ namespace OpenAstroAra.Server.Services {
                     throw new RoutineFailedException("mount_parked", MountParkedMessage);
                 }
                 priorTracking = mountInfo.TrackingEnabled;
+                end.PriorTracking = priorTracking;
                 // One PA-session lease renewer for the whole run: the stages share its clock, so a
                 // hand-off never renews twice back to back.
                 Func<Task> renew = () => RenewLeaseAsync(ct);
@@ -963,15 +1107,18 @@ namespace OpenAstroAra.Server.Services {
                 // Done; the check ends the run itself (state `checked`). It starts where the mount points: no Home, no GoTo
                 // back (#2048); its turns go the way the user confirmed.
                 ThrowIfStoppedFromOutside(gen); // #2066 — a stop from outside since the Start
-                if (stage == PolarAlignStages.Coarse) {
-                    // StartAsync refused a coarse start without the main camera's solver.
-                    await RunCoarseStageAsync(
-                        mainCamera ?? throw new InvalidOperationException("the coarse stage started without a main-camera solver"),
-                        site, settings, band, renew, gen, ct).ConfigureAwait(false);
-                } else if (stage == PolarAlignStages.Fine) {
-                    await RunFineStageAsync(guiderClient, site, settings, band, workDir, renew, gen, ct).ConfigureAwait(false);
+                // #2082 — the camera the plan named: StartAsync refused a main-camera start without the main camera's solver.
+                var main = camera == PolarAlignCameras.Main
+                    ? mainCamera ?? throw new InvalidOperationException("a main-camera measurement started without a main-camera solver")
+                    : null;
+                if (stage != PolarAlignStages.Check) {
+                    if (main is not null) {
+                        await RunMainCameraStageAsync(stage, main, site, settings, band, renew, gen, ct).ConfigureAwait(false);
+                    } else {
+                        await RunFineStageAsync(guiderClient, site, settings, band, workDir, renew, gen, ct).ConfigureAwait(false);
+                    }
                 } else {
-                    var verdict = await RunCheckStageAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
+                    var verdict = await RunCheckStageAsync(guiderClient, main, workDir, site, settings, band, gen, ct).ConfigureAwait(false);
                     // The check's verdict is a finished run: the mount is stopped and confirmed before the client hears of it.
                     if (await ExitMountOnceAsync(finished: true, "checked").ConfigureAwait(false) == false) {
                         throw new RoutineFailedException(MountDidNotStop, CutPowerSentence);
@@ -985,11 +1132,12 @@ namespace OpenAstroAra.Server.Services {
             } catch (OpenAstroAra.PlateSolving.PlateSolverConfigurationException ex) when (IsCurrent(gen)) {
                 // Solver setup problems (guide optics unset, ASTAP path wrong) are user-fixable —
                 // surface the solver's own actionable message, not internal_error.
-                await FailRoutineAsync("solver_configuration", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                await FailRoutineAsync("solver_configuration", ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (RoutineFailedException ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync(ex.Reason, ex, gen, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver)).ConfigureAwait(false);
+                await FailRoutineAsync(ex.Reason, ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed", takenOver: ex.MountTakenOver),
+                    stoppedBy: ex.StoppedBy).ConfigureAwait(false);
             } catch (Exception ex) when (IsCurrent(gen)) {
-                await FailRoutineAsync("internal_error", ex, gen, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
+                await FailRoutineAsync("internal_error", ex, gen, end, () => ExitMountOnceAsync(finished: false, "failed")).ConfigureAwait(false);
             } catch (Exception ex) {
                 // A superseded (zombie) run: its failure must not touch state, events, the lease, or
                 // the session log the successor run now owns — log and drain quietly.
@@ -1195,25 +1343,99 @@ namespace OpenAstroAra.Server.Services {
 
         // ── capture + solve plumbing ─────────────────────────────────────────────────────────
 
-        /// <summary>Seed frames must solve — retry a few times, then fail the routine (a seed that
-        /// can't solve means clouds/focus problems the live loop can't fix either).</summary>
-        private async Task<PolarAlignSolveOutcome> SolveSeedFrameAsync(
+        /// <summary>#2082 — a point whose solves scatter more than this about their mean is retaken once; still over it,
+        /// the measurement is flagged noisy.</summary>
+        internal const double MaxPointScatterArcsec = 3.0;
+
+        /// <summary>One point of a measurement (a seed or a check point): <see cref="PolarAlignSettingsDto.FramesPerPoint"/>
+        /// frames with the mount still, averaged as unit vectors (#2082), with the rms scatter of the solves about their
+        /// mean logged in arcseconds. A point scattered over <see cref="MaxPointScatterArcsec"/> is retaken once; still
+        /// over it (or with no solve in the retake: the first set stands), the run goes on and its result is flagged noisy
+        /// (<see cref="MarkMeasurementNoisy"/>). A frame that
+        /// does not solve is retried, up to <c>SeedSolveAttempts</c> failures per set; a set with no solve fails the
+        /// routine (a seed that can't solve means clouds/focus problems the live loop can't fix either).</summary>
+        /// <returns>The point's mean pointing and the mean time of its solves (the three-point fit moves each point to
+        /// the last one's time by the Earth's turn since it was taken).</returns>
+        /// <param name="attemptsBefore">Frames already taken under <paramref name="frameId"/> (a hand turn's wait): the
+        /// point's frame ids go on from them.</param>
+        private async Task<(PolarAlignSolveOutcome Point, DateTimeOffset At)> SolveSeedFrameAsync(
                 LiveCapture capture, string frameId,
-                (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct) {
+                (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct,
+                int attemptsBefore = 0) {
+            var frames = FramesPerPoint(settings);
+            var set = (await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore, gen, ct).ConfigureAwait(false))!;
+            LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
+            if (set.ScatterArcsec > MaxPointScatterArcsec) {
+                LogPointRetake(frameId, set.ScatterArcsec, MaxPointScatterArcsec);
+                var retake = await SolvePointSetAsync(capture, frameId, (set.Point.RaDegJnow, set.Point.DecDegJnow), settings, frames,
+                    attemptsBefore: set.Attempts, gen, ct, retake: true).ConfigureAwait(false);
+                if (retake is null) {
+                    // The retake did not solve (a cloud): the first set still stands for the point, flagged noisy.
+                    LogPointRetakeUnsolved(frameId, set.ScatterArcsec);
+                    MarkMeasurementNoisy(gen);
+                    return (set.Point, set.At);
+                }
+                set = retake;
+                LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
+                if (set.ScatterArcsec > MaxPointScatterArcsec) {
+                    LogPointNoisy(frameId, set.ScatterArcsec);
+                    MarkMeasurementNoisy(gen);
+                }
+            }
+            return (set.Point, set.At);
+        }
+
+        /// <summary>#2067 — the circular mean (degrees) of a point's frames' position angles, the frames with none left out;
+        /// null when none has one. Circular: frames at 359° and 1° are 0°, not 180°.</summary>
+        internal static double? MeanPositionAngleDeg(IReadOnlyList<double?> anglesDeg) {
+            double sin = 0, cos = 0;
+            var any = false;
+            foreach (var a in anglesDeg) {
+                if (a is double deg) {
+                    sin += Math.Sin(deg * Math.PI / 180.0);
+                    cos += Math.Cos(deg * Math.PI / 180.0);
+                    any = true;
+                }
+            }
+            return any ? Math.Atan2(sin, cos) * 180.0 / Math.PI : null;
+        }
+
+        /// <summary>The frames each point of a measurement averages (<c>polar_align.frames_per_point</c>, clamped).</summary>
+        private static int FramesPerPoint(PolarAlignSettingsDto settings) =>
+            Math.Clamp(settings.FramesPerPoint, PolarAlignSettingsClamp.MinFramesPerPoint, PolarAlignSettingsClamp.MaxFramesPerPoint);
+
+        /// <summary>One set of a point's frames (<see cref="SolveSeedFrameAsync"/>).</summary>
+        private sealed record PointSet(PolarAlignSolveOutcome Point, DateTimeOffset At, int Solved, int Failed, double ScatterArcsec, int Attempts);
+
+        /// <param name="attemptsBefore">The frames this point took already (a retake): frame ids stay unique.</param>
+        /// <param name="retake">A retake: a set with no solve returns null (the first set stands) and keeps no frame.</param>
+        private async Task<PointSet?> SolvePointSetAsync(
+                LiveCapture capture, string frameId, (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings,
+                int frames, int attemptsBefore, int gen, CancellationToken ct, bool retake = false) {
             var anyFrameReachedSolver = false;
             string? keptFrame = null;
-            for (var attempt = 1; attempt <= SeedSolveAttempts; attempt++) {
-                var timing = new FrameTiming { KeepUnsolvedFrame = attempt == SeedSolveAttempts };
-                // One id per attempt, on frame_started and frame_complete alike.
+            var solves = new List<(PolarAlignSolveOutcome S, DateTimeOffset At)>(frames);
+            var failed = 0;
+            var attempt = attemptsBefore;
+            var frameHint = hint;
+            while (solves.Count < frames && failed < SeedSolveAttempts) {
+                attempt++;
+                // The frame kept for the focal-length measurement: the last one a set with no solve may take.
+                var timing = new FrameTiming { KeepUnsolvedFrame = !retake && solves.Count == 0 && failed == SeedSolveAttempts - 1 };
+                // One id per frame, on frame_started and frame_complete alike.
                 var attemptId = frameId + "-" + attempt.ToString(CultureInfo.InvariantCulture);
-                var s = await capture(attemptId, hint, settings, timing, ct).ConfigureAwait(false);
-                await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : attempt).ConfigureAwait(false);
-                // #2066 — a stop during the exposure or the solve: no further attempt, and no turn after it.
+                var s = await capture(attemptId, frameHint, settings, timing, ct).ConfigureAwait(false);
+                var at = DateTimeOffset.UtcNow;
+                await CompleteFrameAsync(gen, attemptId, s, timing, s.Success ? 0 : failed + 1).ConfigureAwait(false);
+                // #2066 — a stop during the exposure or the solve: no further frame, and no turn after it.
                 ThrowIfStoppedFromOutside(gen);
                 keptFrame = timing.KeptFramePath;
                 if (s.Success) {
-                    return s;
+                    solves.Add((s, at));
+                    frameHint = (s.RaDegJnow, s.DecDegJnow); // the mount is still: the next frame solves near this one
+                    continue;
                 }
+                failed++;
                 // _lastCaptureFault reflects THIS attempt (set on any capture-layer fault, cleared
                 // when the fetch delivers a frame to the solver) — a null here means the attempt
                 // failed in the SOLVER, i.e. a real focus/sky problem exists regardless of what the
@@ -1225,6 +1447,17 @@ namespace OpenAstroAra.Server.Services {
                         anyFrameReachedSolver = true;
                     }
                 }
+            }
+            if (solves.Count > 0) {
+                var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.ConvertAll(p => (p.S.RaDegJnow, p.S.DecDegJnow)));
+                var first = solves[0].At;
+                var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
+                // #2067 ARA-13 — the point keeps its frames' position angle, so the field check sees every point.
+                var positionAngle = MeanPositionAngleDeg(solves.ConvertAll(p => p.S.PositionAngleDeg));
+                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec, positionAngle), meanAt, solves.Count, failed, scatter, attempt);
+            }
+            if (retake) {
+                return null;
             }
             string? captureFault;
             lock (_gate) {
@@ -1240,6 +1473,16 @@ namespace OpenAstroAra.Server.Services {
             throw new RoutineFailedException("seed_solve_failed",
                 $"the {frameId} seed frame failed to solve after {SeedSolveAttempts} attempts — check focus, sky conditions, and the optics configuration of the camera in use"
                 + (measured is { } mm ? $". With no scale hint the frame solves at a scale that implies a guide focal length of about {mm:0} mm: set it in Settings → Guiding if that is your guide scope" : ""));
+        }
+
+        /// <summary>#2082 — a point of this run's measurement stayed scattered after its retake: the status, each progress
+        /// event and the check's verdict say the readout rests on noisy solves.</summary>
+        private void MarkMeasurementNoisy(int gen) {
+            lock (_gate) {
+                if (_generation == gen) {
+                    _measurementNoisy = true;
+                }
+            }
         }
 
         /// <summary>#1715 — one solve with no scale hint on the last unsolved seed frame; null when it does not solve
@@ -1480,12 +1723,15 @@ namespace OpenAstroAra.Server.Services {
         // #2048: the state turns failed at once (a Stop meanwhile must not relabel it), then the mount is stopped and
         // confirmed (exitMount), and only then is the failure reported — with the cut-power sentence when the stop was not
         // confirmed.
-        private async Task FailRoutineAsync(string reason, Exception ex, int gen, Func<Task<bool?>> exitMount) {
+        private async Task FailRoutineAsync(string reason, Exception ex, int gen, RunEnd end, Func<Task<bool?>> exitMount, string? stoppedBy = null) {
             LogRoutineFailed(reason, ex);
             bool claimed;
             lock (_gate) {
                 claimed = _generation == gen; // superseded between the catch filter and here — the successor owns state
                 if (claimed) {
+                    // #2066 — this failure is the run's last event and carries an unconfirmed stop itself (the sentence below):
+                    // neither the stop path nor the exit tells mount_did_not_stop for it again.
+                    end.ReportsItself = true;
                     _state = "failed";
                     _active = false;
                     RememberRunReadoutLocked(); // #2082 — a failed run that had a readout is still the last run
@@ -1507,8 +1753,9 @@ namespace OpenAstroAra.Server.Services {
             if (!claimed) {
                 return;
             }
-            var message = mountStopped == false && reason != MountDidNotStop ? ex.Message + " " + CutPowerSentence : ex.Message;
-            await PublishErrorAsync(reason, message).ConfigureAwait(false);
+            var notStopped = mountStopped == false && reason != MountDidNotStop;
+            var message = notStopped ? ex.Message + " " + CutPowerSentence : ex.Message;
+            await PublishErrorAsync(reason, message, stoppedBy, stopUnconfirmed: notStopped).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("failed", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
@@ -1634,15 +1881,18 @@ namespace OpenAstroAra.Server.Services {
             string? stage;
             string? caution;
             double? decSpread;
+            bool noisy;
             lock (_gate) {
                 stage = _stage;
                 caution = _readoutCaution;
                 decSpread = _decSpreadArcsec;
+                noisy = _measurementNoisy;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
                 ["readout_caution"] = caution,
                 ["dec_spread_arcsec"] = decSpread,
+                ["measurement_noisy"] = noisy,
                 ["iteration"] = iteration,
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),
                 ["azimuth_error_arcmin"] = Math.Round(azErrArcmin, 2),
@@ -1695,11 +1945,35 @@ namespace OpenAstroAra.Server.Services {
             return PublishAsync(WsEventCatalog.PolarAlignFrameComplete, payload);
         }
 
-        private Task PublishErrorAsync(string reason, string message) =>
-            PublishAsync(WsEventCatalog.PolarAlignError, new JsonObject {
+        /// <param name="stoppedBy">#2107 — for <see cref="SlewAbortedExternally"/>: what stopped the mount
+        /// (<see cref="MountStopReasons"/>), so the app words the end in its own language; left out when not known.</param>
+        /// <param name="stopUnconfirmed">#2066 — the run's exit could not confirm its stop, and this error carries the
+        /// cut-power sentence itself (no <c>mount_did_not_stop</c> follows): an app that words the end from
+        /// <paramref name="stoppedBy"/> keeps the warning. Sent only when true.</param>
+        private Task PublishErrorAsync(string reason, string message, string? stoppedBy = null, bool stopUnconfirmed = false) {
+            var payload = new JsonObject {
                 ["reason"] = reason,
                 ["message"] = message,
-            });
+            };
+            if (stoppedBy is not null) {
+                payload["stopped_by"] = stoppedBy;
+            }
+            if (stopUnconfirmed) {
+                payload["stop_unconfirmed"] = true;
+            }
+            return PublishAsync(WsEventCatalog.PolarAlignError, payload);
+        }
+
+        /// <summary>#2066 — under <c>_gate</c>: whether the caller is the one to tell the client that the run's stop was not
+        /// confirmed (<c>mount_did_not_stop</c>), and if so claims it. Not when the stop was confirmed or is not known yet,
+        /// when the run's own failure report carries it, or when it was told already.</summary>
+        private static bool ClaimNotStoppedReportLocked(RunEnd end) {
+            if (end.MountStopped != false || end.ReportsItself || end.NotStoppedTold) {
+                return false;
+            }
+            end.NotStoppedTold = true;
+            return true;
+        }
 
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "WS publish is best-effort; a broadcaster fault must not abort the routine. Log-and-recover boundary.")]
@@ -1723,6 +1997,18 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4527, Level = LogLevel.Information, Message = "§45 polar-align {Frame} solved at RA {RaDeg:F4}° Dec {DecDeg:F4}° (JNOW)")]
         private partial void LogSeedSolve(string frame, double raDeg, double decDeg);
+
+        [LoggerMessage(EventId = 4574, Level = LogLevel.Information, Message = "§45 polar-align {Frame}: {Solved} solves averaged ({Failed} failed), mean RA {RaDeg:F5}° Dec {DecDeg:F5}° (JNOW), rms scatter {ScatterArcsec:F2}″")]
+        private partial void LogPointScatter(string frame, int solved, int failed, double raDeg, double decDeg, double scatterArcsec);
+
+        [LoggerMessage(EventId = 4575, Level = LogLevel.Information, Message = "§45 polar-align {Frame}: rms scatter {ScatterArcsec:F2}″ is over {LimitArcsec:F0}″ — retaking the point once")]
+        private partial void LogPointRetake(string frame, double scatterArcsec, double limitArcsec);
+
+        [LoggerMessage(EventId = 4576, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: still {ScatterArcsec:F2}″ rms after the retake — the result is flagged noisy")]
+        private partial void LogPointNoisy(string frame, double scatterArcsec);
+
+        [LoggerMessage(EventId = 4577, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: the retake did not solve — the first set ({ScatterArcsec:F2}″ rms) stands for the point and the result is flagged noisy")]
+        private partial void LogPointRetakeUnsolved(string frame, double scatterArcsec);
 
         [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
         private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);

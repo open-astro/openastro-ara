@@ -188,6 +188,43 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_shutdown_whose_Polar_Align_takeover_times_out_stops_tracking_since_the_held_mount_refuses_its_park() {
+            // End Night's (and the unattended shutdown's) ladder ends Polar Align through its takeover before its Find Home
+            // and park. A run stuck in a call that ignores cancellation outlasts the takeover's bound: the run is fenced but
+            // still holds the mount, so the mediator refuses the Find Home and the park, and the park step falls back to
+            // tracking off: an unattended mount must never be left tracking.
+            var mount = PolledGemAt(-4.0);
+            mount.MediatorRefusesHomeAndParkWhileOwned = true;
+            var ws = new WsRecorder();
+            var solver = new StuckSolver();
+            using var svc = NewGemServiceWith(mount, ws, solver);
+            svc.TakeoverStopBound = TimeSpan.FromMilliseconds(200); // the daemon's 9 s
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await solver.Entered.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            var ladder = new ShutdownLadder(telescope: mount, polarAlign: () => svc);
+
+            try {
+                Assert.That(mount.Tracking, Is.True, "the mount tracks before the shutdown");
+                var watch = System.Diagnostics.Stopwatch.StartNew();
+                var home = await ladder.FindHomeAsync().ConfigureAwait(false);
+                var rest = await ladder.RestMountAsync().ConfigureAwait(false);
+                var took = watch.Elapsed;
+
+                Assert.Multiple(() => {
+                    Assert.That(took, Is.LessThan(TimeSpan.FromSeconds(10)), "each takeover answered at Polar Align's bound, not the ladder's 60 s");
+                    Assert.That(mount.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "the fenced run still holds the mount");
+                    Assert.That(home.Outcome, Is.EqualTo(LadderOutcome.Failed), home.Text);
+                    Assert.That(rest.Rest, Is.EqualTo(MountRest.TrackingOff), rest.Step.Text);
+                    Assert.That(mount.Tracking, Is.False, "tracking stopped instead of the park");
+                    Assert.That(mount.Motions.Where(m => m.Kind is MotionKind.FindHome or MotionKind.Park), Is.Empty,
+                        "no Find Home or park reached the mount. " + mount.Describe());
+                });
+            } finally {
+                solver.Release();
+            }
+        }
+
+        [Test]
         public async Task A_Start_that_drains_a_run_that_never_unwound_gives_that_runs_motion_owner_back() {
             // A run failed by itself, stopped the mount and reported it, but its task never unwound (here its session row
             // hangs). A new Start waits for it only so long; a Start that is then refused before it takes the mount must

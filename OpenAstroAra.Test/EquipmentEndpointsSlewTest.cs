@@ -103,14 +103,14 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_park_while_polar_align_turns_the_mount_is_refused() {
             var telescope = new Mock<ITelescopeService>();
-            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            telescope.Setup(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.park", DateTimeOffset.UtcNow, null));
             var polarAlign = new Mock<IPolarAlignService>();
             polarAlign.Setup(p => p.IsMovingMount).Returns(true);
 
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None));
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
-            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
 
             polarAlign.Setup(p => p.IsMovingMount).Returns(false);
             var accepted = await EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None);
@@ -155,7 +155,7 @@ namespace OpenAstroAra.Test {
             Assert.That(new[] { goTo!.Cause, park!.Cause, home!.Cause }, Is.All.EqualTo(RefusalCatalog.PolarAlignMovingMount));
             Assert.That(goTo.Message, Does.Contain("Stop polar alignment first"));
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
-            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             telescope.Verify(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
             var sync = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
                 new SlewRequestDto(5.5, -12.25, Sync: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));

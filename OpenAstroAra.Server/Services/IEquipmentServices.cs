@@ -99,8 +99,17 @@ public interface ITelescopeService : IMountMotionControl {
     /// on live hardware is always an explicit two-step.</summary>
     Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>The park that never yields to the mount's motion owner: the safety and fault parks call it (they end Polar
+    /// Align through its takeover first). #2066 — the user's park is <see cref="ParkUnlessMotionOwnedAsync"/>.</summary>
     Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#2066 (ARA-2) — the user's park (<c>POST /park</c>): as <see cref="ParkAsync"/>, but counted in the motion
+    /// dispatch as a REST GoTo is. Refused (<c>polar-align-moving-mount</c>) when a routine took the mount's motion owner
+    /// during its checks, and while it is on its way no routine can take the owner.</summary>
+    Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>The user's Find Home (<c>POST /home</c>; nothing else calls it). #2066 (ARA-2) — counted in the motion dispatch
+    /// as <see cref="ParkUnlessMotionOwnedAsync"/> is.</summary>
     Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
     Task SetTrackingAsync(bool enabled, CancellationToken ct);
 
@@ -154,6 +163,12 @@ public interface ITelescopeService : IMountMotionControl {
     /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
     /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
     Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors marks the mount's position unverified with
+    /// <paramref name="reason"/> (<c>stop_unconfirmed</c>): its stop was not confirmed, or the mount reconnected while it
+    /// ran. GoTo, Park, Home and polar alignment are then refused, as after a power loss, until
+    /// <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
+    void MarkPositionUnverified(string reason) { }
 }
 
 public interface IFocuserService {

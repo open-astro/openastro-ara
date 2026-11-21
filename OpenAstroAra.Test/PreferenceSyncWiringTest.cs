@@ -123,15 +123,18 @@ namespace OpenAstroAra.Test {
             Assert.That(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All.Select(c => c.Token), Does.Contain(reason));
         }
 
-        /// <summary>Subscribes first, sends the request, and returns the payload of the first event of
-        /// <paramref name="type"/> (empty when none arrives within 10 s).</summary>
+        /// <summary>Subscribes on the calling thread before the request starts, sends the request, and
+        /// returns the payload of the first event of <paramref name="type"/> (empty when none arrives
+        /// within 10 s). ReadAllAsync registers the subscriber at call time, so an event published
+        /// synchronously by the request is never missed, however late the reader task starts.</summary>
         private async Task<string> Collect(Func<Task<HttpResponseMessage>> request, string type) {
             var ws = app.Services.GetRequiredService<IWsEventChannel>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var found = new TaskCompletionSource<string>();
+            var stream = ws.ReadAllAsync(cts.Token);
             var reader = Task.Run(async () => {
                 try {
-                    await foreach (var e in ws.ReadAllAsync(cts.Token)) {
+                    await foreach (var e in stream) {
                         if (e.Type == type) {
                             found.TrySetResult(e.Payload.GetRawText());
                             return;
