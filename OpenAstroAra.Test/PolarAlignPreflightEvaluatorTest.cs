@@ -171,6 +171,7 @@ namespace OpenAstroAra.Test {
                 }
                 Assert.That(CauseOf(noLongitude), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet));
                 Assert.That(CauseOf(noLst), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet));
+                Assert.That(CauseOf(unsetSite), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet), "0°, 0° refuses as an unset site, not a bad latitude");
                 Assert.That(Check(unsetSite, PolarAlignPreflightChecks.SiteLongitudeLst).Detail, Does.Contain("never set"));
                 Assert.That(Check(greenwich, PolarAlignPreflightChecks.SiteLongitudeLst).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok),
                     "longitude 0° with a real latitude is a real site");

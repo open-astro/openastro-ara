@@ -189,7 +189,10 @@ internal static class PolarAlignPreflightEvaluator {
         var lonRow = rows[PolarAlignPreflightChecks.SiteLongitudeLst];
         try {
             var site = inputs.Site();
-            if (double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90) {
+            if (site.LatitudeDeg == 0 && site.LongitudeDeg == 0) {
+                // #2083 — 0°, 0° is a site that was never set: refuse as unset, not as a bad latitude.
+                latRow.Fail(new RefusalException(RefusalCatalog.PolarAlignSiteNotSet, SiteNotSetMessage), "Set your site in Settings › Site.");
+            } else if (double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90) {
                 latRow.Ok(string.Create(CultureInfo.InvariantCulture, $"The site's latitude is {site.LatitudeDeg:0.0}°."));
             } else {
                 latRow.Fail(new InvalidOperationException(SiteLatitudeMessage), "Set the site's latitude (not 0°) in Settings › Site.");
