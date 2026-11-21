@@ -1502,6 +1502,31 @@ const List<Setting> settingsRegistry = [
     defaultValue: null,
     profilePath: 'polar_align.coarse_exposure_seconds',
   ),
+  // #2068 per mount (profile `polar_align.mount_clearance`, keyed by the
+  // mount): the counterweight limit and the clearance confirmation, set in
+  // the clearance dialog. No Polar align motion until it is confirmed.
+  Setting(
+    id: 'img.polar.max_cw_angle_deg',
+    tier: SettingTier.advanced,
+    label: 'Counterweight limit (°)',
+    description: 'How far Polar align may turn this mount\'s counterweight up from counterweight-down (0° counterweights down, 90° horizontal), as you measured it with the hand controller. Kept for each mount, between 10° and 75°. Set it in the clearance dialog.',
+    keywords: ['polar', 'alignment', 'counterweight', 'limit', 'clearance', 'pier', 'collision', 'cw'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.doubleRange(min: 10, max: 75, step: 5),
+    defaultValue: null,
+    profilePath: 'polar_align.mount_clearance',
+  ),
+  Setting(
+    id: 'img.polar.clearance_confirmed',
+    tier: SettingTier.advanced,
+    label: 'Clearance confirmed',
+    description: 'You checked with the hand controller that this mount\'s counterweight, tube and cables clear the pier and tripod up to its counterweight limit. Polar align does not move a mount until its clearance is confirmed. Kept for each mount.',
+    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.bool(),
+    defaultValue: null,
+    profilePath: 'polar_align.mount_clearance',
+  ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig
   // without a guider. State lives in `unguidedSettingsProvider` (profile
   // section `unguided`).

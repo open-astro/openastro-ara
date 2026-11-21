@@ -555,7 +555,19 @@ public sealed record PolarAlignSettingsDto(
     // #2048: NINA's StopTrackingWhenDone, on by default like NINA's ("to not run into pier collisions").
     // On: every end of a run turns tracking off. Off: a run that finishes (Done, or the check's verdict)
     // gives back the tracking it found; a Stop or a failure still leaves tracking off.
-    bool StopTrackingWhenDone = true);
+    bool StopTrackingWhenDone = true,
+    // #2068 (ARA-8, ARA-18): the counterweight limit and the user's clearance confirmation, per mount, keyed by the
+    // mount's identity (PolarAlignPreflightEvaluator.MountKey: its Alpaca UniqueID). No Polar Align motion until the
+    // connected mount's entry says clearance_confirmed. Null reads as empty (PolarAlignSettingsClamp).
+    IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? MountClearance = null);
+
+/// <summary>#2068 — one mount's entry in <see cref="PolarAlignSettingsDto.MountClearance"/>: how far the RA axis may
+/// turn the counterweight up from counterweight-down (<c>MaxCwAngleDeg</c>, 0 = Home, 90 = horizontal; held at 10–75°,
+/// default 60°), and whether the user checked with the hand controller that the counterweight, the tube and the cables
+/// clear the pier and tripod up to it (<c>ClearanceConfirmed</c>).</summary>
+public sealed record PolarAlignMountClearanceDto(
+    double MaxCwAngleDeg = 60.0,
+    bool ClearanceConfirmed = false);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

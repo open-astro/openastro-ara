@@ -23,6 +23,7 @@ const rigPolarAlign = PolarAlignSettings(
   coarseExposureSeconds: 3.0,
   polarAlignerAuto: true,
   stopTrackingWhenDone: true,
+  mountClearance: {},
 );
 
 /// The profile's polar-align section for a widget test, with no HTTP (a Dio

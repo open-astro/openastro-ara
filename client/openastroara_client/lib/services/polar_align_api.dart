@@ -15,6 +15,10 @@ abstract interface class PolarAlignClient {
   /// answers before the mount moves.
   Future<PolarAlignStartPlan> startPlan({String? stage});
 
+  /// #2068 the pre-flight list for a start at [stage]: every check the rig
+  /// refuses a start on. Null from a rig that predates it (a 404).
+  Future<PolarAlignPreflight?> preflight({String? stage});
+
   /// Begin the [plan] the user confirmed: from where the mount points, one
   /// measurement at its stage, turning its direction (#2082: a measurement
   /// never leads into another; a check started from the adjust loop ends the
@@ -82,6 +86,28 @@ class PolarAlignApi implements PolarAlignClient {
       throw const FormatException('start-plan returned a non-object body');
     }
     return PolarAlignStartPlan.fromJson(data, stage: stage);
+  }
+
+  /// #2068 (ARA-18) the Start card's pre-flight list: always 200, a check
+  /// that fails is a row. Null on a 404 (an older rig): the card then shows no
+  /// list and the rig's own start refusals stand.
+  @override
+  Future<PolarAlignPreflight?> preflight({String? stage}) async {
+    final Response<dynamic> res;
+    try {
+      res = await _dio.get<dynamic>(
+        '/api/v1/equipment/polaralign/preflight',
+        queryParameters: stage == null ? null : <String, dynamic>{'stage': stage},
+      );
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('preflight returned a non-object body');
+    }
+    return PolarAlignPreflight.fromJson(data);
   }
 
   /// Begin the routine (preflight: connected guider + mount, configured site)

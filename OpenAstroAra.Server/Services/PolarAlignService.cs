@@ -315,33 +315,6 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The parked refusal's sentence (#2048): Polar Align never unparks the mount.</summary>
         internal const string MountParkedMessage = "Mount is parked — unpark it and point near the pole first";
 
-        /// <summary>#2048 — the mount-side checks every start makes before anything moves, the confirm step's plan
-        /// included: a connected mount, not parked (refused, never unparked: NINA refuses too, PolarAlignment.cs
-        /// 1108-1110), a configured site latitude.</summary>
-        private SiteSettingsDto MountPreflight() {
-            var mountInfo = _mount.GetInfo();
-            if (mountInfo?.Connected != true) {
-                throw new InvalidOperationException("mount is not connected");
-            }
-            if (mountInfo.AtPark) {
-                throw new RefusalException(RefusalCatalog.PolarAlignMountParked, MountParkedMessage);
-            }
-            var site = _profileStore.GetSiteSettings();
-            if (!(double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90)) {
-                throw new InvalidOperationException(
-                    "site latitude must be configured (non-zero) before polar alignment — the routine measures against your site's celestial pole");
-            }
-            return site;
-        }
-
-        /// <summary>#2070 — refuses (<c>mount-position-unverified</c>) while the mount's position is not trusted: a false zero
-        /// after a power loss, or a stop a run could not confirm (#2066, cleared only by a confirmed Home).</summary>
-        private async Task ThrowIfPoseUnverifiedAsync(CancellationToken ct) {
-            if (await _motionControl.PositionUnverifiedReasonAsync(ct).ConfigureAwait(false) is { } unverified) {
-                throw TelescopeService.PositionUnverifiedRefusal(unverified);
-            }
-        }
-
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
         /// they take the axis (this measurement's two turns). <c>HandTurn</c> (#2083): the user makes those turns by hand,
         /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).</summary>
@@ -376,14 +349,12 @@ namespace OpenAstroAra.Server.Services {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
-            MountPreflight();
-            // #2066 — the same order as Start: an unverified position is refused before the plan reads the pointing, so a
-            // false Home at the pole after a power cycle names the unconfirmed stop, not the on-axis refusal (#2082).
-            await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
-            var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
-            // A start that names no stage is the fine measurement (#2082); the plan echoes the request.
-            var (plan, _, _) = await PlanStartAsync(stage ?? PolarAlignStages.Fine, settings, ct).ConfigureAwait(false);
-            return plan with { Stage = stage };
+            // #2068 — the same pre-flight list as Start, refused on its first failing check. #2066: an unverified position
+            // comes before the start pointing, so a false Home at the pole after a power cycle names the unconfirmed stop,
+            // not the on-axis refusal (#2082). A start that names no stage is the fine measurement; the plan echoes it.
+            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, ct).ConfigureAwait(false);
+            ThrowOnFirstFailure(preflight);
+            return StartPlanOf(preflight).Plan with { Stage = stage };
         }
 
         /// <summary>
@@ -509,18 +480,19 @@ namespace OpenAstroAra.Server.Services {
                 }
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
-                var site = MountPreflight();
-                ThrowIfMountClockNotVerified();
-                // #2070 — a false zero after a power loss made the routine slew below the pole (RC51,
-                // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
-                // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
-                await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
-                var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
+                // #2068 (ARA-18) — the pre-flight list the Start card shows, refused on its first failing check: the
+                // mount connected and not parked, the site, #2071's mount clock, #2070's position (a false zero after a
+                // power loss made the routine slew below the pole, RC51 2026-11-19; the motor moves are guarded again in
+                // the mount), the mount's clearance (no motion until it is confirmed), and the start pointing.
+                var preflight = await EvaluatePreflightAsync(stage, ct).ConfigureAwait(false);
+                ThrowOnFirstFailure(preflight);
+                var site = _profileStore.GetSiteSettings();
+                var settings = preflight.Settings;
                 // #2048 — nothing moves without the user's confirmation of this start and its RA turn direction, read from
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
                 // is asked again. NINA asks nothing, but it starts from a GoTo of its own; Ara starts where the user
                 // pointed the mount, so the user has to see where it will turn.
-                var (plan, band, sweep) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
+                var (plan, band, sweep) = StartPlanOf(preflight);
                 ThrowIfNotConfirmed(confirmation, plan);
                 ThrowIfClutchTurned(confirmation); // #2083 — the mount's reading is off by a clutch turn: no motor run
                 // #2083 — the user's choice in the confirm step: turn RA by hand, so the run moves nothing.
@@ -655,13 +627,6 @@ namespace OpenAstroAra.Server.Services {
                 new Dictionary<string, object?> { ["direction"] = plan.Direction });
         }
 
-        /// <summary>#2071 — the routine turns the mount against its sidereal time: refused while its clock is not verified.</summary>
-        private void ThrowIfMountClockNotVerified() {
-            if (_mountClock?.MountClockMotionRefusal() is { } clockRefusal) {
-                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
-            }
-        }
-
         /// <summary>The run is in its live adjust loop (adjusting, or paused on failed solves).</summary>
         private bool IsAdjusting() {
             lock (_gate) {
@@ -677,10 +642,11 @@ namespace OpenAstroAra.Server.Services {
         /// <returns>The loop's reading of the mount's stop count (<c>_abortWatch</c>), for the check to keep; null when the
         /// loop had none (a mount that keeps no count).</returns>
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
-            MountPreflight();
-            ThrowIfMountClockNotVerified(); // #2071: a refused Check leaves the loop running, the mount untouched
-            var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
-            var (plan, _, _) = await PlanStartAsync(PolarAlignStages.Check, settings, ct).ConfigureAwait(false);
+            // #2068 — the check's pre-flight list (#2071's mount clock among it): a refused Check leaves the loop running,
+            // the mount untouched.
+            var preflight = await EvaluatePreflightAsync(PolarAlignStages.Check, ct).ConfigureAwait(false);
+            ThrowOnFirstFailure(preflight);
+            var (plan, _, _) = StartPlanOf(preflight);
             ThrowIfNotConfirmed(confirmation, plan);
             ThrowIfClutchTurned(confirmation); // #2083 — refused while the loop still runs
             (long Epoch, long OwnAborts)? watch;

@@ -89,7 +89,8 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_Start_during_a_mount_clock_push_waits_for_it_and_without_one_is_refused_at_once() {
             var fake = NewFake(answerCaptures: false);
-            string? refusalNow = "Mount clock not verified: Ara is setting and checking the mount's clock. Try again in a moment.";
+            // Open while the plan is read: start-plan refuses on a closed gate too (#2068, the pre-flight list).
+            string? refusalNow = null;
             var push = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var gate = new Mock<IMountClockGate>();
             gate.Setup(g => g.MountClockMotionRefusal()).Returns(() => refusalNow);
@@ -97,6 +98,7 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), ws: ws, mountClock: gate.Object);
             var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            refusalNow = "Mount clock not verified: Ara is setting and checking the mount's clock. Try again in a moment.";
 
             var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None);
 

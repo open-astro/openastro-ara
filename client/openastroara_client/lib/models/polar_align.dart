@@ -449,6 +449,12 @@ class PolarAlignSettings {
   /// found; a Stop or a failure still leaves tracking off.
   final bool stopTrackingWhenDone;
 
+  /// #2068 the counterweight limit and the clearance confirmation per mount,
+  /// keyed by the mount's identity (the rig's [PolarAlignPreflight.mountKey]).
+  /// A mount with no entry has the rig's defaults: the pre-flight list shows
+  /// them ([PolarAlignPreflightPlanned.maxCwAngleDeg]).
+  final Map<String, PolarAlignMountClearance> mountClearance;
+
   const PolarAlignSettings({
     required this.exposureSeconds,
     required this.binning,
@@ -461,6 +467,7 @@ class PolarAlignSettings {
     required this.coarseExposureSeconds,
     required this.polarAlignerAuto,
     required this.stopTrackingWhenDone,
+    required this.mountClearance,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -475,6 +482,9 @@ class PolarAlignSettings {
         'coarse_exposure_seconds': coarseExposureSeconds,
         'polar_aligner_auto': polarAlignerAuto,
         'stop_tracking_when_done': stopTrackingWhenDone,
+        'mount_clearance': {
+          for (final e in mountClearance.entries) e.key: e.value.toJson(),
+        },
       };
 
   PolarAlignSettings copyWith({
@@ -489,6 +499,7 @@ class PolarAlignSettings {
     double? coarseExposureSeconds,
     bool? polarAlignerAuto,
     bool? stopTrackingWhenDone,
+    Map<String, PolarAlignMountClearance>? mountClearance,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -504,6 +515,166 @@ class PolarAlignSettings {
             coarseExposureSeconds ?? this.coarseExposureSeconds,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
         stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
+        mountClearance: mountClearance ?? this.mountClearance,
+      );
+
+  /// This section with [mountKey]'s entry set to [clearance], the other
+  /// mounts' entries kept.
+  PolarAlignSettings withMountClearance(
+    String mountKey,
+    PolarAlignMountClearance clearance,
+  ) => copyWith(mountClearance: {...mountClearance, mountKey: clearance});
+}
+
+/// #2068 one mount's entry in [PolarAlignSettings.mountClearance]: how far the
+/// RA axis may turn the counterweight up from counterweight-down
+/// ([maxCwAngleDeg]: 0° Home, 90° horizontal; the rig holds it at 10–75°), and
+/// whether the user checked with the hand controller that the counterweight,
+/// tube and cables clear the pier and tripod up to it.
+class PolarAlignMountClearance {
+  final double maxCwAngleDeg;
+  final bool clearanceConfirmed;
+
+  const PolarAlignMountClearance({
+    required this.maxCwAngleDeg,
+    required this.clearanceConfirmed,
+  });
+
+  /// The limit the rig accepts ([maxCwAngleDeg] is clamped to it).
+  static const double minMaxCwAngleDeg = 10;
+  static const double maxMaxCwAngleDeg = 75;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'max_cw_angle_deg': maxCwAngleDeg,
+    'clearance_confirmed': clearanceConfirmed,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is PolarAlignMountClearance &&
+      other.maxCwAngleDeg == maxCwAngleDeg &&
+      other.clearanceConfirmed == clearanceConfirmed;
+
+  @override
+  int get hashCode => Object.hash(maxCwAngleDeg, clearanceConfirmed);
+}
+
+/// #2068 the statuses of a [PolarAlignPreflightCheck].
+abstract final class PolarAlignPreflightStatuses {
+  static const ok = 'ok';
+  static const warn = 'warn';
+
+  /// The rig refuses a start on it.
+  static const fail = 'fail';
+
+  /// Not checked by the rig yet; never refuses a start.
+  static const unknown = 'unknown';
+}
+
+/// #2068 the ids of the pre-flight checks the app acts on.
+abstract final class PolarAlignPreflightChecks {
+  static const clearanceConfirmed = 'clearance_confirmed';
+}
+
+/// #2068 one check of the pre-flight list: its id, status and the rig's
+/// sentence for it.
+class PolarAlignPreflightCheck {
+  final String id;
+  final String status;
+  final String detail;
+
+  const PolarAlignPreflightCheck({
+    required this.id,
+    required this.status,
+    required this.detail,
+  });
+
+  bool get fails => status == PolarAlignPreflightStatuses.fail;
+
+  factory PolarAlignPreflightCheck.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflightCheck(
+        id: json['id'] as String? ?? '',
+        status: json['status'] as String? ?? PolarAlignPreflightStatuses.unknown,
+        detail: json['detail'] as String? ?? '',
+      );
+}
+
+/// #2068 what the next Start would do, from the pre-flight list: the RA turn
+/// direction (null when the rig could not plan it), each turn's step, the most
+/// it turns, and the mount's counterweight limit.
+class PolarAlignPreflightPlanned {
+  final String? direction;
+  final double turnStepDeg;
+  final double checkStepDeg;
+  final int turns;
+  final double maxSweepDeg;
+  final double maxCwAngleDeg;
+  final double? startCwAngleDeg;
+  final double? minAltitudeDeg;
+
+  const PolarAlignPreflightPlanned({
+    this.direction,
+    required this.turnStepDeg,
+    required this.checkStepDeg,
+    required this.turns,
+    required this.maxSweepDeg,
+    required this.maxCwAngleDeg,
+    this.startCwAngleDeg,
+    this.minAltitudeDeg,
+  });
+
+  factory PolarAlignPreflightPlanned.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflightPlanned(
+        direction: json['direction'] as String?,
+        turnStepDeg: (json['turn_step_deg'] as num).toDouble(),
+        checkStepDeg: (json['check_step_deg'] as num).toDouble(),
+        turns: (json['turns'] as num).toInt(),
+        maxSweepDeg: (json['max_sweep_deg'] as num).toDouble(),
+        maxCwAngleDeg: (json['max_cw_angle_deg'] as num).toDouble(),
+        startCwAngleDeg: (json['start_cw_angle_deg'] as num?)?.toDouble(),
+        minAltitudeDeg: (json['min_altitude_deg'] as num?)?.toDouble(),
+      );
+}
+
+/// #2068 (ARA-18) Polar Align's pre-flight list
+/// (`GET /api/v1/equipment/polaralign/preflight`): every check a start makes,
+/// in its order. The rig refuses a start on the first that [fails]; a warn or
+/// unknown check never refuses. [mountKey] is the connected mount's key in
+/// [PolarAlignSettings.mountClearance] (null with no mount).
+class PolarAlignPreflight {
+  final bool ready;
+  final List<PolarAlignPreflightCheck> checks;
+  final PolarAlignPreflightPlanned planned;
+  final String? mountKey;
+
+  const PolarAlignPreflight({
+    required this.ready,
+    required this.checks,
+    required this.planned,
+    this.mountKey,
+  });
+
+  /// A check fails: the rig would refuse a start.
+  bool get blocksStart => !ready || checks.any((c) => c.fails);
+
+  PolarAlignPreflightCheck? check(String id) {
+    for (final c in checks) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  factory PolarAlignPreflight.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflight(
+        ready: json['ready'] == true,
+        checks: [
+          for (final c in json['checks'] as List<dynamic>? ?? const [])
+            if (c is Map<String, dynamic>) PolarAlignPreflightCheck.fromJson(c),
+        ],
+        planned: PolarAlignPreflightPlanned.fromJson(
+          json['planned'] as Map<String, dynamic>,
+        ),
+        mountKey: json['mount_key'] as String?,
       );
 }
 

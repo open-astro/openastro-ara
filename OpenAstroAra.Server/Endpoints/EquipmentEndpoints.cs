@@ -872,6 +872,14 @@ public static partial class EquipmentEndpoints {
             .WithName("GetPolarAlignStartPlan")
             .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
             .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
+        // #2068 (ARA-18) — the Start card's pre-flight list: every check a start makes (ok | warn | fail | unknown), in its
+        // order, and what the start would do. Always 200 (a failing check is a row, not an error); 400 for an unknown stage.
+        // Start and start-plan refuse on the first failing check, with its cause.
+        polar.MapGet("/preflight", (string? stage, IPolarAlignService svc, CancellationToken ct) =>
+                PolarAlignPreflightAsync(svc, stage, ct))
+            .WithName("GetPolarAlignPreflight")
+            .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
+            .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
         // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
         // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
         // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
@@ -1294,6 +1302,14 @@ public static partial class EquipmentEndpoints {
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
+    }
+
+    public static async Task<IResult> PolarAlignPreflightAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        if (stage is not null && !PolarAlignStages.IsValid(stage)) {
+            return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
+        }
+        return Results.Ok(await svc.GetPreflightAsync(stage, ct));
     }
 
     public static async Task<IResult> PolarAlignNextAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {

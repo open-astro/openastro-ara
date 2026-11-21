@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart' show PolarAlignClient;
 import '../../state/night_mode_state.dart';
+import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
@@ -25,6 +26,7 @@ import '../help_icon.dart';
 import 'polar_advanced_row.dart';
 import 'polar_align_readout.dart';
 import 'polar_aligner_block.dart';
+import 'polar_preflight_checklist.dart';
 import 'polar_start_confirm.dart';
 import '../adaptive_controls.dart';
 import '../settings/section_load_state.dart';
@@ -720,6 +722,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   }
 
   Widget _idleBody(PolarAlignLive live) {
+    // #2068 — a pre-flight check that fails turns the starts off: the rig would refuse them.
+    final blocked = polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider));
+    final off = _busy || blocked;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -751,6 +756,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           const SizedBox(height: 12),
           _callout(_status!, AraColors.accentError, Icons.error_outline),
         ],
+        const SizedBox(height: 12),
+        const PolarPreflightChecklist(),
         const SizedBox(height: 16),
         Wrap(
           spacing: 16,
@@ -760,13 +767,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             _captureSettings(),
             FilledButton.icon(
               key: const Key('polar-align-start'),
-              onPressed: _busy ? null : () => _start(),
+              onPressed: off ? null : () => _start(),
               icon: const Icon(Icons.play_arrow),
               label: const Text('Start Polar Alignment'),
             ),
             OutlinedButton.icon(
               key: const Key('polar-align-start-check'),
-              onPressed: _busy ? null : _check,
+              onPressed: off ? null : _check,
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(context.l10n.polarCheck),
             ),
@@ -775,7 +782,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             if (live.phase == PolarAlignStates.failed && live.errorReason == 'seed_solve_failed')
               TextButton(
                 key: const Key('polar-align-start-rough'),
-                onPressed: _busy ? null : () => _start(stage: PolarAlignStages.coarse),
+                onPressed: off ? null : () => _start(stage: PolarAlignStages.coarse),
                 child: Text(context.l10n.polarRoughFirst),
               ),
           ],

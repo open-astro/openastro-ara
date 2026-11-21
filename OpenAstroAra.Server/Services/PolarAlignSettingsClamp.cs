@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Collections.Generic;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -31,6 +32,10 @@ public static class PolarAlignSettingsClamp {
     public const double DefaultCheckStepDeg = 10.0;
     public const double MaxCoarseExposureSeconds = 60.0;
     public const double DefaultCoarseExposureSeconds = 3.0;
+    // #2068 (ARA-8) — the counterweight limit: 0° = Home (counterweight down), 90° = horizontal.
+    public const double MinMaxCwAngleDeg = 10.0;
+    public const double MaxMaxCwAngleDeg = 75.0;
+    public const double DefaultMaxCwAngleDeg = 60.0;
 
     /// <summary>The same settings with the three knobs in range: a non-finite or out-of-range turn is
     /// clamped (a non-finite one takes the default), and a rough exposure that is not positive takes
@@ -47,6 +52,29 @@ public static class PolarAlignSettingsClamp {
             CoarseExposureSeconds = double.IsFinite(settings.CoarseExposureSeconds) && settings.CoarseExposureSeconds > 0
                 ? Math.Min(settings.CoarseExposureSeconds, MaxCoarseExposureSeconds)
                 : DefaultCoarseExposureSeconds,
+            MountClearance = ClampMountClearance(settings.MountClearance),
         };
     }
+
+    /// <summary>#2068 — the per-mount clearance entries: each limit held at 10–75° (a non-finite one takes the default,
+    /// 60°). An entry with an empty key, or a null one, is dropped: no mount has that identity. None (null) stays none:
+    /// no mount has an entry, so every mount reads the defaults (60°, not confirmed).</summary>
+    private static Dictionary<string, PolarAlignMountClearanceDto>? ClampMountClearance(
+            IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
+        if (entries is null) {
+            return null;
+        }
+        var clamped = new Dictionary<string, PolarAlignMountClearanceDto>(StringComparer.Ordinal);
+        foreach (var (key, entry) in entries) {
+            if (string.IsNullOrWhiteSpace(key) || entry is null) {
+                continue;
+            }
+            clamped[key] = entry with { MaxCwAngleDeg = ClampMaxCwAngleDeg(entry.MaxCwAngleDeg) };
+        }
+        return clamped;
+    }
+
+    /// <summary>#2068 — a counterweight limit in range: clamped to 10–75°; a non-finite one is the default, 60°.</summary>
+    public static double ClampMaxCwAngleDeg(double deg) =>
+        double.IsFinite(deg) ? Math.Clamp(deg, MinMaxCwAngleDeg, MaxMaxCwAngleDeg) : DefaultMaxCwAngleDeg;
 }
