@@ -148,11 +148,6 @@ public interface ITelescopeService : IMountMotionControl {
     /// a leased motor renewal is refused (its lease then runs out and stops the axis), and Polar Align fails its run.</summary>
     void FenceMotion(string reason) { }
 
-    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
-    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
-    /// German equatorial mount, and treats null as one (fail-safe).</summary>
-    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
-
     /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
     /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
     /// came since <paramref name="unlessAbortedSince"/> (an <see cref="IMountMotionControl.AbortEpoch"/> reading): a

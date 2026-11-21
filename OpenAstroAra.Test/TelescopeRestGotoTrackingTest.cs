@@ -849,6 +849,18 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.MountAlignmentMode, Is.EqualTo(expected));
         }
 
+        // #2083 — Polar Align's motor start needs CanMoveAxis(Primary), read once at connect.
+        [TestCase("true", true)]
+        [TestCase("false", false)]
+        public async Task CanMoveAxis_primary_is_read_once_at_connect(string wire, bool expected) {
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(path => path.EndsWith("/canmoveaxis", StringComparison.Ordinal) ? wire : mount(path));
+            using var svc = await ConnectedAsync(box);
+
+            await WaitForAsync(() => svc.CanMovePrimaryAxis is not null, "CanMoveAxis(Primary) was never read");
+            Assert.That(svc.CanMovePrimaryAxis, Is.EqualTo(expected));
+        }
+
         [Test]
         public async Task A_mount_that_does_not_report_its_type_reads_unknown() {
             var log = new InfoLog();
