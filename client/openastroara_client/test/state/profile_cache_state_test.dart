@@ -88,6 +88,12 @@ class _FailingUnguidedApi extends _FakeApi {
       throw StateError('500 from /profile/unguided');
 }
 
+class _FailingFilterSetApi extends _FakeApi {
+  @override
+  Future<FilterSetSettings> getFilterSet() async =>
+      throw ArgumentError('unknown filter kind');
+}
+
 void main() {
   late Directory tmp;
   late ProfileCacheService cache;
@@ -145,6 +151,36 @@ void main() {
     final p1 = (stored['sections'] as Map)['p1'] as Map;
     expect(p1['optics'], containsPair('focal_length_mm', 382));
     expect(p1.containsKey('unguided'), isFalse);
+  });
+
+  test('one section the rig answers unreadably keeps its cached copy; the '
+      'other sections are refreshed', () async {
+    await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
+    await cache.saveSections('p1', {
+      'optics': ProfileApi.opticsToJson(
+          const TestOpticsSettings(focalLengthMm: 200)),
+      'filter_set': ProfileApi.filterSetToJson(const FilterSetSettings(
+          filters: [
+            PlanningFilter(name: 'OIII', kind: FilterKind.oiii, bandwidthNm: 6)
+          ])),
+    });
+    await captureProfileCache(cache, _FailingFilterSetApi(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1['optics'], containsPair('focal_length_mm', 382),
+        reason: 'the readable sections are refreshed');
+    expect(p1['site'], containsPair('site_name', 'South GA'));
+    expect(
+        ((p1['filter_set'] as Map)['filters'] as List).single,
+        containsPair('name', 'OIII'),
+        reason: 'the failed one keeps what the cache held');
+  });
+
+  test('#1264: a failed unguided read keeps the unguided copy the cache '
+      'already holds', () async {
+    await captureProfileCache(cache, _FakeApi(), list);
+    await captureProfileCache(cache, _FailingUnguidedApi(), list);
+    final p1 = ((await cache.load())['sections'] as Map)['p1'] as Map;
+    expect(p1['unguided'], containsPair('step_down_after', 3));
   });
 
   test('a snapshot without camera electronics leaves the section not loaded, never defaults', () async {
