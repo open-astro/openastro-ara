@@ -10,10 +10,10 @@ import '../../../state/focus/autofocus_step_size_state.dart';
 import '../../../state/focus/focus_presets.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/advanced_settings_state.dart';
-import '../../../state/simple_mode_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/settings_nav.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/settings_row.dart';
 
