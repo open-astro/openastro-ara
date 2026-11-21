@@ -97,6 +97,11 @@ public static class RefusalCatalog {
     // that turns RA with the motor is refused until the mount is synced or reconnected (a hand-turn start goes ahead).
     public static readonly RefusalCause PolarAlignClutchTurned = new("polar-align-clutch-turned", 409, "RA was turned with the clutch open");
 
+    // #2068 (ARA-8, ARA-18) — the connected mount's counterweight and cable clearance is not confirmed (the pre-flight list's
+    // clearance check): no Polar Align motion until the user checked it with the hand controller and confirmed it in the
+    // app. max_cw_angle_deg is the limit the confirmation is for.
+    public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "max_cw_angle_deg");
+
     // #1589 — a GoTo to a target at or above the profile's clearance limit (clearance_limit_enabled on): the camera
     // or rotator could reach the pier or tripod there.
     public static readonly RefusalCause AboveClearanceLimit = new("above-clearance-limit", 409, "The target is above the clearance limit", "altitude_deg", "limit_deg");
@@ -107,6 +112,7 @@ public static class RefusalCatalog {
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
+        PolarAlignClearanceNotConfirmed,
         AboveClearanceLimit,
     ];
 }

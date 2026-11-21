@@ -1152,6 +1152,19 @@ const Map<String, Help> helpRegistry = {
     relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
     keywords: ['polar', 'alignment', 'confirm', 'parked', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west', 'hand', 'manual', 'nina', 'azimuth'],
   ),
+  'setup.polar_align.preflight': Help(
+    key: 'setup.polar_align.preflight',
+    title: 'Polar align pre-flight checks',
+    body:
+        'Before Polar align moves the mount, the rig checks it can do so safely, and the Start card lists every check:\n\n'
+        '* **Passed** (green tick), **Note** (amber: a reminder, it never stops a start), **Fails** (red: Start stays off until it passes), **Not checked yet** (grey: a check a later update adds; it never stops a start).\n'
+        '* The checks: the mount connected and not parked; the site latitude (and, later, longitude and sidereal time); the mount\'s clock, set and checked from the rig\'s synced clock; the mount\'s position trusted (no power loss or unconfirmed stop since); this mount\'s counterweight and cable clearance, confirmed by you; and where the scope points, from a fresh reading (not within 3° of the pole, within the session\'s sweep limit).\n'
+        '* **Clearance** — tap *Confirm clearance…*, check with the hand controller how far the counterweight can turn up before anything touches, set that limit and confirm. It is kept for each mount.\n'
+        '* **The mount\'s own limits** — always a note: set the slew and altitude limits in the mount\'s hand controller or app too. Ara\'s checks do not replace them.\n'
+        '* Start asks the rig again: it refuses on the first check that fails, so the list and the start never disagree. The list reads itself again when the mount connects, parks, unparks or ends a slew, when the settings change, and a few seconds after a failing clock check; the refresh button reads it at once. Check turns by its own step, so where the scope points is judged for it when it starts.',
+    relatedHelpKeys: ['setup.polar_align.stages', 'img.polar.clearance_confirmed', 'img.polar.max_cw_angle_deg'],
+    keywords: ['polar', 'alignment', 'preflight', 'pre-flight', 'checks', 'clearance', 'counterweight', 'safety', 'start'],
+  ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
     title: 'Focusing the guide camera',
@@ -2486,6 +2499,22 @@ const Map<String, Help> helpRegistry = {
         'A measurement solves three points around two RA turns. At each point Polar align takes this many frames with the mount still (1 to 5, 3 by default) and averages them, so one noisy solve does not move the axis. The scatter of the solves is in the log.\n\n'
         'A point whose solves scatter more than 3″ is retaken once. If it is still scattered, the run goes on, but the readout or the Check says the measurement is noisy: check focus and seeing, or take more frames per point.',
     relatedSettings: ['img.polar.frames_per_point'],
+  ),
+  'img.polar.max_cw_angle_deg': Help(
+    key: 'img.polar.max_cw_angle_deg',
+    title: 'Counterweight limit',
+    body:
+        'How far Polar align may turn the RA axis up from counterweight-down on this mount: 0° is counterweights down (Home), 90° is the counterweight bar horizontal. Measure it with the hand controller: turn RA from counterweight-down until the counterweight, the tube or a cable would touch the pier, the tripod or anything else, and set the limit a little below that. Kept for each mount (by its identity), between 10° and 75°; 60° until you set it. A new limit needs a new clearance confirmation. The checks that hold every turn inside it come in a later update; until then the limit is what you confirm.',
+    relatedSettings: ['img.polar.max_cw_angle_deg', 'img.polar.clearance_confirmed'],
+    keywords: ['polar', 'alignment', 'counterweight', 'limit', 'clearance', 'pier'],
+  ),
+  'img.polar.clearance_confirmed': Help(
+    key: 'img.polar.clearance_confirmed',
+    title: 'Clearance confirmed',
+    body:
+        'Polar align turns the mount with its RA motor, so before the first run on a mount it asks you to check that the counterweight, the tube and the cables clear the pier and the tripod up to the counterweight limit. Do it with the hand controller, with a hand on the mount\'s power switch. Until you confirm it in the clearance dialog (Confirm clearance… on the Polar align card), the motor does not turn the mount: Start opens with Turn RA by hand only, which moves nothing, and the pre-flight list shows the check as a warning. A confirmation is for one limit: change the limit and you tick the box again. Take back (in the dialog, or in Settings › Imaging › Polar align) withdraws it. The confirmation is kept for each mount, in each profile: a different mount asks again. A profile you share never carries it.',
+    relatedSettings: ['img.polar.clearance_confirmed', 'img.polar.max_cw_angle_deg'],
+    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'safety'],
   ),
   'img.unguided.eccentricity': Help(
     key: 'img.unguided.eccentricity',

@@ -967,6 +967,84 @@ public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, dou
     bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, string Camera = PolarAlignCameras.Guide,
     bool HandTurnAvailable = true);
 
+/// <summary>#2068 (ARA-18) — Polar Align's pre-flight list (<c>GET /polaralign/preflight</c>): every safety check a start
+/// makes, in the order a start makes them, with what the next Start would do. <c>Ready</c> is true when no check
+/// fails; a start (<c>POST /polaralign/start</c>, <c>GET /polaralign/start-plan</c>) refuses on the first check that
+/// fails, with that check's cause. A <c>warn</c> or <c>unknown</c> check never refuses: <c>unknown</c> is a check this
+/// daemon does not make yet (its detail names the issue that adds it). <c>MountKey</c> is the connected mount's key in
+/// the polar-align section's <c>mount_clearance</c> (null with no mount connected): the clearance confirmation writes
+/// there.</summary>
+public sealed record PolarAlignPreflightDto(
+    bool Ready,
+    IReadOnlyList<PolarAlignPreflightCheckDto> Checks,
+    PolarAlignPreflightPlannedDto Planned,
+    string? MountKey);
+
+/// <summary>One check of <see cref="PolarAlignPreflightDto"/>: its id (<see cref="PolarAlignPreflightChecks"/>), its
+/// status (<see cref="PolarAlignPreflightStatuses"/>) and a sentence for people (English).</summary>
+public sealed record PolarAlignPreflightCheckDto(string Id, string Status, string Detail);
+
+/// <summary>What the next Start at <c>Stage</c> would do (the confirm step's plan where the mount could be read):
+/// <c>Direction</c> (<c>east</c> | <c>west</c>, null when the plan could not be made), <c>TurnStepDeg</c> each of the
+/// measurement's two turns (<c>CheckStepDeg</c> a Check's), <c>MaxSweepDeg</c> the most it turns from where it starts,
+/// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and the mount's
+/// counterweight limit (<c>MaxCwAngleDeg</c>, the connected mount's entry or the default). <c>StartCwAngleDeg</c> and
+/// <c>MinAltitudeDeg</c> are null until the counterweight model and the pose envelope land (#2065).</summary>
+public sealed record PolarAlignPreflightPlannedDto(
+    string Stage,
+    string? Direction,
+    double TurnStepDeg,
+    double CheckStepDeg,
+    int Turns,
+    double MaxSweepDeg,
+    bool? NewOrigin,
+    double? OriginOffsetDeg,
+    double? SweepLimitDeg,
+    double MaxCwAngleDeg,
+    double? StartCwAngleDeg,
+    double? MinAltitudeDeg);
+
+/// <summary>The statuses of a <see cref="PolarAlignPreflightCheckDto"/>.</summary>
+public static class PolarAlignPreflightStatuses {
+    public const string Ok = "ok";
+    /// <summary>Worth reading; never refuses a start.</summary>
+    public const string Warn = "warn";
+    /// <summary>A start refuses on it.</summary>
+    public const string Fail = "fail";
+    /// <summary>Not checked by this daemon yet, or its input could not be read for an informational check; never
+    /// refuses a start.</summary>
+    public const string Unknown = "unknown";
+}
+
+/// <summary>The ids of the <see cref="PolarAlignPreflightCheckDto"/> rows (ARA-18), in the order a start checks
+/// them.</summary>
+public static class PolarAlignPreflightChecks {
+    public const string MountConnected = "mount_connected";
+    public const string MountParked = "mount_parked";
+    public const string SiteLatitude = "site_latitude";
+    public const string SiteLongitudeLst = "site_longitude_lst";
+    public const string MountClockOrSite = "mount_clock_or_site";
+    public const string PoseVerified = "pose_verified";
+    public const string ClearanceConfirmed = "clearance_confirmed";
+    public const string StartPointing = "start_pointing";
+    public const string MountType = "mount_type";
+    public const string CanMoveAxis = "can_move_axis";
+    public const string MotionSafety = "motionsafety";
+    public const string PierSide = "pier_side";
+    public const string PoseEnvelope = "pose_envelope";
+    public const string StartCwAngle = "start_cw_angle";
+    public const string TurnStep = "turn_step";
+    public const string Aligner = "aligner";
+    public const string MountLimits = "mount_limits";
+
+    /// <summary>Every id, in order.</summary>
+    public static readonly IReadOnlyList<string> All = [
+        MountConnected, MountParked, SiteLatitude, SiteLongitudeLst, MountClockOrSite, PoseVerified, ClearanceConfirmed,
+        StartPointing, MountType, CanMoveAxis, MotionSafety, PierSide, PoseEnvelope, StartCwAngle, TurnStep, Aligner,
+        MountLimits,
+    ];
+}
+
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
 /// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
 /// they saw made this pose Polar Align's new origin. <c>HandTurn</c> (#2083): the user turns RA by hand, so the run

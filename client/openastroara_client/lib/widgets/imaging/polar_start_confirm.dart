@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart';
+import '../../services/refusal.dart';
 import '../adaptive_dialog.dart';
 
 /// #2048 — Polar Align's confirm step, the one way the app starts the routine
@@ -16,16 +17,30 @@ import '../adaptive_dialog.dart';
 ///
 /// #2083 — on a rig that takes it, the user can also choose to turn RA by
 /// hand (NINA's manual mode): the start then asks the rig to move nothing.
+///
+/// #2068 — while the mount's clearance is not confirmed the rig refuses the
+/// motor start's plan; the step then offers Turn RA by hand alone, which moves
+/// nothing (Joey, 2026-11-21).
 Future<void> confirmAndStartPolarAlign(
   BuildContext context,
   PolarAlignClient api, {
   String? stage,
 }) async {
-  final plan = await api.startPlan(stage: stage);
+  PolarAlignStartPlan plan;
+  var motorAllowed = true;
+  try {
+    plan = await api.startPlan(stage: stage);
+  } on Refusal catch (refusal) {
+    if (refusal.cause != RefusalCause.polarAlignClearanceNotConfirmed) rethrow;
+    plan = await api.startPlan(stage: stage, handTurn: true);
+    if (!plan.handTurnAvailable) rethrow;
+    motorAllowed = false;
+  }
   if (!context.mounted) return;
   final choice = await showAdaptiveAlert<PolarStartChoice>(
     context: context,
-    builder: (_) => PolarStartConfirmDialog(plan: plan),
+    builder: (_) =>
+        PolarStartConfirmDialog(plan: plan, motorAllowed: motorAllowed),
   );
   switch (choice) {
     case PolarStartChoice.motor:
@@ -46,9 +61,17 @@ enum PolarStartChoice { motor, hand }
 /// mount", [PolarStartChoice.hand] for "Turn RA by hand" (shown only when the
 /// rig takes it), null for Cancel.
 class PolarStartConfirmDialog extends StatelessWidget {
-  const PolarStartConfirmDialog({super.key, required this.plan});
+  const PolarStartConfirmDialog({
+    super.key,
+    required this.plan,
+    this.motorAllowed = true,
+  });
 
   final PolarAlignStartPlan plan;
+
+  /// False while the mount's clearance is not confirmed (#2068): "Move the
+  /// mount" is off and the dialog says why; Turn RA by hand stays.
+  final bool motorAllowed;
 
   @override
   Widget build(BuildContext context) {
@@ -88,6 +111,7 @@ class PolarStartConfirmDialog extends StatelessWidget {
         ),
       l10n.polarConfirmPower,
       if (plan.handTurnAvailable) l10n.polarConfirmHandTurnHint,
+      if (!motorAllowed) l10n.polarConfirmMotorNeedsClearance,
     ];
     return adaptiveAlertDialog(
       // The guidance lines (#2083) make it tall: scroll on a short screen.
@@ -125,7 +149,9 @@ class PolarStartConfirmDialog extends StatelessWidget {
           key: const Key('polar-start-confirm-go'),
           isDefault: true,
           filled: true,
-          onPressed: () => Navigator.of(context).pop(PolarStartChoice.motor),
+          onPressed: motorAllowed
+              ? () => Navigator.of(context).pop(PolarStartChoice.motor)
+              : null,
           child: Text(l10n.polarConfirmGo),
         ),
       ],

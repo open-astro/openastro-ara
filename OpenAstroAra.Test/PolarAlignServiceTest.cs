@@ -277,7 +277,7 @@ namespace OpenAstroAra.Test {
             // Bench cadences: the real §45.12 defaults would make loop tests take minutes. One frame per point (#2082): a
             // scripted solver's answers map one to one onto the measurement's points.
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1).Confirmed());
             return store;
         }
 

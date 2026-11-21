@@ -949,6 +949,38 @@ class ProfileApi {
       stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
       camera: camera as String,
       framesPerPoint: (j['frames_per_point'] as num).toInt(),
+      mountClearance: _mountClearanceFromRig(j),
+    );
+  }
+
+  // #2068 strict too: the key must be there (null is a profile with no mount's
+  // entry yet); an entry missing a field fails the load.
+  static Map<String, PolarAlignMountClearance> _mountClearanceFromRig(
+    Map<String, dynamic> j,
+  ) {
+    if (!j.containsKey('mount_clearance')) {
+      throw const FormatException('missing mount_clearance');
+    }
+    final raw = j['mount_clearance'] as Map<String, dynamic>?;
+    return {
+      for (final e in (raw ?? const <String, dynamic>{}).entries)
+        e.key: _mountClearanceEntryFromRig(e.value as Map<String, dynamic>),
+    };
+  }
+
+  // Every key of an entry must be there; confirmed_max_cw_angle_deg is null
+  // while the mount is not confirmed.
+  static PolarAlignMountClearance _mountClearanceEntryFromRig(
+    Map<String, dynamic> j,
+  ) {
+    if (!j.containsKey('confirmed_max_cw_angle_deg')) {
+      throw const FormatException('missing confirmed_max_cw_angle_deg');
+    }
+    return PolarAlignMountClearance(
+      maxCwAngleDeg: (j['max_cw_angle_deg'] as num).toDouble(),
+      clearanceConfirmed: j['clearance_confirmed'] as bool,
+      confirmedMaxCwAngleDeg: (j['confirmed_max_cw_angle_deg'] as num?)
+          ?.toDouble(),
     );
   }
 

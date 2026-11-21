@@ -178,7 +178,7 @@ namespace OpenAstroAra.Test {
                 var store = new InMemoryProfileStore();
                 store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = latitudeDeg, LongitudeDeg = longitudeDeg });
                 store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0));
+                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0).Confirmed());
                 var ws = new WsRecorder();
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
                     new SimulatedSkySolver(http), mount.Object, MediatorMotionControl.For(mount.Object), store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {

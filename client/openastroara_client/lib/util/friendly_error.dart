@@ -133,6 +133,10 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
     RefusalCause.polarAlignClutchTurned => l.refusalPolarAlignClutchTurned,
+    RefusalCause.polarAlignClearanceNotConfirmed =>
+      l.refusalPolarAlignClearanceNotConfirmed(
+        _wholeDegrees(r.parameters['max_cw_angle_deg']),
+      ),
     null => _firstLine(r.detail),
   };
 }

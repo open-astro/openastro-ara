@@ -32,6 +32,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.Test.PolarAlign;
 
 namespace OpenAstroAra.Test {
 
@@ -114,7 +115,7 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1).Confirmed());
             var mount = NewMount().Object;
             return new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver ?? new ScriptedSolver(SolveA, SolveB),
                 mount, OpenAstroAra.Test.PolarAlign.MediatorMotionControl.For(mount), store, ws, log: null, fetcher ?? new FileFetcher()) {

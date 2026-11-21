@@ -7178,4 +7178,168 @@ class AppLocalizationsEn extends AppLocalizations {
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
+
+  @override
+  String get polarPreflightTitle => 'Pre-flight checks';
+
+  @override
+  String get polarPreflightChecking => 'Checking the rig…';
+
+  @override
+  String get polarPreflightReadFailed =>
+      'Couldn\'t read the pre-flight checks. The rig still checks them when you start.';
+
+  @override
+  String get polarPreflightRetry => 'Retry';
+
+  @override
+  String get polarPreflightRefresh => 'Check again';
+
+  @override
+  String polarPreflightSummary(int passed, int notYet) {
+    return '$passed passed · $notYet not checked yet';
+  }
+
+  @override
+  String get polarPreflightShowAll => 'Show all checks';
+
+  @override
+  String get polarPreflightShowFewer => 'Show fewer';
+
+  @override
+  String get polarPreflightStatusOk => 'passed';
+
+  @override
+  String get polarPreflightStatusWarn => 'note';
+
+  @override
+  String get polarPreflightStatusFail => 'fails, Start is off';
+
+  @override
+  String get polarPreflightStatusUnknown => 'not checked yet';
+
+  @override
+  String get polarPreflightBlocked =>
+      'A pre-flight check fails: see the list in Polar align';
+
+  @override
+  String get polarPreflightCheckMountConnected => 'Mount connected';
+
+  @override
+  String get polarPreflightCheckMountParked => 'Mount not parked';
+
+  @override
+  String get polarPreflightCheckSiteLatitude => 'Site latitude';
+
+  @override
+  String get polarPreflightCheckSiteLongitude =>
+      'Site longitude and sidereal time';
+
+  @override
+  String get polarPreflightCheckMountClock => 'Mount clock';
+
+  @override
+  String get polarPreflightCheckPoseVerified => 'Mount position trusted';
+
+  @override
+  String get polarPreflightCheckClearance =>
+      'Counterweight and cable clearance';
+
+  @override
+  String get polarPreflightCheckStartPointing => 'Where the scope points';
+
+  @override
+  String get polarPreflightCheckMountType => 'Mount type';
+
+  @override
+  String get polarPreflightCheckCanMoveAxis => 'RA motor control';
+
+  @override
+  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
+
+  @override
+  String get polarPreflightCheckPierSide => 'Pier side';
+
+  @override
+  String get polarPreflightCheckPoseEnvelope =>
+      'Start near the pole and above the horizon';
+
+  @override
+  String get polarPreflightCheckStartCwAngle =>
+      'Counterweight angle at the start';
+
+  @override
+  String get polarPreflightCheckTurnStep =>
+      'Turn step within the counterweight limit';
+
+  @override
+  String get polarPreflightCheckAligner => 'Polar Aligner';
+
+  @override
+  String get polarPreflightCheckMountLimits => 'The mount\'s own limits';
+
+  @override
+  String get polarClearanceButton => 'Confirm clearance…';
+
+  @override
+  String get polarClearanceChange => 'Change clearance…';
+
+  @override
+  String get polarClearanceTitle => 'Check the mount\'s clearance';
+
+  @override
+  String get polarClearanceExplain =>
+      'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.';
+
+  @override
+  String get polarClearanceHow =>
+      'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.';
+
+  @override
+  String polarClearanceLimit(String deg) {
+    return 'Counterweight limit: $deg° from counterweight-down';
+  }
+
+  @override
+  String get polarClearanceTick =>
+      'I checked this mount\'s clearance with its hand controller';
+
+  @override
+  String get polarClearanceConfirm => 'Confirm';
+
+  @override
+  String get polarClearanceTakeBack => 'Take back';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.';
+
+  @override
+  String get polarActionClearance => 'save the mount\'s clearance';
+
+  @override
+  String refusalPolarAlignClearanceNotConfirmed(String limit) {
+    return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
+  }
+
+  @override
+  String get polarKnobClearance => 'Counterweight limit and clearance';
+
+  @override
+  String polarKnobClearanceConfirmed(String deg) {
+    return '$deg° from counterweight-down, confirmed for this mount';
+  }
+
+  @override
+  String polarKnobClearanceNotConfirmed(String deg) {
+    return '$deg° from counterweight-down, not confirmed: Polar align does not move this mount';
+  }
+
+  @override
+  String get polarKnobClearanceNoMount =>
+      'Connect the mount to see and confirm its clearance';
+
+  @override
+  String get polarKnobClearanceHint =>
+      'Kept for each mount. Measure it with the hand controller.';
 }
