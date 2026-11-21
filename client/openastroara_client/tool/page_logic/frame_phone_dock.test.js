@@ -63,6 +63,7 @@ function px(value, h) {
 test('Simple Mode on an upright phone: the framing card docks under the status card, clear of the box', () => {
   const [w, h] = [390, 844];
   const r = frameRule(w, h);
+  assert.equal(r['box-sizing'], 'border-box', 'max-height must count the padding and border, or they carry the card past it');
   const bottom = px(r.top, h) + px(r['max-height'], h);
   assert.ok(bottom <= h / 2 - INSET, `the card can reach y ${bottom}, over the view centre at y ${h / 2}`);
   assert.ok(bottom <= h - DECK_AND_ROW, `the card can reach y ${bottom}, under the deck and the bottom row`);
