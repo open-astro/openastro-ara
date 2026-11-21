@@ -98,8 +98,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     try {
       // §63.19 — optics first: the OAG-derived guide focal length reads the
       // main optics section, which is hydrated by a different panel.
-      final opticsLoaded =
-          await ref.read(opticsSettingsProvider.notifier).load(api);
+      final opticsLoaded = await ref.read(opticsSettingsProvider.notifier).load(api);
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
       // No optics, no derived focal length: stay not loaded so no save sends 0.
       final optics = ref.read(opticsSettingsProvider);
@@ -141,11 +140,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// on setup-type change, and before every save/apply.
   void _syncDerivedFocalLength() {
     final optics = ref.read(opticsSettingsProvider).value;
-    // Optics reset (rig changed): keep the stored value, never derive 0.
-    if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag' ||
-        optics == null) {
-      return;
-    }
+    // No optics (reset): keep the stored value rather than derive 0.
+    if (optics == null || ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
     _syncingDerived = true;
     try {
       ref
@@ -324,8 +320,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   @override
   Widget build(BuildContext context) {
     final phd2 = ref.watch(phd2SettingsProvider);
-    final optics =
-        ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
+    final optics = ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
     final phd2N = ref.read(phd2SettingsProvider.notifier);
     ref.listen(phd2SettingsProvider, (_, _) => _scheduleSave());
     final guiderStatus = ref.watch(guiderStatusProvider).asData?.value;

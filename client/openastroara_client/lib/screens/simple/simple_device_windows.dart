@@ -1667,7 +1667,6 @@ class _SimpleFocuserWindowState extends ConsumerState<SimpleFocuserWindow> {
           onChanged: (v) => _saveAutofocus((c) => withAutofocusDuringPlans(c, v)),
         ),
       ),
-      // Not loaded: the rig may refocus or not, so neither caption is true.
       if (af != null)
         Text(
           on ? l10n.deviceAutofocusOnHint : l10n.deviceAutofocusOffHint,
