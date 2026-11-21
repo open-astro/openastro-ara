@@ -349,43 +349,93 @@ void _runJob(BuildContext context, WidgetRef ref, SimpleCalibrationJob job) =>
 String simpleCalibrationSummary(BuildContext context, WidgetRef ref) =>
     simpleCalibrationJob(context, ref).chip;
 
-/// The Calibration mode's shutter: the current tab's job, its caption under
-/// it; its red square stops a run.
+/// The Calibration mode's shutter: the current tab's job; its red square
+/// stops a run. [captioned] false draws no caption under it but makes the
+/// job's caption the shutter's tooltip (the rail keeps one size, #2038): the
+/// rail draws [SimpleCalibrationShutterCaption] in a slot of its own where it
+/// fits.
 class SimpleCalibrationShutter extends ConsumerWidget {
-  const SimpleCalibrationShutter({super.key});
+  const SimpleCalibrationShutter({super.key, this.captioned = true});
+
+  final bool captioned;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final job = simpleCalibrationJob(context, ref);
     final running = simpleCalibrationProgress(ref) != null;
+    final button = SimpleShutterButton(
+      start: true,
+      running: running,
+      label: job.caption,
+      whyOff: job.whyOff,
+      onPressed: job.run == null ? null : () => _runJob(context, ref, job),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
       children: [
-        SimpleShutterButton(
-          start: true,
-          running: running,
-          label: job.caption,
-          whyOff: job.whyOff,
-          onPressed: job.run == null ? null : () => _runJob(context, ref, job),
-        ),
-        // What it will do, only when it can: the chip says the state, and a
-        // tap on an idle shutter says why in a pill, as the panel does.
-        if (job.run != null)
-          ExcludeSemantics(
-            // As wide as the rail at every text size, so large text wraps
-            // the same words to the same lines instead of cutting them.
-            child: SizedBox(
-              width: 64 * simpleRailScale(context),
-              child: Text(
-                job.caption,
-                key: const Key('simple-calibration-shutter-caption'),
-                textAlign: TextAlign.center,
-                style: kSimpleCaption,
-              ),
-            ),
+        // The semantics label already says it; the tooltip is for the eye.
+        if (captioned || job.run == null)
+          button
+        else
+          Tooltip(
+            message: job.caption,
+            excludeFromSemantics: true,
+            child: button,
           ),
+        // None while idle, so the spacing adds no gap under the button.
+        if (captioned && job.run != null)
+          const SimpleCalibrationShutterCaption(),
       ],
+    );
+  }
+}
+
+/// What the shutter will do, under it, only when it can: the chip says the
+/// state, and a tap on an idle shutter says why in a pill, as the panel does.
+/// [slot] true: the rail's slot, wrapped to the rail buttons' width so it
+/// never widens the rail, and drawn at full size only when it fits, else not
+/// at all (the shutter's tooltip says it, #2038).
+class SimpleCalibrationShutterCaption extends ConsumerWidget {
+  const SimpleCalibrationShutterCaption({super.key, this.slot = false});
+
+  final bool slot;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final job = simpleCalibrationJob(context, ref);
+    if (job.run == null) return const SizedBox.shrink();
+    Widget caption(double width) => ExcludeSemantics(
+      child: SizedBox(
+        width: width,
+        child: Text(
+          job.caption,
+          key: const Key('simple-calibration-shutter-caption'),
+          textAlign: TextAlign.center,
+          style: kSimpleCaption,
+        ),
+      ),
+    );
+    // As wide as the rail at every text size, so large text wraps the same
+    // words to the same lines instead of cutting them.
+    if (!slot) return caption(64 * simpleRailScale(context));
+    return LayoutBuilder(
+      builder: (context, box) {
+        // Above 1.1x text the rail leaves more room than its buttons take.
+        final width = box.constrainWidth(60 * simpleRailScale(context));
+        final painter = TextPainter(
+          text: TextSpan(
+            text: job.caption,
+            style: DefaultTextStyle.of(context).style.merge(kSimpleCaption),
+          ),
+          textAlign: TextAlign.center,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: width);
+        final fits = painter.height <= box.maxHeight;
+        painter.dispose();
+        return fits ? caption(width) : const SizedBox.shrink();
+      },
     );
   }
 }

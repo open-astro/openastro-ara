@@ -1,0 +1,3 @@
+### Fixed (client)
+
+- **The Simple Mode right rail keeps one size** (#2038): the rail was taller on Calibration than on Preview whenever the shutter had a job, because its caption sat under the button, so the whole rail grew and its top moved. Now the rail has the same size and top on Preview and Calibration, idle or with a job ready. The caption shows only where it fits, at full size: a window at least 832 px high inside its safe area (where the rail at 1.0x holds it without scrolling its tabs), text up to 1.3x, and words that fit three lines. Otherwise it is the shutter's tooltip, so a long caption such as "Build 30 s · 1 min · 2 min · 5 min + bias" is no longer shrunk to an unreadable size.

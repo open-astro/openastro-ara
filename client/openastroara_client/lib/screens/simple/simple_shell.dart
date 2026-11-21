@@ -3,6 +3,8 @@ import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 import 'simple_best_screen.dart';
 import 'simple_monitor_screen.dart';
 import 'simple_queue_screen.dart' show simpleQueueSheetProvider;
+import 'simple_calibration.dart'
+    show SimpleCalibrationShutter, SimpleCalibrationShutterCaption;
 import 'simple_screen.dart';
 import 'companion_portrait_shell.dart';
 import 'simple_search.dart';
@@ -1313,6 +1315,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final height =
         MediaQuery.sizeOf(context).height -
         MediaQuery.paddingOf(context).vertical;
+    // #2038 — the shutter's caption slot, on every mode or none: only where
+    // the tab rail at 1.0x holds it with its tabs unscrolled.
+    final railRoomy =
+        height >= kSimpleRailRoomyHeight &&
+        MediaQuery.textScalerOf(context).scale(1) <= 1.3;
     final leftRailTop = deck
         ? height - deckTop - kSimpleInset
         : _leftRailHeight == 0
@@ -1776,6 +1783,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             onSettings: () =>
                                                 _toggle(_Popover.settings),
                                             footHeight: footHeight,
+                                            roomy: railRoomy,
                                           )
                                         : _RightRail(
                                             key: _rightRailKey,
@@ -1788,6 +1796,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                                 _toggle(_Popover.modes),
                                             onSettings: () =>
                                                 _toggle(_Popover.settings),
+                                            roomy: railRoomy,
                                           ),
                                   ),
                                 ),
@@ -2750,6 +2759,33 @@ const double kSimpleRigControlWidth = 160;
 /// whose rows are a label and a [kSimpleRigControlWidth] value.
 const double kSimpleSettingsMaxWidth = 640;
 
+/// The shortest room (the window inside its safe area) where the tab rail at
+/// 1.0x holds the shutter's caption slot with its tabs unscrolled at its
+/// fullest: the bottom row showing and Plan open while it images (#2038).
+/// Top to bottom: the inset, the status strip and the inset under it (88);
+/// the rail's top padding (8); five tabs of 46 and Polar align's two lines
+/// (56); the open block, its name (48), Plan's figure (16), the shutter (60),
+/// the slot (4 and three lines of 18), the settings chip (72) and three gaps
+/// of 8; the six gaps of 4 between the seven rows; Stop at the foot (60); the
+/// inset, the bottom row and the inset under it (88). 832 in all.
+const double kSimpleRailRoomyHeight =
+    kSimpleInset * 2 +
+    kSimpleBarHeight +
+    AraSpace.s8 +
+    5 * 46 +
+    56 +
+    48 +
+    16 +
+    60 +
+    AraSpace.s4 +
+    3 * AraFontSize.simpleCaption * 1.5 +
+    72 +
+    3 * AraSpace.s8 +
+    6 * AraSpace.s4 +
+    kSimpleRailFootHeight +
+    kSimpleInset * 2 +
+    kSimpleBarHeight;
+
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
 
@@ -2862,6 +2898,7 @@ class _RightRail extends ConsumerWidget {
     required this.popover,
     required this.onModes,
     required this.onSettings,
+    required this.roomy,
   });
 
   final SimpleModeScreen mode;
@@ -2871,6 +2908,9 @@ class _RightRail extends ConsumerWidget {
   final _Popover popover;
   final VoidCallback onModes;
   final VoidCallback onSettings;
+
+  /// The shutter has its caption slot ([_RailShutter]).
+  final bool roomy;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -2921,7 +2961,7 @@ class _RightRail extends ConsumerWidget {
               ),
             ),
           ),
-          SimpleScreen.of(mode).shutter,
+          _RailShutter(mode: mode, roomy: roomy),
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
@@ -2976,6 +3016,7 @@ class _RailTabs extends ConsumerWidget {
     required this.onPick,
     required this.onSettings,
     required this.footHeight,
+    required this.roomy,
   });
 
   final SimpleModeScreen mode;
@@ -2986,6 +3027,9 @@ class _RailTabs extends ConsumerWidget {
 
   /// The rail's last row, Stop's, which the shell draws over the panel.
   final double footHeight;
+
+  /// The shutter has its caption slot ([_RailShutter]).
+  final bool roomy;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -3082,7 +3126,7 @@ class _RailTabs extends ConsumerWidget {
               key: const Key('simple-rail-figure'),
               style: AraText.caption.copyWith(color: AraColors.selectionFg),
             ),
-          SimpleScreen.of(mode).shutter,
+          _RailShutter(mode: mode, roomy: roomy),
           _RailButton(
             key: const Key('simple-settings'),
             icon: Icons.tune,
@@ -3093,6 +3137,42 @@ class _RailTabs extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// The shutter with the room for its caption, the same on every mode so the
+/// rail keeps one size and its top stays put (#2038). Where the rail is
+/// [roomy] (at least [kSimpleRailRoomyHeight] high, text up to 1.3x) the slot
+/// holds three lines, and Calibration's caption shows there when it fits;
+/// elsewhere no mode has a slot. Calibration's caption is always its
+/// shutter's tooltip too, for when it does not show.
+class _RailShutter extends StatelessWidget {
+  const _RailShutter({required this.mode, required this.roomy});
+
+  final SimpleModeScreen mode;
+  final bool roomy;
+
+  @override
+  Widget build(BuildContext context) {
+    final calibration = mode == SimpleModeScreen.calibration;
+    final scaler = MediaQuery.textScalerOf(context);
+    final shutter = calibration
+        ? const SimpleCalibrationShutter(captioned: false)
+        : SimpleScreen.of(mode).shutter;
+    if (!roomy) return shutter;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      spacing: AraSpace.s4,
+      children: [
+        shutter,
+        SizedBox(
+          height: 3 * scaler.scale(kSimpleCaption.fontSize! * 1.5),
+          child: calibration
+              ? const SimpleCalibrationShutterCaption(slot: true)
+              : null,
+        ),
+      ],
     );
   }
 }
