@@ -107,6 +107,8 @@ import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
+import '../../widgets/sky_atlas/target_preview.dart'
+    show SurveyThumb, surveyPicture;
 import '../../widgets/version_mismatch_warning.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
@@ -2139,10 +2141,16 @@ class _SkyPick extends ConsumerWidget {
     final art = manifest == null || catalog == null
         ? null
         : skyPickArt(selection.designations, selection.name, catalog, manifest);
-    return _card(context, art);
+    // No Art: the survey cutout stands in once it is cached or fetched.
+    final survey = art == null ? surveyPicture(ref, selection) : null;
+    return _card(context, art, survey);
   }
 
-  Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
+  Widget _card(
+    BuildContext context,
+    AlbumArt? art,
+    Uint8List? survey,
+  ) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -2181,6 +2189,13 @@ class _SkyPick extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
+        if (survey != null)
+          SurveyThumb(
+            key: const Key('simple-sky-survey'),
+            bytes: survey,
+            size: 52,
+            radius: AraRadius.container,
           ),
         // Wraps in a narrow window (or a longer language) so Image this
         // keeps its place.

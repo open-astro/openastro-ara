@@ -7263,6 +7263,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
+
+  @override
+  String get surveyPictureCredit => 'DSS2 color survey (CDS hips2fits)';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14579,4 +14582,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String versionMismatchWarning(String server, String app) {
     return 'O servidor $server e o app $app são de versões diferentes; atualize os dois a partir da mesma versão.';
   }
+
+  @override
+  String get surveyPictureCredit =>
+      'Levantamento colorido DSS2 (CDS hips2fits)';
 }

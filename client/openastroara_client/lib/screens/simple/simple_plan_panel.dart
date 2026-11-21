@@ -42,6 +42,8 @@ import '../../state/sky_atlas/dso_catalog_state.dart'
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../widgets/sky_atlas/target_preview.dart'
+    show SurveyThumb, surveyPicture;
 import '../../state/simple_recent_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -1658,18 +1660,37 @@ class _TargetCard extends StatelessWidget {
               ),
             )
           else
-            ExcludeSemantics(
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                  gradient: const RadialGradient(
-                    colors: [AraColors.targetArtGlow, AraColors.targetArtNight],
-                  ),
-                ),
-                child: const Icon(Icons.auto_awesome, size: 20),
-              ),
+            // No Art: the survey cutout when there is one, else the drawn
+            // placeholder.
+            Consumer(
+              builder: (context, ref, _) {
+                final survey = surveyPicture(ref, sel);
+                return survey != null
+                    ? SurveyThumb(
+                        key: const Key('simple-run-target-survey'),
+                        bytes: survey,
+                        size: 40,
+                        radius: AraRadius.simplePanel,
+                      )
+                    : ExcludeSemantics(
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(
+                              AraRadius.simplePanel,
+                            ),
+                            gradient: const RadialGradient(
+                              colors: [
+                                AraColors.targetArtGlow,
+                                AraColors.targetArtNight,
+                              ],
+                            ),
+                          ),
+                          child: const Icon(Icons.auto_awesome, size: 20),
+                        ),
+                      );
+              },
             ),
           Expanded(
             child: Column(

@@ -7263,4 +7263,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
+
+  @override
+  String get surveyPictureCredit => 'DSS2 color survey (CDS hips2fits)';
 }

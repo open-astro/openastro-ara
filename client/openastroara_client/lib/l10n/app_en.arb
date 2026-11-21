@@ -9189,5 +9189,9 @@
   "@versionMismatchWarning": {
     "description": "Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'",
     "placeholders": {"server": {"type": "String"}, "app": {"type": "String"}}
+  },
+  "surveyPictureCredit": "DSS2 color survey (CDS hips2fits)",
+  "@surveyPictureCredit": {
+    "description": "Simple Mode Plan target card and Sky Map pick card: credit shown on a tap on the survey picture that stands in for missing Album Art (#1958)"
   }
 }

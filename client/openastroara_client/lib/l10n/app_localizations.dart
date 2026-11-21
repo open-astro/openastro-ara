@@ -12064,6 +12064,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Server {server} and app {app} differ; update both from the same release.'**
   String versionMismatchWarning(String server, String app);
+
+  /// Simple Mode Plan target card and Sky Map pick card: credit shown on a tap on the survey picture that stands in for missing Album Art (#1958)
+  ///
+  /// In en, this message translates to:
+  /// **'DSS2 color survey (CDS hips2fits)'**
+  String get surveyPictureCredit;
 }
 
 class _AppLocalizationsDelegate
