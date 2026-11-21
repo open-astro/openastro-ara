@@ -135,12 +135,15 @@ public partial class Program {
             };
             return Task.CompletedTask;
         }).AddOperationTransformer((op, ctx, _) => {
-            // ADR 0015 — a section PUT takes the tag of the copy the client loaded (WithSection).
+            // ADR 0015 — a section PUT must send the tag of the copy the client loaded (WithSection).
             if (ctx.Description.HttpMethod == "PUT"
                 && ctx.Description.ActionDescriptor.EndpointMetadata.OfType<ProfileSection>().Any()) {
                 (op.Parameters ??= []).Add(new Microsoft.OpenApi.OpenApiParameter {
                     Name = "If-Match",
                     In = Microsoft.OpenApi.ParameterLocation.Header,
+                    Required = true,
+                    Description = "The ETag of the section copy this write was made from, or * to write over any copy. "
+                        + "Missing or empty: 428; another copy's tag: 412. Nothing is written either way.",
                     Schema = new Microsoft.OpenApi.OpenApiSchema { Type = Microsoft.OpenApi.JsonSchemaType.String },
                 });
             }
