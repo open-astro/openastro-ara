@@ -311,7 +311,7 @@ namespace OpenAstroAra.Test {
             var after = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That((after.NewOrigin, after.OriginOffsetDeg), Is.EqualTo((true, 0.0)), "a reconnected mount may have been moved meanwhile");
-            Assert.That(after.Direction, Is.EqualTo(PolarAlignDirections.East), "a new origin turns away from the meridian, as before");
+            Assert.That(after.Direction, Is.EqualTo(PolarAlignDirections.East), "a new origin takes the east_direction setting again; unset: east in the north (#2081)");
         }
 
         // ── RA wrap ──────────────────────────────────────────────────────────────────────────

@@ -2498,7 +2498,7 @@ namespace OpenAstroAra.Test {
             // refraction term is left — never the 75′ the pointing-as-axis reading gave.
             Assert.That(coarse.CurrentErrorArcmin, Is.LessThan(3.0));
             Assert.That(stops.ToArray(), Has.Length.EqualTo(2), "the two seed turns from where the mount points, before the first live frame");
-            Assert.That(stops.Select(c => c.RADegrees).ToArray(), Is.EqualTo(CoarseSeedTurns).Within(1e-6), "both 30° turns away from the meridian (east here)");
+            Assert.That(stops.Select(c => c.RADegrees).ToArray(), Is.EqualTo(CoarseSeedTurns).Within(1e-6), "both 30° turns east: east_direction unset, east in the north (#2081)");
             Assert.That(stops.Select(c => c.Dec), Is.All.EqualTo(PoleMountDecDeg).Within(1e-6), "no Dec motion");
             var progress = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignProgress).ConfigureAwait(false);
             Assert.That(progress.GetProperty("stage").GetString(), Is.EqualTo(PolarAlignStages.Coarse));
