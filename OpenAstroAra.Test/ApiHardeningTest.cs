@@ -440,5 +440,109 @@ public class FrameFileConfinementTest {
             store.PutStorageSettings(store.GetStorageSettings() with { SaveDirectory = saveDir });
             Assert.That(repo.ConfinedExistingPath(fits), Is.EqualTo(Path.GetFullPath(fits)), "read live: a changed setting is honoured");
         }
+
+        // ── #2077: a refused path warns once ──
+
+        private sealed class RecordingLogger<T> : Microsoft.Extensions.Logging.ILogger<T> {
+            public List<(Microsoft.Extensions.Logging.LogLevel Level, string Message)> Lines { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                lock (Lines) { Lines.Add((logLevel, formatter(state, exception))); }
+            }
+
+            public int Count(Microsoft.Extensions.Logging.LogLevel level, string path) {
+                lock (Lines) { return Lines.Count(l => l.Level == level && l.Message.Contains(path, StringComparison.Ordinal)); }
+            }
+        }
+
+        private (SqliteFrameRepository Repo, RecordingLogger<SqliteFrameRepository> Log) LoggedRepo() {
+            var log = new RecordingLogger<SqliteFrameRepository>();
+            return (new SqliteFrameRepository(_db, new InMemoryProfileStore(), logger: log, captureRoots: () => new[] { _root }), log);
+        }
+
+        [Test]
+        public async Task A_refused_path_warns_once_and_repeats_go_to_debug() {
+            // The 2026-10-18 rig: rows catalogued under the pre-store save directory were refused on every
+            // gallery view, and each refusal wrote the same warning again.
+            var outsidePath = Path.Combine(_outside, "old.fits");
+            var outside = await InsertAsync(outsidePath);
+            var (repo, log) = LoggedRepo();
+
+            for (var round = 0; round < 2; round++) {
+                var thumb = await repo.GetThumbnailAsync(outside, CancellationToken.None);
+                Assert.That(thumb!.Value.Bytes.Length, Is.LessThan(2000), "still the placeholder");
+                var preview = await repo.GetPreviewAsync(outside, new FramePreviewRequestDto(null!, null, null, null, null, ApplyDebayer: true), CancellationToken.None);
+                Assert.That(preview!.Value.Bytes.Length, Is.LessThan(2000), "still the placeholder");
+                Assert.That(await repo.GetHistogramAsync(outside, CancellationToken.None), Is.Null, "still refused");
+                Assert.That(await repo.OpenDownloadAsync(outside, CancellationToken.None), Is.Null, "still refused");
+            }
+
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, outsidePath), Is.EqualTo(1), "one warning for the path");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Debug, outsidePath), Is.GreaterThanOrEqualTo(7), "every repeat at Debug");
+        }
+
+        [Test]
+        public async Task Each_refused_path_warns_once_on_its_own() {
+            var firstPath = Path.Combine(_outside, "a.fits");
+            var secondPath = Path.Combine(_outside, "b.fits");
+            var first = await InsertAsync(firstPath);
+            var second = await InsertAsync(secondPath);
+            var (repo, log) = LoggedRepo();
+
+            for (var round = 0; round < 3; round++) {
+                Assert.That(await repo.OpenDownloadAsync(first, CancellationToken.None), Is.Null);
+                Assert.That(await repo.OpenDownloadAsync(second, CancellationToken.None), Is.Null);
+            }
+
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, firstPath), Is.EqualTo(1));
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, secondPath), Is.EqualTo(1), "a second path is not hidden by the first");
+        }
+
+        [Test]
+        public async Task Past_the_cap_refusals_still_warn() {
+            var firstPath = Path.Combine(_outside, "a.fits");
+            var secondPath = Path.Combine(_outside, "b.fits");
+            var first = await InsertAsync(firstPath);
+            var second = await InsertAsync(secondPath);
+            var (repo, log) = LoggedRepo();
+            repo.RefusalsNotedCap = 1;
+            repo.RefusalsPastCapWarnInterval = TimeSpan.Zero;
+
+            for (var round = 0; round < 2; round++) {
+                Assert.That(await repo.OpenDownloadAsync(first, CancellationToken.None), Is.Null);
+                Assert.That(await repo.OpenDownloadAsync(second, CancellationToken.None), Is.Null);
+            }
+
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, firstPath), Is.EqualTo(1), "recorded under the cap");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, secondPath), Is.EqualTo(2), "past the cap, an open window warns");
+        }
+
+        [Test]
+        public async Task Past_the_cap_warnings_are_rate_limited() {
+            // A moved save directory strands every frame under it: a catalogue with more stale rows than
+            // the cap must not bring the per-view warning flood back.
+            string[] paths = [Path.Combine(_outside, "a.fits"), Path.Combine(_outside, "b.fits"), Path.Combine(_outside, "c.fits")];
+            var ids = new List<Guid>();
+            foreach (var path in paths) {
+                ids.Add(await InsertAsync(path));
+            }
+            var (repo, log) = LoggedRepo();
+            repo.RefusalsNotedCap = 1;
+            repo.RefusalsPastCapWarnInterval = TimeSpan.FromHours(1);
+
+            for (var round = 0; round < 3; round++) {
+                foreach (var id in ids) {
+                    Assert.That(await repo.OpenDownloadAsync(id, CancellationToken.None), Is.Null, "still refused");
+                }
+            }
+
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, paths[0]), Is.EqualTo(1), "recorded under the cap");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, paths[1]), Is.EqualTo(1), "the first refusal past the cap warns");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Warning, paths[2]), Is.EqualTo(0), "inside the window: Debug only");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Debug, paths[2]), Is.EqualTo(3), "still logged, at Debug");
+            Assert.That(log.Count(Microsoft.Extensions.Logging.LogLevel.Debug, paths[1]), Is.EqualTo(2), "repeats past the cap at Debug");
+        }
     }
 }

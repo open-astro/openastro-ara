@@ -25,41 +25,40 @@ class _Fixed extends MonitorState {
 final _asOf = DateTime(2026, 11, 15, 0, 23);
 
 /// A colour camera mid-frame: one plan row with no filter name.
-MonitorSnapshot _snap({
-  String? filter = '',
-  MonitorLastFrame lastFrame = const MonitorLastFrame(),
-}) => MonitorSnapshot(
-  asOf: _asOf,
-  verdict: const MonitorVerdict(
-    MonitorVerdictKind.allGood,
-    MonitorStatus.normal,
-    target: 'NGC 1269',
-  ),
-  now: MonitorNow(
-    status: MonitorStatus.working,
-    word: MonitorNowWord.exposing,
-    target: 'NGC 1269',
-    filter: filter,
-    subSeconds: 60,
-    frameEndsAt: _asOf.add(const Duration(seconds: 36)),
-    frameSeconds: 60,
-    frame: 27,
-    frames: 120,
-    targetSecondsLeft: 5640,
-    filters: [(filter: filter ?? '', done: 26, total: 120, inHand: true)],
-  ),
-  upNext: [
-    MonitorUpNext(
-      MonitorUpKind.nextFrame,
-      at: _asOf.add(const Duration(seconds: 36)),
-      frame: 28,
-      name: filter,
-    ),
-  ],
-  flip: const MonitorFlip(state: null),
-  lastFrame: lastFrame,
-  night: const MonitorNight(),
-);
+MonitorSnapshot _snap({String? filter = '', MonitorConditions? conditions}) =>
+    MonitorSnapshot(
+      asOf: _asOf,
+      verdict: const MonitorVerdict(
+        MonitorVerdictKind.allGood,
+        MonitorStatus.normal,
+        target: 'NGC 1269',
+      ),
+      now: MonitorNow(
+        status: MonitorStatus.working,
+        word: MonitorNowWord.exposing,
+        target: 'NGC 1269',
+        filter: filter,
+        subSeconds: 60,
+        frameEndsAt: _asOf.add(const Duration(seconds: 36)),
+        frameSeconds: 60,
+        frame: 27,
+        frames: 120,
+        targetSecondsLeft: 5640,
+        filters: [(filter: filter ?? '', done: 26, total: 120, inHand: true)],
+      ),
+      upNext: [
+        MonitorUpNext(
+          MonitorUpKind.nextFrame,
+          at: _asOf.add(const Duration(seconds: 36)),
+          frame: 28,
+          name: filter,
+        ),
+      ],
+      flip: const MonitorFlip(state: null),
+      conditions: conditions,
+      lastFrame: const MonitorLastFrame(),
+      night: const MonitorNight(),
+    );
 
 Future<void> _pump(WidgetTester tester, MonitorSnapshot snap) async {
   tester.view.physicalSize = const Size(1288, 780);
@@ -110,19 +109,21 @@ void main() {
   );
 
   testWidgets(
-    'the autofocus line ends on "since then", not a dangling "since"',
+    'the change since the last autofocus is a signed value over its time',
     (tester) async {
       await _pump(
         tester,
         _snap(
-          lastFrame: MonitorLastFrame(
-            focuser: true,
-            autofocusAt: DateTime(2026, 11, 14, 23, 50),
-            tempSinceAutofocus: -0.8,
+          conditions: MonitorConditions(
+            rig: MonitorRigTemps(
+              autofocusAt: DateTime(2026, 11, 14, 23, 50),
+              tempSinceAutofocus: -0.8,
+            ),
           ),
         ),
       );
-      expect(find.text('Autofocus 23:50 · −0.8 °C since then'), findsOneWidget);
+      expect(find.text('−0.8 °C', findRichText: true), findsOneWidget);
+      expect(find.text('Autofocus 23:50'), findsOneWidget);
     },
   );
 }

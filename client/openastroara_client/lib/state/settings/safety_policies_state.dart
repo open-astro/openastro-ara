@@ -32,6 +32,13 @@ class SafetyPolicies {
   // On meridian flip.
   final bool meridianFlipAuto;
   final int meridianPauseMin;
+  // #2044 — the flip window after the meridian (NINA's MinutesAfterMeridian
+  // and MaxMinutesAfterMeridian); a non-zero [meridianPauseMin] overrides it.
+  final int minutesAfterMeridian;
+  final int maxMinutesAfterMeridian;
+  // #2044 — with the flip off, the daemon stops tracking and pauses the plan
+  // this many minutes before the meridian. 0 = off (null on the wire).
+  final int stopBeforeMeridianMin;
   final bool meridianRecenter;
   // Legacy bool the wire still carries (true ≡ meridianGuiderRecal != skip).
   final bool meridianRecalGuider;
@@ -137,6 +144,9 @@ class SafetyPolicies {
     this.resumeDelayMin = 10,
     this.meridianFlipAuto = true,
     this.meridianPauseMin = 5,
+    this.minutesAfterMeridian = 5,
+    this.maxMinutesAfterMeridian = 10,
+    this.stopBeforeMeridianMin = 0,
     this.meridianRecenter = true,
     this.meridianRecalGuider = true,
     this.meridianRefocus = MeridianRefocusMode.ifTempDrifted,
@@ -181,6 +191,9 @@ class SafetyPolicies {
     int? resumeDelayMin,
     bool? meridianFlipAuto,
     int? meridianPauseMin,
+    int? minutesAfterMeridian,
+    int? maxMinutesAfterMeridian,
+    int? stopBeforeMeridianMin,
     bool? meridianRecenter,
     bool? meridianRecalGuider,
     MeridianRefocusMode? meridianRefocus,
@@ -224,6 +237,11 @@ class SafetyPolicies {
         resumeDelayMin: resumeDelayMin ?? this.resumeDelayMin,
         meridianFlipAuto: meridianFlipAuto ?? this.meridianFlipAuto,
         meridianPauseMin: meridianPauseMin ?? this.meridianPauseMin,
+        minutesAfterMeridian: minutesAfterMeridian ?? this.minutesAfterMeridian,
+        maxMinutesAfterMeridian:
+            maxMinutesAfterMeridian ?? this.maxMinutesAfterMeridian,
+        stopBeforeMeridianMin:
+            stopBeforeMeridianMin ?? this.stopBeforeMeridianMin,
         meridianRecenter: meridianRecenter ?? this.meridianRecenter,
         meridianRecalGuider: meridianRecalGuider ?? this.meridianRecalGuider,
         meridianRefocus: meridianRefocus ?? this.meridianRefocus,
@@ -299,6 +317,35 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
   void setMeridianPauseMin(int v) {
     if (v < 0) return;
     state = state.copyWith(meridianPauseMin: v);
+  }
+
+  /// #2044 — the flip window after the meridian (Advanced rows).
+  void setMinutesAfterMeridian(int v) {
+    if (v < 0) return;
+    state = state.copyWith(minutesAfterMeridian: v);
+  }
+
+  void setMaxMinutesAfterMeridian(int v) {
+    if (v < 0) return;
+    state = state.copyWith(maxMinutesAfterMeridian: v);
+  }
+
+  /// #2044 — Simple Mode's signed "At the meridian" (see [meridianTimingMin]).
+  void setMeridianTimingMin(int v) => state = withMeridianTimingMin(state, v);
+
+  /// #2044 — puts back the three flip-window fields of [old] (a failed save),
+  /// leaving every other field as it is now.
+  void restoreMeridianWindow(SafetyPolicies old) => state = state.copyWith(
+    meridianPauseMin: old.meridianPauseMin,
+    minutesAfterMeridian: old.minutesAfterMeridian,
+    maxMinutesAfterMeridian: old.maxMinutesAfterMeridian,
+  );
+
+  /// #2044 — minutes before the meridian at which the rig stops tracking with
+  /// the flip off; 0 = off.
+  void setStopBeforeMeridianMin(int v) {
+    if (v < 0) return;
+    state = state.copyWith(stopBeforeMeridianMin: v);
   }
 
   void setMeridianRecenter(bool v) =>
@@ -469,6 +516,25 @@ class SafetyPoliciesNotifier extends Notifier<SafetyPolicies>
 
   Future<SafetyPolicies> persistToServer(ProfileApi api) =>
       persistGuarded((sent) => api.putSafetyPolicies(sent));
+}
+
+/// #2044 — Simple Mode's one signed "At the meridian" value over the three
+/// flip-window fields: negative = stop tracking that many minutes before the
+/// meridian, wait for it to pass, then flip ([SafetyPolicies.meridianPauseMin],
+/// which the daemon treats as a hard stop); positive = keep tracking that long
+/// after it, then flip ([SafetyPolicies.minutesAfterMeridian], the window's
+/// end 5 min later); 0 = flip on it.
+int meridianTimingMin(SafetyPolicies p) =>
+    p.meridianPauseMin > 0 ? -p.meridianPauseMin : p.minutesAfterMeridian;
+
+/// #2044 — [p] with the signed value [v] written: only one side is non-zero.
+SafetyPolicies withMeridianTimingMin(SafetyPolicies p, int v) {
+  final after = v > 0 ? v : 0;
+  return p.copyWith(
+    meridianPauseMin: v < 0 ? -v : 0,
+    minutesAfterMeridian: after,
+    maxMinutesAfterMeridian: after + 5,
+  );
 }
 
 final safetyPoliciesProvider =

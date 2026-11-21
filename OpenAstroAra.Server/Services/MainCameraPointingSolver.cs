@@ -80,7 +80,7 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
 
     public async Task<string?> UnavailableReasonAsync(CancellationToken ct) {
         // The same optics check the capture makes, so a focal length left at 0 refuses before the
-        // mount moves instead of after Home and the Dec-85° slew (the 2026-11-07 first attempt).
+        // mount moves instead of after Home and the move off the axis (the 2026-11-07 first attempt).
         LegacyProfileBridge.SyncPlateSolve(_profileService, _profileStore);
         var profile = _profileService.ActiveProfile;
         if (profile is null) {

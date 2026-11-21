@@ -146,8 +146,8 @@ void main() {
     'an edit in the row saves at once and the Settings panel shows it (#1736)',
     (tester) async {
       final api = await _pump(tester);
-      await _enter(tester, _seed, '45');
-      expect(api.saved.single.seedRotationDeg, 45.0);
+      await _enter(tester, _seed, '25');
+      expect(api.saved.single.seedRotationDeg, 25.0);
       // Settings rows, in order: tolerance, turn, verify step, rough exposure.
       final settingsFields = find.descendant(
         of: find.byType(ImagingPolarPanel),
@@ -155,7 +155,7 @@ void main() {
       );
       expect(
         tester.widget<TextField>(settingsFields.at(1)).controller!.text,
-        '45',
+        '25',
       );
     },
   );
@@ -165,7 +165,7 @@ void main() {
     (tester) async {
       final rig = _Api()
         ..settings = const PolarAlignSettings(
-          seedRotationDeg: 45,
+          seedRotationDeg: 25,
           checkStepDeg: 20,
           coarseExposureSeconds: 5,
         );
@@ -174,7 +174,7 @@ void main() {
       expect(
         find.descendant(
           of: row,
-          matching: find.text('45° turn · 20° step · 5 s'),
+          matching: find.text('25° turn · 20° step · 5 s'),
         ),
         findsOneWidget,
       );
@@ -236,17 +236,15 @@ void main() {
   );
 
   testWidgets(
-    'seed 4 and check 61 are refused in the field with the range, and nothing is sent (#1736)',
+    'seed 4 and check 31 are refused in the field with the range, and nothing is sent (#1736)',
     (tester) async {
       final api = await _pump(tester);
       await _enter(tester, _seed, '4');
-      await _enter(tester, _check, '61');
+      await _enter(tester, _check, '31');
       expect(api.saved, isEmpty);
-      expect(find.textContaining('5 to 120'), findsWidgets);
-      expect(find.textContaining('5 to 60'), findsWidgets);
+      expect(find.textContaining('5 to 30'), findsWidgets);
       expect(_text(tester, _seed), '4');
-      expect(find.text('Out of range: use 5 to 120'), findsOneWidget);
-      expect(find.text('Out of range: use 5 to 60'), findsOneWidget);
+      expect(find.text('Out of range: use 5 to 30'), findsNWidgets(2));
     },
   );
 
@@ -330,17 +328,17 @@ void main() {
     (tester) async {
       final api = await _pump(tester);
       await _enter(tester, _seed, '4');
-      expect(find.text('Out of range: use 5 to 120'), findsOneWidget);
+      expect(find.text('Out of range: use 5 to 30'), findsOneWidget);
       final settingsFields = find.descendant(
         of: find.byType(ImagingPolarPanel),
         matching: find.byType(TextField),
       );
       await tester.ensureVisible(settingsFields.at(1));
-      await tester.enterText(settingsFields.at(1), '45');
+      await tester.enterText(settingsFields.at(1), '25');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
-      expect(api.saved.single.seedRotationDeg, 45.0);
-      expect(_text(tester, _seed), '45');
+      expect(api.saved.single.seedRotationDeg, 25.0);
+      expect(_text(tester, _seed), '25');
       expect(find.textContaining('Out of range'), findsNothing);
     },
   );

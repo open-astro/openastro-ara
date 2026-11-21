@@ -318,16 +318,24 @@ void main() {
       expect(homing.isActive, isTrue);
     });
 
-    test('settings carry the stage knobs and default the turn to 60°', () {
+    test('settings carry the stage knobs and default the turn to 10°', () {
       const defaults = PolarAlignSettings();
-      expect(defaults.seedRotationDeg, 60.0);
-      expect(defaults.checkStepDeg, 30.0);
+      expect(defaults.seedRotationDeg, 10.0);
+      expect(defaults.checkStepDeg, 10.0);
       expect(defaults.coarseExposureSeconds, 3.0);
       expect(defaults.useHome, isTrue);
       final json = defaults.copyWith(useHome: false, checkStepDeg: 15).toJson();
       expect(json['use_home'], isFalse);
       expect(PolarAlignSettings.fromJson(json).checkStepDeg, 15.0);
       expect(PolarAlignSettings.fromJson(json).useHome, isFalse);
+    });
+
+    test('settings carry stop_tracking_when_done, on unless the daemon says off (#2048)', () {
+      expect(const PolarAlignSettings().stopTrackingWhenDone, isTrue, reason: "NINA's default");
+      expect(PolarAlignSettings.fromJson(const {}).stopTrackingWhenDone, isTrue, reason: 'an older daemon');
+      final json = const PolarAlignSettings().copyWith(stopTrackingWhenDone: false).toJson();
+      expect(json['stop_tracking_when_done'], isFalse);
+      expect(PolarAlignSettings.fromJson(json).stopTrackingWhenDone, isFalse);
     });
   });
 

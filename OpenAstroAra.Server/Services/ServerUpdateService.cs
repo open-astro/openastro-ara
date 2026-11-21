@@ -205,7 +205,7 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
 
         // --no-block: the oneshot restarts THIS process part-way through, so a blocking start
         // would never return. The result file is what reports the outcome (GetStatusAsync).
-        var (exitCode, output) = await run("systemctl", ["start", "--no-block", $"openastroara-update@{id}.service"], ct)
+        var (exitCode, output) = await run("systemctl", [Systemctl.NoAskPassword, "start", "--no-block", $"openastroara-update@{id}.service"], ct)
             .ConfigureAwait(false);
         if (exitCode != 0) {
             TryDelete(requestPath);

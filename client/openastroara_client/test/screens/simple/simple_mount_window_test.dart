@@ -49,6 +49,12 @@ class _Mount extends MountNotifier {
     calls.add('unpark');
     return true;
   }
+
+  @override
+  Future<bool> confirmHome() async {
+    calls.add('confirm-home');
+    return true;
+  }
 }
 
 Map<String, dynamic> _wire({bool tracking = true, bool parked = false, String state = 'connected', String runtime = 'tracking'}) => {
@@ -82,7 +88,10 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          // Scrolls, as the shell's window does: the Limits group (#2044) makes it tall.
+          child: SingleChildScrollView(
+            child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          ),
         ),
       ),
     ),
@@ -91,7 +100,39 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
   return (c, mount);
 }
 
+/// #2070 — a mount at its false zero after a power loss: the rig does not trust its position.
+Map<String, dynamic> _unverified({required bool atHome}) {
+  final w = _wire(tracking: false, runtime: 'idle');
+  w['runtime'] = {
+    ...w['runtime'] as Map<String, dynamic>,
+    'at_home': atHome,
+    'position_unverified': true,
+    'position_unverified_reason': 'at_home_on_connect',
+  };
+  return w;
+}
+
 void main() {
+  testWidgets('an unverified position is said, Park is off, and Home is confirmed only after asking (#2070)', (tester) async {
+    final (_, mount) = await _pump(tester, _unverified(atHome: true));
+    expect(find.byKey(const Key('simple-mount-position-unverified')), findsOneWidget);
+    expect(find.text('Mount position unverified'), findsOneWidget);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).onTap, isNull,
+        reason: 'the rig refuses a park from an unverified position');
+    await tester.tap(find.byKey(const Key('simple-mount-confirm-home')));
+    await tester.pump();
+    expect(mount.calls, isEmpty, reason: 'the window asks first');
+    await tester.tap(find.text('Yes, it is at Home'));
+    await tester.pump();
+    expect(mount.calls, ['confirm-home']);
+  });
+
+  testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {
+    await _pump(tester, _unverified(atHome: false));
+    expect(find.byKey(const Key('simple-mount-run-zero-search')), findsOneWidget);
+    expect(find.byKey(const Key('simple-mount-confirm-home')), findsNothing);
+  });
+
   testWidgets('a tap dropped while the last command runs says so in a pill, once (ALP-4982)', (tester) async {
     // #1486 review: Tracking Off then Parked before the first answer dropped the second with no word.
     final (c, mount) = await _pump(tester, _wire());
@@ -105,6 +146,18 @@ void main() {
     expect(c.read(simpleMessagesProvider), hasLength(1), reason: 'one pill, not one per tap');
     await tester.pump(const Duration(seconds: 11));
     expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades like a result');
+  });
+
+  testWidgets('the Limits group sits under the rows and the pad, in the window and in Settings (#2044)', (tester) async {
+    for (final inSettings in [false, true]) {
+      await _pump(tester, _wire(), inSettings: inSettings);
+      final flip = tester.getTopLeft(find.byKey(const Key('simple-window-row-Meridian flip')));
+      final pad = tester.getBottomLeft(find.byKey(const Key('simple-mount-pad-none')));
+      final limits = tester.getTopLeft(find.byKey(const Key('simple-mount-limits')));
+      expect(limits.dy, greaterThan(flip.dy));
+      expect(limits.dy, greaterThan(pad.dy), reason: 'the pad stays at the top');
+      expect(find.text('LIMITS'), findsOneWidget);
+    }
   });
 
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {

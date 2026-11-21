@@ -77,7 +77,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static async Task<List<NotificationDto>> BootAndListProfileNoticesAsync() {
-            var app = Program.BuildApp([]);
+            var app = Program.BuildApp([], TestHostSeams.Replace);
             try {
                 var page = await app.Services.GetRequiredService<INotificationService>()
                     .ListAsync(50, null, null, CancellationToken.None);

@@ -100,6 +100,9 @@ public static class WsEventCatalog {
     public static readonly WsEvent TelescopeSlewStarted = new("telescope.slew_started");
     public static readonly WsEvent TelescopeSlewComplete = new("telescope.slew_complete");
     public static readonly WsEvent TelescopeSlewAborted = new("telescope.slew_aborted");
+    // #2044 — MeridianStopWatch stopped tracking at a mount limit (the meridian, with the flip off) and paused the
+    // active runs; it never slews or parks. Payload TelescopeLimitReachedPayload.
+    public static readonly WsEvent TelescopeLimitReached = new("telescope.limit_reached");
     // §63.18 — one event per guide frame while the guider is connected, straight from the
     // daemon's GuideStep stream: payload { frame, time_sec, ra_raw_px, dec_raw_px,
     // ra_arcsec?, dec_arcsec? (null until the guider reports a pixel scale), ra_duration_ms,
@@ -319,6 +322,7 @@ public static class WsEventCatalog {
         [CameraExposureComplete.Token] = typeof(ExposureCompletePayload),
         [CameraExposureFailed.Token] = typeof(ExposureFailedPayload),
         [EndNightProgress.Token] = typeof(EndNightProgressPayload),
+        [TelescopeLimitReached.Token] = typeof(TelescopeLimitReachedPayload),
     };
 
     /// <summary>
@@ -342,6 +346,7 @@ public static class WsEventCatalog {
         TelescopeSlewStarted,
         TelescopeSlewComplete,
         TelescopeSlewAborted,
+        TelescopeLimitReached,
         GuiderStep,
         GuiderEvent,
         GuiderPaResidual,

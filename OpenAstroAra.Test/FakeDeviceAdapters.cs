@@ -308,15 +308,29 @@ namespace OpenAstroAra.Test {
         public Action? OnSideOfPierWrite;
         public volatile bool CanSyncValue = true;
         public volatile bool CanSetPierSideValue;
-        private int _syncs;
-        public int Syncs => Volatile.Read(ref _syncs);
-        private int _gotos;
-        public int Gotos => Volatile.Read(ref _gotos);
         private int _aborts;
         public int Aborts => Volatile.Read(ref _aborts);
         private int _moveAxisStops;
         public int MoveAxisStops => Volatile.Read(ref _moveAxisStops);
         public bool TrackingOn { get; set; } = true;
+        // #2070 — what the mount reports: AtHome and Dec (a false zero after a power loss reads AtHome, Dec 90).
+        public volatile bool ReportsAtHome;
+        public double Dec { get => Volatile.Read(ref _dec); set => Volatile.Write(ref _dec, value); }
+        private double _dec = 30.0;
+        private int _parks;
+        public int Parks => Volatile.Read(ref _parks);
+        private int _homes;
+        public int Homes => Volatile.Read(ref _homes);
+        private int _slews;
+        public int Slews => Volatile.Read(ref _slews);
+        public int Gotos => Slews;
+        private int _syncs;
+        public int Syncs => Volatile.Read(ref _syncs);
+        private int _moveAxisStarts;
+        public int MoveAxisStarts => Volatile.Read(ref _moveAxisStarts);
+        private int _pierSideWrites;
+        public int PierSideWrites => Volatile.Read(ref _pierSideWrites);
+        public bool PierSideSettable { get => CanSetPierSideValue; set => CanSetPierSideValue = value; }
 
         private void ThrowIfLatched() {
             if (Latched) {
@@ -331,16 +345,19 @@ namespace OpenAstroAra.Test {
             }
         }
         public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return 5.0; } }
-        public double Declination { get { ThrowIfLatched(); return 30.0; } }
+        public double Declination { get { ThrowIfLatched(); return Dec; } }
         public double TargetRightAscension => throw new InvalidOperationException("no target set");
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
         public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
         public bool AtPark { get { ThrowIfLatched(); return AtParkScript?.Invoke() ?? false; } }
-        public bool AtHome { get { ThrowIfLatched(); return false; } }
+        public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome; } }
         public bool IsPulseGuiding => false;
-        public PointingState SideOfPier { get => PointingState.Normal; set => OnSideOfPierWrite?.Invoke(); }
+        public PointingState SideOfPier { get => PointingState.Normal; set { Interlocked.Increment(ref _pierSideWrites); OnSideOfPierWrite?.Invoke(); } }
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
+        /// <summary>#2073 — the mount type; null makes the read throw, as a driver that does not implement it.</summary>
+        public AlignmentMode? Alignment { get; set; } = AlignmentMode.GermanPolar;
+        public AlignmentMode AlignmentMode => Alignment ?? throw new ASCOM.NotImplementedException("AlignmentMode");
         public bool CanSlewAsync => true;
         public bool CanSlew => true;
         public bool CanSync => CanSyncValue;
@@ -369,13 +386,13 @@ namespace OpenAstroAra.Test {
             return ActionResponder is { } respond ? respond(name, parameters) : throw new ASCOM.NotImplementedException(name);
         }
         public PointingState DestinationSideOfPier(double raHours, double decDegrees) => PointingState.Normal;
-        public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } }
+        public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } else { Interlocked.Increment(ref _moveAxisStarts); } }
         public override void Stop() => AbortSlew();
         public void AbortSlew() => Interlocked.Increment(ref _aborts);
-        public void Park() => OnCommand?.Invoke();
+        public void Park() { Interlocked.Increment(ref _parks); OnCommand?.Invoke(); }
         public void Unpark() => OnCommand?.Invoke();
-        public void FindHome() => OnCommand?.Invoke();
-        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { Interlocked.Increment(ref _gotos); OnCommand?.Invoke(); }
+        public void FindHome() { Interlocked.Increment(ref _homes); OnCommand?.Invoke(); }
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { Interlocked.Increment(ref _slews); OnCommand?.Invoke(); }
         public void SyncToCoordinates(double raHours, double decDegrees) { Interlocked.Increment(ref _syncs); OnSync?.Invoke(); }
 
         private sealed class FakeTrackingRates : ITrackingRates {

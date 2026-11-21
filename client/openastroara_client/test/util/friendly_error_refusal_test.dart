@@ -24,6 +24,12 @@ Refusal _known(RefusalCause cause) => Refusal(
       ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
       : cause == RefusalCause.belowHorizonLimit
       ? const {'altitude_deg': 14.2, 'limit_deg': 20}
+      : cause == RefusalCause.counterweightLimit
+      ? const {
+          'hour_angle_hours': -11.13,
+          'counterweight_angle_deg': 77.0,
+          'limit_deg': 60,
+        }
       : const {},
 );
 
@@ -86,6 +92,31 @@ void main() {
       expect(words, contains('20'));
     }
   });
+
+  test('an unverified mount position read too early says to try again (#2070)', () {
+    for (final l in [_en, _pt]) {
+      const early = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {'position_unverified_reason': 'not_read_yet'},
+      );
+      expect(failureReason(l, early), l.refusalMountPositionNotReadYet);
+      expect(failureReason(l, _known(RefusalCause.mountPositionUnverified)),
+          l.refusalMountPositionUnverified);
+    }
+  });
+  test(
+    'the counterweight sentence names the hour angle, the angle and the limit',
+    () {
+      for (final l in [_en, _pt]) {
+        final words = failureReason(l, _known(RefusalCause.counterweightLimit));
+        expect(words, contains('-11.1'));
+        expect(words, contains('77'));
+        expect(words, contains('60'));
+      }
+    },
+  );
 
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(

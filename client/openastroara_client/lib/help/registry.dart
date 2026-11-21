@@ -502,6 +502,35 @@ const Map<String, Help> helpRegistry = {
         'On a mount where the scope or camera can touch the pier, set this to the time the target takes to get from a safe angle to the meridian, and leave a little extra. 0 turns the early stop off: the flip then runs inside the after-meridian window.',
     relatedSettings: ['safety.policies.meridian_flip_auto'],
   ),
+  'safety.policies.minutes_after_meridian': Help(
+    key: 'safety.policies.minutes_after_meridian',
+    title: 'Flip after the meridian',
+    body:
+        'How many minutes the mount keeps tracking past the meridian before the automatic flip. The flip can run from then until the latest flip time. '
+        'It is ignored while Stop before meridian (min) is above 0: that early stop is a hard stop, and the flip then runs once the meridian has passed. Simple Mode sets it from Mount › At the meridian.',
+    relatedSettings: [
+      'safety.policies.max_minutes_after_meridian',
+      'safety.policies.meridian_pause_min',
+    ],
+  ),
+  'safety.policies.max_minutes_after_meridian': Help(
+    key: 'safety.policies.max_minutes_after_meridian',
+    title: 'Latest flip after the meridian',
+    body:
+        'The end of the flip window: the latest the automatic flip may run, in minutes past the meridian. It is never below Flip after the meridian (min). Simple Mode sets it 5 min after that value.',
+    relatedSettings: ['safety.policies.minutes_after_meridian'],
+  ),
+  'safety.policies.stop_before_meridian_min': Help(
+    key: 'safety.policies.stop_before_meridian_min',
+    title: 'Stop before meridian, flip off',
+    body:
+        'Only with Auto flip off. That many minutes before the meridian, Ara stops tracking and pauses the plan, and says why. It never moves the mount. 0 is off: the mount tracks through the meridian and only its own firmware limit stops it. '
+        'With Auto flip on, Stop before meridian (min) does the early stop instead.',
+    relatedSettings: [
+      'safety.policies.meridian_flip_auto',
+      'safety.policies.meridian_pause_min',
+    ],
+  ),
   'safety.policies.on_altitude_limit': Help(
     key: 'safety.policies.on_altitude_limit',
     title: 'On altitude limit',
@@ -1122,13 +1151,15 @@ const Map<String, Help> helpRegistry = {
     key: 'setup.polar_align.stages',
     title: 'Polar alignment in three steps',
     body:
-        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), slews a few degrees off the axis and turns in RA by the profile\'s seed turn (60° for a new profile) with the *main camera* solving a frame at each end; that measures where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
-        '* **Fine** — the mount goes Home again, and the *guide camera* takes two solved frames around the same turn in RA (from Home the mount first slews a few degrees off the axis, where the turn draws a circle the fit can use), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
-        '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (30° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
+        '* **Rough** — the mount goes Home (Find Home, or you put it there and tap *Continue*), its Dec motor tilts the tube 5° off the axis, and its RA motor makes two turns of the profile\'s seed turn (10° for a new profile), with the *main camera* solving a frame at each of the three stops; the circle through them is where the mount\'s axis really points (a camera not square to the axis adds nothing false), then tracking stops and every solve follows your knob moves. The readout says how far from the pole the axis sits and on which side: above or below, east or west. The main camera\'s frames take a few seconds each, so use this step for the big moves and tap **Next: fine** within a few arcminutes.\n'
+        '* **Fine** — the mount goes Home again and the *guide camera* measures the axis the same way (the 5° tilt, three solves, two RA turns), then tracking stops and every solve shows your knob adjustments live. Lower/Raise and Move east/west name the knob to turn.\n'
+        '* **Check** — once inside the tolerance, **Verify** sends the mount Home again and takes three solves, turning the profile\'s check step (10° for a new profile) between them. Three points fix the axis exactly, with nothing taken from the live loop, so the verdict says how good the alignment really is; a check whose three frames do not describe a turn (a slipping clutch) gives no verdict. *Disagreement* is how far the check\'s axis sits from the fine readout\'s: more than 2′ means trust the check and adjust again.\n'
         '* **Done** without the check ends the routine where it is; *Skip the rough step* and *Check only* on the Start card jump straight to a later step.\n'
-        '* From Home the tube turns about the axis line, so the 60° turn cannot reach the pier; the mount\'s own limits still apply.',
+        '* With *Send the mount Home first* on (the default), every move is one motor at a time, never a GoTo, as NINA\'s three-point polar alignment: the whole measurement stays within 20° of RA and 5° of Dec of Home, and Stop halts the motor at once. With it off, each later step first returns to where the run started with a GoTo. The mount\'s own limits still apply.\n'
+        '* **Stop** stops the mount where it is: it aborts a GoTo or Find Home, stops both motors and checks that the mount stands still. Every end of a run leaves tracking off unless *Stop tracking when polar align ends* is off and the run finished.',
     relatedHelpKeys: [
       'img.polar.use_home',
+      'img.polar.stop_tracking_when_done',
       'img.polar.seed_rotation_deg',
       'img.polar.check_step_deg',
       'img.polar.coarse_exposure_seconds',
@@ -2424,6 +2455,14 @@ const Map<String, Help> helpRegistry = {
         'On, every stage starts by sending the mount Home. Off, the mount\'s current pointing is taken as Home: put the mount where you want Home to be right before each stage. Use it for a mount whose Home is not on the pole, or whose Find Home is unreliable.',
     relatedSettings: ['img.polar.use_home'],
   ),
+  'img.polar.stop_tracking_when_done': Help(
+    key: 'img.polar.stop_tracking_when_done',
+    title: 'Stop tracking when polar align ends',
+    body:
+        'On (the default, as NINA): every end of a run turns tracking off, so the mount cannot track into the pier while nobody watches. Off: a run that finishes (Done, or the Verify result) gives back the tracking it found. A Stop or a failure always leaves tracking off. Starting guiding while a run is open gives back the tracking it found, because guiding needs it.\n\n'
+        'Every end of a run also stops the mount first: Ara aborts a GoTo or Find Home, stops both motors, and checks that the mount stands still. If it cannot confirm that, it tells you to cut the mount\'s power.',
+    relatedSettings: ['img.polar.stop_tracking_when_done'],
+  ),
   'img.polar.polar_aligner_auto': Help(
     key: 'img.polar.polar_aligner_auto',
     title: "Correct with the Polar Aligner's motors",
@@ -2435,14 +2474,14 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.seed_rotation_deg',
     title: 'Polar align turn',
     body:
-        'How far the mount turns in RA to measure its axis, from 5° to 120°. A smaller turn suits a mount with limited RA travel.',
+        'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
   'img.polar.check_step_deg': Help(
     key: 'img.polar.check_step_deg',
     title: 'Verify step',
     body:
-        'The RA turn between the three frames of Verify, from 5° to 60°. A smaller step suits a mount with limited RA travel.',
+        'The RA turn between the three frames of Verify, from 5° to 30° (10° by default). The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.check_step_deg'],
   ),
   'img.polar.coarse_exposure_seconds': Help(
