@@ -2754,7 +2754,7 @@ const double kSimpleSettingsMaxWidth = 640;
 
 /// Whether the rail has room for the shutter's caption slot: a window at least
 /// 600 high and text up to 1.3x. Read by [_RailShutter] alone, the one place
-/// that decides caption slot or tooltip (#2038).
+/// that decides whether the rail has the slot (#2038).
 bool simpleRailRoomy(BuildContext context) =>
     MediaQuery.sizeOf(context).height >= 600 &&
     MediaQuery.textScalerOf(context).scale(1) <= 1.3;
@@ -3107,10 +3107,10 @@ class _RailTabs extends ConsumerWidget {
 }
 
 /// The shutter with the room for its caption, the same on every mode so the
-/// rail keeps one size and its top stays put (#2038): Calibration's caption
-/// wraps to three lines at most, and the slot holds three. Where there is no
-/// room to spare ([simpleRailRoomy] false) no mode has a slot, and
-/// Calibration's caption is its shutter's tooltip instead.
+/// rail keeps one size and its top stays put (#2038): the slot holds three
+/// lines, and Calibration's caption shows there when it fits. Where there is
+/// no room to spare ([simpleRailRoomy] false) no mode has a slot. Calibration's
+/// caption is always its shutter's tooltip too, for when it does not show.
 class _RailShutter extends StatelessWidget {
   const _RailShutter({required this.mode});
 
@@ -3120,31 +3120,19 @@ class _RailShutter extends StatelessWidget {
   Widget build(BuildContext context) {
     final calibration = mode == SimpleModeScreen.calibration;
     final scaler = MediaQuery.textScalerOf(context);
-    if (!simpleRailRoomy(context)) {
-      return calibration
-          ? const SimpleCalibrationShutter(captioned: false)
-          : SimpleScreen.of(mode).shutter;
-    }
+    final shutter = calibration
+        ? const SimpleCalibrationShutter(captioned: false)
+        : SimpleScreen.of(mode).shutter;
+    if (!simpleRailRoomy(context)) return shutter;
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
       children: [
-        if (calibration)
-          const SimpleCalibrationShutter(captioned: false)
-        else
-          SimpleScreen.of(mode).shutter,
+        shutter,
         SizedBox(
           height: 3 * scaler.scale(kSimpleCaption.fontSize! * 1.5),
-          // A longer caption shrinks into the slot, never cut and never taller.
           child: calibration
-              ? LayoutBuilder(
-                  // Wrapped to the slot's own width, so it shrinks only when
-                  // three lines are not enough.
-                  builder: (context, box) => FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SimpleCalibrationShutterCaption(width: box.maxWidth),
-                  ),
-                )
+              ? const SimpleCalibrationShutterCaption(slot: true)
               : null,
         ),
       ],

@@ -350,10 +350,10 @@ String simpleCalibrationSummary(BuildContext context, WidgetRef ref) =>
     simpleCalibrationJob(context, ref).chip;
 
 /// The Calibration mode's shutter: the current tab's job; its red square
-/// stops a run. [captioned] false draws no caption under it (the rail keeps one
-/// size, #2038): the rail draws [SimpleCalibrationShutterCaption] in a slot of
-/// its own where there is room, and the job's caption is the shutter's tooltip
-/// where there is not.
+/// stops a run. [captioned] false draws no caption under it but makes the
+/// job's caption the shutter's tooltip (the rail keeps one size, #2038): the
+/// rail draws [SimpleCalibrationShutterCaption] in a slot of its own where it
+/// fits.
 class SimpleCalibrationShutter extends ConsumerWidget {
   const SimpleCalibrationShutter({super.key, this.captioned = true});
 
@@ -391,21 +391,20 @@ class SimpleCalibrationShutter extends ConsumerWidget {
 
 /// What the shutter will do, under it, only when it can: the chip says the
 /// state, and a tap on an idle shutter says why in a pill, as the panel does.
+/// [slot] true: the rail's slot, wrapped to its width and drawn at full size
+/// only when it fits, else not at all (the shutter's tooltip says it, #2038).
 class SimpleCalibrationShutterCaption extends ConsumerWidget {
-  const SimpleCalibrationShutterCaption({super.key, this.width});
+  const SimpleCalibrationShutterCaption({super.key, this.slot = false});
 
-  /// Where the caption wraps; the rail's width at the text size when null.
-  final double? width;
+  final bool slot;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final job = simpleCalibrationJob(context, ref);
     if (job.run == null) return const SizedBox.shrink();
-    return ExcludeSemantics(
-      // As wide as the rail at every text size, so large text wraps the same
-      // words to the same lines instead of cutting them.
+    Widget caption(double width) => ExcludeSemantics(
       child: SizedBox(
-        width: width ?? 64 * simpleRailScale(context),
+        width: width,
         child: Text(
           job.caption,
           key: const Key('simple-calibration-shutter-caption'),
@@ -413,6 +412,25 @@ class SimpleCalibrationShutterCaption extends ConsumerWidget {
           style: kSimpleCaption,
         ),
       ),
+    );
+    // As wide as the rail at every text size, so large text wraps the same
+    // words to the same lines instead of cutting them.
+    if (!slot) return caption(64 * simpleRailScale(context));
+    return LayoutBuilder(
+      builder: (context, box) {
+        final painter = TextPainter(
+          text: TextSpan(
+            text: job.caption,
+            style: DefaultTextStyle.of(context).style.merge(kSimpleCaption),
+          ),
+          textAlign: TextAlign.center,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: box.maxWidth);
+        final fits = painter.height <= box.maxHeight;
+        painter.dispose();
+        return fits ? caption(box.maxWidth) : const SizedBox.shrink();
+      },
     );
   }
 }

@@ -2,11 +2,15 @@ import 'dart:io' show File, Platform;
 import 'dart:typed_data' show ByteData;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter/services.dart' show FontLoader;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/calibration/calibration_models.dart'
+    show DarkLibraryState;
 import 'package:openastroara/models/calibration_status.dart';
+import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_calibration.dart'
@@ -18,12 +22,17 @@ import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/guider_api.dart' show GuiderClient;
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/calibration/calibration_state.dart'
+    show DarkLibraryStatusNotifier, darkLibraryStatusProvider;
+import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/server_state.dart'
     show discoveredServersProvider;
 import 'package:openastroara/state/settings/settings_nav.dart'
     show kLiveTabIndex;
+import 'package:openastroara/state/simple_calibration_state.dart'
+    show simpleLibraryNeedProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
 
 // #2038: the right rail keeps one size on every mode. Calibration's shutter
@@ -73,6 +82,32 @@ class _GuiderCal extends GuiderCalibrationNotifier {
       );
   @override
   Future<void> refresh() async {}
+}
+
+class _DarksTab extends SimpleCalibrationTabNotifier {
+  @override
+  SimpleCalibrationTab build() => SimpleCalibrationTab.darks;
+}
+
+class _Camera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async => CameraStatus.fromJson({
+    'device_id': 'c',
+    'name': 'ASI2600MM',
+    'state': 'connected',
+  });
+}
+
+/// A library with nothing on file: every exposure and the bias to build.
+class _EmptyLibrary extends DarkLibraryStatusNotifier {
+  @override
+  Future<DarkLibraryState?> build() async => const DarkLibraryState(
+    status: 'idle',
+    totalCombinations: 0,
+    completedCombinations: 0,
+    generatedSequenceId: null,
+    entries: [],
+  );
 }
 
 Future<void> _pump(
@@ -143,6 +178,19 @@ final _ready = <Override>[
   simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
 ];
 
+// The longest caption: the Library's, which names every exposure to shoot.
+final _longJob = <Override>[
+  cameraStatusProvider.overrideWith(_Camera.new),
+  darkLibraryStatusProvider.overrideWith(_EmptyLibrary.new),
+  simpleLibraryNeedProvider.overrideWithValue((
+    exposures: [30, 60, 120, 300],
+    gain: 100,
+    offset: null,
+    temperatureC: null,
+  )),
+  simpleCalibrationTabProvider.overrideWith(_DarksTab.new),
+];
+
 final _caption = find.byKey(const Key('simple-calibration-shutter-caption'));
 
 void main() {
@@ -161,11 +209,11 @@ void main() {
         await _open(tester, 'preview');
         final preview = _rail(tester);
         await _open(tester, 'calibration');
-        expect(
-          _caption,
-          ready && roomy ? findsOneWidget : findsNothing,
-          reason: 'the caption shows only where it fits',
-        );
+        // Whether the caption fits the slot is measured with Roboto below:
+        // the test font's square glyphs fit fewer words.
+        if (!roomy) {
+          expect(_caption, findsNothing, reason: 'no slot without room');
+        }
         expect(_rail(tester), preview);
         expect(tester.takeException(), isNull);
       });
@@ -198,32 +246,69 @@ void main() {
   final fonts =
       '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
   final hasFonts = File('$fonts/Roboto-Regular.ttf').existsSync();
-  for (final text in const [1.0, 1.3]) {
-    testWidgets(
-      'the Guide caption is not shrunk in its slot at ${text}x (#2038)',
-      skip: !hasFonts,
-      (tester) async {
-        final roboto = FontLoader('Roboto')
-          ..addFont(
+  Future<void> roboto() =>
+      (FontLoader('Roboto')..addFont(
             Future.value(
               ByteData.view(
                 File('$fonts/Roboto-Regular.ttf').readAsBytesSync().buffer,
               ),
             ),
-          );
-        await roboto.load();
+          ))
+          .load();
+
+  for (final text in const [1.0, 1.3]) {
+    testWidgets(
+      'the Guide caption is not shrunk in its slot at ${text}x (#2038)',
+      skip: !hasFonts,
+      (tester) async {
+        await roboto();
         await _pump(tester, _ready, text: text);
         await _open(tester, 'calibration');
-        final box = tester.getSize(
-          find.ancestor(of: _caption, matching: find.byType(FittedBox)),
+        final slot = tester.getSize(
+          find
+              .ancestor(of: _caption, matching: find.byType(LayoutBuilder))
+              .first,
         );
-        final inner = tester.getSize(_caption);
-        expect(inner.width, box.width, reason: 'wrapped to the slot');
         expect(
-          inner.height,
-          lessThanOrEqualTo(box.height),
-          reason: 'within three lines, so the FittedBox scale is 1.0',
+          find.ancestor(of: _caption, matching: find.byType(FittedBox)),
+          findsNothing,
+          reason: 'drawn at full size, never scaled down',
         );
+        expect(tester.getSize(_caption).width, slot.width);
+        expect(
+          tester
+              .renderObject<RenderParagraph>(_caption)
+              .getMaxIntrinsicHeight(slot.width),
+          lessThanOrEqualTo(slot.height),
+          reason: 'within the three lines of the slot, so never cut',
+        );
+      },
+    );
+
+    testWidgets(
+      'the Library caption that does not fit three lines at ${text}x is the '
+      'tooltip, not a shrunk caption (#2038)',
+      skip: !hasFonts,
+      (tester) async {
+        await roboto();
+        await _pump(tester, _longJob, text: text);
+        await _open(tester, 'preview');
+        final preview = _rail(tester);
+        await _open(tester, 'calibration');
+        expect(_caption, findsNothing);
+        expect(
+          tester
+              .widget<Tooltip>(
+                find.ancestor(
+                  of: find.byKey(const Key('simple-shutter')),
+                  matching: find.byType(Tooltip),
+                ),
+              )
+              .message,
+          'Build 30 s · 1 min · 2 min · 5 min + bias',
+        );
+        expect(_rail(tester), preview);
+        expect(tester.takeException(), isNull);
       },
     );
   }
