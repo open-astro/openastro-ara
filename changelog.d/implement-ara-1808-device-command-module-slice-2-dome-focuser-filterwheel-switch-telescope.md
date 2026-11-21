@@ -1,0 +1,3 @@
+### Changed (equipment)
+
+- **Mount commands use the shared device-command module** (#1808): park, unpark, find home, goto, wait-for-slew, the meridian-flip pier-side hint and sync now share the other devices' timeout, stall, fault and abandoned-call handling; every timeout and poll count stays the same. A mount stall or timeout message now reads "telescope.park was not confirmed settled within the 180s bound" or "telescope.park did not complete within 300s". A sync that hangs past its bound is logged with its abandoned call (still no fault, still not synced). A wait-for-slew that outlasts the slew bound now fails with a stall fault instead of returning quietly; Polar Align, the one routine that waits this way, reports it as a failed slew and raises no fault.

@@ -48,8 +48,8 @@ namespace OpenAstroAra.Server.Services;
 /// <see cref="ParkTelescope"/>, <see cref="UnparkTelescope"/>,
 /// <see cref="FindHome(IProgress{ApplicationStatus}, CancellationToken)"/>) drive the device and
 /// block on a bounded wait for their terminal condition (settled-on-target, AtPark, !AtPark, AtHome),
-/// returning <c>true</c> only when reached — reusing the cancellation+wall-clock-bounded launcher
-/// from the focuser/rotator/dome mediators. The tracking writes are prompt synchronous calls.
+/// returning <c>true</c> only when reached — through the shared device-command module (ADR 0011),
+/// as the focuser/rotator/dome mediators do. The tracking writes are prompt synchronous calls.
 /// The §28 centering loop also drives <see cref="Sync(Coordinates)"/> (a real
 /// <c>SyncToCoordinates</c>, epoch-transformed + capability/parked-guarded), and the §58.4
 /// <see cref="MeridianFlip"/> is the pier-side hint + goto the flip executor runs (#1238). Members no
@@ -58,21 +58,32 @@ namespace OpenAstroAra.Server.Services;
 /// </summary>
 public sealed partial class TelescopeService : ITelescopeMediator {
 
-    private const int MountOpSettleMaxPolls = 1800; // ~180s at the poll interval (park/unpark/findhome)
+    // ADR 0011 rule 5: the mount commands' timeout values. Hard timeout = wall-clock ceiling for a single
+    // blocking mount call (Park/Unpark/FindHome/the slew kickoff/Sync): a silent device must not park a
+    // sequence thread until the OS TCP timeout. The settle wait adds its own bound on top (1,800 x 100 ms
+    // = ~3min for park/unpark/findhome), so ~8min worst case; cancellation cuts it short. The motion flag
+    // is required: an unreadable Slewing keeps polling.
+    internal static readonly DeviceCommandPolicy MountOpPolicy = new(Contracts.DeviceType.Telescope,
+        HardTimeout: TimeSpan.FromMinutes(5), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 1800);
     // Slews get their own, larger ceiling: a slow-slew mount (1–2°/s and below) doing a long goto
     // can legitimately take 5–10 minutes, and a settled-too-early ceiling reports a SUCCESSFUL slew
     // as false to the instruction. ~600s covers a worst-case meridian-to-horizon goto on slow gear
     // without meaningfully widening the hung-driver window (cancellation still cuts it short).
-    // ~600s at the poll interval. Instance-settable (#1265) so a bench fixture can prove the
-    // settle-exhaustion fault in a few polls instead of ten minutes; the daemon never sets it.
-    internal int SlewSettleMaxPolls { get; set; } = 6000;
-    private static readonly TimeSpan MountOpPollInterval = TimeSpan.FromMilliseconds(100);
-    // Wall-clock ceiling for a single blocking mount call (Park/Unpark/FindHome/the slew kickoff): a
-    // silent device must not park a sequence thread until the OS TCP timeout. The terminal-condition
-    // wait adds its own bound on top (~3min for park/unpark/findhome, ~10min for a slew), so the
-    // worst-case total before RunMountOpAsync returns is ~8min (~15min for a slew); cancellation (ct)
-    // cuts it short.
-    private static readonly TimeSpan MountOpHardTimeout = TimeSpan.FromMinutes(5);
+    internal static readonly DeviceCommandPolicy SlewPolicy = MountOpPolicy with { MaxPolls = 6000 };
+
+    // Test seams: millisecond timeouts. Production keeps MountOpPolicy / SlewPolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; set; } = MountOpPolicy;
+    internal DeviceCommandPolicy SlewCommandPolicy { get; set; } = SlewPolicy;
+    // Instance-settable (#1265) so a bench fixture can prove the slew's settle-exhaustion fault in a
+    // few polls instead of ten minutes; the daemon never sets it.
+    internal int SlewSettleMaxPolls {
+        get => SlewCommandPolicy.MaxPolls;
+        set => SlewCommandPolicy = SlewCommandPolicy with { MaxPolls = value };
+    }
+
+    // Built per call, inside the caller's async context, so RunWithoutOpFaultsAsync (#1536) reaches it.
+    private DeviceCommand Command(DeviceCommandPolicy policy) =>
+        new(OpFaultsSuppressed ? policy with { PublishFaults = false } : policy, _faults, _logger);
     // #1124 — bound on the on-demand EquatorialSystem read a slew/sync makes before the first
     // refresh has landed it: one property GET, so a few seconds is generous; Sync takes no token.
     private static readonly TimeSpan EquatorialSystemReadTimeout = TimeSpan.FromSeconds(10);
@@ -231,8 +242,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     // and Program.cs logs their presence at boot, but a dev box or a hand-rolled install can still
     // lack them, so a missing/broken native must degrade to the untransformed target (≤ ~arcminutes of precession drift J2000↔JNOW today,
     // within a typical pointing model's slop) instead of failing the instruction. Only the
-    // native-load failure modes are caught — a genuine astrometry error still surfaces (and is then
-    // contained by RunMountOpAsync's op boundary). Internal for direct unit testing.
+    // native-load failure modes are caught — a genuine astrometry error still surfaces (and then
+    // fails the instruction). Internal for direct unit testing.
     internal Coordinates TransformBestEffort(Coordinates coords, Epoch targetEpoch) {
         try {
             return coords.Transform(targetEpoch);
@@ -364,7 +375,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             // target sends nothing to the mount and publishes no op fault (the mount did nothing
             // wrong, so it must not count toward abort_and_park). Throw rather than return false:
             // SlewScopeToRaDec's blind slew ignores a false return, and the mount's own refusal
-            // already reaches the caller as this exception type through RunMountOpAsync.
+            // already reaches the caller as this exception type through RunMountCommandAsync.
             var targetRa = WrapRaHours(target.RA);
             var targetDec = target.Dec;
             if (SlewTargetRefusal(targetRa, targetDec, "telescope.slew") is string refusal) {
@@ -376,16 +387,15 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
             }
             try {
-                return await RunMountOpAsync("telescope.slew",
+                return await RunMountCommandAsync(SlewCommandPolicy, "telescope.slew",
                     c => {
                         TryEnableTracking(c);
-                        // Async goto: returns immediately, Slewing goes true; the settle-wait below
+                        // Async goto: returns immediately, Slewing goes true; the settle-wait
                         // confirms arrival. Same call the REST SlewInBackground path uses.
                         c.SlewToCoordinatesAsync(targetRa, targetDec);
                     },
                     c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
-                    token,
-                    SlewSettleMaxPolls).ConfigureAwait(false);
+                    token).ConfigureAwait(false);
             } finally {
                 // Consume-or-clear (#836 r2/r5): when the op returns — success, failure, or throw —
                 // this command's episode is over. Either the poll consumed the target (clear is a
@@ -423,18 +433,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     public Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
         // TryEnableTracking before Park here too (not just the REST path): some mounts (iOptron) won't
         // park from a stationary state, so an end-of-sequence auto-park would silently no-op otherwise.
-        RunMountOpAsync("telescope.park", c => { TryEnableTracking(c); c.Park(); },
+        RunMountCommandAsync(CommandPolicy, "telescope.park", c => { TryEnableTracking(c); c.Park(); },
             c => ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> UnparkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) =>
         // !Slewing matters here too: a motorised unpark can clear AtPark the moment the command is
         // accepted while the mount is still moving to its unpark position — returning early would
         // let a back-to-back slew/tracking change land mid-motion.
-        RunMountOpAsync("telescope.unpark", c => c.Unpark(),
+        RunMountCommandAsync(CommandPolicy, "telescope.unpark", c => c.Unpark(),
             c => !ReadAtPark(c) && !ReadSlewing(c), token);
 
     public Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) =>
-        RunMountOpAsync("telescope.findhome", c => c.FindHome(),
+        RunMountCommandAsync(CommandPolicy, "telescope.findhome", c => c.FindHome(),
             c => ReadAtHome(c) && !ReadSlewing(c), token);
 
     public long TrackingWriteCount => Interlocked.Read(ref _trackingWrites);
@@ -485,7 +495,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return;
         }
-        await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false);
+        // Nothing to send: the module only waits. Still slewing at the bound is a stall (#1808).
+        await Command(SlewCommandPolicy).RunAsync(MountRequest(client, "telescope.waitforslew", () => { }, c => !ReadSlewing(c)),
+            token).ConfigureAwait(false);
     }
 
     // #1222 — GetCurrentPosition tries the on-demand equatorial-system read at most once per
@@ -511,7 +523,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             // offset; in the window before the first refresh read the system, the label was a guess
             // (JNOW) and a J2000 mount's first iteration carried the ~0.36° precession error into the
             // offset. Read the system now, once, bounded like the slew/sync paths (#1124). This is a
-            // sync API on the sequencer thread; RunMountOpAsync blocks it the same way.
+            // sync API on the sequencer thread; a mount command blocks it the same way.
             var resolved = ResolveEquatorialSystemAsync(unresolved, CancellationToken.None).GetAwaiter().GetResult();
             if (resolved is null) {
                 LogPositionFrameGuessed(); // once per connection, by construction
@@ -532,16 +544,16 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Telescope position requested while its equatorial system is still unknown (the read did not answer); labelling it JNOW — a J2000 mount's centering offset is off by the precession until the system reads (#1222)")]
     private partial void LogPositionFrameGuessed();
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
+    // ADR 0011 — park/unpark/findhome/goto through the command module. The connected check stays here
+    // (not connected = false, nothing sent: the instruction's Validate has already blocked this).
+    private async Task<bool> RunMountCommandAsync(DeviceCommandPolicy policy, string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct) {
         var client = ConnectedClientOrNull();
         if (client is null) {
-            return false; // not connected: the instruction's Validate has already blocked this
+            return false;
         }
         // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo, a Park Scope or
         // Find Home instruction, an end-of-sequence park or a failed flip's safe rest would run beside its next turn
-        // (Joey, 2026-11-20 on #2048). Refused before the try (never an op fault), and it throws, so a blind
+        // (Joey, 2026-11-20 on #2048). Refused before the module runs (never an op fault), and it throws, so a blind
         // SlewScopeToRaDec shows it. A refused park leaves tracking as it is (the run tracks). Checked and counted with
         // the owner in one step, right before the send: a routine that took the mount while this GoTo read the pose or
         // the coordinate system still refuses it, and none can take it while the move goes out. The shutdown ladder's
@@ -555,8 +567,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         // #2066 — a raced REST GoTo's second abort must not stop this move: noted here, it counts from its send (SendMotion,
         // which first waits for a second abort already on its way) and is settled when its call returns or throws.
         long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
-        // #2070 — a park or a model Home from a position that is not trusted is refused BEFORE the try:
-        // inside it the catch-all would publish an op fault, and op faults escalate to an abort-and-park.
+        // #2070 — a park or a model Home from a position that is not trusted is refused before the module
+        // runs: inside it the refusal would publish an op fault, and op faults escalate to an abort-and-park.
         if (op is "telescope.park" or "telescope.findhome") {
             try {
                 await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
@@ -568,98 +580,49 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 throw;
             }
         }
-        try {
-            // §42.2 — note the command before dispatch so the tracking watch's grace window is
-            // armed by the time any refresh tick can observe the op's effect. Park/home end with
-            // tracking legitimately off; everything else just suppresses without re-expecting.
-            NoteMountCommand(op is "telescope.park" or "telescope.findhome"
-                ? w => w.NoteParkCommanded()
-                : w => w.NoteMotionCommanded());
-            // #2066 — the move's checks are done: from here a raced GoTo keeps its second abort back for it (SendMotion,
-            // on the op's thread, waits first for one already on its way).
-            if (motion is long sending) {
-                _ = NoteMotionOnTheWire(sending);
-            }
-            // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
-            // a hung HTTP call can't pin the sequence thread. The abandoned op is observed.
-            var opTask = Task.Run(() => {
-                if (motion is long token) {
-                    SendMotion(token, client, () => action(client));
-                } else {
-                    action(client);
-                }
-            }, CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(MountOpHardTimeout);
-                var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != opTask) {
-                    ObserveQuietly(opTask);
-                    ct.ThrowIfCancellationRequested();      // sequencer cancel → propagate
-                    throw new TimeoutException($"mount op {op} did not complete within {MountOpHardTimeout.TotalSeconds:0}s");
-                }
-                await linked.CancelAsync().ConfigureAwait(false);
-            }
-            await opTask.ConfigureAwait(false); // observe the op's result / surface its exception
-            if (!await WaitForMountConditionAsync(client, isDone, ct, settleMaxPolls).ConfigureAwait(false)) {
-                // Dispatched but never reached its terminal state (settle exhaustion, or the
-                // connection dropped mid-wait — the publish gate suppresses the latter and the
-                // §42.3 probe owns it). Either way the mount is not where the instruction needs
-                // it — fail rather than report success.
-                var msg = $"mount op {op} dispatched but did not reach its terminal state within the settle bound";
-                PublishOpFault(client, EquipmentFaultKind.StallTimeout, msg);
-                throw new SequenceEntityFailedException(msg);
-            }
-            return true;
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (SequenceEntityFailedException) {
-            throw; // already classified + published above
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking call never returned — a stalled op (§42.4).
-            // §42.2: publish the fault AND fail the instruction, so Attempts retries and
-            // sequence.instruction_failed engage instead of the failure being silently swallowed.
-            LogMountOpFailed(ex, op);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            throw new SequenceEntityFailedException(ex.Message, ex);
-        } catch (Exception ex) {
-            LogMountOpFailed(ex, op);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
-            throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
+        // §42.2 — note the command before dispatch so the tracking watch's grace window is armed by
+        // the time any refresh tick can observe the op's effect (the module's Dispatched hook runs
+        // after the call: too late). Park/home end with tracking legitimately off; everything else
+        // just suppresses without re-expecting.
+        NoteMountCommand(op is "telescope.park" or "telescope.findhome"
+            ? w => w.NoteParkCommanded()
+            : w => w.NoteMotionCommanded());
+        // #2066 — the move's checks are done: from here a raced GoTo keeps its second abort back for it (SendMotion,
+        // on the call's thread, waits first for one already on its way).
+        if (motion is long sending) {
+            _ = NoteMotionOnTheWire(sending);
         }
+        await Command(policy).RunAsync(MountRequest(client, op, () => {
+            if (motion is long token) {
+                SendMotion(token, client, () => action(client));
+            } else {
+                action(client);
+            }
+        }, isDone), ct).ConfigureAwait(false);
+        return true;
     }
 
-    // Polls the device directly until the terminal condition holds (refreshing the §32.4 cache each
-    // tick so GetInfo stays current), or returns false on timeout / a dropped-or-superseded connection.
-    // Delay-BEFORE-check (rotator-style), not check-then-delay: ASCOM does not contractually require
-    // Slewing to be asserted before SlewToCoordinatesAsync returns, so an immediate first check could
-    // read !Slewing + near-target and declare a slew settled before the mount ever moved (a target
-    // within the tolerance of the current heading defeats the PointingNear guard). One unconditional
-    // poll interval gives the driver that window; it costs 100ms on already-satisfied conditions.
-    private async Task<bool> WaitForMountConditionAsync(ITelescopeDevice client, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int maxPolls = MountOpSettleMaxPolls) {
-        var loggedReadFailure = false;
-        for (var i = 0; i < maxPolls; i++) {
-            await Task.Delay(MountOpPollInterval, ct).ConfigureAwait(false);
-            bool stillOurClient;
-            lock (_gate) {
-                stillOurClient = _lifecycle.IsLive(client);
-            }
-            if (!stillOurClient) {
-                return false; // disconnected / superseded — the op can't be confirmed
-            }
-            var done = ReadCondition(client, isDone);
-            if (done is null && !loggedReadFailure) {
-                // A consistently-throwing condition read (e.g. an unsupported property) would
-                // otherwise time out silently after the full bound — log it once so the timeout is
-                // diagnosable, then keep polling (treat as not-yet-met).
-                LogConditionReadFailed();
-                loggedReadFailure = true;
-            }
-            RefreshCacheOnce();
-            if (done == true) {
-                return true;
-            }
-        }
-        return false; // timed out without reaching the terminal state
+    // One mount command for the module. The settle poll refreshes the §32.4 cache each tick so GetInfo
+    // stays current. The module waits one poll interval before the first read: ASCOM does not require
+    // Slewing to be asserted before SlewToCoordinatesAsync returns, so an immediate check could read
+    // !Slewing + near-target and declare a slew settled before the mount ever moved.
+    private DeviceCommandRequest MountRequest(ITelescopeDevice client, string op, Action call, Func<ITelescopeDevice, bool>? isDone) {
+        var loggedReadFailure = false; // per command, never a field
+        return new DeviceCommandRequest(op, call,
+            IsLive: () => _lifecycle.IsLive(client),
+            CurrentDevice: () => _lifecycle.DeviceIfCurrent(client),
+            Terminal: isDone is null ? null : () => {
+                var done = ReadCondition(client, isDone);
+                if (done is null && !loggedReadFailure) {
+                    // A consistently-throwing condition read (e.g. an unsupported property) would
+                    // otherwise time out silently after the full bound — log it once so the timeout is
+                    // diagnosable, then keep polling (treat as not-yet-met).
+                    LogConditionReadFailed();
+                    loggedReadFailure = true;
+                }
+                return done;
+            },
+            Polled: RefreshCacheOnce);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -732,17 +695,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         }
     }
 
-    // Observes an abandoned (cancelled/timed-out) op task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem.
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedOpFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
-    }
-
     private static readonly AsyncLocal<bool> _opFaultsSuppressed = new();
+
+    // True inside RunWithoutOpFaultsAsync; Command(...) reads it per call.
+    internal static bool OpFaultsSuppressed => _opFaultsSuppressed.Value;
 
     /// <summary>Runs <paramref name="op"/> with this call's mount-op faults (§42.4) left unpublished. For a
     /// caller that reports its own failure to the user and must not feed the fault escalation to
@@ -756,26 +712,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             _opFaultsSuppressed.Value = true;
             return await op().ConfigureAwait(false);
         }
-    }
-
-    // §42.4 — op-channel fault publish: snapshot the device under the gate, publish off-lock
-    // (EquipmentFaultHub.Publish is non-blocking and never throws into the caller). A fault may
-    // only be blamed on the LIVE client — an op whose client was superseded or disposed by a user
-    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
-    // so the liveness check and the device snapshot share one critical section.
-    private void PublishOpFault(ITelescopeDevice client, EquipmentFaultKind kind, string details) {
-        if (_faults is null || _opFaultsSuppressed.Value) {
-            return;
-        }
-        DiscoveredDeviceDto? device;
-        lock (_gate) {
-            if (!_lifecycle.IsCurrent(client)) {
-                return;
-            }
-            device = _lifecycle.Device;
-        }
-        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Telescope, device?.UniqueId, device?.Name,
-            kind, details, DateTimeOffset.UtcNow));
     }
 
     // Guarded per-field reads used by the terminal-condition predicates (each may throw on an
@@ -856,8 +792,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     /// <summary>#1222 — <see cref="Sync(Coordinates)"/> with the caller's token: the equatorial-system
     /// read it may need (#1124) waits up to its 10 s bound, and a sequence Stop during a centering
     /// sync used to sit that out. The centering loop passes its token.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Mount sync boundary: the blocking ASCOM SyncToCoordinates/CanSync can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-call; every escape is logged and reported as a failed sync (false) so the centering loop falls back to offset compensation rather than faulting the run. CA1031's log-and-recover boundary applies.")]
     public async Task<bool> Sync(Coordinates coordinates, CancellationToken token) {
         ArgumentNullException.ThrowIfNull(coordinates);
         bool parked;
@@ -909,34 +843,27 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
+        var synced = false;
         try {
-            var opTask = Task.Run(() => {
+            // The module bounds the blocking round-trip so a hung driver can't pin the sequencer thread.
+            // No terminal condition (a returning SyncToCoordinates is done), no fault, and not the
+            // sequencer's token: a sync is never cancelled half-way.
+            await Command(CommandPolicy with { PublishFaults = false }).RunAsync(MountRequest(client, "telescope.sync", () => {
                 if (!client.CanSync) {
                     // Encoder/absolute mounts don't sync — a clean "not synced", the loop offset-compensates.
                     LogSyncUnsupported();
-                    return false;
+                    return;
                 }
                 TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
                 client.SyncToCoordinates(syncRa, syncDec);
                 Interlocked.Increment(ref _syncEpoch); // #2083
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
-                return true;
-            }, CancellationToken.None);
-            // Bound the blocking ASCOM round-trip against a wall clock so a hung driver can't pin the
-            // sequencer thread — Sync takes no CancellationToken and the centering loop awaits it directly.
-            // Same hard-timeout race as RunMountOpAsync, minus the settle-poll (sync is instantaneous, so a
-            // returning SyncToCoordinates is done).
-            using var timeout = new CancellationTokenSource(MountOpHardTimeout);
-            var completed = await Task.WhenAny(opTask, Task.Delay(Timeout.Infinite, timeout.Token)).ConfigureAwait(false);
-            if (completed != opTask) {
-                ObserveQuietly(opTask);
-                throw new TimeoutException($"mount op telescope.sync did not complete within {MountOpHardTimeout.TotalSeconds:0}s");
-            }
-            return await opTask.ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogMountOpFailed(ex, "telescope.sync");
-            return false;
+                synced = true;
+            }, isDone: null), CancellationToken.None).ConfigureAwait(false);
+        } catch (SequenceEntityFailedException) {
+            return false; // the module has logged it; a failed sync is "not synced", never a fault
         }
+        return synced;
     }
 
     // ── §58.4 — the flip slew (#1238) ─────────────────────────────────────────────────────────────
@@ -1005,17 +932,19 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 return;
             }
             LogFlipPierSideCommanded(expected);
-            client.SideOfPier = expected == PierSide.pierWest ? PointingState.ThroughThePole : PointingState.Normal;
+            var side = expected == PierSide.pierWest ? PointingState.ThroughThePole : PointingState.Normal;
             // Some mounts start the flip slew on the write itself; let it settle before the goto.
             // A mount still moving at the bound gets the goto anyway (the executor's watchdog
-            // owns that case), but say so in the log.
-            if (!await WaitForMountConditionAsync(client, c => !ReadSlewing(c), token, SlewSettleMaxPolls).ConfigureAwait(false)) {
-                LogFlipPierSideStillMoving();
-            }
+            // owns that case), but say so in the log. Never a fault: the hint is best-effort.
+            await Command(SlewCommandPolicy with { PublishFaults = false }).RunAsync(
+                MountRequest(client, "telescope.pierside", () => client.SideOfPier = side, c => !ReadSlewing(c)),
+                token).ConfigureAwait(false);
         } catch (OperationCanceledException) when (token.IsCancellationRequested) {
             throw;
+        } catch (SequenceEntityFailedException ex) when (ex.InnerException is null) {
+            LogFlipPierSideStillMoving(); // stall at the bound, or the mount dropped mid-wait
         } catch (Exception ex) {
-            LogFlipPierSideFailed(ex);
+            LogFlipPierSideFailed(ex); // the write threw or timed out; the goto does the flip
         }
     }
 
@@ -1103,9 +1032,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
     public event Func<object, EventArgs, Task>? Unparked;
     public event Func<object, MountSlewedEventArgs, Task>? Slewed;
 
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount mediator op {Op} failed")]
-    private partial void LogMountOpFailed(Exception ex, string op);
-
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount mediator op {Op} rejected: mount is parked")]
     private partial void LogMountOpRejectedParked(string op);
 
@@ -1131,9 +1057,6 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Warning, Message = "Mount StopSlew (AbortSlew) failed")]
     private partial void LogStopSlewFailed(Exception ex);
-
-    [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "abandoned mount op (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedOpFaulted(Exception ex);
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Debug, Message = "mount terminal-condition read failed during settle-wait (will keep polling)")]
     private partial void LogConditionReadFailed();

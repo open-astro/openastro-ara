@@ -298,6 +298,16 @@ namespace OpenAstroAra.Test {
 
         public volatile bool Latched;
         public volatile bool IsSlewing;
+        // Scripts for the command tests: SlewingScript answers (or throws) each Slewing read, AtParkScript each
+        // AtPark read; OnCommand runs inside a park / unpark / find-home / goto call (block it, or throw from
+        // it), OnSync inside a sync, OnSideOfPierWrite inside the pier-side hint's write.
+        public Func<bool>? SlewingScript;
+        public Func<bool>? AtParkScript { get; set; }
+        public Action? OnCommand;
+        public Action? OnSync;
+        public Action? OnSideOfPierWrite;
+        public volatile bool CanSyncValue = true;
+        public volatile bool CanSetPierSideValue;
         private int _aborts;
         public int Aborts => Volatile.Read(ref _aborts);
         private int _moveAxisStops;
@@ -313,13 +323,14 @@ namespace OpenAstroAra.Test {
         public int Homes => Volatile.Read(ref _homes);
         private int _slews;
         public int Slews => Volatile.Read(ref _slews);
+        public int Gotos => Slews;
         private int _syncs;
         public int Syncs => Volatile.Read(ref _syncs);
         private int _moveAxisStarts;
         public int MoveAxisStarts => Volatile.Read(ref _moveAxisStarts);
         private int _pierSideWrites;
         public int PierSideWrites => Volatile.Read(ref _pierSideWrites);
-        public bool PierSideSettable { get; set; }
+        public bool PierSideSettable { get => CanSetPierSideValue; set => CanSetPierSideValue = value; }
 
         private void ThrowIfLatched() {
             if (Latched) {
@@ -330,7 +341,7 @@ namespace OpenAstroAra.Test {
         public bool Slewing {
             get {
                 ThrowIfLatched();
-                return IsSlewing;
+                return SlewingScript?.Invoke() ?? IsSlewing;
             }
         }
         public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return Ra; } }
@@ -342,20 +353,20 @@ namespace OpenAstroAra.Test {
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
         public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
-        public bool AtPark { get { ThrowIfLatched(); return ReportsArrival && _atPark; } }
+        public bool AtPark { get { ThrowIfLatched(); return AtParkScript?.Invoke() ?? (ReportsArrival && _atPark); } }
         public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome || (ReportsArrival && _atHome); } }
         // #2071 — opt-in: Park and FindHome report arriving, so a sequencer park or home completes.
         public volatile bool ReportsArrival;
         private volatile bool _atPark, _atHome;
         public bool IsPulseGuiding => false;
-        public PointingState SideOfPier { get => PointingState.Normal; set => Interlocked.Increment(ref _pierSideWrites); }
+        public PointingState SideOfPier { get => PointingState.Normal; set { Interlocked.Increment(ref _pierSideWrites); OnSideOfPierWrite?.Invoke(); } }
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
         /// <summary>#2073 — the mount type; null makes the read throw, as a driver that does not implement it.</summary>
         public AlignmentMode? Alignment { get; set; } = AlignmentMode.GermanPolar;
         public AlignmentMode AlignmentMode => Alignment ?? throw new ASCOM.NotImplementedException("AlignmentMode");
         public bool CanSlewAsync => true;
         public bool CanSlew => true;
-        public bool CanSync => true;
+        public bool CanSync => CanSyncValue;
         public bool CanPark => true;
         public bool CanUnpark => true;
         public bool CanSetTracking => true;
@@ -386,12 +397,12 @@ namespace OpenAstroAra.Test {
         public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } else { Interlocked.Increment(ref _moveAxisStarts); } }
         public override void Stop() => AbortSlew();
         public void AbortSlew() => Interlocked.Increment(ref _aborts);
-        public void Park() { _atPark = true; Interlocked.Increment(ref _parks); }
-        public void Unpark() { }
-        public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); }
+        public void Park() { _atPark = true; Interlocked.Increment(ref _parks); OnCommand?.Invoke(); }
+        public void Unpark() => OnCommand?.Invoke();
+        public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); OnCommand?.Invoke(); }
         // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
-        public void SlewToCoordinatesAsync(double raHours, double decDegrees) => Interlocked.Increment(ref _slews);
-        public void SyncToCoordinates(double raHours, double decDegrees) => Interlocked.Increment(ref _syncs);
+        public void SlewToCoordinatesAsync(double raHours, double decDegrees) { Interlocked.Increment(ref _slews); OnCommand?.Invoke(); }
+        public void SyncToCoordinates(double raHours, double decDegrees) { Interlocked.Increment(ref _syncs); OnSync?.Invoke(); }
 
         private sealed class FakeTrackingRates : ITrackingRates {
             private readonly DriveRate[] _rates = [DriveRate.Sidereal];
