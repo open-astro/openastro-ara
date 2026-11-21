@@ -31,7 +31,10 @@ enum RefusalCause {
   polarAlignAlreadyRunning('polar-align-already-running'),
   polarAlignClutchTurned('polar-align-clutch-turned'),
   polarAlignClearanceNotConfirmed('polar-align-clearance-not-confirmed'),
-  aboveClearanceLimit('above-clearance-limit');
+  aboveClearanceLimit('above-clearance-limit'),
+  polarAlignSiteNotSet('polar-align-site-not-set'),
+  polarAlignAltAzMount('polar-align-alt-az-mount'),
+  polarAlignCannotMoveAxis('polar-align-cannot-move-axis');
 
   const RefusalCause(this.token);
 

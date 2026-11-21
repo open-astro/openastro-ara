@@ -12052,36 +12052,6 @@ abstract class AppLocalizations {
   /// **'RA motor control'**
   String get polarPreflightCheckCanMoveAxis;
 
-  /// Polar align (#2068): pre-flight check name (the AlpacaBridge version with its motion-safety marker)
-  ///
-  /// In en, this message translates to:
-  /// **'AlpacaBridge motion safety'**
-  String get polarPreflightCheckMotionSafety;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Pier side'**
-  String get polarPreflightCheckPierSide;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Start near the pole and above the horizon'**
-  String get polarPreflightCheckPoseEnvelope;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Counterweight angle at the start'**
-  String get polarPreflightCheckStartCwAngle;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Turn step within the counterweight limit'**
-  String get polarPreflightCheckTurnStep;
-
   /// Polar align (#2068): pre-flight check name (the motorised alt/az adjuster)
   ///
   /// In en, this message translates to:
@@ -12165,6 +12135,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to {limit}° from counterweight-down, then tap Confirm clearance in Polar align.'**
   String refusalPolarAlignClearanceNotConfirmed(String limit);
+
+  /// Refusal (polar-align-site-not-set, #2083): the site has no longitude, sits at latitude 0 and longitude 0 (never set), or its sidereal time is unknown; polar alignment steers by the hour angle
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.'**
+  String get refusalPolarAlignSiteNotSet;
+
+  /// Refusal (polar-align-alt-az-mount, #2083): the mount reports AlignmentMode alt-az; polar alignment turns the RA axis
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.'**
+  String get refusalPolarAlignAltAzMount;
+
+  /// Refusal (polar-align-cannot-move-axis, #2083): the mount reports CanMoveAxis false for its RA axis; a motor start is refused, a hand-turn start goes ahead; 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.'**
+  String get refusalPolarAlignCannotMoveAxis;
 
   /// Settings › Imaging › Polar align (#2068): the connected mount's counterweight limit and clearance confirmation
   ///

@@ -41,9 +41,9 @@ PolarAlignPreflight rigPreflight({
           : 'Not confirmed for this mount.',
     ),
     const PolarAlignPreflightCheck(
-      id: 'start_cw_angle',
+      id: 'mount_type',
       status: PolarAlignPreflightStatuses.unknown,
-      detail: 'Not checked yet.',
+      detail: 'The mount does not report its type.',
     ),
     const PolarAlignPreflightCheck(
       id: 'mount_limits',

@@ -67,14 +67,17 @@ namespace OpenAstroAra.Server.Services {
                     return planned.Plan;
                 },
                 AlignerPresent: _alignerSource is { } aligners ? () => aligners.Current() is not null : null,
-                HandTurn: handTurn);
+                HandTurn: handTurn,
+                AlignmentMode: () => _motionControl.MountAlignmentMode,
+                CanMovePrimaryAxis: () => _motionControl.CanMovePrimaryAxis);
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, ct).ConfigureAwait(false);
             return new StartPreflight(result, settings ?? PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto()), start);
         }
 
         /// <summary>#2068 — a start refuses on the first check that fails, with that check's own cause (the mount not
-        /// connected or parked, no site latitude, #2087's mount clock, #2070's position, the clearance not confirmed for a
-        /// motor start, the start pointing's refusals). A <c>warn</c> or <c>unknown</c> check never refuses.</summary>
+        /// connected or parked, no site latitude, no site longitude or LST (#2083), #2087's mount clock, #2070's position, the
+        /// clearance not confirmed for a motor start, the start pointing's refusals, an alt-az mount, CanMoveAxis false for a
+        /// motor start). A <c>warn</c> or <c>unknown</c> check never refuses.</summary>
         private static void ThrowOnFirstFailure(StartPreflight preflight) {
             if (preflight.Result.FirstFailure is { } failure) {
                 ExceptionDispatchInfo.Capture(failure).Throw();

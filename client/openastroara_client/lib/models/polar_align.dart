@@ -665,13 +665,11 @@ abstract final class PolarAlignPreflightStatuses {
 abstract final class PolarAlignPreflightChecks {
   static const clearanceConfirmed = 'clearance_confirmed';
   static const startPointing = 'start_pointing';
-  static const startCwAngle = 'start_cw_angle';
-  static const turnStep = 'turn_step';
 
   /// The checks that depend on the measurement's turn step. The list is read
   /// for the fine stage; a Check plans with its own step, so the rig judges
   /// these for it when it starts.
-  static const stageDependent = {startPointing, startCwAngle, turnStep};
+  static const stageDependent = {startPointing};
 }
 
 /// #2068 one check of the pre-flight list: its id, status and the rig's

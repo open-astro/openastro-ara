@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using ASCOM.Common.DeviceInterfaces;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
@@ -38,6 +39,10 @@ namespace OpenAstroAra.Server.Services;
 /// <param name="AlignerPresent">A Polar Aligner on the rig (#1971); null delegate when this daemon wires none.</param>
 /// <param name="HandTurn">#2068 — the start turns RA by hand (#2083: no motor move), so an unconfirmed clearance is a
 /// <c>warn</c>, not a <c>fail</c> (Joey, 2026-11-21). False for a motor start.</param>
+/// <param name="AlignmentMode">#2083 — the mount type read at connect (<see cref="IMountMotionControl.MountAlignmentMode"/>):
+/// null when unknown; null delegate when this daemon reads none.</param>
+/// <param name="CanMovePrimaryAxis">#2083 — CanMoveAxis(Primary) read at connect
+/// (<see cref="IMountMotionControl.CanMovePrimaryAxis"/>): null when unknown; null delegate when this daemon reads none.</param>
 internal sealed record PolarAlignPreflightInputs(
     string Stage,
     Func<TelescopeInfo?> MountInfo,
@@ -47,7 +52,9 @@ internal sealed record PolarAlignPreflightInputs(
     Func<CancellationToken, Task<string?>> PoseUnverifiedReason,
     Func<CancellationToken, Task<PolarAlignStartPlanDto>> Plan,
     Func<bool>? AlignerPresent,
-    bool HandTurn = false);
+    bool HandTurn = false,
+    Func<AlignmentMode?>? AlignmentMode = null,
+    Func<bool?>? CanMovePrimaryAxis = null);
 
 /// <summary>The pre-flight list and, for a start, the exception the first failing check refuses with (null when none
 /// fails), with the confirm step's plan when it could be made.</summary>
@@ -60,11 +67,11 @@ internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exc
 /// a read that fails becomes its check's status (<c>fail</c> for a check a start refuses on, so a start refuses with
 /// the read's own exception, as it did before the list existed).
 /// <para>The checks, in the order a start makes them: the mount connected and not parked, the site latitude, then
-/// (#2065) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
-/// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), and the start pointing (the confirm step's plan). The checks that #2065 and #2083 add
-/// (mount type, CanMoveAxis, the AlpacaBridge <c>motionsafety</c> marker, pier side, the pose envelope, the start
-/// counterweight angle, a reduced turn step) are listed as <c>unknown</c> until they land, and never refuse. The Polar
-/// Aligner's check is <c>unknown</c> until its verified stop lands (#2069). A last <c>warn</c> asks the user to set the
+/// (#2083) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
+/// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), the start pointing (the
+/// confirm step's plan), and (#2083) the mount type (alt-az refused) and CanMoveAxis(Primary) (false refuses a motor
+/// start; a hand-turn start only warns). The Polar Aligner's check passes: with no aligner or its motors off the user turns the bolts, and with its motors on
+/// its Stop is verified and its turns capped (#2069). A last <c>warn</c> asks the user to set the
 /// mount's own limits.</para>
 /// </summary>
 internal static class PolarAlignPreflightEvaluator {
@@ -75,6 +82,12 @@ internal static class PolarAlignPreflightEvaluator {
     /// <summary>A mount's key in <see cref="PolarAlignSettingsDto.MountClearance"/>: the identity the daemon already keeps
     /// per device (its Alpaca UniqueID, <see cref="TelescopeInfo.DeviceId"/>: the pose store, #1362's equipment
     /// identity), else its name, else <see cref="UnidentifiedMountKey"/>. Null with no mount connected.</summary>
+    /// <summary>
+    /// #2083 — whether a run drives the Polar Aligner's motors: auto on and not a hand turn. A hand-turn run moves
+    /// nothing, so the person turns the bolts, as with auto off. The run and the pre-flight list share this rule.
+    /// </summary>
+    public static bool DrivesAlignerMotors(bool polarAlignerAuto, bool handTurn) => polarAlignerAuto && !handTurn;
+
     public static string? MountKey(TelescopeInfo? info) {
         if (info?.Connected != true) {
             return null;
@@ -138,7 +151,7 @@ internal static class PolarAlignPreflightEvaluator {
         }
         var stage = inputs.Stage;
 
-        // The settings first: the turn step, the counterweight limit and the clearance read them.
+        // The settings first: the clearance, the Polar Aligner and the plan read them.
         PolarAlignSettingsDto settings;
         Exception? settingsError = null;
         try {
@@ -177,18 +190,22 @@ internal static class PolarAlignPreflightEvaluator {
 
         // The site.
         var latRow = rows[PolarAlignPreflightChecks.SiteLatitude];
+        var lonRow = rows[PolarAlignPreflightChecks.SiteLongitudeLst];
         try {
             var site = inputs.Site();
-            if (double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90) {
+            if (site.LatitudeDeg == 0 && site.LongitudeDeg == 0) {
+                // #2083 — 0°, 0° is a site that was never set: refuse as unset, not as a bad latitude.
+                latRow.Fail(new RefusalException(RefusalCatalog.PolarAlignSiteNotSet, SiteNotSetMessage), "Set your site in Settings › Site.");
+            } else if (double.IsFinite(site.LatitudeDeg) && Math.Abs(site.LatitudeDeg) > 0 && Math.Abs(site.LatitudeDeg) <= 90) {
                 latRow.Ok(string.Create(CultureInfo.InvariantCulture, $"The site's latitude is {site.LatitudeDeg:0.0}°."));
             } else {
                 latRow.Fail(new InvalidOperationException(SiteLatitudeMessage), "Set the site's latitude (not 0°) in Settings › Site.");
             }
+            EvaluateLongitudeAndLst(lonRow, site, connected ? info : null);
         } catch (Exception ex) {
             latRow.Fail(ex, $"The site could not be read: {ex.Message}");
+            lonRow.Fail(ex, $"The site could not be read: {ex.Message}");
         }
-        rows[PolarAlignPreflightChecks.SiteLongitudeLst].Unknown(
-            "Not checked yet: a missing site longitude or sidereal time, and a site at latitude 0° and longitude 0°, are refused once #2065 and #2083 land.");
 
         // #2087's mount clock gate: the one SiderealTime check.
         var clockRow = rows[PolarAlignPreflightChecks.MountClockOrSite];
@@ -201,7 +218,7 @@ internal static class PolarAlignPreflightEvaluator {
                 if (inputs.ClockRefusal() is { } refusal) {
                     clockRow.Fail(new RefusalException(RefusalCatalog.MountClockNotVerified, refusal), refusal);
                 } else {
-                    clockRow.Ok("The mount's clock is set from the synced rig clock and checked. Its site longitude is compared once #2065 lands.");
+                    clockRow.Ok("The mount's clock is set from the synced rig clock and checked.");
                 }
             } catch (Exception ex) {
                 clockRow.Fail(ex, $"The mount's clock check could not be read: {ex.Message}");
@@ -262,23 +279,18 @@ internal static class PolarAlignPreflightEvaluator {
             }
         }
 
-        // Filled by #2065 (counterweight model, envelope, mount checks) and #2083 (CanMoveAxis).
-        rows[PolarAlignPreflightChecks.MountType].Unknown("Not checked yet: an alt-az mount, and a fork mount without its opt-in, are refused once #2065 lands.");
-        rows[PolarAlignPreflightChecks.CanMoveAxis].Unknown("Not checked yet: a mount that cannot turn its RA axis by rate is refused once #2083 lands.");
-        rows[PolarAlignPreflightChecks.MotionSafety].Unknown("Not checked yet: the AlpacaBridge motion-safety marker is checked once #2065 lands.");
-        rows[PolarAlignPreflightChecks.PierSide].Unknown("Not checked yet: a pier side that disagrees with the hour angle is refused once #2065 lands.");
-        rows[PolarAlignPreflightChecks.PoseEnvelope].Unknown("Not checked yet: a start below 70° Dec or under the altitude floor is refused once #2065 lands.");
-        rows[PolarAlignPreflightChecks.StartCwAngle].Unknown("Not checked yet: the counterweight angle at the start is measured against the limit once #2065 lands.");
-        rows[PolarAlignPreflightChecks.TurnStep].Unknown("Not checked yet: a turn step too big for the counterweight limit is reduced once #2065 lands.");
+        // #2083 — the mount type and CanMoveAxis(Primary), read at connect.
+        EvaluateMountType(rows[PolarAlignPreflightChecks.MountType], inputs.AlignmentMode, connected);
+        EvaluateCanMoveAxis(rows[PolarAlignPreflightChecks.CanMoveAxis], inputs.CanMovePrimaryAxis, connected, inputs.HandTurn);
 
         var alignerRow = rows[PolarAlignPreflightChecks.Aligner];
         try {
             if (inputs.AlignerPresent?.Invoke() != true) {
                 alignerRow.Ok("No Polar Aligner: you turn the altitude and azimuth bolts.");
-            } else if (!settings.PolarAlignerAuto) {
+            } else if (!DrivesAlignerMotors(settings.PolarAlignerAuto, inputs.HandTurn)) {
                 alignerRow.Ok("The Polar Aligner's motors are off: you turn the bolts.");
             } else {
-                alignerRow.Unknown("Not checked yet: the Polar Aligner's verified stop and travel limits come with #2069.");
+                alignerRow.Ok("The Polar Aligner's Stop is checked and its turns are capped.");
             }
         } catch (Exception ex) {
             alignerRow.Unknown($"The Polar Aligner could not be read: {ex.Message}");
@@ -315,5 +327,97 @@ internal static class PolarAlignPreflightEvaluator {
             MinAltitudeDeg: null);
         var dto = new PolarAlignPreflightDto(ready, checks, planned, mountKey);
         return new PolarAlignPreflightResult(dto, firstFailure, plan);
+    }
+
+    internal const string SiteNotSetMessage =
+        "set the site's latitude and longitude before polar alignment — the routine steers by the hour angle, which needs the site's longitude and the local sidereal time";
+
+    /// <summary>#2083 — a usable longitude, not the unset site at 0°, 0°, and (with a mount) a finite local sidereal
+    /// time, which the daemon works out from the site's longitude (<see cref="TelescopeInfo.SiderealTime"/>).</summary>
+    private static void EvaluateLongitudeAndLst(Row row, SiteSettingsDto site, TelescopeInfo? connectedMount) {
+        RefusalException NotSet() => new(RefusalCatalog.PolarAlignSiteNotSet, SiteNotSetMessage);
+        if (!double.IsFinite(site.LongitudeDeg) || Math.Abs(site.LongitudeDeg) > 180) {
+            row.Fail(NotSet(), "Set the site's longitude in Settings › Site.");
+        } else if (site.LatitudeDeg == 0 && site.LongitudeDeg == 0) {
+            row.Fail(NotSet(), "The site is at latitude 0° and longitude 0°, a site that was never set: set your site in Settings › Site.");
+        } else if (connectedMount is null) {
+            row.Unknown(string.Create(CultureInfo.InvariantCulture,
+                $"The site's longitude is {site.LongitudeDeg:0.0}°. The sidereal time is worked out once the mount connects."));
+        } else if (!double.IsFinite(connectedMount.SiderealTime)) {
+            row.Fail(NotSet(), "The local sidereal time could not be worked out from the site's longitude: check the site in Settings › Site.");
+        } else {
+            row.Ok(string.Create(CultureInfo.InvariantCulture,
+                $"The site's longitude is {site.LongitudeDeg:0.0}°; the local sidereal time is {connectedMount.SiderealTime:0.00} h."));
+        }
+    }
+
+    /// <summary>#2083 — an alt-az mount is refused: MoveAxis(Primary) would turn azimuth, not RA. An unknown type is not.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The evaluator never throws (#2068): a failed read lists the check as unknown.")]
+    private static void EvaluateMountType(Row row, Func<AlignmentMode?>? read, bool connected) {
+        if (!connected) {
+            row.Unknown(WaitsForMount);
+            return;
+        }
+        if (read is null) {
+            row.Unknown("This daemon does not read the mount type.");
+            return;
+        }
+        AlignmentMode? mode;
+        try {
+            mode = read();
+        } catch (Exception ex) {
+            row.Unknown($"The mount type could not be read: {ex.Message}");
+            return;
+        }
+        switch (mode) {
+            case AlignmentMode.AltAz:
+                row.Fail(new RefusalException(RefusalCatalog.PolarAlignAltAzMount,
+                        "polar alignment needs an equatorial mount — this mount reports alt-az, so turning its first axis would turn azimuth, not RA"),
+                    "The mount reports alt-az: its first axis turns azimuth, not RA. Polar Align needs an equatorial mount.");
+                break;
+            case AlignmentMode.GermanPolar:
+                row.Ok("A German equatorial mount.");
+                break;
+            case AlignmentMode.Polar:
+                row.Ok("An equatorial (fork or polar) mount.");
+                break;
+            default:
+                row.Unknown("The mount does not report its type.");
+                break;
+        }
+    }
+
+    /// <summary>#2083 — CanMoveAxis(Primary) false refuses a motor start; a hand-turn start sends no motor move, so it
+    /// only warns. An unknown answer does not refuse.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The evaluator never throws (#2068): a failed read lists the check as unknown.")]
+    private static void EvaluateCanMoveAxis(Row row, Func<bool?>? read, bool connected, bool handTurn) {
+        if (!connected) {
+            row.Unknown(WaitsForMount);
+            return;
+        }
+        if (read is null) {
+            row.Unknown("This daemon does not read whether the mount can turn its RA axis by rate.");
+            return;
+        }
+        bool? can;
+        try {
+            can = read();
+        } catch (Exception ex) {
+            row.Unknown($"The mount's CanMoveAxis could not be read: {ex.Message}");
+            return;
+        }
+        if (can is null) {
+            row.Unknown("The mount does not say whether it can turn its RA axis by rate.");
+        } else if (can.Value) {
+            row.Ok("The mount can turn its RA axis by rate.");
+        } else if (handTurn) {
+            row.Warn("The mount cannot turn its RA axis by rate: Turn RA by hand moves nothing, so it can start. The motor cannot turn this mount.");
+        } else {
+            row.Fail(new RefusalException(RefusalCatalog.PolarAlignCannotMoveAxis,
+                    "this mount cannot turn its RA axis by rate (CanMoveAxis is false), so Polar Align cannot turn it — use Turn RA by hand"),
+                "The mount cannot turn its RA axis by rate (CanMoveAxis is false). Use Turn RA by hand.");
+        }
     }
 }

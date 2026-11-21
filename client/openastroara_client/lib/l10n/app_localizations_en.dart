@@ -7255,24 +7255,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override
@@ -7321,6 +7303,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String refusalPolarAlignClearanceNotConfirmed(String limit) {
     return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
   }
+
+  @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
 
   @override
   String get polarKnobClearance => 'Counterweight limit and clearance';

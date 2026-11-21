@@ -7255,24 +7255,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override
@@ -7321,6 +7303,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String refusalPolarAlignClearanceNotConfirmed(String limit) {
     return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
   }
+
+  @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
 
   @override
   String get polarKnobClearance => 'Counterweight limit and clearance';
@@ -14650,25 +14644,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarPreflightCheckCanMoveAxis => 'Controle do motor de AR';
 
   @override
-  String get polarPreflightCheckMotionSafety =>
-      'Segurança de movimento do AlpacaBridge';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Lado do pilar';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Início perto do polo e acima do horizonte';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Ângulo do contrapeso no início';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Passo de giro dentro do limite do contrapeso';
-
-  @override
   String get polarPreflightCheckAligner => 'Alinhador polar';
 
   @override
@@ -14717,6 +14692,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalPolarAlignClearanceNotConfirmed(String limit) {
     return 'Confirme antes a folga desta montagem: verifique com o controle de mão que o contrapeso, o tubo e os cabos não tocam o pilar nem o tripé até $limit° a partir do contrapeso para baixo, depois toque em Confirmar folga no alinhamento polar.';
   }
+
+  @override
+  String get refusalPolarAlignSiteNotSet =>
+      'O alinhamento polar precisa do seu local: defina a latitude e a longitude nas configurações do local (não 0° e 0°), para saber o tempo sideral.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'O alinhamento polar precisa de uma montagem equatorial. Esta montagem diz que é altazimutal, então girá-la giraria o azimute, não a AR.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'Esta montagem não consegue girar o eixo de AR por velocidade do motor, então o alinhamento polar não consegue girá-la. Use Girar a AR à mão.';
 
   @override
   String get polarKnobClearance => 'Limite do contrapeso e folga';

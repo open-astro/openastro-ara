@@ -15592,6 +15592,9 @@ components:
         - polar-align-clutch-turned
         - polar-align-clearance-not-confirmed
         - above-clearance-limit
+        - polar-align-site-not-set
+        - polar-align-alt-az-mount
+        - polar-align-cannot-move-axis
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
