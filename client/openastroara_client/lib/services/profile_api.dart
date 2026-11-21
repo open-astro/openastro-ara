@@ -980,6 +980,8 @@ class ProfileApi {
     'first_flip_confirmed',
     'first_flip_completed_utc',
     'first_flip_pier_side_changed',
+    'clearance_limit_enabled',
+    'clearance_max_altitude_deg',
     'unattended_escalation',
     'unattended_shutdown_enabled',
     'unattended_shutdown_wait_minutes',
