@@ -391,8 +391,9 @@ class SimpleCalibrationShutter extends ConsumerWidget {
 
 /// What the shutter will do, under it, only when it can: the chip says the
 /// state, and a tap on an idle shutter says why in a pill, as the panel does.
-/// [slot] true: the rail's slot, wrapped to its width and drawn at full size
-/// only when it fits, else not at all (the shutter's tooltip says it, #2038).
+/// [slot] true: the rail's slot, wrapped to the rail buttons' width so it
+/// never widens the rail, and drawn at full size only when it fits, else not
+/// at all (the shutter's tooltip says it, #2038).
 class SimpleCalibrationShutterCaption extends ConsumerWidget {
   const SimpleCalibrationShutterCaption({super.key, this.slot = false});
 
@@ -418,6 +419,8 @@ class SimpleCalibrationShutterCaption extends ConsumerWidget {
     if (!slot) return caption(64 * simpleRailScale(context));
     return LayoutBuilder(
       builder: (context, box) {
+        // Above 1.1x text the rail leaves more room than its buttons take.
+        final width = box.constrainWidth(60 * simpleRailScale(context));
         final painter = TextPainter(
           text: TextSpan(
             text: job.caption,
@@ -426,10 +429,10 @@ class SimpleCalibrationShutterCaption extends ConsumerWidget {
           textAlign: TextAlign.center,
           textDirection: Directionality.of(context),
           textScaler: MediaQuery.textScalerOf(context),
-        )..layout(maxWidth: box.maxWidth);
+        )..layout(maxWidth: width);
         final fits = painter.height <= box.maxHeight;
         painter.dispose();
-        return fits ? caption(box.maxWidth) : const SizedBox.shrink();
+        return fits ? caption(width) : const SizedBox.shrink();
       },
     );
   }
