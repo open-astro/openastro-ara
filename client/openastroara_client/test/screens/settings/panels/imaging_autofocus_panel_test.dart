@@ -8,6 +8,7 @@ import 'package:openastroara/settings/registry.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/focus/focus_presets.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/panel_save_registry.dart';
@@ -53,6 +54,8 @@ Future<void> _pump(
           ),
         ),
         autofocusApiProvider.overrideWithValue(api),
+        // #2036: the switch rules in Simple Mode only.
+        simpleModeActiveProvider.overrideWithValue(true),
         advancedSettingsProvider.overrideWith(() => _Advanced(advanced)),
         // A ⌘K hit picked before the panel opened (command_palette.dart).
         if (searchHit != null)
