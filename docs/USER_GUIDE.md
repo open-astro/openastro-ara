@@ -299,19 +299,20 @@ framing/focus loop when you need to point or focus by eye.
   each point are taken once your turn is in and the mount is still.
 - **How sure the readout is (#2072).** The total error shows with its uncertainty, for example
   **0.2′ ± 1.1′** (one sigma), in the full UI and Simple Mode. The uncertainty comes from how much
-  each point's frames scattered; a point of one frame counts a 1″ floor, because one frame has no
-  scatter to measure, and a point of several frames is never counted surer than that floor shared
-  among them (1″ ÷ √3 for three). With 10° turns, each arcsecond of solve noise is about 1.3′ of
-  axis error, so at the defaults (1′ tolerance, 10° turns, three frames) the floor alone keeps Done
-  waiting.
-  **Done** waits until the error plus twice its uncertainty is inside your tolerance, so a noisy
-  measurement cannot claim a small error; until then the screen says why. **Check** stays available:
-  it measures afresh, with its own step. Larger turns shrink the uncertainty most: 20° in place of
-  10° (**Polar align turn** and **Check step** in Settings → Imaging → Polar align) cuts it about
-  four times; more frames per point help a little. The uncertainty covers only what the frames of each point show: a mount that shifts
-  between points (flexure, a slipping clutch) is not in it. With a Polar Aligner, the motors stop
-  once the error is inside the tolerance (more moves cannot shrink the uncertainty) and the line
-  says when Done still waits.
+  each point's frames scattered. A point is never counted surer than the solver can measure: about
+  0.15 pixel per frame at the pixel scale of the camera that took it (guide or main camera), shared
+  among the point's frames (÷ √3 for three); when Ara does not know the pixel scale it counts 1″.
+  With 10° turns, each arcsecond of solve noise is about 1.3′ of axis error.
+  The screen says **inside your tolerance** only when the error plus twice its uncertainty is inside
+  it. While only the error is, it says the measurement can't confirm the alignment; **Done** and
+  **Check** stay available. Larger turns shrink the uncertainty most: 20° in place of 10°
+  (**Polar align turn** and **Check step** in Settings → Imaging → Polar align) cuts it about four
+  times; more frames per point help a little. The Check's verdict (Excellent, Very good, …) is rated
+  on the error plus twice its uncertainty too, so a noisy check does not read Excellent. The
+  uncertainty covers only what the frames of each point show: a mount that shifts between points
+  (flexure, a slipping clutch) is not in it. With a Polar Aligner, the motors stop once the error is
+  inside the tolerance (more moves cannot shrink the uncertainty), and the line says when the
+  alignment is not confirmed.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and

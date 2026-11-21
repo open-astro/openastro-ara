@@ -26,43 +26,68 @@ namespace OpenAstroAra.Server.Services {
     /// carries the 1σ of its mean from the scatter of its frames (<see cref="PolarAlignSolveOutcome.SigmaArcsec"/>); the
     /// fit carries those through to a 1σ on the altitude and azimuth errors and on the total
     /// (<see cref="PolarAlignGeometry.AxisErrorSigma"/>). The readout shows it ("0.2′ ± 1.1′"), the fit's log line carries
-    /// it with the axis and the solves, and Done waits until the error plus twice its 1σ is inside the tolerance
-    /// (<see cref="AlignedWithinTolerance"/>).
+    /// it with the axis and the solves, and the Check's verdict rates the error plus twice its 1σ
+    /// (<see cref="VerdictFor"/>). Done is not held by the σ (Joey, 2026-11-21): the clients show "aligned" only when the
+    /// error plus twice its 1σ is inside the tolerance, and otherwise say the measurement cannot confirm it.
     /// <para>The live readout keeps the seed fit's σ: each live frame adds its own solve noise once (about 1″, against
     /// the fit's roughly 80-fold amplification), which is left out. The σ measures only what the frames of one point
     /// show: a mount that shifts between points (flexure, a clutch, the turn itself) is not in it.</para>
     /// </summary>
     public sealed partial class PolarAlignService {
 
-        /// <summary>The 1σ per axis given to a point of a single solve, which has no scatter to measure: a FLOOR, not a
-        /// measurement. §45.16's budget: a guide-scope solve returns the frame centre to about 0.1–0.2 px, about 1″ per
-        /// axis at 3–5″/px. The mount's own jitter between frames (5–30″ by the same budget) can be far larger, so a
-        /// single-frame fit is at least this uncertain. A point averaged from n solves is floored at this over √n.
+        /// <summary>The solver's precision of one solve, in pixels per axis (Joey, 2026-11-21): §45.16's budget gives
+        /// 0.1–0.2 px for the frame centre. The floor of a single solve is this times the frame's pixel scale
+        /// (<see cref="PolarAlignSolveOutcome.PixelScaleArcsec"/>, the camera that took the point), per axis.</summary>
+        internal const double SolvePrecisionPx = 0.15;
+
+        /// <summary>The 1σ per axis given to a single solve when its pixel scale is unknown: a FLOOR, not a measurement
+        /// (0.15 px at about 3–5″/px is about 0.5–0.75″; 1″ errs on the safe side). The mount's own jitter between frames
+        /// (5–30″ by the same budget) can be far larger, so a single-frame fit is at least this uncertain. A point
+        /// averaged from n solves is floored at its single-solve floor over √n.
         /// <para>The trade-off at the defaults (1′ tolerance, 10° turns, 3 frames per point): the fit amplifies a point's
-        /// noise about 80-fold along the middle point, so the floor alone gives about 0.8′ of 1σ and error + 2σ stays over
-        /// 1′ however small the error; 20° turns cut the σ about four times. Pinned by
+        /// noise about 80-fold along the middle point, so this floor alone gives about 0.8′ of 1σ and error + 2σ stays
+        /// over 1′ however small the error ("can't confirm"); 20° turns cut the σ about four times. Pinned by
         /// <c>PolarAlignServiceTest.The_default_settings_floor_keeps_two_sigma_over_the_default_tolerance_and_20_degree_turns_cut_it_four_times</c>.</para></summary>
         internal const double SingleSolveSigmaFloorArcsec = 1.0;
 
-        /// <summary>A fit's 1σ on its altitude, azimuth and total errors (arcminutes), and the three solves it used
-        /// (each "RA … Dec … ±σ″", for the fit's log line).</summary>
-        internal sealed record FitUncertainty(double AltSigmaArcmin, double AzSigmaArcmin, double TotalSigmaArcmin, string Solves);
+        /// <summary>One solve's floor per axis (arcseconds): <see cref="SolvePrecisionPx"/> × the frame's pixel scale, or
+        /// <see cref="SingleSolveSigmaFloorArcsec"/> when the scale is unknown.</summary>
+        internal static double SingleSolveFloorArcsec(double? pixelScaleArcsec) =>
+            pixelScaleArcsec is double scale && double.IsFinite(scale) && scale > 0
+                ? SolvePrecisionPx * scale
+                : SingleSolveSigmaFloorArcsec;
+
+        /// <summary>A fit's 1σ on its altitude, azimuth and total errors (arcminutes), the three solves it used
+        /// (each "RA … Dec … ±σ″", for the fit's log line), and the single-solve floor it used and where from
+        /// (<see cref="FloorText"/>).</summary>
+        internal sealed record FitUncertainty(double AltSigmaArcmin, double AzSigmaArcmin, double TotalSigmaArcmin, string Solves,
+            string Floor = "");
 
         // The current measurement's fit uncertainty: the seed's while the live readout runs, the check's once it has a
         // verdict. Null before a fit; cleared per run (StartAsync). Guarded by _gate.
         private FitUncertainty? _fitSigma;
 
         /// <summary>A point's 1σ per axis (arcseconds): its mean's from the scatter, but never under the solver's own
-        /// precision of a mean of that many solves, <see cref="SingleSolveSigmaFloorArcsec"/> / √n (the single-solve floor
+        /// precision of a mean of that many solves, <see cref="SingleSolveFloorArcsec"/> / √n (the single-solve floor
         /// for one solve). A few solves that happen to agree (or a solver that returns the same answer each time) give a
         /// small-sample scatter far under the truth, as low as 0: the floor keeps such a point from claiming more than
         /// the solver can reach.</summary>
         internal static double PointSigmaArcsec(PolarAlignSolveOutcome point) =>
             Math.Max(point.SigmaArcsec ?? 0.0, PointSigmaFloorArcsec(point));
 
-        /// <summary>The solver's precision of a point's mean: the single-solve floor over √(its solves).</summary>
+        /// <summary>The solver's precision of a point's mean: the single-solve floor at its pixel scale over √(its solves).</summary>
         private static double PointSigmaFloorArcsec(PolarAlignSolveOutcome point) =>
-            SingleSolveSigmaFloorArcsec / Math.Sqrt(Math.Max(1, point.Solves));
+            SingleSolveFloorArcsec(point.PixelScaleArcsec) / Math.Sqrt(Math.Max(1, point.Solves));
+
+        /// <summary>The single-solve floor a fit's points used, for its log line: "0.15 px × 4.00″/px = 0.60″ per axis",
+        /// or "1.00″ per axis (pixel scale unknown)".</summary>
+        private static string FloorText(IEnumerable<PolarAlignSolveOutcome> points) =>
+            string.Join(" / ", points.Select(p => p.PixelScaleArcsec is double scale && double.IsFinite(scale) && scale > 0
+                    ? string.Create(CultureInfo.InvariantCulture,
+                        $"{SolvePrecisionPx:F2} px × {scale:F2}″/px = {SingleSolveFloorArcsec(scale):F2}″ per axis")
+                    : string.Create(CultureInfo.InvariantCulture,
+                        $"{SingleSolveSigmaFloorArcsec:F2}″ per axis (pixel scale unknown)"))
+                .Distinct(StringComparer.Ordinal));
 
         /// <summary>The point's σ is the floor (<see cref="PointSigmaArcsec"/>), not its measured scatter.</summary>
         private static bool PointSigmaIsFloor(PolarAlignSolveOutcome point) =>
@@ -81,7 +106,9 @@ namespace OpenAstroAra.Server.Services {
             var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.Select(p =>
                 (p.S.RaDegJnow + (tracking ? 0.0 : (meanAt - p.At).TotalSeconds * SiderealDegPerSecond), p.S.DecDegJnow)).ToList());
             var sigma = PolarAlignGeometry.MeanStandardErrorArcsec(scatter, solves.Count);
-            return (new PolarAlignSolveOutcome(true, ra, dec, sigma, solves.Count), meanAt, scatter);
+            // The point's frames come from one camera: its pixel scale sets the point's floor.
+            var scale = solves.Select(p => p.S.PixelScaleArcsec).FirstOrDefault(v => v is double x && double.IsFinite(x) && x > 0);
+            return (new PolarAlignSolveOutcome(true, ra, dec, sigma, solves.Count, scale), meanAt, scatter);
         }
 
         /// <summary>The uncertainty of the three-point fit of <see cref="FitThreePointOrFail"/> (and its hand-turn twin):
@@ -104,15 +131,15 @@ namespace OpenAstroAra.Server.Services {
             }
             static string Solve((PolarAlignSolveOutcome S, DateTimeOffset At) p) => string.Create(CultureInfo.InvariantCulture,
                 $"RA {p.S.RaDegJnow:F5}° Dec {p.S.DecDegJnow:F5}° ±{PointSigmaArcsec(p.S):F2}″{(PointSigmaIsFloor(p.S) ? " (floor)" : "")}");
-            return new FitUncertainty(sigma.Alt, sigma.Az, sigma.Total, string.Join("; ", Solve(p1), Solve(p2), Solve(p3)));
+            return new FitUncertainty(sigma.Alt, sigma.Az, sigma.Total, string.Join("; ", Solve(p1), Solve(p2), Solve(p3)),
+                FloorText([p1.S, p2.S, p3.S]));
         }
 
-        /// <summary>#2072 — "aligned": the total error plus twice its 1σ is inside the tolerance, so a noisy fit cannot
-        /// claim a small error. A readout with no σ yet (none before a fit) counts σ as 0. Both are taken at the 0.01′
-        /// the clients see them (<c>polar_align.progress</c> and the status round to 2 decimals): a Done the app offers
-        /// on the published numbers is never refused on the unrounded ones (1e-9 absorbs the sum's binary rounding).</summary>
-        internal static bool AlignedWithinTolerance(double totalArcmin, double? sigmaArcmin, double toleranceArcmin) =>
-            Math.Round(totalArcmin, 2) + 2 * Math.Round(sigmaArcmin ?? 0.0, 2) <= toleranceArcmin + 1e-9;
+        /// <summary>#2072 — what the Check's verdict rates (Joey, 2026-11-21): the total error plus twice its 1σ, so a noisy
+        /// fit cannot read "excellent". A result with no σ counts σ as 0. Both are taken at the 0.01′ the clients see
+        /// them, so the band the app shows beside "0.2′ ± 1.3′" is the daemon's.</summary>
+        internal static double RatedErrorArcmin(double totalArcmin, double? sigmaArcmin) =>
+            Math.Round(totalArcmin, 2) + 2 * Math.Round(sigmaArcmin ?? 0.0, 2);
 
         private static double? RoundedSigma(double? sigmaArcmin) => sigmaArcmin is double s ? Math.Round(s, 2) : null;
 

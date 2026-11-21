@@ -570,9 +570,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Widget _checkedBody(PolarAlignLive live, Color color) {
     final r = live.checkResult;
     final total = r?.totalErrorArcmin ?? live.totalErrorArcmin;
-    // The daemon's verdict when it sent one; the local bands only for a token this build does not know.
-    final rating = (r == null ? null : polarRatingForVerdict(r.verdict)) ??
-        (total == null ? null : polarErrorRating(total));
+    final sigma = r?.totalSigmaArcmin ?? live.totalSigmaArcmin;
+    // #2072 the band rates the error plus twice its 1σ, so a noisy check never
+    // reads Excellent (Joey, 2026-11-21); without a σ, the daemon's verdict, and
+    // the local bands only for a token this build does not know.
+    final rated = total == null ? null : polarRatedArcmin(total, sigma);
+    final rating = (r == null ? null : polarRatingForVerdict(polarCheckVerdict(r))) ??
+        (rated == null ? null : polarErrorRating(rated));
     final delta = r?.fineDeltaArcmin;
     final alt = r?.altErrorArcmin ?? live.altErrorArcmin;
     final az = r?.azErrorArcmin ?? live.azErrorArcmin;
@@ -601,7 +605,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                             fit: BoxFit.scaleDown,
                             child: Text(
                               // #2072 the verdict's total with its 1σ: "+0.5′ ± 0.6′".
-                              polarErrorWithSigmaText(context.l10n, formatArcmin(total), r?.totalSigmaArcmin ?? live.totalSigmaArcmin),
+                              polarErrorWithSigmaText(context.l10n, formatArcmin(total), sigma),
                               key: const Key('polar-align-check-total'),
                               style: TextStyle(
                                 fontSize: _short ? _heroFontShort : _heroFont,
@@ -615,7 +619,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                         ],
                       ),
                     ),
-                    if (rating != null && total != null) ...[
+                    if (rating != null && rated != null) ...[
                       const SizedBox(width: 16),
                       Flexible(
                         child: FittedBox(
@@ -630,7 +634,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(polarErrorRatingIcon(total), size: 34, color: color),
+                                Icon(polarErrorRatingIcon(rated), size: 34, color: color),
                                 const SizedBox(width: 10),
                                 Text(rating.$1,
                                     key: const Key('polar-align-check-verdict'),
@@ -883,10 +887,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final tolerance = _toleranceArcmin;
     final inTolerance =
         live.totalErrorArcmin != null && tolerance != null && live.totalErrorArcmin! <= tolerance;
-    // #2072 Done needs the error plus twice its 1σ inside the tolerance; while
-    // only the error is, the screen says why.
-    final aligned = polarAligned(live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
-    final held = polarDoneHeldText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
+    // #2072 inside the tolerance, but not with twice its 1σ: the screen says the
+    // measurement cannot confirm it; Done stays available (Joey, 2026-11-21).
+    final unconfirmed = polarUnconfirmedText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
     final single = _settings?.loopMode == PolarAlignLoopModes.single;
     final coarse = live.stage == PolarAlignStages.coarse;
     final side = coarse ? polarSideOfPoleText(context.l10n, live.altErrorArcmin, live.azErrorArcmin) : null;
@@ -1007,7 +1010,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Frame'),
                   ),
-                if (coarse && aligned)
+                if (coarse && inTolerance)
                   // #1875: the rough alignment may already be inside the tolerance.
                   OutlinedButton.icon(
                     key: const Key('polar-align-done-rough'),
@@ -1022,12 +1025,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
                 if (!coarse) ...[
                   Tooltip(
-                    message: aligned || tolerance == null
+                    message: inTolerance || tolerance == null
                         ? ''
-                        : held ?? 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
+                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
                     child: FilledButton.tonalIcon(
                       key: const Key('polar-align-done'),
-                      onPressed: _busy || !aligned
+                      onPressed: _busy || !inTolerance
                           ? null
                           : () => _run('complete polar alignment', (api) => api.complete()),
                       icon: const Icon(Icons.check),
@@ -1052,13 +1055,13 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ],
         ),
-        if (held != null) ...[
+        if (unconfirmed != null) ...[
           const SizedBox(height: 8),
           Align(
             alignment: Alignment.centerRight,
             child: Text(
-              held,
-              key: const Key('polar-align-done-held'),
+              unconfirmed,
+              key: const Key('polar-align-unconfirmed'),
               textAlign: TextAlign.right,
               style: const TextStyle(fontSize: _smallFont, color: AraColors.accentBusy, height: 1.3),
             ),
@@ -1202,7 +1205,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// axes with their knob directions, in one row.
   Widget _readoutStrip(PolarAlignLive live, Color color) {
     final total = live.totalErrorArcmin;
-    final rating = total == null ? null : polarErrorRating(total);
+    // #2072 rated on the error plus twice its 1σ.
+    final rating = total == null ? null : polarErrorRating(polarRatedArcmin(total, live.totalSigmaArcmin));
     final row = Row(
         key: const Key('polar-align-readout'),
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1290,7 +1294,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   Widget _meaningCard(PolarAlignLive live, Color color) {
     final total = live.totalErrorArcmin;
     final offset = total == null ? null : formatPoleOffset(total);
-    final rating = total == null ? null : polarErrorRating(total);
+    // #2072 rated on the error plus twice its 1σ: "0.2′ ± 1.3′" is not Excellent.
+    final rated = total == null ? null : polarRatedArcmin(total, live.totalSigmaArcmin);
+    final rating = rated == null ? null : polarErrorRating(rated);
     final drift = total == null ? null : maxDriftArcsec(total, 300);
     return _card(
       key: const Key('polar-align-meaning'),
@@ -1337,7 +1343,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(polarErrorRatingIcon(total!), size: 34, color: color),
+                          Icon(polarErrorRatingIcon(rated!), size: 34, color: color),
                           const SizedBox(width: 10),
                           Text(rating.$1,
                               style: TextStyle(fontSize: 30, fontWeight: FontWeight.w700, color: color)),

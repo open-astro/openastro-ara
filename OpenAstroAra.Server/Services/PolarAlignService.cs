@@ -243,8 +243,7 @@ namespace OpenAstroAra.Server.Services {
                     MeasurementNoisy: _measurementNoisy,
                     HandTurn: _handTurn,
                     HandTurnWait: _handTurnWait,
-                    // #2072 — the readout's 1σ, beside each error, at the 0.01′ polar_align.progress gives it (the Done
-                    // gate, AlignedWithinTolerance, judges it at that precision).
+                    // #2072 — the readout's 1σ, beside each error, at the 0.01′ polar_align.progress gives it.
                     CurrentSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.TotalSigmaArcmin),
                     AzimuthSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.AzSigmaArcmin),
                     AltitudeSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.AltSigmaArcmin)));
@@ -756,11 +755,9 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 // A rough readout outside the tolerance is not an alignment to record as "complete" (a stage-unaware
                 // client's Done would otherwise write the §45.13 row the guiding and "last night" readouts trust).
-                // #2072 — nor is one whose error plus twice its 1σ is outside it: a noisy fit cannot claim a small error.
                 if (_active && _stage == PolarAlignStages.Coarse
-                    && !(_altErrorArcmin is double alt && _azErrorArcmin is double az
-                        && AlignedWithinTolerance(Math.Sqrt(alt * alt + az * az), _fitSigma?.TotalSigmaArcmin, tolerance))) {
-                    throw new InvalidOperationException("Done is not available in the rough step until the error plus twice its uncertainty is inside your tolerance — Stop, then Start to refine it with the guide camera");
+                    && !(_altErrorArcmin is double alt && _azErrorArcmin is double az && Math.Sqrt(alt * alt + az * az) <= tolerance)) {
+                    throw new InvalidOperationException("Done is not available in the rough step until the error is inside your tolerance — Stop, then Start to refine it with the guide camera");
                 }
             }
             return EndRoutineAsync("polar-align.complete", outcome: "complete", idempotencyKey, ct);
@@ -1982,8 +1979,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4577, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: the retake did not solve — the first set ({ScatterArcsec:F2}″ rms) stands for the point and the result is flagged noisy")]
         private partial void LogPointRetakeUnsolved(string frame, double scatterArcsec);
 
-        [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ ± {AltSigmaArcmin:F2}′ az {AzArcmin:F2}′ ± {AzSigmaArcmin:F2}′, total ± {TotalSigmaArcmin:F2}′ (1σ); solves {Solves}")]
-        private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double altSigmaArcmin, double azArcmin, double azSigmaArcmin, double totalSigmaArcmin, string solves);
+        [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ ± {AltSigmaArcmin:F2}′ az {AzArcmin:F2}′ ± {AzSigmaArcmin:F2}′, total ± {TotalSigmaArcmin:F2}′ (1σ); solves {Solves}; σ floor {Floor}")]
+        private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double altSigmaArcmin, double azArcmin, double azSigmaArcmin, double totalSigmaArcmin, string solves, string floor);
 
         [LoggerMessage(EventId = 4529, Level = LogLevel.Information, Message = "§45 polar-align live readout {FrameId}: alt {AltArcmin:F2}′ az {AzArcmin:F2}′ (solve JNOW RA {RaDeg:F5}° Dec {DecDeg:F5}°, tracking {Tracking})")]
         private partial void LogLiveReadout(string? frameId, double altArcmin, double azArcmin, double raDeg, double decDeg, bool tracking);

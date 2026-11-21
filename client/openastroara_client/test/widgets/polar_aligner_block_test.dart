@@ -220,7 +220,7 @@ void main() {
     expect(find.byType(ButtonStyleButton), findsNothing);
   });
 
-  testWidgets('converged inside the tolerance but not with twice its 1σ: the line says Done waits (#2072)', (tester) async {
+  testWidgets("converged inside the tolerance but not with twice its 1σ: the line says it can't confirm the alignment (#2072)", (tester) async {
     await _pump(tester,
         live: const PolarAlignLive(
             phase: PolarAlignStates.adjusting,
@@ -228,10 +228,11 @@ void main() {
             totalSigmaArcmin: 0.4,
             correction: PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('The motors stopped inside your 2′ tolerance, but the error is not inside it with twice its '
-            'uncertainty (± 0.4′), so Done waits. More moves cannot help: larger turns shrink it most (20° in place '
-            'of 10° cuts it about four times), so run Check with a larger Check step.'),
+        find.text("The motors stopped inside your 2′ tolerance, but at ± 0.4′ this measurement can't confirm the "
+            'alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four '
+            'times), so run Check with a larger Check step.'),
         findsOneWidget);
+    expect(find.textContaining('Inside your 2′ tolerance after'), findsNothing, reason: 'no claim of alignment');
   });
 
   testWidgets(

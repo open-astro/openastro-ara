@@ -14,6 +14,7 @@
 
 using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Image.Interfaces;
 using OpenAstroAra.PlateSolving;
@@ -106,6 +107,26 @@ namespace OpenAstroAra.Test {
 
             Assert.That(seen!.SearchScale, Is.True, "no scale hint");
             Assert.That(measured, Is.EqualTo(128).Within(0.1));
+        }
+
+        [Test]
+        public async Task A_solved_frame_carries_the_guide_pixel_scale_it_was_solved_at() {
+            // #2072: the fit's precision floor scales with it. 200 mm, 3.75 µm, 2×2: 206.265 × 7.5 / 200 = 7.73″/px.
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 200, GuidePixelSize = 3.75 });
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = new Coordinates(10.0, 85.0, Epoch.J2000, Coordinates.RAType.Degrees) });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object);
+
+            var outcome = await sut.SolveAsync(WriteFrame(), 2, 10, 85, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Success, Is.True);
+            Assert.That(outcome.PixelScaleArcsec, Is.EqualTo(206.265 * 3.75 * 2 / 200).Within(1e-9));
         }
 
         [Test]

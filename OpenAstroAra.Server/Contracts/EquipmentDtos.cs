@@ -996,8 +996,10 @@ public static class PolarAlignDirections {
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
 /// point stayed noisy after its retake (#2082, <c>Noisy</c>). The <c>*SigmaArcmin</c> fields (#2072) are the fit's 1σ on
-/// each error, from the scatter of each point's frames (a single-frame point counts a 1″ floor); the total's is the rms
-/// length of the error vector, √(alt² + az²) of the two. Null from an older daemon.</summary>
+/// each error, from the scatter of each point's frames (a single-frame point counts a floor of 0.15 px at the solving
+/// camera's pixel scale, 1″ when that is unknown); the total's is the rms length of the error vector, √(alt² + az²) of
+/// the two. Null from an older daemon. With them, the verdict band rates the total plus twice its 1σ (#2072), so a
+/// noisy check does not read <c>excellent</c>.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -1057,7 +1059,7 @@ public sealed record PolarAlignStateDto(
     PolarAlignHandTurnDto? HandTurnWait = null,
     // #2072 — the 1σ of CurrentErrorArcmin, AzimuthAdjustmentArcmin and AltitudeAdjustmentArcmin (arcmin): the fit the
     // readout rests on (the seed's in the live loop, the verdict's once checked). Null whenever the error is null.
-    // "Aligned" (Done in the clients, and the daemon's own rough-step Done) needs error + 2σ inside the tolerance.
+    // The clients show "aligned" only when error + 2σ is inside the tolerance (Done is not held by it).
     double? CurrentSigmaArcmin = null,
     double? AzimuthSigmaArcmin = null,
     double? AltitudeSigmaArcmin = null);

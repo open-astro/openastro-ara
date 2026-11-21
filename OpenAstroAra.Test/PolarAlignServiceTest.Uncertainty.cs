@@ -28,15 +28,17 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// #2072 "PR A" — each fit's uncertainty: each point's scatter (or the single-solve floor) carried through the
     /// three-point fit into a 1σ on the altitude, azimuth and total errors; the readout, the check's verdict, the log
-    /// line and the session row carry it; the rough step's Done waits until the error plus twice its 1σ is inside the
-    /// tolerance.
+    /// line and the session row carry it; the Check's verdict rates the error plus twice its 1σ; Done is not held by it
+    /// (Joey, 2026-11-21); a single solve's floor is 0.15 px at the solving camera's pixel scale.
     /// </summary>
     public partial class PolarAlignServiceTest {
 
         /// <summary>A guide-camera solver that answers at the hint's RA on the Dec-85° circle, with
-        /// <see cref="DecOffsetArcsec"/> added to the frames it names by id, and records each answer.</summary>
+        /// <see cref="DecOffsetArcsec"/> added to the frames it names by id, and records each answer. Each answer carries
+        /// <see cref="PixelScaleArcsec"/> (null: unknown).</summary>
         private sealed class ScatterSolver : IPolarAlignFrameSolver {
             public Dictionary<string, double> DecOffsetArcsec { get; } = new(StringComparer.Ordinal);
+            public double? PixelScaleArcsec { get; init; }
             public List<(string Frame, double RaDeg)> Answers { get; } = new();
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 var frame = Path.GetFileNameWithoutExtension(fitsPath);
@@ -45,7 +47,7 @@ namespace OpenAstroAra.Test {
                     Answers.Add((frame, ra));
                 }
                 var offset = DecOffsetArcsec.TryGetValue(frame, out var arcsec) ? arcsec / 3600.0 : 0.0;
-                return Task.FromResult(new PolarAlignSolveOutcome(true, ra, PoleMountDecDeg + offset));
+                return Task.FromResult(new PolarAlignSolveOutcome(true, ra, PoleMountDecDeg + offset, PixelScaleArcsec: PixelScaleArcsec));
             }
             public double RaOf(string frame) {
                 lock (Answers) {
@@ -90,9 +92,11 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_single_frame_point_counts_a_1_arcsec_floor_in_the_fit_sigma() {
-            // One frame per point (the bench store): no scatter to measure, so each point counts 1″ per axis.
+            // One frame per point (the bench store): no scatter to measure, and the solver gives no pixel scale, so each
+            // point counts the 1″ fallback per axis, and the fit's log line says which floor it used.
             var solver = new ScatterSolver();
-            using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore());
+            var logger = new CapturingLogger();
+            using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore(), logger: logger);
 
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
@@ -101,6 +105,33 @@ namespace OpenAstroAra.Test {
             var expected = ExpectedSigma(solver.RaOf("seed-a-1"), solver.RaOf("seed-b-1"), solver.RaOf("seed-c-1"), 1.0);
             Assert.That(status.State, Is.EqualTo("adjusting"));
             Assert.That(status.CurrentSigmaArcmin, Is.EqualTo(expected.Total).Within(0.0051));
+            var fit = logger.Entries.Single(e => e.EventId == 4528).Message;
+            Assert.That(fit, Does.EndWith("σ floor 1.00″ per axis (pixel scale unknown)"), fit);
+        }
+
+        [Test]
+        public async Task A_coarse_pixel_scale_gives_a_proportionally_larger_fit_sigma_and_the_log_names_the_floor() {
+            // Joey, 2026-11-21: a solve's floor is 0.15 px at the solving camera's scale. At 8″/px that is 1.2″ per axis,
+            // so the fit's σ is 1.2 times the 1″ fallback's, and the log line says how the floor was reached.
+            var solver = new ScatterSolver { PixelScaleArcsec = 8.0 };
+            var logger = new CapturingLogger();
+            using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore(), logger: logger);
+
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            var (ra, rb, rc) = (solver.RaOf("seed-a-1"), solver.RaOf("seed-b-1"), solver.RaOf("seed-c-1"));
+            var atScale = ExpectedSigma(ra, rb, rc, 0.15 * 8.0);
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(atScale.Total / ExpectedSigma(ra, rb, rc, 1.0).Total, Is.EqualTo(1.2).Within(1e-6), "σ is linear in the floor");
+            Assert.That(status.CurrentSigmaArcmin, Is.EqualTo(atScale.Total).Within(0.0051));
+            var fit = logger.Entries.Single(e => e.EventId == 4528).Message;
+            Assert.That(fit, Does.EndWith("σ floor 0.15 px × 8.00″/px = 1.20″ per axis"), fit);
+            Assert.That(fit.Split("±1.20″ (floor)").Length - 1, Is.EqualTo(3), fit);
+            // Four times the scale, four times a point's floor (a mean of three solves, here).
+            Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, 0.0, 3, PixelScaleArcsec: 8.0)),
+                Is.EqualTo(4 * PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, 0.0, 3, PixelScaleArcsec: 2.0))).Within(1e-12));
         }
 
         [Test]
@@ -121,7 +152,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Rough_Done_is_held_while_the_error_plus_two_sigma_is_over_the_tolerance_and_allowed_once_inside() {
+        public async Task Rough_Done_inside_the_tolerance_completes_even_while_the_error_plus_two_sigma_is_over_it() {
             var log = new RecordingLog();
             var store = NewStore();
             using var svc = NewService(NewFake(), new HintFollowingSolver(), NewPoleMount(), store: store, log: log, mainCamera: new FakeMainCamera());
@@ -133,14 +164,9 @@ namespace OpenAstroAra.Test {
             var sigma = status.CurrentSigmaArcmin!.Value;
             Assert.That(sigma, Is.GreaterThan(0.01), "the single-frame floor gives the fit a σ");
 
-            // Inside the tolerance, but not by twice its σ: held.
+            // Inside the tolerance, but not by twice its σ: Done is not held by the σ (Joey, 2026-11-21); the clients say
+            // the measurement cannot confirm the alignment.
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { TargetToleranceArcmin = total + sigma });
-            await AssertThrowsAsync<InvalidOperationException>(() => svc.CompleteAsync(null, CancellationToken.None)).ConfigureAwait(false);
-            Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("adjusting"), "still running");
-            Assert.That(log.Rows, Is.Empty, "no complete row while the error plus 2σ is outside the tolerance");
-
-            // Error + 2σ inside: Done completes.
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { TargetToleranceArcmin = total + 2 * sigma + 0.01 });
             await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("stopped"));
             Assert.That(log.Rows.TryPeek(out var row) && row.Outcome == "complete", Is.True);
@@ -210,8 +236,9 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public void The_default_settings_floor_keeps_two_sigma_over_the_default_tolerance_and_20_degree_turns_cut_it_four_times() {
-            // #2072 review: the trade-off the Done gate makes at the defaults, pinned. 1′ tolerance, 10° turns, 3 frames
-            // per point whose solves agree: the floor alone (1″ / √3 per point) holds Done however small the error.
+            // #2072 review: the trade-off at the defaults, pinned. 1′ tolerance, 10° turns, 3 frames per point whose solves
+            // agree, no pixel scale: the floor alone (1″ / √3 per point) keeps "aligned" from being confirmed however small
+            // the error.
             var defaults = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto());
             var at = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero);
             var floor = PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, PoleMountDecDeg, 0.0, defaults.FramesPerPoint));
@@ -222,21 +249,31 @@ namespace OpenAstroAra.Test {
             var atDefault = SigmaAt(defaults.SeedRotationDeg);
             Assert.That(defaults.SeedRotationDeg, Is.EqualTo(10.0));
             Assert.That(defaults.CheckStepDeg, Is.EqualTo(defaults.SeedRotationDeg), "the check measures with the seed's step");
-            Assert.That(PolarAlignService.AlignedWithinTolerance(0.0, atDefault, defaults.TargetToleranceArcmin), Is.False,
-                $"a zero error ± {atDefault:F2}′ is not aligned at {defaults.TargetToleranceArcmin}′");
-            // The cure the held text names: 20° turns cut the σ about four times, and a small error is then aligned.
+            Assert.That(PolarAlignService.RatedErrorArcmin(0.0, atDefault), Is.GreaterThan(defaults.TargetToleranceArcmin),
+                $"a zero error ± {atDefault:F2}′ cannot be confirmed inside {defaults.TargetToleranceArcmin}′");
+            // The cure the unconfirmed text names: 20° turns cut the σ about four times, and a small error is then confirmed.
             var atTwenty = SigmaAt(20.0);
             Assert.That(atDefault / atTwenty, Is.InRange(3.5, 4.5));
-            Assert.That(PolarAlignService.AlignedWithinTolerance(0.3, atTwenty, defaults.TargetToleranceArcmin), Is.True);
+            Assert.That(PolarAlignService.RatedErrorArcmin(0.3, atTwenty), Is.LessThanOrEqualTo(defaults.TargetToleranceArcmin));
         }
 
         [Test]
-        public void The_Done_gate_judges_the_error_and_sigma_at_the_two_decimals_the_clients_see() {
-            // 0.494′ ± 0.2549′ reaches the app as 0.49′ ± 0.25′: 0.49 + 0.50 is inside 1′, so the app offers Done and the
-            // daemon must not refuse it on the unrounded 1.004′.
-            Assert.That(PolarAlignService.AlignedWithinTolerance(0.494, 0.2549, 1.0), Is.True);
-            Assert.That(PolarAlignService.AlignedWithinTolerance(0.50, 0.26, 1.0), Is.False);
-            Assert.That(PolarAlignService.AlignedWithinTolerance(0.3, 0.35, 1.0), Is.True, "exactly on the tolerance");
+        public async Task A_check_verdict_rates_the_error_plus_twice_its_sigma_so_0_2_plus_or_minus_1_3_is_not_excellent() {
+            // Joey, 2026-11-21: the band rates error + 2σ, both at the 0.01′ the clients see.
+            Assert.That(PolarAlignService.VerdictFor(PolarAlignService.RatedErrorArcmin(0.2, 1.3)), Is.EqualTo("very_good"));
+            Assert.That(PolarAlignService.VerdictFor(PolarAlignService.RatedErrorArcmin(0.2, 0.4)), Is.EqualTo("excellent"));
+            Assert.That(PolarAlignService.VerdictFor(PolarAlignService.RatedErrorArcmin(0.2, null)), Is.EqualTo("excellent"), "no σ: the error alone");
+
+            // End to end: a single-frame check (1″ floor) whose error alone is "excellent".
+            var solver = new ScatterSolver();
+            using var svc = NewService(NewFake(), solver, NewPoleMount(), store: NewStore());
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var r = (await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).CheckResult!;
+
+            Assert.That(r.TotalErrorArcmin, Is.LessThanOrEqualTo(1.0), "the error alone is in the excellent band");
+            Assert.That(r.TotalErrorArcmin + 2 * r.TotalSigmaArcmin!.Value, Is.GreaterThan(1.0));
+            Assert.That(r.Verdict, Is.Not.EqualTo("excellent"));
+            Assert.That(r.Verdict, Is.EqualTo(PolarAlignService.VerdictFor(r.TotalErrorArcmin + 2 * r.TotalSigmaArcmin.Value)));
         }
 
         [Test]

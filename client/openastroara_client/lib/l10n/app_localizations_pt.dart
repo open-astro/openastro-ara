@@ -6092,13 +6092,13 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String polarDoneHeldBySigma(String tolerance, String sigma) {
-    return 'Done waits: the error is inside your $tolerance′ tolerance, but not with twice its uncertainty (± $sigma). Larger turns shrink it most: 20° in place of 10° cuts it about four times (Polar align turn and Check step in Settings). More frames per point help a little.';
+  String polarUnconfirmedBySigma(String tolerance, String sigma) {
+    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).';
   }
 
   @override
-  String polarAlignerConvergedHeld(String tolerance, String sigma) {
-    return 'The motors stopped inside your $tolerance′ tolerance, but the error is not inside it with twice its uncertainty (± $sigma), so Done waits. More moves cannot help: larger turns shrink it most (20° in place of 10° cuts it about four times), so run Check with a larger Check step.';
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
+    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.';
   }
 
   @override
@@ -13263,13 +13263,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String polarDoneHeldBySigma(String tolerance, String sigma) {
-    return 'Concluir espera: o erro está dentro da sua tolerância de $tolerance′, mas não com o dobro da sua incerteza (± $sigma). Giros maiores a reduzem mais: 20° no lugar de 10° a corta cerca de quatro vezes (giro e passo do Verificar nas configurações do alinhamento polar). Mais quadros por ponto ajudam um pouco.';
+  String polarUnconfirmedBySigma(String tolerance, String sigma) {
+    return 'Dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Giros maiores ajudam mais: 20° no lugar de 10° cortam a incerteza cerca de quatro vezes (giro e passo do Verificar nas configurações do alinhamento polar).';
   }
 
   @override
-  String polarAlignerConvergedHeld(String tolerance, String sigma) {
-    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas o erro não fica dentro dela com o dobro da sua incerteza (± $sigma), então Concluir espera. Mais movimentos não ajudam: giros maiores a reduzem mais (20° no lugar de 10° a corta cerca de quatro vezes), então rode o Verificar com um passo maior.';
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
+    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Mais movimentos não ajudam; giros maiores sim (20° no lugar de 10° cortam a incerteza cerca de quatro vezes), então rode o Verificar com um passo maior.';
   }
 
   @override

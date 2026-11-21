@@ -217,11 +217,32 @@ void main() {
       expect(polarErrorWithSigmaText(_en, '+0.2′', 1.1), '+0.2′ ± 1.1′');
       expect(polarErrorWithSigmaText(pt, '+0.2′', 1.14), '+0.2′ ± 1.1′');
       expect(polarErrorWithSigmaText(_en, '+0.2′', null), '+0.2′', reason: 'an older daemon sends no σ');
-      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('Done waits'));
-      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('1′ tolerance'));
-      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('± 0.4′'));
-      expect(polarDoneHeldText(pt, 0.5, 0.4, 1.0), contains('Concluir espera'));
-      expect(polarDoneHeldText(_en, 1.2, 0.1, 1.0), isNull, reason: 'outside the tolerance on its own: the usual hint');
+    });
+
+    test("inside the tolerance but not with twice its 1σ: the text says it can't confirm and names larger turns, in English and pt-BR (#2072)", () {
+      final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+      final en = polarUnconfirmedText(_en, 0.5, 0.4, 1.0)!;
+      expect(en, startsWith("Inside your 1′ tolerance, but at ± 0.4′ this measurement can't confirm the alignment."));
+      expect(en, contains('20° in place of 10°'));
+      expect(polarUnconfirmedText(pt, 0.5, 0.4, 1.0), contains('não consegue confirmar o alinhamento'));
+      expect(polarUnconfirmedText(_en, 0.5, 0.25, 1.0), isNull, reason: 'confirmed: 0.5 + 2 × 0.25 is inside 1′');
+      expect(polarUnconfirmedText(_en, 1.2, 0.1, 1.0), isNull, reason: 'outside the tolerance on its own: the usual hint');
+    });
+
+    test('a check rates the error plus twice its 1σ: 0.2′ ± 1.3′ does not read Excellent (#2072)', () {
+      const noisy = PolarAlignCheckResult(
+          altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.0, verdict: 'excellent', totalSigmaArcmin: 1.3);
+      expect(polarCheckVerdict(noisy), 'very_good');
+      expect(polarErrorRating(polarRatedArcmin(0.2, 1.3)).$1, isNot('Excellent'));
+      const sure = PolarAlignCheckResult(
+          altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.0, verdict: 'excellent', totalSigmaArcmin: 0.3);
+      expect(polarCheckVerdict(sure), 'excellent');
+      const older = PolarAlignCheckResult(
+          altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.0, verdict: 'good');
+      expect(polarCheckVerdict(older), 'good', reason: "no σ: the daemon's own token");
     });
 
     test('aligned needs the error plus twice its 1σ inside the tolerance; no σ judges the error alone (#2072)', () {
@@ -582,6 +603,21 @@ void main() {
       expect(total.data, '+0.5′ ± 0.6′', reason: "the verdict's σ, as Simple Mode shows it");
     });
 
+    testWidgets('the check card badge rates the error plus twice its 1σ: 0.2′ ± 1.3′ does not read Excellent (#2072)', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.checked, stage: PolarAlignStages.check, checkSolvesDone: 3,
+        altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2, totalSigmaArcmin: 1.3, zone: 'green',
+        checkResult: PolarAlignCheckResult(
+          altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.02, verdict: 'excellent', totalSigmaArcmin: 1.3,
+        ),
+      )));
+      await _expand(tester);
+      final badge = tester.widget<Text>(find.byKey(const Key('polar-align-check-verdict')));
+      expect(badge.data, 'Very good', reason: '0.2 + 2 × 1.3 = 2.8′');
+    });
+
     testWidgets('idle shows Start, and posts start only once the confirm step says so (#2048)', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));
@@ -654,7 +690,7 @@ void main() {
       expect(api.calls, ['complete']);
     });
 
-    testWidgets('the readout shows the total with its 1σ; Done waits while the error plus 2σ is over the tolerance and says why (#2072)',
+    testWidgets("the readout shows the total with its 1σ; inside the tolerance but not with twice it, Done is allowed and the screen says it can't confirm (#2072)",
         (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(
@@ -671,15 +707,19 @@ void main() {
       await _expand(tester);
 
       expect(find.text('+0.5′ ± 0.4′'), findsOneWidget);
-      final done = tester.widget<FilledButton>(find.byKey(const Key('polar-align-done')));
-      expect(done.onPressed, isNull, reason: '0.5′ + 2 × 0.4′ is over the 1′ tolerance');
-      expect(find.byKey(const Key('polar-align-done-held')), findsOneWidget);
-      expect(find.textContaining('Done waits'), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-unconfirmed')), findsOneWidget);
+      expect(find.textContaining("this measurement can't confirm the alignment"), findsOneWidget);
       final check = tester.widget<FilledButton>(find.byKey(const Key('polar-align-check')));
-      expect(check.onPressed, isNotNull, reason: 'Check measures afresh: it is not held by the σ');
+      expect(check.onPressed, isNotNull, reason: 'Check measures afresh');
+      // Done is not held by the σ (Joey, 2026-11-21).
+      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['complete']);
     });
 
-    testWidgets('Done posts complete once the error plus 2σ is inside the tolerance (#2072)', (tester) async {
+    testWidgets('with the error plus 2σ inside the tolerance the screen does not call it unconfirmed (#2072)', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(
           api,
@@ -694,12 +734,27 @@ void main() {
           )));
       await _expand(tester);
 
-      expect(find.byKey(const Key('polar-align-done-held')), findsNothing);
-      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
+      expect(find.byKey(const Key('polar-align-unconfirmed')), findsNothing, reason: '0.5 + 2 × 0.25 is exactly the 1′ tolerance');
+    });
+
+    testWidgets('the live quality card rates the error plus twice its 1σ: 0.2′ ± 1.3′ does not read Excellent (#2072)', (tester) async {
+      // A tall window: a short one drops this card for the one-row readout.
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        azErrorArcmin: 0.17,
+        altErrorArcmin: 0.1,
+        totalErrorArcmin: 0.2,
+        totalSigmaArcmin: 1.3,
+      )));
       await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('polar-align-done')));
-      await tester.pumpAndSettle();
-      expect(api.calls, ['complete']);
+      final card = find.byKey(const Key('polar-align-meaning'));
+      Finder inCard(String text) => find.descendant(of: card, matching: find.text(text));
+      expect(inCard('Excellent'), findsNothing);
+      expect(inCard('Very good'), findsOneWidget);
     });
 
     testWidgets('single mode shows Take Frame and posts a capture request', (tester) async {

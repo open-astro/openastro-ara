@@ -12,7 +12,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../status_indicator.dart';
-import 'polar_align_readout.dart' show formatArcmin, formatSigmaArcmin, polarDoneHeldBySigma;
+import 'polar_align_readout.dart' show formatArcmin, formatSigmaArcmin, polarUnconfirmed;
 
 /// #1971 the Polar Aligner's state and controls, the one module both
 /// presentations render (ADR 0013): Simple Mode's Polar align panel between
@@ -218,16 +218,17 @@ class PolarAlignerBlock extends ConsumerWidget {
         stopMotors(aligner.stopInRoutine),
       ];
     } else if (run?.state == PolarAlignerStates.converged) {
-      // #2072 inside the tolerance, but not with twice its 1σ: more moves
-      // cannot shrink the fit's uncertainty, and Done waits.
-      final held = settings != null &&
-          polarDoneHeldBySigma(live.totalErrorArcmin, live.totalSigmaArcmin, settings.targetToleranceArcmin);
+      // #2072 inside the tolerance, but not with twice its 1σ: the motors may
+      // stop, but the line must not claim the alignment (Joey, 2026-11-21).
+      // More moves cannot shrink the fit's uncertainty.
+      final unconfirmed = settings != null &&
+          polarUnconfirmed(live.totalErrorArcmin, live.totalSigmaArcmin, settings.targetToleranceArcmin);
       body = [
         line(
           settings == null
               ? l10n.polarAlignerConvergedPlain(run!.moves)
-              : held
-              ? l10n.polarAlignerConvergedHeld(
+              : unconfirmed
+              ? l10n.polarAlignerConvergedUnconfirmed(
                   polarToleranceText(settings.targetToleranceArcmin), formatSigmaArcmin(live.totalSigmaArcmin!))
               : l10n.polarAlignerConverged(run!.moves, polarToleranceText(settings.targetToleranceArcmin)),
           color: AraColors.accentConnected,

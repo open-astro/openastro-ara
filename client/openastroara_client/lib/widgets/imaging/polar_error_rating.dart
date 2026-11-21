@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/pa_residual.dart';
+import '../../models/polar_align.dart';
 import '../../theme/ara_colors.dart';
 
 /// §45.10 color zones: red > 1°, yellow 10′–1°, green < 10′. Pure — unit-tested.
@@ -41,6 +42,21 @@ String polarVerdictFor(double arcmin) {
   if (a <= 10) return 'good';
   if (a <= 30) return 'rough';
   return 'far_off';
+}
+
+/// #2072 what a Polar Align rating rates (Joey, 2026-11-21): the total error
+/// plus twice its 1σ, so a noisy "0.2′ ± 1.3′" never reads Excellent. Without a
+/// σ (an older daemon) the error alone. Pure — unit-tested.
+double polarRatedArcmin(double totalArcmin, double? sigmaArcmin) => totalArcmin.abs() + 2 * (sigmaArcmin ?? 0);
+
+/// #2072 the Check's verdict token: with the result's σ, the bands on the
+/// error plus twice its σ (the daemon's own rule, `RatedErrorArcmin`); without
+/// one, the daemon's token, or the bands on the total for a token this build
+/// does not know. Pure — unit-tested.
+String polarCheckVerdict(PolarAlignCheckResult r) {
+  final sigma = r.totalSigmaArcmin;
+  if (sigma != null) return polarVerdictFor(polarRatedArcmin(r.totalErrorArcmin, sigma));
+  return _ratingByVerdict.containsKey(r.verdict) ? r.verdict : polarVerdictFor(r.totalErrorArcmin);
 }
 
 /// The words for a verdict the daemon sent (`check_result.verdict`), so the
