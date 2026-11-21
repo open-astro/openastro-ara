@@ -2,14 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/equipment_device_status.dart';
-import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/app_shell_state.dart';
-import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
 import 'package:openastroara/state/server_state.dart'
@@ -25,10 +22,9 @@ import '../../support/fake_section_rig.dart';
 // ADR 0015, slice 3 of #1807: Simple Mode's Settings › Rig page saves the
 // optics, guider and site sections it never loaded. Each write must load the
 // rig's copy first, refuse (no PUT, the "Couldn't save" pill) when it cannot,
-// and keep the rig's other values with the edit when it can. The mount
-// reporting its optics no longer saves from the client at all (the daemon
-// fills them). Assertions are on the rig's side (FakeSectionRig.puts) and the
-// pill the person sees, so they hold whatever shape the notifiers take.
+// and keep the rig's other values with the edit when it can. Assertions are
+// on the rig's side (FakeSectionRig.puts) and the pill the person sees, so
+// they hold whatever shape the notifiers take.
 
 /// The rig's optics: the focal length the row changes and fields it does not.
 final _optics = ProfileApi.opticsToJson(
@@ -62,22 +58,6 @@ class _StartOnLive extends SelectedTabIndexNotifier {
 class _SkyReady extends PlanetariumReadyNotifier {
   @override
   bool build() => true;
-}
-
-/// A mount the test connects: no capabilities until [report].
-class _Mount extends MountNotifier {
-  static Map<String, dynamic> _json(Map<String, dynamic>? caps) => {
-    'device_id': 'd',
-    'name': 'AM5',
-    'state': EquipmentConnectionState.connected.name,
-    'capabilities': ?caps,
-  };
-
-  @override
-  Future<MountStatus?> build() async => MountStatus.fromJson(_json(null));
-
-  void report(Map<String, dynamic> caps) =>
-      state = AsyncData(MountStatus.fromJson(_json(caps)));
 }
 
 Future<ProviderContainer> _pump(
@@ -228,64 +208,4 @@ void main() {
       expect(rig.puts.single.body, {...s.rigCopy, ...s.edit});
     });
   }
-
-  testWidgets('the mount reporting its optics sends no optics PUT from the '
-      'client', (tester) async {
-    final rigOptics = ProfileApi.opticsToJson(
-      const OpticsSettings(
-        sensorWidthPx: 6248,
-        sensorHeightPx: 4176,
-        pixelSizeUm: 3.76,
-      ),
-    );
-    final rig = FakeSectionRig({'optics': rigOptics});
-    late _Mount mount;
-    final c = await _pump(
-      tester,
-      rig,
-      gear: [mountProvider.overrideWith(() => mount = _Mount())],
-    );
-    await tester.runAsync(() async {
-      await c.read(mountProvider.future);
-      mount.report({'focal_length_mm': 480, 'aperture_diameter_mm': 80});
-      await settle(() => rig.puts.isNotEmpty);
-    });
-    await flushLoads(tester);
-    expect(rig.puts, isEmpty);
-    expect(rig.sectionOf('optics'), rigOptics);
-  });
-
-  testWidgets('#2041: overlapping optics loads at connect never PUT optics '
-      "over the rig's sensor fields", (tester) async {
-    final rigOptics = ProfileApi.opticsToJson(
-      const OpticsSettings(
-        apertureMm: 200,
-        focalLengthMm: 1260,
-        sensorWidthPx: 800,
-        sensorHeightPx: 600,
-        pixelSizeUm: 5.6,
-      ),
-    );
-    final rig = FakeSectionRig({'optics': rigOptics});
-    late _Mount mount;
-    final c = await _pump(
-      tester,
-      rig,
-      gear: [mountProvider.overrideWith(() => mount = _Mount())],
-    );
-    await tester.runAsync(() async {
-      await c.read(mountProvider.future);
-      // The mount connects and reports its optics; another load of the
-      // section (Settings, live sync) starts while the first is in flight.
-      mount.report({'focal_length_mm': 480, 'aperture_diameter_mm': 80});
-      final other = c
-          .read(opticsSettingsProvider.notifier)
-          .hydrateFromServer(rig.api());
-      await other;
-      await settle(() => rig.puts.isNotEmpty);
-    });
-    await flushLoads(tester);
-    expect(rig.puts, isEmpty);
-    expect(rig.sectionOf('optics'), rigOptics);
-  });
 }
