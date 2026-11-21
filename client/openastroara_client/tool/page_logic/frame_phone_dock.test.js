@@ -1,7 +1,8 @@
 // Simple Mode (?bare=1) framing card on an upright phone (#1899): the shell
 // shows its #1775 deck there instead of the rails, so the card placed for the
 // right rail covered the box at the view centre. It docks under the status
-// card instead, clear of the view centre, the deck and the bottom row.
+// card instead, clear of the view centre, the deck and the bottom row. Beside
+// the right rail it keeps its place and stops above the bottom row.
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
@@ -9,7 +10,8 @@ const { pageSource } = require('./load_page.js');
 
 // Simple Mode's numbers (lib/screens/simple/simple_shell.dart): the 16 px
 // inset, the 56 px strip, the 48 px status line under it; on an upright
-// 390 px phone the 192 px deck and the 56 px bottom row, each 8 px apart.
+// 390 px phone the 192 px deck and the 56 px bottom row, each 8 px apart;
+// beside the rails the 56 px bottom row on the inset.
 const INSET = 16;
 const STATUS_BOTTOM = INSET * 2 + 56 + 48;
 const DECK_AND_ROW = INSET + 192 + 8 + 56 + 8;
@@ -71,9 +73,21 @@ test('Simple Mode on an upright phone: the framing card docks under the status c
   assert.deepEqual([r.left, r.right, r.width], [`${INSET}px`, `${INSET}px`, 'auto']);
 });
 
+test('Simple Mode on a phone on its side: the framing card stops above the bottom row', () => {
+  const [w, h] = [844, 390];
+  const r = frameRule(w, h);
+  assert.equal(r['box-sizing'], 'border-box', 'max-height must count the padding and border, or they carry the card past it');
+  const bottom = px(r.top, h) + px(r['max-height'], h);
+  const rowTop = h - INSET - 56;
+  assert.ok(bottom <= rowTop - INSET, `the card can reach y ${bottom}, over the bottom row at y ${rowTop}`);
+});
+
 test('Simple Mode beside the right rail: the framing card keeps its place', () => {
+  // 274 px with its padding and border: the box its 242 px content width gave
+  // with the 15 px side padding (a view under 560 px high pads 13 px).
   for (const [w, h] of [[1280, 800], [844, 390]]) {
     const r = frameRule(w, h);
-    assert.deepEqual([r.left, r.right, r.top, r.width], ['auto', '104px', '136px', '242px'], `${w}x${h}`);
+    assert.deepEqual([r.left, r.right, r.top, r.width, r['box-sizing']],
+      ['auto', '104px', '136px', '274px', 'border-box'], `${w}x${h}`);
   }
 });
