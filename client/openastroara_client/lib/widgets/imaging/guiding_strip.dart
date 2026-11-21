@@ -129,9 +129,8 @@ class GuidingStrip extends ConsumerWidget {
                       stateLabel(context.l10n, status),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _stateColor(status),
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: _stateColor(status)),
                     ),
                   ),
                   const SizedBox(width: 12),

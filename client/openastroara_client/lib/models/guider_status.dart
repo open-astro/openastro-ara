@@ -126,6 +126,7 @@ class GuiderStatus {
   /// The distance the guider is set to move on each leg, in guide pixels
   /// (`runtime.calibration_target_px`); null when it reports none (#1895).
   final double? calibrationTargetPx;
+
   /// Why the guider does not hold the active profile's guider settings, and
   /// how to fix it; null when it does or that is not known yet (#1665).
   final String? outOfStepReason;
@@ -166,7 +167,10 @@ class GuiderStatus {
       if (moved != null)
         target == null
             ? '$moved px'
-            : l.guiderStateCalibrationDistanceOf(moved, target.toStringAsFixed(target % 1 == 0 ? 0 : 1)),
+            : l.guiderStateCalibrationDistanceOf(
+                moved,
+                target.toStringAsFixed(target % 1 == 0 ? 0 : 1),
+              ),
     ];
     return parts.join(' · ');
   }

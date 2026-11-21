@@ -728,15 +728,22 @@ class _PolarRun extends PolarAlignLiveNotifier {
 class _GuiderAt extends GuiderStatusNotifier {
   _GuiderAt(this.runtime, {this.target = 25});
   final String runtime;
+
   /// The guider's calibration distance in pixels; null is a guider that reports none (#1895).
   final num? target;
   static GuiderStatus _wire(String r, num? target) => GuiderStatus.fromJson({
-        'device_id': 'g', 'name': 'PHD2', 'state': 'connected',
-        'runtime': {
-          'state': r, 'calibration_direction': 'West', 'calibration_step': 3, 'calibration_distance_px': 11.94,
-          'calibration_target_px': target, 'rms_total_arcsec': 0.62,
-        },
-      });
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {
+      'state': r,
+      'calibration_direction': 'West',
+      'calibration_step': 3,
+      'calibration_distance_px': 11.94,
+      'calibration_target_px': target,
+      'rms_total_arcsec': 0.62,
+    },
+  });
   @override
   Future<GuiderStatus?> build() async => _wire(runtime, target);
   void at(String r) => state = AsyncData(_wire(r, target));
@@ -2669,61 +2676,141 @@ void main() {
     expect(pill(), contains('Run autofocus'), reason: 'the Plan pill returns');
   });
 
-  testWidgets("a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
-      (tester) async {
-    await _pump(tester, const Size(1024, 768),
-        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
-          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
-        ]),
+  testWidgets(
+    "a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
+    (tester) async {
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        plan: const SimpleRun(
+          sequenceId: 'seq-1',
+          started: true,
+          targets: [
+            SimpleTarget(
+              name: 'M31',
+              steps: [
+                FilterPlanStep(
+                  filterName: 'L',
+                  exposureSeconds: 120,
+                  frameCount: 30,
+                ),
+              ],
+            ),
+          ],
+        ),
         runState: const SequenceRunStateInfo(
-            sequenceId: 'seq-1', state: SequenceRunState.running,
-            currentInstructionDescription: 'Start guiding · Guider - Calibrating'),
-        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
-    await tester.pump();
-    final pills = find.byKey(const Key('simple-status-pill'));
-    final text = tester
-        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
-        .map((t) => t.text.toPlainText())
-        .join('|');
-    expect(text, contains('Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px'));
-    expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
-  });
+          sequenceId: 'seq-1',
+          state: SequenceRunState.running,
+          currentInstructionDescription: 'Start guiding · Guider - Calibrating',
+        ),
+        gear: [
+          guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating')),
+        ],
+      );
+      await tester.pump();
+      final pills = find.byKey(const Key('simple-status-pill'));
+      final text = tester
+          .widgetList<RichText>(
+            find.descendant(of: pills, matching: find.byType(RichText)),
+          )
+          .map((t) => t.text.toPlainText())
+          .join('|');
+      expect(
+        text,
+        contains(
+          'Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px',
+        ),
+      );
+      expect(
+        pills,
+        findsOneWidget,
+        reason: 'the Plan pill says it; no second Guider pill',
+      );
+      // Story 8 (#1895): the plan pill's focus reads the leg with its target; the live region does not announce each step.
+      expect(
+        tester.getSemantics(pills.first),
+        matchesSemantics(
+          label: 'Plan, Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px',
+          isButton: true,
+          hasTapAction: true,
+        ),
+        reason: 'the full text is read on focus; each step is not announced',
+      );
+    },
+  );
 
-  testWidgets('the calibration pill says how far the leg has to go, and keeps today\'s text with no target (#1895)',
-      (tester) async {
-    String pill() => tester
-        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
-        .map((t) => t.text.toPlainText())
-        .join(' ');
-    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
-    await tester.pump();
-    expect(pill(), contains('Calibrating · West step 3 · 11.9 of 25 px'));
-    await tester.pumpWidget(const SizedBox());
+  testWidgets(
+    'the calibration pill says how far the leg has to go, and keeps today\'s text with no target (#1895)',
+    (tester) async {
+      String pill() => tester
+          .widgetList<RichText>(
+            find.descendant(
+              of: find.byType(SimpleStatusPill),
+              matching: find.byType(RichText),
+            ),
+          )
+          .map((t) => t.text.toPlainText())
+          .join(' ');
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [
+          guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating')),
+        ],
+      );
+      await tester.pump();
+      expect(pill(), contains('Calibrating · West step 3 · 11.9 of 25 px'));
+      await tester.pumpWidget(const SizedBox());
 
-    await _pump(tester, const Size(1024, 768),
-        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating', target: null))]);
-    await tester.pump();
-    expect(pill(), contains('Calibrating · West step 3 · 11.9 px'));
-    expect(pill(), isNot(contains(' of ')));
-  });
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [
+          guiderStatusProvider.overrideWith(
+            () => _GuiderAt('calibrating', target: null),
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(pill(), contains('Calibrating · West step 3 · 11.9 px'));
+      expect(pill(), isNot(contains(' of ')));
+    },
+  );
 
   testWidgets('the Guiding Assistant has its own pill with time left on its bar; the Done pill fades after 10 s '
       '(#1875 slice 3)', (tester) async {
     final guider = _GuiderAt('assistant');
     final ga = _AssistantRunning();
-    await _pump(tester, const Size(1024, 768),
-        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(() => ga)]);
+    await _pump(
+      tester,
+      const Size(1024, 768),
+      gear: [
+        guiderStatusProvider.overrideWith(() => guider),
+        guidingAssistantProvider.overrideWith(() => ga),
+      ],
+    );
     await tester.pump();
     await tester.pump();
     final pills = find.byKey(const Key('simple-status-pill'));
     String text() => tester
-        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .widgetList<RichText>(
+          find.descendant(of: pills, matching: find.byType(RichText)),
+        )
         .map((t) => t.text.toPlainText())
         .join('|');
     expect(text(), contains('Guiding Assistant'));
     expect(text(), contains('01:30 left'));
-    expect(text(), isNot(contains('Guider')), reason: 'not the generic Guider pill');
-    final bar = tester.widget<LinearProgressIndicator>(find.descendant(of: pills, matching: find.byType(LinearProgressIndicator)));
+    expect(
+      text(),
+      isNot(contains('Guider')),
+      reason: 'not the generic Guider pill',
+    );
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.descendant(
+        of: pills,
+        matching: find.byType(LinearProgressIndicator),
+      ),
+    );
     expect(bar.value, closeTo(0.25, 0.01));
     guider
       ..rig = 'stopped'
@@ -2732,10 +2819,18 @@ void main() {
     await tester.pump();
     expect(text(), contains('Done. 1 suggestion to apply.'));
     await tester.pump(const Duration(seconds: 5));
-    expect(text(), contains('Done. 1 suggestion to apply.'), reason: 'still there at 5 s');
+    expect(
+      text(),
+      contains('Done. 1 suggestion to apply.'),
+      reason: 'still there at 5 s',
+    );
     await tester.pump(const Duration(seconds: 6));
     await _letPillLeave(tester);
-    expect(text(), isNot(contains('Guiding Assistant')), reason: 'gone after 10 s');
+    expect(
+      text(),
+      isNot(contains('Guiding Assistant')),
+      reason: 'gone after 10 s',
+    );
   });
 
   testWidgets("a paused plan keeps its pill while an autofocus runs (#1884 audit)", (tester) async {
@@ -5814,28 +5909,60 @@ void main() {
     await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
   });
 
-  testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
-      (tester) async {
-    // User, 2026-11-04: nothing on screen said the guider was calibrating.
-    final guider = _GuiderAt('calibrating');
-    final container = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
-    await tester.pump();
-    String pill() => tester
-        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
-        .map((t) => t.text.toPlainText())
-        .join(' ');
-    expect(pill(), allOf(contains('Guider'), contains('Calibrating'), contains('West step 3')));
-    expect(tester.getSemantics(find.byKey(const Key('simple-status-pill')).first), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true, isButton: true, hasTapAction: true),
-        reason: 'each step is not read out');
-    guider.at('guiding');
-    await tester.pump();
-    expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
-    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
-    await tester.pump();
-    expect(pill(), contains('Taking a frame'), reason: 'the frame\'s pill first, the guider\'s under it (user, 2026-11-04)');
-    container.read(captureProgressProvider.notifier).reset();
-    await tester.pump(const Duration(seconds: 1));
-  });
+  testWidgets(
+    'the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
+    (tester) async {
+      // User, 2026-11-04: nothing on screen said the guider was calibrating.
+      final guider = _GuiderAt('calibrating');
+      final container = await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider)],
+      );
+      await tester.pump();
+      String pill() => tester
+          .widgetList<RichText>(
+            find.descendant(
+              of: find.byType(SimpleStatusPill),
+              matching: find.byType(RichText),
+            ),
+          )
+          .map((t) => t.text.toPlainText())
+          .join(' ');
+      expect(
+        pill(),
+        allOf(
+          contains('Guider'),
+          contains('Calibrating'),
+          contains('West step 3'),
+        ),
+      );
+      // Story 8 (#1895): a focus reads the leg with its target; the live region does not announce each step.
+      expect(
+        tester.getSemantics(find.byKey(const Key('simple-status-pill')).first),
+        matchesSemantics(
+          label: 'Guider, Calibrating, West step 3, 11.9 of 25 px',
+          isButton: true,
+          hasTapAction: true,
+        ),
+        reason: 'the full text is read on focus; each step is not announced',
+      );
+      guider.at('guiding');
+      await tester.pump();
+      expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
+      container
+          .read(captureProgressProvider.notifier)
+          .beginExposing(const Duration(seconds: 5));
+      await tester.pump();
+      expect(
+        pill(),
+        contains('Taking a frame'),
+        reason: 'the frame\'s pill first, the guider\'s under it (user, 2026-11-04)',
+      );
+      container.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    },
+  );
 
   testWidgets("the status pill keeps its width while its numbers change (ALP-4937)", (tester) async {
     // On the iPad (2026-11-03) the pill jittered narrower as '10 s left' became '9 s left'. The test font's
