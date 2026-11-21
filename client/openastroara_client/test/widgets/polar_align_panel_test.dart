@@ -263,7 +263,7 @@ void main() {
       expect(find.text(_en.polarReadoutCautionAltitudeWeak), findsOneWidget);
     });
 
-    testWidgets('the live readout and the check warn when the mount\'s Dec moved across the three points (#2081)', (tester) async {
+    testWidgets('the live readout and the check warn when the Dec of the mount moved across the three points (#2081)', (tester) async {
       tester.view.physicalSize = const Size(1400, 1000);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);

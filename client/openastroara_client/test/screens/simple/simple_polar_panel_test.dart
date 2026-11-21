@@ -880,7 +880,7 @@ void main() {
     expect(find.text(en.polarDecSpreadWarning('2.6')), findsOneWidget);
   });
 
-  test('the Dec-spread warning is the verdict\'s once checked, the seed\'s only while the readout runs (#2081)', () {
+  test('the Dec-spread warning is the verdict one once checked, the seed one only while the readout runs (#2081)', () {
     const verdict = PolarAlignCheckResult(altErrorArcmin: 0, azErrorArcmin: 0, totalErrorArcmin: 0.5, decSpreadArcsec: 3.0);
     expect(
       simplePolarDecSpread(
