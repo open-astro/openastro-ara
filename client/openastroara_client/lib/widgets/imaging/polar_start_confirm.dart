@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
@@ -76,7 +77,12 @@ class PolarStartConfirmDialog extends StatelessWidget {
       l10n.polarConfirmGuideMeridian,
       // #2081 — the motor-direction test, the run's first move.
       if (plan.directionTestDeg > 0)
-        l10n.polarConfirmDirectionTest(plan.directionTestDeg.toStringAsFixed(1)),
+        l10n.polarConfirmDirectionTest(
+          NumberFormat(
+            '0.0',
+            Localizations.localeOf(context).toString(),
+          ).format(plan.directionTestDeg),
+        ),
       l10n.polarConfirmTurns(
         deg(plan.stepDeg),
         direction,

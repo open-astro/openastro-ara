@@ -211,4 +211,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(rig.started.single.directionTestDeg, 0.5, reason: 'the start carries the test the user saw');
   });
+
+  testWidgets('the motor-direction test distance uses the language decimal comma in pt-BR (#2081)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.east,
+      stepDeg: 10,
+      directionTestDeg: 0.5,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine, locale: const Locale('pt', 'BR'));
+    expect(find.textContaining('Primeiro ela gira a montagem 0,5°'), findsOneWidget);
+  });
 }
