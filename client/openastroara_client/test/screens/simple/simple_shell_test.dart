@@ -365,6 +365,15 @@ class _Focuser extends FocuserNotifier with _Calls<FocuserStatus> {
       state = AsyncData(FocuserStatus.fromJson({..._wire('EAF', state0), 'runtime': {'state': runtime, 'position': 12000}}));
 }
 
+class _WarmFocuser extends _Focuser {
+  _WarmFocuser() : super(EquipmentConnectionState.connected);
+  @override
+  Future<FocuserStatus?> build() async => FocuserStatus.fromJson({
+        ..._wire('EAF', state0),
+        'runtime': {'state': 'idle', 'position': 12000, 'temperature': 11.5},
+      });
+}
+
 class _FilterWheel extends FilterWheelNotifier with _Calls<FilterWheelStatus> {
   _FilterWheel(this.state0, {this.slots = 0});
   final EquipmentConnectionState state0;
@@ -7979,6 +7988,15 @@ void main() {
       await tester.pump(const Duration(seconds: 1));
       expect(find.byKey(const Key('simple-monitor')), findsNothing);
       expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    });
+
+    testWidgets('with only a focuser temperature, a Conditions long press closes Monitor and opens the Focuser window', (tester) async {
+      await openMonitor(tester, gear: [focuserProvider.overrideWith(() => _WarmFocuser())]);
+      await tester.longPress(find.byKey(const Key('simple-monitor-conditions')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byKey(const Key('simple-device-focuser')), findsOneWidget);
     });
 
     testWidgets('the safety alarm shows over it', (tester) async {
