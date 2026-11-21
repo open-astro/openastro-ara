@@ -34,15 +34,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          # Full history: the merge-down exemption reads origin/stable/X.Y. A
+          # shallower checkout fails safe (the PR is checked as usual).
           fetch-depth: 0
           persist-credentials: false
 
       - name: Check Falsified by lines
         # The PR body is untrusted text (fork PRs): it reaches the script only
         # through the environment, never through a `${{ }}` expansion in `run:`.
+        # The MERGE_DOWN_* values let scripts/merge-down.py exempt a real merge
+        # down (docs/RELEASES.md): a merge-down/X.Y-to-<target> head in this
+        # repository whose commits are all on stable/X.Y. The head name is
+        # untrusted text too: env only.
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
           FALSIFIED_BASE: merge-parent
+          MERGE_DOWN_HEAD_REF: ${{ github.head_ref }}
+          MERGE_DOWN_BASE_REF: ${{ github.base_ref }}
+          MERGE_DOWN_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          MERGE_DOWN_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_DOWN_SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
         run: python3 scripts/check-falsified-by.py
 
   pr-template:

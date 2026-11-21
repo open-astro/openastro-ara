@@ -10,6 +10,7 @@ import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/screens/simple/simple_best_screen.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
@@ -55,9 +56,10 @@ class _Site extends SiteSettingsNotifier {
   _Site(this.set);
   final bool set;
   @override
-  SiteSettings build() => set
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: set
       ? const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297)
-      : const SiteSettings();
+      : const SiteSettings(), source: SectionSource.rig);
 }
 
 class _Stats extends StatsTargetsNotifier {

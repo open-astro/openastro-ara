@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
-import '../../../state/profile_management_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/custom_horizon_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../state/simple_mode_state.dart';
 import '../../../theme/ara_metrics.dart';
@@ -19,9 +19,9 @@ import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/settings/time_sync_section.dart';
 import '../../../widgets/adaptive_controls.dart';
 
-/// §37.12 Site preferences — editable. Phase 12h.6e added the daemon
-/// round-trip — values hydrate from the active server on mount and
-/// persist back on Save.
+/// §37.12 Site preferences — editable. The fields show the rig's copy of the
+/// `site` section (ADR 0015: loaded before it is saved; not loaded, they are
+/// not shown) and go back on Save with the skyline.
 class SafetySitePanel extends ConsumerStatefulWidget {
   const SafetySitePanel({super.key});
 
@@ -39,41 +39,24 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   // seeded controllers stale until the panel is reopened.
   int _gpsFill = 0;
 
-  // The skyline loads and saves through the section module; the site still
-  // loads and saves the old way until its own migration.
+  // The skyline and the site load and save through the section module, in
+  // that order: one Save, two PUTs.
   @override
-  List<PanelSection> get sections => [customHorizonProvider];
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [
+    customHorizonProvider,
+    siteSettingsProvider,
+  ];
 
   @override
   Future<void> panelSave() async {
     setState(() => _lastError = null);
-    // Two sequential PUTs: saveSections writes the skyline, then the site in
-    // andThen. A site failure says the skyline was kept instead of implying
-    // the whole Save was rolled back (review r2).
+    // A field still being edited commits on focus loss; drop focus first so
+    // the typed value is what gets sent.
+    FocusManager.instance.primaryFocus?.unfocus();
+    // A site failure says the skyline was kept instead of implying the whole
+    // Save was rolled back (review r2).
     final error = await saveSections(
-      andThen: ref.read(siteSettingsProvider.notifier).persistToServer,
-      andThenFailed:
+      partlySaved:
           'The horizon skyline was saved, but the site preferences were not. ',
     );
     if (mounted) setState(() => _lastError = error);
@@ -87,7 +70,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
     if (_gpsBusy) return;
     // A lookup can take up to ~20 s — snapshot the site so a fetched fix can't
     // silently overwrite lat/long/elevation/timezone the user typed meanwhile.
-    final before = ref.read(siteSettingsProvider);
+    final before = ref.read(siteSettingsProvider).value;
+    if (before == null) return; // the fields are not shown: nothing to fill
     setState(() {
       _gpsBusy = true;
       _gpsStatus = null;
@@ -125,8 +109,9 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   /// True when the site's GPS-relevant fields still match [before] — i.e. the
   /// user didn't edit them while the location fetch was in flight.
   bool _siteUnchangedSince(SiteSettings before) {
-    final s = ref.read(siteSettingsProvider);
-    return s.latitudeDeg == before.latitudeDeg &&
+    final s = ref.read(siteSettingsProvider).value;
+    return s != null &&
+        s.latitudeDeg == before.latitudeDeg &&
         s.longitudeDeg == before.longitudeDeg &&
         s.elevationM == before.elevationM &&
         s.timeZone == before.timeZone;
@@ -163,7 +148,8 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   /// lat/lng edit refreshes it. Values still go through Save to persist.
   void _deriveTimezoneFromCoords() {
     if (_tzUserEdited) return;
-    final s = ref.read(siteSettingsProvider);
+    final s = ref.read(siteSettingsProvider).value;
+    if (s == null) return;
     if (s.latitudeDeg < -90 || s.latitudeDeg > 90) return;
     final zone = tz_map.latLngToTimezoneString(s.latitudeDeg, s.longitudeDeg);
     if (zone != s.timeZone) {
@@ -174,8 +160,15 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
   @override
   Widget build(BuildContext context) {
     reloadWhenReset();
-    final s = ref.watch(siteSettingsProvider);
+    // Not loaded from the rig: the site's rows are not shown (no default), the
+    // permanent pier and time sync, which are not this panel's Save, still are.
+    final section = ref.watch(siteSettingsProvider);
+    final s = section.canSave ? section.value : null;
     final n = ref.read(siteSettingsProvider.notifier);
+    // A field's canonical text only; a reset mid-edit reads the plain
+    // values, and no save can send them (the section is not loaded).
+    SiteSettings now() =>
+        ref.read(siteSettingsProvider).value ?? const SiteSettings();
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -183,6 +176,13 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         // The skyline's banner shows here, also with the editor hidden.
         ?sectionConflict(),
         const SettingsSectionHeader('Location'),
+        if (s == null)
+          SectionNotLoaded(
+            section: section,
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            onRetry: loadSections,
+          )
+        else ...[
         Padding(
           padding: const EdgeInsets.only(bottom: 8),
           child: Column(
@@ -215,7 +215,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           label: 'Site name',
           helpKey: 'safety.site.site_name',
           currentValue: s.siteName,
-          getCanonical: () => ref.read(siteSettingsProvider).siteName,
+          getCanonical: () => now().siteName,
           parse: n.setSiteName,
         ),
         EditableNumberRow(
@@ -224,7 +224,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-lat-$_gpsFill'),
           currentValue: s.latitudeDeg.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).latitudeDeg.toString(),
+              now().latitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) {
@@ -239,7 +239,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-lng-$_gpsFill'),
           currentValue: s.longitudeDeg.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).longitudeDeg.toString(),
+              now().longitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) {
@@ -254,7 +254,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           key: ValueKey('site-gps-alt-$_gpsFill'),
           currentValue: s.elevationM.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).elevationM.toString(),
+              now().elevationM.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setElevationM(v);
@@ -265,7 +265,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.time_zone',
           key: ValueKey('site-gps-tz-$_gpsFill'),
           currentValue: s.timeZone,
-          getCanonical: () => ref.read(siteSettingsProvider).timeZone,
+          getCanonical: () => now().timeZone,
           parse: (v) {
             _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
             n.setTimeZone(v);
@@ -274,6 +274,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
               'IANA name (e.g. America/Los_Angeles) — auto-filled from '
               'the coordinates',
         ),
+        ],
         // Same provider as Simple Mode's switch (#1565): it writes the profile's
         // site.permanent_pier at once, not through this panel's Save.
         SettingsSwitchRow(
@@ -291,7 +292,10 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
               messenger.showSnackBar(
                 SnackBar(
                   content: Text(
-                    friendlyError(l10n, e, action: l10n.actionSave),
+                    e is SectionNotLoadedException ||
+                            e is SectionConflictException
+                        ? e.toString()
+                        : friendlyError(l10n, e, action: l10n.actionSave),
                   ),
                 ),
               );
@@ -300,6 +304,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         ),
         const SettingsSectionHeader('Time sync'),
         const TimeSyncSection(),
+        if (s != null) ...[
         const SettingsSectionHeader('Horizon'),
         SettingsSwitchRow(
           label: 'Use my measured horizon',
@@ -314,9 +319,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
             label: 'Default horizon altitude (°)',
             helpKey: 'safety.site.default_horizon_altitude_deg',
             currentValue: s.defaultHorizonAltitudeDeg.toString(),
-            getCanonical: () => ref
-                .read(siteSettingsProvider)
-                .defaultHorizonAltitudeDeg
+            getCanonical: () => now().defaultHorizonAltitudeDeg
                 .toString(),
             parse: (str) {
               final v = double.tryParse(str);
@@ -337,7 +340,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.typical_seeing_arcsec',
           currentValue: s.typicalSeeingArcsec.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).typicalSeeingArcsec.toString(),
+              now().typicalSeeingArcsec.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setTypicalSeeingArcsec(v);
@@ -361,7 +364,7 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.soft_warning_altitude_deg',
           currentValue: s.softWarningAltitudeDeg.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).softWarningAltitudeDeg.toString(),
+              now().softWarningAltitudeDeg.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSoftWarningAltitudeDeg(v);
@@ -374,12 +377,13 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
           helpKey: 'safety.site.max_sequence_runtime_min',
           currentValue: s.maxSequenceRuntimeMin.toString(),
           getCanonical: () =>
-              ref.read(siteSettingsProvider).maxSequenceRuntimeMin.toString(),
+              now().maxSequenceRuntimeMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setMaxSequenceRuntimeMin(v);
           },
         ),
+        ],
         const SizedBox(height: 24),
         if (_lastError != null) ...[
           Text(
@@ -534,7 +538,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.sqm_mag_per_arcsec2',
             currentValue: sqmText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).sqmMagPerArcsec2.toString(),
+                ref.read(siteSettingsProvider).value?.sqmMagPerArcsec2.toString() ?? '',
             parse: (str) {
               final v = double.tryParse(str);
               if (v != null) n.setSkySqm(v);
@@ -557,7 +561,7 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.bortle_class',
             currentValue: bortleText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).bortleClass.toString(),
+                ref.read(siteSettingsProvider).value?.bortleClass.toString() ?? '',
             parse: (str) {
               final v = int.tryParse(str);
               if (v != null) n.setSkyBortle(v);

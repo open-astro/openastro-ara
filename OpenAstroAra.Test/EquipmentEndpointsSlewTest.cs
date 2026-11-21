@@ -21,6 +21,7 @@ using Microsoft.AspNetCore.Http.HttpResults;
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 
@@ -72,6 +73,93 @@ namespace OpenAstroAra.Test {
             var quiet = await EquipmentEndpoints.SlewAsync(new SlewRequestDto(5.5, -12.25), null, telescope.Object, idle.Object, null, CancellationToken.None);
             Assert.That(quiet, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), "k1", It.IsAny<CancellationToken>()), Times.Once, "the idempotency key rides through");
+        }
+
+        // #2066 — a GoTo while Polar Align turns the mount would drive the motors twice at once: refused before the mount,
+        // force or not. A sync is refused too: it shifts the RA reading the turn steers by, which can reverse the motor.
+        [Test]
+        public async Task A_goto_or_sync_while_polar_align_turns_the_mount_is_refused() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
+            var idle = new Mock<ISequencerService>();
+            idle.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Force: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            var sync = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Sync: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            Assert.That(sync!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            Assert.That(sync.Message, Does.Contain("the sync was not sent"));
+            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        // #2066 — Park and Home while Polar Align turns the mount: refused before the mount; accepted once it is still.
+        [Test]
+        public async Task A_park_while_polar_align_turns_the_mount_is_refused() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.park", DateTimeOffset.UtcNow, null));
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false);
+            var accepted = await EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+        }
+
+        [Test]
+        public async Task A_find_home_while_polar_align_turns_the_mount_is_refused() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.findhome", DateTimeOffset.UtcNow, null));
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(true);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            telescope.Verify(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false);
+            var accepted = await EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None);
+            Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
+        }
+
+        // #2066 (ARA-2) — Joey, 2026-11-20 on #2048: Polar Align holds the mount for its whole run, the adjust loop and its
+        // solves included, not only while a motor turns. A GoTo, sync, Park or Home between its turns is refused too.
+        [Test]
+        public async Task GoTo_Park_and_Home_are_refused_while_Polar_Align_holds_the_mount_between_turns() {
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.MotionOwner).Returns(MotionOwners.PolarAlign);
+            telescope.Setup(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "telescope.slew", DateTimeOffset.UtcNow, null));
+            var idle = new Mock<ISequencerService>();
+            idle.Setup(s => s.ActiveRunIdsAsync(It.IsAny<CancellationToken>())).ReturnsAsync(None);
+            var polarAlign = new Mock<IPolarAlignService>();
+            polarAlign.Setup(p => p.IsMovingMount).Returns(false); // solving or adjusting: no motor runs
+
+            var goTo = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Force: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            var park = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeParkAsync(null, null, telescope.Object, polarAlign.Object, CancellationToken.None));
+            var home = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.TelescopeFindHomeAsync(null, telescope.Object, polarAlign.Object, CancellationToken.None));
+
+            Assert.That(new[] { goTo!.Cause, park!.Cause, home!.Cause }, Is.All.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            Assert.That(goTo.Message, Does.Contain("Stop polar alignment first"));
+            telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.ParkUnlessMotionOwnedAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            telescope.Verify(t => t.FindHomeAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+            var sync = await Assert.ThrowsAsync<RefusalException>(() => EquipmentEndpoints.SlewAsync(
+                new SlewRequestDto(5.5, -12.25, Sync: true), null, telescope.Object, idle.Object, null, CancellationToken.None, polarAlign: polarAlign.Object));
+            Assert.That(sync!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount), "a sync moves the readings the run measures by");
         }
 
         [Test]

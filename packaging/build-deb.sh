@@ -7,7 +7,9 @@
 # Args:
 #   publish-dir  — output of `dotnet publish ... -r linux-arm64 --self-contained`.
 #                  Must contain the OpenAstroAra.Server ELF executable.
-#   version      — Debian version string (e.g. 0.0.1-ara.1, or 0.0.0-dev-<sha>).
+#   version      — Debian version string (e.g. 1.0.0~beta1, 1.0.0, or a CI dev
+#                  build from scripts/nightly-version.py such as
+#                  1.1.0~~nightly202611190317.gabc1234).
 #   output-dir   — where to write the resulting .deb (default: ./dist).
 #
 # Produces: <output-dir>/openastroara-server_<version>_arm64.deb

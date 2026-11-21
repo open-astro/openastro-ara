@@ -4,7 +4,6 @@ import 'package:flutter/widgets.dart'
     show WidgetsBindingObserver, WidgetsFlutterBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../services/profile_api.dart';
 import '../services/simple_mode_prefs_service.dart';
 import 'profile_management_state.dart' show profileApiProvider;
 import 'settings/site_settings_state.dart';
@@ -138,20 +137,27 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     final local = await files.load();
     final api = ref.watch(profileApiProvider);
     // A change another device made lands through the profile hydrate.
-    ref.listen(siteSettingsProvider.select((s) => s.permanentPier), (_, on) {
-      if (!_writing && state.hasValue) state = AsyncData(on);
+    ref.listen(siteSettingsProvider.select((s) => s.value?.permanentPier), (
+      _,
+      on,
+    ) {
+      if (on != null && !_writing && state.hasValue) state = AsyncData(on);
     });
     if (api == null) return local;
+    // The rig's copy of the site (ADR 0015); a copy already in is kept. A
+    // load the section's own first load superseded lands nothing: load once
+    // more.
     final site = ref.read(siteSettingsProvider.notifier);
-    try {
-      await site.hydrateFromServer(api);
-    } catch (_) {
-      return local; // an unreachable rig: the file keeps the answer
+    for (var i = 0; i < 2 && !ref.read(siteSettingsProvider).canSave; i++) {
+      if (!await site.load(api)) break;
     }
-    final onRig = ref.read(siteSettingsProvider).permanentPier;
+    final loaded = ref.read(siteSettingsProvider);
+    // An unreachable rig (or a cache copy): the file keeps the answer.
+    if (!loaded.canSave) return local;
+    final onRig = loaded.value!.permanentPier;
     if (local && !onRig) {
       try {
-        await _writePier(api, true);
+        await _writePier(true);
         await files.save(false);
       } catch (_) {} // kept on the device; the next start retries
       return true;
@@ -167,13 +173,16 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     if (api == null) return files.save(on);
     _writing = true;
     try {
-      await _writePier(api, on);
+      await _writePier(on);
       await files.save(false);
     } catch (_) {
       if (!on) {
-        // A refused switch-off shows what the rig holds again. Still on there:
-        // throw, so the screen can say so, and write nothing to the file.
-        final onRig = ref.read(siteSettingsProvider).permanentPier;
+        // A refused switch-off shows what the rig holds again. Still on there,
+        // or not known (the site never loaded, or only the offline cache's
+        // copy is there): throw, so the screen can say so, and write nothing
+        // to the file.
+        final site = ref.read(siteSettingsProvider);
+        final onRig = site.canSave ? site.value!.permanentPier : true;
         state = AsyncData(onRig);
         if (onRig) rethrow;
       }
@@ -185,13 +194,12 @@ class SimplePermanentPierController extends AsyncNotifier<bool> {
     }
   }
 
-  /// Puts only the pier onto the rig's stored site and into the local copy, so
-  /// a site edit the Full UI panel has not saved yet stays as typed.
-  Future<void> _writePier(ProfileApi api, bool on) async {
-    final stored = await api.getSiteSettings();
-    await api.putSiteSettings(stored.copyWith(permanentPier: on));
-    ref.read(siteSettingsProvider.notifier).setPermanentPier(on);
-  }
+  /// Puts only the pier onto the rig's copy of the site (ADR 0015: loaded
+  /// before it is saved, with its tag) and into the shown copy, so a site edit
+  /// the Full UI panel has not saved yet stays as typed and is not sent.
+  Future<void> _writePier(bool on) => ref
+      .read(siteSettingsProvider.notifier)
+      .saveOnRigCopy((c) => c.copyWith(permanentPier: on));
 }
 
 final simplePermanentPierProvider =

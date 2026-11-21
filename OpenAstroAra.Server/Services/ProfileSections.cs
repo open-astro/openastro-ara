@@ -173,7 +173,12 @@ internal static class ProfileSections {
         kept: ["DateSeparator", "CompressDarksAndBias", "HeaderSite", "HeaderOptics", "HeaderTemperature", "HeaderWeather", "HeaderIdentity", "HeaderEphemeris"],
         stripped: []);
 
-    /// <summary>Tuning judgement; the donor's first-flip confirmation describes the donor's mount, so the recipient confirms their own.</summary>
+    /// <summary>§58.8 (#1589) — the safety policies with no confirmed and no completed meridian flip: what a
+    /// re-arm, an optics change and a share leave, so the next flip announces and the user watches one again.</summary>
+    internal static SafetyPoliciesDto WithoutFirstFlip(SafetyPoliciesDto v) =>
+        v with { FirstFlipConfirmed = false, FirstFlipCompletedUtc = null, FirstFlipPierSideChanged = false };
+
+    /// <summary>Tuning judgement; the donor's first-flip confirmation and completed flip describe the donor's mount, so the recipient confirms their own.</summary>
     public static readonly ProfileSection<SafetyPoliciesDto> SafetyPolicies = new(
         "SafetyPolicies",
         s => s.SafetyPolicies,
@@ -187,8 +192,11 @@ internal static class ProfileSections {
             ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
             GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true),
         kept: ["OnUnsafe", "AutoResumeWhenSafe", "ResumeDelayMin", "MeridianFlipAuto", "MeridianPauseMin", "MeridianRecenter", "MeridianRecalGuider", "OnAltitudeLimit", "ParkIfNoMoreTargets", "OnGuiderLost", "GuiderRetryTimeoutSec", "SkipTargetIfRecoveryFails", "OnDiskSpaceCritical", "CalibrationCaptureDefault", "FlipSafetyEnabled", "ExpectedFlipSlewSeconds", "UnattendedEscalation", "UnattendedShutdownEnabled", "UnattendedShutdownWaitMinutes", "WeatherTriggersEnabled", "MaxWindKmh", "MaxHumidityPct", "MinDewDeltaC", "FlatTargetAdu", "FlatTargetAduTolerancePct", "FlatFramesPerFilter", "PostFlatParkMount", "SkyFlatTargetAdu", "SkyFlatFramesPerFilter", "SkyFlatTargetAzimuth", "SkyFlatTargetAltitude", "SkyFlatStopAtMaxAdu", "SkyFlatStopAtMinAdu", "SkyFlatSunAltitude", "HotReconnectEnabled", "OnCameraLost", "OnMountLost", "OnTrackingLost", "SwitchValueTolerancePct", "MeridianRefocus", "MeridianRefocusTempThresholdC", "MeridianGuiderRecal", "UnattendedWindowStart", "UnattendedWindowEnd", "FlatTargetPercent", "MinutesAfterMeridian", "MaxMinutesAfterMeridian", "StopBeforeMeridianMin"],
-        stripped: ["FirstFlipConfirmed"],
-        strip: v => v with { FirstFlipConfirmed = false });
+        stripped: ["FirstFlipConfirmed", "FirstFlipCompletedUtc", "FirstFlipPierSideChanged"],
+        strip: WithoutFirstFlip,
+        heal: // #1589 - a confirmation always has its completed flip on record. A true without one was written
+              // before any flip ran (the old executor confirmed when its 60 s wait ended), so it proves nothing.
+            (v, _) => v.FirstFlipConfirmed && v.FirstFlipCompletedUtc is null ? v with { FirstFlipConfirmed = false } : v);
 
     /// <summary>Method, sweep and trigger judgement; the focuser backlash is measured on the donor's focuser.</summary>
     public static readonly ProfileSection<AutofocusSettingsDto> Autofocus = new(
@@ -407,7 +415,7 @@ internal static class ProfileSections {
         st => st.GetPolarAlignSettings(),
         (st, v) => st.PutPolarAlignSettings(v!),
         new(),
-        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "UseHome", "PolarAlignerAuto", "StopTrackingWhenDone"],
+        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "PolarAlignerAuto", "StopTrackingWhenDone", "Camera", "FramesPerPoint"],
         stripped: []);
 
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>

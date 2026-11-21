@@ -403,7 +403,7 @@ namespace OpenAstroAra.Test {
             var target = new Coordinates(Angle.ByHours(5.5), Angle.ByDegree(20.0), Epoch.JNOW);
             var ex = await Assert.ThrowsAsync<SequenceEntityFailedException>(() =>
                 ((ITelescopeMediator)svc).SlewToCoordinatesAsync(target, CancellationToken.None));
-            Assert.That(ex!.Message, Does.Contain("did not reach its terminal state"));
+            Assert.That(ex!.Message, Does.Contain("was not confirmed settled within the"));
 
             lock (faults) {
                 Assert.That(faults, Has.Count.EqualTo(1), "the stalled slew published exactly one fault");

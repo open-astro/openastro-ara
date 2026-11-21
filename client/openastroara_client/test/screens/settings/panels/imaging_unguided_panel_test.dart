@@ -69,7 +69,10 @@ Future<_Fixed> _pump(
           connected ? const AraServer(hostname: 'rig', port: 5555) : null,
         ),
         profileApiProvider.overrideWithValue(
-          FakeSectionRig({'unguided': rigDefaults['unguided']}).api(),
+          FakeSectionRig({
+            'unguided': rigDefaults['unguided'],
+            'optics': rigDefaults['optics'],
+          }).api(),
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
         mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null, neverLoads: mountLoading)),

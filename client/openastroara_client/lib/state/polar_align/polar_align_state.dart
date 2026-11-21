@@ -21,6 +21,7 @@ abstract final class PolarAlignWsEvents {
   static const needsHome = 'polar_align.needs_home';
   static const checked = 'polar_align.checked';
   static const correction = WsEventTypes.polarAlignCorrection;
+  static const handTurn = WsEventTypes.polarAlignHandTurn;
 }
 
 /// Live routine view folded from the `polar_align.*` WS stream — what the
@@ -44,6 +45,17 @@ class PolarAlignLive {
   /// Machine-readable reason + message from a fatal `polar_align.error`.
   final String? errorReason;
   final String? errorMessage;
+
+  /// #2107 what stopped the mount when [errorReason] is
+  /// `slew_aborted_externally` (the event's `stopped_by`: `user_request`,
+  /// `emergency_stop`, `pad_stop`, `fault_reaction`, …); null when the daemon
+  /// did not say. The card words the end from it in the app's language.
+  final String? errorStoppedBy;
+
+  /// #2066 the run could not confirm its stop after the error (the event's
+  /// `stop_unconfirmed`): the mount may still move. The card that words the
+  /// end itself adds the cut-power warning the daemon's message carries.
+  final bool errorStopUnconfirmed;
 
   /// The frame being captured/solved right now: when this client saw its
   /// `frame_started` and its exposure. Null between frames.
@@ -70,6 +82,27 @@ class PolarAlignLive {
   /// first measurement, and once the routine ends.
   final PolarAlignerRun? correction;
 
+  /// #2072 a caution on the live readout ([PolarAlignReadoutCautions]) from
+  /// the last progress event; null when the readout is sound.
+  final String? readoutCaution;
+
+  /// #2082 the run's camera ([PolarAlignCameras]) from `started` or the
+  /// status; null before a run or from an older daemon.
+  final String? camera;
+
+  /// #2082 a point of the measurement stayed scattered over 3″ after its
+  /// retake (from each progress event and the status).
+  final bool measurementNoisy;
+  /// #2083 the run turns RA by hand: Ara moves nothing.
+  final bool handTurn;
+
+  /// #2083 the turn the run waits for; null when it waits for none.
+  final PolarAlignHandTurn? handTurnWait;
+
+  /// #2083 this stage's first readout (the seed's), for NINA's large- and
+  /// huge-error warnings; null before it and after a hydrate.
+  final double? initialErrorArcmin;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -80,6 +113,8 @@ class PolarAlignLive {
     this.consecutiveSolveFailures = 0,
     this.errorReason,
     this.errorMessage,
+    this.errorStoppedBy,
+    this.errorStopUnconfirmed = false,
     this.frameStartedAt,
     this.frameExposureSeconds,
     this.lastFrame,
@@ -89,7 +124,18 @@ class PolarAlignLive {
     this.checkSolvesTotal = 3,
     this.checkResult,
     this.correction,
+    this.readoutCaution,
+    this.camera,
+    this.measurementNoisy = false,
+    this.handTurn = false,
+    this.handTurnWait,
+    this.initialErrorArcmin,
   });
+
+  /// #2082 the run shoots the main camera (Rough first, or the profile's
+  /// camera): the guider has no picture of it to show.
+  bool get usesMainCamera =>
+      stage == PolarAlignStages.coarse || camera == PolarAlignCameras.main;
 
   /// True between a frame's `frame_started` and its `frame_complete`.
   bool get frameInProgress => frameStartedAt != null;
@@ -107,6 +153,9 @@ class PolarAlignLive {
     int? consecutiveSolveFailures,
     String? errorReason,
     String? errorMessage,
+    String? errorStoppedBy,
+    bool clearErrorStoppedBy = false,
+    bool? errorStopUnconfirmed,
     DateTime? frameStartedAt,
     double? frameExposureSeconds,
     PolarAlignFrameInfo? lastFrame,
@@ -119,6 +168,13 @@ class PolarAlignLive {
     PolarAlignCheckResult? checkResult,
     PolarAlignerRun? correction,
     bool clearCorrection = false,
+    String? readoutCaution,
+    bool clearReadoutCaution = false,
+    bool? measurementNoisy,
+    bool? handTurn,
+    PolarAlignHandTurn? handTurnWait,
+    bool clearHandTurnWait = false,
+    double? initialErrorArcmin,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -131,6 +187,10 @@ class PolarAlignLive {
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
         errorReason: errorReason ?? this.errorReason,
         errorMessage: errorMessage ?? this.errorMessage,
+        errorStoppedBy: clearErrorStoppedBy
+            ? null
+            : errorStoppedBy ?? this.errorStoppedBy,
+        errorStopUnconfirmed: errorStopUnconfirmed ?? this.errorStopUnconfirmed,
         frameStartedAt: clearFrameInProgress
             ? null
             : frameStartedAt ?? this.frameStartedAt,
@@ -144,11 +204,22 @@ class PolarAlignLive {
         checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
         checkResult: checkResult ?? this.checkResult,
         correction: clearCorrection ? null : correction ?? this.correction,
+        // The readout's own caution goes with it.
+        readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
+        camera: camera,
+        measurementNoisy: clearReadout ? false : measurementNoisy ?? this.measurementNoisy,
+        handTurn: handTurn ?? this.handTurn,
+        handTurnWait: clearHandTurnWait ? null : handTurnWait ?? this.handTurnWait,
+        // A new stage's readout starts afresh: so does its first readout.
+        initialErrorArcmin: clearReadout ? null : initialErrorArcmin ?? this.initialErrorArcmin,
       );
 }
 
 double? _num(Map<String, dynamic> payload, String key) =>
     (payload[key] as num?)?.toDouble();
+
+String? _str(Map<String, dynamic> payload, String key) =>
+    payload[key] is String ? payload[key] as String : null;
 
 /// Pure fold of one WS event into the live routine view. Returns null when the
 /// event is not a `polar_align.*` event (no state write). [now] stamps a
@@ -165,6 +236,8 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
             : PolarAlignStages.fine,
+        camera: _str(event.payload, 'camera'),
+        handTurn: event.payload['hand_turn'] == true,
       );
     case PolarAlignWsEvents.stopped:
       // The run's end clears the correction without an event of its own.
@@ -172,7 +245,8 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
           phase: PolarAlignStates.stopped,
           clearFrameInProgress: true,
           waitingForHome: false,
-          clearCorrection: true);
+          clearCorrection: true,
+          clearHandTurnWait: true);
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
     case PolarAlignWsEvents.stage:
@@ -193,6 +267,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         // A new stage measures afresh: the previous stage's readout (and its
         // green) must not stand for it while it homes and seeds.
         clearReadout: nextStage != current.stage,
+        clearHandTurnWait: true,
       );
     case PolarAlignWsEvents.needsHome:
       return current.copyWith(
@@ -209,18 +284,26 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         clearFrameInProgress: true,
       );
     case PolarAlignWsEvents.progress:
+      final iteration = (event.payload['iteration'] as num?)?.toInt();
       return current.copyWith(
         phase: PolarAlignStates.adjusting,
+        clearHandTurnWait: true,
+        // Iteration 0 is the seed's readout: the error the stage started from.
+        initialErrorArcmin: iteration == 0 ? _num(event.payload, 'total_error_arcmin') : null,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
             : current.stage,
         waitingForHome: false,
-        iteration: (event.payload['iteration'] as num?)?.toInt() ?? current.iteration,
+        iteration: iteration ?? current.iteration,
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
+        // Every progress event says the readout's caution afresh (absent = sound).
+        readoutCaution: _str(event.payload, 'readout_caution'),
+        clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
+        measurementNoisy: event.payload['measurement_noisy'] == true,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -240,16 +323,28 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         phase: PolarAlignStates.failed,
         clearFrameInProgress: true,
         clearCorrection: true,
+        clearHandTurnWait: true,
         errorReason: event.payload['reason'] is String
             ? event.payload['reason'] as String
             : 'internal_error',
         errorMessage: event.payload['message'] is String
             ? event.payload['message'] as String
             : null,
+        // Each error says its own: a stop's name never carries over to the next.
+        errorStoppedBy: _str(event.payload, 'stopped_by'),
+        clearErrorStoppedBy: _str(event.payload, 'stopped_by') == null,
+        errorStopUnconfirmed: event.payload['stop_unconfirmed'] == true,
       );
     case PolarAlignWsEvents.correction:
       final run = PolarAlignerRun.tryParse(event.payload);
       return run == null ? null : current.copyWith(correction: run);
+    case PolarAlignWsEvents.handTurn:
+      // #2083 — the run asks for a turn by hand, then says how far it got.
+      final wait = PolarAlignHandTurn.tryParse(event.payload);
+      if (wait == null) return null;
+      return wait.waiting
+          ? current.copyWith(handTurn: true, handTurnWait: wait)
+          : current.copyWith(handTurn: true, clearHandTurnWait: true);
     default:
       return null;
   }
@@ -325,6 +420,11 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkSolvesDone: status.checkSolvesDone,
       checkResult: status.checkResult,
       correction: status.correction,
+      readoutCaution: status.readoutCaution,
+      camera: status.camera,
+      measurementNoisy: status.measurementNoisy,
+      handTurn: status.handTurn,
+      handTurnWait: status.handTurnWait,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

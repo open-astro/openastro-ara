@@ -18,20 +18,26 @@ class _Rig extends ProfileApi {
   SafetyPolicies safety;
   bool failPut = false;
 
+  int _version = 1;
+  String get _etag => '"v$_version"';
+
+  // The sections load from the rig and save back with their tag (ADR 0015).
   @override
-  Future<SiteSettings> getSiteSettings() async => site;
+  Future<({SiteSettings value, String? etag})> getSiteSection() async => (value: site, etag: _etag);
   @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async {
+  Future<({SiteSettings value, String? etag})> putSiteSection(SiteSettings value, {String? ifMatch}) async {
     if (failPut) throw StateError('rig unreachable');
-    return site = value;
+    _version++;
+    return (value: site = value, etag: _etag);
   }
 
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => safety;
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => (value: safety, etag: _etag);
   @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(SafetyPolicies value, {String? ifMatch}) async {
     if (failPut) throw StateError('rig unreachable');
-    return safety = value;
+    _version++;
+    return (value: safety = value, etag: _etag);
   }
 }
 
@@ -151,7 +157,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-mount-lowest-up')));
     await tester.pumpAndSettle();
     expect(_value(tester, 'simple-mount-lowest'), '20°');
-    expect(c.read(siteSettingsProvider).defaultHorizonAltitudeDeg, 20);
+    expect(c.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg, 20);
     final pill = c.read(simpleMessagesProvider).single;
     expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't save the limit"));
   });

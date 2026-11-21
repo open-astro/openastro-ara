@@ -210,6 +210,8 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
 
     string? IGuideCapture.OutOfStepReason => OutOfStepReason;
 
+    string? IGuideCapture.AppState => ConnectedGuiderOrNull()?.State;
+
     void IGuideCapture.ThrowIfOutOfStep(string operation) => ThrowIfOutOfStep(operation);
 
     Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
@@ -667,11 +669,13 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     }
 
     // Caller holds _gate. A disposed service publishes nothing.
-    private EquipmentFaultEvent? PublishFaultLocked(EquipmentFaultKind kind, string details) {
+    // [opening] sees the fault before the hub's subscribers do (#1589).
+    private EquipmentFaultEvent? PublishFaultLocked(EquipmentFaultKind kind, string details, Action<EquipmentFaultEvent>? opening = null) {
         if (_disposed) {
             return null;
         }
         var fault = new EquipmentFaultEvent(DeviceType.Guider, DeviceId: null, DeviceName: "PHD2", kind, details, DateTimeOffset.UtcNow);
+        opening?.Invoke(fault);
         _faultSink?.Publish(fault);
         return fault;
     }
@@ -692,6 +696,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         _starLostReacted = false;
         _starLostFault = null;
         _starLostPausedRuns = [];
+        DropDecRunawayFaultLocked();
     }
 
     // #1191 — the guider reports the lost device back: the camera-drop fault is recovered now, not on
@@ -797,6 +802,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         // Not during the Guiding Assistant: its frames are deliberately uncorrected drift.
         if (!guider.GuidingAssistantActive) {
             FeedPaResidualStep(guider, step);
+            FeedDecRunawayStep(guider, step); // #1589 — Dec growing at its maximum pulses stops guiding
         }
         // §63.18 — the Live tab's guide graph is drawn from these, one point per guide frame
         // (the REST status only carries the windowed RMS). Fire-and-forget off the guider's
@@ -835,6 +841,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         }
         FeedPaResidualMarker(guider, marker.Kind, marker.Error);
         NoteStarLostMarker(marker.Kind);
+        NoteDecRunawayMarker(marker.Kind);
     }
 
     /// <summary>The <c>guider.event</c> payload: <c>kind</c> plus whichever details the PHD2
@@ -1021,6 +1028,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             _outOfStepReason = null;
             ResetPaResidual();
             ResetStarLostWatchLocked();
+            ResetDecRunawayLocked();
         }
     }
 

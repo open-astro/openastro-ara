@@ -8,24 +8,23 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 import 'package:openastroara/widgets/imaging/polar_aligner_block.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
+import '../support/polar_align_section.dart';
+
 class _Api implements PolarAlignClient {
-  PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 2);
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => settings = next;
-  @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -71,7 +70,8 @@ class _Site extends SiteSettingsNotifier {
   _Site(this.lat);
   final double lat;
   @override
-  SiteSettings build() => SiteSettings(latitudeDeg: lat);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(latitudeDeg: lat), source: SectionSource.rig);
 }
 
 const _base = PolarAligner(
@@ -87,14 +87,21 @@ PolarAlignLive _run(PolarAlignerRun run) =>
     PolarAlignLive(phase: PolarAlignStates.adjusting, totalErrorArcmin: 8, correction: run);
 
 Future<_Aligner> _pump(WidgetTester tester,
-    {PolarAligner? device = _base, PolarAlignLive live = const PolarAlignLive(), bool auto = true, double lat = 40}) async {
+    {PolarAligner? device = _base,
+    PolarAlignLive live = const PolarAlignLive(),
+    bool auto = true,
+    double lat = 40,
+    bool loaded = true}) async {
   final aligner = _Aligner(device);
   // A fresh scope each time: overrideWith keeps the first notifier otherwise.
   await tester.pumpWidget(const SizedBox());
   await tester.pumpWidget(ProviderScope(
     overrides: [
-      polarAlignApiProvider.overrideWithValue(
-          _Api()..settings = PolarAlignSettings(targetToleranceArcmin: 2, polarAlignerAuto: auto)),
+      polarAlignApiProvider.overrideWithValue(_Api()),
+      // The profile's polar-align section: the rig's copy, or a rig that does not answer.
+      ...polarAlignSectionOverrides(FakePolarAlignSection(
+          initial: loaded ? rigPolarAlign.copyWith(targetToleranceArcmin: 2, polarAlignerAuto: auto) : null,
+          loaded: loaded)),
       polarAlignerApiProvider.overrideWithValue(aligner),
       polarAlignLiveProvider.overrideWith(() => _Live(live)),
       siteSettingsProvider.overrideWith(() => _Site(lat)),
@@ -207,10 +214,25 @@ void main() {
   testWidgets('converged: the tolerance and the moves, no buttons', (tester) async {
     await _pump(tester, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
-        find.text('Inside your 2′ tolerance after 4 moves. Finish with Verify or Done. '
+        find.text('Inside your 2′ tolerance after 4 moves. Finish with Check or Done. '
             'If the error drifts out, the motors correct again.'),
         findsOneWidget);
     expect(find.byType(ButtonStyleButton), findsNothing);
+  });
+
+  testWidgets(
+      'the profile not loaded from the rig: no made-up tolerance, and a correction the motors make still reads as theirs (ADR 0015)',
+      (tester) async {
+    await _pump(tester, loaded: false, live: _run(const PolarAlignerRun(state: 'converged', moves: 4)));
+    expect(
+        find.text('Inside your tolerance after 4 moves. Check and Done wait for your polar-align settings to load. '
+            'If the error drifts out, the motors correct again.'),
+        findsOneWidget);
+    expect(find.text('Motors off. Turn the bolts by hand.'), findsNothing);
+
+    await _pump(tester, loaded: false);
+    expect(find.textContaining('tolerance'), findsNothing, reason: 'idle: no tolerance until the rig answers');
+    expect(_key('polar-aligner-home'), findsOneWidget);
   });
 
   const causes = {

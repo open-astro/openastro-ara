@@ -29,6 +29,8 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/slew_rates.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
+import '../../support/safety_section.dart';
+
 /// #1649 / #1650 — Simple Mode's Mount window moves the mount by hand and
 /// checks where it points. Fakes record what the rig is asked.
 class _Mount extends MountNotifier {
@@ -215,6 +217,8 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
       if (imaging) sequenceRunStateProvider.overrideWith(_Imaging.new),
       simpleModeActiveProvider.overrideWithValue(true),
       simpleRunProvider.overrideWith(_Run.new),
+      // The meridian flip row reads the rig's copy of the policies.
+      safetyFromRig(),
     ],
   );
   addTearDown(c.dispose);

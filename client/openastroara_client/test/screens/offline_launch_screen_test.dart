@@ -97,7 +97,7 @@ void main() {
     await tester.tap(find.text('Plan'));
     await tester.pumpAndSettle();
     expect(container.read(profileGatePassedProvider), isTrue);
-    expect(container.read(opticsSettingsProvider).focalLengthMm, 382);
+    expect(container.read(opticsSettingsProvider).value!.focalLengthMm, 382);
   });
 
   testWidgets('a profile without cached sections warns about defaults',

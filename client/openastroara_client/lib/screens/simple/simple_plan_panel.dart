@@ -202,7 +202,7 @@ PlanetariumSelection simplePickDso(
   PlanningDso d, {
   String? designation,
 }) {
-  final site = ref.read(siteSettingsProvider);
+  final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
   return simpleSelectionOfDso(
     d,
     ref.read(tonightSkyProvider).value ?? const [],
@@ -785,7 +785,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   // once per minute and site (Start now is a new instant on every rebuild).
   (DateTime, SiteSettings, DateTime?, bool)? _night;
   (DateTime?, bool) _nightOf(DateTime start) {
-    final site = ref.read(siteSettingsProvider);
+    final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
     final minute = DateTime(
       start.year,
       start.month,
@@ -914,11 +914,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 raDeg: sel.raJ2000Hours * 15,
                 decDeg: sel.decJ2000Deg,
                 defaultExposure:
-                    ref
-                        .watch(imagingDefaultsProvider)
-                        .defaultExposure
-                        .inMilliseconds /
-                    1000,
+                    (ref.watch(imagingDefaultsProvider).value ??
+                                const ImagingDefaults())
+                            .defaultExposure
+                            .inMilliseconds /
+                        1000,
                 skyCalibrationK: k,
               ),
     ];
@@ -981,7 +981,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           _ => r.name,
         },
     ];
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final span = ref.watch(simpleRestOfNightProvider);
     // Null: unknown (no site set, or no night ahead), never zero hours.
     double? hoursOf(double raDeg, double decDeg) =>
@@ -1974,7 +1974,7 @@ class _NightDone extends ConsumerWidget {
     // frame that would end after dawn, so such a run ends up to a sub early (2
     // min more for the client's sun model and the park). A run waiting for
     // dark started in daylight, so its night begins at dark.
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final dawn = start == null || run.dawnStop == null
         ? null
         : nightEnd(

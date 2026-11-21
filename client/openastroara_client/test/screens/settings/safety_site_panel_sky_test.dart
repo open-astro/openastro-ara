@@ -4,13 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/safety_site_panel.dart';
-import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/site_section.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -28,17 +30,13 @@ class _File extends SimpleModePrefsService {
   Future<void> save(bool enabled) async {}
 }
 
-class _Rig extends ProfileApi {
-  _Rig(this.site) : super(const AraServer(hostname: '192.0.2.10', port: 5000));
-  SiteSettings site;
-  @override
-  Future<SiteSettings> getSiteSettings() async => site;
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async =>
-      site = value;
-}
+/// The rig's site (ADR 0015: served with its tag, no HTTP).
+FakeSiteSection _rig(SiteSettings site) => FakeSiteSection(initial: site);
 
-Future<ProviderContainer> _pumpPanel(WidgetTester tester, _Rig rig) async {
+Future<ProviderContainer> _pumpPanel(
+  WidgetTester tester,
+  FakeSiteSection rig,
+) async {
   tester.view.physicalSize = const Size(1600, 1000);
   tester.view.devicePixelRatio = 1.0;
   addTearDown(tester.view.reset);
@@ -48,7 +46,12 @@ Future<ProviderContainer> _pumpPanel(WidgetTester tester, _Rig rig) async {
       overrides: [
         savedServerServiceProvider.overrideWithValue(_NoServers()),
         simplePermanentPierPrefsProvider.overrideWithValue(_File()),
-        profileApiProvider.overrideWithValue(rig),
+        profileApiProvider.overrideWithValue(
+          FakeSectionRig({
+            'custom-horizon': {'points': []},
+          }).api(),
+        ),
+        siteSettingsProvider.overrideWith(() => rig),
       ],
       child: Consumer(
         builder: (context, ref, _) {
@@ -67,8 +70,7 @@ Future<ProviderContainer> _pumpPanel(WidgetTester tester, _Rig rig) async {
       ),
     ),
   );
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 50));
+  await tester.pumpAndSettle();
   return container;
 }
 
@@ -96,7 +98,7 @@ void main() {
   testWidgets('a profile with SQM 0 and Bortle 5 loads in Bortle mode', (
     tester,
   ) async {
-    await _pumpPanel(tester, _Rig(sydney.copyWith(bortleClass: 5)));
+    await _pumpPanel(tester, _rig(sydney.copyWith(bortleClass: 5)));
     expect(sqmSelected(tester), isFalse);
     expect(find.byKey(const ValueKey('site-bortle')), findsOneWidget);
     expect(find.byKey(const ValueKey('site-sqm')), findsNothing);
@@ -116,7 +118,7 @@ void main() {
     (tester) async {
       final container = await _pumpPanel(
         tester,
-        _Rig(sydney.copyWith(bortleClass: 6, sqmMagPerArcsec2: 20.3)),
+        _rig(sydney.copyWith(bortleClass: 6, sqmMagPerArcsec2: 20.3)),
       );
       expect(sqmSelected(tester), isTrue);
       expect(find.byKey(const ValueKey('site-bortle')), findsNothing);
@@ -132,27 +134,27 @@ void main() {
       );
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
-      expect(container.read(siteSettingsProvider).sqmMagPerArcsec2, 21.9);
+      expect(container.read(siteSettingsProvider).value!.sqmMagPerArcsec2, 21.9);
       await expectDerived(tester, 1);
     },
   );
 
   testWidgets('switching mode leaves no hidden value', (tester) async {
-    final rig = _Rig(sydney.copyWith(bortleClass: 6));
+    final rig = _rig(sydney.copyWith(bortleClass: 6));
     final container = await _pumpPanel(tester, rig);
 
     await pick(tester, 'SQM reading');
-    var s = container.read(siteSettingsProvider);
+    var s = container.read(siteSettingsProvider).value!;
     expect(s.sqmMagPerArcsec2, 19.5, reason: 'Bortle 6 sky carried over');
     expect(s.bortleClass, 6);
     expect(sqmSelected(tester), isTrue);
 
     container.read(siteSettingsProvider.notifier).setSkySqm(21.4);
     await tester.pump();
-    expect(container.read(siteSettingsProvider).bortleClass, 2);
+    expect(container.read(siteSettingsProvider).value!.bortleClass, 2);
 
     await pick(tester, 'Bortle class');
-    s = container.read(siteSettingsProvider);
+    s = container.read(siteSettingsProvider).value!;
     expect(
       s.sqmMagPerArcsec2,
       0,

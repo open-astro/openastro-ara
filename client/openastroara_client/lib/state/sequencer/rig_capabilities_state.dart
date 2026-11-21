@@ -76,7 +76,10 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
     filterWheel: await wheel,
     rotator: await rotator,
     flatPanel: await flatPanel,
-    guider: guiderConfigured(guider, container.read(phd2SettingsProvider)),
+    guider: guiderConfigured(
+      guider,
+      container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
+    ),
   );
 }
 

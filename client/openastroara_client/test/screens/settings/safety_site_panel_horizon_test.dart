@@ -37,6 +37,7 @@ void main() {
         (rig ??
                 FakeSectionRig({
                   'custom-horizon': {'points': []},
+                  'site': rigDefaults['site'],
                 }))
             .api();
     await tester.pumpWidget(
@@ -126,7 +127,7 @@ void main() {
   ) async {
     final rig = FakeSectionRig({
       'custom-horizon': {'points': []},
-      'site': <String, Object?>{},
+      'site': rigDefaults['site'],
     });
     final container = await pumpPanel(tester, rig: rig);
     int skylinePuts() =>
@@ -157,7 +158,9 @@ void main() {
     container.read(customHorizonProvider.notifier).seed(const [
       CustomHorizonPoint(azimuthDeg: 90, altitudeDeg: 20),
     ]);
-    container.read(siteSettingsProvider.notifier).setUseCustomHorizon(true);
+    container
+        .read(siteSettingsProvider.notifier)
+        .seed(const SiteSettings(useCustomHorizon: true));
     await tester.pump();
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byKey(const ValueKey('horizon_point_0')), findsNothing);
@@ -167,7 +170,7 @@ void main() {
       'lands the site', (tester) async {
     final rig = FakeSectionRig({
       'custom-horizon': {'points': []},
-      'site': <String, Object?>{},
+      'site': rigDefaults['site'],
     });
     final container = await pumpPanel(tester, rig: rig);
     rig.savedElsewhere('custom-horizon');

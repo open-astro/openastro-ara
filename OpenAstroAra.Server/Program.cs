@@ -73,6 +73,14 @@ public partial class Program {
         return mount;
     }
 
+    // #2071 — a trusted time sync sets the connected mount's clock too, not only the Pi's.
+    private static TelescopeService FollowClock(IServiceProvider sp, TelescopeService mount) {
+        if (sp.GetService<ITimeSyncService>() is { } timeSync) {
+            mount.FollowTimeSync(timeSync);
+        }
+        return mount;
+    }
+
     /// <summary>
     /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
     /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
@@ -359,7 +367,7 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
-        builder.Services.AddSingleton<TelescopeService>(sp => FollowSite(sp, new TelescopeService(
+        builder.Services.AddSingleton<TelescopeService>(sp => FollowClock(sp, FollowSite(sp, new TelescopeService(
             sp.GetService<ILogger<TelescopeService>>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<IEquipmentFaultSink>(),
@@ -371,8 +379,11 @@ public partial class Program {
             () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
             sp.GetService<IProfileStore>(),
             // #2070 — registered below, once profileDir is known.
-            sp.GetService<IMountPoseStore>())));
+            sp.GetService<IMountPoseStore>(),
+            // #2071 — the mount's clock is set from, and checked against, the synced rig clock.
+            () => sp.GetService<ITimeSyncService>()))));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
+        builder.Services.AddSingleton<IMountClockGate>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
         // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
@@ -543,12 +554,14 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
                 sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<ITelescopeService>(), // #2066 — the IMountMotionControl seam: the same TelescopeService
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
-                aligner: sp.GetRequiredService<IPolarAlignerSource>()));
+                aligner: sp.GetRequiredService<IPolarAlignerSource>(),
+                mountClock: sp.GetRequiredService<IMountClockGate>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>
@@ -739,7 +752,9 @@ public partial class Program {
             new TimeSyncService(
                 sp.GetRequiredService<ILogger<TimeSyncService>>(),
                 clockSetter: null,
-                profiles: sp.GetService<IProfileStore>()));
+                profiles: sp.GetService<IProfileStore>(),
+                // #2071 — a kernel the NTP daemon keeps synchronised is a trusted time source too.
+                kernelClock: new LinuxKernelClockSyncProbe()));
         builder.Services.AddSingleton<ITimeSyncService>(sp => sp.GetRequiredService<TimeSyncService>());
         // §37.4/§29 — the save-directory picker's server-side directory walk.
         builder.Services.AddSingleton<IStorageBrowseService, StorageBrowseService>();
@@ -953,7 +968,8 @@ public partial class Program {
                 sp.GetService<IRotatorService>(),
                 sp.GetService<IFlatDeviceService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<ILogger<UnattendedShutdownService>>()));
+                sp.GetService<ILogger<UnattendedShutdownService>>(),
+                polarAlignResolver: () => sp.GetService<IPolarAlignService>()));
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
@@ -968,7 +984,9 @@ public partial class Program {
             sp.GetService<IFocuserService>(),
             sp.GetService<IRotatorService>(),
             sp.GetService<IFlatDeviceService>(),
-            sp.GetService<ILogger<ShutdownLadder>>()));
+            sp.GetService<ILogger<ShutdownLadder>>(),
+            // #2066 — resolved lazily (Polar Align is built after the ladder): ended before the Find Home and park.
+            () => sp.GetService<IPolarAlignService>()));
         builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
         builder.Services.AddSingleton(sp => new EndNightService(
             sp.GetRequiredService<ShutdownLadder>(),
@@ -1058,7 +1076,10 @@ public partial class Program {
                 () => sp.GetService<ICenteringService>(),
                 sp.GetService<TargetRecenter>(),
                 // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
-                () => sp.GetService<DomeFollower>()));
+                () => sp.GetService<DomeFollower>(),
+                // #2066 — the park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
@@ -1089,7 +1110,10 @@ public partial class Program {
                 // §42.5 — the reaction outcome lands on the fault-log row.
                 sp.GetService<IFaultLogService>(),
                 // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
-                () => sp.GetService<GuiderService>()));
+                () => sp.GetService<GuiderService>(),
+                // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
@@ -1426,6 +1450,9 @@ public partial class Program {
         // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
         // section-specific endpoint pairs on top of the same IProfileStore.
         app.MapProfileEndpoints();
+        // #1807 — a section the daemon writes itself (time sync, plate solve, a connect-time fill, the flip
+        // executor, the guider, ...) publishes profile.updated too, so a client reloads it before its next Save.
+        app.PublishDaemonProfileWrites();
 
         // §37/§30 multi-profile management — CRUD over the known-profiles set.
         app.MapProfilesEndpoints();

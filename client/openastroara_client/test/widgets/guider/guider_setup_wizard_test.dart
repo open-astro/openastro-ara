@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -52,13 +53,30 @@ class _FakeProfileApi extends ProfileApi {
   void makeUnconfigured() =>
       stored = const Phd2Settings(host: 'rc91.lan', port: 4400);
   Phd2Settings? lastPut;
+  String? lastIfMatch;
+  /// The rig's tag for its copy; [savedElsewhere] moves it on.
+  int version = 1;
+  void savedElsewhere() => version++;
   @override
-  Future<Phd2Settings> getPhd2Settings() async => stored;
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: stored, etag: '"v$version"');
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings value, {
+    String? ifMatch,
+  }) async {
+    if (ifMatch != null && ifMatch != '"v$version"') {
+      final req = RequestOptions(path: '/api/v1/profile/phd2');
+      throw DioException(
+        requestOptions: req,
+        response: Response<void>(requestOptions: req, statusCode: 412),
+      );
+    }
     lastPut = value;
+    lastIfMatch = ifMatch;
     stored = value;
-    return value;
+    version++;
+    return (value: value, etag: '"v$version"');
   }
 }
 
@@ -271,7 +289,7 @@ void main() {
     await _next(tester); // mount
     await _next(tester); // apply
     // The shared provider is untouched until Apply (draft pattern).
-    expect(h.container.read(phd2SettingsProvider).guiderCamera, '');
+    expect(h.container.read(phd2SettingsProvider).value!.guiderCamera, 'Old Camera');
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
     expect(h.profile.lastPut?.guiderCamera,
@@ -282,8 +300,36 @@ void main() {
     expect(h.profile.lastPut?.host, 'rc91.lan');
     expect(h.equipment.calls, contains('push'));
     // Applied fields are reflected into the shared provider.
-    expect(h.container.read(phd2SettingsProvider).guiderCamera,
+    expect(h.container.read(phd2SettingsProvider).value!.guiderCamera,
         'Alpaca Camera [rc91.lan:6800/0]');
+  });
+
+  testWidgets('Guider wizard: Apply sends the tag of the rig\'s copy it loaded (ADR 0015)',
+      (tester) async {
+    final h = await _pump(tester);
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await _next(tester); // mount
+    await _next(tester); // apply
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastIfMatch, '"v1"');
+    expect(h.equipment.calls, contains('push'));
+  });
+
+  testWidgets('Guider wizard: Apply over a copy another device saved since is '
+      'refused, nothing written or pushed (ADR 0015)', (tester) async {
+    final h = await _pump(tester);
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await _next(tester); // mount
+    await _next(tester); // apply
+    h.profile.savedElsewhere();
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull);
+    expect(h.equipment.calls, isNot(contains('push')));
+    expect(find.textContaining('changed on the rig'), findsOneWidget);
   });
 
   testWidgets('Next past Review is gated until Apply succeeds',
@@ -328,7 +374,7 @@ void main() {
         find.byKey(const ValueKey('wiz-Host')), 'edited.local');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
-    expect(h.container.read(phd2SettingsProvider).host, 'localhost');
+    expect(h.container.read(phd2SettingsProvider).value!.host, 'rc91.lan');
     expect(h.profile.lastPut, isNull);
   });
 

@@ -1,45 +1,19 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/services/polar_align_api.dart';
-import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
+
+import '../../support/fake_section_rig.dart';
 
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
     WsEvent(type: type, ts: DateTime.utc(2026, 11, 16, 9), seq: 1, payload: payload);
-
-class _Api implements PolarAlignClient {
-  PolarAlignSettings settings = const PolarAlignSettings();
-  final puts = <Map<String, dynamic>>[];
-  @override
-  Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    puts.add(next.toJson());
-    return settings = next;
-  }
-  @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async {}
-  @override
-  Future<void> stop() async {}
-  @override
-  Future<void> complete() async {}
-  @override
-  Future<void> requestCapture() async {}
-  @override
-  Future<Uint8List?> getLiveFrame() async => null;
-  @override
-  void close() {}
-}
 
 class _Aligner implements PolarAlignerClient {
   /// What each read returns, in turn; the last one repeats.
@@ -147,15 +121,18 @@ void main() {
   });
 
   test('a profile round trip keeps polar_aligner_auto', () async {
-    expect(PolarAlignSettings.fromJson({'polar_aligner_auto': false}).polarAlignerAuto, isFalse);
-    expect(const PolarAlignSettings().polarAlignerAuto, isTrue, reason: 'the daemon default');
-    final api = _Api()..settings = const PolarAlignSettings(polarAlignerAuto: false);
-    final c = ProviderContainer(overrides: [polarAlignApiProvider.overrideWithValue(api)]);
+    final rig = FakeSectionRig({
+      'polar-align': {...rigDefaults['polar-align']!, 'polar_aligner_auto': false},
+    });
+    final c = ProviderContainer(overrides: [profileApiProvider.overrideWithValue(rig.api())]);
     addTearDown(c.dispose);
-    final loaded = await c.read(polarAlignSettingsProvider.future);
-    await c.read(polarAlignSettingsProvider.notifier).save(loaded.copyWith(exposureSeconds: 4));
-    expect(api.puts.single['polar_aligner_auto'], isFalse, reason: 'a save of another field does not wipe it');
-    expect(api.puts.single['exposure_seconds'], 4);
+    c.listen(polarAlignSettingsProvider, (_, _) {});
+    await settle(() => c.read(polarAlignSettingsProvider).canSave);
+    expect(c.read(polarAlignSettingsProvider).value!.polarAlignerAuto, isFalse);
+    await c.read(polarAlignSettingsProvider.notifier).saveKnob((s) => s.copyWith(exposureSeconds: 4));
+    final put = rig.puts.single.body as Map;
+    expect(put['polar_aligner_auto'], isFalse, reason: 'a save of another field does not wipe it');
+    expect(put['exposure_seconds'], 4);
   });
 
   test('the app knows every stop cause the daemon declares', () {
