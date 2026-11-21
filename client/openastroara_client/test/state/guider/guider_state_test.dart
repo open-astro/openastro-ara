@@ -96,8 +96,8 @@ class _FakeGuiderApi implements GuiderClient {
 class _Phd2ProfileApi extends ProfileApi {
   _Phd2ProfileApi() : super(const AraServer(hostname: 'test', port: 1));
   @override
-  Future<Phd2Settings> getPhd2Settings() async =>
-      const Phd2Settings(host: 'sbc.local', port: 8080);
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const Phd2Settings(host: 'sbc.local', port: 8080), etag: '"v1"');
 }
 
 ProviderContainer _container(List<AraServer> servers, GuiderClient api, {Stream<WsEvent>? ws}) {

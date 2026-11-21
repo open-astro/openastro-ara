@@ -21,6 +21,8 @@ import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+
+import '../../support/phd2_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 
@@ -131,6 +133,8 @@ Future<void> _pump(WidgetTester tester, Widget child,
     captureProgressProvider.overrideWith(() => _Capture(capture)),
     sequenceRunStateProvider.overrideWith(_Run.new),
     autofocusLiveProvider.overrideWith(_Live.new),
+    // The guider settings as the rig's copy (ADR 0015).
+    phd2FromRig(),
     deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'guidecamera' ? const DeviceDriver(name: 'ZWO ASI120MM Mini') : null),
   ]);

@@ -344,14 +344,20 @@ namespace OpenAstroAra.Test {
                 return SlewingScript?.Invoke() ?? IsSlewing;
             }
         }
-        public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return 5.0; } }
+        public double RightAscension { get { ThrowIfLatched(); ThrowIfReadFails(); return Ra; } }
+        /// <summary>The RA the mount reports (5 h unless a test points it elsewhere).</summary>
+        public double Ra { get => Volatile.Read(ref _ra); set => Volatile.Write(ref _ra, value); }
+        private double _ra = 5.0;
         public double Declination { get { ThrowIfLatched(); return Dec; } }
         public double TargetRightAscension => throw new InvalidOperationException("no target set");
         public double TargetDeclination => throw new InvalidOperationException("no target set");
         public DriveRate TrackingRate { get => DriveRate.Sidereal; set { } }
         public bool Tracking { get { ThrowIfLatched(); return TrackingOn; } set => TrackingOn = value; }
-        public bool AtPark { get { ThrowIfLatched(); return AtParkScript?.Invoke() ?? false; } }
-        public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome; } }
+        public bool AtPark { get { ThrowIfLatched(); return AtParkScript?.Invoke() ?? (ReportsArrival && _atPark); } }
+        public bool AtHome { get { ThrowIfLatched(); return ReportsAtHome || (ReportsArrival && _atHome); } }
+        // #2071 — opt-in: Park and FindHome report arriving, so a sequencer park or home completes.
+        public volatile bool ReportsArrival;
+        private volatile bool _atPark, _atHome;
         public bool IsPulseGuiding => false;
         public PointingState SideOfPier { get => PointingState.Normal; set { Interlocked.Increment(ref _pierSideWrites); OnSideOfPierWrite?.Invoke(); } }
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
@@ -366,13 +372,15 @@ namespace OpenAstroAra.Test {
         public bool CanSetTracking => true;
         public bool CanPulseGuide => true;
         public bool CanFindHome => true;
-        public bool CanSetPierSide => CanSetPierSideValue;
+        public bool CanSetPierSide { get => PierSideSettable; set => PierSideSettable = value; }
         public double FocalLength => 0.5;
         public double ApertureDiameter => 0.1;
         public ITrackingRates TrackingRates => new FakeTrackingRates();
         public double SiteLatitude { get; set; }
         public double SiteLongitude { get; set; }
         public double SiteElevation { get; set; }
+        public DateTime UTCDate { get; set; } = DateTime.UtcNow;
+        public double SiderealTime => 0.0;
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each
@@ -389,9 +397,10 @@ namespace OpenAstroAra.Test {
         public void MoveAxis(TelescopeAxis axis, double rate) { if (rate == 0) { Interlocked.Increment(ref _moveAxisStops); } else { Interlocked.Increment(ref _moveAxisStarts); } }
         public override void Stop() => AbortSlew();
         public void AbortSlew() => Interlocked.Increment(ref _aborts);
-        public void Park() { Interlocked.Increment(ref _parks); OnCommand?.Invoke(); }
+        public void Park() { _atPark = true; Interlocked.Increment(ref _parks); OnCommand?.Invoke(); }
         public void Unpark() => OnCommand?.Invoke();
-        public void FindHome() { Interlocked.Increment(ref _homes); OnCommand?.Invoke(); }
+        public void FindHome() { _atHome = true; Interlocked.Increment(ref _homes); OnCommand?.Invoke(); }
+        // What the mount was told to do (#2071: a refused GoTo or Sync sends nothing; Park and Home always go).
         public void SlewToCoordinatesAsync(double raHours, double decDegrees) { Interlocked.Increment(ref _slews); OnCommand?.Invoke(); }
         public void SyncToCoordinates(double raHours, double decDegrees) { Interlocked.Increment(ref _syncs); OnSync?.Invoke(); }
 

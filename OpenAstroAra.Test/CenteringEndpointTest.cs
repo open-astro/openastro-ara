@@ -78,7 +78,7 @@ namespace OpenAstroAra.Test {
         // ─── the endpoint wiring ───
 
         [Test]
-        public void An_out_of_range_target_is_rejected_before_anything_is_enqueued() {
+        public async Task An_out_of_range_target_is_rejected_before_anything_is_enqueued() {
             var jobs = new Mock<IBatchJobService>(MockBehavior.Strict); // any Enqueue = test failure
             foreach (var request in new CenterRequestDto?[] {
                 null,
@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
                 new(RaHours: double.NaN, DecDegrees: 0),
                 new(RaHours: 5, DecDegrees: double.NaN),
             }) {
-                var result = PlateSolveEndpoints.CenterAsync(request,
+                var result = await PlateSolveEndpoints.CenterAsync(request,
                     Mock.Of<ICenteringService>(), jobs.Object, Profile(attempts: 3).Object);
                 Assert.That(result, Is.InstanceOf<ProblemHttpResult>(), $"request {request} must be rejected");
                 Assert.That(((ProblemHttpResult)result).StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
@@ -97,9 +97,9 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_valid_target_enqueues_a_center_job_sized_by_the_profiles_attempt_budget() {
+        public async Task A_valid_target_enqueues_a_center_job_sized_by_the_profiles_attempt_budget() {
             var jobs = new InMemoryBatchJobService(null);
-            var result = PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+            var result = await PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
                 Centering(_ => Task.FromResult(new PlateSolveResult())).Object, jobs, Profile(attempts: 4).Object);
 
             Assert.That(result, Is.InstanceOf<Accepted<BatchJobDto>>());
@@ -113,31 +113,46 @@ namespace OpenAstroAra.Test {
         // #1149 — a second POST for OTHER coordinates while a centering job runs is a 409 naming the
         // running job; the same coordinates join it (the §65.5 policy).
         [Test]
-        public void A_center_for_another_target_while_one_runs_is_409_and_the_same_target_joins() {
+        public async Task A_center_for_another_target_while_one_runs_is_409_and_the_same_target_joins() {
             var jobs = new InMemoryBatchJobService(null);
             var gate = new TaskCompletionSource<PlateSolveResult>(TaskCreationOptions.RunContinuationsAsynchronously);
             var centering = Centering(_ => gate.Task).Object;
             try {
-                var first = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
+                var first = (Accepted<BatchJobDto>)await PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
 
-                var refusal = Assert.Throws<RefusalException>(() =>
+                var refusal = await Assert.ThrowsAsync<RefusalException>(() =>
                     PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0), centering, jobs, Profile(attempts: 1).Object),
                     "another target must not silently join");
                 Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.CenterInProgress));
                 Assert.That(refusal.Parameters["job_id"], Is.EqualTo(first.Value!.JobId.ToString()));
                 Assert.That(refusal.Message, Does.Contain(first.Value.JobId.ToString()).And.Contain("DELETE /api/v1/jobs/"));
 
-                var same = (Accepted<BatchJobDto>)PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
+                var same = (Accepted<BatchJobDto>)await PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0), centering, jobs, Profile(attempts: 1).Object);
                 Assert.That(same.Value!.JobId, Is.EqualTo(first.Value.JobId), "the same target joins the running job");
             } finally {
                 gate.SetResult(new PlateSolveResult());
             }
         }
 
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: Center's GoTo would run beside its next turn.
+        // Refused before a job is queued, with the cause the telescope endpoints answer.
         [Test]
-        public void A_nonsense_attempt_budget_still_yields_a_sane_one_step_job() {
+        public async Task Center_is_refused_while_Polar_Align_holds_the_mount() {
+            var jobs = new Mock<IBatchJobService>(MockBehavior.Strict); // any Enqueue = test failure
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.MotionOwner).Returns(MotionOwners.PolarAlign);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+                Mock.Of<ICenteringService>(), jobs.Object, Profile(attempts: 1).Object, telescope: telescope.Object));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            Assert.That(refusal.Message, Does.Contain("centering GoTo"));
+        }
+
+        [Test]
+        public async Task A_nonsense_attempt_budget_still_yields_a_sane_one_step_job() {
             var jobs = new InMemoryBatchJobService(null);
-            var result = PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+            var result = await PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
                 Centering(_ => Task.FromResult(new PlateSolveResult())).Object, jobs, Profile(attempts: 0).Object);
             Assert.That(((Accepted<BatchJobDto>)result).Value!.Total, Is.EqualTo(1));
         }

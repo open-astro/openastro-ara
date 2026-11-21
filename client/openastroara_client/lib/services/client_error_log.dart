@@ -94,8 +94,8 @@ class ClientErrorLogStatus {
 class ClientErrorLog {
   /// [supportDir] overrides the app-support directory lookup (tests use a
   /// temp dir; production uses path_provider). [appVersion] resolves the
-  /// header's version line (production reads `package_info_plus`; tests pass
-  /// a constant). [now] injects the clock.
+  /// header's version line (production formats `kAraAppVersion` with the
+  /// platform's build number; tests pass a constant). [now] injects the clock.
   ClientErrorLog({
     Future<Directory> Function()? supportDir,
     Future<String> Function()? appVersion,

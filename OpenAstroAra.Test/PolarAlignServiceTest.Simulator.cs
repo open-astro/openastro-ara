@@ -17,6 +17,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System;
 using System.Globalization;
 using System.Net.Http;
@@ -115,8 +116,9 @@ namespace OpenAstroAra.Test {
             // distance from the pole (#1983).
             var encoder = new OpenAstroAra.Astrometry.Coordinates(0.0, south ? -startDecMagnitudeDeg : startDecMagnitudeDeg, OpenAstroAra.Astrometry.Epoch.JNOW,
                 OpenAstroAra.Astrometry.Coordinates.RAType.Degrees);
+            // #2064 — the mock's own pose: RA 0 at LST 0 h, on the meridian, the east side of the pier counterweight down.
             mount.Setup(m => m.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo {
-                Connected = true, SiderealTime = 0.0, TrackingEnabled = tracking });
+                Connected = true, SiderealTime = 0.0, TrackingEnabled = tracking, SideOfPier = OpenAstroAra.Core.Enums.PierSide.pierEast });
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => encoder);
             mount.Setup(m => m.SlewToCoordinatesAsync(Moq.It.IsAny<OpenAstroAra.Astrometry.Coordinates>(), Moq.It.IsAny<CancellationToken>()))
                 .Returns<OpenAstroAra.Astrometry.Coordinates, CancellationToken>(async (target, _) => {
@@ -176,15 +178,15 @@ namespace OpenAstroAra.Test {
                 var store = new InMemoryProfileStore();
                 store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = latitudeDeg, LongitudeDeg = longitudeDeg });
                 store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0, UseHome: false));
+                    ExposureSeconds: 0.05, LoopCadenceMs: 200, SettleSeconds: 0.5, SeedRotationDeg: 30.0));
                 var ws = new WsRecorder();
                 using var svc = new PolarAlignService(NewFake(), Microsoft.Extensions.Logging.Abstractions.NullLogger<PolarAlignService>.Instance,
-                    new SimulatedSkySolver(http), mount.Object, store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
+                    new SimulatedSkySolver(http), mount.Object, MediatorMotionControl.For(mount.Object), store, ws, log: null, new FakeFrameFetcher(), aligner: aligners) {
                     AxisMovePoll = TimeSpan.FromMilliseconds(5),
                     AxisSettle = TimeSpan.Zero,
                 };
 
-                await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+                await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
                 await ws.WhenAsync(events => Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignCorrection
                         && e.Payload.GetProperty("state").GetString() is PolarAlignCorrectionStates.Converged or PolarAlignCorrectionStates.Stopped)
                     || Array.Exists(events, e => e.Type == WsEventCatalog.PolarAlignError))

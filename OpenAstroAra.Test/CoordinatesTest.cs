@@ -463,5 +463,23 @@ namespace OpenAstroAra.Test {
                 sut.Epoch.Should().Be(Epoch.JNOW);
             }
         }
+
+        // #2075 — a mount over the pole (or a near-pole offset sum) folds to the same sky point.
+        [Test]
+        [TestCase(10.0, 90.9, 190.0, 89.1)]
+        [TestCase(350.0, -90.5, 170.0, -89.5)]
+        [TestCase(200.0, 45.0, 200.0, 45.0)]
+        [TestCase(0.0, 90.0, 0.0, 90.0)]
+        public void FoldedOverPole_maps_dec_past_the_pole_to_the_same_sky_point(double raDeg, double dec, double expectedRaDeg, double expectedDec) {
+            var reference = new System.DateTime(2026, 11, 5, 3, 52, 50, System.DateTimeKind.Utc);
+            var sut = new Coordinates(Angle.ByDegree(raDeg), Angle.ByDegree(dec), Epoch.JNOW, reference);
+
+            var folded = sut.FoldedOverPole();
+
+            Assert.That(folded.RADegrees, Is.EqualTo(expectedRaDeg).Within(1e-9));
+            Assert.That(folded.Dec, Is.EqualTo(expectedDec).Within(1e-9));
+            Assert.That(folded.Epoch, Is.EqualTo(Epoch.JNOW));
+            Assert.That(folded, Is.Not.SameAs(sut));
+        }
     }
 }

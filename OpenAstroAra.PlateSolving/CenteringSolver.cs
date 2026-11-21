@@ -134,7 +134,9 @@ namespace OpenAstroAra.PlateSolving {
                         progress?.Report(new ApplicationStatus() { Status = Loc.Instance["LblPlateSolveNotInsideToleranceReslew"] });
 
                         var slewMeasurement = new Measurement("Reslew").Start();
-                        await telescopeMediator.SlewToCoordinatesAsync(parameterCoordinates + offset, ct);
+                        // #2075 — near the pole the sum can pass ±90° (operator + does not fold); fold it
+                        // to the same sky point so the mediator's range guard does not refuse it.
+                        await telescopeMediator.SlewToCoordinatesAsync((parameterCoordinates + offset).FoldedOverPole(), ct);
                         slewMeasurement.Stop();
                         centeringAttempt.AddSubMeasurement(slewMeasurement);
 

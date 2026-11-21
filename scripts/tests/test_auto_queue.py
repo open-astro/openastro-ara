@@ -60,9 +60,13 @@ ISSUES = comment("## Defects\n\n- a defect\n\n⚠️ Issues found\n")
 
 
 class AutoQueueTest(unittest.TestCase):
-    def step(self, comments=(), prs=None, head=SHA, draft=False, queued=False, auto=False):
+    def step(self, comments=(), prs=None, head=SHA, draft=False, queued=False, auto=False,
+             base="", head_ref=""):
         if prs is None:
             prs = [{"number": 6, "headRefOid": "b" * 40}, {"number": 7, "headRefOid": SHA}]
+        if base or head_ref:
+            prs = [dict(p, baseRefName=base, headRefName=head_ref) if p["headRefOid"] == SHA else p
+                   for p in prs]
         state = {"id": "PR_node7", "headRefOid": head, "isDraft": draft, "isInMergeQueue": queued,
                  "autoMergeRequest": {"enabledAt": RUN_START} if auto else None}
         with tempfile.TemporaryDirectory() as d:
@@ -123,6 +127,13 @@ class AutoQueueTest(unittest.TestCase):
         self.assertEqual(self.step([quoted]), [])
         self.assertEqual(self.step([comment("✅ Approved", login="claude[bot]")]),
                          ["pr merge 7 --repo open-astro/x --auto"])
+
+    def test_approved_into_a_stable_branch_enters_its_queue_with_no_method_flag(self):
+        self.assertEqual(self.step([APPROVED], base="stable/1.0", head_ref="fix/x"),
+                         ["pr merge 7 --repo open-astro/x --auto"])
+
+    def test_a_merge_down_is_never_handed_to_the_squash_queue(self):
+        self.assertEqual(self.step([APPROVED], base="master", head_ref="merge-down/1.0-to-master"), [])
 
     def test_no_verdict_or_a_draft_does_nothing(self):
         # A skipped review (the pull_request run of a fork PR) posts no comment.

@@ -34,8 +34,10 @@ public static class ProfileStoreSnapshot {
     /// one change notification per section (e.g. profile-select) should suppress their own
     /// handler for the duration. A section absent from the snapshot takes its table default, so
     /// selecting a profile never keeps the previous rig's value; a null calibration is meaningful
-    /// ("never measured") and clears the live one.</summary>
+    /// ("never measured") and clears the live one. A whole-profile apply is a profile switch, not a
+    /// section edit, so it publishes no <c>profile.updated</c> (#1807, <see cref="ProfileWriteScope"/>).</summary>
     public static void Apply(IProfileStore s, ProfileSnapshotDto snap) {
+        using var _ = ProfileWriteScope.Announce(ProfileWriteScope.AllSections);
         foreach (var section in ProfileSections.All) {
             section.Apply(s, snap);
         }

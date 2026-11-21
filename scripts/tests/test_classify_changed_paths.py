@@ -282,6 +282,9 @@ class ClassifyTest(unittest.TestCase):
             ".github/workflows/label-trusted-authors.yml",
             ".github/workflows/merge-queue.yml",
             ".github/workflows/auto-queue.yml",
+            ".github/workflows/release.yml",
+            ".github/workflows/issue-labels.yml",
+            ".github/workflows/close-linked-issues.yml",
             ".github/dependabot.yml",
             ".github/FUNDING.yml",
             ".github/pull_request_template.md",
@@ -299,6 +302,16 @@ class ClassifyTest(unittest.TestCase):
             "scripts/fit-star-count-model.py",
             "scripts/merge-gate.sh",
             "scripts/auto-queue.sh",
+            # #2093 release tooling: no job gated on dotnet or client reads it.
+            "scripts/version.py",
+            "scripts/release-tag.py",
+            "scripts/release-tag-cases.txt",
+            "scripts/changelog-section.py",
+            "scripts/nightly-version.py",
+            "scripts/merge-down.py",
+            "scripts/close-linked-issues.py",
+            "scripts/check-issue-labels.py",
+            "scripts/source-archive.sh",
             "scripts/tests/<anything>",
         }
         probe = sorted(

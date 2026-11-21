@@ -152,16 +152,17 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignFrameComplete = new("polar_align.frame_complete");
     public static readonly WsEvent PolarAlignPaused = new("polar_align.paused");
     public static readonly WsEvent PolarAlignError = new("polar_align.error");
-    // Stages: stage when the routine moves to a new stage ({stage, state}); needs_home when the
-    // mount cannot find Home and the routine waits for the user's Continue ({stage, message});
-    // checked when the three-point check has its result (the PolarAlignCheckResultDto fields).
-    // started and progress also carry {stage}.
+    // Stages: stage when the routine moves to a new stage ({stage, state}); checked when the three-point check has its
+    // result (the PolarAlignCheckResultDto fields). needs_home was retired by #2048: the routine never sends the mount Home.
+    // started and progress also carry {stage}; started also carries {hand_turn} (#2083).
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
-    public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
     // #1971 — the Polar Aligner's state in a running routine, on every change: {state, moves,
     // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectionDto).
     public static readonly WsEvent PolarAlignCorrection = new("polar_align.correction");
+    // #2083 — a hand-turn run waiting for the user to turn the RA axis, after each solve while it waits and once more
+    // when it takes the turn: {point, direction, target_deg, turned_deg?, waiting} (PolarAlignHandTurnDto).
+    public static readonly WsEvent PolarAlignHandTurn = new("polar_align.hand_turn");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
@@ -273,7 +274,8 @@ public static class WsEventCatalog {
     public static readonly WsEvent DiagnosticsSnapshot = new("diagnostics.snapshot");
 
     // #1644 — multi-device preference sync. profile.updated { section } after a successful profile-section
-    // write; client_settings.updated { keys, updated_utc } after a client-settings replace or merge.
+    // write, a route's or (#1807) the daemon's own (ProfileSectionChangePublisher); client_settings.updated
+    // { keys, updated_utc } after a client-settings replace or merge.
     public static readonly WsEvent ProfileUpdated = new("profile.updated");
     public static readonly WsEvent ClientSettingsUpdated = new("client_settings.updated");
 
@@ -362,9 +364,9 @@ public static class WsEventCatalog {
         PolarAlignPaused,
         PolarAlignError,
         PolarAlignStage,
-        PolarAlignNeedsHome,
         PolarAlignChecked,
         PolarAlignCorrection,
+        PolarAlignHandTurn,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,

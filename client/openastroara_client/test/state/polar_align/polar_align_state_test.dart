@@ -51,6 +51,33 @@ void main() {
       expect(folded.consecutiveSolveFailures, 0, reason: 'a solved iteration clears the retry streak');
     });
 
+    test('started carries the run camera and progress the noisy flag; a new run clears it (#2082)', () {
+      final started = foldPolarAlignEvent(
+        const PolarAlignLive(),
+        _event(PolarAlignWsEvents.started, {'state': 'seeding', 'stage': 'fine', 'camera': 'main'}),
+      )!;
+      expect(started.camera, PolarAlignCameras.main);
+      expect(started.usesMainCamera, isTrue);
+      final noisy = foldPolarAlignEvent(
+        started,
+        _event(PolarAlignWsEvents.progress, {
+          'iteration': 0,
+          'altitude_error_arcmin': 1.0,
+          'azimuth_error_arcmin': 1.0,
+          'total_error_arcmin': 1.41,
+          'measurement_noisy': true,
+        }),
+      )!;
+      expect(noisy.measurementNoisy, isTrue);
+      expect(noisy.camera, PolarAlignCameras.main, reason: 'progress keeps the run camera');
+      final next = foldPolarAlignEvent(noisy, _event(PolarAlignWsEvents.started, {'stage': 'fine', 'camera': 'guide'}))!;
+      expect((next.measurementNoisy, next.usesMainCamera), (false, false));
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson({
+        'state': 'adjusting', 'stage': 'fine', 'camera': 'main', 'measurement_noisy': true,
+      }));
+      expect((fromStatus.camera, fromStatus.measurementNoisy), (PolarAlignCameras.main, true));
+    });
+
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),
@@ -135,6 +162,49 @@ void main() {
       expect(folded.phase, PolarAlignStates.failed);
       expect(folded.errorReason, 'axis_fit_failed');
       expect(folded.errorMessage, contains('fitted axis'));
+    });
+
+    // #2107 the stop's name rides on the error, and never carries over to the
+    // next error that has none.
+    test('a stop from outside keeps stopped_by, and the next error drops it', () {
+      final stopped = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'the mount was stopped from the direction pad',
+          'stopped_by': 'pad_stop',
+        }),
+      )!;
+      expect(stopped.errorStoppedBy, 'pad_stop');
+      final next = foldPolarAlignEvent(
+        stopped,
+        _event(PolarAlignWsEvents.error, {'reason': 'mount_did_not_stop', 'message': 'cut power'}),
+      )!;
+      expect(next.errorStoppedBy, isNull);
+    });
+
+    // #2066 an error whose run could not confirm its stop says so, and the
+    // next error that does not say so drops it.
+    test('stop_unconfirmed rides on the error, and the next error drops it', () {
+      final unconfirmed = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped from the direction pad. Cut the mount\'s power now',
+          'stopped_by': 'pad_stop',
+          'stop_unconfirmed': true,
+        }),
+      )!;
+      expect(unconfirmed.errorStopUnconfirmed, isTrue);
+      final next = foldPolarAlignEvent(
+        unconfirmed,
+        _event(PolarAlignWsEvents.error, {
+          'reason': 'slew_aborted_externally',
+          'message': 'stopped (Stop Mount)',
+          'stopped_by': 'user_request',
+        }),
+      )!;
+      expect(next.errorStopUnconfirmed, isFalse);
     });
   });
 
@@ -288,6 +358,24 @@ void main() {
       expect(polarAlignStepState(folded), SetupStepState.done);
     });
 
+    test('a checked event and a status check result carry the noisy flag (#2082)', () {
+      final noisy = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true}),
+      )!;
+      expect(noisy.checkResult!.noisy, isTrue);
+      final steady = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent'}),
+      )!;
+      expect(steady.checkResult!.noisy, isFalse, reason: 'an older daemon sends no key');
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson(const {
+        'state': 'checked',
+        'check_result': {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true},
+      }));
+      expect(fromStatus.checkResult!.noisy, isTrue);
+    });
+
     test('progress carries the stage; an older daemon leaves it null', () {
       final coarse = foldPolarAlignEvent(
         const PolarAlignLive(),
@@ -299,6 +387,31 @@ void main() {
         _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 70.0}),
       )!;
       expect(old.stage, isNull);
+    });
+
+    test('each progress event says the readout caution afresh; a snapshot carries it too (#2072)', () {
+      final weak = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 4.0, 'readout_caution': 'altitude_weak'}),
+      )!;
+      expect(weak.readoutCaution, PolarAlignReadoutCautions.altitudeWeak);
+      final again = foldPolarAlignEvent(
+        weak,
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 3.0, 'readout_caution': 'altitude_weak'}),
+      )!;
+      expect(again.readoutCaution, PolarAlignReadoutCautions.altitudeWeak);
+      expect(again.totalErrorArcmin, 3.0);
+      final sound = foldPolarAlignEvent(
+        again,
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 2.0, 'readout_caution': null}),
+      )!;
+      expect(sound.readoutCaution, isNull, reason: 'a new seed with a sound readout clears it');
+      expect(
+        liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting', 'readout_caution': 'altitude_weak'}))
+            .readoutCaution,
+        PolarAlignReadoutCautions.altitudeWeak,
+      );
+      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting'})).readoutCaution, isNull);
     });
 
     test('the status snapshot hydrates stage, home wait, solves and the check result', () {
@@ -316,50 +429,6 @@ void main() {
       final homing = liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'homing', 'waiting_for_home': true}));
       expect(homing.waitingForHome, isTrue);
       expect(homing.isActive, isTrue);
-    });
-
-    test('settings carry the stage knobs and default the turn to 10°', () {
-      const defaults = PolarAlignSettings();
-      expect(defaults.seedRotationDeg, 10.0);
-      expect(defaults.checkStepDeg, 10.0);
-      expect(defaults.coarseExposureSeconds, 3.0);
-      expect(defaults.useHome, isTrue);
-      final json = defaults.copyWith(useHome: false, checkStepDeg: 15).toJson();
-      expect(json['use_home'], isFalse);
-      expect(PolarAlignSettings.fromJson(json).checkStepDeg, 15.0);
-      expect(PolarAlignSettings.fromJson(json).useHome, isFalse);
-    });
-
-    test('settings carry stop_tracking_when_done, on unless the daemon says off (#2048)', () {
-      expect(const PolarAlignSettings().stopTrackingWhenDone, isTrue, reason: "NINA's default");
-      expect(PolarAlignSettings.fromJson(const {}).stopTrackingWhenDone, isTrue, reason: 'an older daemon');
-      final json = const PolarAlignSettings().copyWith(stopTrackingWhenDone: false).toJson();
-      expect(json['stop_tracking_when_done'], isFalse);
-      expect(PolarAlignSettings.fromJson(json).stopTrackingWhenDone, isFalse);
-    });
-  });
-
-  group('PolarAlignSettings', () {
-    test('loop_mode round-trips and unknown values fall back to loop', () {
-      const single = PolarAlignSettings(loopMode: PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson(single.toJson()).loopMode, PolarAlignLoopModes.single);
-      expect(PolarAlignSettings.fromJson({'loop_mode': 'bogus'}).loopMode, PolarAlignLoopModes.loop);
-      expect(PolarAlignSettings.fromJson({}).loopMode, PolarAlignLoopModes.loop);
-    });
-
-    test('round-trips through json with playbook defaults for missing keys', () {
-      const defaults = PolarAlignSettings();
-      expect(PolarAlignSettings.fromJson(const {}).toJson(), defaults.toJson());
-
-      const custom = PolarAlignSettings(
-        exposureSeconds: 0.5,
-        binning: 2,
-        targetToleranceArcmin: 0.5,
-        seedRotationDeg: 60,
-        loopCadenceMs: 750,
-        settleSeconds: 3,
-      );
-      expect(PolarAlignSettings.fromJson(custom.toJson()).toJson(), custom.toJson());
     });
   });
 }

@@ -25,6 +25,8 @@ import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/services/guider_equipment_api.dart' show GuiderEquipmentClient;
 import 'package:openastroara/services/profile_api.dart' show ProfileApi;
+
+import '../../support/phd2_section.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart' show guiderEquipmentApiProvider;
 import 'package:openastroara/state/profile_management_state.dart' show profileApiProvider;
 import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
@@ -118,10 +120,20 @@ Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guidin
 
 late _Guider _g;
 
-/// The rig's profile store: a PUT answers with what was sent.
+/// The rig's profile store: the guider section loads as the rig's copy
+/// ([phd2], or a failed load when null); a PUT answers with what was sent.
 class _Profile implements ProfileApi {
+  _Profile([this.phd2 = const Phd2Settings()]);
+  Phd2Settings? phd2;
+  final puts = <Phd2Settings>[];
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async => s;
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: phd2 ?? (throw StateError('rig unreachable')), etag: '"v${puts.length + 1}"');
+  @override
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(Phd2Settings s, {String? ifMatch}) async {
+    puts.add(s);
+    return (value: s, etag: '"v${puts.length + 1}"');
+  }
   @override
   dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
@@ -136,13 +148,20 @@ class _GuiderEquipment implements GuiderEquipmentClient {
 }
 
 Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const [], Locale? locale}) async {
+    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const [], Locale? locale,
+    bool guiderFromRig = true}) async {
   // Tall enough that the whole panel is on screen, so nothing needs scrolling.
   tester.view.physicalSize = const Size(2400, 3600);
   addTearDown(tester.view.resetPhysicalSize);
   _g = _Guider(wire, lag: lag);
   _order.clear();
-  final c = ProviderContainer(overrides: [guiderStatusProvider.overrideWith(() => _g), mountProvider.overrideWith(_Mount.new), ...rig]);
+  final c = ProviderContainer(overrides: [
+    guiderStatusProvider.overrideWith(() => _g),
+    mountProvider.overrideWith(_Mount.new),
+    // The guider settings as the rig's copy (ADR 0015: rows save over it).
+    if (guiderFromRig) phd2FromRig(),
+    ...rig,
+  ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
     container: c,
@@ -403,12 +422,12 @@ void main() {
     testWidgets('a minimum move goes to the Guider live', (tester) async {
       final e = _GuiderEquipment();
       final c = await _pump(tester, _wire(), rig: rig(e));
-      final before = c.read(phd2SettingsProvider).minimumMove;
+      final before = c.read(phd2SettingsProvider).value!.minimumMove;
       await _tab(tester, 'tuning');
       await tester.tap(find.byKey(const Key('simple-guider-min-move-ra-up')));
       await tester.pump();
       await tester.pump();
-      expect(c.read(phd2SettingsProvider).minimumMove, closeTo(before + 0.05, 1e-9));
+      expect(c.read(phd2SettingsProvider).value!.minimumMove, closeTo(before + 0.05, 1e-9));
       expect(e.pushes, [true]);
     });
 
@@ -419,7 +438,7 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-guider-settle-time-up')));
       await tester.pump();
       await tester.pump();
-      expect(c.read(phd2SettingsProvider).settleTimeSec, 11);
+      expect(c.read(phd2SettingsProvider).value!.settleTimeSec, 11);
       expect(e.pushes, isEmpty);
     });
 
@@ -894,7 +913,7 @@ void main() {
 
   testWidgets("the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",
       (tester) async {
-    final c = await _pump(tester, _wire());
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
     c.read(phd2SettingsProvider.notifier).setGuideExposureMs(2000);
     await tester.pump();
     final tile = find.byKey(const Key('simple-guide-exposure'));
@@ -903,7 +922,8 @@ void main() {
     expect((slider.min, slider.max), (0.0, 100.0), reason: "the Camera (Guide) window's slider, one value");
     slider.onChangeEnd!(70);
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).guideCameraGain, 70);
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.guideCameraGain, 70);
   });
 
   testWidgets("a guide exposure pick and a gain change reach the guider live (tuning only, so guiding goes on); "
@@ -1016,6 +1036,89 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
   });
 
+  testWidgets('Guider: a Simple Mode change with the guider settings not loaded from the rig sends nothing and '
+      'says why (ADR 0015)', (tester) async {
+    final eq = _GuiderEquipment();
+    final profile = _Profile(null);
+    final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      profileApiProvider.overrideWithValue(profile),
+      guiderEquipmentApiProvider.overrideWithValue(eq),
+    ]);
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra'))).onChangeEnd!(0.55);
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(); // the load tried once more first, and failed
+    }
+    expect(profile.puts, isEmpty);
+    expect(eq.pushes, isEmpty, reason: 'nothing saved, nothing pushed');
+    expect(c.read(simpleMessagesProvider).single.detail, contains('not loaded from the rig'));
+  });
+
+  testWidgets('Guider: a Simple Mode change the rig fails to save goes back to the rig\'s value (ADR 0015)',
+      (tester) async {
+    final eq = _GuiderEquipment();
+    final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+      phd2SettingsProvider.overrideWith(() => FakePhd2Section()..refuse = StateError('rig error')),
+      profileApiProvider.overrideWithValue(_Profile()),
+      guiderEquipmentApiProvider.overrideWithValue(eq),
+    ]);
+    await tester.pump();
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra'))).onChangeEnd!(0.55);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.raAggressiveness, 0.7);
+    expect(eq.pushes, isEmpty);
+  });
+
+  testWidgets('Guider: a Simple Mode step taken while the class values show steps from the rig\'s copy the load '
+      'brings in, never from the shown value (ADR 0015)', (tester) async {
+    const rigCopy = Phd2Settings(
+      ditherEveryNFrames: 4,
+      ditherPixels: 12,
+      settlePixels: 3,
+      settleTimeSec: 30,
+      settleTimeoutSec: 120,
+      minimumMove: 0.4,
+      decMinimumMove: 0.5,
+    );
+    for (final (tab, key, saved) in <(String?, String, Object Function(Phd2Settings))>[
+      (null, 'simple-guider-dither-up', (p) => p.ditherEveryNFrames),
+      ('tuning', 'simple-guider-min-move-ra-up', (p) => p.minimumMove),
+      ('tuning', 'simple-guider-min-move-dec-down', (p) => p.decMinimumMove),
+      ('tuning', 'simple-guider-dither-px-up', (p) => p.ditherPixels),
+      ('tuning', 'simple-guider-settle-px-up', (p) => p.settlePixels),
+      ('tuning', 'simple-guider-settle-time-up', (p) => p.settleTimeSec),
+      ('tuning', 'simple-guider-settle-timeout-down', (p) => p.settleTimeoutSec),
+    ]) {
+      final profile = _Profile(null); // the first load fails: the class values show
+      final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+        profileApiProvider.overrideWithValue(profile),
+        guiderEquipmentApiProvider.overrideWithValue(_GuiderEquipment()),
+      ]);
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      if (tab != null) await _tab(tester, tab);
+      profile.phd2 = rigCopy; // the rig answers the load the tap tries again
+      await tester.tap(find.byKey(Key(key)));
+      for (var i = 0; i < 5; i++) {
+        await tester.pump();
+      }
+      expect(saved(profile.puts.single), {
+        'simple-guider-dither-up': 5,
+        'simple-guider-min-move-ra-up': 0.45,
+        'simple-guider-min-move-dec-down': 0.45,
+        'simple-guider-dither-px-up': 13.0,
+        'simple-guider-settle-px-up': 3.1,
+        'simple-guider-settle-time-up': 31,
+        'simple-guider-settle-timeout-down': 115,
+      }[key], reason: key);
+      // Gone before the next one's screen size lands on it.
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+    }
+  });
+
   testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
       (tester) async {
     final eq = _GuiderEquipment();
@@ -1029,12 +1132,12 @@ void main() {
     ra.onChangeEnd!(0.55);
     await tester.pump();
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).raAggressiveness, closeTo(0.55, 1e-9));
+    expect(c.read(phd2SettingsProvider).value!.raAggressiveness, closeTo(0.55, 1e-9));
     expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
     tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-dec'))).onChangeEnd!(0.4);
     await tester.pump();
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).decAggressiveness, closeTo(0.4, 1e-9));
+    expect(c.read(phd2SettingsProvider).value!.decAggressiveness, closeTo(0.4, 1e-9));
     expect(eq.pushes, [true, true]);
   });
 
@@ -1049,7 +1152,7 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-guide-dec-mode-north')));
     await tester.pump();
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).decGuideMode, 'north');
+    expect(c.read(phd2SettingsProvider).value!.decGuideMode, 'north');
     expect(eq.pushes, [true]);
   });
 
@@ -1062,11 +1165,11 @@ void main() {
     final gain = tester.getSemantics(find.byKey(const Key('simple-guider-gain')));
     expect(gain.getSemanticsData().hasAction(SemanticsAction.increase), isTrue, reason: 'the adjustable node');
     expect(gain.getSemanticsData().label, contains('Gain'));
-    final before = c.read(phd2SettingsProvider).guideCameraGain;
+    final before = c.read(phd2SettingsProvider).value!.guideCameraGain;
     gain.owner!.performAction(gain.id, SemanticsAction.increase);
     await tester.pump();
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).guideCameraGain, greaterThan(before));
+    expect(c.read(phd2SettingsProvider).value!.guideCameraGain, greaterThan(before));
     expect(eq.pushes, [true]);
     handle.dispose();
   });
@@ -1103,7 +1206,7 @@ void main() {
   });
 
   testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {
-    final c = await _pump(tester, _wire());
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
     c.read(phd2SettingsProvider.notifier)
       ..setDitherEnabled(true)
       ..setDitherEveryNFrames(2);
@@ -1111,21 +1214,24 @@ void main() {
     expect(find.text('2 frames'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).ditherEveryNFrames, 3);
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.ditherEveryNFrames, 3);
     for (var i = 0; i < 3; i++) {
       await tester.tap(find.byKey(const Key('simple-guider-dither-down')));
       await tester.pump();
+      await tester.pump();
     }
-    expect(c.read(phd2SettingsProvider).ditherEnabled, isFalse);
+    expect(c.read(phd2SettingsProvider).value!.ditherEnabled, isFalse);
     expect(find.descendant(of: find.byKey(const Key('simple-window-row-Dither')), matching: find.text('Off')), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
     await tester.pump();
-    expect((c.read(phd2SettingsProvider).ditherEnabled, c.read(phd2SettingsProvider).ditherEveryNFrames), (true, 1));
+    await tester.pump();
+    expect((c.read(phd2SettingsProvider).value!.ditherEnabled, c.read(phd2SettingsProvider).value!.ditherEveryNFrames), (true, 1));
     expect(find.text('Every frame'), findsOneWidget);
   });
 
   testWidgets('dither distance in pixels, only while dithering', (tester) async {
-    final c = await _pump(tester, _wire());
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
     c.read(phd2SettingsProvider.notifier)
       ..setDitherEnabled(true)
       ..setDitherPixels(5);
@@ -1134,7 +1240,8 @@ void main() {
     expect(find.text('5 px'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-guider-dither-px-up')));
     await tester.pump();
-    expect(c.read(phd2SettingsProvider).ditherPixels, 6);
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.ditherPixels, 6);
     c.read(phd2SettingsProvider.notifier).setDitherEnabled(false);
     await tester.pump();
     expect(find.byKey(const Key('simple-guider-dither-px-up')), findsNothing);

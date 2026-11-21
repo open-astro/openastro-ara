@@ -5,9 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/guiding_assistant.dart';
 import '../../models/server.dart';
 import '../../services/guiding_assistant_api.dart';
-import '../profile_management_state.dart' show profileApiProvider;
 import '../saved_server_state.dart';
-import '../settings/phd2_settings_state.dart';
 
 /// Builds a [GuidingAssistantClient] for a server. Overridable in tests.
 final guidingAssistantApiFactoryProvider =
@@ -172,16 +170,11 @@ class GuidingAssistantNotifier extends Notifier<GuidingAssistantState> {
     // (this notifier is gone by then, its ref unusable).
     final marks = ref.read(guidingAssistantAppliedProvider.notifier);
     final server = ref.read(activeServerProvider);
-    final phd2 = ref.read(phd2SettingsProvider.notifier);
-    final profileApi = ref.read(profileApiProvider);
-    final recorded = marks.set(await api.apply(which), writtenTo: server);
-    // #1448 — the daemon wrote what the guider now runs into Ara's profile;
-    // re-read it so the guider settings show it, and so a later save from
-    // them cannot put the old Dec mode or exposure back over the Apply.
-    // Best-effort: the Apply itself succeeded.
-    if (recorded && profileApi != null) {
-      phd2.hydrateFromServer(profileApi).ignore();
-    }
+    // #1448 — the daemon writes what the guider now runs into Ara's profile
+    // and announces it (profile.updated), so the guider settings reload; a
+    // save from a copy loaded before is refused as stale (ADR 0015), so it
+    // cannot put the old Dec mode or exposure back over the Apply.
+    marks.set(await api.apply(which), writtenTo: server);
     return null;
   });
 }

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/app_version.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/first_run_screen.dart';
@@ -281,6 +282,67 @@ void main() {
     expect(container.read(selectedServerProvider), isNull);
     expect(await container.read(savedServersProvider.future), isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
+  });
+
+  // #2093: a server from another X.Y release line is flagged next to its
+  // version, without stopping the user from continuing.
+  group('server version warning', () {
+    Future<void> handshakeWith(WidgetTester tester, String serverVersion,
+        {Locale? locale}) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      const rig = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
+      final container = ProviderContainer(overrides: [
+        discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rig])),
+        lastRigServiceProvider.overrideWithValue(_MemLastRig()),
+        appVersionProvider.overrideWithValue('1.0.0-beta.2'),
+        serverHandshakeProvider.overrideWith((ref) async =>
+            ref.watch(selectedServerProvider) == null
+                ? null
+                : ServerInfo(name: 'openastro', version: serverVersion, apiVersion: '1', uuid: 'u')),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          locale: locale,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const FirstRunScreen(),
+        ),
+      ));
+      await tester.pump();
+      container.read(selectedServerProvider.notifier).select(rig);
+      // The handshake, then the app's own version the warning reads.
+      await tester.pump();
+      await tester.pump();
+      await tester.pump();
+    }
+
+    testWidgets('another release line warns and still offers Continue', (tester) async {
+      await handshakeWith(tester, '1.1.0');
+      expect(find.text('Server version: 1.1.0'), findsOneWidget);
+      expect(
+        find.text('Server 1.1.0 and app 1.0.0-beta.2 differ; update both from the same release.'),
+        findsOneWidget,
+      );
+      expect(find.text('Continue'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('the warning is in Brazilian Portuguese too', (tester) async {
+      await handshakeWith(tester, '2.0.0', locale: const Locale('pt', 'BR'));
+      expect(find.textContaining('O servidor 2.0.0 e o app 1.0.0-beta.2'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('the same release line, or an old daemon version, shows none', (tester) async {
+      for (final v in ['1.0.0', '1.0.0.0', 'dev-build']) {
+        await handshakeWith(tester, v);
+        expect(find.text('Server version: $v'), findsOneWidget);
+        expect(find.byKey(const Key('version-mismatch-warning')), findsNothing, reason: v);
+        await tester.pumpWidget(const SizedBox.shrink());
+      }
+    });
   });
 
   // #1129: Android drops mDNS answers without a multicast lock; the scan

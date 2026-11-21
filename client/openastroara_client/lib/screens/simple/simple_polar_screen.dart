@@ -3,10 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
-import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_preflight_state.dart';
+import '../../util/polar_align_error_text.dart';
 import 'simple_polar_panel.dart';
 import 'simple_screen.dart';
 
@@ -29,7 +30,7 @@ class SimplePolarScreen extends SimpleScreen {
 
   @override
   String caption(BuildContext context, WidgetRef ref) => simplePolarSummary(
-    ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings(),
+    ref.watch(polarAlignSettingsProvider).value,
     context.l10n,
   );
 
@@ -54,7 +55,7 @@ class SimplePolarScreen extends SimpleScreen {
           .show(
             SimpleMessageKind.error,
             context.l10n.polarPhaseFailed,
-            detail: next.errorMessage ?? next.errorReason,
+            detail: polarAlignErrorText(context.l10n, next),
             origin: SimpleStatusOrigin.polar,
           );
     });

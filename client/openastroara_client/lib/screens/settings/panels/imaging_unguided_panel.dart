@@ -256,8 +256,10 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         // say so only while it is actually missing.
         if (basisGapFor(
               u.priorToleranceBasis,
-              optics: ref.watch(opticsSettingsProvider),
-              seeingArcsec: ref.watch(siteSettingsProvider).typicalSeeingArcsec,
+              optics:
+                  ref.watch(opticsSettingsProvider).value ??
+                  const OpticsSettings(),
+              seeingArcsec: (ref.watch(siteSettingsProvider).value ?? const SiteSettings()).typicalSeeingArcsec,
             )
             case final gap?)
           Padding(

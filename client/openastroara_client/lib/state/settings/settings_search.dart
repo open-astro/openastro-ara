@@ -208,7 +208,6 @@ const Map<String, List<String>> _panelKeywords = {
     'park',
     'meridian',
     'guider',
-    'altitude',
     'unsafe',
     'session',
     'end',

@@ -1,20 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../../util/friendly_error.dart';
-import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §48 Session → Calibration panel — the sequence-start "capture calibration
 /// tonight?" default. The value rides the profile's safety-policies document
-/// (same daemon round-trip as Safety → Policies): hydrate on mount, persist
-/// on Save.
+/// (same section as Unattended running): the rig's copy, loaded before it is
+/// saved (ADR 0015), and saved back on Save.
 class SessionCalibrationPanel extends ConsumerStatefulWidget {
   const SessionCalibrationPanel({super.key});
 
@@ -25,68 +22,34 @@ class SessionCalibrationPanel extends ConsumerStatefulWidget {
 
 class _SessionCalibrationPanelState
     extends ConsumerState<SessionCalibrationPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [safetyPoliciesProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
-  }
-
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+    // A field still being edited commits on focus loss; drop focus first so
+    // the typed value is what gets sent.
+    FocusManager.instance.primaryFocus?.unfocus();
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(safetyPoliciesProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final s = ref.watch(safetyPoliciesProvider).value!;
     final n = ref.read(safetyPoliciesProvider.notifier);
+    SafetyPolicies now() => ref.read(safetyPoliciesProvider).value!;
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         const SettingsSectionHeader('End-of-night calibration frames'),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
@@ -124,8 +87,7 @@ class _SessionCalibrationPanelState
           label: 'Target brightness (% of camera range)',
           helpKey: 'session.calibration.flat_target_adu',
           currentValue: _percent(s.flatTargetPercent),
-          getCanonical: () =>
-              _percent(ref.read(safetyPoliciesProvider).flatTargetPercent),
+          getCanonical: () => _percent(now().flatTargetPercent),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setFlatTargetPercent(v);
@@ -135,10 +97,7 @@ class _SessionCalibrationPanelState
           label: 'Target tolerance (%)',
           helpKey: 'session.calibration.flat_target_adu_tolerance_pct',
           currentValue: s.flatTargetAduTolerancePct.toString(),
-          getCanonical: () => ref
-              .read(safetyPoliciesProvider)
-              .flatTargetAduTolerancePct
-              .toString(),
+          getCanonical: () => now().flatTargetAduTolerancePct.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setFlatTargetAduTolerancePct(v);
@@ -148,8 +107,7 @@ class _SessionCalibrationPanelState
           label: 'Frames per filter',
           helpKey: 'session.calibration.flat_frames_per_filter',
           currentValue: s.flatFramesPerFilter.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).flatFramesPerFilter.toString(),
+          getCanonical: () => now().flatFramesPerFilter.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setFlatFramesPerFilter(v);
@@ -169,8 +127,7 @@ class _SessionCalibrationPanelState
           label: 'Target brightness (mean ADU)',
           helpKey: 'session.calibration.sky_flat_target_adu',
           currentValue: s.skyFlatTargetAdu.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatTargetAdu.toString(),
+          getCanonical: () => now().skyFlatTargetAdu.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setSkyFlatTargetAdu(v);
@@ -180,10 +137,7 @@ class _SessionCalibrationPanelState
           label: 'Frames per filter',
           helpKey: 'session.calibration.sky_flat_frames_per_filter',
           currentValue: s.skyFlatFramesPerFilter.toString(),
-          getCanonical: () => ref
-              .read(safetyPoliciesProvider)
-              .skyFlatFramesPerFilter
-              .toString(),
+          getCanonical: () => now().skyFlatFramesPerFilter.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setSkyFlatFramesPerFilter(v);
@@ -193,8 +147,7 @@ class _SessionCalibrationPanelState
           label: 'Sky patch azimuth (deg)',
           helpKey: 'session.calibration.sky_flat_target_azimuth',
           currentValue: s.skyFlatTargetAzimuth.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatTargetAzimuth.toString(),
+          getCanonical: () => now().skyFlatTargetAzimuth.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSkyFlatTargetAzimuth(v);
@@ -204,8 +157,7 @@ class _SessionCalibrationPanelState
           label: 'Sky patch altitude (deg)',
           helpKey: 'session.calibration.sky_flat_target_altitude',
           currentValue: s.skyFlatTargetAltitude.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatTargetAltitude.toString(),
+          getCanonical: () => now().skyFlatTargetAltitude.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSkyFlatTargetAltitude(v);
@@ -215,8 +167,7 @@ class _SessionCalibrationPanelState
           label: 'Stop above (ADU)',
           helpKey: 'session.calibration.sky_flat_stop_at_max_adu',
           currentValue: s.skyFlatStopAtMaxAdu.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatStopAtMaxAdu.toString(),
+          getCanonical: () => now().skyFlatStopAtMaxAdu.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSkyFlatStopAtMaxAdu(v);
@@ -226,8 +177,7 @@ class _SessionCalibrationPanelState
           label: 'Stop below (ADU)',
           helpKey: 'session.calibration.sky_flat_stop_at_min_adu',
           currentValue: s.skyFlatStopAtMinAdu.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatStopAtMinAdu.toString(),
+          getCanonical: () => now().skyFlatStopAtMinAdu.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSkyFlatStopAtMinAdu(v);
@@ -237,8 +187,7 @@ class _SessionCalibrationPanelState
           label: 'Wait for sun altitude (deg)',
           helpKey: 'session.calibration.sky_flat_sun_altitude',
           currentValue: s.skyFlatSunAltitude.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).skyFlatSunAltitude.toString(),
+          getCanonical: () => now().skyFlatSunAltitude.toString(),
           parse: (str) {
             final v = double.tryParse(str);
             if (v != null) n.setSkyFlatSunAltitude(v);

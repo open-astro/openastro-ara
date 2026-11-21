@@ -38,6 +38,18 @@ The script checks shape, not truth; review applies the mutation.
 The PR body is read from the PR_BODY environment variable (or --body-file),
 never from a command line, because it is untrusted text.
 
+A merge down (docs/RELEASES.md) passes without a body check: its cases were
+listed on the fix PRs that landed them on stable/X.Y, and against the receiving
+branch every one reads as new again. scripts/merge-down.py decides, from the
+environment (untrusted text, so never a command line):
+  MERGE_DOWN_HEAD_REF   the PR head branch (default: GITHUB_HEAD_REF)
+  MERGE_DOWN_BASE_REF   the PR base branch (default: GITHUB_BASE_REF)
+  MERGE_DOWN_BASE_SHA   the base commit (default: the diff base below)
+  MERGE_DOWN_HEAD_SHA   the head commit (default: HEAD^2 of a merge HEAD, else HEAD)
+  MERGE_DOWN_SAME_REPO  "true" when the head is a branch of this repository
+                        (anything else: never exempt)
+Only a head named merge-down/X.Y-to-master or merge-down/X.Y-to-X.Z is looked at.
+
 Usage:
     check-falsified-by.py [--base REF] [--body-file FILE]
 """
@@ -364,6 +376,38 @@ def gather_new_cases(base):
     return new, head_cases
 
 
+MERGE_DOWN_PREFIX = "merge-down/"
+
+
+def merge_down_exemption(base):
+    """(exempt, reason) from scripts/merge-down.py, or None when the head is not named like a merge down."""
+    env = os.environ
+    head_ref = env.get("MERGE_DOWN_HEAD_REF") or env.get("GITHUB_HEAD_REF") or ""
+    if not head_ref.startswith(MERGE_DOWN_PREFIX):
+        return None
+    path = os.path.join(ROOT, "scripts", "merge-down.py")
+    try:
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("merge_down", path)
+        merge_down = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(merge_down)
+    except (OSError, ImportError, SyntaxError) as exc:
+        return False, "cannot load %s: %s" % (path, exc)
+    head_rev = env.get("MERGE_DOWN_HEAD_SHA")
+    if not head_rev:
+        merge = subprocess.run(["git", "-C", ROOT, "rev-parse", "--verify", "-q", "HEAD^2"],
+                               capture_output=True, text=True)
+        head_rev = merge.stdout.strip() if merge.returncode == 0 else "HEAD"
+    return merge_down.exempt(
+        head_ref,
+        env.get("MERGE_DOWN_BASE_REF") or env.get("GITHUB_BASE_REF") or "",
+        env.get("MERGE_DOWN_BASE_SHA") or base,
+        head_rev,
+        same_repo=env.get("MERGE_DOWN_SAME_REPO") == "true",
+        cwd=ROOT,
+    )
+
+
 def main(argv):
     base_arg, body_file = None, None
     args = iter(argv)
@@ -382,6 +426,16 @@ def main(argv):
         body = os.environ.get("PR_BODY", "")
     try:
         base = resolve_base(base_arg or os.environ.get("FALSIFIED_BASE"))
+    except RuntimeError as exc:
+        print("falsified-by: ERROR: %s" % exc, file=sys.stderr)
+        return 2
+    verdict = merge_down_exemption(base)
+    if verdict and verdict[0]:
+        print("falsified-by: exempt, %s" % verdict[1])
+        return 0
+    if verdict:
+        print("falsified-by: not exempt as a merge down (%s); checking as usual" % verdict[1])
+    try:
         new, head_cases = gather_new_cases(base)
     except RuntimeError as exc:
         print("falsified-by: ERROR: %s" % exc, file=sys.stderr)

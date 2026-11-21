@@ -48,22 +48,35 @@ class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi(this.stored) : super(_server);
   Phd2Settings stored;
   Phd2Settings? lastPut;
+  String? lastIfMatch;
   int puts = 0;
   bool failGet = false;
+  /// The rig's tag for its copy: a write moves it on.
+  int version = 1;
   @override
-  Future<Phd2Settings> getPhd2Settings() async =>
-      failGet ? throw DioException(requestOptions: RequestOptions(path: "/profile/phd2")) : stored.copyWith();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async => failGet
+      ? throw DioException(requestOptions: RequestOptions(path: "/profile/phd2"))
+      : (value: stored.copyWith(), etag: '"v$version"');
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings value, {
+    String? ifMatch,
+  }) async {
     lastPut = value;
+    lastIfMatch = ifMatch;
     puts++;
     stored = value;
+    version++;
     // A new object, like the real API's parsed echo (not the instance sent).
-    return value.copyWith();
+    return (value: value.copyWith(), etag: '"v$version"');
   }
 
+  /// The optics read fails, as against a rig that is still booting.
+  bool failOptics = false;
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => failOptics
+      ? throw DioException(requestOptions: RequestOptions(path: '/profile/optics'))
+      : (value: const OpticsSettings(focalLengthMm: 400, reducerFactor: 0.8), etag: '"v1"');
   @override
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() async =>
@@ -161,10 +174,12 @@ typedef _Harness = ({
   _FakeGuiderApi guider,
 });
 
-Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false}) async {
+Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false, bool failOptics = false}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 2400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final profile = _FakeProfileApi(stored)..failGet = failLoad;
+  final profile = _FakeProfileApi(stored)
+    ..failGet = failLoad
+    ..failOptics = failOptics;
   final equipment = _FakeEquipmentApi();
   final names = _FakeAlpacaNames();
   final guider = _FakeGuiderApi();
@@ -353,17 +368,50 @@ void main() {
     expect(h.profile.puts, 1);
   });
 
-  testWidgets('when the settings could not load, an edit says it was not saved instead of vanishing',
+  testWidgets('Guider: not loaded from the rig, the settings wait with Retry and an edit sends nothing (ADR 0015)',
       (tester) async {
     final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), failLoad: true);
+    expect(find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), findsNothing,
+        reason: 'no client default is shown in place of the rig\'s settings');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    expect(find.byType(GuiderConnectionSection), findsOneWidget, reason: 'Connect stays');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setDitherEnabled(false);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    h.profile.failGet = false;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), findsOneWidget);
+    expect(h.profile.lastPut, isNull, reason: 'Retry loads; it saves nothing');
+  });
+
+  testWidgets('Guider: an auto-save sends the tag of the copy loaded from the rig (ADR 0015)', (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
     final toggle = find.descendant(
         of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
     await tester.ensureVisible(toggle);
     await tester.tap(toggle);
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
-    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
-    expect(find.textContaining('Not saved'), findsWidgets);
+    expect(h.profile.lastPut?.ditherEnabled, isFalse);
+    expect(h.profile.lastIfMatch, '"v1"');
+  });
+
+  testWidgets('Guider: a new rig copy loaded by live sync is shown, not saved back (ADR 0015)', (tester) async {
+    final h = await _pump(tester, const Phd2Settings());
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    // The guider connected and the daemon filled the guide pixel size; its
+    // profile.updated reloads the section.
+    h.profile
+      ..stored = const Phd2Settings(guidePixelSize: 3.75)
+      ..version += 1;
+    await container.read(phd2SettingsProvider.notifier).load(h.profile);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('3.75'), findsWidgets);
+    expect(h.profile.puts, 0);
   });
 
   testWidgets('#1806 Apply to guider after a failed load does not write over the rig', (tester) async {
@@ -371,10 +419,23 @@ void main() {
         tester,
         const Phd2Settings(guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]', guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
         failLoad: true);
-    await tester.ensureVisible(find.text('Apply to guider'));
-    await tester.tap(find.text('Apply to guider'));
-    await tester.pumpAndSettle();
+    expect(find.text('Apply to guider'), findsNothing, reason: 'not offered over settings that did not load');
     expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    expect(h.equipment.calls, isNot(contains('push')));
+  });
+
+  testWidgets('an OAG guide focal length is never derived from optics that did not load: Apply writes nothing (ADR 0015)',
+      (tester) async {
+    final h = await _pump(
+        tester,
+        const Phd2Settings(
+            guiderSetupType: 'oag',
+            guideFocalLength: 320,
+            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+            guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
+        failOptics: true);
+    expect(find.text('Apply to guider'), findsNothing, reason: 'not offered while the optics are not in');
+    expect(h.profile.lastPut, isNull, reason: 'no focal length derived from optics the rig never sent');
     expect(h.equipment.calls, isNot(contains('push')));
   });
 
@@ -451,7 +512,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('guider_pick_rotator')), findsNothing);
     expect(find.byKey(const ValueKey('guider_rotator_not_used')), findsOneWidget);
-    expect(container.read(phd2SettingsProvider).guiderRotator, '');
+    expect(container.read(phd2SettingsProvider).value!.guiderRotator, '');
     expect(h.profile, isNotNull);
   });
 
@@ -472,7 +533,7 @@ void main() {
         'Sky-Watcher EQM-35 Pro (EQMOD) (127.0.0.1:6800/1)');
 
     final element = tester.element(find.byType(EquipmentGuiderPanel));
-    final phd2 = ProviderScope.containerOf(element).read(phd2SettingsProvider);
+    final phd2 = ProviderScope.containerOf(element).read(phd2SettingsProvider).value!;
     expect(phd2.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
     expect(phd2.guiderCameraAlpacaUniqueId, 'ZWO_0',
         reason: '#1308 — pinned by UniqueID so a renumber is caught at push');
@@ -539,7 +600,7 @@ void main() {
     await _pick(tester, 'guider_pick_camera', 'ZWO ASI120MM Mini (127.0.0.1:6800/0)');
     final element = tester.element(find.byType(EquipmentGuiderPanel));
     expect(
-        ProviderScope.containerOf(element).read(phd2SettingsProvider).guiderCamera,
+        ProviderScope.containerOf(element).read(phd2SettingsProvider).value!.guiderCamera,
         'Alpaca Camera [127.0.0.1:6800/0]');
   });
 }
