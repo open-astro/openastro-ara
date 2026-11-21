@@ -101,7 +101,11 @@ String paResidualDetail(AppLocalizations l, PaResidual r) {
     else if (hours != null)
       l.paResidualDetailHourAngle(hours),
     l.paResidualDetailLowerBound,
-    if (r.aboveAlign && alignText != null)
+    // #2072 both figures with their 1σ when Align carries its own.
+    if (r.aboveAlign && alignText != null && r.alignSigmaArcmin != null && uncertainty != null)
+      l.paResidualDetailDisagreeSigma(
+          alignText, formatPoleOffset(r.alignSigmaArcmin!).$1, error, formatPoleOffset(uncertainty).$1)
+    else if (r.aboveAlign && alignText != null)
       l.paResidualDetailDisagree(alignText, error)
     else if (!r.reliable)
       l.paResidualDetailNoisy,

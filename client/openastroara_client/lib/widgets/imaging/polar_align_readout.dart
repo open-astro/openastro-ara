@@ -214,6 +214,40 @@ String formatArcmin(double? v) {
   return '$sign${v.abs().toStringAsFixed(1)}′';
 }
 
+/// #2072 a 1σ the way the readout shows it: `1.1′`.
+String formatSigmaArcmin(double sigma) => '${sigma.toStringAsFixed(1)}′';
+
+/// #2072 [value] (already formatted) with its 1σ: `+0.2′ ± 1.1′`. A readout
+/// without one (an older daemon) is the value alone.
+String polarErrorWithSigmaText(AppLocalizations l10n, String value, double? sigma) =>
+    sigma == null ? value : l10n.polarErrorWithSigma(value, formatSigmaArcmin(sigma));
+
+/// #2072 "aligned": the total error plus twice its 1σ is inside the
+/// tolerance, the daemon's rule (`PolarAlignService.AlignedWithinTolerance`),
+/// so a noisy fit never shows a small error as aligned. Done waits for it. A
+/// readout without a σ (an older daemon) is judged on the error alone. Pure —
+/// unit-tested.
+bool polarAligned(double? totalArcmin, double? sigmaArcmin, double? toleranceArcmin) =>
+    totalArcmin != null && toleranceArcmin != null && totalArcmin + 2 * (sigmaArcmin ?? 0) <= toleranceArcmin;
+
+/// #2072 the error is inside the tolerance on its own but not with twice its
+/// 1σ: Done waits, and the screen says why ([polarDoneHeldText]).
+bool polarDoneHeldBySigma(double? totalArcmin, double? sigmaArcmin, double? toleranceArcmin) =>
+    totalArcmin != null &&
+    toleranceArcmin != null &&
+    totalArcmin <= toleranceArcmin &&
+    !polarAligned(totalArcmin, sigmaArcmin, toleranceArcmin);
+
+/// #2072 why Done waits ([polarDoneHeldBySigma]); null when it does not wait
+/// for the uncertainty.
+String? polarDoneHeldText(AppLocalizations l10n, double? totalArcmin, double? sigmaArcmin, double? toleranceArcmin) =>
+    polarDoneHeldBySigma(totalArcmin, sigmaArcmin, toleranceArcmin)
+        ? l10n.polarDoneHeldBySigma(_toleranceText(toleranceArcmin!), formatSigmaArcmin(sigmaArcmin!))
+        : null;
+
+// "2" for 2.0, "1.5" for 1.5 (polarToleranceText's rule).
+String _toleranceText(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(1);
+
 /// Worst-case declination drift, in arcseconds, that a polar error of
 /// [arcmin] causes over [seconds]: error × Earth's rotation rate
 /// (7.292e-5 rad/s), i.e. ~0.26″ per minute per arcminute of error.

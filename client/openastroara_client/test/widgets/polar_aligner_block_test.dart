@@ -220,6 +220,19 @@ void main() {
     expect(find.byType(ButtonStyleButton), findsNothing);
   });
 
+  testWidgets('converged inside the tolerance but not with twice its 1σ: the line says Done waits (#2072)', (tester) async {
+    await _pump(tester,
+        live: const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            totalErrorArcmin: 1.5,
+            totalSigmaArcmin: 0.4,
+            correction: PolarAlignerRun(state: 'converged', moves: 4)));
+    expect(
+        find.text('The motors stopped inside your 2′ tolerance, but the error is not inside it with twice its '
+            'uncertainty (± 0.4′), so Done waits. More moves cannot help: run Check to measure afresh.'),
+        findsOneWidget);
+  });
+
   testWidgets(
       'the profile not loaded from the rig: no made-up tolerance, and a correction the motors make still reads as theirs (ADR 0015)',
       (tester) async {

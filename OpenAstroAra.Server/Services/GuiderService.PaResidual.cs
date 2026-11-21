@@ -59,6 +59,18 @@ public sealed partial class GuiderService {
 
     private const double AlignDisagreementMarginArcmin = 2.0;
 
+    /// <summary>#1731 / #2072 — the guiding figure (a lower bound, with its 1σ) sits above the Polar Align result by more
+    /// than their combined uncertainty: twice √(σ_guiding² + σ_align²) when the alignment carries its own 1σ
+    /// (<see cref="PolarAlignmentRecord.FinalSigmaArcmin"/>). An older row without one keeps the old rule, which stood a
+    /// fixed <see cref="AlignDisagreementMarginArcmin"/> in for the alignment's error.</summary>
+    internal static bool AboveAlign(double paErrorMinArcmin, double uncertaintyArcmin, PolarAlignmentRecord align) {
+        ArgumentNullException.ThrowIfNull(align);
+        var alignError = align.FinalErrorArcmin ?? 0.0;
+        return align.FinalSigmaArcmin is double alignSigma
+            ? paErrorMinArcmin - alignError > 2 * Math.Sqrt(uncertaintyArcmin * uncertaintyArcmin + alignSigma * alignSigma)
+            : paErrorMinArcmin - 2 * uncertaintyArcmin > alignError + AlignDisagreementMarginArcmin;
+    }
+
     private readonly object _paGate = new();
     private PaResidualTracker _paTracker = new();
     private PaResidualDto? _paCurrent;  // what GET shows; null = nothing measured yet
@@ -275,9 +287,7 @@ public sealed partial class GuiderService {
                 // for the Align's own error, the two disagree. Either Dec lost motion ate guide pulses (the guiding figure is
                 // too high), or the mount shifted since the alignment or its reference was wrong (the Align figure is too low).
                 // Nothing here tells the two apart; a fresh Polar Align, or a drift measured with Dec guiding off, does.
-                bool? aboveAlign = align is null
-                    ? null
-                    : f.PaErrorMinArcmin - 2 * f.UncertaintyArcmin > align.FinalErrorArcmin + AlignDisagreementMarginArcmin;
+                bool? aboveAlign = align is null ? null : AboveAlign(f.PaErrorMinArcmin, f.UncertaintyArcmin, align);
                 result = started with {
                     Status = "done",
                     CompletedUtc = now,
@@ -291,12 +301,13 @@ public sealed partial class GuiderService {
                     HourAngleHours = pointing?.HourAngleHours,
                     DecDeg = pointing?.DecDeg,
                     AlignErrorArcmin = align?.FinalErrorArcmin,
+                    AlignSigmaArcmin = align?.FinalSigmaArcmin is double alignSigma ? Math.Round(alignSigma, 2) : null,
                     AlignEndedUtc = align?.EndedAt,
                     SessionId = ActiveRunSession?.Invoke(),
                 };
                 LogPaResidualMeasured(f.PaErrorMinArcmin, f.UncertaintyArcmin, f.DriftArcsecPerMin, f.SampleSeconds, f.Frames,
                     rate ?? 0, f.DecPulseNetMs, f.DecPulseTotalMs, pointing?.HourAngleHours, pointing?.DecDeg,
-                    align?.FinalErrorArcmin, aboveAlign);
+                    align?.FinalErrorArcmin, align?.FinalSigmaArcmin, aboveAlign);
             }
 
             lock (_paGate) {
@@ -352,10 +363,10 @@ public sealed partial class GuiderService {
     [LoggerMessage(Level = LogLevel.Information,
         Message = "PA residual from guiding: ≥ {ErrorArcmin:F2}′ ± {UncertaintyArcmin:F2}′ (Dec drift {DriftArcsecPerMin:F3}″/min over {Seconds:F0} s, {Frames} frames; " +
             "Dec rate {DecRatePxPerSec:F3} px/s, Dec pulses net {DecPulseNetMs:F0} ms of {DecPulseTotalMs:F0} ms; HA {HourAngleHours:F2} h, Dec {DecDeg:F2}°; " +
-            "Polar Align {AlignArcmin:F2}′, above it {AboveAlign})")]
+            "Polar Align {AlignArcmin:F2}′ ± {AlignSigmaArcmin:F2}′, above it {AboveAlign})")]
     private partial void LogPaResidualMeasured(double errorArcmin, double uncertaintyArcmin, double driftArcsecPerMin, double seconds, int frames,
         double decRatePxPerSec, double decPulseNetMs, double decPulseTotalMs, double? hourAngleHours, double? decDeg,
-        double? alignArcmin, bool? aboveAlign);
+        double? alignArcmin, double? alignSigmaArcmin, bool? aboveAlign);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "PA residual measurement failed")]
     private partial void LogPaResidualFailed(Exception ex);

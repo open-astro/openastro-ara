@@ -276,7 +276,8 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 iterations             INTEGER NOT NULL,
                 outcome                TEXT NOT NULL,
                 notes                  TEXT,
-                aligner_moves          INTEGER
+                aligner_moves          INTEGER,
+                final_sigma_arcmin     REAL
             );
             """, ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_polar_alignments_started_at ON polar_alignments(started_at);", ct);
@@ -291,6 +292,8 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
             }
         }
         await AddColumnIfMissingAsync(conn, "polar_alignments", "aligner_moves", "INTEGER", ct);
+        // #2072 — the 1σ of final_error_arcmin; NULL on a row written before this column.
+        await AddColumnIfMissingAsync(conn, "polar_alignments", "final_sigma_arcmin", "REAL", ct);
 
         // #1311 — one row per polar-alignment residual measured from guiding (the first minutes of a
         // guided run). session_id is the imaging session running at the time, when exactly one is.

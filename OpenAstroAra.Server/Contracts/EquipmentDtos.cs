@@ -763,6 +763,9 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// Polar Align result in the 12 h before, for comparison. <c>AboveAlign</c> (#2072) is that second rule on its own:
 /// the two numbers disagree (Dec lost motion inflated the guiding figure, or the mount shifted or the alignment was
 /// wrong); null with no Polar Align result to compare. Hour angle / Dec are the mount's at the end.
+/// <c>AlignSigmaArcmin</c> (#2072) is that Polar Align result's own 1σ; with it, the two disagree when the value is
+/// above the result by more than twice their combined 1σ, √(<c>UncertaintyArcmin</c>² + <c>AlignSigmaArcmin</c>²)
+/// (without it, an older row, the fixed 2′ margin stands in for the result's error). Not stored with the row.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,
@@ -782,7 +785,8 @@ public sealed record PaResidualDto(
     DateTimeOffset? AlignEndedUtc = null,
     Guid? SessionId = null,
     string? Reason = null,
-    bool? AboveAlign = null);
+    bool? AboveAlign = null,
+    double? AlignSigmaArcmin = null);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at
@@ -991,7 +995,9 @@ public static class PolarAlignDirections {
 /// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
-/// point stayed noisy after its retake (#2082, <c>Noisy</c>).</summary>
+/// point stayed noisy after its retake (#2082, <c>Noisy</c>). The <c>*SigmaArcmin</c> fields (#2072) are the fit's 1σ on
+/// each error, from the scatter of each point's frames (a single-frame point counts a 1″ floor); the total's is the rms
+/// length of the error vector, √(alt² + az²) of the two. Null from an older daemon.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -1003,7 +1009,11 @@ public sealed record PolarAlignCheckResultDto(
     string Verdict,
     DateTimeOffset MeasuredAt,
     // #2082 — a point of the check stayed scattered over 3″ after its retake (polar_align.frames_per_point).
-    bool Noisy = false);
+    bool Noisy = false,
+    // #2072 — the fit's 1σ on each error (arcmin).
+    double? AltitudeSigmaArcmin = null,
+    double? AzimuthSigmaArcmin = null,
+    double? TotalSigmaArcmin = null);
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
@@ -1044,7 +1054,13 @@ public sealed record PolarAlignStateDto(
     // #2083 — the current run, or the last one, turns RA by hand (no motor moves); false before any run.
     bool HandTurn = false,
     // #2083 — a hand-turn run waiting for the user's turn; null otherwise.
-    PolarAlignHandTurnDto? HandTurnWait = null);
+    PolarAlignHandTurnDto? HandTurnWait = null,
+    // #2072 — the 1σ of CurrentErrorArcmin, AzimuthAdjustmentArcmin and AltitudeAdjustmentArcmin (arcmin): the fit the
+    // readout rests on (the seed's in the live loop, the verdict's once checked). Null whenever the error is null.
+    // "Aligned" (Done in the clients, and the daemon's own rough-step Done) needs error + 2σ inside the tolerance.
+    double? CurrentSigmaArcmin = null,
+    double? AzimuthSigmaArcmin = null,
+    double? AltitudeSigmaArcmin = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

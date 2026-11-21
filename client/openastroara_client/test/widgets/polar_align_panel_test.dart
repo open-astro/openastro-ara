@@ -211,6 +211,27 @@ void main() {
       expect(formatArcmin(-23.41), '−23.4′');
       expect(formatArcmin(null), '—');
     });
+
+    test('an error reads with its 1σ in English and pt-BR, and alone without one (#2072)', () {
+      final pt = lookupAppLocalizations(const Locale('pt', 'BR'));
+      expect(polarErrorWithSigmaText(_en, '+0.2′', 1.1), '+0.2′ ± 1.1′');
+      expect(polarErrorWithSigmaText(pt, '+0.2′', 1.14), '+0.2′ ± 1.1′');
+      expect(polarErrorWithSigmaText(_en, '+0.2′', null), '+0.2′', reason: 'an older daemon sends no σ');
+      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('Done waits'));
+      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('1′ tolerance'));
+      expect(polarDoneHeldText(_en, 0.5, 0.4, 1.0), contains('± 0.4′'));
+      expect(polarDoneHeldText(pt, 0.5, 0.4, 1.0), contains('Concluir espera'));
+      expect(polarDoneHeldText(_en, 1.2, 0.1, 1.0), isNull, reason: 'outside the tolerance on its own: the usual hint');
+    });
+
+    test('aligned needs the error plus twice its 1σ inside the tolerance; no σ judges the error alone (#2072)', () {
+      expect(polarAligned(0.5, 0.25, 1.0), isTrue, reason: '0.5 + 2 × 0.25 is exactly the tolerance');
+      expect(polarAligned(0.5, 0.26, 1.0), isFalse);
+      expect(polarAligned(0.2, 1.1, 1.0), isFalse, reason: '0.2′ ± 1.1′ is not aligned');
+      expect(polarAligned(0.9, null, 1.0), isTrue);
+      expect(polarAligned(null, 0.1, 1.0), isFalse);
+      expect(polarAligned(0.5, 0.1, null), isFalse, reason: 'no tolerance until the rig answers');
+    });
   });
 
   group('PolarAlignPanel', () {
@@ -611,6 +632,54 @@ void main() {
       await tester.pumpAndSettle();
       await _expand(tester);
 
+      await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-align-done')));
+      await tester.pumpAndSettle();
+      expect(api.calls, ['complete']);
+    });
+
+    testWidgets('the readout shows the total with its 1σ; Done waits while the error plus 2σ is over the tolerance and says why (#2072)',
+        (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            stage: PolarAlignStages.fine,
+            altErrorArcmin: 0.3,
+            azErrorArcmin: 0.4,
+            totalErrorArcmin: 0.5,
+            totalSigmaArcmin: 0.4,
+            zone: 'green',
+          )));
+      await _expand(tester);
+
+      expect(find.text('+0.5′ ± 0.4′'), findsOneWidget);
+      final done = tester.widget<FilledButton>(find.byKey(const Key('polar-align-done')));
+      expect(done.onPressed, isNull, reason: '0.5′ + 2 × 0.4′ is over the 1′ tolerance');
+      expect(find.byKey(const Key('polar-align-done-held')), findsOneWidget);
+      expect(find.textContaining('Done waits'), findsOneWidget);
+      final check = tester.widget<FilledButton>(find.byKey(const Key('polar-align-check')));
+      expect(check.onPressed, isNotNull, reason: 'Check measures afresh: it is not held by the σ');
+    });
+
+    testWidgets('Done posts complete once the error plus 2σ is inside the tolerance (#2072)', (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(
+          api,
+          const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            stage: PolarAlignStages.fine,
+            altErrorArcmin: 0.3,
+            azErrorArcmin: 0.4,
+            totalErrorArcmin: 0.5,
+            totalSigmaArcmin: 0.25,
+            zone: 'green',
+          )));
+      await _expand(tester);
+
+      expect(find.byKey(const Key('polar-align-done-held')), findsNothing);
       await tester.ensureVisible(find.byKey(const Key('polar-align-done')));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('polar-align-done')));

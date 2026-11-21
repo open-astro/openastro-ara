@@ -145,6 +145,34 @@ void main() {
     expect(PaResidual.fromJson(done)!.aboveAlign, isFalse);
   });
 
+  test("with Polar Align's own 1σ the copy of the rule uses their combined uncertainty (#2072)", () {
+    // 2.8′ apart, combined 1σ 0.58′: they disagree, where the fixed 2′ margin said they did not.
+    final close = {...done, 'pa_error_min_arcmin': 3.0, 'uncertainty_arcmin': 0.5, 'align_error_arcmin': 0.2, 'reliable': true};
+    expect(PaResidual.fromJson({...close, 'align_sigma_arcmin': 0.3})!.aboveAlign, isTrue);
+    expect(PaResidual.fromJson(close)!.aboveAlign, isFalse, reason: 'no σ on Align: the old margin');
+    // A noisy alignment (± 2.5′) covers a 4.8′ gap the fixed margin would call a disagreement.
+    final noisy = {...done, 'pa_error_min_arcmin': 5.0, 'uncertainty_arcmin': 0.5, 'align_error_arcmin': 0.2, 'reliable': false};
+    expect(PaResidual.fromJson({...noisy, 'align_sigma_arcmin': 2.5})!.aboveAlign, isFalse);
+    expect(PaResidual.fromJson(noisy)!.aboveAlign, isTrue);
+  });
+
+  test('a disagreement gives both figures with their 1σ when Polar Align has one, in English and pt-BR (#2072)', () {
+    final far = PaResidual.fromJson({
+      ...done,
+      'pa_error_min_arcmin': 16.54,
+      'uncertainty_arcmin': 1.17,
+      'align_error_arcmin': 0.2,
+      'align_sigma_arcmin': 1.1,
+      'reliable': false,
+      'above_align': true,
+    })!;
+    final en = paResidualDetail(_en, far);
+    expect(en, contains('Polar Align and guiding disagree (12″ ± 66″ vs at least 17′ ± 70″), by more than their combined uncertainty'));
+    expect(en, contains('Run Polar Align again'));
+    final pt = paResidualDetail(_pt, far);
+    expect(pt, contains('Polar Align e guiagem divergem (12″ ± 66″ contra pelo menos 17′ ± 70″)'));
+  });
+
   test('a disagreement names both causes and what to do, in English and pt-BR (#2072)', () {
     final far = PaResidual.fromJson({
       ...done,

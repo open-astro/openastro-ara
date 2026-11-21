@@ -121,6 +121,17 @@ namespace OpenAstroAra.Test {
             Assert.That(latest?.AlignerMoves, Is.EqualTo(7));
         }
 
+        [Test]
+        public async Task The_polar_alignment_row_keeps_its_final_sigma_and_a_row_without_one_reads_none() {
+            var log = new SqlitePolarAlignmentLog(db);
+            var t0 = new DateTimeOffset(2026, 11, 20, 20, 0, 0, TimeSpan.Zero);
+            await log.InsertAsync(new PolarAlignmentRecord(t0, t0.AddMinutes(4), 0.2, 0.1, 0.1, 9, "complete", FinalSigmaArcmin: 1.1), CancellationToken.None);
+            Assert.That((await log.GetLatestMeasuredAsync(t0.AddHours(-1), CancellationToken.None))?.FinalSigmaArcmin, Is.EqualTo(1.1));
+
+            await log.InsertAsync(new PolarAlignmentRecord(t0.AddMinutes(5), t0.AddMinutes(9), 0.4, 0.3, 0.2, 3, "complete"), CancellationToken.None);
+            Assert.That((await log.GetLatestMeasuredAsync(t0.AddHours(-1), CancellationToken.None))?.FinalSigmaArcmin, Is.Null);
+        }
+
         // The column was named corrector_moves for one day on master (2026-11-16).
         [Test]
         public async Task A_database_with_the_columns_first_name_keeps_its_move_counts() {

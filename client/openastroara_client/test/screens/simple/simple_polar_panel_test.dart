@@ -614,6 +614,87 @@ void main() {
   );
 
   testWidgets(
+    'Simple Mode shows the total with its 1σ; Done waits while the error plus 2σ is over the tolerance and says why (#2072)',
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.4,
+          totalErrorArcmin: 0.5,
+          totalSigmaArcmin: 0.4,
+          zone: 'green',
+        ),
+        tolerance: 1.0,
+      );
+      expect(find.text('0.5′ ± 0.4′'), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNull);
+      expect(find.byKey(const Key('simple-polar-done-held')), findsOneWidget);
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNotNull,
+          reason: 'Check measures afresh: it is not held by the σ');
+    },
+  );
+
+  testWidgets(
+    'Simple Mode: Done goes once the error plus 2σ is inside the tolerance (#2072)',
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.4,
+          totalErrorArcmin: 0.5,
+          totalSigmaArcmin: 0.25,
+          zone: 'green',
+        ),
+        tolerance: 1.0,
+      );
+      expect(find.byKey(const Key('simple-polar-done-held')), findsNothing);
+      await tester.tap(find.byKey(const Key('simple-polar-done')));
+      await tester.pump();
+      expect(api!.calls, ['complete']);
+    },
+  );
+
+  testWidgets(
+    'the rough stage holds Done while the error plus 2σ is over the tolerance, and its caption says why (#2072)',
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 1.4,
+          totalErrorArcmin: 1.5,
+          totalSigmaArcmin: 0.4,
+          zone: 'green',
+        ),
+        tolerance: 2.0,
+      );
+      expect(find.byKey(const Key('simple-polar-done-rough')), findsNothing);
+      final caption = tester.widget<Text>(find.byKey(const Key('simple-polar-tolerance-caption')));
+      expect(caption.data, startsWith('Done waits'));
+    },
+  );
+
+  testWidgets(
     'fine stage: a hair above the tolerance, Check and Done stay off',
     (tester) async {
       final api = await _pump(

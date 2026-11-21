@@ -264,6 +264,10 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         total != null &&
         settings != null &&
         total <= settings.targetToleranceArcmin;
+    // #2072 Done needs the error plus twice its 1σ inside the tolerance; while
+    // only the error is, the panel says why.
+    final aligned = polarAligned(total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
+    final held = polarDoneHeldText(l10n, total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
@@ -390,7 +394,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   if ((active || live.phase == PolarAlignStates.checked) && total != null) ...[
                     Icon(Icons.circle, size: 12, color: color),
                     Text(
-                      '${total.toStringAsFixed(1)}′',
+                      // #2072 the total with its 1σ: "0.2′ ± 1.1′".
+                      polarErrorWithSigmaText(l10n, '${total.toStringAsFixed(1)}′', live.totalSigmaArcmin),
+                      key: const Key('simple-polar-total'),
                       style: kSimpleText.copyWith(
                         fontSize: AraFontSize.simpleReadingLarge,
                         fontWeight: FontWeight.w300,
@@ -586,18 +592,19 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               // #2082 — no Next: fine; the guide camera is a new Start.
               if (total != null && settings != null)
                 Text(
-                  inTolerance
+                  aligned
                       ? l10n.polarInsideTolerance(
                           polarToleranceText(settings.targetToleranceArcmin),
                         )
-                      : l10n.polarOutsideTolerance(
-                          polarToleranceText(settings.targetToleranceArcmin),
-                        ),
+                      : held ??
+                          l10n.polarOutsideTolerance(
+                            polarToleranceText(settings.targetToleranceArcmin),
+                          ),
                   key: const Key('simple-polar-tolerance-caption'),
                   style: AraText.caption,
                   maxLines: 3,
                 ),
-              if (inTolerance && !motorsBusy)
+              if (aligned && !motorsBusy)
                 OutlinedButton(
                   key: const Key('simple-polar-done-rough'),
                   onPressed: busy ? null : () => _done(inSimplePreflight),
@@ -649,6 +656,20 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 child: Text(l10n.polarRoughFirst),
               ),
             ],
+            // #2072 why Done waits: the error is inside the tolerance, but not
+            // with twice its uncertainty.
+            if (held != null &&
+                active &&
+                !motorsBusy &&
+                live.stage != PolarAlignStages.coarse &&
+                (live.phase == PolarAlignStates.adjusting ||
+                    live.phase == PolarAlignStates.paused))
+              Text(
+                held,
+                key: const Key('simple-polar-done-held'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
             if (checkCaption != null &&
                 active &&
                 !motorsBusy &&
@@ -695,7 +716,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     child: FilledButton(
                       key: const Key('simple-polar-done'),
                       style: kSimpleGoStyle,
-                      onPressed: !busy && inTolerance
+                      onPressed: !busy && aligned
                           ? () => _done(inSimplePreflight)
                           : null,
                       child: Text(_doneLabel(l10n, inSimplePreflight)),

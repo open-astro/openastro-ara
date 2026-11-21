@@ -443,7 +443,7 @@ namespace OpenAstroAra.Server.Services {
             var (a, b, c) = await ThreePointsByHandAsync(capture, ["seed-a", "seed-b", "seed-c"], settings.SeedRotationDeg, band,
                 renewLeaseIfDue, settings, gen, ct).ConfigureAwait(false);
             var (axis, turnDeg) = FitThreePointByHandOrFail(a, b, c, north);
-            await AdjustFromSeedAsync(axis, c.S, c.At, turnDeg, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
+            await AdjustFromSeedAsync(axis, FitUncertaintyFor(a, b, c, north, site), c.S, c.At, turnDeg, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
         }
 
         /// <summary>The check by hand: three guide-camera solves around two hand turns of <c>CheckStepDeg</c>, the fit,
@@ -458,7 +458,7 @@ namespace OpenAstroAra.Server.Services {
             var (p1, p2, p3) = await ThreePointsByHandAsync(capture, ["check-1", "check-2", "check-3"], settings.CheckStepDeg, band,
                 () => RenewLeaseAsync(ct), settings, gen, ct, noteSolve: done => NoteCheckSolveAsync(gen, done)).ConfigureAwait(false);
             var (axis, _) = FitThreePointByHandOrFail(p1, p2, p3, site.LatitudeDeg > 0);
-            return CheckResultFor(axis, mismatch: 0.0, site, p3.At);
+            return CheckResultFor(axis, FitUncertaintyFor(p1, p2, p3, site.LatitudeDeg > 0, site), mismatch: 0.0, site, p3.At);
         }
 
         private Task PublishHandTurnAsync(int gen, PolarAlignHandTurnDto wait) {

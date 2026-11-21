@@ -882,6 +882,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
     final tolerance = _toleranceArcmin;
     final inTolerance =
         live.totalErrorArcmin != null && tolerance != null && live.totalErrorArcmin! <= tolerance;
+    // #2072 Done needs the error plus twice its 1σ inside the tolerance; while
+    // only the error is, the screen says why.
+    final aligned = polarAligned(live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
+    final held = polarDoneHeldText(context.l10n, live.totalErrorArcmin, live.totalSigmaArcmin, tolerance);
     final single = _settings?.loopMode == PolarAlignLoopModes.single;
     final coarse = live.stage == PolarAlignStages.coarse;
     final side = coarse ? polarSideOfPoleText(context.l10n, live.altErrorArcmin, live.azErrorArcmin) : null;
@@ -1002,7 +1006,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     icon: const Icon(Icons.camera),
                     label: const Text('Take Frame'),
                   ),
-                if (coarse && inTolerance)
+                if (coarse && aligned)
                   // #1875: the rough alignment may already be inside the tolerance.
                   OutlinedButton.icon(
                     key: const Key('polar-align-done-rough'),
@@ -1017,12 +1021,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                   ),
                 if (!coarse) ...[
                   Tooltip(
-                    message: inTolerance || tolerance == null
+                    message: aligned || tolerance == null
                         ? ''
-                        : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
+                        : held ?? 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
                     child: FilledButton.tonalIcon(
                       key: const Key('polar-align-done'),
-                      onPressed: _busy || !inTolerance
+                      onPressed: _busy || !aligned
                           ? null
                           : () => _run('complete polar alignment', (api) => api.complete()),
                       icon: const Icon(Icons.check),
@@ -1047,6 +1051,18 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
           ],
         ),
+        if (held != null) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              held,
+              key: const Key('polar-align-done-held'),
+              textAlign: TextAlign.right,
+              style: const TextStyle(fontSize: _smallFont, color: AraColors.accentBusy, height: 1.3),
+            ),
+          ),
+        ],
         if (!coarse && _checkCaption != null) ...[
           const SizedBox(height: 8),
           Align(
@@ -1127,7 +1143,9 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
               FittedBox(
                 fit: BoxFit.scaleDown,
                 child: Text(
-                  formatArcmin(live.totalErrorArcmin),
+                  // #2072 the total with its 1σ: "+0.2′ ± 1.1′".
+                  polarErrorWithSigmaText(context.l10n, formatArcmin(live.totalErrorArcmin), live.totalSigmaArcmin),
+                  key: const Key('polar-align-total'),
                   style: TextStyle(
                     fontSize: _short ? _heroFontShort : _heroFont,
                     fontWeight: FontWeight.w300,
@@ -1196,7 +1214,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                 FittedBox(
                   fit: BoxFit.scaleDown,
                   child: Text(
-                    formatArcmin(total),
+                    polarErrorWithSigmaText(context.l10n, formatArcmin(total), live.totalSigmaArcmin),
+                    key: const Key('polar-align-total'),
                     style: TextStyle(
                       fontSize: _axisFontShort,
                       fontWeight: FontWeight.w300,

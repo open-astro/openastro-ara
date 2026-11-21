@@ -92,6 +92,9 @@ class PolarAlignCheckResult {
   /// #2082 a point of the check stayed scattered over 3″ after its retake.
   final bool noisy;
 
+  /// #2072 the fit's 1σ on the total error (arcmin); null from an older daemon.
+  final double? totalSigmaArcmin;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -102,6 +105,7 @@ class PolarAlignCheckResult {
     this.fineDeltaArcmin,
     this.verdict = '',
     this.noisy = false,
+    this.totalSigmaArcmin,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -115,6 +119,7 @@ class PolarAlignCheckResult {
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
         noisy: json['noisy'] == true,
+        totalSigmaArcmin: (json['total_sigma_arcmin'] as num?)?.toDouble(),
       );
 }
 
@@ -391,6 +396,10 @@ class PolarAlignStatus {
   /// #2083 a hand-turn run waiting for the user's turn; null otherwise.
   final PolarAlignHandTurn? handTurnWait;
 
+  /// #2072 the 1σ of [currentErrorArcmin] (arcmin), from the fit the readout
+  /// rests on; null with no error and from an older daemon.
+  final double? currentSigmaArcmin;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -411,6 +420,7 @@ class PolarAlignStatus {
     this.measurementNoisy = false,
     this.handTurn = false,
     this.handTurnWait,
+    this.currentSigmaArcmin,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -438,6 +448,7 @@ class PolarAlignStatus {
         measurementNoisy: json['measurement_noisy'] == true,
         handTurn: json['hand_turn'] == true,
         handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
+        currentSigmaArcmin: (json['current_sigma_arcmin'] as num?)?.toDouble(),
       );
 
   /// True while the server is running any phase of the routine.

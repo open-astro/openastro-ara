@@ -53,8 +53,10 @@ public interface IPolarAlignFrameSolver {
 }
 
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
-/// when <see cref="Success"/> is true.</summary>
-public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow);
+/// when <see cref="Success"/> is true. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
+/// 1σ of its mean per axis on the sky, from their scatter (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>);
+/// null on a single solve, which has no scatter to measure.</summary>
+public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow, double? SigmaArcsec = null);
 
 /// <summary>
 /// §45 — the real frame solver: read the guider's 16-bit FITS, wrap it as <c>IImageData</c>, and run

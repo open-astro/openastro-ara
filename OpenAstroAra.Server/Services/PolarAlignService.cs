@@ -242,7 +242,11 @@ namespace OpenAstroAra.Server.Services {
                     Camera: _camera,
                     MeasurementNoisy: _measurementNoisy,
                     HandTurn: _handTurn,
-                    HandTurnWait: _handTurnWait));
+                    HandTurnWait: _handTurnWait,
+                    // #2072 — the readout's 1σ, beside each error.
+                    CurrentSigmaArcmin: total is null ? null : _fitSigma?.TotalSigmaArcmin,
+                    AzimuthSigmaArcmin: total is null ? null : _fitSigma?.AzSigmaArcmin,
+                    AltitudeSigmaArcmin: total is null ? null : _fitSigma?.AltSigmaArcmin));
             }
         }
 
@@ -604,6 +608,7 @@ namespace OpenAstroAra.Server.Services {
                         _checkSolvesDone = 0;
                         _checkResult = null;
                         _readoutCaution = null;
+                        _fitSigma = null;
                         _framesCaptured = 0;
                         _lastFrameId = null;
                         _altErrorArcmin = null;
@@ -750,9 +755,11 @@ namespace OpenAstroAra.Server.Services {
             lock (_gate) {
                 // A rough readout outside the tolerance is not an alignment to record as "complete" (a stage-unaware
                 // client's Done would otherwise write the §45.13 row the guiding and "last night" readouts trust).
+                // #2072 — nor is one whose error plus twice its 1σ is outside it: a noisy fit cannot claim a small error.
                 if (_active && _stage == PolarAlignStages.Coarse
-                    && !(_altErrorArcmin is double alt && _azErrorArcmin is double az && Math.Sqrt(alt * alt + az * az) <= tolerance)) {
-                    throw new InvalidOperationException("Done is not available in the rough step until the error is inside your tolerance — Stop, then Start to refine it with the guide camera");
+                    && !(_altErrorArcmin is double alt && _azErrorArcmin is double az
+                        && AlignedWithinTolerance(Math.Sqrt(alt * alt + az * az), _fitSigma?.TotalSigmaArcmin, tolerance))) {
+                    throw new InvalidOperationException("Done is not available in the rough step until the error plus twice its uncertainty is inside your tolerance — Stop, then Start to refine it with the guide camera");
                 }
             }
             return EndRoutineAsync("polar-align.complete", outcome: "complete", idempotencyKey, ct);
@@ -1412,7 +1419,9 @@ namespace OpenAstroAra.Server.Services {
                 var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.ConvertAll(p => (p.S.RaDegJnow, p.S.DecDegJnow)));
                 var first = solves[0].At;
                 var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
-                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec), meanAt, solves.Count, failed, scatter, attempt);
+                // #2072 — the point carries its mean's 1σ from the scatter, for the fit's uncertainty.
+                var sigma = PolarAlignGeometry.MeanStandardErrorArcsec(scatter, solves.Count);
+                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec, sigma), meanAt, solves.Count, failed, scatter, attempt);
             }
             if (retake) {
                 return null;
@@ -1743,9 +1752,10 @@ namespace OpenAstroAra.Server.Services {
                     FinalAzErrorArcmin: _azErrorArcmin,
                     Iterations: _liveIterations,
                     Outcome: outcome,
-                    AlignerMoves: _alignerMoves);
+                    AlignerMoves: _alignerMoves,
+                    FinalSigmaArcmin: total is null ? null : _fitSigma?.TotalSigmaArcmin);
             }
-            LogFinalError(outcome, record.FinalErrorArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
+            LogFinalError(outcome, record.FinalErrorArcmin, record.FinalSigmaArcmin, record.FinalAltErrorArcmin, record.FinalAzErrorArcmin, record.Iterations);
             try {
                 await _log.InsertAsync(record, ct).ConfigureAwait(false);
             } catch (Exception ex) {
@@ -1839,10 +1849,12 @@ namespace OpenAstroAra.Server.Services {
             string? stage;
             string? caution;
             bool noisy;
+            FitUncertainty? sigma;
             lock (_gate) {
                 stage = _stage;
                 caution = _readoutCaution;
                 noisy = _measurementNoisy;
+                sigma = _fitSigma;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
@@ -1852,6 +1864,10 @@ namespace OpenAstroAra.Server.Services {
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),
                 ["azimuth_error_arcmin"] = Math.Round(azErrArcmin, 2),
                 ["total_error_arcmin"] = Math.Round(total, 2),
+                // #2072 — the readout's 1σ (the seed fit's), beside each error.
+                ["altitude_sigma_arcmin"] = sigma is null ? null : Math.Round(sigma.AltSigmaArcmin, 2),
+                ["azimuth_sigma_arcmin"] = sigma is null ? null : Math.Round(sigma.AzSigmaArcmin, 2),
+                ["total_sigma_arcmin"] = sigma is null ? null : Math.Round(sigma.TotalSigmaArcmin, 2),
                 ["zone"] = total < 10.0 ? "green" : total < 60.0 ? "yellow" : "red",
                 ["solved"] = solved,
             });
@@ -1965,14 +1981,14 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4577, Level = LogLevel.Warning, Message = "§45 polar-align {Frame}: the retake did not solve — the first set ({ScatterArcsec:F2}″ rms) stands for the point and the result is flagged noisy")]
         private partial void LogPointRetakeUnsolved(string frame, double scatterArcsec);
 
-        [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ az {AzArcmin:F2}′")]
-        private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin);
+        [LoggerMessage(EventId = 4528, Level = LogLevel.Information, Message = "§45 polar-align seed fit: mount RA turn {RotationDeg:F3}° -> axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; seed error alt {AltArcmin:F2}′ ± {AltSigmaArcmin:F2}′ az {AzArcmin:F2}′ ± {AzSigmaArcmin:F2}′, total ± {TotalSigmaArcmin:F2}′ (1σ); solves {Solves}")]
+        private partial void LogSeedFit(double rotationDeg, double axisRaDeg, double axisDecDeg, double altArcmin, double altSigmaArcmin, double azArcmin, double azSigmaArcmin, double totalSigmaArcmin, string solves);
 
         [LoggerMessage(EventId = 4529, Level = LogLevel.Information, Message = "§45 polar-align live readout {FrameId}: alt {AltArcmin:F2}′ az {AzArcmin:F2}′ (solve JNOW RA {RaDeg:F5}° Dec {DecDeg:F5}°, tracking {Tracking})")]
         private partial void LogLiveReadout(string? frameId, double altArcmin, double azArcmin, double raDeg, double decDeg, bool tracking);
 
-        [LoggerMessage(EventId = 4530, Level = LogLevel.Information, Message = "§45 polar-align finished ({Outcome}): final error {TotalArcmin}′ (alt {AltArcmin}′ az {AzArcmin}′) after {Iterations} live iterations")]
-        private partial void LogFinalError(string outcome, double? totalArcmin, double? altArcmin, double? azArcmin, int iterations);
+        [LoggerMessage(EventId = 4530, Level = LogLevel.Information, Message = "§45 polar-align finished ({Outcome}): final error {TotalArcmin}′ ± {SigmaArcmin}′ (1σ; alt {AltArcmin}′ az {AzArcmin}′) after {Iterations} live iterations")]
+        private partial void LogFinalError(string outcome, double? totalArcmin, double? sigmaArcmin, double? altArcmin, double? azArcmin, int iterations);
 
         [LoggerMessage(EventId = 4510, Level = LogLevel.Information, Message = "§45 polar-align routine started at the {Stage} stage (PA-session lease acquired)")]
         private partial void LogStarted(string stage);

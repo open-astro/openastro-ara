@@ -78,6 +78,37 @@ void main() {
       expect((fromStatus.camera, fromStatus.measurementNoisy), (PolarAlignCameras.main, true));
     });
 
+    test("progress, checked and the status carry the readout's 1σ; a new run clears it (#2072)", () {
+      final progress = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding, stage: 'fine'),
+        _event(PolarAlignWsEvents.progress, {
+          'iteration': 0,
+          'altitude_error_arcmin': 0.1,
+          'azimuth_error_arcmin': 0.17,
+          'total_error_arcmin': 0.2,
+          'total_sigma_arcmin': 1.1,
+        }),
+      )!;
+      expect(progress.totalSigmaArcmin, 1.1);
+      final checked = foldPolarAlignEvent(
+        progress,
+        _event(PolarAlignWsEvents.checked, {
+          'altitude_error_arcmin': 0.3,
+          'azimuth_error_arcmin': 0.4,
+          'total_error_arcmin': 0.5,
+          'total_sigma_arcmin': 0.6,
+          'verdict': 'excellent',
+        }),
+      )!;
+      expect((checked.totalSigmaArcmin, checked.checkResult?.totalSigmaArcmin), (0.6, 0.6));
+      final next = foldPolarAlignEvent(checked, _event(PolarAlignWsEvents.started, {'stage': 'fine'}))!;
+      expect(next.totalSigmaArcmin, isNull);
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson({
+        'state': 'adjusting', 'stage': 'fine', 'current_error_arcmin': 0.2, 'current_sigma_arcmin': 1.1,
+      }));
+      expect(fromStatus.totalSigmaArcmin, 1.1);
+    });
+
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),
