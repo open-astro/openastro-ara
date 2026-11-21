@@ -40,11 +40,12 @@ void main() {
           'calibration_direction': 'North',
           'calibration_step': 7,
           'calibration_distance_px': 11.9,
+          'calibration_target_px': 25,
         },
       }),
     );
     expect(
-      find.text('Guider · Calibrating · North step 7 · 11.9 px'),
+      find.text('Guider · Calibrating · North step 7 · 11.9 of 25 px'),
       findsOneWidget,
     );
     // It polls while the run band is up.

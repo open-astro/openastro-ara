@@ -272,6 +272,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
                 CalibrationDirection: calibration?.Direction,
                 CalibrationStep: calibration?.Step,
                 CalibrationDistancePx: calibration is { } cal ? Math.Round(cal.Distance, 1) : null,
+                CalibrationTargetPx: calibration is null ? null : _guider.CalibrationTargetPx,
                 Profiles: _guider.ProfilesSnapshot.Select(p => new GuiderProfileDto(p.Id, p.Name)).ToList(),
                 OutOfStepReason: _outOfStepReason);
             return Task.FromResult<GuiderDto?>(new GuiderDto("PHD2_Single", "PHD2", _state, runtime));

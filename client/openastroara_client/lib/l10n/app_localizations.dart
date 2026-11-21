@@ -4017,6 +4017,12 @@ abstract class AppLocalizations {
   /// **'{direction} step {step}'**
   String guiderStateCalibrationStep(String direction, String step);
 
+  /// Guider state (Simple Mode guider pill, plan pill, guiding strip, run dashboard): how far the star has moved on this calibration leg, of the distance the guider is set to move, in guide-camera pixels; both are numbers
+  ///
+  /// In en, this message translates to:
+  /// **'{moved} of {target} px'**
+  String guiderStateCalibrationDistanceOf(String moved, String target);
+
   /// Find star failed; reason is a full sentence
   ///
   /// In en, this message translates to:
@@ -11910,6 +11916,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'limit horizon altitude lowest meridian stop flip'**
   String get searchWordsMountLimits;
+
+  /// Sequencer, Import NINA: the picked file is over the 32 MiB cap
+  ///
+  /// In en, this message translates to:
+  /// **'That sequence file is too large to import (32 MiB limit).'**
+  String get sequenceImportTooLarge;
+
+  /// Sequencer, Import NINA: the picked file could not be read (missing, no access)
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read that file — check it still exists and you have access.'**
+  String get sequenceImportReadError;
+
+  /// Sequencer, Import NINA: the file is not JSON, or is JSON that is not a NINA sequence (a v1 or other schemaVersion body, no type, a root that is not a container); the sentence docs/specs/sequence-v2.md words
+  ///
+  /// In en, this message translates to:
+  /// **'This file is not a NINA sequence.'**
+  String get sequenceImportNotNina;
+
+  /// Sequencer, Import NINA: the file shares one node between two places ($ref), which the importer refuses
+  ///
+  /// In en, this message translates to:
+  /// **'This sequence has a shared node, which OpenAstro Ara cannot import.'**
+  String get sequenceImportSharedNode;
+
+  /// Sequencer, Import NINA: the create or the draft save failed after the file was accepted
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t import the sequence. Check the file and connection.'**
+  String get sequenceImportFailed;
+
+  /// Sequencer, Import NINA: SnackBar after the import; name is the sequence name
+  ///
+  /// In en, this message translates to:
+  /// **'Imported \"{name}\".'**
+  String sequenceImportDone(String name);
+
+  /// Sequencer, Import NINA: title of the dialog that lists what will not run, before anything is uploaded; name is the sequence name
+  ///
+  /// In en, this message translates to:
+  /// **'Import \"{name}\" with warnings?'**
+  String sequenceImportConfirmTitle(String name);
+
+  /// Sequencer, Import NINA: line above the warnings in the confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Check these before you import:'**
+  String get sequenceImportConfirmBody;
+
+  /// Sequencer, Import NINA: the button that uploads after the warnings
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get sequenceImportConfirm;
+
+  /// Sequencer, Import NINA: the button that closes the warnings and uploads nothing
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get sequenceImportCancel;
 
   /// Guiding strip chip: the polar-alignment residual is being measured (elapsed / target, m:ss)
   ///

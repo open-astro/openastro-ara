@@ -286,23 +286,65 @@ void main() {
     });
   }
 
+  testWidgets('the strip header says how far the calibration leg has to go, and drops the "of" with no target '
+      '(#1895)', (tester) async {
+    GuiderStatus calibrating(Map<String, dynamic> extra) =>
+        GuiderStatus.fromJson(<String, dynamic>{
+          'state': 'connected',
+          'runtime': <String, dynamic>{
+            'state': 'calibrating',
+            'calibration_direction': 'North',
+            'calibration_step': 7,
+            'calibration_distance_px': 11.94,
+            ...extra,
+          },
+        });
+    var container = await _pump(
+      tester,
+      guider: _FakeGuiderApi(),
+      status: calibrating({'calibration_target_px': 25}),
+    );
+    expect(
+      find.textContaining('calibrating · North step 7 · 11.9 of 25 px'),
+      findsOneWidget,
+    );
+    await _teardownPanel(tester, container);
+
+    container = await _pump(
+      tester,
+      guider: _FakeGuiderApi(),
+      status: calibrating({}),
+    );
+    expect(
+      find.textContaining('calibrating · North step 7 · 11.9 px'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('11.9 of'), findsNothing);
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('a start the guider gave up on shows its reason in a snackbar '
       '(#1664)', (tester) async {
     final guider = _FakeGuiderApi()
       ..startError = const GuideStartFailed('Stopped capturing');
-    final container = await _pump(tester,
-        guider: guider,
-        status: const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.stopped,
-        ));
+    final container = await _pump(
+      tester,
+      guider: guider,
+      status: const GuiderStatus(
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.stopped,
+      ),
+    );
 
     await tester.tap(find.byKey(const Key('guide-toggle-button')));
     await tester.pump();
     await tester.pump();
 
-    expect(find.text("Guiding didn't start: Stopped capturing."), findsOneWidget);
+    expect(
+      find.text("Guiding didn't start: Stopped capturing."),
+      findsOneWidget,
+    );
     await _teardownPanel(tester, container);
   });
 
@@ -1108,23 +1150,79 @@ void main() {
   });
 
   test('the strip labels every guider phase in the shared wording, lower case (#1364)', () {
-    GuiderStatus st(GuiderRuntimeState r, {Map<String, dynamic>? cal}) => cal == null
-        ? GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: r)
-        : GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': cal});
-    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.looping)), 'looping');
-    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starSelected)), 'star selected');
-    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.settling)), 'settling');
-    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starLost)), 'star lost');
-    expect(GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.unknown)), 'connected', reason: 'not yet polled');
+    GuiderStatus st(GuiderRuntimeState r, {Map<String, dynamic>? cal}) =>
+        cal == null
+        ? GuiderStatus(
+            name: 'G',
+            connectionState: GuiderConnectionState.connected,
+            runtimeState: r,
+          )
+        : GuiderStatus.fromJson(<String, dynamic>{
+            'state': 'connected',
+            'runtime': cal,
+          });
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.looping)),
+      'looping',
+    );
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starSelected)),
+      'star selected',
+    );
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.settling)),
+      'settling',
+    );
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.starLost)),
+      'star lost',
+    );
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.unknown)),
+      'connected',
+      reason: 'not yet polled',
+    );
     expect(GuidingStrip.stateLabel(_en, null), 'disconnected');
     expect(
-      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.calibrating, cal: {
-        'state': 'calibrating', 'calibration_direction': 'East', 'calibration_step': 4, 'calibration_distance_px': 6.0,
-      })),
+      GuidingStrip.stateLabel(
+        _en,
+        st(
+          GuiderRuntimeState.calibrating,
+          cal: {
+            'state': 'calibrating',
+            'calibration_direction': 'East',
+            'calibration_step': 4,
+            'calibration_distance_px': 6.0,
+          },
+        ),
+      ),
       'calibrating · East step 4 · 6.0 px',
+      reason: 'a guider that reports no target keeps today\'s text',
     );
-    for (final r in GuiderRuntimeState.values.where((r) => r != GuiderRuntimeState.unknown)) {
-      expect(GuidingStrip.stateLabel(_en, st(r)), guiderRuntimeText(_en, r).toLowerCase(), reason: '$r drifts from the shared wording');
+    expect(
+      GuidingStrip.stateLabel(
+        _en,
+        st(
+          GuiderRuntimeState.calibrating,
+          cal: {
+            'state': 'calibrating',
+            'calibration_direction': 'East',
+            'calibration_step': 4,
+            'calibration_distance_px': 6.0,
+            'calibration_target_px': 25,
+          },
+        ),
+      ),
+      'calibrating · East step 4 · 6.0 of 25 px',
+    );
+    for (final r in GuiderRuntimeState.values.where(
+      (r) => r != GuiderRuntimeState.unknown,
+    )) {
+      expect(
+        GuidingStrip.stateLabel(_en, st(r)),
+        guiderRuntimeText(_en, r).toLowerCase(),
+        reason: '$r drifts from the shared wording',
+      );
     }
   });
 

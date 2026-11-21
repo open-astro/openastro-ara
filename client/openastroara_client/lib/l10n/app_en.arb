@@ -3214,6 +3214,18 @@
       }
     }
   },
+  "guiderStateCalibrationDistanceOf": "{moved} of {target} px",
+  "@guiderStateCalibrationDistanceOf": {
+    "description": "Guider state (Simple Mode guider pill, plan pill, guiding strip, run dashboard): how far the star has moved on this calibration leg, of the distance the guider is set to move, in guide-camera pixels; both are numbers",
+    "placeholders": {
+      "moved": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "guideFindStarFailed": "Couldn't find a star: {reason}",
   "@guideFindStarFailed": {
     "description": "Find star failed; reason is a full sentence",
@@ -9043,6 +9055,56 @@
   "searchWordsMountLimits": "limit horizon altitude lowest meridian stop flip",
   "@searchWordsMountLimits": {
     "description": "Simple Mode search keywords for Mount limits, space-separated"
+  },
+  "sequenceImportTooLarge": "That sequence file is too large to import (32 MiB limit).",
+  "@sequenceImportTooLarge": {
+    "description": "Sequencer, Import NINA: the picked file is over the 32 MiB cap"
+  },
+  "sequenceImportReadError": "Couldn't read that file — check it still exists and you have access.",
+  "@sequenceImportReadError": {
+    "description": "Sequencer, Import NINA: the picked file could not be read (missing, no access)"
+  },
+  "sequenceImportNotNina": "This file is not a NINA sequence.",
+  "@sequenceImportNotNina": {
+    "description": "Sequencer, Import NINA: the file is not JSON, or is JSON that is not a NINA sequence (a v1 or other schemaVersion body, no type, a root that is not a container); the sentence docs/specs/sequence-v2.md words"
+  },
+  "sequenceImportSharedNode": "This sequence has a shared node, which OpenAstro Ara cannot import.",
+  "@sequenceImportSharedNode": {
+    "description": "Sequencer, Import NINA: the file shares one node between two places ($ref), which the importer refuses"
+  },
+  "sequenceImportFailed": "Couldn't import the sequence. Check the file and connection.",
+  "@sequenceImportFailed": {
+    "description": "Sequencer, Import NINA: the create or the draft save failed after the file was accepted"
+  },
+  "sequenceImportDone": "Imported \"{name}\".",
+  "@sequenceImportDone": {
+    "description": "Sequencer, Import NINA: SnackBar after the import; name is the sequence name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sequenceImportConfirmTitle": "Import \"{name}\" with warnings?",
+  "@sequenceImportConfirmTitle": {
+    "description": "Sequencer, Import NINA: title of the dialog that lists what will not run, before anything is uploaded; name is the sequence name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sequenceImportConfirmBody": "Check these before you import:",
+  "@sequenceImportConfirmBody": {
+    "description": "Sequencer, Import NINA: line above the warnings in the confirm dialog"
+  },
+  "sequenceImportConfirm": "Import",
+  "@sequenceImportConfirm": {
+    "description": "Sequencer, Import NINA: the button that uploads after the warnings"
+  },
+  "sequenceImportCancel": "Cancel",
+  "@sequenceImportCancel": {
+    "description": "Sequencer, Import NINA: the button that closes the warnings and uploads nothing"
   },
   "paResidualChipMeasuring": "PA residual · measuring {elapsed} / {target}",
   "@paResidualChipMeasuring": {
