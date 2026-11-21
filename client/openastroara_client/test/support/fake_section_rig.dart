@@ -46,6 +46,10 @@ class FakeSectionRig implements HttpClientAdapter {
   /// that fails by [failGet] does not wait). The test completes it.
   final Map<String, Completer<void>> holdGet = {};
 
+  /// Section -> a completer its next PUT waits on before it is checked and
+  /// lands (a PUT still in flight). The test completes it.
+  final Map<String, Completer<void>> holdPut = {};
+
   /// Path after `/api/v1/profile/` -> what a POST there does on the rig (a
   /// daemon-owned write such as `safety/first-flip/rearm`); returns the reply.
   final Map<String, Object? Function()> onPost = {};
@@ -107,6 +111,8 @@ class FakeSectionRig implements HttpClientAdapter {
         if (hold != null) await hold.future;
         return _json(_sections[section], 200, etag: etagOf(section));
       case 'PUT':
+        final held = holdPut.remove(section);
+        if (held != null) await held.future;
         final ifMatch = options.headers['if-match'] as String?;
         ifMatches.add(ifMatch);
         if (failPut.remove(section)) return _json({'title': 'rig error'}, 500);

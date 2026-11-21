@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
@@ -208,4 +210,28 @@ void main() {
       expect(rig.puts.single.body, {...s.rigCopy, ...s.edit});
     });
   }
+
+  testWidgets('Rig focal length: a second wheel settling while the first is '
+      'still saving lands too, with no conflict', (tester) async {
+    final rig = FakeSectionRig({'optics': _optics});
+    final c = await _pump(tester, rig);
+    await _openRig(tester);
+    await _openRow(tester, 'focal');
+    final hold = rig.holdPut['optics'] = Completer<void>();
+    // 1000 mm: the hundreds wheel one up is 1100, then the tens one 1110.
+    await _roll(tester, 'simple-rig-focal-wheel-1', 1);
+    await _settle(tester, () => rig.holdPut.isEmpty);
+    await _roll(tester, 'simple-rig-focal-wheel-2', 1);
+    await _settle(tester, () => false, rounds: 10);
+    hold.complete();
+    await _settle(
+      tester,
+      () => rig.puts.length == 2 || _titles(c).contains(_couldntSave),
+    );
+    expect(_titles(c), isNot(contains(_couldntSave)));
+    expect([
+      for (final p in rig.puts) (p.body as Map)['focal_length_mm'],
+    ], [1100, 1110]);
+    expect(c.read(opticsSettingsProvider).conflict, isFalse);
+  });
 }

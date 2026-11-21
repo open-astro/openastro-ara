@@ -205,6 +205,31 @@ void main() {
     ]);
   });
 
+  testWidgets('a second exposure pick while the first is still saving lands '
+      'too, with no conflict', (tester) async {
+    final rig = FakeSectionRig({_route: _rigCopy});
+    final c = await _pump(tester, const SimpleFocusPanel(), width: null, rig: rig);
+    final hold = rig.holdPut[_route] = Completer<void>();
+    await _tap(tester, 'simple-focus-af-exposure-10');
+    // The first pick's PUT is out once the rig has taken the hold.
+    await tester.runAsync(() => settle(() => rig.holdPut.isEmpty));
+    await _tap(tester, 'simple-focus-af-exposure-15');
+    await tester.runAsync(() async {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      hold.complete();
+    });
+    await tester.runAsync(
+      () => settle(() => rig.puts.length == 2 || _pills(c).isNotEmpty),
+    );
+    await flushLoads(tester);
+    expect(_pills(c), isEmpty);
+    expect([
+      for (final p in rig.puts) (p.body as Map)['exposure_seconds'],
+    ], [10, 15]);
+    expect(c.read(autofocusSettingsProvider).conflict, isFalse);
+    expect(c.read(autofocusSettingsProvider).value!.exposureSeconds, 15);
+  });
+
   testWidgets('the helper\'s two messages read in Portuguese', (tester) async {
     final rig = FakeSectionRig({_route: _rigCopy})..failGet.add(_route);
     final c = await _pump(
