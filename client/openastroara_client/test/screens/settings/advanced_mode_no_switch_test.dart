@@ -10,10 +10,15 @@ import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart'
     show autofocusApiProvider;
 import 'package:openastroara/state/focus/autofocus_step_size_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
+import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
 
 // #2036: the Advanced switch belongs to Simple Mode's Settings. Advanced Mode
 // has no switch and behaves as if it were on, whatever the saved value says.
@@ -101,6 +106,9 @@ void main() {
         simple: false,
         extra: [
           activeServerProvider.overrideWithValue(null),
+          // The rows show once the profile's autofocus section loads.
+          profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+          autofocusSettingsProvider.overrideWith(FakeAutofocusSection.new),
           autofocusApiProvider.overrideWithValue(null),
         ],
       );
