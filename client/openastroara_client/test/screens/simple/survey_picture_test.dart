@@ -31,6 +31,8 @@ import 'package:openastroara/state/sky_atlas/dso_catalog_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/widgets/sky_atlas/target_preview.dart'
+    show surveyPicture;
 
 /// #1958: a target without Album Art gets the DSS2 survey cutout on the Plan
 /// target card and the Sky Map pick card; Art wins, and a survey that does
@@ -141,6 +143,19 @@ const _lonely = PlanetariumSelection(
   maxAltDeg: 60,
   designations: ['Sh2-1'],
 );
+
+// An object with no designation: the page names it by its type word.
+PlanetariumSelection _star(double raHours, double decDeg) =>
+    PlanetariumSelection(
+      name: 'Star',
+      kind: 'Star',
+      raHours: raHours,
+      decDeg: decDeg,
+      raJ2000Hours: raHours,
+      decJ2000Deg: decDeg,
+      altDeg: 40,
+      maxAltDeg: 60,
+    );
 
 final _catalog = [
   const PlanningDso(
@@ -263,7 +278,7 @@ void main() {
       await _pumpPlan(tester, _lonely, svc);
       expect(find.byKey(planSurvey), findsOneWidget);
       expect(find.byIcon(Icons.auto_awesome), findsNothing);
-      expect(svc.loaded, ['pick-Lonely Cloud']);
+      expect(svc.loaded, ['pick-22.500_30.000']);
     });
 
     // Falsified by: target_preview.dart surveyPicture, drop the wait for the Album manifest.
@@ -294,6 +309,59 @@ void main() {
       await _pumpSky(tester, _lonely, svc);
       expect(find.byKey(skySurvey), findsOneWidget);
       expect(find.byKey(const Key('simple-sky-art')), findsNothing);
+      // The survey credit is behind an info mark, shown on a tap.
+      expect(
+        find.descendant(
+          of: find.byKey(skySurvey),
+          matching: find.byIcon(Icons.info_outline),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(skySurvey));
+      await tester.pump();
+      expect(find.text('DSS2 colour survey (CDS hips2fits)'), findsOneWidget);
+    });
+
+    // Falsified by: target_preview.dart surveyPicture, drop the isSolarSystemName check.
+    testWidgets('a planet pick (Jupiter) gets no survey', (tester) async {
+      final svc = _Svc(_png);
+      await _pumpSky(
+        tester,
+        const PlanetariumSelection(
+          name: 'Jupiter',
+          kind: '',
+          raHours: 3,
+          decDeg: 17,
+          raJ2000Hours: 3,
+          decJ2000Deg: 17,
+          altDeg: 40,
+          maxAltDeg: 60,
+        ),
+        svc,
+      );
+      expect(find.byKey(skySurvey), findsNothing);
+      expect(svc.loaded, isEmpty);
+    });
+
+    // Falsified by: target_preview.dart surveyPicture, drop the solar-system kind check.
+    testWidgets('a comet pick (by its kind) gets no survey', (tester) async {
+      final svc = _Svc(_png);
+      await _pumpSky(
+        tester,
+        const PlanetariumSelection(
+          name: 'C/2023 A3',
+          kind: 'Com',
+          raHours: 14,
+          decDeg: -5,
+          raJ2000Hours: 14,
+          decJ2000Deg: -5,
+          altDeg: 40,
+          maxAltDeg: 60,
+        ),
+        svc,
+      );
+      expect(find.byKey(skySurvey), findsNothing);
+      expect(svc.loaded, isEmpty);
     });
 
     // Falsified by: target_preview.dart surveyPicture, drop the wait for the Album manifest.
@@ -316,5 +384,32 @@ void main() {
       expect(find.byKey(const Key('simple-sky-art')), findsNothing);
       expect(find.text('Lonely Cloud'), findsOneWidget);
     });
+  });
+
+  // Falsified by: target_preview.dart surveyPicture, key the cutout on the name only.
+  testWidgets('two picks named Star at different positions load two ids', (
+    tester,
+  ) async {
+    final svc = _Svc(_png);
+    final c = ProviderContainer(overrides: _data(svc));
+    addTearDown(c.dispose);
+    await c.read(albumManifestProvider.future);
+    await c.read(bundledCatalogProvider.future);
+    for (final star in [_star(1, 10), _star(2, 20)]) {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: Consumer(
+            builder: (_, ref, _) {
+              surveyPicture(ref, star);
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+    expect(svc.loaded, hasLength(2));
+    expect(svc.loaded.toSet(), hasLength(2));
   });
 }
