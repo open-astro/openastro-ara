@@ -17,6 +17,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Model;
+using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Equipment.Interfaces;
@@ -63,11 +64,15 @@ namespace OpenAstroAra.Test {
         private const double SiteLonDeg = -75.0;
         private static readonly PolarAlignSolveOutcome SolveA = new(true, 0.0, 85.0);
         private static readonly PolarAlignSolveOutcome SolveB = new(true, 30.0, 85.0);
+        // The third seed solve: one more 30° step around the pole (the bench store's SeedRotationDeg).
+        private static readonly PolarAlignSolveOutcome SolveC = new(true, 60.0, 85.0);
         private static readonly PolarAlignSolveOutcome Unsolved = new(false, 0, 0);
 
         private sealed class ScriptedSolver : IPolarAlignFrameSolver {
             private readonly ConcurrentQueue<PolarAlignSolveOutcome> _script = new();
-            public PolarAlignSolveOutcome Fallback { get; set; } = SolveB;
+            /// <summary>The answer once the script runs out; null = the solve lands where the mount points (the
+            /// hint), as a real sky would, so the three-point seed sees three distinct pointings on one circle.</summary>
+            public PolarAlignSolveOutcome? Fallback { get; set; }
             public void Enqueue(params PolarAlignSolveOutcome[] outcomes) {
                 foreach (var o in outcomes) {
                     _script.Enqueue(o);
@@ -82,7 +87,8 @@ namespace OpenAstroAra.Test {
             }
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 Binnings.Enqueue(binning);
-                return Task.FromResult(_script.TryDequeue(out var o) ? o : Fallback);
+                return Task.FromResult(_script.TryDequeue(out var o) ? o
+                    : Fallback ?? (hintRa is double ra && hintDec is double dec ? new PolarAlignSolveOutcome(true, ra, dec) : SolveB));
             }
         }
 
@@ -166,9 +172,44 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => position = target)
                 .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c);
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns(true);
             return mount;
+        }
+
+        private static double Wrap180Test(double deg) => ((deg + 540.0) % 360.0) - 180.0;
+
+        /// <summary>A raw reading past the pole (|Dec| > 90°) as the same sky point: (RA+180°, ±180° − Dec).</summary>
+        private static Coordinates Folded(Coordinates c) => Math.Abs(c.Dec) > 90.0
+            ? new Coordinates((c.RADegrees + 180.0) % 360.0, Math.CopySign(180.0, c.Dec) - c.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
+            : c;
+
+        /// <summary>One motor command's worth of travel on the bench mount.</summary>
+        private const double MotorStepDeg = 0.25;
+
+        /// <summary>The bench mount's motors: every MoveAxis command with a non-zero rate steps the pointing
+        /// <see cref="MotorStepDeg"/> on that axis (RA up for a positive rate, Dec toward the equator), and the
+        /// stop reports where the move ended (<paramref name="stopped"/>) — a move reads like a slew to that point.</summary>
+        private static void SimulateMotors(Mock<ITelescopeMediator> mount, Func<Coordinates> read, Action<Coordinates> write,
+                Action<Coordinates>? stopped = null, bool raUpIsNegative = false) {
+            var moving = false;
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((axis, rate) => {
+                    var p = read();
+                    if (rate == 0) {
+                        if (moving) {
+                            moving = false;
+                            stopped?.Invoke(p);
+                        }
+                        return;
+                    }
+                    moving = true;
+                    var step = Math.Sign(rate) * MotorStepDeg;
+                    write(axis == TelescopeAxes.Primary
+                        ? new Coordinates((p.RADegrees + (raUpIsNegative ? -step : step) + 360.0) % 360.0, p.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
+                        : new Coordinates(p.RADegrees, p.Dec >= 0 ? p.Dec - step : p.Dec + step, Epoch.JNOW, Coordinates.RAType.Degrees));
+                });
         }
 
         private sealed class CapturingLogger : Microsoft.Extensions.Logging.ILogger<PolarAlignService> {
@@ -254,6 +295,16 @@ namespace OpenAstroAra.Test {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
                 TrackingConfirmPoll = TimeSpan.FromMilliseconds(10),
+                AxisMovePoll = TimeSpan.FromMilliseconds(1),
+                AxisSettle = TimeSpan.Zero,
+                AxisMoveStall = TimeSpan.FromMilliseconds(200),
+                // #2048: the exit's stop confirmation at bench speed (the daemon waits 2 s at least, 8 s at most).
+                StopVerifyPoll = TimeSpan.FromMilliseconds(1),
+                StopVerifyStillFor = TimeSpan.Zero,
+                StopVerifyNotBefore = TimeSpan.Zero,
+                StopResendAfter = TimeSpan.FromMilliseconds(20),
+                StopVerifyWindow = TimeSpan.FromMilliseconds(500),
+                ShutdownGrace = TimeSpan.FromSeconds(2),
             };
             Recorders.Add(svc, ws);
             return svc;
@@ -330,6 +381,25 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None));
             Assert.That(fake.LeaseCalls, Is.Empty, "a failed preflight must not acquire the lease");
+        }
+
+        // #2070 — a false zero after a power loss made the routine slew below the pole (RC51, 2026-11-19).
+        [Test]
+        public async Task Start_is_refused_while_the_mount_position_is_unverified_and_nothing_moves() {
+            var fake = NewFake();
+            var mount = NewMount();
+            mount.As<ITelescopeService>().Setup(t => t.PositionUnverifiedReasonAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(MountPoseTrust.AtHomeOnConnect);
+            using var svc = NewService(fake, new ScriptedSolver(), mount);
+
+            var refusal = await Assert.ThrowsAsync<OpenAstroAra.Server.Contracts.Refusals.RefusalException>(
+                () => svc.StartAsync(PolarAlignStages.Check, null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.MountPositionUnverified));
+            Assert.That(fake.LeaseCalls, Is.Empty, "a refused start must not acquire the lease");
+            mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never);
         }
 
         [Test]
@@ -433,7 +503,9 @@ namespace OpenAstroAra.Test {
             Assert.That(stopTask.IsCompleted, Is.False, "Stop must wait for the in-flight Start (serialized by _opLock)");
 
             releaseStartLease.SetResult();
-            await Task.WhenAll(startTask, stopTask).ConfigureAwait(false);
+            // #2048 — a Stop that lands while the Start still holds the lock means the Start launches no run.
+            await Assert.ThrowsAsync<InvalidOperationException>(() => startTask).ConfigureAwait(false);
+            await stopTask.ConfigureAwait(false);
 
             Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease),
                 "the lease calls must run in call order — acquire then release — not race");
@@ -447,7 +519,7 @@ namespace OpenAstroAra.Test {
         public async Task Happy_path_seeds_then_adjusts_with_populated_errors_and_progress_events() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB); // seed A, seed B; the live loop re-solves B (Fallback)
+            solver.Enqueue(SolveA, SolveB, SolveC); // seed A, seed B; the live loop re-solves B (Fallback)
             var mount = NewMount(tracking: true);
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, mount, ws);
@@ -461,10 +533,12 @@ namespace OpenAstroAra.Test {
             Assert.That(status.AltitudeAdjustmentArcmin, Is.Not.Null.And.EqualTo(-1.0).Within(0.2));
             Assert.That(status.AzimuthAdjustmentArcmin, Is.Not.Null.And.EqualTo(0.0).Within(0.2));
             Assert.That(status.CurrentErrorArcmin, Is.Not.Null.And.EqualTo(1.0).Within(0.2));
-            Assert.That(status.FramesCaptured, Is.GreaterThanOrEqualTo(2), "both seed frames captured");
+            Assert.That(status.FramesCaptured, Is.GreaterThanOrEqualTo(3), "all three seed frames captured");
 
             mount.Verify(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()),
-                Times.Once, "the seed performs exactly one RA slew");
+                Times.Never, "the seed turns with the RA motor, never a GoTo");
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, 0), Times.Exactly(2), "the seed performs exactly two RA turns");
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Secondary, It.IsAny<double>()), Times.Never, "the Dec motor never runs off Home");
             mount.Verify(m => m.SetTrackingEnabled(false), Times.Once, "the adjust loop stops tracking");
 
             // Progress events stream with the live payload shape the client renders.
@@ -474,7 +548,9 @@ namespace OpenAstroAra.Test {
             Assert.That(progress.GetProperty("zone").GetString(), Is.EqualTo("green"));
 
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.Once, "Stop restores the pre-routine tracking state");
+            // #2048: stop_tracking_when_done is on by default, as NINA's, and a Stop never turns tracking back on.
+            mount.Verify(m => m.SetTrackingEnabled(false), Times.Exactly(2), "off for the adjust loop, and off again at the exit");
+            mount.Verify(m => m.SetTrackingEnabled(true), Times.Never, "Stop does not turn tracking back on");
             Assert.That(PaCalls(fake).Last(), Is.False, "Stop releases the lease");
         }
 
@@ -483,7 +559,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             var solver = new ScriptedSolver();
             var failures = Enumerable.Repeat(Unsolved, PolarAlignService.MaxConsecutiveSolveFailures).ToArray();
-            solver.Enqueue(new[] { SolveA, SolveB }.Concat(failures).ToArray()); // then Fallback succeeds
+            solver.Enqueue(new[] { SolveA, SolveB, SolveC }.Concat(failures).ToArray()); // then Fallback succeeds
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
@@ -589,7 +665,7 @@ namespace OpenAstroAra.Test {
             await PollStateAsync(svc, "failed").ConfigureAwait(false);
 
             solver.Fallback = SolveB;
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var mark = Mark(svc);
             var restart = svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None);
             await Task.Delay(200).ConfigureAwait(false); // ADR 0016 rule 5 exception: the re-Start waiting behind the gated release is an absence nothing signals; the gate keeps it blocked, so the bound only gives a wrongly unblocked Start time to finish.
@@ -612,7 +688,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             fake.Script = n => n <= 2 ? FakeCaptureOutcome.Refused : FakeCaptureOutcome.Saved;
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -654,7 +730,7 @@ namespace OpenAstroAra.Test {
             fake.RpcPort = 4401;
             var fetcher = new FakeFrameFetcher();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -674,7 +750,7 @@ namespace OpenAstroAra.Test {
             // on the solver (the guider saves the binned frame, so the solver's scale must carry it).
             var fake = NewFake(frameWidth: 4144, frameHeight: 2822);
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -693,7 +769,7 @@ namespace OpenAstroAra.Test {
             // has no get_camera_frame_size (the RPC errors → fallback, never a failed routine).
             var fake = NewFake(noFrameSize: noFrameSize);
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -710,7 +786,7 @@ namespace OpenAstroAra.Test {
             // link turns that answer into no size (Phd2GuideCaptureLinkTest); the routine logs it as unavailable.
             var fake = NewFake(noFrameSize: true);
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var logger = new CapturingLogger();
             using var svc = NewService(fake, solver, logger: logger);
 
@@ -728,7 +804,7 @@ namespace OpenAstroAra.Test {
             var store = NewStore();
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { Binning = 2 });
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, store: store);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -755,7 +831,7 @@ namespace OpenAstroAra.Test {
             };
             var fetcher = new FakeFrameFetcher();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
             svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300); // fast first-capture timeout
 
@@ -778,7 +854,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             fake.AppState = state;
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -814,7 +890,7 @@ namespace OpenAstroAra.Test {
             fake.Script = n => n == 1 ? FakeCaptureOutcome.NeverCompletes : FakeCaptureOutcome.Saved;
             var fetcher = new FakeFrameFetcher();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -882,7 +958,7 @@ namespace OpenAstroAra.Test {
             fake.Script = n => n == 1 ? FakeCaptureOutcome.NeverCompletes : FakeCaptureOutcome.Saved;
             var fetcher = new FakeFrameFetcher();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, fetcher: fetcher);
             svc.CaptureCompleteTimeout = TimeSpan.FromMilliseconds(300);
 
@@ -925,7 +1001,7 @@ namespace OpenAstroAra.Test {
             fake.RenewalsFail = true;
             fake.Custody.LeaseRenewInterval = TimeSpan.FromTicks(-1); // every pass renews
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1001,7 +1077,7 @@ namespace OpenAstroAra.Test {
 
             // And a fresh Start still works after the failure (the stale CTS is disposed, state resets).
             solver.Fallback = SolveB;
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var mark = Mark(svc);
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var resumed = await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false);
@@ -1030,11 +1106,10 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_seed_slew_the_mount_accepts_but_never_turns_fails_as_slew_failed() {
-            // The mount says yes to the slew, but its reported RA does not move: there is no turn
-            // to fit, so the routine must stop rather than seed from a zero-degree rotation.
+            // The mount takes the motor command, but its reported RA does not move: there is no turn
+            // to fit, so the routine must stop (and stop the motor) rather than run on.
             var mount = NewMount();
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()));
 
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
         }
@@ -1044,24 +1119,35 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_seed_slew_the_mediator_refuses_by_throwing_fails_as_slew_failed() {
             var mount = NewMount();
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new SequenceEntityFailedException("the mount's equatorial system is unknown; slew refused"));
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.Is<double>(r => r != 0)))
+                .Throws(new SequenceEntityFailedException("the mount refused the move"));
 
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
         }
 
         // #1808 — WaitForSlew throws when the mount is still moving at the slew bound. Like the slew itself
         // (#1536), that is this routine's slew_failed, and its stall must not count toward abort-and-park.
+        // The seed turns are motor moves (#2063): the one GoTo left is the slew back to the start (use_home off).
         [Test]
         public async Task A_WaitForSlew_that_throws_fails_as_slew_failed_and_runs_without_op_faults() {
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { UseHome = false });
             var mount = NewMount();
             var suppressed = new List<bool>();
             mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(() => {
                 lock (suppressed) { suppressed.Add(TelescopeService.OpFaultsSuppressed); }
                 return Task.FromException(new SequenceEntityFailedException("telescope.slew was not confirmed settled within the 600s bound"));
             });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount, ws, store: store, mainCamera: new FakeMainCamera());
 
-            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var fine = await StageSettledAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+
+            Assert.That(fine.State, Is.EqualTo("failed"));
+            Assert.That(ws.Events.Last(e => e.Type == WsEventCatalog.PolarAlignError).Payload.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
             lock (suppressed) {
                 Assert.That(suppressed, Has.Count.EqualTo(1).And.All.True, "WaitForSlew ran once, inside RunWithoutOpFaultsAsync");
             }
@@ -1073,16 +1159,15 @@ namespace OpenAstroAra.Test {
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             var slewed = false;
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => slewed ? null! : position);
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .Callback(() => slewed = true)
-                .ReturnsAsync(true);
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback(() => slewed = true);
 
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("mount_fault"));
         }
 
-        // #1591 — seed 1° from a mount axis that sits 10° off the pole: the two axis lines the pointings admit
-        // are mirror images, and the pole-nearest pick takes the mirror for some camera azimuths. The routine
-        // passes the mount's own turn direction, so every azimuth and both turn directions keep the true axis.
+        // #1591 — seed close to a mount axis that sits 10° off the pole: two pointings admit two mirror-image
+        // axis lines, and the pole-nearest pick took the mirror for some camera azimuths. Three pointings fix
+        // one circle, so every azimuth and both turn directions keep the true axis.
         [TestCase(0.0, 20.0, 30.0)]
         [TestCase(90.0, 20.0, 30.0)]
         [TestCase(180.0, 20.0, 30.0)]
@@ -1114,9 +1199,10 @@ namespace OpenAstroAra.Test {
             const double AxisDecDeg = 80.0;
             var axis = Unit(AxisRaDeg, AxisDecDeg);
             var side = Turn(Unit(AxisRaDeg + 90.0, 0.0), axis, phiDeg);
-            var camera = Turn(axis, side, 1.0); // 1° from the axis, as a seed at mount Dec 89°
+            var camera = Turn(axis, side, 2.0); // 2° from the axis, as NINA's start near the pole
             var seedA = Solved(camera);
             var seedB = Solved(Turn(camera, axis, turnDeg));
+            var seedC = Solved(Turn(camera, axis, 2.0 * turnDeg));
 
             var mount = NewMount();
             mount.Setup(m => m.GetInfo()).Returns(new TelescopeInfo { Connected = true, SiderealTime = lstHours, TrackingEnabled = true });
@@ -1125,9 +1211,10 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => position = target)
                 .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c);
             var fake = NewFake();
-            var solver = new ScriptedSolver { Fallback = seedB };
-            solver.Enqueue(seedA, seedB);
+            var solver = new ScriptedSolver { Fallback = seedC };
+            solver.Enqueue(seedA, seedB, seedC);
             using var svc = NewService(fake, solver, mount);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1138,6 +1225,67 @@ namespace OpenAstroAra.Test {
             var (alt, az) = PolarAlignGeometry.AxisError(AxisRaDeg, AxisDecDeg, SiteLatDeg, SiteLonDeg, DateTimeOffset.UtcNow);
             Assert.That(status.CurrentErrorArcmin, Is.EqualTo(Math.Sqrt(alt * alt + az * az)).Within(3.0),
                 "the error of the true axis, not of its mirror ~2° away");
+        }
+
+        // NINA's Three Point Polar Alignment: three solves 10° apart in RA from near the pole, the axis is the
+        // circle through them. The same routine serves both hemispheres: the fit takes the end of the axis
+        // nearer the site's pole, and the error is read against that pole's altitude.
+        [TestCase(45.0, 89.5)]
+        [TestCase(-33.0, -89.5)]
+        public async Task The_three_point_seed_measures_the_true_axis_in_either_hemisphere(double latitudeDeg, double axisDecDeg) {
+            static (double X, double Y, double Z) Unit(double raDeg, double decDeg) {
+                var ra = raDeg * Math.PI / 180.0;
+                var dec = decDeg * Math.PI / 180.0;
+                return (Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+            }
+            static (double X, double Y, double Z) Cross((double X, double Y, double Z) a, (double X, double Y, double Z) b) =>
+                (a.Y * b.Z - a.Z * b.Y, a.Z * b.X - a.X * b.Z, a.X * b.Y - a.Y * b.X);
+            static (double X, double Y, double Z) Turn((double X, double Y, double Z) v, (double X, double Y, double Z) k, double deg) {
+                var t = deg * Math.PI / 180.0;
+                var c = Cross(k, v);
+                var d = k.X * v.X + k.Y * v.Y + k.Z * v.Z;
+                return (v.X * Math.Cos(t) + c.X * Math.Sin(t) + k.X * d * (1 - Math.Cos(t)),
+                        v.Y * Math.Cos(t) + c.Y * Math.Sin(t) + k.Y * d * (1 - Math.Cos(t)),
+                        v.Z * Math.Cos(t) + c.Z * Math.Sin(t) + k.Z * d * (1 - Math.Cos(t)));
+            }
+            static PolarAlignSolveOutcome Solved((double X, double Y, double Z) v) =>
+                new(true, (Math.Atan2(v.Y, v.X) * 180.0 / Math.PI + 360.0) % 360.0, Math.Asin(v.Z) * 180.0 / Math.PI);
+
+            const double AxisRaDeg = 40.0;
+            var axis = Unit(AxisRaDeg, axisDecDeg);
+            var camera = Turn(axis, Unit(AxisRaDeg + 90.0, 0.0), 5.0); // 5° off the axis, as after Home → Dec 85°
+            var store = NewStore();
+            store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = latitudeDeg });
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0 });
+            var mount = NewMount();
+            var position = new Coordinates(0.0, Math.CopySign(85.0, latitudeDeg), Epoch.JNOW, Coordinates.RAType.Degrees);
+            var targets = new List<Coordinates>();
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => { position = target; targets.Add(target); })
+                .ReturnsAsync(true);
+            var gotos = 0;
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback(() => gotos++).ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c, stopped: targets.Add);
+            var seedC = Solved(Turn(camera, axis, 20.0));
+            var solver = new ScriptedSolver { Fallback = seedC };
+            solver.Enqueue(Solved(camera), Solved(Turn(camera, axis, 10.0)), seedC);
+            using var svc = NewService(NewFake(), solver, mount, store: store);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            var (alt, az) = PolarAlignGeometry.AxisError(AxisRaDeg, axisDecDeg, latitudeDeg, SiteLonDeg, DateTimeOffset.UtcNow);
+            Assert.That(status.CurrentErrorArcmin, Is.EqualTo(Math.Sqrt(alt * alt + az * az)).Within(0.5));
+            Assert.That(targets, Has.Count.EqualTo(2), "two RA turns, nothing else");
+            Assert.That(gotos, Is.Zero, "the turns are motor moves, never a GoTo the firmware could route over the pier");
+            static double Turned(double fromDeg, double toDeg) => Math.Abs(((toDeg - fromDeg + 540.0) % 360.0) - 180.0);
+            Assert.That(Turned(0.0, targets[0].RADegrees), Is.EqualTo(10.0).Within(1e-6), "the first turn is the 10° step");
+            Assert.That(Turned(targets[0].RADegrees, targets[1].RADegrees), Is.EqualTo(10.0).Within(1e-6), "so is the second");
+            Assert.That(targets.Select(t => t.Dec), Is.All.EqualTo(Math.CopySign(85.0, latitudeDeg)).Within(1e-6), "the turns keep the Dec");
         }
 
         // #1536 — a synced iOptron at home reported Dec 90.9°. The seed target kept that Dec, the mount
@@ -1156,9 +1304,10 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { targets.Enqueue(target); position = target; })
                 .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c, stopped: targets.Enqueue);
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, mount);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1166,27 +1315,286 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("adjusting"));
-            // The folded pointing sits on the axis (|Dec| > 87°), so the routine first leaves it for
-            // Dec 85° at the folded RA, then makes the seed turn from there: both slews carry the
-            // folded RA (+180°), and the turn is a pure RA change at that Dec.
-            var slews = targets.ToArray();
-            Assert.That(slews, Has.Length.EqualTo(2));
-            Assert.That(slews[0].RADegrees, Is.EqualTo(expectedTargetRa - 30.0).Within(1e-6));
-            Assert.That(slews[0].Dec, Is.EqualTo(Math.CopySign(PolarAlignService.SeedDecDeg, expectedTargetDec)).Within(1e-6));
-            Assert.That(slews[1].RADegrees, Is.EqualTo(expectedTargetRa).Within(1e-6));
+            // The folded pointing (RA +180°, Dec ±89.1°) sits on the axis (|Dec| > 87°), so the routine first tilts
+            // off it with the Dec motor. This bench motor first heads over the pole, so the tilt reverses and ends
+            // 5° from the pole on the reading's own side; then the seed turns: each a pure 30° RA change at that Dec.
+            var stops = targets.ToArray();
+            Assert.That(stops, Has.Length.EqualTo(4), "the reversal's stop, the tilt, two turns");
+            var slews = stops[1..];
+            Assert.That(Math.Abs(Folded(slews[0]).Dec), Is.EqualTo(PolarAlignService.SeedDecDeg).Within(MotorStepDeg), "5° from the pole, within one motor step");
+            Assert.That(Math.Abs(Folded(slews[0]).RADegrees - (expectedTargetRa - 30.0)), Is.LessThan(1e-6), "on the reading's side of the pole");
+            Assert.That(Math.Sign(Folded(slews[0]).Dec), Is.EqualTo(Math.Sign(expectedTargetDec)));
+            Assert.That(Math.Abs(Wrap180Test(slews[1].RADegrees - slews[0].RADegrees)), Is.EqualTo(30.0).Within(1e-6));
+            Assert.That(Math.Abs(Wrap180Test(slews[2].RADegrees - slews[1].RADegrees)), Is.EqualTo(30.0).Within(1e-6));
             Assert.That(slews[1].Dec, Is.EqualTo(slews[0].Dec).Within(1e-6));
+            Assert.That(slews[2].Dec, Is.EqualTo(slews[0].Dec).Within(1e-6));
+        }
+
+        // A driver's sign for a "positive" RA motor rate is not standard. The turn must still go the way the
+        // routine chose (away from the meridian): a motor that runs the other way is stopped and reversed.
+        [Test]
+        public async Task A_motor_that_runs_the_wrong_way_is_reversed_and_the_turn_goes_the_chosen_way() {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            SimulateMotors(mount, () => position, c => position = c, raUpIsNegative: true);
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(NewFake(), solver, mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            // LST 20 h puts RA 0 east of the meridian: the chosen way is RA up, two 30° turns.
+            Assert.That(position.RADegrees, Is.EqualTo(60.0).Within(1e-6), "both turns went RA up despite the motor's sign");
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.Is<double>(r => r < 0)), Times.AtLeastOnce(), "the reversal");
+            // The reversal is learned for the run: the second turn starts the right way at once.
+            var rates = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.MoveAxis)
+                    && i.Arguments[0] is TelescopeAxes.Primary)
+                .Select(i => i.Arguments[1] is double r ? r : double.NaN).ToArray();
+            var secondTurn = rates.SkipWhile(r => r != 0).Skip(1).SkipWhile(r => r != 0).Skip(1).ToArray(); // after the reversal stop and the first turn's stop
+            Assert.That(secondTurn.FirstOrDefault(r => r != 0), Is.LessThan(0), "the second turn starts with the learned sign");
+        }
+
+        // On the daemon the mount is the telescope service: each turn runs on its leased MoveAxis (the motor stops by
+        // itself if the routine stops renewing) and stops on the driver's position read now. The cached reading here
+        // never moves (the 2 s refresh never catches up), so a turn that waited on it would stall.
+        [Test]
+        public async Task On_the_telescope_service_the_turns_run_on_a_leased_motor_and_stop_on_fresh_reads() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var calls = new ConcurrentQueue<(int Axis, double Rate, int? LeaseMs)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((axis, rate, lease, _, _) => {
+                    calls.Enqueue((axis, rate, lease));
+                    if (rate != 0) {
+                        freshRaHours = (freshRaHours + (Math.Sign(rate) * MotorStepDeg / 15.0) + 24.0) % 24.0;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(freshRaHours * 15.0, Is.EqualTo(60.0).Within(1e-6), "two 30° turns, stopped on the fresh reading");
+            var moves = calls.Where(c => c.Rate != 0).ToArray();
+            Assert.That(moves, Is.Not.Empty);
+            Assert.That(moves.Select(c => c.LeaseMs), Is.All.EqualTo(3000), "every motor command carries the lease");
+            Assert.That(calls.Count(c => c.Rate == 0 && c.LeaseMs is null), Is.GreaterThanOrEqualTo(2), "each turn ends with a stop");
+            mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()), Times.Never, "never the mediator's unleased call");
+        }
+
+        // The turn mismatch is the clutch-slip diagnostic: on a perfect mount it is zero. Between solves a tracking
+        // tube also turns with the Earth, which the mount's sky-RA reading does not show; 30 s apart that is 0.125°.
+        [TestCase(10.0)]
+        [TestCase(-10.0)]
+        public void The_turn_mismatch_counts_the_Earths_turn_between_solves(double turnDeg) {
+            var t0 = new DateTimeOffset(2026, 11, 19, 6, 0, 0, TimeSpan.Zero);
+            // The axis on the pole: the solves read what the mount reads, each 30 s after the last.
+            var a = (new PolarAlignSolveOutcome(true, 100.0, 85.0), t0);
+            var b = (new PolarAlignSolveOutcome(true, 100.0 + turnDeg, 85.0), t0.AddSeconds(30));
+            var c = (new PolarAlignSolveOutcome(true, 100.0 + (2 * turnDeg), 85.0), t0.AddSeconds(60));
+
+            var (axis, mismatch) = PolarAlignService.FitThreePointOrFail(a, b, c, turnDeg, turnDeg, north: true);
+
+            Assert.That(axis.DecDeg, Is.EqualTo(90.0).Within(1e-6));
+            Assert.That(mismatch, Is.EqualTo(0.0).Within(1e-6));
+        }
+
+        // Stop Mount in the app aborts the mount from outside the routine and cancels the motor's lease. The routine's
+        // next renewal must not start the motor again: the run ends, and nothing after the abort moves the mount.
+        [Test]
+        public async Task Stop_Mount_during_a_turn_ends_the_run_and_the_motor_is_not_restarted() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var abortEpoch = 7L;
+            var afterAbort = new ConcurrentQueue<(double Rate, long? Since)>();
+            var service = mount.As<ITelescopeService>();
+            service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref abortEpoch));
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var moves = 0;
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
+                    if (Interlocked.Read(ref abortEpoch) != 7L) {
+                        afterAbort.Enqueue((rate, since));
+                        return;
+                    }
+                    if (rate != 0) {
+                        freshRaHours += MotorStepDeg / 15.0;
+                        if (++moves == 5) {
+                            Interlocked.Increment(ref abortEpoch); // the user taps Stop Mount mid-turn
+                        }
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Stop Mount"));
+            Assert.That(afterAbort.Where(c => c.Rate != 0), Is.Empty, "no motor command after the abort");
+            Assert.That(afterAbort.Count(c => c.Rate == 0), Is.GreaterThanOrEqualTo(1), "the routine's own stop still goes out");
+            Assert.That(freshRaHours * 15.0, Is.LessThan(2.0), "the turn ended where the abort caught it");
+        }
+
+        // The routine hands the telescope service the abort count it started under, so the service itself can refuse a
+        // renewal that races the abort.
+        [Test]
+        public async Task Each_motor_command_of_a_turn_carries_the_abort_count_it_started_under() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaHours = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.SetupGet(s => s.AbortEpoch).Returns(42L);
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaHours, 85.0));
+            var guards = new ConcurrentQueue<(double Rate, long? Since)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, since, _) => {
+                    guards.Enqueue((rate, since));
+                    if (rate != 0) {
+                        freshRaHours = (freshRaHours + (Math.Sign(rate) * MotorStepDeg / 15.0) + 24.0) % 24.0;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(guards.Where(g => g.Rate != 0).Select(g => g.Since), Is.All.EqualTo(42L));
+            Assert.That(guards.Where(g => g.Rate == 0).Select(g => g.Since), Is.All.Null, "a stop is never refused");
+        }
+
+        // Each turn runs at 3°/s (NINA's speed) and slows to 1°/s for its last 3°, so the stop on the mount's reading
+        // lands close to the target; it never speeds up again.
+        [Test]
+        public async Task A_turn_runs_at_3_degrees_a_second_and_slows_to_1_for_its_last_3_degrees() {
+            var mount = NewMount();
+            var cached = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => cached);
+            var freshRaDeg = 0.0;
+            var service = mount.As<ITelescopeService>();
+            service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>()))
+                .ReturnsAsync(() => ((double RaHours, double DecDegrees)?)(freshRaDeg / 15.0, 85.0));
+            var commands = new ConcurrentQueue<(double Rate, double AtDeg)>();
+            service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
+                .Callback<int, double, int?, long?, CancellationToken>((_, rate, _, _, _) => {
+                    commands.Enqueue((rate, freshRaDeg));
+                    if (rate != 0) {
+                        freshRaDeg += Math.Sign(rate) * MotorStepDeg;
+                    }
+                })
+                .Returns(Task.CompletedTask);
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            // The first 30° turn (the bench store's step): every command until its stop.
+            var turn = commands.TakeWhile(c => c.Rate != 0).ToArray();
+            Assert.That(turn.Select(c => Math.Abs(c.Rate)), Is.All.EqualTo(3.0).Or.EqualTo(1.0));
+            Assert.That(turn.First().Rate, Is.EqualTo(3.0), "it starts at 3°/s");
+            Assert.That(turn.Last().Rate, Is.EqualTo(1.0), "it ends at 1°/s");
+            var firstSlow = Array.FindIndex(turn, c => Math.Abs(c.Rate) == 1.0);
+            Assert.That(turn.Skip(firstSlow).Select(c => Math.Abs(c.Rate)), Is.All.EqualTo(1.0), "never fast again");
+            Assert.That(turn[firstSlow].AtDeg, Is.GreaterThanOrEqualTo(30.0 - PolarAlignService.AxisSlowZoneDeg), "slow only for the last 3°");
+            Assert.That(turn[firstSlow - 1].AtDeg, Is.LessThan(30.0 - PolarAlignService.AxisSlowZoneDeg), "fast until then");
+        }
+
+        // A mount that creeps (each poll a little progress, so never a stall) but far slower than asked must not
+        // run on: the move has a time bound of three times its travel at the slow speed.
+        [Test]
+        public async Task A_turn_that_creeps_past_its_time_bound_fails_and_stops_the_motor() {
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            var stops = 0;
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((_, rate) => {
+                    if (rate == 0) {
+                        Interlocked.Increment(ref stops);
+                        return;
+                    }
+                    position = new Coordinates((position.RADegrees + (Math.Sign(rate) * 0.06) + 360.0) % 360.0, position.Dec, Epoch.JNOW, Coordinates.RAType.Degrees);
+                });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
+            svc.AxisMovePoll = TimeSpan.FromMilliseconds(10);
+            svc.AxisSlowRateDegPerSec = 100.0; // bound = 30° / 100°/s × 3 = 0.9 s; the creep needs 5 s
+            svc.AxisMoveBoundSlack = TimeSpan.Zero;
+            svc.AxisMoveStall = TimeSpan.FromMinutes(5);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("failed"));
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("moved only"));
+            Assert.That(stops, Is.GreaterThanOrEqualTo(1), "the motor is stopped");
+        }
+
+        // Stop must stop the motor at once, not leave it running to the end of the turn.
+        [Test]
+        public async Task Stop_during_a_turn_stops_the_RA_motor() {
+            var mount = NewMount();
+            var running = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var stopped = false;
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((_, rate) => {
+                    if (rate != 0) {
+                        running.TrySetResult(); // the mount takes the command but never moves: the turn runs until Stop
+                    } else {
+                        stopped = true;
+                    }
+                });
+            var solver = new ScriptedSolver();
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(NewFake(), solver, mount);
+            svc.AxisMoveStall = TimeSpan.FromMinutes(5);
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await running.Task.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(stopped, Is.True, "Stop sent the motor stop");
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, 0), Times.AtLeastOnce());
         }
 
         // #1536 — the user-facing reason names the recovery; the driver's own text stays in the log.
         [Test]
         public async Task A_refused_seed_slew_fails_with_a_plain_recovery_message() {
             var mount = NewMount();
-            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new SequenceEntityFailedException("telescope.slew failed: Invalid Dec 90.9 (driver text)"));
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.Is<double>(r => r != 0)))
+                .Throws(new InvalidOperationException("MoveAxis failed: Invalid rate (driver text)"));
 
             var message = (await SeedFailureAsync(mount).ConfigureAwait(false)).GetProperty("message").GetString();
 
-            Assert.That(message, Does.Contain("Dec 85").And.Contain("start again"));
+            Assert.That(message, Does.Contain("free to move").And.Contain("start again"));
             Assert.That(message, Does.Not.Contain("driver text"));
         }
 
@@ -1209,6 +1617,7 @@ namespace OpenAstroAra.Test {
                 });
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            SimulateMotors(mount, () => position, c => position = c, stopped: _ => { lock (calls) { calls.Add("slew"); } });
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Returns<Coordinates, CancellationToken>((target, _) => {
                     lock (calls) { calls.Add("slew"); }
@@ -1229,7 +1638,7 @@ namespace OpenAstroAra.Test {
             var (mount, calls) = ParkedMount(unparks: true);
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, mount);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1260,7 +1669,7 @@ namespace OpenAstroAra.Test {
         private static async Task<System.Text.Json.JsonElement> SeedFailureAsync(Mock<ITelescopeMediator> mount) {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, mount, ws: ws);
 
@@ -1324,6 +1733,7 @@ namespace OpenAstroAra.Test {
                     position = target;
                 })
                 .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c, stopped: _ => calls.Record($"slew tracking={state}"));
             var writes = 0L;
             mount.SetupGet(m => m.TrackingWriteCount).Returns(() => Interlocked.Read(ref writes));
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Returns((bool on) => {
@@ -1348,7 +1758,7 @@ namespace OpenAstroAra.Test {
         private static async Task RunToAdjustingThenStopAsync(Mock<ITelescopeMediator> mount) {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, mount);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1364,54 +1774,62 @@ namespace OpenAstroAra.Test {
 
             await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking False"),
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking False"),
                 "on before the seed slew, off for the adjust loop, the user's off put back");
+        }
+
+        /// <summary>The bench store with <c>stop_tracking_when_done</c> off: a finished run hands tracking back.</summary>
+        private static InMemoryProfileStore HandBackStore() {
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { StopTrackingWhenDone = false });
+            return store;
         }
 
         [TestCase(true)]
         [TestCase(false)]
-        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_on_at_Stop(bool sameValueAsRoutine) {
-            // A sequence's Set Tracking writes while the run is live; the exit must not turn it off again.
+        public async Task Tracking_turned_on_by_another_caller_during_the_adjust_loop_is_left_as_set_at_Done_with_hand_back(bool sameValueAsRoutine) {
+            // A sequence's Set Tracking writes while the run is live; with stop_tracking_when_done off, Done hands
+            // tracking back, and that hand-back must not undo the other caller's write.
             // sameValueAsRoutine: the other caller writes the value the routine itself last wrote (off).
             var (mount, calls) = TrackingMount(tracking: false);
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
-            using var svc = NewService(fake, solver, mount);
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             mount.Object.SetTrackingEnabled(!sameValueAsRoutine);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(string.Join(", ", calls), Is.EqualTo(
-                $"tracking True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
+                $"tracking True, slew tracking=True, slew tracking=True, tracking False, tracking {!sameValueAsRoutine}"),
                 "the routine's own restore is not written after the other caller's write");
         }
 
         [Test]
-        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Stop() {
+        public async Task Tracking_set_by_a_sequence_Set_Tracking_instruction_during_the_adjust_loop_is_left_on_at_Done_with_hand_back() {
             // Drives the real instruction, so the test follows the mediator member the sequence uses.
             var (mount, calls) = TrackingMount(tracking: false);
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
-            using var svc = NewService(fake, solver, mount);
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
 
             await new SetTracking(mount.Object) { TrackingMode = TrackingMode.Sidereal }
                 .Execute(null!, CancellationToken.None).ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking True"),
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking True"),
                 "the sequence's Sidereal stays on: no restore to off after it");
         }
 
         private static async Task<(PolarAlignService Svc, RecordingLog Log)> AdjustingServiceAsync() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var log = new RecordingLog();
             var svc = NewService(fake, solver, log: log);
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1448,17 +1866,18 @@ namespace OpenAstroAra.Test {
 
             await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("slew tracking=True, tracking False, tracking True"));
+            // Untouched until the adjust loop turns it off; Stop then leaves it off (#2048), it does not turn it back on.
+            Assert.That(string.Join(", ", calls), Is.EqualTo("slew tracking=True, slew tracking=True, tracking False, tracking False"));
         }
 
         [Test]
-        public async Task Tracking_dropped_before_the_seed_slew_is_turned_back_on_and_left_on() {
+        public async Task Tracking_dropped_before_the_seed_slew_is_turned_back_on_for_the_turns() {
             var (mount, calls) = TrackingMount(tracking: true, dropAtPointingRead: 1);
 
             await RunToAdjustingThenStopAsync(mount).ConfigureAwait(false);
 
-            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, tracking False, tracking True"),
-                "the user had it on, so Stop leaves it on");
+            Assert.That(string.Join(", ", calls), Is.EqualTo("tracking True, slew tracking=True, slew tracking=True, tracking False, tracking False"),
+                "on again for the turns; the user had it on, but a Stop never turns it back on (#2048)");
         }
 
         [TestCase("refused")]
@@ -1490,14 +1909,30 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_mount_axis_well_off_the_pole_still_seeds_from_the_mounts_own_rotation() {
-            // Field seeds from 2026-10-02 (iOptron HAE29C, axis ~4.6° off the NCP): a 30° RA turn
-            // moved the near-pole guide field only 0.8° in solved RA but 1.6° on the sky. Using
-            // the solved ΔRA as the rotation failed every run with axis_fit_failed.
+            // Field seeds from 2026-10-02 (iOptron HAE29C, axis ~4.6° off the NCP): a 30° RA turn moved the
+            // near-pole guide field only 0.8° in solved RA. The three-point fit works on the pointings
+            // themselves, so an axis that far out still fits, and the mount's 30° turns match the solved ones.
+            static (double X, double Y, double Z) Unit(double raDeg, double decDeg) {
+                var ra = raDeg * Math.PI / 180.0;
+                var dec = decDeg * Math.PI / 180.0;
+                return (Math.Cos(dec) * Math.Cos(ra), Math.Cos(dec) * Math.Sin(ra), Math.Sin(dec));
+            }
+            static (double X, double Y, double Z) Turn((double X, double Y, double Z) v, (double X, double Y, double Z) k, double deg) {
+                var t = deg * Math.PI / 180.0;
+                var c = (k.Y * v.Z - k.Z * v.Y, k.Z * v.X - k.X * v.Z, k.X * v.Y - k.Y * v.X);
+                var d = k.X * v.X + k.Y * v.Y + k.Z * v.Z;
+                return (v.X * Math.Cos(t) + c.Item1 * Math.Sin(t) + k.X * d * (1 - Math.Cos(t)),
+                        v.Y * Math.Cos(t) + c.Item2 * Math.Sin(t) + k.Y * d * (1 - Math.Cos(t)),
+                        v.Z * Math.Cos(t) + c.Item3 * Math.Sin(t) + k.Z * d * (1 - Math.Cos(t)));
+            }
+            static PolarAlignSolveOutcome Solved((double X, double Y, double Z) v) =>
+                new(true, (Math.Atan2(v.Y, v.X) * 180.0 / Math.PI + 360.0) % 360.0, Math.Asin(v.Z) * 180.0 / Math.PI);
+            var axis = Unit(138.0, 85.4);
+            var camera = Turn(axis, Unit(228.0, 0.0), 5.0);
             var fake = NewFake();
-            var seedA = new PolarAlignSolveOutcome(true, 137.8417, 85.6097);
-            var seedB = new PolarAlignSolveOutcome(true, 138.6667, 87.1822);
-            var solver = new ScriptedSolver { Fallback = seedB };
-            solver.Enqueue(seedA, seedB);
+            var seedC = Solved(Turn(camera, axis, 60.0));
+            var solver = new ScriptedSolver { Fallback = seedC };
+            solver.Enqueue(Solved(camera), Solved(Turn(camera, axis, 30.0)), seedC);
             using var svc = NewService(fake, solver);
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
@@ -1505,6 +1940,7 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(status.CurrentErrorArcmin, Is.GreaterThan(200.0), "the 4.6° axis error is measured, not hidden");
         }
 
         // ── single-frame mode + frame readout ────────────────────────────────────────────────
@@ -1514,7 +1950,7 @@ namespace OpenAstroAra.Test {
             var fake = NewFake();
             fake.Custody.LeaseRenewInterval = TimeSpan.FromTicks(-1); // every parked pass renews: each renewal is a signal
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var store = NewStore();
             store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { LoopMode = PolarAlignLoopModes.SingleFrame });
             var ws = new WsRecorder();
@@ -1535,7 +1971,7 @@ namespace OpenAstroAra.Test {
             Assert.That(still.FramesCaptured, Is.EqualTo(parked.FramesCaptured),
                 "single-frame mode must not shoot until asked");
             Assert.That(fake.Captures.Count, Is.EqualTo(shots), "single-frame mode must not shoot until asked");
-            Assert.That(still.LastFrame?.FrameId, Is.EqualTo("seed-b-1"));
+            Assert.That(still.LastFrame?.FrameId, Is.EqualTo("seed-c-1"));
 
             await svc.RequestCaptureAsync(null, CancellationToken.None).ConfigureAwait(false);
             await fake.WhenCapturedAsync(shots + 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
@@ -1568,7 +2004,7 @@ namespace OpenAstroAra.Test {
         public async Task Each_frame_reports_its_exposure_timings_and_solved_pointing() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, ws: ws);
 
@@ -1584,8 +2020,8 @@ namespace OpenAstroAra.Test {
             Assert.That(frame.ExposureSeconds, Is.EqualTo(0.05));
             Assert.That(frame.CaptureMs, Is.GreaterThanOrEqualTo(0));
             Assert.That(frame.SolveMs, Is.Not.Null);
-            Assert.That(frame.RaDeg, Is.EqualTo(SolveB.RaDegJnow));
-            Assert.That(frame.DecDeg, Is.EqualTo(SolveB.DecDegJnow));
+            Assert.That(frame.RaDeg, Is.EqualTo(SolveC.RaDegJnow));
+            Assert.That(frame.DecDeg, Is.EqualTo(SolveC.DecDegJnow));
 
             Assert.That(ws.Count(WsEventCatalog.PolarAlignFrameStarted), Is.GreaterThanOrEqualTo(3));
             var complete = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignFrameComplete).Payload;
@@ -1598,7 +2034,7 @@ namespace OpenAstroAra.Test {
             string[] Ids(string type) => ws.Events.Where(e => e.Type == type)
                 .Select(e => e.Payload.GetProperty("frame_id").GetString()!).ToArray();
             var completedIds = Ids(WsEventCatalog.PolarAlignFrameComplete);
-            Assert.That(completedIds, Does.Contain("seed-a-1").And.Contain("seed-b-1"));
+            Assert.That(completedIds, Does.Contain("seed-a-1").And.Contain("seed-b-1").And.Contain("seed-c-1"));
             Assert.That(completedIds, Is.SubsetOf(Ids(WsEventCatalog.PolarAlignFrameStarted)));
         }
 
@@ -1644,7 +2080,7 @@ namespace OpenAstroAra.Test {
         public async Task A_run_logs_its_seeds_fit_live_readouts_and_final_error_at_Information() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var logger = new CapturingLogger();
             var ws = new WsRecorder();
             using var svc = NewService(fake, solver, NewMount(), ws, log: new RecordingLog(), logger: logger);
@@ -1655,7 +2091,7 @@ namespace OpenAstroAra.Test {
             await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             var ids = logger.Entries.Select(e => e.EventId).ToList();
-            Assert.That(ids.Count(i => i == 4527), Is.EqualTo(2), "both seed solves");
+            Assert.That(ids.Count(i => i == 4527), Is.EqualTo(3), "all three seed solves");
             Assert.That(ids, Does.Contain(4528).And.Contain(4529).And.Contain(4530));
             Assert.That(logger.Entries.Single(e => e.EventId == 4528).Message, Does.Contain("axis RA").And.Contain("seed error"));
         }
@@ -1664,7 +2100,7 @@ namespace OpenAstroAra.Test {
         public async Task Complete_logs_the_achieved_error_and_unwinds_like_stop() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var log = new RecordingLog();
             var mount = NewMount();
             var ws = new WsRecorder();
@@ -1693,7 +2129,7 @@ namespace OpenAstroAra.Test {
         public async Task Stop_logs_an_aborted_row_and_a_second_stop_does_not_duplicate_it() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             var log = new RecordingLog();
             using var svc = NewService(fake, solver, log: log);
 
@@ -1711,7 +2147,7 @@ namespace OpenAstroAra.Test {
         public async Task Stop_with_an_error_reading_records_the_last_result() {
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
+            solver.Enqueue(SolveA, SolveB, SolveC);
             using var svc = NewService(fake, solver, log: new RecordingLog());
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).LastResult, Is.Null, "none by default");
 
@@ -1780,11 +2216,12 @@ namespace OpenAstroAra.Test {
             Assert.That(defaults.ExposureSeconds, Is.EqualTo(1.0));
             Assert.That(defaults.Binning, Is.EqualTo(PolarAlignBinning.Auto), "§45.12: binning is auto by default");
             Assert.That(defaults.TargetToleranceArcmin, Is.EqualTo(1.0));
-            Assert.That(defaults.SeedRotationDeg, Is.EqualTo(60.0));
-            Assert.That(defaults.CheckStepDeg, Is.EqualTo(30.0));
+            Assert.That(defaults.SeedRotationDeg, Is.EqualTo(10.0));
+            Assert.That(defaults.CheckStepDeg, Is.EqualTo(10.0));
             Assert.That(defaults.CoarseExposureSeconds, Is.EqualTo(3.0));
             Assert.That(defaults.UseHome, Is.True);
             Assert.That(defaults.PolarAlignerAuto, Is.True, "#1971: a rig with a Polar Aligner uses it unless told not to");
+            Assert.That(defaults.StopTrackingWhenDone, Is.True, "#2048: tracking off at the end of a run, as NINA's default");
             Assert.That(defaults.LoopCadenceMs, Is.EqualTo(1000));
             Assert.That(defaults.SettleSeconds, Is.EqualTo(2.0));
 
@@ -1845,6 +2282,7 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
                 .Callback<Coordinates, CancellationToken>((target, _) => { slews?.Enqueue(target); position = target; })
                 .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c, stopped: c => slews?.Enqueue(c));
             mount.Setup(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback(() => { Interlocked.Increment(ref homed); position = home; })
                 .ReturnsAsync(true);
@@ -1888,19 +2326,20 @@ namespace OpenAstroAra.Test {
             Assert.That(coarse.State, Is.EqualTo("adjusting"));
             Assert.That(coarse.Stage, Is.EqualTo(PolarAlignStages.Coarse));
             mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
-            Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(3), "two seed frames and at least one live frame");
+            Assert.That(mainCamera.Calls, Is.GreaterThanOrEqualTo(4), "three seed frames and at least one live frame");
             Assert.That(mainCamera.Exposures.TryPeek(out var exposure) && exposure == 3.0, Is.True, "the coarse exposure, not the guide exposure");
             var blind = mainCamera.BlindFailovers.ToArray();
-            Assert.That(blind.Take(2), Is.All.True, "the seed frames may need the blind fallback");
-            Assert.That(blind.Skip(2), Is.All.False, "the live loop takes one fast look per frame");
+            Assert.That(blind.Take(3), Is.All.True, "the seed frames may need the blind fallback");
+            Assert.That(blind.Skip(3), Is.All.False, "the live loop takes one fast look per frame");
             // The axis is measured from the seed turn, so the camera's offset cancels: only the ~1′
             // refraction term is left — never the 75′ the pointing-as-axis reading gave.
             Assert.That(coarse.CurrentErrorArcmin, Is.LessThan(3.0));
             var coarseTargets = slews.ToArray();
-            Assert.That(coarseTargets.Length, Is.EqualTo(2), "leave the axis, then the seed turn — before the first live frame");
+            Assert.That(coarseTargets.Length, Is.EqualTo(3), "leave the axis, then the two seed turns — before the first live frame");
             Assert.That(coarseTargets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "from Home the camera is on the axis: slew to Dec 85° first");
             Assert.That(coarseTargets[1].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the seed turn stays at that Dec");
             Assert.That(Math.Abs(((coarseTargets[1].RADegrees - coarseTargets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
+            Assert.That(Math.Abs(((coarseTargets[2].RADegrees - coarseTargets[1].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "and the second");
             var progress = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignProgress).ConfigureAwait(false);
             Assert.That(progress.GetProperty("stage").GetString(), Is.EqualTo(PolarAlignStages.Coarse));
             Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStage
@@ -1916,10 +2355,10 @@ namespace OpenAstroAra.Test {
             Assert.That(fine.State, Is.EqualTo("adjusting"));
             mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Exactly(2), "the fine stage homes again after the coarse turn");
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(4), "the fine stage adds its Dec-85° slew from Home and its seed turn");
-            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "from Home the camera is on the axis again");
-            Assert.That(targets[3].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the fine seed turn stays at Dec 85°");
-            Assert.That(Math.Abs(((targets[3].RADegrees - targets[2].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
+            Assert.That(targets.Length, Is.EqualTo(6), "the fine stage adds its Dec-85° slew from Home and its two seed turns");
+            Assert.That(targets[3].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "from Home the camera is on the axis again");
+            Assert.That(targets[4].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6), "the fine seed turns stay at Dec 85°");
+            Assert.That(Math.Abs(((targets[4].RADegrees - targets[3].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6), "the test store's 30° seed turn");
             Assert.That(ws.Events.Any(e => e.Type == WsEventCatalog.PolarAlignStage
                 && e.Payload.GetProperty("stage").GetString() == PolarAlignStages.Fine), Is.True);
 
@@ -2008,8 +2447,48 @@ namespace OpenAstroAra.Test {
 
             mount.Verify(m => m.FindHome(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()), Times.Once);
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(2), "from Home: off the axis to Dec 85°, then the seed turn");
+            Assert.That(targets.Length, Is.EqualTo(3), "from Home: off the axis to Dec 85°, then the two seed turns");
             Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6));
+        }
+
+        [Test]
+        public async Task After_a_hand_set_Home_a_stale_reading_near_the_equator_still_tilts_5_degrees() {
+            // A mount with no Find Home whose last GoTo left its reading at Dec 2°: the user puts it at Home by hand and
+            // taps Continue. The tilt cannot be measured as distance from the pole (the reading says nothing about the
+            // pole); it is 5° of the reading's own movement, which carries it past Dec 0° without a reversal.
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 2.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            var tilts = new List<Coordinates>();
+            var decMoving = false;
+            mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()))
+                .Callback<TelescopeAxes, double>((axis, rate) => {
+                    if (rate == 0) {
+                        // A stop that ends a Dec move is a tilt; the exit's stop of an axis at rest (#2048) is not.
+                        if (axis == TelescopeAxes.Secondary && decMoving) {
+                            tilts.Add(position);
+                            decMoving = false;
+                        }
+                        return;
+                    }
+                    decMoving |= axis == TelescopeAxes.Secondary;
+                    var step = Math.Sign(rate) * MotorStepDeg;
+                    position = axis == TelescopeAxes.Primary
+                        ? new Coordinates((position.RADegrees + step + 360.0) % 360.0, position.Dec, Epoch.JNOW, Coordinates.RAType.Degrees)
+                        : new Coordinates(position.RADegrees, position.Dec - step, Epoch.JNOW, Coordinates.RAType.Degrees);
+                });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws, store: NewHomeStore());
+
+            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await WaitForEventAsync(ws, WsEventCatalog.PolarAlignNeedsHome).ConfigureAwait(false);
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false); // Continue: at Home by hand
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+            Assert.That(tilts, Has.Count.EqualTo(1), "one tilt, no reversal");
+            Assert.That(tilts[0].Dec, Is.EqualTo(-3.0).Within(1e-6), "5° of the reading's movement, across Dec 0°");
         }
 
         [Test]
@@ -2041,7 +2520,7 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(2), "from the hand-set Home: off the axis to Dec 85°, then the seed turn");
+            Assert.That(targets.Length, Is.EqualTo(3), "from the hand-set Home: off the axis to Dec 85°, then the two seed turns");
             Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6));
         }
 
@@ -2077,7 +2556,11 @@ namespace OpenAstroAra.Test {
                 .Callback<Coordinates, CancellationToken>((target, _) => slews.Enqueue(target))
                 .ReturnsAsync(true);
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
-            mount.Setup(m => m.GetCurrentPosition()).Returns(() => slews.LastOrDefault() ?? position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => { slews.Enqueue(target); position = target; })
+                .ReturnsAsync(true);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            SimulateMotors(mount, () => position, c => position = c, stopped: slews.Enqueue);
             using var svc = NewService(fake, new HintFollowingSolver(), mount, store: store, mainCamera: new FakeMainCamera());
 
             await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
@@ -2087,12 +2570,12 @@ namespace OpenAstroAra.Test {
             Assert.That(fine.State, Is.EqualTo("adjusting"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            // Coarse: the seed turn (RA 0 → 30). Fine: back to the start (RA 0), then its own turn (RA 30).
+            // Coarse: the seed turns (RA 0 → 30 → 60). Fine: back to the start (RA 0), then its own turns.
             var ras = slews.Select(c => c.RADegrees).ToArray();
             Assert.That(ras, Is.EqualTo(TurnBackTurn).Within(1e-6));
         }
 
-        private static readonly double[] TurnBackTurn = { 30.0, 0.0, 30.0 };
+        private static readonly double[] TurnBackTurn = { 30.0, 60.0, 0.0, 30.0, 60.0 };
 
         [Test]
         public async Task After_a_hand_placed_Home_the_off_axis_move_is_relative_to_the_mounts_stale_reading() {
@@ -2117,12 +2600,12 @@ namespace OpenAstroAra.Test {
             Assert.That(fine.State, Is.EqualTo("adjusting"));
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
 
-            // Coarse: Dec 90 → 85, turn. Fine: the reading is still (RA of the turn, Dec 85) — the move off
-            // the axis is 5° relative to it (Dec 80 at that RA), not skipped; then the fine turn.
+            // Coarse: Dec 90 → 85, two turns. Fine: the reading is still (RA of the last turn, Dec 85) — the move
+            // off the axis is 5° relative to it (Dec 80 at that RA), not skipped; then the fine turns.
             var targets = slews.ToArray();
-            Assert.That(targets.Length, Is.EqualTo(4));
-            Assert.That(targets[2].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg - 5.0).Within(1e-6), "relative to the stale reading");
-            Assert.That(targets[2].RADegrees, Is.EqualTo(targets[1].RADegrees).Within(1e-6), "same RA as the reading");
+            Assert.That(targets.Length, Is.EqualTo(6));
+            Assert.That(targets[3].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg - 5.0).Within(1e-6), "relative to the stale reading");
+            Assert.That(targets[3].RADegrees, Is.EqualTo(targets[2].RADegrees).Within(1e-6), "same RA as the reading");
             // The guide-camera solver (no blind fallback) is told the camera looks near the pole, not the
             // stale Dec 80° the reading says: the fine seeds would otherwise miss the search radius.
             Assert.That(solver.Hints, Is.Not.Empty);
@@ -2238,12 +2721,13 @@ namespace OpenAstroAra.Test {
             mount.Setup(m => m.SetTrackingEnabled(It.IsAny<bool>())).Callback<bool>(trackingWrites.Enqueue).Returns(true);
             var fake = NewFake();
             var solver = new ScriptedSolver();
-            solver.Enqueue(SolveA, SolveB);
-            using var svc = NewService(fake, solver, mount);
+            solver.Enqueue(SolveA, SolveB, SolveC);
+            // The hand-back happens only at Done with stop_tracking_when_done off (#2048).
+            using var svc = NewService(fake, solver, mount, store: HandBackStore());
 
             await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await svc.CompleteAsync(null, CancellationToken.None).ConfigureAwait(false);
 
             Assert.That(trackingWrites, Is.Not.Empty);
             Assert.That(trackingWrites.Last(), Is.True, "the hand-back restores the tracking read after the unpark");
@@ -2290,12 +2774,12 @@ namespace OpenAstroAra.Test {
             Assert.That(status.LastResult, Is.Not.Null, "#1565: a finished check is the last result");
             Assert.That(status.LastResult!.ErrorArcmin, Is.EqualTo(status.CheckResult.TotalErrorArcmin).Within(1e-6));
             Assert.That(status.CheckResult.FineErrorArcmin, Is.Null, "no fine stage ran");
-            // Home, then off the axis, then two 30° turns the same way.
+            // Home, then off the axis, then two 10° turns (the default check step) the same way.
             var targets = slews.ToArray();
             Assert.That(targets.Length, Is.EqualTo(3));
             Assert.That(targets[0].Dec, Is.EqualTo(PolarAlignService.SeedDecDeg).Within(1e-6));
-            Assert.That(Math.Abs(((targets[1].RADegrees - targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6));
-            Assert.That(Math.Abs(((targets[2].RADegrees - targets[1].RADegrees + 540) % 360) - 180), Is.EqualTo(30.0).Within(1e-6));
+            Assert.That(Math.Abs(((targets[1].RADegrees - targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(10.0).Within(1e-6));
+            Assert.That(Math.Abs(((targets[2].RADegrees - targets[1].RADegrees + 540) % 360) - 180), Is.EqualTo(10.0).Within(1e-6));
             // The row, the event and the lease.
             var checkedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignChecked).ConfigureAwait(false);
             Assert.That(checkedEvent.GetProperty("verdict").GetString(), Is.EqualTo("excellent"));
@@ -2334,8 +2818,10 @@ namespace OpenAstroAra.Test {
             // Both stages measured the same axis (the pole): the distance between the two measured axes is ~0.
             Assert.That(status.CheckResult.FineDeltaArcmin, Is.Not.Null.And.LessThan(0.1));
             Assert.That(log.Rows.Single().Outcome, Is.EqualTo("checked"));
-            // Tracking was handed back at the end of the run.
-            mount.Verify(m => m.SetTrackingEnabled(true), Times.AtLeastOnce);
+            // The verdict ends the run: stop_tracking_when_done (on by default, #2048) leaves tracking off.
+            var trackingWrites = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.SetTrackingEnabled)).ToArray();
+            Assert.That(trackingWrites, Is.Not.Empty);
+            Assert.That(trackingWrites.Last().Arguments[0], Is.False, "tracking off after the verdict");
         }
 
         private static async Task AssertThrowsAsync<T>(Func<Task> act) where T : Exception {

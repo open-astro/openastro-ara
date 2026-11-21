@@ -296,9 +296,19 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_Slewing_that_is_always_unreadable_keeps_polling_and_fails_at_the_bound() {
             var reads = 0;
+            var parkSent = false;
+            // Readable until the park is sent: an always-unreadable Slewing leaves the position unverified, and
+            // #2070 refuses the park before the module runs it.
             using var mount = new FakeTelescopeDevice {
                 AtParkScript = () => true,
-                SlewingScript = () => { Interlocked.Increment(ref reads); throw new InvalidOperationException("no Slewing"); },
+                OnCommand = () => Volatile.Write(ref parkSent, true),
+                SlewingScript = () => {
+                    if (!Volatile.Read(ref parkSent)) {
+                        return false;
+                    }
+                    Interlocked.Increment(ref reads);
+                    throw new InvalidOperationException("no Slewing");
+                },
             };
             using var svc = await ConnectedAsync(mount, s => s.CommandPolicy = Mounted(maxPolls: 12));
             await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, CancellationToken.None));

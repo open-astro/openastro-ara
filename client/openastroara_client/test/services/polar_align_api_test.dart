@@ -1,0 +1,49 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/services/polar_align_api.dart';
+
+/// #2048 — the routine's client against a stub daemon that records each
+/// request's receive timeout.
+class _Daemon implements HttpClientAdapter {
+  final seen = <(String, Duration?)>[];
+
+  @override
+  void close({bool force = false}) {}
+
+  @override
+  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    seen.add(('${options.method} ${options.path}', options.receiveTimeout));
+    return ResponseBody.fromString('', 202);
+  }
+}
+
+void main() {
+  test('Stop and Done wait for the daemon to confirm the mount stopped, past the 5 s default (#2048)', () async {
+    final d = _Daemon();
+    final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
+    await api.stop();
+    await api.complete();
+    await api.next();
+    expect(d.seen, [
+      ('POST /api/v1/equipment/polaralign/stop', PolarAlignApi.endTimeout),
+      ('POST /api/v1/equipment/polaralign/complete', PolarAlignApi.endTimeout),
+      ('POST /api/v1/equipment/polaralign/next', null),
+    ]);
+  });
+
+  test("the end timeout outlasts the daemon's slowest end, a stuck run (#2048)", () {
+    // The daemon's defaults (PolarAlignService.MountStop.cs EndWorstCase): each stop command or read 3 s, three
+    // commands a round, the 15 s unwind grace, and the end's own confirmation (8 s window, 250 ms poll, two reads,
+    // one more round).
+    const command = Duration(seconds: 3);
+    final round = command * 3;
+    final confirmedStop = const Duration(seconds: 8) + const Duration(milliseconds: 250) + command * 2 + round;
+    final worstCase = round + const Duration(seconds: 15) + confirmedStop;
+    expect(worstCase, const Duration(milliseconds: 47250));
+    // Ten seconds at least for tracking off, the session row and the camera release after the stop.
+    expect(PolarAlignApi.endTimeout - worstCase, greaterThanOrEqualTo(const Duration(seconds: 10)));
+  });
+}

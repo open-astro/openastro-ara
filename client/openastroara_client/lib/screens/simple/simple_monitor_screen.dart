@@ -22,7 +22,7 @@ import 'simple_shell.dart' show kSimpleStopSize, simpleRailScale;
 
 /// Where a tile tap goes: Monitor closes and the shell opens the window or
 /// panel that owns the thing (#1724).
-enum MonitorDestination { queue, sky, mount, safety, weather, guider, frameInfo }
+enum MonitorDestination { queue, sky, mount, safety, weather, camera, guider, frameInfo }
 
 /// Below this width the grid needs more room than it has: Monitor is offered
 /// only from a phone's portrait deck (#1775), and lays its tiles in one
@@ -144,6 +144,23 @@ class _TopLine extends ConsumerWidget {
     // Back, at the top left, as the Sky Album leaves (DESIGN.md: Simple
     // Mode's full-screen pages).
     const back = BackButton(key: Key('simple-monitor-back'), color: AraColors.textSecondary);
+    // The title with its icon, as the Sky Album has (#2014).
+    final title = Semantics(
+      header: true,
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.monitor_heart_outlined, size: 22, color: AraColors.textSecondary),
+        const SizedBox(width: AraSpace.s8),
+        Flexible(
+          child: Text(
+            l10n.monitorTitle,
+            key: const Key('simple-monitor-title'),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: kSimpleText.copyWith(fontSize: AraFontSize.simpleReadingLarge, fontWeight: FontWeight.w600),
+          ),
+        ),
+      ]),
+    );
     final words = [
       if (_dot(v.status) case final dot?) ...[dot, const SizedBox(width: AraSpace.s12)],
       Expanded(
@@ -237,13 +254,21 @@ class _TopLine extends ConsumerWidget {
               Wrap(
                 alignment: WrapAlignment.spaceBetween,
                 crossAxisAlignment: WrapCrossAlignment.center,
-                children: [back, Row(mainAxisSize: MainAxisSize.min, children: readings)],
+                children: [
+                  Row(mainAxisSize: MainAxisSize.min, children: [back, title]),
+                  Row(mainAxisSize: MainAxisSize.min, children: readings),
+                ],
               ),
               Flexible(child: Row(children: words)),
             ])
           : Row(children: [
               back,
-              const SizedBox(width: AraSpace.s4),
+              // A question, a stop's outcome or large text needs the whole line.
+              if (question == null && message == null && MediaQuery.textScalerOf(context).scale(1) <= 1.3) ...[
+                title,
+                const SizedBox(width: AraSpace.s16),
+              ] else
+                const SizedBox(width: AraSpace.s4),
               ...words,
               const SizedBox(width: AraSpace.s16),
               ...readings,
@@ -294,7 +319,15 @@ class _Grid extends StatelessWidget {
     final target = _TargetTile(s: s, onTap: () => onOpen(MonitorDestination.sky));
     final flip = _FlipTile(s: s, onTap: () => onOpen(MonitorDestination.mount));
     final safety = s.safety == null ? null : _SafetyTile(s: s, onTap: () => onOpen(MonitorDestination.safety));
-    final weather = s.weather == null ? null : _WeatherTile(s: s, onTap: () => onOpen(MonitorDestination.weather));
+    final weather = s.conditions == null
+        ? null
+        : _ConditionsTile(
+            s: s,
+            // The weather's window when a station reports, else the camera's.
+            onTap: () => onOpen(
+              s.conditions!.weather != null ? MonitorDestination.weather : MonitorDestination.camera,
+            ),
+          );
     final guider = s.guider == null ? null : _GuiderTile(s: s, onTap: () => onOpen(MonitorDestination.guider));
     final focus = _LastFrameTile(s: s, onTap: () => onOpen(MonitorDestination.frameInfo));
     final night = _NightTile(s: s, onTap: () => onOpen(MonitorDestination.queue));
@@ -313,7 +346,7 @@ class _Grid extends StatelessWidget {
             (target, 220.0),
             (flip, 150.0),
             if (safety != null) (safety, strip),
-            if (weather != null) (weather, 150.0),
+            if (weather != null) (weather, 340.0),
             if (guider != null) (guider, 240.0),
             (focus, 220.0),
             (night, 130.0),
@@ -929,7 +962,8 @@ class _UpNext extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(s.tonightsBest ? l10n.monitorTonightsBest : l10n.monitorUpNext, style: kSimpleCaption),
+        // No plan, no rows: no caption over nothing.
+        if (s.upNext.isNotEmpty) Text(l10n.monitorUpNext, style: kSimpleCaption),
         for (final u in limit == null ? s.upNext : s.upNext.take(limit!))
           Container(
             constraints: const BoxConstraints(minHeight: 30),
@@ -941,7 +975,7 @@ class _UpNext extends StatelessWidget {
                     MonitorUpKind.nextFrame =>
                       '${l10n.monitorUpFrame(u.frame ?? 0)}${_named(u.name) ? ' · ${u.name}' : ''}',
                     MonitorUpKind.meridianFlip => l10n.deviceMeridianFlip,
-                    MonitorUpKind.nextTarget || MonitorUpKind.best => u.name ?? '',
+                    MonitorUpKind.nextTarget => u.name ?? '',
                     MonitorUpKind.park => l10n.monitorUpPark,
                   },
                   maxLines: 1,
@@ -950,11 +984,7 @@ class _UpNext extends StatelessWidget {
                 ),
               ),
               Text(
-                u.kind == MonitorUpKind.best
-                    ? l10n.monitorAltitudeUp(_n(u.altitudeDeg, 0))
-                    : u.at == null
-                    ? l10n.monitorThen
-                    : simpleClockTime(u.at!),
+                u.at == null ? l10n.monitorThen : simpleClockTime(u.at!),
                 style: kSimpleUnit,
               ),
             ]),
@@ -1154,8 +1184,10 @@ class _SafetyTile extends StatelessWidget {
   }
 }
 
-class _WeatherTile extends StatelessWidget {
-  const _WeatherTile({required this.s, required this.onTap});
+/// Conditions: the weather station's readings and a "Camera and focuser" group
+/// of temperatures, each only when its gear is in the profile (#2014).
+class _ConditionsTile extends StatelessWidget {
+  const _ConditionsTile({required this.s, required this.onTap});
 
   final MonitorSnapshot s;
   final VoidCallback onTap;
@@ -1163,67 +1195,172 @@ class _WeatherTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    final w = s.weather!;
+    final c0 = s.conditions!;
+    final w = c0.weather;
+    final rig = c0.rig;
+    final cells =
+        w?.cells ??
+        const <({MonitorWeatherCell cell, double value, double? overLimit})>[];
     const compass = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
-    (String, String, String) cell(({MonitorWeatherCell cell, double value, double? overLimit}) c) => switch (c.cell) {
-          MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
-          MonitorWeatherCell.skyQuality => (_n(c.value, 2), '', l10n.monitorSkyQuality),
-          MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
-          MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
-          MonitorWeatherCell.humidity => (_n(c.value, 0), '%', l10n.monitorHumidity),
-          MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
-          MonitorWeatherCell.wind => (
-              _n(c.value, 0),
-              'km/h',
-              [
-                l10n.monitorWind,
-                if (w.windDeg != null) compass[((w.windDeg! % 360) / 45).round() % 8],
-                if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
-                if (w.gustKmh != null) l10n.monitorGusts(_n(w.gustKmh, 0)),
-              ].join(' · '),
+    (String, String, String) cell(
+      ({MonitorWeatherCell cell, double value, double? overLimit}) c,
+    ) => switch (c.cell) {
+      MonitorWeatherCell.cloud => (_n(c.value, 0), '%', l10n.monitorCloud),
+      MonitorWeatherCell.skyQuality => (
+        _n(c.value, 2),
+        '',
+        l10n.monitorSkyQuality,
+      ),
+      MonitorWeatherCell.air => (_n(c.value), '°C', l10n.monitorAir),
+      MonitorWeatherCell.dewMargin => (_n(c.value), '°', l10n.monitorDewMargin),
+      MonitorWeatherCell.humidity => (
+        _n(c.value, 0),
+        '%',
+        l10n.monitorHumidity,
+      ),
+      MonitorWeatherCell.rain => (_n(c.value), 'mm/h', l10n.monitorRain),
+      MonitorWeatherCell.wind => (
+        _n(c.value, 0),
+        'km/h',
+        [
+          l10n.monitorWind,
+          if (w?.windDeg != null)
+            compass[((w!.windDeg! % 360) / 45).round() % 8],
+          if (c.overLimit != null) l10n.monitorLimit(_n(c.overLimit, 0)),
+          if (w?.gustKmh != null) l10n.monitorGusts(_n(w!.gustKmh, 0)),
+        ].join(' · '),
+      ),
+    };
+    // Camera and focuser: only what the rig reports.
+    final gear = <(String, String, String)>[
+      if (rig?.sensorC != null)
+        (
+          _n(rig!.sensorC),
+          '°C',
+          rig.sensorTargetC == null
+              ? l10n.monitorSensor
+              : '${l10n.monitorSensor} · ${_n(rig.sensorTargetC, 0)}',
+        ),
+      if (rig?.coolerPowerPct != null)
+        (_n(rig!.coolerPowerPct, 0), '%', l10n.monitorCoolerPower),
+      if (rig?.focuserC != null)
+        (_n(rig!.focuserC), '°C', l10n.monitorFocuserTemp),
+      if (rig?.autofocusAt case final at?)
+        rig!.tempSinceAutofocus == null
+            ? ('—', '', l10n.monitorAutofocusAt(simpleClockTime(at)))
+            : (
+                '${rig.tempSinceAutofocus! >= 0 ? '+' : '−'}${rig.tempSinceAutofocus!.abs().toStringAsFixed(1)}',
+                '°C',
+                l10n.monitorAutofocusAt(simpleClockTime(at)),
+              ),
+    ];
+    // The approved mock's cell: an 18 px reading over a 12 px label, both at
+    // a line height of 1.2, so seven weather readings and the whole group fit.
+    Widget reading(
+      String v,
+      String unit,
+      String label, {
+      Widget? icon,
+      Color? colour,
+    }) => Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            if (icon != null) ...[icon, const SizedBox(width: 6)],
+            Flexible(
+              child: Text.rich(
+                TextSpan(
+                  text: v,
+                  style: kSimpleReading.copyWith(
+                    fontSize: AraFontSize.monitorCell,
+                    height: 1.2,
+                    color: colour,
+                  ),
+                  children: [TextSpan(text: ' $unit', style: kSimpleUnit)],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
-        };
+          ],
+        ),
+        Text(
+          label,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: kSimpleCaption.copyWith(height: 1.2, color: colour),
+        ),
+      ],
+    );
     return _Tile(
-      tileKey: 'weather',
+      tileKey: 'conditions',
       icon: Icons.cloud_outlined,
-      name: l10n.shellWeather,
-      status: w.status,
-      word: w.status == MonitorStatus.warning ? l10n.monitorPastLimit : null,
-      value: [for (final c in w.cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}'].join(', '),
+      name: l10n.monitorConditions,
+      status: w?.status ?? MonitorStatus.normal,
+      word: w?.status == MonitorStatus.warning ? l10n.monitorPastLimit : null,
+      value: [
+        for (final c in cells) '${cell(c).$3} ${cell(c).$1} ${cell(c).$2}',
+        for (final g in gear) '${g.$3} ${g.$1} ${g.$2}',
+      ].join(', '),
       frozen: s.frozen,
       onTap: onTap,
       children: [
         const SizedBox(height: AraSpace.s4),
-        for (final row in _weatherRows(w.cells))
+        // One flex child, so each row keeps its own height in the tile's
+        // IntrinsicHeight (flex rows would all take the tallest one's) and
+        // spare room spreads between them.
+        if (cells.isNotEmpty)
           Expanded(
-            child: Row(children: [
-              for (final c in row)
-                Expanded(
-                  child: Column(mainAxisAlignment: MainAxisAlignment.center, crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    // The Weather window's icon in front of each reading.
-                    Row(children: [
-                      _weatherIcon(c.cell, c.overLimit != null ? AraColors.accentWarning : AraColors.textSecondary),
-                      const SizedBox(width: 6),
-                      Flexible(
-                        child: Text.rich(
-                          TextSpan(
-                            text: cell(c).$1,
-                            style: kSimpleReading.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null),
-                            children: [TextSpan(text: ' ${cell(c).$2}', style: kSimpleUnit)],
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                // An odd last reading takes the whole row: the wind's
+                // direction and gusts stay on one line.
+                for (final row in _pairs(cells))
+                  Row(
+                    children: [
+                      for (final c in row)
+                        Expanded(
+                          child: reading(
+                            cell(c).$1,
+                            cell(c).$2,
+                            cell(c).$3,
+                            // The Weather window's icon in front of each reading.
+                            icon: _weatherIcon(
+                              c.cell,
+                              c.overLimit != null
+                                  ? AraColors.accentWarning
+                                  : AraColors.textSecondary,
+                            ),
+                            colour: c.overLimit != null
+                                ? AraColors.accentWarning
+                                : null,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                      ),
-                    ]),
-                    Text(cell(c).$3,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: kSimpleUnit.copyWith(color: c.overLimit != null ? AraColors.accentWarning : null)),
-                  ]),
-                ),
-            ]),
+                    ],
+                  ),
+              ],
+            ),
           ),
+        if (gear.isNotEmpty) ...[
+          Container(
+            margin: const EdgeInsets.only(top: AraSpace.s4),
+            padding: const EdgeInsets.only(top: AraSpace.s4),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: AraColors.border)),
+            ),
+            child: Text(l10n.monitorCameraAndFocuser, style: kSimpleCaption),
+          ),
+          // At their own height, under the weather.
+          for (final row in _pairs(gear))
+            Row(
+              children: [
+                for (final g in row) Expanded(child: reading(g.$1, g.$2, g.$3)),
+              ],
+            ),
+        ],
       ],
     );
   }
@@ -1240,19 +1377,10 @@ Widget _weatherIcon(MonitorWeatherCell cell, Color color) => switch (cell) {
       MonitorWeatherCell.wind => Icon(Icons.air, size: 22, color: color),
     };
 
-/// Two readings a row; the wind, with its direction and gusts, takes a row
-/// of its own, and so does a last odd reading.
-List<List<T>> _weatherRows<T extends ({MonitorWeatherCell cell, double value, double? overLimit})>(List<T> cells) {
-  final rows = <List<T>>[];
-  for (final c in cells) {
-    if (c.cell != MonitorWeatherCell.wind && rows.isNotEmpty && rows.last.length == 1 && rows.last.first.cell != MonitorWeatherCell.wind) {
-      rows.last.add(c);
-    } else {
-      rows.add([c]);
-    }
-  }
-  return rows;
-}
+/// Two readings a row, as the Monitor mock has them.
+List<List<T>> _pairs<T>(List<T> items) => [
+      for (var i = 0; i < items.length; i += 2) items.sublist(i, i + 2 > items.length ? items.length : i + 2),
+    ];
 
 class _GuiderTile extends StatelessWidget {
   const _GuiderTile({required this.s, required this.onTap});
@@ -1422,12 +1550,6 @@ class _LastFrameTile extends StatelessWidget {
       if (last?.background != null) '${l10n.monitorSkyBackground} ${_n(last!.background, 0)}',
       if (last?.clippedShare != null) '${l10n.monitorClippedStars} ${_n(last!.clippedShare! * 100)} %',
     ].join(' · ');
-    final af = f.focuser && f.autofocusAt != null
-        ? l10n.monitorAutofocusSince(
-            simpleClockTime(f.autofocusAt!),
-            f.tempSinceAutofocus == null ? '—' : '${f.tempSinceAutofocus! >= 0 ? '+' : '−'}${f.tempSinceAutofocus!.abs().toStringAsFixed(1)} °C',
-          )
-        : null;
     // [guide] is where the flag starts: 15 % off the start, the wrong way.
     Widget graph(String id, List<double> values, MonitorDeviation? dev, double? guide, int decimals, [List<double>? own]) =>
         values.length > 1
@@ -1492,7 +1614,6 @@ class _LastFrameTile extends StatelessWidget {
             ),
           ]),
         ),
-        if (af != null) Text(af, style: _dim),
       ],
     );
   }

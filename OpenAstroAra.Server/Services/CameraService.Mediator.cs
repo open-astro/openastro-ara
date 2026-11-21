@@ -658,6 +658,31 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 sinceFanSync = TimeSpan.Zero;
             }
         }
+        // #2076 — how long (virtual time) the cooler has read back off while this cool commanded it
+        // on: a camera with no 12 V. A known-on read restarts it; an unknown read leaves it; a
+        // cooler-off since the start (Emergency Stop, the REST control) is not this fault. Cooling
+        // only: a warm whose cooler drops to off is not short of power.
+        var coolerOffFor = TimeSpan.Zero;
+        bool CoolerNotResponding(bool? coolerOn, TimeSpan elapsed) {
+            if (!cooling || Interlocked.Read(ref _coolerOffs) != offsAtStart) {
+                coolerOffFor = TimeSpan.Zero;
+                return false;
+            }
+            if (coolerOn == true) {
+                coolerOffFor = TimeSpan.Zero;
+            } else if (coolerOn == false) {
+                coolerOffFor += elapsed;
+            }
+            return coolerOffFor >= CoolerResponseWatch.DefaultWindow;
+        }
+        string NotRespondingShortfall() {
+            // Warn, then fail (#2076 user decision): the step's poll time can reach the minute a
+            // refresh pass before the watch does, and a cooler-off right after the failure would
+            // reset the watch before it ever warned.
+            ReportCoolerNotRespondingFromStep();
+            return string.Create(CultureInfo.InvariantCulture,
+                $"the cooler is not responding: is the camera's 12 V connected? (CoolerOn still reads off {coolerOffFor.TotalMinutes:0} min after it was switched on)");
+        }
         try {
             double? last = null;
             if (duration > TimeSpan.Zero && !double.IsNaN(start) && Math.Abs(start - target) > CoolingReachedToleranceC) {
@@ -674,6 +699,11 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                     ReportCooling(progress, label, target, fraction);
                     await CoolingDelay(CoolingRampInterval, ct).ConfigureAwait(false);
                     sinceFanSync += CoolingRampInterval;
+                    // #2076 — a long imported ramp must not re-send the set-point (and run the fan
+                    // interlock, the cooler reading off) every 15 s for its whole duration.
+                    if (cooling && CoolerNotResponding((await ReadCoolingTelemetryAsync().ConfigureAwait(false))?.CoolerOn, CoolingRampInterval)) {
+                        return NotRespondingShortfall();
+                    }
                 }
             }
             if (last != target) {
@@ -691,6 +721,9 @@ public sealed partial class CameraService : ICameraMediator, IImagingMediator {
                 await CoolingDelay(CoolingPollInterval, ct).ConfigureAwait(false);
                 telemetry = await ReadCoolingTelemetryAsync().ConfigureAwait(false)
                     ?? throw new InvalidOperationException("camera is not connected");
+                if (CoolerNotResponding(telemetry.CoolerOn, CoolingPollInterval)) {
+                    return NotRespondingShortfall();
+                }
                 var distance = Distance(telemetry.Temperature, target);
                 if (best - distance >= CoolingProgressC) {
                     best = distance;

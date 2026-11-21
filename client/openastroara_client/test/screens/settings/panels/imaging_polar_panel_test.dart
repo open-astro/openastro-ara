@@ -86,7 +86,7 @@ void main() {
       final fields = find.byType(TextField);
       expect(fields, findsNWidgets(4));
       // Row order: tolerance, turn, verify step, rough exposure.
-      final entered = ['2', '45', '20', '7.5'];
+      final entered = ['2', '25', '20', '7.5'];
       for (var i = 0; i < 4; i++) {
         await tester.enterText(fields.at(i), entered[i]);
         await tester.testTextInput.receiveAction(TextInputAction.done);
@@ -94,7 +94,7 @@ void main() {
       }
       final last = api.saved.last;
       expect(last.targetToleranceArcmin, 2.0);
-      expect(last.seedRotationDeg, 45.0);
+      expect(last.seedRotationDeg, 25.0);
       expect(last.checkStepDeg, 20.0);
       expect(last.coarseExposureSeconds, 7.5);
     },
@@ -130,9 +130,9 @@ void main() {
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
       expect(api.saved, isEmpty);
-      expect(tester.widget<TextField>(fields.at(1)).controller!.text, '60');
+      expect(tester.widget<TextField>(fields.at(1)).controller!.text, '10');
       expect(tester.widget<TextField>(fields.at(0)).controller!.text, '1');
-      expect(find.textContaining('5 to 120'), findsOneWidget);
+      expect(find.textContaining('Turn (°, 5 to 30)'), findsOneWidget);
     },
   );
 
@@ -146,6 +146,7 @@ void main() {
         'Turn',
         'Verify step',
         'Rough step exposure',
+        'Stop tracking when polar align ends',
       ]) {
         expect(find.textContaining(english), findsNothing, reason: english);
       }
@@ -170,6 +171,27 @@ void main() {
       expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
       expect(
         find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
+    (tester) async {
+      final rig = _Api()..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false);
+      await _pump(tester, rig: rig);
+      expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
+      expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
+      final stopTracking = find.byType(Switch).at(2);
+      expect(tester.widget<Switch>(stopTracking).value, isTrue);
+      await tester.tap(stopTracking);
+      await tester.pumpAndSettle();
+      final saved = rig.saved.single;
+      expect(saved.stopTrackingWhenDone, isFalse);
+      expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
+      expect(
+        find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
         findsOneWidget,
       );
     },

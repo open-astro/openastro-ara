@@ -116,6 +116,47 @@ public interface ITelescopeService {
     /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
+
+    /// <summary><see cref="AbortSlewAsync(CancellationToken)"/> with the caller named in the abort's log line and its
+    /// <c>slew_aborted</c> event (<c>user_request</c> for Stop Mount; <c>polar_align</c> for the routine's own stop).
+    /// Like it, the abort reaches the driver even when <paramref name="ct"/> is already cancelled.</summary>
+    Task AbortSlewAsync(string reason, CancellationToken ct) => AbortSlewAsync(ct);
+
+    /// <summary>The mount's Slewing read from the driver now, not the 2 s refresh; null when not connected or the read
+    /// fails. A routine that stops the mount confirms the stop on it.</summary>
+    Task<bool?> ReadSlewingNowAsync(CancellationToken ct) => Task.FromResult<bool?>(null);
+
+    /// <summary>The mount's RA (hours) and Dec (degrees) read from the driver now, not the 2 s refresh, in the
+    /// mount's own frame (<see cref="OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator.GetCurrentPosition"/>'s);
+    /// null when not connected or the read fails. Polar alignment stops its motor moves on it.</summary>
+    Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
+        Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+
+    /// <summary>Counts every slew abort (Stop Mount, Emergency Stop, the watchdog). A routine that drives the motors
+    /// itself reads it when a move starts, and treats any change as a stop it must obey.</summary>
+    long AbortEpoch => 0;
+
+    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
+    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
+    /// German equatorial mount, and treats null as one (fail-safe).</summary>
+    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
+
+    /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
+    /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
+    /// came since <paramref name="unlessAbortedSince"/> (an <see cref="AbortEpoch"/> reading): a routine's lease renewal
+    /// must never restart a motor the user just stopped.</summary>
+    Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, ct);
+
+    /// <summary>#2070 — null when the mount's reported position may be trusted for a GoTo, Park, Home or
+    /// polar alignment; otherwise why not (a <c>position_unverified_reason</c> token, or
+    /// <c>not_read_yet</c> before the session's first position read). Reads the mount once when the
+    /// session has not read it yet.</summary>
+    Task<string?> PositionUnverifiedReasonAsync(CancellationToken ct) => Task.FromResult<string?>(null);
+
+    /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
+    /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
+    Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
 }
 
 public interface IFocuserService {
@@ -403,8 +444,9 @@ public enum GuiderTwinDeleteStatus {
 public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, string? Reason);
 
 public interface IPolarAlignService {
-    /// <summary>A routine is running (any stage, any state short of a terminal one) — the one test
-    /// Emergency Stop and the start gates need; never a list of state names that a new stage outgrows.</summary>
+    /// <summary>A routine is running (any stage, any state short of a terminal one), or a run that just ended is still
+    /// stopping the mount (#2048) — the one test Emergency Stop and the start gates need; never a list of state names
+    /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
@@ -424,7 +466,8 @@ public interface IPolarAlignService {
     /// <see cref="InvalidOperationException"/> (→ 409) when the Polar Aligner is not stopped.</summary>
     Task<OperationAcceptedDto> ResumeAlignerAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
-    /// the mount stays put).</summary>
+    /// the mount stops where it is: AbortSlew and MoveAxis 0 go out before any wait, the stop is
+    /// confirmed, and tracking is left off, #2048).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
     /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>

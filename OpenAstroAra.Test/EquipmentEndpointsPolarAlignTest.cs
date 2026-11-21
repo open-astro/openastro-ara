@@ -21,6 +21,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
 
@@ -58,6 +59,20 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ProblemStatusOf(result), Is.EqualTo(StatusCodes.Status409Conflict));
             Assert.That(ProblemTypeOf(result), Is.EqualTo(EquipmentEndpoints.GuiderNotConnectedProblemType));
+        }
+
+        [Test]
+        public async Task Start_lets_a_declared_refusal_reach_the_refusal_handler() {
+            // #2070 — RefusalException is an InvalidOperationException: the not-connected catch must not turn
+            // the unverified-mount refusal into a "guider not connected" 409 with no reason.
+            var svc = new Mock<IPolarAlignService>();
+            svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .ThrowsAsync(TelescopeService.PositionUnverifiedRefusal(MountPoseTrust.AtHomeOnConnect));
+
+            var thrown = await Assert.ThrowsAsync<RefusalException>(
+                () => EquipmentEndpoints.PolarAlignStartAsync(svc.Object, null, null, CancellationToken.None));
+
+            Assert.That(thrown!.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
         }
 
         [Test]

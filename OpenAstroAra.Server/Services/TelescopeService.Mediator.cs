@@ -327,6 +327,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         return SlewCoreAsync();
 
         async Task<bool> SlewCoreAsync() {
+            // #2070 — a goto from a position model that is not trusted (a false zero after a power loss)
+            // drives the tube to the wrong place: fail the instruction before anything is sent. It throws,
+            // like the unknown-system refusal below, so a blind SlewScopeToRaDec shows it.
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.slew", token).ConfigureAwait(false);
             // #1124 — a slew right after connect can beat the first refresh: read the system now
             // rather than guess. Still unknown → fail the instruction without sending anything
             // (SlewScopeToRaDec's blind slew ignores a false return, so a refusal must throw to be seen;
@@ -510,6 +514,15 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
+        // #2070 — a park or a model Home from a position that is not trusted is refused before the module
+        // runs it: inside it the refusal would be published as an op fault, and op faults escalate to an
+        // abort-and-park.
+        if (op is "telescope.park" or "telescope.findhome") {
+            await ThrowIfPoseUnverifiedForSequenceAsync(client, op, ct,
+                // A refused park (a plan's Park Scope at the end of the night) must not leave the mount tracking
+                // unattended on a model whose limits may be wrong too: tracking stops, as the safety park's does.
+                stopTrackingOnRefusal: op == "telescope.park").ConfigureAwait(false);
+        }
         // §42.2 — note the command before dispatch so the tracking watch's grace window is armed by
         // the time any refresh tick can observe the op's effect (the module's Dispatched hook runs
         // after the call: too late). Park/home end with tracking legitimately off; everything else
@@ -556,14 +569,17 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort pre-op aid: a goto needs Tracking, and some mounts (e.g. iOptron) won't park from a stationary/home state — both want Tracking enabled first. A mount that rejects the write may still accept the op (or fail it with its own clear error, which the op path logs); swallowing the write failure keeps the op attempt authoritative. CA1031's log-and-recover boundary applies.")]
-    private void TryEnableTracking(ITelescopeDevice client) {
+    /// <returns>True when this call turned tracking on (it read off and the write went through).</returns>
+    private bool TryEnableTracking(ITelescopeDevice client) {
         try {
             if (!client.Tracking) {
                 client.Tracking = true;
+                return true;
             }
         } catch (Exception ex) {
             LogTrackingWriteIgnored(ex);
         }
+        return false;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -618,7 +634,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     /// <summary>Runs <paramref name="op"/> with this call's mount-op faults (§42.4) left unpublished. For a
     /// caller that reports its own failure to the user and must not feed the fault escalation to
-    /// abort-and-park (#1536 Polar Align's seed slew). The flag is set inside this method's own async
+    /// abort-and-park (#1536 Polar Align's slews). The flag is set inside this method's own async
     /// context, so no other caller's ops are affected.</summary>
     public static Task<T> RunWithoutOpFaultsAsync<T>(Func<Task<T>> op) {
         ArgumentNullException.ThrowIfNull(op);
@@ -685,6 +701,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             return false;
         }
         var target = TransformBestEffort(coordinates, MapSlewEpoch(equatorialSystem.Value));
+        NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
         var synced = false;
         try {
             // The module bounds the blocking round-trip so a hung driver can't pin the sequencer thread.
@@ -722,6 +739,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
+        // #2070 — before the pier-side write: some mounts start the flip slew on that write alone.
+        await ThrowIfPoseUnverifiedForSequenceAsync(client, "telescope.flip", token).ConfigureAwait(false);
         if (_profileService?.ActiveProfile?.MeridianFlipSettings.UseSideOfPier == true) {
             await CommandDestinationPierSideAsync(client, targetCoordinates, token).ConfigureAwait(false);
         }

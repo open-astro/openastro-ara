@@ -1,0 +1,11 @@
+### Breaking changes
+
+- **Polar Align leaves tracking off when it ends** (Polar Align, #2048): before, every end of a run turned tracking back on when the mount had been tracking. Now every end turns it off, as NINA does by default. A GoTo still turns tracking on by itself. **After upgrading:** if you want tracking back after Done or Verify, turn off *Stop tracking when polar align ends* in Settings › Imaging › Polar align. A Stop or a failure leaves tracking off either way. Starting guiding while Polar Align is still open gives back the tracking Polar Align found, as before.
+
+### Fixed (Polar Align)
+
+- **Stop really stops the mount** (#2048): Stop used to end the routine only. A Find Home or GoTo under way kept moving, a motor turn stopped only when the routine unwound, and a Stop whose request timed out never reached the mount. Now Stop sends AbortSlew and MoveAxis 0 on both axes at once, before it waits for anything, and every end of a run (Stop, Done, a failure, an exception, a time bound, the end of Verify, a sequence start, daemon shutdown) sends them again and checks on fresh readings that the mount stands still. If Ara cannot confirm that, the routine ends failed with `mount_did_not_stop`, tells you to cut the mount's power, and leaves tracking off. A Stop tapped while Polar Align is still starting (taking the guide camera) now keeps it from starting, instead of letting it move the mount after the Stop. A sequence started while a failed run is still stopping the mount waits for that stop, so the stop cannot abort the sequence's first slew or turn its tracking off. The app waits up to 60 s for Stop or Done to answer, longer than the daemon's slowest stop (47 s, for a run stuck in a mount call), so it no longer reports a failed Stop while Ara is still stopping the mount.
+
+### Added (Polar Align)
+
+- **Stop tracking when polar align ends** (#2048): the profile switch `stop_tracking_when_done` (on by default, NINA's StopTrackingWhenDone) in Settings › Imaging › Polar align, in English and pt-BR.

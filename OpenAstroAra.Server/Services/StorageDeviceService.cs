@@ -603,7 +603,7 @@ namespace OpenAstroAra.Server.Services {
                 // One argument per line; the wrapper rebuilds argv from it. An
                 // empty confirm label must survive as an empty line.
                 await File.WriteAllTextAsync(requestPath, string.Join('\n', helperArgs) + "\n", ct).ConfigureAwait(false);
-                var (exitCode, output) = await run("systemctl", ["start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
+                var (exitCode, output) = await run("systemctl", [Systemctl.NoAskPassword, "start", $"openastroara-storage@{id}.service"], ct).ConfigureAwait(false);
                 if (!File.Exists(resultPath)) {
                     return (exitCode == 0 ? -1 : exitCode,
                         string.IsNullOrWhiteSpace(output) ? "storage helper unit produced no result" : output);

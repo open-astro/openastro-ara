@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-16T22:47:20+13:00",
+  "generatedAt": "2026-11-20T17:38:55+13:00",
   "title": "Design System: OpenAstro Ara",
   "extensions": {
     "colorMeta": {
@@ -918,7 +918,7 @@
       "name": "Rig Setup Header and Sheet (Simple Mode)",
       "kind": "custom",
       "refersTo": "client/openastroara_client/lib/screens/simple/simple_rig_setup_sheet.dart",
-      "description": "#1562, redone 2026-11-13 (mock design/preview/simple-rig-setup-mock.html, layout B). Settings › Rig opens with a header while the rig lacks a first-night fact: Panel Alt box with a Hairline, the title and \"N of M done\" (caption), a 4 px Connected Green bar on Input Fill, then \"Next: <item>\" with what is missing and that item's fix as an amber outlined SimpleWindowButton (accent: Busy Amber outline and label, no fill). The menu has no Rig setup row. The first-time sheet boxes each missing line in amber (10 % fill, 45 % border, 8 px radius) around its words and its amber fix; done lines are flat with a tick; a footer under a Hairline holds the count and Not now as a plain Dim Text button."
+      "description": "#1562, redone 2026-11-13 (mock design/preview/simple-rig-setup-mock.html, layout B). Settings › Rig opens with a header while the rig lacks a first-night fact: Panel Alt box with a Hairline, the title and \"N of M done\" (caption), a 4 px Connected Green bar on Input Fill, then \"Next: <item>\" with what is missing and that item's fix as an amber outlined SimpleWindowButton (accent: Busy Amber outline and label, no fill). The menu has no Rig setup row. The first-time sheet boxes each missing line in amber (10 % fill, 45 % border, 8 px radius) around its words and its amber fix; done lines are flat with a tick; a footer under a Hairline holds the count and Not now as a plain Dim Text button. Set up optics, in the header and the sheet, opens Settings › Rig at the telescope rows, never the full UI; the main camera's sensor and pixel size there are read-only disabled tiles the rig fills from the camera (#2041)."
     },
     {
       "name": "Polar Aligner Block (Simple Mode)",
@@ -935,6 +935,14 @@
       "description": "Advanced Mode's Polar Align Start card ends with a collapsed Advanced row (#1736, mock design/preview/polar-align-advanced-row-mock.html, layout A chosen 2026-11-17): a 48 px high toggle under a Hairline, a chevron and the word Advanced, and while closed a Dim summary (\"60° turn · 30° step · 3 s\"). Open, it grows in the card below the Start buttons: the four knobs (Send the mount Home first as a switch, the turn, the Verify step and the rough exposure as number fields) in two columns, the name over each field with its help icon, one column under 480 px. A value out of range stays in the field with \"Out of range: use 5 to 120\" in the field's error line; a failed save puts the field back to the rig's value and says why in Error Red under the grid. Nothing shows until the rig's settings are loaded: a failed load shows \"not loaded\" with Retry. It edits the same Polar Align Routine settings as Settings › Imaging › Polar align, so the two always agree.",
       "html": "<div class=\"ds-adv\"><div class=\"ds-adv-h\"><span>&#9656; Advanced</span><span>60° turn · 30° step · 3 s</span></div></div>",
       "css": ".ds-adv{width:388px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;border-top:1px solid #404040}.ds-adv-h{display:flex;justify-content:space-between;align-items:center;min-height:48px;font-size:14px;font-weight:600;color:#E0E0E0}.ds-adv-h span+span{font-size:12px;font-weight:400;color:#A0A0A0}"
+    },
+    {
+      "name": "Mount Limits (Simple Mode)",
+      "kind": "custom",
+      "refersTo": "simple-mount-limits",
+      "description": "The Mount window's Limits group, across the full width under the rows, the pad and the Pointing row (#2044): a LIMITS section header, Lowest altitude (0–60° in 5° steps; read-only \"Your measured horizon\" with a caption when a measured horizon is in use), At the meridian (flip Auto, 30 min before to 30 min after) or Stop before meridian (flip Off, Off or 5–30 min) with a caption, as − value + steppers with 48 pt buttons disabled at their ends and spoken as \"Raise lowest altitude\" etc., and a quarter-circle sky arc (Error red 35 % under the lowest altitude, Connected green 28 % above). Each tap saves with a sentence pill; a failed save restores the value with \"Couldn't save the limit\".",
+      "html": "<div class=\"ds-limits\"><div class=\"ds-limits-sect\">Limits</div><div class=\"ds-limits-row\"><span>Lowest altitude</span><span class=\"ds-step\"><button aria-label=\"Lower lowest altitude\">−</button><output>20°</output><button aria-label=\"Raise lowest altitude\">+</button></span></div><div class=\"ds-limits-row\"><span>At the meridian</span><span class=\"ds-step\"><button aria-label=\"Earlier at the meridian\">−</button><output>5 min after</output><button aria-label=\"Later at the meridian\">+</button></span></div><span class=\"ds-limits-cap\">Keeps tracking 5 min past the meridian, then flips.</span><svg width=\"360\" height=\"150\" viewBox=\"0 0 360 150\" role=\"img\" aria-label=\"Allowed sky from 20° to the zenith\"><path d=\"M40,138 L158,138 A118,118 0 0 0 150.9,97.6 Z\" fill=\"rgba(229,57,53,.35)\"/><path d=\"M40,138 L150.9,97.6 A118,118 0 0 0 40,20 Z\" fill=\"rgba(76,175,80,.28)\"/></svg></div>",
+      "css": ".ds-limits{display:flex;flex-direction:column;gap:4px;width:400px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#E0E0E0;font-size:14px} .ds-limits-sect{font-size:11px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;color:#A0A0A0;border-top:1px solid #404040;padding-top:8px} .ds-limits-row{display:flex;align-items:center;justify-content:space-between;min-height:44px} .ds-step{display:inline-flex;align-items:center;background:rgba(56,56,56,.55);border-radius:6px} .ds-step button{width:48px;height:48px;background:transparent;border:0;color:#E0E0E0;font-size:18px} .ds-step button:disabled{color:#606060} .ds-step output{width:120px;text-align:center} .ds-limits-cap{color:#A0A0A0;font-size:12px}"
     }
   ],
   "narrative": {

@@ -575,6 +575,21 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/telescope/confirm-home:
+    post:
+      tags:
+        - Equipment
+      summary: 'Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.'
+      operationId: ConfirmTelescopeHome
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/abort:
     post:
       tags:
@@ -14429,7 +14444,7 @@ components:
             - number
             - string
           format: double
-          default: 60
+          default: 10
         loop_cadence_ms:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -14453,7 +14468,7 @@ components:
             - number
             - string
           format: double
-          default: 30
+          default: 10
         coarse_exposure_seconds:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
@@ -14465,6 +14480,9 @@ components:
           type: boolean
           default: true
         polar_aligner_auto:
+          type: boolean
+          default: true
+        stop_tracking_when_done:
           type: boolean
           default: true
     PolarAlignStartRequestDto:
@@ -14991,6 +15009,8 @@ components:
         - storage-unavailable
         - end-night-in-progress
         - below-horizon-limit
+        - mount-position-unverified
+        - counterweight-limit
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
@@ -15577,6 +15597,27 @@ components:
             - string
           format: double
           default: 50
+        minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 5
+        max_minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 10
+        stop_before_meridian_min:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
     SavedTargetDto:
       required:
         - name

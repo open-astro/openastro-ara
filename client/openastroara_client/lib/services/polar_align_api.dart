@@ -78,18 +78,37 @@ class PolarAlignApi implements PolarAlignClient {
     await _dio.post<void>('/api/v1/equipment/polaralign/next');
   }
 
-  /// Abort — the mount stays where it is; logged as `aborted`. 202-Accepted.
+  /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
+  /// stopped, confirmed on the daemon, tracking left off); logged as
+  /// `aborted`. 202-Accepted.
   @override
   Future<void> stop() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/stop');
+    await _dio.post<void>(
+      '/api/v1/equipment/polaralign/stop',
+      options: Options(receiveTimeout: endTimeout),
+    );
   }
 
   /// The user is satisfied: same unwind as [stop] but the §45.13 session row
   /// records `complete` with the achieved error. 202-Accepted.
   @override
   Future<void> complete() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/complete');
+    await _dio.post<void>(
+      '/api/v1/equipment/polaralign/complete',
+      options: Options(receiveTimeout: endTimeout),
+    );
   }
+
+  /// #2048 — Stop and Done answer once the daemon has ended the run and
+  /// confirmed the mount stopped. Its slowest end (`EndWorstCase` in
+  /// PolarAlignService.MountStop.cs) is a stuck run: one round of stop
+  /// commands (3 × 3 s), the 15 s unwind grace, then the stop it confirms
+  /// itself (8 s window, plus the poll, two 3 s reads and one more 9 s round):
+  /// 47.25 s. The margin covers tracking off, the session row and the camera
+  /// release, so the app never reports a failed Stop while the daemon is still
+  /// stopping the mount. PolarAlignServiceTest reads this value and checks it
+  /// against the daemon's bound.
+  static const endTimeout = Duration(seconds: 60);
 
   /// Single-frame mode: take the next adjust frame. 202-Accepted; a 409
   /// outside the adjust phase.
