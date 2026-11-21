@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Astrometry;
 using OpenAstroAra.Core.Enums;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
@@ -114,6 +115,27 @@ namespace OpenAstroAra.Test {
                 Assert.That(FormValue(goto_.Body, "Declination"), Is.EqualTo(30.0).Within(1e-9));
                 Assert.That(box.Puts.Any(p => p.Path.EndsWith("/sideofpier", StringComparison.Ordinal)), Is.False,
                     "side of pier is off in the profile: no pier-side hint");
+            }
+        }
+
+        // #2066 (ARA-2) — some mounts start the flip slew on the pier-side write alone: while Polar Align holds the mount,
+        // the flip is refused before that write, not at its GoTo after it.
+        [Test]
+        public async Task A_flip_while_Polar_Align_holds_the_mount_is_refused_before_the_pier_side_write() {
+            var ra = (LstHours() + 3.0) % 24.0;
+            await using var box = ScriptedAlpacaDevice.Start(Mount(ra, sideOfPier: "0", canSetPierSide: "true"));
+            var (profile, profileService) = ProfileWith(useSideOfPier: true);
+            using (profile) {
+                using var svc = await ConnectAsync(box, profileService);
+                var target = new Coordinates(Angle.ByHours(ra), Angle.ByDegree(30.0), Epoch.JNOW);
+
+                using (svc.AcquireMotion(MotionOwners.PolarAlign)) {
+                    var refused = await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).MeridianFlip(target, CancellationToken.None));
+                    Assert.That(refused!.Message, Does.Contain("Polar alignment is running"));
+                }
+
+                Assert.That(box.Puts.Any(p => p.Path.EndsWith("/sideofpier", StringComparison.Ordinal)), Is.False, "no pier-side write");
+                Assert.That(box.Puts.Any(p => p.Path.EndsWith("/slewtocoordinatesasync", StringComparison.Ordinal)), Is.False, "no GoTo");
             }
         }
 

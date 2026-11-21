@@ -345,10 +345,20 @@ framing/focus loop when you need to point or focus by eye.
   direction pad, or the safety or equipment-fault reaction when it could not park the mount. The card
   says what stopped it, in the app's language, and no further turn starts. Emergency Stop latches before any of its other
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
-  While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
-  ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
-  turns unsafe, or a device fault ends in a park, the park stops Polar Align and the Polar Aligner
-  first. A Home you tap just before Stop Mount or Emergency Stop does not start after the stop.
+  From Start until it ends (its solves and the live adjust loop too), Polar Align holds the mount: a
+  GoTo, a sync, Center, Home and Park are refused ("Polar alignment is using the mount"), and so are a
+  sequence's GoTo, Park, Find Home and meridian flip; a direction-pad move is refused while it turns
+  the mount. Stop Polar Align first, tap **Done**, or tap Stop Mount. Emergency Stop, Stop Mount, a pad
+  release and Tracking off always get through. When the sky turns unsafe, a device fault ends in a
+  park, or End Night (or the unattended shutdown) homes and parks the mount, it stops Polar Align and
+  the Polar Aligner first. A Home you tap just before Stop Mount or Emergency Stop does not start
+  after the stop.
+- **Polar Align turns only a still mount.** It refuses to start while the mount is slewing (or does
+  not say whether it is), or while the guider is guiding or calibrating ("the mount is moving or the
+  guider is guiding"): let the slew finish or stop guiding, then start again. Before each turn it
+  reads the mount twice, a second apart: if the mount slews or moved in between (the hand controller,
+  another program), or the guider started guiding, the run ends before the motor starts and the card
+  says why.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

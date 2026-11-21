@@ -15,6 +15,7 @@
 using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Core.Model;
+using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Image.ImageAnalysis;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
@@ -397,7 +398,17 @@ namespace OpenAstroAra.Test {
             var frames = new Mock<IAnalysisFrameSource>();
             frames.Setup(f => f.CaptureForAnalysisAsync(It.IsAny<double>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
                 .Returns(() => Task.FromResult(new AnalysisFrame(new ushort[64 * 64], 64, 64, DateTimeOffset.UnixEpoch)));
-            using var sweep = new AutofocusSweepService(store, focuser, frames.Object,
+            // The sweep's own requests, passed straight to the service: the hardware must get exactly these.
+            var asked = new ConcurrentQueue<int>();
+            var recording = new Mock<IFocuserMediator>();
+            recording.Setup(f => f.GetInfo()).Returns(() => focuser.GetInfo());
+            recording.Setup(f => f.MoveFocuser(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .Returns((int target, CancellationToken ct) => {
+                    asked.Enqueue(target);
+                    return focuser.MoveFocuser(target, ct);
+                });
+            var before = stub.Moves.Count;
+            using var sweep = new AutofocusSweepService(store, recording.Object, frames.Object,
                 travelRange: _ => Task.FromResult<(int, int)?>((0, 50_000)),
                 metric: (_, _) => {
                     var delta = (stub.Position - 9_850) / 100.0;
@@ -407,8 +418,10 @@ namespace OpenAstroAra.Test {
 
             Assert.That(await sweep.RunAutofocusAsync(new Progress<ApplicationStatus>(), CancellationToken.None), Is.True);
 
-            Assert.That(focuser.GetInfo().Position, Is.EqualTo(stub.Position),
-                "no standing offset after the sweep: the hardware moved exactly where the sweep asked");
+            // Compared move by move, not through GetInfo(): its cached position can trail the last move by a refresh tick.
+            Assert.That(asked, Is.Not.Empty, "the sweep moved the focuser");
+            Assert.That(stub.Moves.ToArray()[before..], Is.EqualTo(asked.ToArray()),
+                "no backlash steps in the sweep: the hardware moved exactly where the sweep asked");
         }
 
         private static System.Collections.Generic.List<DetectedStar> Stars(int count, double hfr) {
