@@ -196,6 +196,29 @@ void main() {
     });
   });
 
+  test('a focal length change on a rig with a confirmed first flip saves safety with the tag after the optics write', () async {
+    final rig = FakeSectionRig({
+      ...rigDefaults,
+      'storage': rigStorage,
+      'safety': {
+        ...rigDefaults['safety']!,
+        'first_flip_confirmed': true,
+        'first_flip_completed_utc': '2026-11-01T22:14:00Z',
+        'first_flip_pier_side_changed': true,
+      },
+    });
+    final d = ProfileDraft()..profileName = 'Rig';
+    d.telescope.focalLengthMm = 400;
+    await saveWizardProfile(_RigApi(rig), d);
+    expect(rig.ifMatches, isNot(contains(null)));
+    final tags = {for (final p in rig.puts) p.section: p.ifMatch};
+    expect(tags.keys, containsAll(['optics', 'safety']));
+    // The optics write moved safety to v2; the safety PUT carries that tag.
+    expect(tags['safety'], '"safety-v2"');
+    expect((rig.sectionOf('optics') as Map)['focal_length_mm'], 400);
+    expect((rig.sectionOf('safety') as Map)['first_flip_confirmed'], isFalse);
+  });
+
   group('saveWizardProfile orchestration', () {
     test('happy path creates once and PUTs every section', () async {
       final api = _FakeProfileApi();

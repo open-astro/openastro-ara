@@ -444,25 +444,30 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     d.savedProfileId = meta.id;
   }
 
-  // Each section is an independent GET-overlay-PUT against the active profile, so
-  // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
-  // latency). Collect every failure (rather than letting Future.wait drop all but
+  // Each section is a GET-overlay-PUT against the active profile; run them
+  // concurrently rather than serially (safety alone waits for optics, below).
+  // Collect every failure (rather than letting Future.wait drop all but
   // the first) so a partial save reports exactly which sections didn't apply.
-  // The sections are disjoint (no section's GET reads another's PUT target),
-  // and the caller (_saveAndExit) runs this under a non-dismissible spinner that
-  // blocks a second Save, so there is no GET-after-PUT overlap to worry about.
   // ADR 0015 — each PUT sends the `ETag` of the copy its GET loaded; the rig
   // refuses a section PUT without one (428) and one over a newer copy (412),
-  // and either counts as a section that did not apply.
+  // and either counts as a section that did not apply. So a section whose copy
+  // another section's PUT changes on the rig is read only after that PUT. The
+  // one such link: an optics write that changes the optics clears the
+  // first-flip state in safety (§58.8, `FileProfileStore.WithOptics` /
+  // `ProfileSections.WithoutFirstFlip`), which moves the safety tag, so the
+  // safety GET waits for the optics PUT. Every other section PUT writes only
+  // its own section, and the caller (_saveAndExit) runs this under a
+  // non-dismissible spinner that blocks a second Save.
+  final opticsSaved = _trySave(
+    () => _overlay(api.getOpticsSection, api.putOpticsSection,
+        (base) => applyDraftToOptics(base, d)),
+  );
   final errors = (await Future.wait([
     _trySave(
       () => _overlay(api.getSiteSection, api.putSiteSection,
           (base) => applyDraftToSite(base, d)),
     ),
-    _trySave(
-      () => _overlay(api.getOpticsSection, api.putOpticsSection,
-          (base) => applyDraftToOptics(base, d)),
-    ),
+    opticsSaved,
     _trySave(
       () => _overlay(api.getImagingDefaultsSection,
           api.putImagingDefaultsSection, (base) => applyDraftToImaging(base, d)),
@@ -497,9 +502,12 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
       () => _overlay(api.getStorageSection, api.putStorageSection,
           (base) => applyDraftToStorage(base, d)),
     ),
-    _trySave(
-      () => _overlay(api.getSafetySection, api.putSafetySection,
-          (base) => applyDraftToSafety(base, d)),
+    // After the optics PUT, landed or not (see above); _trySave never throws.
+    opticsSaved.then(
+      (_) => _trySave(
+        () => _overlay(api.getSafetySection, api.putSafetySection,
+            (base) => applyDraftToSafety(base, d)),
+      ),
     ),
     // The fan replaces the section whole; the GET is for its tag.
     if (d.coolingFan case final fan?)

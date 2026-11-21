@@ -118,8 +118,12 @@ class FakeSectionRig implements HttpClientAdapter {
           return _json({'title': 'Precondition Failed'}, 412);
         }
         puts.add((section: section, body: options.data, ifMatch: ifMatch));
+        final before = _sections[section];
         _sections[section] = options.data;
         savedElsewhere(section);
+        if (section == 'optics' && !_sameJson(before, options.data)) {
+          _opticsChanged();
+        }
         final drop = dropFromReply[section];
         final reply = drop == null
             ? options.data
@@ -128,6 +132,42 @@ class FakeSectionRig implements HttpClientAdapter {
       default:
         return _json({'title': 'method not allowed'}, 405);
     }
+  }
+
+  /// The daemon's optics write (`FileProfileStore.WithOptics`, mirrored by
+  /// `InMemoryProfileStore.SetOpticsLocked`): an optics copy that differs from
+  /// the stored one clears the first-flip state in safety
+  /// (`ProfileSections.WithoutFirstFlip`), so the safety copy, and its tag,
+  /// move when that state was set. An identical re-save keeps both.
+  void _opticsChanged() {
+    final safety = _sections['safety'];
+    if (safety is! Map) return;
+    final cleared = {
+      ...safety,
+      'first_flip_confirmed': false,
+      'first_flip_completed_utc': null,
+      'first_flip_pier_side_changed': false,
+    };
+    if (_sameJson(safety, cleared)) return;
+    _sections['safety'] = cleared;
+    savedElsewhere('safety');
+  }
+
+  /// Two JSON values hold the same data (a number compares by value, so 1 and
+  /// 1.0 match, as the daemon's DTO equality does).
+  static bool _sameJson(Object? a, Object? b) {
+    if (a is Map && b is Map) {
+      return a.length == b.length &&
+          a.keys.every((k) => b.containsKey(k) && _sameJson(a[k], b[k]));
+    }
+    if (a is List && b is List) {
+      if (a.length != b.length) return false;
+      for (var i = 0; i < a.length; i++) {
+        if (!_sameJson(a[i], b[i])) return false;
+      }
+      return true;
+    }
+    return a == b;
   }
 
   ResponseBody _json(Object? body, int status, {String? etag}) =>
