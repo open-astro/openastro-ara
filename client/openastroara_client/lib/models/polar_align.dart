@@ -574,6 +574,14 @@ abstract final class PolarAlignPreflightStatuses {
 /// #2068 the ids of the pre-flight checks the app acts on.
 abstract final class PolarAlignPreflightChecks {
   static const clearanceConfirmed = 'clearance_confirmed';
+  static const startPointing = 'start_pointing';
+  static const startCwAngle = 'start_cw_angle';
+  static const turnStep = 'turn_step';
+
+  /// The checks that depend on the measurement's turn step. The list is read
+  /// for the fine stage; a Check plans with its own step, so the rig judges
+  /// these for it when it starts.
+  static const stageDependent = {startPointing, startCwAngle, turnStep};
 }
 
 /// #2068 one check of the pre-flight list: its id, status and the rig's
@@ -656,6 +664,13 @@ class PolarAlignPreflight {
 
   /// A check fails: the rig would refuse a start.
   bool get blocksStart => !ready || checks.any((c) => c.fails);
+
+  /// A check that does not depend on the turn step fails: the rig would
+  /// refuse a Check too ([PolarAlignPreflightChecks.stageDependent] are the
+  /// fine stage's, and a Check turns by its own step).
+  bool get blocksCheck => checks.any(
+    (c) => c.fails && !PolarAlignPreflightChecks.stageDependent.contains(c.id),
+  );
 
   PolarAlignPreflightCheck? check(String id) {
     for (final c in checks) {

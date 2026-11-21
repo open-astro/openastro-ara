@@ -3,23 +3,78 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/polar_align.dart';
+import '../equipment/mount_state.dart';
+import '../settings/polar_align_settings_state.dart';
+import '../settings/site_settings_state.dart';
 import 'polar_align_state.dart';
 
 /// #2068 (ARA-18) the Start card's pre-flight list, as the rig evaluates it:
 /// every check a start refuses on. Read when a Start card opens
-/// (autoDispose), whenever the routine's phase changes (a run started, ended
-/// or failed: the mount may stand elsewhere), and after the clearance dialog
-/// saves ([refresh]). Null with no rig, or from a rig that predates the list
-/// (the card then shows none, and the rig's own start refusals stand).
+/// (autoDispose), and again ([refresh]) whenever something a check reads
+/// changes: the routine's phase (a run started, ended or failed), the mount
+/// (connected, parked, its position trusted, a slew ending, another mount),
+/// the polar-align section (a clearance saved here or on another device, a
+/// profile switch) and the site. A failing mount-clock check is read again a
+/// few seconds later ([clockRetryDelay]): the rig's clock push after a
+/// connect clears it with no event the app sees. Null with no rig, or from a
+/// rig that predates the list (the card then shows none, and the rig's own
+/// start refusals stand).
 class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
+  /// How long after a failing mount-clock check the list is read again: the
+  /// rig's push takes up to about 10 s.
+  static const clockRetryDelay = Duration(seconds: 12);
+
+  /// At most this many clock re-reads in a row, so a mount whose clock never
+  /// verifies is not polled while the card stays open.
+  static const maxClockRetries = 3;
+
+  static const _clockCheck = 'mount_clock_or_site';
+
+  // The read that may set the state: an older reply never overwrites a newer
+  // one.
+  int _seq = 0;
+  int _clockRetries = 0;
+  Timer? _clockRetry;
+
   @override
   Future<PolarAlignPreflight?> build() async {
     final api = ref.watch(polarAlignApiProvider);
+    ref.onDispose(() => _clockRetry?.cancel());
     if (api == null) return null;
-    ref.listen(polarAlignLiveProvider.select((l) => l.phase), (prev, next) {
+    void changed(Object? prev, Object? next) {
       if (prev != next) unawaited(refresh());
-    });
-    return api.preflight();
+    }
+
+    ref.listen<Object?>(polarAlignLiveProvider.select((l) => l.phase), changed);
+    ref.listen<Object?>(
+      mountProvider.select((m) {
+        final v = m.value;
+        return v == null
+            ? null
+            : (
+                v.deviceId,
+                v.connectionState,
+                v.parked,
+                v.positionUnverified,
+                v.isBusy,
+              );
+      }),
+      changed,
+    );
+    ref.listen<Object?>(
+      polarAlignSettingsProvider.select((s) => s.value),
+      changed,
+    );
+    ref.listen<Object?>(
+      siteSettingsProvider.select(
+        (s) => (s.value?.latitudeDeg, s.value?.longitudeDeg),
+      ),
+      changed,
+    );
+    final seq = ++_seq;
+    final list = await api.preflight();
+    if (seq == _seq) _scheduleClockRetry(list);
+    return list;
   }
 
   /// Read the list again. A failed read is shown (with Retry); it never keeps
@@ -27,12 +82,30 @@ class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
   Future<void> refresh() async {
     final api = ref.read(polarAlignApiProvider);
     if (api == null) return;
+    final seq = ++_seq;
     try {
       final next = await api.preflight();
-      if (ref.mounted) state = AsyncData(next);
+      if (!ref.mounted || seq != _seq) return;
+      state = AsyncData(next);
+      _scheduleClockRetry(next);
     } catch (e, st) {
-      if (ref.mounted) state = AsyncError(e, st);
+      if (ref.mounted && seq == _seq) state = AsyncError(e, st);
     }
+  }
+
+  void _scheduleClockRetry(PolarAlignPreflight? list) {
+    _clockRetry?.cancel();
+    _clockRetry = null;
+    final clockFails = list?.check(_clockCheck)?.fails ?? false;
+    if (!clockFails) {
+      _clockRetries = 0;
+      return;
+    }
+    if (_clockRetries >= maxClockRetries) return;
+    _clockRetries++;
+    _clockRetry = Timer(clockRetryDelay, () {
+      if (ref.mounted) unawaited(refresh());
+    });
   }
 }
 
@@ -49,5 +122,14 @@ final polarAlignPreflightProvider =
 bool polarPreflightBlocksStart(AsyncValue<PolarAlignPreflight?> preflight) =>
     switch (preflight) {
       AsyncData(:final value) => value?.blocksStart ?? false,
+      _ => false,
+    };
+
+/// [polarPreflightBlocksStart] for a Check: only the checks that do not depend
+/// on the turn step ([PolarAlignPreflight.blocksCheck]). The list is the fine
+/// stage's; the rig judges a Check's own start pointing when it starts.
+bool polarPreflightBlocksCheck(AsyncValue<PolarAlignPreflight?> preflight) =>
+    switch (preflight) {
+      AsyncData(:final value) => value?.blocksCheck ?? false,
       _ => false,
     };

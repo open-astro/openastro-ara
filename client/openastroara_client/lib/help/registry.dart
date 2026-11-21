@@ -1137,7 +1137,7 @@ const Map<String, Help> helpRegistry = {
         '* The checks: the mount connected and not parked; the site latitude (and, later, longitude and sidereal time); the mount\'s clock, set and checked from the rig\'s synced clock; the mount\'s position trusted (no power loss or unconfirmed stop since); this mount\'s counterweight and cable clearance, confirmed by you; and where the scope points, from a fresh reading (not within 3° of the pole, within the session\'s sweep limit).\n'
         '* **Clearance** — tap *Confirm clearance…*, check with the hand controller how far the counterweight can turn up before anything touches, set that limit and confirm. It is kept for each mount.\n'
         '* **The mount\'s own limits** — always a note: set the slew and altitude limits in the mount\'s hand controller or app too. Ara\'s checks do not replace them.\n'
-        '* Start asks the rig again: it refuses on the first check that fails, so the list and the start never disagree. Tap the refresh button after you fix something.',
+        '* Start asks the rig again: it refuses on the first check that fails, so the list and the start never disagree. The list reads itself again when the mount connects, parks, unparks or ends a slew, when the settings change, and a few seconds after a failing clock check; the refresh button reads it at once. Check turns by its own step, so where the scope points is judged for it when it starts.',
     relatedHelpKeys: ['setup.polar_align.stages', 'img.polar.clearance_confirmed', 'img.polar.max_cw_angle_deg'],
     keywords: ['polar', 'alignment', 'preflight', 'pre-flight', 'checks', 'clearance', 'counterweight', 'safety', 'start'],
   ),

@@ -702,7 +702,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             children: [
               TextButton.icon(
                 key: const Key('polar-align-adjust-again'),
-                onPressed: _busy ? null : () => _start(stage: PolarAlignStages.fine),
+                // #2068 — a fine start: off while a pre-flight check fails.
+                onPressed: _busy || polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider))
+                    ? null
+                    : () => _start(stage: PolarAlignStages.fine),
                 icon: const Icon(Icons.tune),
                 label: const Text('Adjust again'),
               ),
@@ -723,8 +726,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
 
   Widget _idleBody(PolarAlignLive live) {
     // #2068 — a pre-flight check that fails turns the starts off: the rig would refuse them.
-    final blocked = polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider));
-    final off = _busy || blocked;
+    final preflight = ref.watch(polarAlignPreflightProvider);
+    final off = _busy || polarPreflightBlocksStart(preflight);
+    // A Check turns by its own step: the fine stage's start pointing is not its own (the rig judges it).
+    final checkOff = _busy || polarPreflightBlocksCheck(preflight);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -773,7 +778,7 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
             ),
             OutlinedButton.icon(
               key: const Key('polar-align-start-check'),
-              onPressed: off ? null : _check,
+              onPressed: checkOff ? null : _check,
               icon: const Icon(Icons.fact_check_outlined),
               label: Text(context.l10n.polarCheck),
             ),
@@ -1013,7 +1018,10 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                         : 'Available once the total error is under ${tolerance.toStringAsFixed(1)}′',
                     child: FilledButton.icon(
                       key: const Key('polar-align-check'),
-                      onPressed: _busy || !inTolerance ? null : _check,
+                      // #2068 — off while a check that does not depend on the turn step fails.
+                      onPressed: _busy || !inTolerance || polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider))
+                          ? null
+                          : _check,
                       icon: const Icon(Icons.fact_check_outlined),
                       label: Text(context.l10n.polarCheck),
                     ),

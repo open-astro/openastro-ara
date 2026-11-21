@@ -352,6 +352,11 @@ namespace OpenAstroAra.Server.Services {
             // #2068 — the same pre-flight list as Start, refused on its first failing check. #2066: an unverified position
             // comes before the start pointing, so a false Home at the pole after a power cycle names the unconfirmed stop,
             // not the on-axis refusal (#2082). A start that names no stage is the fine measurement; the plan echoes it.
+            // #2071 — like Start, the plan waits (up to about 10 s) for a mount clock push in flight: the app reads the
+            // plan before Start, so a Start tapped just after connect is not refused by the push it would have waited for.
+            if (_mountClock is { } clockGate) {
+                await clockGate.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
+            }
             var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, ct).ConfigureAwait(false);
             ThrowOnFirstFailure(preflight);
             return StartPlanOf(preflight).Plan with { Stage = stage };

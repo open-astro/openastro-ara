@@ -612,7 +612,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               OutlinedButton(
                 key: const Key('simple-polar-check-again'),
-                onPressed: busy || polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider)) ? null : _check,
+                // #2068 — off while a check that does not depend on the turn step fails.
+                onPressed: busy || polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider)) ? null : _check,
                 child: Text(l10n.polarCheck),
               ),
             ],
@@ -654,7 +655,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
-                      onPressed: !busy && inTolerance ? _check : null,
+                      onPressed: !busy &&
+                              inTolerance &&
+                              !polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider))
+                          ? _check
+                          : null,
                       child: Text(l10n.polarCheck),
                     ),
                   ),

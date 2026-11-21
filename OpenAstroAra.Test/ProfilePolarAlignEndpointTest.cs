@@ -19,6 +19,7 @@ using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Endpoints;
 using OpenAstroAra.Server.Services;
+using System.Collections.Generic;
 
 namespace OpenAstroAra.Test {
 
@@ -129,6 +130,45 @@ namespace OpenAstroAra.Test {
             Assert.That(view.CheckStepDeg, Is.EqualTo(PolarAlignSettingsClamp.MaxCheckStepDeg));
             Assert.That(view.CoarseExposureSeconds, Is.EqualTo(PolarAlignSettingsClamp.DefaultCoarseExposureSeconds));
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never, "a read writes nothing back");
+        }
+
+        // #2068 review — an app from before mount_clearance PUTs the section without it: the stored confirmations stay.
+        // An empty map (the app's own clear) still clears them.
+        [Test]
+        public void A_PUT_without_mount_clearance_keeps_every_stored_confirmation() {
+            var stored = new Dictionary<string, PolarAlignMountClearanceDto> {
+                ["mount-a"] = new(MaxCwAngleDeg: 45.0, ClearanceConfirmed: true),
+            };
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(MountClearance: stored));
+
+            var kept = (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(ExposureSeconds: 4.0), store.Object)
+                as Ok<PolarAlignSettingsDto>)?.Value;
+            var cleared = (ProfileEndpoints.PutPolarAlignSettings(
+                new PolarAlignSettingsDto(MountClearance: new Dictionary<string, PolarAlignMountClearanceDto>()), store.Object)
+                as Ok<PolarAlignSettingsDto>)?.Value;
+
+            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(45.0, true)));
+            Assert.That(kept!.ExposureSeconds, Is.EqualTo(4.0));
+            Assert.That(cleared?.MountClearance, Is.Empty, "an empty map clears them");
+        }
+
+        // #2068 review — a confirmation is for the limit the user checked: a confirmed limit out of range is refused, not
+        // raised to 10° or lowered to 75°. An unconfirmed one is clamped like the other knobs.
+        [TestCase(5.0)]
+        [TestCase(80.0)]
+        public void A_confirmed_clearance_outside_10_to_75_degrees_is_400_and_not_stored(double limitDeg) {
+            var store = new Mock<IProfileStore>();
+            var entries = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(limitDeg, ClearanceConfirmed: true) };
+
+            var refused = ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: entries), store.Object);
+            Assert.That((refused as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+            store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never);
+
+            var unconfirmed = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(limitDeg, ClearanceConfirmed: false) };
+            var clamped = (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: unconfirmed), store.Object)
+                as Ok<PolarAlignSettingsDto>)?.Value;
+            Assert.That(clamped?.MountClearance?["m"].MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.ClampMaxCwAngleDeg(limitDeg)));
         }
 
         [TestCase(0.001, PolarAlignLoopModes.Loop)]
