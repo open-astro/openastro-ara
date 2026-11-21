@@ -14,6 +14,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import 'package:openastroara/util/tonight_sky_local.dart';
 
 class _List extends SequenceListNotifier {
   _List(this.items);
@@ -201,6 +202,53 @@ void main() {
         );
       },
     );
+
+    test('the prompt waits for the site twilight line, not a fixed -12', () async {
+      // The fixture site keeps the default astronomical line (-18). Find a dusk
+      // minute with the sun between -13 and -17: nautical dark, not yet site dark.
+      DateTime? t;
+      for (var m = 0; m < 300; m++) {
+        final x = DateTime.utc(2026, 7, 19, 2).add(Duration(minutes: m));
+        final alt = sunMoonAltitudeDeg(
+          x,
+          belen.latitudeDeg,
+          belen.longitudeDeg,
+        ).sunAltDeg;
+        if (alt < -13 && alt > -17) {
+          t = x;
+          break;
+        }
+      }
+      expect(t, isNotNull);
+      expect(belen.twilightDefinition, TwilightDefinition.astronomical);
+      final c = make(runs: running, now: t!);
+      final s = await c.read(preflightPromptProvider.future);
+      expect(s.shouldPrompt, isFalse, reason: 'sun above the site line at $t');
+    });
+
+    test('a civil-twilight site prompts once the sun is below -6', () async {
+      // Sun between -7 and -11: past the civil line, above the old fixed -12.
+      DateTime? t;
+      for (var m = 0; m < 300; m++) {
+        final x = DateTime.utc(2026, 7, 19, 2).add(Duration(minutes: m));
+        final alt = sunMoonAltitudeDeg(
+          x,
+          belen.latitudeDeg,
+          belen.longitudeDeg,
+        ).sunAltDeg;
+        if (alt < -7 && alt > -11) {
+          t = x;
+          break;
+        }
+      }
+      expect(t, isNotNull);
+      final civil = belen.copyWith(
+        twilightDefinition: TwilightDefinition.civil,
+      );
+      final c = make(runs: running, now: t!, site: civil);
+      final s = await c.read(preflightPromptProvider.future);
+      expect(s.shouldPrompt, isTrue, reason: 'sun below the civil line at $t');
+    });
 
     test(
       'the sky tick re-evaluates, so a run started after dusk gets its card',

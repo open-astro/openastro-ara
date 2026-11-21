@@ -14,6 +14,7 @@ import '../sequencer/sequence_list_state.dart';
 import '../settings/site_settings_state.dart';
 import '../setup/setup_readiness.dart';
 import '../sky_atlas/tonight_sky_state.dart';
+import '../../util/tonight_sky_local.dart';
 
 /// Test seam: how a [PreflightApi] is built for the active server.
 final preflightApiFactoryProvider = Provider<PreflightApi Function(AraServer)>(
@@ -132,7 +133,11 @@ class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
     return PreflightPromptState(
       shouldPrompt: shouldPromptPreflight(
         sequenceRunning: anySequenceLive(runs),
-        dark: isDarkNow(site, nowUtc: now.toUtc()),
+        dark: isDarkNow(
+          site,
+          nowUtc: now.toUtc(),
+          belowDeg: twilightSunAltitudeDeg(site.twilightDefinition),
+        ),
         nightKey: nightKey,
         acknowledgedNights: _acknowledged,
       ),
