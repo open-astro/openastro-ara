@@ -9,6 +9,7 @@ import '../../../services/autofocus_api.dart';
 import '../../../state/equipment/focuser_state.dart';
 import '../../../state/focus/autofocus_step_size_state.dart';
 import '../../../state/settings/advanced_settings_state.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
 import '../../../theme/ara_colors.dart';
@@ -59,7 +60,9 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         // #1544: the step size the next sweep would use, read beside the
         // focuser it belongs to; it is edited, with its other inputs, in the
         // Autofocus panel only.
-        if (ref.watch(advancedSettingsProvider).value ?? true)
+        // #2036: Advanced Mode has no toggle and always shows it.
+        if (!ref.watch(simpleModeActiveProvider) ||
+            (ref.watch(advancedSettingsProvider).value ?? true))
           if (ref.watch(autofocusStepSizeProvider).value case final derived?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),

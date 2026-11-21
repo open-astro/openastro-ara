@@ -7,6 +7,7 @@ import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/settings/settings_shell.dart';
 import 'package:openastroara/services/advanced_settings_prefs_service.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 
 // The real toggle over a prefs file that cannot be found (no disk I/O in a
@@ -24,7 +25,9 @@ void main() {
       tester.view.physicalSize = const Size(1600, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final c = ProviderContainer(overrides: [_noPrefsFile]);
+      final c = ProviderContainer(
+        overrides: [_noPrefsFile, simpleModeActiveProvider.overrideWithValue(true)],
+      );
       addTearDown(c.dispose);
       // The About panel needs no rig.
       c.read(selectedSettingsPanelProvider.notifier).select('app.changelog');
@@ -54,7 +57,9 @@ void main() {
       tester.view.physicalSize = const Size(820, 1200);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.reset);
-      final c = ProviderContainer(overrides: [_noPrefsFile]);
+      final c = ProviderContainer(
+        overrides: [_noPrefsFile, simpleModeActiveProvider.overrideWithValue(true)],
+      );
       addTearDown(c.dispose);
       c.read(selectedSettingsPanelProvider.notifier).select('app.changelog');
       await tester.pumpWidget(

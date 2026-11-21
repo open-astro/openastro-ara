@@ -10,6 +10,7 @@ import '../../../state/focus/autofocus_step_size_state.dart';
 import '../../../state/focus/focus_presets.dart';
 import '../../../state/saved_server_state.dart';
 import '../../../state/settings/advanced_settings_state.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../state/settings/autofocus_settings_state.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/settings_nav.dart';
@@ -146,7 +147,10 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
         : l10n.autofocusTriggerSetBy(_sharpName(l10n, sharp));
     // #1544: a row shows by its registry tier: Simple always, Advanced with
     // the global toggle on or once a search hit lands on it.
-    final advanced = ref.watch(advancedSettingsProvider).value ?? true;
+    // #2036: Advanced Mode has no toggle and shows every tier.
+    final advanced =
+        !ref.watch(simpleModeActiveProvider) ||
+        (ref.watch(advancedSettingsProvider).value ?? true);
     ref.listen(highlightedSettingProvider, (_, hit) {
       if (hit != null) setState(() => _revealed.add(hit));
     });
