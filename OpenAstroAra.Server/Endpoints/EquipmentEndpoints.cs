@@ -1024,13 +1024,13 @@ public static partial class EquipmentEndpoints {
             .WithName("GetPolarAlignMotorDirection")
             .WithSummary("The RA motor direction Polar Align tested and saved for this profile's mount, and whether it stands for the connected mount's driver.")
             .Produces<PolarAlignMotorDirectionStateDto>();
-        polar.MapPost("/motor-direction/retest", ([FromServices] IProfileStore profiles) => {
-            profiles.PutPolarAlignMotorDirection(null);
-            return Results.NoContent();
-        })
+        // Refused (polar-align-already-running) while a run is going: its own 0.5° test could save a sign right after the
+        // forget, so "forgotten" would not hold.
+        polar.MapPost("/motor-direction/retest", ([FromServices] IProfileStore profiles, [FromServices] IPolarAlignService svc) =>
+                RetestPolarAlignMotorDirection(profiles, svc))
             .WithName("RetestPolarAlignMotorDirection")
-            .WithSummary("Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows.")
-            .Produces(StatusCodes.Status204NoContent);
+            .WithSummary("Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows. 409 while a run is going.")
+            .Produces(StatusCodes.Status204NoContent).ProducesProblem(StatusCodes.Status409Conflict);
         // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
         polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
             await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
@@ -1326,6 +1326,22 @@ public static partial class EquipmentEndpoints {
             // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
+    }
+
+    /// <summary>#2081 — why <c>POST /polaralign/motor-direction/retest</c> is refused while a run is going.</summary>
+    internal const string RetestWhileRunningMessage =
+        "polar alignment is running, and its motor-direction test could save a direction right after this — stop it first, then tap Test direction again";
+
+    /// <summary>#2081 — <c>POST /polaralign/motor-direction/retest</c>: forget the saved direction, so the next start tests
+    /// it again; a <c>polar-align-already-running</c> Refusal while a run is going.</summary>
+    internal static IResult RetestPolarAlignMotorDirection(IProfileStore profiles, IPolarAlignService svc) {
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(svc);
+        if (svc.IsActive) {
+            throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning, RetestWhileRunningMessage);
+        }
+        profiles.PutPolarAlignMotorDirection(null);
+        return Results.NoContent();
     }
 
     /// <summary>#2081 — <c>GET /polaralign/motor-direction</c>: the saved test, beside the connected mount's driver (no

@@ -50,6 +50,10 @@ namespace OpenAstroAra.Server.Services {
         internal const string TurnWrongWayMessage =
             "the mount turned the other way from its saved RA motor direction, so Polar Align stopped it and never turned it back — check the mount, then tap Test direction again (Settings → Imaging → Polar align) and start again";
 
+        /// <summary>#2081 — the active profile's id (<see cref="IProfileRepository.ActiveId"/>), read when a run is planned
+        /// and again before the direction test saves its sign. Null (tests, no repository): the save is never skipped.</summary>
+        internal Func<Guid?>? ActiveProfileId { get; set; }
+
         /// <summary>The mount driver a saved motor direction stands for: its DriverInfo and DriverVersion.</summary>
         internal sealed record MountDriverKey(string Info, string Version);
 
@@ -110,14 +114,24 @@ namespace OpenAstroAra.Server.Services {
                 }
                 _raMotorSign = sign;
             }
+            // A profile switch during the test swaps the store: the sign belongs to the profile the run was planned under,
+            // so it is not written into another one. This run still turns with it (the same mount and driver).
+            var profileNow = ActiveProfileId?.Invoke();
+            if (profileNow != band.ProfileId) {
+                LogDirectionTestNotSavedProfileSwitched(sign, band.ProfileId, profileNow);
+                return;
+            }
             _profileStore.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(sign, driver.Info, driver.Version, DateTimeOffset.UtcNow));
             LogDirectionTested(moved, sign, driver.Info, driver.Version);
         }
 
-        [LoggerMessage(EventId = 4640, Level = LogLevel.Information, Message = "§45 polar-align: no saved RA motor direction for the driver '{DriverInfo}' {DriverVersion} — testing it with a {Degrees:F1}° turn toward the {Direction} (a positive rate assumed east)")]
+        [LoggerMessage(EventId = 4650, Level = LogLevel.Information, Message = "§45 polar-align: no saved RA motor direction for the driver '{DriverInfo}' {DriverVersion} — testing it with a {Degrees:F1}° turn toward the {Direction} (a positive rate assumed east)")]
         private partial void LogDirectionTestStarts(double degrees, string direction, string driverInfo, string driverVersion);
 
-        [LoggerMessage(EventId = 4641, Level = LogLevel.Information, Message = "§45 polar-align: the direction test moved the RA reading {MovedDeg:+0.00;-0.00}°: RA motor sign {Sign:+0;-0}, saved for the driver '{DriverInfo}' {DriverVersion}")]
+        [LoggerMessage(EventId = 4651, Level = LogLevel.Information, Message = "§45 polar-align: the direction test moved the RA reading {MovedDeg:+0.00;-0.00}°: RA motor sign {Sign:+0;-0}, saved for the driver '{DriverInfo}' {DriverVersion}")]
         private partial void LogDirectionTested(double movedDeg, int sign, string driverInfo, string driverVersion);
+
+        [LoggerMessage(EventId = 4652, Level = LogLevel.Warning, Message = "§45 polar-align: the direction test found RA motor sign {Sign:+0;-0}, not saved: the active profile changed during it (was {ProfileAtPlan}, now {ProfileNow}); this run turns with it")]
+        private partial void LogDirectionTestNotSavedProfileSwitched(int sign, Guid? profileAtPlan, Guid? profileNow);
     }
 }

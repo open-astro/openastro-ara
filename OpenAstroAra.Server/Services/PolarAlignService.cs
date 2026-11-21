@@ -343,8 +343,10 @@ namespace OpenAstroAra.Server.Services {
         /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).
         /// <para>#2081 — <c>RaMotorSign</c>: the saved RA motor direction for the mount's <c>Driver</c>, or null when none
         /// stands for it and the run tests it first (<see cref="TestRaMotorDirectionIfOwedAsync"/>).</para></summary>
+        /// <para><c>ProfileId</c>: the profile active when the run was planned; the test's sign is saved only while it still
+        /// is (a profile switch swaps the store, so the sign would land on a profile the test never ran for).</para>
         private sealed record RunBand(double AwaySign, double MaxSweepDeg, bool HandTurn = false, double? RaMotorSign = null,
-            MountDriverKey? Driver = null);
+            MountDriverKey? Driver = null, Guid? ProfileId = null);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the turns the
         /// run makes and their place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
@@ -376,7 +378,7 @@ namespace OpenAstroAra.Server.Services {
             var plan = new PolarAlignStartPlanDto(stage, awaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
                 stepDeg, Turns: 2, maxSweepDeg, sweep.NewOrigin, Math.Round(sweep.OffsetDeg, 1), sweep.LimitDeg,
                 CameraFor(stage ?? PolarAlignStages.Fine, settings), DirectionTestDeg: testDeg);
-            return (plan, new RunBand(awaySign, maxSweepDeg, RaMotorSign: savedSign, Driver: driver), sweep);
+            return (plan, new RunBand(awaySign, maxSweepDeg, RaMotorSign: savedSign, Driver: driver, ProfileId: ActiveProfileId?.Invoke()), sweep);
         }
 
         /// <summary>#2082 — the camera a start at <paramref name="stage"/> measures with: the main camera for the coarse stage

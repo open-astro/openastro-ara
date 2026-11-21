@@ -86,6 +86,54 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Test_direction_again_while_a_run_is_going_is_refused_and_keeps_the_saved_direction() {
+            var store = TenDegreeStore();
+            var saved = new PolarAlignMotorDirectionDto(-1, "AlpacaBridge iOptron", "6.0.0", DateTimeOffset.UtcNow);
+            store.PutPolarAlignMotorDirection(saved);
+            var running = new Mock<IPolarAlignService>();
+            running.SetupGet(s => s.IsActive).Returns(true);
+
+            var refusal = Assert.Throws<RefusalException>(() => EquipmentEndpoints.RetestPolarAlignMotorDirection(store, running.Object));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignAlreadyRunning));
+            Assert.That(store.GetPolarAlignMotorDirection(), Is.EqualTo(saved),
+                "a run's own test could save right after a forget: nothing is forgotten while it runs");
+            running.SetupGet(s => s.IsActive).Returns(false);
+            EquipmentEndpoints.RetestPolarAlignMotorDirection(store, running.Object);
+            Assert.That(store.GetPolarAlignMotorDirection(), Is.Null, "with no run going, the forget goes through");
+        }
+
+        [Test]
+        public async Task A_profile_switch_during_the_direction_test_saves_no_sign_and_the_run_still_turns_with_it() {
+            var mount = PolledGemAt(-4.0);
+            mount.RaMotorSign = -1.0;
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            using var svc = NewGemService(mount, ws, store, motorDirectionSaved: false);
+            var active = Guid.NewGuid();
+            svc.ActiveProfileId = () => active;
+            // Another profile is selected while the test move runs: the store now holds that profile's sections.
+            mount.OnFreshRead = _ => {
+                if (mount.Motions.Any(m => m.Kind == MotionKind.RaMotor && !m.Refused)) {
+                    active = Guid.NewGuid();
+                }
+            };
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check,
+                new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, DirectionTest: true), null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"), "the run completes: " + mount.Describe());
+            Assert.That(store.GetPolarAlignMotorDirection(), Is.Null, "the sign is not written into the profile switched to");
+            var turns = RaTurns(mount);
+            Assert.That(turns, Has.Length.EqualTo(3), mount.Describe());
+            // The run still used the sign it learned: both turns went east, as the confirm step said.
+            Assert.That(turns.Skip(1).Select(t => t.TrueDeltaHaDeg), Has.All.EqualTo(-10.0).Within(TrueTurnToleranceDeg), mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
         public async Task A_motor_whose_sign_flipped_after_the_test_fails_within_half_a_degree_and_one_poll_and_is_never_reversed() {
             // The saved direction says a positive rate raises RA; the driver now lowers it with the same name and version.
             var mount = PolledGemAt(-4.0);

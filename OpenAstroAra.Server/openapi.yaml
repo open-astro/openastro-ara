@@ -2485,11 +2485,17 @@ paths:
     post:
       tags:
         - Equipment
-      summary: 'Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows.'
+      summary: 'Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows. 409 while a run is going.'
       operationId: RetestPolarAlignMotorDirection
       responses:
         '204':
           description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/frame.jpg:
     get:
       tags:

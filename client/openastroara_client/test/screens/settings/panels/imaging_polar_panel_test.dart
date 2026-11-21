@@ -386,6 +386,34 @@ void main() {
   );
 
   testWidgets(
+    'Test direction again is off while a run is going, and on again when it ends (#2081)',
+    (tester) async {
+      final direction = _DirectionRig(
+        const PolarAlignMotorDirectionState(
+          saved: PolarAlignMotorDirection(sign: 1, driverInfo: 'AlpacaBridge iOptron', driverVersion: '6.0.0'),
+          matchesConnectedMount: true,
+        ),
+      );
+      final live = _FakeLive();
+      await _pumpWithDirection(tester, direction, live: live);
+      ButtonStyleButton retest() =>
+          tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-motor-direction-retest')));
+      expect(retest().onPressed, isNotNull);
+
+      live.set(const PolarAlignLive(phase: PolarAlignStates.adjusting));
+      await tester.pumpAndSettle();
+      expect(retest().onPressed, isNull, reason: 'its own test could save a direction right after a forget');
+      await tester.tap(find.byKey(const Key('polar-motor-direction-retest')), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(direction.retests, 0);
+
+      live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
+      await tester.pumpAndSettle();
+      expect(retest().onPressed, isNotNull);
+    },
+  );
+
+  testWidgets(
     'a saved direction for another driver says the next start tests again (#2081)',
     (tester) async {
       await _pumpWithDirection(

@@ -1606,6 +1606,9 @@ const List<Setting> settingsRegistry = [
     description: 'Which way RA turns when Polar align starts from a new pose: east or west, or automatic (east in the north, west in the south, as NINA). Later starts in the same session turn back toward that start, so repeated starts never walk the mount one way. The confirm step shows the way before the mount moves.',
     keywords: ['polar', 'alignment', 'east', 'west', 'direction', 'turn', 'ra', 'nina', 'meridian'],
     path: ['Settings', 'Imaging', 'Polar align'],
+    // The choices as the panel shows them (as storage.compression and
+    // phd2.guider_setup_type list theirs); the profile value is null (auto),
+    // true (east) or false (west).
     type: SettingType.enumValue(['auto', 'east', 'west']),
     defaultValue: null,
     profilePath: 'polar_align.east_direction',

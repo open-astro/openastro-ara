@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/l10n.dart';
 import '../../../models/polar_align.dart';
 import '../../../state/polar_align/polar_align_motor_direction_state.dart';
+import '../../../state/polar_align/polar_align_state.dart';
 import '../../../state/polar_align/polar_align_routine_state.dart';
 import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/polar_align_settings_state.dart';
@@ -281,7 +282,12 @@ class _PolarMotorDirectionRowState
       loading: () => '…',
       error: (_, _) => l10n.polarMotorDirectionReadFailed,
     );
-    final canRetest = direction.value?.saved != null && !_busy;
+    // Off while a run is going: its own 0.5° test could save a direction right
+    // after the forget (the rig refuses it then too).
+    final runActive = ref.watch(
+      polarAlignLiveProvider.select((l) => l.isActive),
+    );
+    final canRetest = direction.value?.saved != null && !_busy && !runActive;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
