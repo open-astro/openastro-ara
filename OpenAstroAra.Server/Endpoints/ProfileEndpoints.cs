@@ -115,15 +115,18 @@ public static partial class ProfileEndpoints {
     }
 
     /// <summary>Marks a route as one profile section: its GET and PUT answer an <c>ETag</c> of the stored
-    /// section, and its PUT refuses an <c>If-Match</c> naming another copy (<see cref="CheckSectionVersion"/>).</summary>
+    /// section, and its PUT refuses a missing <c>If-Match</c> and one naming another copy
+    /// (<see cref="CheckSectionVersion"/>).</summary>
     internal static TBuilder WithSection<TBuilder>(this TBuilder builder, ProfileSection section)
         where TBuilder : IEndpointConventionBuilder {
         builder.WithMetadata(section);
-        // The PUT's 412 is declared here, with the section, so a route cannot carry one without the other.
+        // The PUT's 412 and 428 are declared here, with the section, so a route cannot carry one without the other.
         builder.Add(b => {
             if (b.Metadata.OfType<IHttpMethodMetadata>().Any(m => m.HttpMethods.Contains("PUT"))) {
                 b.Metadata.Add(new ProducesResponseTypeMetadata(
                     StatusCodes.Status412PreconditionFailed, typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), ["application/problem+json"]));
+                b.Metadata.Add(new ProducesResponseTypeMetadata(
+                    StatusCodes.Status428PreconditionRequired, typeof(Microsoft.AspNetCore.Mvc.ProblemDetails), ["application/problem+json"]));
             }
         });
         return builder;
@@ -135,21 +138,30 @@ public static partial class ProfileEndpoints {
         "\"" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(
             System.Text.Json.JsonSerializer.Serialize(section.Read(store), section.DtoType, AraJsonSerializerContext.Default)))) + "\"";
 
-    /// <summary>ADR 0015 — before a write: a sent <c>If-Match</c> other than <c>*</c> that is not the stored
-    /// section's tag is a 412 and nothing runs (no store write, no <c>profile.updated</c>). No <c>If-Match</c>
-    /// still passes (refusing it is a later slice). After a 2xx the response carries the stored section's tag.</summary>
+    /// <summary>ADR 0015 — before a section PUT: no <c>If-Match</c> (or an empty one) is a 428, and one other
+    /// than <c>*</c> that is not the stored section's tag is a 412; either way nothing runs (no store write, no
+    /// <c>profile.updated</c>). Only a PUT is checked, so a POST that writes the section by a route of its own
+    /// (the safety first-flip re-arm and confirm) takes no <c>If-Match</c>. After a 2xx the response carries
+    /// the stored section's tag.</summary>
     internal static async ValueTask<object?> CheckSectionVersion(EndpointFilterInvocationContext ctx, EndpointFilterDelegate next) {
         var http = ctx.HttpContext;
         if (http.GetEndpoint()?.Metadata.GetMetadata<ProfileSection>() is not { } section) {
             return await next(ctx);
         }
         var store = http.RequestServices.GetRequiredService<IProfileStore>();
-        if (HttpMethods.IsPut(http.Request.Method)
-            && http.Request.Headers.IfMatch.ToString().Trim() is { Length: > 0 } sent
-            && sent != "*" && sent != SectionETag(section, store)) {
-            return Results.Problem(
-                detail: $"The {section.Name} settings changed since they were loaded; reload before saving.",
-                statusCode: StatusCodes.Status412PreconditionFailed);
+        if (HttpMethods.IsPut(http.Request.Method)) {
+            var sent = http.Request.Headers.IfMatch.ToString().Trim();
+            if (sent.Length == 0) {
+                return Results.Problem(
+                    title: "Precondition Required",
+                    detail: $"A write of the {section.Name} settings must send the ETag of the copy it was made from as If-Match; reload before saving.",
+                    statusCode: StatusCodes.Status428PreconditionRequired);
+            }
+            if (sent != "*" && sent != SectionETag(section, store)) {
+                return Results.Problem(
+                    detail: $"The {section.Name} settings changed since they were loaded; reload before saving.",
+                    statusCode: StatusCodes.Status412PreconditionFailed);
+            }
         }
         var result = await next(ctx);
         var status = (result as IStatusCodeHttpResult)?.StatusCode ?? StatusCodes.Status200OK;

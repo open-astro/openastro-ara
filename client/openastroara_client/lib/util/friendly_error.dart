@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import '../l10n/l10n.dart';
 import '../models/mount_status.dart' show MountStatus;
 import '../services/guider_api.dart' show GuideStartFailed;
+import '../services/profile_api.dart' show SectionVersionMissingException;
 import '../services/refusal.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
 
@@ -72,6 +73,9 @@ String? _ownWords(AppLocalizations l, Object error) {
     final reason = error.reason;
     return reason == null ? l.guideStartFailedNoReason : l.guideStartFailed(reason);
   }
+  // ADR 0015 — a section write refused before it went out: the rig sent no
+  // version to send back.
+  if (error is SectionVersionMissingException) return error.toString();
   // StateError carries our own written-for-people messages (e.g. "Connect to
   // your rig first.") — pass those straight through.
   if (error is StateError) return error.message;

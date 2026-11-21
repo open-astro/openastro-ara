@@ -6563,6 +6563,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6580,6 +6582,12 @@ paths:
                 $ref: '#/components/schemas/ImagingDefaultsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6605,6 +6613,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6632,6 +6642,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/notifications:
     get:
       tags:
@@ -6653,6 +6669,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6670,6 +6688,12 @@ paths:
                 $ref: '#/components/schemas/NotificationsSettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6695,6 +6719,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6712,6 +6738,12 @@ paths:
                 $ref: '#/components/schemas/SiteSettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6737,6 +6769,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6760,6 +6794,12 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6798,6 +6838,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6821,6 +6863,12 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6859,6 +6907,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6876,6 +6926,12 @@ paths:
                 $ref: '#/components/schemas/FilenamesSettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6901,6 +6957,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6918,6 +6976,12 @@ paths:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -6975,6 +7039,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -6992,6 +7058,12 @@ paths:
                 $ref: '#/components/schemas/AutofocusSettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7017,6 +7089,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7044,6 +7118,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/unguided:
     get:
       tags:
@@ -7065,6 +7145,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7092,6 +7174,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/guider-advanced:
     get:
       tags:
@@ -7113,6 +7201,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7140,6 +7230,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/plate-solve:
     get:
       tags:
@@ -7161,6 +7257,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7178,6 +7276,12 @@ paths:
                 $ref: '#/components/schemas/PlateSolveSettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7203,6 +7307,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7220,6 +7326,12 @@ paths:
                 $ref: '#/components/schemas/DiagnosticsModeDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7245,6 +7357,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7262,6 +7376,12 @@ paths:
                 $ref: '#/components/schemas/Phd2SettingsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7287,6 +7407,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7314,6 +7436,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/camera-electronics:
     get:
       tags:
@@ -7335,6 +7463,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7362,6 +7492,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/filter-set:
     get:
       tags:
@@ -7383,6 +7519,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7410,6 +7548,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/filter-wheel/labels:
     get:
       tags:
@@ -7431,6 +7575,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7458,6 +7604,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/filter-wheel/policy:
     get:
       tags:
@@ -7479,6 +7631,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7496,6 +7650,12 @@ paths:
                 $ref: '#/components/schemas/FilterWheelPolicyDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7521,6 +7681,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7548,6 +7710,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/dome:
     get:
       tags:
@@ -7569,6 +7737,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7596,6 +7766,12 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/equipment-connection:
     get:
       tags:
@@ -7617,6 +7793,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7634,6 +7812,12 @@ paths:
                 $ref: '#/components/schemas/EquipmentConnectionDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:
@@ -7659,6 +7843,8 @@ paths:
       parameters:
         - name: If-Match
           in: header
+          description: 'The ETag of the section copy this write was made from, or * to write over any copy. Missing or empty: 428; another copy''s tag: 412. Nothing is written either way.'
+          required: true
           schema:
             type: string
       requestBody:
@@ -7676,6 +7862,12 @@ paths:
                 $ref: '#/components/schemas/StretchDefaultsDto'
         '412':
           description: Precondition Failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '428':
+          description: Precondition Required
           content:
             application/problem+json:
               schema:

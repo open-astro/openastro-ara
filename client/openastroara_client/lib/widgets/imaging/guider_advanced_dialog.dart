@@ -6,7 +6,8 @@ import '../../models/guider_advanced_settings.dart';
 import '../../models/server.dart';
 import '../../services/guider_advanced_api.dart';
 import '../../state/saved_server_state.dart';
-import '../../state/settings/loaded_section.dart' show SectionConflictException;
+import '../../state/settings/loaded_section.dart'
+    show SectionConflictException, SectionReloadRequiredException;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
@@ -342,13 +343,17 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       });
     } catch (e) {
       if (!mounted) return;
-      final stale = e is DioException && e.response?.statusCode == 412;
+      // 412: another device saved a newer copy; 428: the rig wants the
+      // version of a loaded copy. Either way Reload is the way on.
+      final status = e is DioException ? e.response?.statusCode : null;
       setState(() {
         _applying = false;
         _statusIsError = true;
-        _conflict = stale;
-        _status = stale
+        _conflict = status == 412 || status == 428;
+        _status = status == 412
             ? const SectionConflictException().toString()
+            : status == 428
+            ? const SectionReloadRequiredException().toString()
             : failureReason(context.l10n, e);
       });
     }
