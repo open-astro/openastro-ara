@@ -66,6 +66,15 @@ class SectionConflictException implements Exception {
       'These settings changed on the rig since you loaded them; nothing was saved.';
 }
 
+/// Save refused by the rig (428): the write carried no version of a loaded
+/// copy. Nothing was written; a reload brings the copy and its tag.
+class SectionReloadRequiredException extends SectionConflictException {
+  const SectionReloadRequiredException();
+  @override
+  String toString() =>
+      'Reload these settings from the rig before saving; nothing was saved.';
+}
+
 typedef Tagged<T> = ({T value, String? etag});
 
 /// Load-before-save for one profile section. A subclass says how to fetch and
@@ -305,14 +314,22 @@ abstract class SectionNotifier<T> extends Notifier<LoadedSection<T>> {
   }
 
   // A 412 flags the conflict (the shown value stays) and throws
-  // [SectionConflictException]; any other failure is rethrown as it is.
+  // [SectionConflictException]; a 428 (the rig wants the version of a loaded
+  // copy) does the same with [SectionReloadRequiredException], so the panel
+  // offers Reload. A copy with no tag to send is refused before anything goes
+  // out, as a section that is not loaded. Any other failure is rethrown.
   Future<Tagged<T>> _send(ProfileApi api, T value, String? etag) async {
     try {
       return await send(api, value, etag);
+    } on SectionVersionMissingException catch (e) {
+      throw SectionNotLoadedException(e);
     } on DioException catch (e) {
-      if (e.response?.statusCode == 412 && ref.mounted) {
+      final status = e.response?.statusCode;
+      if ((status == 412 || status == 428) && ref.mounted) {
         state = state.copyWith(conflict: true);
-        throw const SectionConflictException();
+        throw status == 428
+            ? const SectionReloadRequiredException()
+            : const SectionConflictException();
       }
       rethrow;
     }

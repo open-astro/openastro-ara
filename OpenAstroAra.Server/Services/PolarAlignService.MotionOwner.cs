@@ -68,11 +68,11 @@ namespace OpenAstroAra.Server.Services {
         /// </summary>
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> EnsureMountSteadyAsync(int gen, CancellationToken ct) {
             ThrowIfGuiderBusy();
-            var first = await RunReadingAsync(gen, positionOnly: false, ct).ConfigureAwait(false);
+            var first = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
             ThrowIfSlewing(first.Slewing);
             await Task.Delay(MountSteadyFor, ct).ConfigureAwait(false);
             ThrowIfStoppedFromOutside(gen);
-            var second = await RunReadingAsync(gen, positionOnly: false, ct).ConfigureAwait(false);
+            var second = await RunReadingAsync(gen, MountReadKind.Full, ct).ConfigureAwait(false);
             ThrowIfSlewing(second.Slewing);
             var movedRa = Math.Abs(Wrap180(second.RaDeg - first.RaDeg));
             var movedDec = Math.Abs(second.DecDeg - first.DecDeg);

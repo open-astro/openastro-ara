@@ -32,8 +32,8 @@ void main() {
     expect(written.keys.toSet(), ProfileApi.safetyModeledKeys);
   });
 
-  // The wizard's write reads the section untagged and puts it back with its
-  // own picks: the daemon's fault policies, which the client has no field
+  // The wizard's write reads the section with its tag and puts it back with
+  // its own picks: the daemon's fault policies, which the client has no field
   // for, go back as the rig had them, not as the daemon's defaults.
   test("the wizard's safety write keeps the rig's fault policies", () async {
     const faultPolicies = {
@@ -47,8 +47,11 @@ void main() {
       'safety': {...rigDefaults['safety']!, ...faultPolicies},
     });
     final api = rig.api();
-    final read = await api.getSafetyPolicies();
-    await api.putSafetyPolicies(read.copyWith(meridianFlipAuto: false));
+    final read = await api.getSafetySection();
+    await api.putSafetySection(
+      read.value.copyWith(meridianFlipAuto: false),
+      ifMatch: read.etag,
+    );
     final body = rig.puts.single.body as Map;
     expect(body['meridian_flip_auto'], isFalse);
     for (final e in faultPolicies.entries) {

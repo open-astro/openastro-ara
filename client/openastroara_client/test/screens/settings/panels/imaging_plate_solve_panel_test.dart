@@ -45,6 +45,8 @@ class _NormalisingDaemon implements HttpClientAdapter {
       200,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
+        // A hash of the stored copy, as the daemon's tag (ADR 0015).
+        'etag': ['"${jsonEncode(stored).hashCode}"'],
       },
     );
   }

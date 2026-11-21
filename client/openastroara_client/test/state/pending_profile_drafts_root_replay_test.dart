@@ -45,55 +45,82 @@ class _Api extends FakeStorageApi {
     return ProfileMeta(id: 'p-${created.length}', name: name);
   }
 
-  @override
-  Future<SiteSettings> getSiteSettings() async => const TestSiteSettings();
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings v) async => v;
+  // Each section is served with a tag and written back with it; Storage is
+  // the fixture's, whose tag moves on the write.
   @override
   Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings v) async => v;
+  Future<({SiteSettings value, String? etag})> getSiteSection() async =>
+      (value: const TestSiteSettings(), etag: '"t"');
   @override
-  Future<ImagingDefaults> getImagingDefaults() async => const TestImagingDefaults();
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) async => v;
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const TestOpticsSettings(), etag: '"t"');
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const TestPhd2Settings();
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async => v;
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() async =>
+      (value: const TestImagingDefaults(), etag: '"t"');
   @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const TestPlateSolveSettings();
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<PlateSolveSettings> putPlateSolveSettings(
-    PlateSolveSettings v,
-  ) async => v;
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const TestPhd2Settings(), etag: '"t"');
   @override
-  Future<AutofocusSettings> getAutofocusSettings() async =>
-      const TestAutofocusSettings();
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
-      v;
+  Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() async =>
+      (value: const TestPlateSolveSettings(), etag: '"t"');
   @override
-  Future<CameraElectronics> getCameraElectronics() async =>
-      const TestCameraElectronics();
+  Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
+    PlateSolveSettings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
-      v;
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() async =>
+      (value: const TestAutofocusSettings(), etag: '"t"');
   @override
-  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
+  Future<({CameraElectronics value, String? etag})> getCameraElectronicsSection() async =>
+      (value: const TestCameraElectronics(), etag: '"t"');
   @override
-  Future<StorageSettings> getStorageSettings() async => kTestStorage;
-  // The wizard writes Storage with no tag; the rig takes it and its tag moves.
+  Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
+    CameraElectronics v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async =>
-      (await putStorageSection(v)).value;
+  Future<({FilterSetSettings value, String? etag})> getFilterSetSection() async =>
+      (value: const FilterSetSettings(), etag: '"t"');
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const TestSafetyPolicies();
+  Future<({FilterSetSettings value, String? etag})> putFilterSetSection(
+    FilterSetSettings v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
   @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: const TestSafetyPolicies(), etag: '"t"');
+  @override
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies v, {
+    String? ifMatch,
+  }) async => (value: v, etag: ifMatch);
 }
 
 void main() {
@@ -199,6 +226,10 @@ void main() {
     }
     expect(container.read(storageSettingsProvider).value, isNull);
     await storage.save(api);
-    expect(api.ifMatches, [null, '"v2"'], reason: 'the replay wrote untagged');
+    expect(
+      api.ifMatches,
+      ['"v1"', '"v2"'],
+      reason: 'the replay wrote with the tag it loaded; the Save sends the new one',
+    );
   });
 }

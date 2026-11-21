@@ -158,12 +158,24 @@ Future<(int applied, int failed, int held, int rejected)>
 
 /// True when the draft should wait for a later reconnect: every failed section
 /// had no response, the single request that failed (create, list, select) got
-/// none, or the rig answered 409 because a run is active. Any other status code
+/// none, or the rig answered 409 because a run is active. A section refused
+/// for its version (ADR 0015) waits too: a rig that sends none
+/// ([SectionVersionMissingException], nothing was sent), or a copy saved
+/// between the replay's read and write (412) or one the rig wants a version
+/// for (428). The next replay reads each section again. Any other status code
 /// is a rejection.
 bool isProfileReplayTransportFailure(Object e) =>
     e is ProfileSaveTransportFailure ||
+    (e is ProfileSaveFailure && e.errors.every(_waitsForReplay)) ||
     (e is DioException &&
         (e.response == null || e.response?.statusCode == 409));
+
+bool _waitsForReplay(Object e) =>
+    e is SectionVersionMissingException ||
+    (e is DioException &&
+        (e.response == null ||
+            e.response?.statusCode == 412 ||
+            e.response?.statusCode == 428));
 
 /// Root-mounted: when the active server's WebSocket reaches `connected`, apply
 /// whatever drafts are waiting for THAT server. Listening on the link (not just

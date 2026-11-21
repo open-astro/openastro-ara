@@ -261,6 +261,44 @@ namespace OpenAstroAra.Test {
             Assert.That((now.ReadAtUtc, now.SessionEpoch), Is.EqualTo((stamp.Now, svc.SessionEpoch)), "stamped and tagged as ReadNow");
         }
 
+        // #2067 — Polar Align's turn polls on this read: the position and the pier side (a turn that changes the side
+        // stops), never the Slewing round trip.
+        [Test]
+        public async Task ReadPoseNow_asks_the_driver_for_RA_Dec_and_the_pier_side_only() {
+            var stamp = new ManualClock { Now = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero) };
+            var (box, svc, _) = await ArmedAsync(poseClock: stamp);
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "80.0"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "1"
+                : mount(path));
+
+            var now = await ((IMountMotionControl)svc).ReadPoseNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.Not.Null);
+            Assert.That((now!.RaHours, now.DecDegrees), Is.EqualTo((7.5, 80.0)));
+            Assert.That((now.Slewing, now.SideOfPier), Is.EqualTo(((bool?)null, PierSide.pierWest)), "the side asked, Slewing not");
+            Assert.That((now.ReadAtUtc, now.SessionEpoch), Is.EqualTo((stamp.Now, svc.SessionEpoch)), "stamped and tagged as ReadNow");
+        }
+
+        // #2083 — the rate a routine's turn runs at comes from the mount's AxisRates, at or below the request: a request
+        // under every band has none (the pad's own snap would raise it to the band).
+        [Test]
+        public async Task MatchMoveAxisRate_takes_the_mounts_bands_at_or_below_the_request() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            IMountMotionControl seam = svc;
+
+            Assert.That(seam.MatchMoveAxisRate(0, 3.0), Is.EqualTo(3.0), "inside the mount's 0.002–4 °/s band");
+            Assert.That(seam.MatchMoveAxisRate(0, -9.0), Is.EqualTo(-4.0), "over it: its top, sign kept");
+            Assert.That(seam.MatchMoveAxisRate(0, 0.001), Is.Null, "under it: none, never raised to 0.002");
+            Assert.That(TelescopeService.SnapMoveAxisRate(0.001, [(0.002, 4.0)]), Is.EqualTo(0.002), "where the pad's snap raises it");
+        }
+
         [Test]
         public async Task ReadNow_is_null_when_the_position_read_fails_and_unknown_when_only_slewing_fails() {
             var (box, svc, _) = await ArmedAsync();

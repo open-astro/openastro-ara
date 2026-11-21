@@ -1,4 +1,5 @@
 import '../../support/storage_fixture.dart';
+import '../../support/wizard_sections.dart';
 
 import 'dart:convert';
 import 'dart:io';
@@ -13,84 +14,18 @@ import 'package:openastroara/screens/wizard/wizard_shell.dart';
 import 'package:openastroara/services/guider_calibration_api.dart';
 import 'package:openastroara/models/guider_equipment_choices.dart';
 import 'package:openastroara/services/guider_equipment_api.dart';
-import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_equipment_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
-import 'package:openastroara/state/settings/autofocus_settings_state.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
-import 'package:openastroara/state/settings/filter_set_state.dart';
-import 'package:openastroara/state/settings/imaging_defaults_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/phd2_settings_state.dart';
-import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
-import 'package:openastroara/state/settings/safety_policies_state.dart';
-import 'package:openastroara/state/settings/site_settings_state.dart';
-import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
-import '../../support/settings_values.dart';
 
 /// Instant in-memory ProfileApi double (no gate — the finish flow is what's
 /// under test, not the spinner).
-class _FastProfileApi extends ProfileApi {
-  _FastProfileApi() : super(const AraServer(hostname: 'test', port: 1));
-  Phd2Settings? lastPhd2Put;
-
+class _FastProfileApi extends FakeStorageApi with WizardSectionsInMemory {
   @override
   Future<ProfileMeta> createProfile(String name) async =>
       ProfileMeta(id: 'profile-1', name: name);
-  @override
-  Future<SiteSettings> getSiteSettings() async => const TestSiteSettings();
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings v) async => v;
-  @override
-  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
-  @override
-  Future<OpticsSettings> putOptics(OpticsSettings v) async => v;
-  @override
-  Future<ImagingDefaults> getImagingDefaults() async => const TestImagingDefaults();
-  @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) async => v;
-  @override
-  Future<Phd2Settings> getPhd2Settings() async => const TestPhd2Settings();
-  @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async {
-    lastPhd2Put = v;
-    return v;
-  }
-
-  @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const TestPlateSolveSettings();
-  @override
-  Future<PlateSolveSettings> putPlateSolveSettings(
-    PlateSolveSettings v,
-  ) async => v;
-  @override
-  Future<AutofocusSettings> getAutofocusSettings() async =>
-      const TestAutofocusSettings();
-  @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
-      v;
-  @override
-  Future<CameraElectronics> getCameraElectronics() async =>
-      const TestCameraElectronics();
-  @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
-      v;
-  @override
-  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
-  @override
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
-  @override
-  Future<StorageSettings> getStorageSettings() async => kTestStorage;
-  @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
-  @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const TestSafetyPolicies();
-  @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
 
 class _FakeGuiderEquipment implements GuiderEquipmentClient {

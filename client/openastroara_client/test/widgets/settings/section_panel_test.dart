@@ -107,6 +107,45 @@ void main() {
     );
   });
 
+  testWidgets('428 on Save says to reload, keeps the edits and offers '
+      'Reload', (tester) async {
+    final rig = _rig()..requireVersion.add(_section);
+    final container = await _pump(tester, rig);
+    container
+        .read(notificationsSettingsProvider.notifier)
+        .setPushoverToken('mine');
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Reload these settings from the rig before saving; nothing was saved.',
+      ),
+      findsWidgets,
+    );
+    expect(find.byKey(const Key('section-reload')), findsOneWidget);
+    expect(
+      container.read(notificationsSettingsProvider).value!.pushoverToken,
+      'mine',
+    );
+    expect(rig.puts, isEmpty);
+  });
+
+  testWidgets('a rig that sends no version gets no section PUT: Save says '
+      'not loaded', (tester) async {
+    final rig = _rig()..sendsTags = false;
+    final container = await _pump(tester, rig);
+    container
+        .read(notificationsSettingsProvider.notifier)
+        .setPushoverToken('mine');
+    await tester.runAsync(container.read(panelSaveActionProvider)!);
+    await tester.pumpAndSettle();
+    expect(rig.ifMatches, isEmpty, reason: 'nothing was sent');
+    expect(
+      find.textContaining('Settings not loaded from the rig'),
+      findsWidgets,
+    );
+  });
+
   testWidgets('Save sends the tag the panel loaded', (tester) async {
     final rig = _rig();
     final container = await _pump(tester, rig);
