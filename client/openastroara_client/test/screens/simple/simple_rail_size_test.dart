@@ -258,11 +258,14 @@ void main() {
 
   for (final text in const [1.0, 1.3]) {
     testWidgets(
-      'the Guide caption is not shrunk in its slot at ${text}x (#2038)',
+      'the Guide caption is not shrunk in its slot and does not widen the '
+      'rail at ${text}x (#2038)',
       skip: !hasFonts,
       (tester) async {
         await roboto();
         await _pump(tester, _ready, text: text);
+        await _open(tester, 'preview');
+        final preview = _rail(tester);
         await _open(tester, 'calibration');
         final slot = tester.getSize(
           find
@@ -282,6 +285,8 @@ void main() {
           lessThanOrEqualTo(slot.height),
           reason: 'within the three lines of the slot, so never cut',
         );
+        // Above 1.1x the rail leaves more room than its buttons' width.
+        expect(_rail(tester), preview, reason: 'as wide as the rail buttons');
       },
     );
 
