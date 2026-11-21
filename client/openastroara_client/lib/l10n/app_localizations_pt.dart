@@ -6486,6 +6486,26 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get bestHours => 'Imaging hours';
+
+  @override
+  String get bestHoursAny => 'Any time';
+
+  @override
+  String get bestHoursPick => 'Pick hours';
+
+  @override
+  String bestHoursRange(String from, String to) {
+    return '$from-$to';
+  }
+
+  @override
+  String get bestHoursFromHelp => 'Imaging starts';
+
+  @override
+  String get bestHoursToHelp => 'Imaging ends';
+
+  @override
   String get bestField => 'Field';
 
   @override
@@ -13844,6 +13864,26 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String bestPeakDeg(int deg) {
     return '$deg°';
   }
+
+  @override
+  String get bestHours => 'Horário de imagem';
+
+  @override
+  String get bestHoursAny => 'Qualquer hora';
+
+  @override
+  String get bestHoursPick => 'Escolher horas';
+
+  @override
+  String bestHoursRange(String from, String to) {
+    return '$from-$to';
+  }
+
+  @override
+  String get bestHoursFromHelp => 'Início da imagem';
+
+  @override
+  String get bestHoursToHelp => 'Fim da imagem';
 
   @override
   String get bestField => 'Campo';

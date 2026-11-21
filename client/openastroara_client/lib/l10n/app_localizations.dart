@@ -10887,6 +10887,42 @@ abstract class AppLocalizations {
   /// **'{deg}°'**
   String bestPeakDeg(int deg);
 
+  /// Time range control label: keep Targets whose dark window overlaps these local hours
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging hours'**
+  String get bestHours;
+
+  /// Imaging hours: no range
+  ///
+  /// In en, this message translates to:
+  /// **'Any time'**
+  String get bestHoursAny;
+
+  /// Imaging hours: opens the time pickers
+  ///
+  /// In en, this message translates to:
+  /// **'Pick hours'**
+  String get bestHoursPick;
+
+  /// Imaging hours as set, 24-hour local times
+  ///
+  /// In en, this message translates to:
+  /// **'{from}-{to}'**
+  String bestHoursRange(String from, String to);
+
+  /// Time picker title for the start of the imaging hours
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging starts'**
+  String get bestHoursFromHelp;
+
+  /// Time picker title for the end of the imaging hours
+  ///
+  /// In en, this message translates to:
+  /// **'Imaging ends'**
+  String get bestHoursToHelp;
+
   /// Fits my field control label
   ///
   /// In en, this message translates to:

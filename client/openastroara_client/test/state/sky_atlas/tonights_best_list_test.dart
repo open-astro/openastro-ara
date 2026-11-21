@@ -279,6 +279,80 @@ void main() {
     expect(_ids(_rows(rows, ch)), ['OK']);
   });
 
+  // Time-range filter (#2005): the range is minutes of the local day, so
+  // each case builds its window from local DateTimes.
+  group('time range', () {
+    DateTime at(int day, int h, [int m = 0]) => DateTime(2026, 11, day, h, m);
+    TonightSkyObject w(String id, DateTime? s, DateTime? e) => TonightSkyObject(
+      id: id,
+      name: id,
+      type: 'G',
+      magnitude: 9,
+      raDeg: 10,
+      decDeg: 20,
+      altitudeDeg: 40,
+      maxAltitudeDeg: 70,
+      score: 50,
+      windowStartUtc: s?.toUtc(),
+      windowEndUtc: e?.toUtc(),
+    );
+    List<String> kept(TonightSkyObject o, int from, int to) =>
+        _ids(_rows([o], BestChoices(windowFromMin: from, windowToMin: to)));
+    const evening = 21 * 60, one = 60;
+
+    test('an unset range leaves every row, windowless ones too', () {
+      expect(_ids(_rows([w('A', at(17, 22), at(18, 2)), w('B', null, null)])), [
+        'A',
+        'B',
+      ]);
+    });
+
+    test('a window inside the range, and one that only touches it, stay', () {
+      expect(kept(w('A', at(17, 22), at(17, 23)), evening, 23 * 60 + 30), [
+        'A',
+      ]);
+      expect(kept(w('A', at(17, 19), at(17, 21)), evening, 23 * 60), ['A']);
+    });
+
+    test('a window wholly outside the range goes', () {
+      expect(
+        kept(w('A', at(17, 18), at(17, 20, 59)), evening, 23 * 60),
+        isEmpty,
+      );
+      expect(kept(w('A', at(17, 23, 1), at(18, 2)), evening, 23 * 60), isEmpty);
+    });
+
+    test(
+      'a range that crosses midnight matches a window either side of it',
+      () {
+        expect(kept(w('A', at(17, 20), at(17, 21, 30)), evening, one), ['A']);
+        expect(kept(w('A', at(18, 0, 30), at(18, 3)), evening, one), ['A']);
+        expect(kept(w('A', at(18, 2), at(18, 5)), evening, one), isEmpty);
+      },
+    );
+
+    test('a window that crosses midnight matches a range on the later day', () {
+      expect(kept(w('A', at(17, 22), at(18, 4)), 2 * 60, 3 * 60), ['A']);
+      expect(kept(w('A', at(17, 22), at(18, 4)), 5 * 60, 6 * 60), isEmpty);
+    });
+
+    test('a row with no dark window is dropped under an active range', () {
+      expect(kept(w('A', null, null), evening, one), isEmpty);
+      expect(kept(w('A', at(17, 22), null), evening, one), isEmpty);
+    });
+
+    test(
+      'a window ending at midnight touches a range starting at midnight',
+      () {
+        expect(kept(w('A', at(17, 22), at(18, 0)), 0, one), ['A']);
+      },
+    );
+
+    test('equal ends mean the whole day', () {
+      expect(kept(w('A', at(17, 3), at(17, 4)), 600, 600), ['A']);
+    });
+  });
+
   group('kept choices', () {
     late Directory dir;
     setUp(() => dir = Directory.systemTemp.createTempSync('best_prefs'));
@@ -309,6 +383,7 @@ void main() {
       n.setShow(BestShow.upNow);
       n.setMinPeakAlt(45);
       n.setFitsField(true);
+      n.setWindow(21 * 60, 60);
       await n.saved;
       final second = make();
       await second.read(tonightsBestChoicesProvider.notifier).ready;
@@ -318,7 +393,23 @@ void main() {
       expect(got.show, BestShow.upNow);
       expect(got.minPeakAltDeg, 45);
       expect(got.fitsField, isTrue);
+      expect(got.windowFromMin, 21 * 60);
+      expect(got.windowToMin, 60);
     });
+
+    test(
+      'a stored range that is half set or out of the day is dropped',
+      () async {
+        File('${dir.path}/tonights_best.json').writeAsStringSync(
+          jsonEncode({'windowFromMin': 90, 'windowToMin': 1440}),
+        );
+        final c = make();
+        await c.read(tonightsBestChoicesProvider.notifier).ready;
+        final got = c.read(tonightsBestChoicesProvider);
+        expect(got.windowFromMin, isNull);
+        expect(got.windowToMin, isNull);
+      },
+    );
 
     test(
       'an unknown stored value falls back to the default, not a crash',
@@ -401,6 +492,7 @@ void main() {
         ..setShow(BestShow.upNow)
         ..setMinPeakAlt(60)
         ..setFitsField(true)
+        ..setWindow(21 * 60, 60)
         ..clearFilters();
       // Windows cannot delete the dir while a save holds the file open.
       await n.saved;
@@ -410,6 +502,8 @@ void main() {
       expect(got.types, isEmpty);
       expect(got.minPeakAltDeg, 0);
       expect(got.fitsField, isFalse);
+      expect(got.windowFromMin, isNull);
+      expect(got.windowToMin, isNull);
     });
 
     test('Score with no filter starts with the four tiles of tonightsBest, not of tonightSkyProvider', () async {

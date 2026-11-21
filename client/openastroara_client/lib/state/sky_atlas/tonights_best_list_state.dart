@@ -52,6 +52,8 @@ class BestChoices {
     this.show = BestShow.allNight,
     this.minPeakAltDeg = 0,
     this.fitsField = false,
+    this.windowFromMin,
+    this.windowToMin,
   });
 
   final BestSort sort;
@@ -62,18 +64,28 @@ class BestChoices {
   final int minPeakAltDeg;
   final bool fitsField;
 
+  /// Imaging hours as minutes of the local day (0-1439); both null = no
+  /// range. A To at or before From runs past midnight (21:00-01:00).
+  final int? windowFromMin;
+  final int? windowToMin;
+
   BestChoices copyWith({
     BestSort? sort,
     Set<BestType>? types,
     BestShow? show,
     int? minPeakAltDeg,
     bool? fitsField,
+    int? windowFromMin,
+    int? windowToMin,
+    bool clearWindow = false,
   }) => BestChoices(
     sort: sort ?? this.sort,
     types: types ?? this.types,
     show: show ?? this.show,
     minPeakAltDeg: minPeakAltDeg ?? this.minPeakAltDeg,
     fitsField: fitsField ?? this.fitsField,
+    windowFromMin: clearWindow ? null : windowFromMin ?? this.windowFromMin,
+    windowToMin: clearWindow ? null : windowToMin ?? this.windowToMin,
   );
 
   /// Whether a filter (not Sort) is set.
@@ -81,7 +93,8 @@ class BestChoices {
       types.isNotEmpty ||
       show != BestShow.allNight ||
       minPeakAltDeg != 0 ||
-      fitsField;
+      fitsField ||
+      windowFromMin != null;
 
   Map<String, Object> toJson() => {
     'sort': sort.name,
@@ -89,6 +102,8 @@ class BestChoices {
     'show': show.name,
     'minPeakAltDeg': minPeakAltDeg,
     'fitsField': fitsField,
+    'windowFromMin': ?windowFromMin,
+    'windowToMin': ?windowToMin,
   };
 
   /// Per field: an unknown or wrongly typed value falls back to its default,
@@ -97,6 +112,12 @@ class BestChoices {
     if (raw is! Map) return const BestChoices();
     final types = raw['types'];
     final peak = raw['minPeakAltDeg'];
+    final from = raw['windowFromMin'];
+    final to = raw['windowToMin'];
+    // Only a whole range counts: one end alone, or a minute outside the day,
+    // drops both.
+    final range =
+        from is int && to is int && _minuteOfDay(from) && _minuteOfDay(to);
     return BestChoices(
       sort: BestSort.values.asNameMap()[raw['sort']] ?? BestSort.score,
       types: {
@@ -107,8 +128,41 @@ class BestChoices {
       // A hand-edited 30.0 equals 30 but is a double, not an int.
       minPeakAltDeg: kBestPeakAlts.contains(peak) ? (peak as num).toInt() : 0,
       fitsField: raw['fitsField'] is bool ? raw['fitsField'] as bool : false,
+      windowFromMin: range ? from : null,
+      windowToMin: range ? to : null,
     );
   }
+}
+
+bool _minuteOfDay(int m) => m >= 0 && m < 24 * 60;
+
+/// Whether the dark window [start]..[end] overlaps the daily range
+/// [fromMin]..[toMin] (minutes of the local day) on any day the window
+/// touches. A range whose To is at or before From ends on the next day, so
+/// equal ends cover the whole day. Touching ends overlap, as the window's own
+/// open test (`windowStateFor`) includes its ends. No window: no overlap.
+bool windowOverlapsRange(
+  DateTime? start,
+  DateTime? end,
+  int fromMin,
+  int toMin,
+) {
+  if (start == null || end == null) return false;
+  final s = start.toLocal();
+  final e = end.toLocal();
+  final spanDays = toMin <= fromMin ? 1 : 0;
+  // The range that began the day before the window may still run into it.
+  for (
+    var d = -1;
+    d <= 0 || !DateTime(s.year, s.month, s.day + d).isAfter(e);
+    d++
+  ) {
+    final day = DateTime(s.year, s.month, s.day + d);
+    final from = DateTime(day.year, day.month, day.day, 0, fromMin);
+    final to = DateTime(day.year, day.month, day.day + spanDays, 0, toMin);
+    if (!from.isAfter(e) && !to.isBefore(s)) return true;
+  }
+  return false;
 }
 
 /// One listed Target with what the screen shows beside the ranker's row.
@@ -171,6 +225,13 @@ List<BestRow> bestRows(
     if (choices.types.isNotEmpty && !choices.types.contains(type)) continue;
     if (choices.show == BestShow.upNow && !up) continue;
     if (o.maxAltitudeDeg < choices.minPeakAltDeg) continue;
+    final from = choices.windowFromMin;
+    final to = choices.windowToMin;
+    if (from != null &&
+        to != null &&
+        !windowOverlapsRange(o.windowStartUtc, o.windowEndUtc, from, to)) {
+      continue;
+    }
     if (useField &&
         o.framing != TonightFraming.goodFit &&
         o.framing != TonightFraming.good) {
@@ -303,6 +364,11 @@ class TonightsBestChoicesNotifier extends Notifier<BestChoices> {
   void setShow(BestShow s) => _set(state.copyWith(show: s));
   void setMinPeakAlt(int deg) => _set(state.copyWith(minPeakAltDeg: deg));
   void setFitsField(bool on) => _set(state.copyWith(fitsField: on));
+
+  /// Both ends, minutes of the local day.
+  void setWindow(int fromMin, int toMin) =>
+      _set(state.copyWith(windowFromMin: fromMin, windowToMin: toMin));
+  void clearWindow() => _set(state.copyWith(clearWindow: true));
   void clearTypes() => _set(state.copyWith(types: const {}));
 
   void toggleType(BestType t) {
@@ -311,14 +377,15 @@ class TonightsBestChoicesNotifier extends Notifier<BestChoices> {
     _set(state.copyWith(types: next));
   }
 
-  /// Resets the four filters (types, Show, Peak altitude, Fits my field);
-  /// Sort stays.
+  /// Resets the five filters (types, Show, Peak altitude, Fits my field,
+  /// Imaging hours); Sort stays.
   void clearFilters() => _set(
     state.copyWith(
       types: const {},
       show: BestShow.allNight,
       minPeakAltDeg: 0,
       fitsField: false,
+      clearWindow: true,
     ),
   );
 }
