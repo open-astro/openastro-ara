@@ -185,7 +185,7 @@ void main() {
       tester,
     ) async {
       final rig = FakeSectionRig({s.route: s.rigCopy})..failGet.add(s.route);
-      final c = await _pump(tester, rig, );
+      final c = await _pump(tester, rig);
       await _openRig(tester);
       await s.act(tester);
       await _settle(
@@ -200,7 +200,7 @@ void main() {
       tester,
     ) async {
       final rig = FakeSectionRig({s.route: s.rigCopy})..failGet.add(s.route);
-      await _pump(tester, rig, );
+      await _pump(tester, rig);
       await _openRig(tester);
       // Not loaded at the edit (any read so far failed); the rig answers now.
       rig.failGet.remove(s.route);
@@ -229,9 +229,10 @@ void main() {
       () => rig.puts.length == 2 || _titles(c).contains(_couldntSave),
     );
     expect(_titles(c), isNot(contains(_couldntSave)));
-    expect([
-      for (final p in rig.puts) (p.body as Map)['focal_length_mm'],
-    ], [1100, 1110]);
+    expect(
+      [for (final p in rig.puts) (p.body as Map)['focal_length_mm']],
+      [1100, 1110],
+    );
     expect(c.read(opticsSettingsProvider).conflict, isFalse);
   });
 }

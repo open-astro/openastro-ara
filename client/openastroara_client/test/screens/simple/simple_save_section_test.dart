@@ -167,7 +167,12 @@ void main() {
   testWidgets('a save the rig fails (not a 412) puts the control back on the '
       "rig's value", (tester) async {
     final rig = FakeSectionRig({_route: _rigCopy});
-    final c = await _pump(tester, const SimpleFocusPanel(), width: null, rig: rig);
+    final c = await _pump(
+      tester,
+      const SimpleFocusPanel(),
+      width: null,
+      rig: rig,
+    );
     expect(c.read(autofocusSettingsProvider).value!.exposureSeconds, 7);
     rig.failPut.add(_route);
     await _tap(tester, 'simple-focus-af-exposure-10');
@@ -181,7 +186,12 @@ void main() {
   testWidgets('a rig or profile change during the write\'s own load refuses '
       'with the pill and writes nothing', (tester) async {
     final rig = FakeSectionRig({_route: _rigCopy});
-    final c = await _pump(tester, const SimpleFocusPanel(), width: null, rig: rig);
+    final c = await _pump(
+      tester,
+      const SimpleFocusPanel(),
+      width: null,
+      rig: rig,
+    );
     final hold = rig.holdGet[_route] = Completer<void>();
     await _tap(tester, 'simple-focus-af-exposure-10');
     // The tap's GET is out once the rig has taken the hold.
@@ -208,7 +218,12 @@ void main() {
   testWidgets('a second exposure pick while the first is still saving lands '
       'too, with no conflict', (tester) async {
     final rig = FakeSectionRig({_route: _rigCopy});
-    final c = await _pump(tester, const SimpleFocusPanel(), width: null, rig: rig);
+    final c = await _pump(
+      tester,
+      const SimpleFocusPanel(),
+      width: null,
+      rig: rig,
+    );
     final hold = rig.holdPut[_route] = Completer<void>();
     await _tap(tester, 'simple-focus-af-exposure-10');
     // The first pick's PUT is out once the rig has taken the hold.
@@ -223,9 +238,10 @@ void main() {
     );
     await flushLoads(tester);
     expect(_pills(c), isEmpty);
-    expect([
-      for (final p in rig.puts) (p.body as Map)['exposure_seconds'],
-    ], [10, 15]);
+    expect(
+      [for (final p in rig.puts) (p.body as Map)['exposure_seconds']],
+      [10, 15],
+    );
     expect(c.read(autofocusSettingsProvider).conflict, isFalse);
     expect(c.read(autofocusSettingsProvider).value!.exposureSeconds, 15);
   });

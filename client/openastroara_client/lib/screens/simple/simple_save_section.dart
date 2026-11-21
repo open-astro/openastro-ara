@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -19,6 +21,10 @@ import '../../util/friendly_error.dart';
 /// A failed save (not a 412) puts the rig's copy back, and a 412 keeps the
 /// edit and sets the section's `conflict` (`replaceAndSave`). Returns whether
 /// the rig took the change.
+///
+/// Writes to one section run one at a time: a second tap's load waits for
+/// the first tap's PUT, else it reads the copy from before that PUT, drops
+/// its result and saves with the old tag (a false 412).
 Future<bool> simpleSaveSection<T>(
   BuildContext context,
   WidgetRef ref,
@@ -30,16 +36,20 @@ Future<bool> simpleSaveSection<T>(
   final notify = userNotifier(context, origin: origin);
   final l10n = context.l10n;
   void refuse(String detail) => notify(title, detail: detail, error: true);
-  final api = ref.read(profileApiProvider);
-  if (api == null) {
-    refuse(l10n.shellRigNotConnected);
-    return false;
-  }
   final n = ref.read(provider.notifier);
-  // The window may close during the load: read the section through the
-  // container, not the widget's ref.
+  // The window may close during the wait or the load: read the rig and the
+  // section through the container, not the widget's ref.
   final container = ProviderScope.containerOf(context, listen: false);
+  final before = _writing[n];
+  final done = Completer<void>();
+  _writing[n] = done.future;
   try {
+    await before;
+    final api = container.read(profileApiProvider);
+    if (api == null) {
+      refuse(l10n.shellRigNotConnected);
+      return false;
+    }
     // A load whose result a reset dropped still returns true, with no value.
     final loaded = await n.load(api);
     final now = container.read(provider);
@@ -54,6 +64,11 @@ Future<bool> simpleSaveSection<T>(
     refuse(l10n.simpleSectionConflict);
   } catch (e) {
     refuse(failureReason(l10n, e));
+  } finally {
+    done.complete();
   }
   return false;
 }
+
+/// The last write each section's notifier started (see [simpleSaveSection]).
+final _writing = Expando<Future<void>>();
