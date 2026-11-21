@@ -95,15 +95,18 @@ DioException staleSave() {
 
 /// The sections a run is built from as the rig's copies from the start (no
 /// load, no HTTP), for a test that builds a run: the create refuses without
-/// them (ADR 0015). Loads and saves still go through the real API.
+/// them (ADR 0015). Loads and saves still go through the real API. A null
+/// [unguided] leaves that section not loaded (only a rig with no guider needs
+/// it).
 List<Override> imagingSectionsFromRig({
   ImagingDefaults defaults = const TestImagingDefaults(),
   AutofocusSettings autofocus = const TestAutofocusSettings(),
-  UnguidedSettings unguided = const TestUnguidedSettings(),
+  UnguidedSettings? unguided = const TestUnguidedSettings(),
 }) => [
   imagingDefaultsFromRig(defaults),
   autofocusSettingsProvider.overrideWith(() => _RigAutofocus(autofocus)),
-  unguidedSettingsProvider.overrideWith(() => _RigUnguided(unguided)),
+  if (unguided != null)
+    unguidedSettingsProvider.overrideWith(() => _RigUnguided(unguided)),
 ];
 
 /// The imaging defaults alone as the rig's copy (Simple Mode's plan rows take

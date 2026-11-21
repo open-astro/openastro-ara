@@ -159,6 +159,36 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
+  testWidgets('no server, no guider: a cache with no unguided section stops '
+      'the create, and no draft is saved', (tester) async {
+    final c = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(unguided: null),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(c.dispose);
+    final outcome = await run(tester, api: null, container: c);
+    expect(outcome.error, isA<SectionNotLoadedException>(),
+        reason: 'an unguided run needs the guard and probe settings');
+    expect(drafts.store, isEmpty);
+  });
+
+  testWidgets('no server, a guider named: the draft is built with no unguided '
+      'section, which a guided run never reads', (tester) async {
+    final c = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(unguided: null),
+      sequenceApiProvider.overrideWith((ref) => null),
+      phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
+    ]);
+    addTearDown(c.dispose);
+    final outcome = await run(tester, api: null, container: c);
+    expect(outcome.error, isNull);
+    expect(drafts.store.values.single.body.toString(),
+        contains(startGuidingType));
+    await tester.pump(const Duration(seconds: 5));
+  });
+
   testWidgets('no server: a second add APPENDS to the open draft', (tester) async {
     final container = ProviderContainer(overrides: [
       draftSequenceServiceProvider.overrideWithValue(drafts),

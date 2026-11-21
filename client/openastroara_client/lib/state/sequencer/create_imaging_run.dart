@@ -253,15 +253,15 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // With a draft already open the target is APPENDED to it (below), the same
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
-    // The offline cache's copy (ADR 0015): a section it lacks stops the
-    // create before the plan chooser, as connected, never a client default.
-    final (defaults, af) = _loadedRunSettings(container);
     // No daemon to ask what the rig has — settings are the best we know (the
     // cache holds no guider settings: no guider then).
     final rig = rigCapabilitiesFromSettings(
       container.read(phd2SettingsProvider).value,
     )
         .copyWith(pauseForFilterSwap: pauseForFilterSwap);
+    // The offline cache's copy (ADR 0015): a section it lacks stops the
+    // create before the plan chooser, as connected, never a client default.
+    final (defaults, af, unguided) = _loadedRunSettings(container, rig);
     final choice = filterPlan != null
         ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
         : await _choosePlan(
@@ -303,7 +303,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       startGuiding: choice.guide,
       recalibrateGuider: recalibrateGuider,
       rig: rig,
-      unguidedOptions: unguidedOptionsOf(container),
+      unguidedOptions: unguided,
       ditherEveryNExposures: _ditherCadence(container, choice),
       manualFilterSwap: choice.manualFilterSwap,
       flatsAfter: flatsAfterTarget,
@@ -332,7 +332,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           startGuiding: choice.guide,
           recalibrateGuider: recalibrateGuider,
           rig: rig,
-          unguidedOptions: unguidedOptionsOf(container),
+          unguidedOptions: unguided,
           ditherEveryNExposures: _ditherCadence(container, choice),
           manualFilterSwap: choice.manualFilterSwap,
           flatsAfter: flatsAfterTarget,
@@ -367,7 +367,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
             startGuiding: choice.guide,
             recalibrateGuider: recalibrateGuider,
             rig: rig,
-            unguidedOptions: unguidedOptionsOf(container),
+            unguidedOptions: unguided,
             ditherEveryNExposures: _ditherCadence(container, choice),
             manualFilterSwap: choice.manualFilterSwap,
             flatsAfter: flatsAfterTarget,
@@ -399,11 +399,11 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // copy (the rig's, or its offline cache), never from client defaults. One
   // not loaded: the create stops before the plan chooser, with nothing sent
   // (ADR 0015).
-  final (defaults, af) = _loadedRunSettings(container);
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
   final rig = (await readRigCapabilities(container))
       .copyWith(pauseForFilterSwap: pauseForFilterSwap);
+  final (defaults, af, unguided) = _loadedRunSettings(container, rig);
 
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.
@@ -459,7 +459,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
           startGuiding: choice.guide,
           recalibrateGuider: recalibrateGuider,
           rig: rig,
-          unguidedOptions: unguidedOptionsOf(container),
+          unguidedOptions: unguided,
           ditherEveryNExposures: ditherEvery,
           manualFilterSwap: choice.manualFilterSwap,
           flatsAfter: flatsAfterTarget,
@@ -518,7 +518,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     startGuiding: choice.guide,
     recalibrateGuider: recalibrateGuider,
     rig: rig,
-    unguidedOptions: unguidedOptionsOf(container),
+    unguidedOptions: unguided,
     ditherEveryNExposures: ditherEvery,
     manualFilterSwap: choice.manualFilterSwap,
     flatsAfter: flatsAfterTarget,
@@ -546,7 +546,7 @@ Future<ImagingRunResult?> _createImagingRunPinned(
         startGuiding: choice.guide,
         recalibrateGuider: recalibrateGuider,
         rig: rig,
-        unguidedOptions: unguidedOptionsOf(container),
+        unguidedOptions: unguided,
         ditherEveryNExposures: ditherEvery,
         manualFilterSwap: choice.manualFilterSwap,
         flatsAfter: flatsAfterTarget,
@@ -652,8 +652,9 @@ Future<TargetPlanChoice?> _choosePlan(
 /// The dither cadence for the run's imaging loops: the OpenAstro Guider settings' every-N
 /// frames when the user chose to guide and dithering is on; null = no dither
 /// trigger (also whenever guiding was declined — dithering without a guider
-/// nudges nothing). Guiding with the guider settings not loaded throws
-/// [SectionNotLoadedException]: the cadence is never a client default.
+/// nudges nothing). Guiding needs the guider settings, which
+/// [_loadedRunSettings] checked before the plan chooser: the cadence is never
+/// a client default.
 int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
   if (!choice.guide) return null;
   final phd2 = _loaded(container.read(phd2SettingsProvider));
@@ -882,16 +883,33 @@ Future<void> _registerMosaicProject(
   }
 }
 
-/// The sections every run is built from, or [SectionNotLoadedException]
+/// The sections a run on [rig] is built from, or [SectionNotLoadedException]
 /// when one holds no copy (the rig's or the offline cache's): a run never
-/// takes a client default (ADR 0015 rule 3).
-(ImagingDefaults, AutofocusSettings) _loadedRunSettings(
+/// takes a client default (ADR 0015 rule 3). Checked before the plan chooser,
+/// so a refused create has asked nothing and sent nothing. A rig with a
+/// guider needs the guider settings (the dither cadence when the user
+/// guides); one without needs the unguided knobs (the guard, probe and
+/// re-centre). A guided body never reads the unguided options, so they are
+/// the body builder's own then.
+(ImagingDefaults, AutofocusSettings, UnguidedOptions) _loadedRunSettings(
   ProviderContainer container,
+  RigCapabilities rig,
 ) {
   final defaults = _loaded(container.read(imagingDefaultsProvider));
   final af = _loaded(container.read(autofocusSettingsProvider));
-  _loaded(container.read(unguidedSettingsProvider));
-  return (defaults, af);
+  if (rig.guider) {
+    _loaded(container.read(phd2SettingsProvider));
+    return (defaults, af, const UnguidedOptions());
+  }
+  return (defaults, af, unguidedOptionsOf(container));
+}
+
+/// Simple Mode's edit replaces a block on the rig by removing it first: it
+/// asks this before the removal, so a run that would be refused for a
+/// section not loaded ([SectionNotLoadedException]) leaves the block alone.
+Future<void> requireRunSections(ProviderContainer container) async {
+  await hydratePlanningSettings(container);
+  _loadedRunSettings(container, await readRigCapabilities(container));
 }
 
 T _loaded<T>(LoadedSection<T> section) =>

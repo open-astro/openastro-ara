@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
+import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
@@ -11,9 +12,14 @@ import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
+import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/guider/guider_state.dart';
+import 'package:openastroara/state/settings/filter_set_state.dart';
+import 'package:openastroara/state/settings/phd2_settings_state.dart';
 
 import '../../support/section_load.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// Simple Mode's Run hands createImagingRun a finished plan: no plan chooser,
 /// its own sub length and frame count, and a run of its own even with a
@@ -45,6 +51,38 @@ class _Focuser extends FocuserNotifier {
   @override
   Future<FocuserStatus?> build() async =>
       FocuserStatus.fromJson({'device_id': 'd', 'name': 'EAF', 'state': 'connected'});
+}
+
+// A rig the daemon reports a guider on.
+class _Guider extends GuiderStatusNotifier {
+  @override
+  Future<GuiderStatus?> build() async => GuiderStatus.fromJson({
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {'state': 'stopped'},
+  });
+}
+
+// The guider settings as the rig's copy.
+class _RigPhd2 extends Phd2SettingsNotifier {
+  @override
+  LoadedSection<Phd2Settings> build() =>
+      LoadedSection(value: const TestPhd2Settings(), source: SectionSource.rig);
+}
+
+// An LRGB filter set: the plan chooser has a real choice to offer.
+class _Lrgb extends FilterSetNotifier {
+  @override
+  LoadedSection<FilterSetSettings> build() => LoadedSection(
+    value: const FilterSetSettings(filters: [
+      PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),
+      PlanningFilter(name: 'R', kind: FilterKind.r, bandwidthNm: 0),
+      PlanningFilter(name: 'G', kind: FilterKind.g, bandwidthNm: 0),
+      PlanningFilter(name: 'B', kind: FilterKind.b, bandwidthNm: 0),
+    ]),
+    source: SectionSource.rig,
+  );
 }
 
 Future<ImagingRunResult?> _run(
@@ -180,6 +218,62 @@ void main() {
     }
     expect(error, isA<SectionNotLoadedException>());
     expect(seq.bodies, isEmpty, reason: 'nothing reaches the rig');
+  });
+
+  testWidgets('connected with a guider and its settings not loaded, the '
+      'create stops before the plan chooser with nothing sent', (tester) async {
+    container.dispose();
+    container = ProviderContainer(overrides: [
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => seq),
+      guiderStatusProvider.overrideWith(_Guider.new),
+      filterSetProvider.overrideWith(_Lrgb.new),
+    ]);
+    Object? error;
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Consumer(
+            builder: (context, ref, _) => ElevatedButton(
+              onPressed: () => createImagingRun(
+                ref,
+                raDeg: 10.68,
+                decDeg: 41.27,
+                targetName: 'M31',
+                jumpToRun: false,
+                appendToOpen: false,
+              ).catchError((Object e) {
+                error = e;
+                return null;
+              }),
+              child: const Text('go'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('go'));
+    for (var i = 0; i < 20 && error == null; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.byType(Dialog), findsNothing, reason: 'no plan chooser');
+    expect(error, isA<SectionNotLoadedException>());
+    expect(seq.bodies, isEmpty, reason: 'nothing reaches the rig');
+  });
+
+  testWidgets('connected with a guider, a run is built with the unguided '
+      'section not loaded (a guided run never reads it)', (tester) async {
+    container.dispose();
+    container = ProviderContainer(overrides: [
+      ...imagingSectionsFromRig(unguided: null),
+      sequenceApiProvider.overrideWith((ref) => seq),
+      guiderStatusProvider.overrideWith(_Guider.new),
+      phd2SettingsProvider.overrideWith(_RigPhd2.new),
+    ]);
+    final r = await _run(tester, container, exposureSeconds: 120, frameCount: 30);
+    expect(r?.sequenceId, 'seq-1');
+    expect(jsonEncode(seq.bodies.single), contains(startGuidingType));
   });
 
   // The profile's refocus-on-temperature amount reaches the run, plan or not.

@@ -709,6 +709,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         : null;
     state = state.copyWith(busy: true);
     try {
+      // A run refused for a section not loaded must not cost the block it
+      // would replace: ask before the removal.
+      await requireRunSections(ref.container);
       await _removeBlock(api, id, t.name);
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
