@@ -295,7 +295,7 @@
     <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
     <button id="f-rot+" title="+1°">+</button>
   </div>
-  <button id="f-snap" title="Turn the box to the catalogue position angle of this object">Snap to catalogue angle</button>
+  <button id="f-snap" title="Turn the box so its long side lies along this object's catalogue position angle">Snap to catalogue angle</button>
   <div class="frow full-only"><span class="k">Columns</span>
     <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
   </div>
@@ -1387,13 +1387,23 @@ function catalogueAngle(sel) {
   } catch (e) { return null; }
 }
 
+// The dial angle that lays the box's long side along the catalogue position
+// angle, 0 to 179, or null without one. mosaicData puts the box's width axis
+// at position angle 90 − dial and its height axis at −dial.
+function snapDialDeg() {
+  if (frameCatPaDeg == null) return null;
+  var portrait = !!(optics && optics.ok && optics.fovHDeg > optics.fovWDeg);
+  var turn = (portrait ? 0 : 90) - frameCatPaDeg;
+  return ((turn % 180) + 180) % 180;
+}
+
 function snapEnabled() {
-  return !!frameOn && frameCatPaDeg != null && frameRotDeg !== frameCatPaDeg;
+  return !!frameOn && frameCatPaDeg != null && frameRotDeg !== snapDialDeg();
 }
 
 function snapToCatalogueAngle() {
   if (frameCatPaDeg == null) return;
-  frameRotDeg = frameCatPaDeg;
+  frameRotDeg = snapDialDeg();
   updateFrame();
 }
 
@@ -1644,7 +1654,7 @@ function renderFramePanel() {
   msg.hidden = !!(CHART && optics && optics.ok);
   document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
   var snapBtn = document.getElementById('f-snap');
-  snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + frameCatPaDeg + '°)');
+  snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + snapDialDeg() + '°)');
   snapBtn.disabled = !snapEnabled();
   var bareBtn = document.getElementById('f-bare');
   bareBtn.style.display = CHART && frameRaDeg != null ? 'block' : 'none';
