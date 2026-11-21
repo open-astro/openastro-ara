@@ -117,9 +117,12 @@ class SimpleLiveStackRow extends ConsumerWidget {
         on ? l10n.simpleLiveStackCouldntStart : l10n.simpleLiveStackCouldntStop,
       ),
     );
+    // 8 px between neighbouring targets (DESIGN.md), so a gloved tap meant
+    // for one never lands on Off or Reset, which both empty the stack.
     return Column(
       key: const Key('simple-live-stack-row'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
       children: [
         if (!s.supported)
           title

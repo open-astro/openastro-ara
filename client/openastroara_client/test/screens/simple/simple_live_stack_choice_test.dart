@@ -136,4 +136,31 @@ void main() {
       ),
     );
   });
+
+  testWidgets('with the stack on, On / Off, the view choice and Reset keep '
+      '8 px apart, at normal and large text', (tester) async {
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, FakeSessionLiveStackClient()..enabled = true);
+    Rect rect(String id) =>
+        tester.getRect(find.byKey(Key('simple-live-stack-$id')));
+    for (final scale in [1.0, 1.3]) {
+      tester.platformDispatcher.textScaleFactorTestValue = scale;
+      await tester.pump();
+      expect(
+        rect('switch').width == rect('row').width,
+        scale > 1.2,
+        reason: 'past 1.2x the pair goes under the title',
+      );
+      expect(
+        rect('view-last').top - rect('off').bottom,
+        greaterThanOrEqualTo(8),
+        reason: 'Off to the view choice at ${scale}x',
+      );
+      expect(
+        rect('reset').top - rect('view-stack').bottom,
+        greaterThanOrEqualTo(8),
+        reason: 'the view choice to Reset at ${scale}x',
+      );
+    }
+  });
 }
