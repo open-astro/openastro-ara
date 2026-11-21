@@ -15,11 +15,16 @@ const polarAlignTurnWrongWay = 'turn_wrong_way';
 /// `stopped_by`, with the cut-power warning when the run could not confirm
 /// its stop afterwards (#2066: the daemon's sentence carries it, and no
 /// `mount_did_not_stop` follows). #2081 a turn the wrong way is worded too,
-/// with where to test the direction again. Anything else shows the daemon's
+/// with where to test the direction again, and keeps the cut-power warning
+/// the same way. Anything else shows the daemon's
 /// own sentence, then its reason token; null when the run did not fail with a
 /// reason.
 String? polarAlignErrorText(AppLocalizations l, PolarAlignLive live) {
-  if (live.errorReason == polarAlignTurnWrongWay) return l.polarAlignTurnWrongWay;
+  if (live.errorReason == polarAlignTurnWrongWay) {
+    return live.errorStopUnconfirmed
+        ? '${l.polarAlignTurnWrongWay} ${l.polarAlignStopNotConfirmed}'
+        : l.polarAlignTurnWrongWay;
+  }
   final stoppedBy = live.errorStoppedBy;
   if (live.errorReason == polarAlignSlewAbortedExternally &&
       stoppedBy != null) {

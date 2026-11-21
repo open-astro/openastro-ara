@@ -103,4 +103,21 @@ void main() {
     expect(polarAlignErrorText(en, live), contains('Test direction again'));
     expect(polarAlignErrorText(pt, live), contains('Testar a direção de novo'));
   });
+
+  // #2081 a wrong-way turn whose stop the run could not confirm: the daemon's
+  // sentence ends in "cut the mount's power" and no mount_did_not_stop
+  // follows, so the app's own wording keeps that warning.
+  test('a turn the wrong way whose stop was not confirmed keeps the cut-power warning (#2081)', () {
+    for (final l in [en, pt]) {
+      final unconfirmed = PolarAlignLive(
+        phase: PolarAlignStates.failed,
+        errorReason: polarAlignTurnWrongWay,
+        errorMessage: 'the daemon sentence',
+        errorStopUnconfirmed: true,
+      );
+      final words = polarAlignErrorText(l, unconfirmed)!;
+      expect(words, startsWith(l.polarAlignTurnWrongWay));
+      expect(words, endsWith(l.polarAlignStopNotConfirmed));
+    }
+  });
 }
