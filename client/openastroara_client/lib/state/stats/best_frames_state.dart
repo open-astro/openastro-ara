@@ -8,7 +8,9 @@ import 'stats_refresh_mixin.dart';
 
 /// Builds a [BestFramesClient] for a server. Overridable in tests.
 final bestFramesApiFactoryProvider =
-    Provider<BestFramesClient Function(AraServer)>((ref) => BestFramesApi.new);
+    Provider<BestFramesClient Function(AraServer)>(
+  (ref) => BestFramesApi.new,
+);
 
 /// [BestFramesClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -35,12 +37,11 @@ class BestFramesNotifier extends AsyncNotifier<List<BestFrame>?>
   /// Re-reads the best frames, keeping the previous list on screen if the read
   /// fails (the section shows a stale banner). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-    final api = ref.read(bestFramesApiProvider);
-    return api?.fetch();
-  });
+        final api = ref.read(bestFramesApiProvider);
+        return api?.fetch();
+      });
 }
 
 final bestFramesProvider =
     AsyncNotifierProvider<BestFramesNotifier, List<BestFrame>?>(
-      BestFramesNotifier.new,
-    );
+        BestFramesNotifier.new);

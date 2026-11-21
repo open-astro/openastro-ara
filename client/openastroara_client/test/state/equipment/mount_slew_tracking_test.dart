@@ -17,15 +17,12 @@ class _Api implements EquipmentDeviceClient<MountStatus> {
   Future<MountStatus?> getStatus() async => status;
   @override
   Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
-      calls.add(
-        subpath == 'tracking' ? 'tracking ${body?['enabled']}' : subpath,
-      );
+      calls.add(subpath == 'tracking' ? 'tracking ${body?['enabled']}' : subpath);
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
-MountStatus _mount({bool tracking = false, bool canSetTracking = true}) =>
-    MountStatus(
+MountStatus _mount({bool tracking = false, bool canSetTracking = true}) => MountStatus(
       deviceId: 'm',
       name: 'EQM-35',
       connectionState: EquipmentConnectionState.connected,
@@ -50,9 +47,7 @@ MountStatus _mount({bool tracking = false, bool canSetTracking = true}) =>
 
 Future<List<String>> _slew(MountStatus status, {bool sync = false}) async {
   final api = _Api(status);
-  final c = ProviderContainer(
-    overrides: [mountApiProvider.overrideWithValue(api)],
-  );
+  final c = ProviderContainer(overrides: [mountApiProvider.overrideWithValue(api)]);
   addTearDown(c.dispose);
   await c.read(mountProvider.future);
   await c.read(mountProvider.notifier).slewTo(1.0, -60, sync: sync);

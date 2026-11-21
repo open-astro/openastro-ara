@@ -40,13 +40,10 @@ void main() {
   // IndexedStack keeps non-selected children offstage, so every finder here
   // must look past the default skipOffstage filter.
   Finder probe(String name) => find.byWidgetPredicate(
-    (w) => w is _Probe && w.name == name,
-    skipOffstage: false,
-  );
+      (w) => w is _Probe && w.name == name, skipOffstage: false);
 
-  testWidgets('unvisited slots are placeholders, visited ones real bodies', (
-    tester,
-  ) async {
+  testWidgets('unvisited slots are placeholders, visited ones real bodies',
+      (tester) async {
     await tester.pumpWidget(host(selected: 0, visited: {0}));
     expect(find.text('a'), findsOneWidget);
     expect(find.byType(_Probe, skipOffstage: false), findsOneWidget);
@@ -61,9 +58,8 @@ void main() {
     expect(_Probe.initCounts, {'a': 1});
   });
 
-  testWidgets('a tab keeps its State across a switch away and back', (
-    tester,
-  ) async {
+  testWidgets('a tab keeps its State across a switch away and back',
+      (tester) async {
     await tester.pumpWidget(host(selected: 0, visited: {0}));
     final a = tester.state(probe('a'));
 
@@ -73,15 +69,12 @@ void main() {
 
     await tester.pumpWidget(host(selected: 0, visited: {0, 2}));
     expect(tester.state(probe('a')), same(a));
-    expect(_Probe.initCounts, {
-      'a': 1,
-      'c': 1,
-    }, reason: 'initState exactly once per tab');
+    expect(_Probe.initCounts, {'a': 1, 'c': 1},
+        reason: 'initState exactly once per tab');
   });
 
-  testWidgets('a selected index outside visited is a placeholder', (
-    tester,
-  ) async {
+  testWidgets('a selected index outside visited is a placeholder',
+      (tester) async {
     // buildTabStack is a pure function of its inputs: it does NOT add the
     // selected index to visited. The caller (AppShell.build) unions them,
     // so this pins where that invariant lives.

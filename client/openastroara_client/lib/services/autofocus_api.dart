@@ -50,23 +50,21 @@ class AutofocusJob {
     this.total = 0,
   });
 
-  bool get isTerminal =>
-      state == 'complete' || state == 'failed' || state == 'cancelled';
+  bool get isTerminal => state == 'complete' || state == 'failed' || state == 'cancelled';
 
   static AutofocusJob fromJson(Map<String, dynamic> json) {
     final jobId = json['job_id'];
     if (jobId is! String) {
       throw FormatException(
-        'autofocus job missing string "job_id" (${jobId.runtimeType})',
-      );
+          'autofocus job missing string "job_id" (${jobId.runtimeType})');
     }
     return AutofocusJob(
-      jobId: jobId,
-      state: json['state'] as String? ?? 'unknown',
-      errorMessage: json['error_message'] as String?,
-      done: (json['done'] as num?)?.toInt() ?? 0,
-      total: (json['total'] as num?)?.toInt() ?? 0,
-    );
+        jobId: jobId,
+        state: json['state'] as String? ?? 'unknown',
+        errorMessage: json['error_message'] as String?,
+        done: (json['done'] as num?)?.toInt() ?? 0,
+        total: (json['total'] as num?)?.toInt() ?? 0,
+      );
   }
 }
 
@@ -112,14 +110,12 @@ class DioAutofocusApi implements AutofocusApi {
   final Dio _dio;
 
   DioAutofocusApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
           sendTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   @override
   Future<AutofocusJob> start() async {
@@ -135,16 +131,12 @@ class DioAutofocusApi implements AutofocusApi {
   // in-memory and never evicts, so in practice this means the daemon RESTARTED
   // mid-sweep — the caller must treat it as "lost track", not as success.
   static final Options _jobOptions = Options(
-    validateStatus: (status) =>
-        status != null && (status < 400 || status == 404),
+    validateStatus: (status) => status != null && (status < 400 || status == 404),
   );
 
   @override
   Future<AutofocusJob?> job(String jobId) async {
-    final res = await _dio.get<dynamic>(
-      '/api/v1/jobs/$jobId',
-      options: _jobOptions,
-    );
+    final res = await _dio.get<dynamic>('/api/v1/jobs/$jobId', options: _jobOptions);
     if (res.statusCode == 404) return null;
     final data = res.data;
     if (data is! Map<String, dynamic>) {
@@ -157,18 +149,14 @@ class DioAutofocusApi implements AutofocusApi {
   Future<AutofocusRun> state() async {
     final res = await _dio.get<dynamic>('/api/v1/autofocus/state');
     final data = res.data;
-    return data is Map<String, dynamic>
-        ? AutofocusRun.fromJson(data)
-        : AutofocusRun.idle;
+    return data is Map<String, dynamic> ? AutofocusRun.fromJson(data) : AutofocusRun.idle;
   }
 
   @override
   Future<void> cancel() async {
     await _dio.post<void>(
       '/api/v1/autofocus/cancel',
-      options: Options(
-        validateStatus: (s) => s != null && (s < 400 || s == 409),
-      ),
+      options: Options(validateStatus: (s) => s != null && (s < 400 || s == 409)),
     );
   }
 

@@ -22,15 +22,12 @@ class CalendarApi implements CalendarClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   CalendarApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<CalendarStats> fetch({int days = 49}) async {
@@ -48,9 +45,7 @@ class CalendarApi implements CalendarClient {
     );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'stats/calendar returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('stats/calendar returned a non-object body (${data.runtimeType})');
     }
     return CalendarStats.fromJson(data);
   }

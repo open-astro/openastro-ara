@@ -39,15 +39,13 @@ class NotificationBell extends ConsumerWidget {
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          icon: Icon(
-            unread > 0 ? Icons.notifications : Icons.notifications_none,
-            size: 18,
-          ),
+          icon: Icon(unread > 0 ? Icons.notifications : Icons.notifications_none,
+              size: 18),
           tooltip: unread == 0
               ? 'Notifications'
               : unread == 1
-              ? '1 unread notification'
-              : '$unread unread notifications',
+                  ? '1 unread notification'
+                  : '$unread unread notifications',
           onPressed: () => showNotificationCenter(context),
         ),
         // The badge grows in rather than blinking on, and slides to its new
@@ -74,21 +72,17 @@ class NotificationBell extends ConsumerWidget {
                   transitionBuilder: (child, anim) => FadeTransition(
                     opacity: anim,
                     child: SizeTransition(
-                      sizeFactor: anim,
-                      axis: Axis.vertical,
-                      child: child,
-                    ),
+                        sizeFactor: anim, axis: Axis.vertical, child: child),
                   ),
                   child: Text(
                     unread > 99 ? '99+' : '$unread',
                     key: ValueKey<int>(unread),
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      fontSize: 9,
-                      height: 1.3,
-                      fontWeight: FontWeight.w600,
-                      color: AraColors.onFill,
-                    ),
+                        fontSize: 9,
+                        height: 1.3,
+                        fontWeight: FontWeight.w600,
+                        color: AraColors.onFill),
                   ),
                 ),
               ),
@@ -112,10 +106,8 @@ Future<void> showNotificationCenter(BuildContext context) =>
       transitionDuration: _openDuration,
       pageBuilder: (_, _, _) => const _NotificationCenter(),
       transitionBuilder: (_, animation, _, child) {
-        final eased = CurvedAnimation(
-          parent: animation,
-          curve: Curves.easeOutCubic,
-        );
+        final eased =
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
         return FadeTransition(
           opacity: eased,
           child: ScaleTransition(
@@ -151,15 +143,10 @@ class _NotificationCenter extends ConsumerWidget {
                 color: AraColors.bgPanel.withValues(alpha: 0.92),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: AraColors.border.withValues(alpha: 0.8),
-                  width: 0.5,
-                ),
+                    color: AraColors.border.withValues(alpha: 0.8), width: 0.5),
                 boxShadow: const [
                   BoxShadow(
-                    color: AraColors.panelShadow,
-                    blurRadius: 28,
-                    offset: Offset(0, 8),
-                  ),
+                      color: AraColors.panelShadow, blurRadius: 28, offset: Offset(0, 8)),
                 ],
               ),
               child: Material(
@@ -175,24 +162,17 @@ class _NotificationCenter extends ConsumerWidget {
                         alignment: Alignment.topCenter,
                         child: async.when(
                           loading: () => const SizedBox(
-                            height: 170,
-                            child: Center(
-                              child: SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: AdaptiveProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
-                          ),
+                              height: 170,
+                              child: Center(
+                                  child: SizedBox(
+                                      width: 22,
+                                      height: 22,
+                                      child: AdaptiveProgressIndicator(
+                                          strokeWidth: 2)))),
                           error: (e, _) => _Empty(
                             icon: Icons.cloud_off,
-                            title: friendlyError(
-                              context.l10n,
-                              e,
-                              action: context.l10n.actionLoadNotifications,
-                            ),
+                            title:
+                                friendlyError(context.l10n, e, action: context.l10n.actionLoadNotifications),
                           ),
                           data: (items) => _Body(items: items),
                         ),
@@ -222,13 +202,9 @@ class _Header extends ConsumerWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              'Notifications',
-              style: theme.textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w600,
-                letterSpacing: -0.2,
-              ),
-            ),
+            child: Text('Notifications',
+                style: theme.textTheme.titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w600, letterSpacing: -0.2)),
           ),
           // Appears only when there is something to mark, and fades rather
           // than popping into the row.
@@ -241,10 +217,7 @@ class _Header extends ConsumerWidget {
                 onPressed: () =>
                     ref.read(notificationInboxProvider.notifier).markAllRead(),
                 style: TextButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   minimumSize: Size.zero,
                   tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   textStyle: theme.textTheme.bodySmall,
@@ -287,8 +260,7 @@ class _Body extends ConsumerWidget {
       return const _Empty(
         icon: Icons.check_circle_outline,
         title: "You're all caught up.",
-        detail:
-            'Anything Ara decides on its own — a guider that gave up, a '
+        detail: 'Anything Ara decides on its own — a guider that gave up, a '
             'run that stopped early — waits for you here.',
       );
     }
@@ -306,17 +278,14 @@ class _Body extends ConsumerWidget {
       rows.add(_Row(key: ValueKey<String>(n.id), item: n));
     }
     if (truncated) {
-      rows.add(
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Text(
-            'Showing the newest ${list.length}. Older ones are still on your rig.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AraColors.textDisabled,
-            ),
-          ),
+      rows.add(Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Text(
+          'Showing the newest ${list.length}. Older ones are still on your rig.',
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: AraColors.textDisabled),
         ),
-      );
+      ));
     }
     // builder, not children: the backlog can reach ~500 rows and a plain
     // ListView would materialize all of them on open.
@@ -332,11 +301,7 @@ class _Body extends ConsumerWidget {
 String _dayLabel(DateTime when, {DateTime? now}) {
   final today = now ?? DateTime.now();
   final day = DateTime(when.year, when.month, when.day);
-  final delta = DateTime(
-    today.year,
-    today.month,
-    today.day,
-  ).difference(day).inDays;
+  final delta = DateTime(today.year, today.month, today.day).difference(day).inDays;
   if (delta <= 0) return 'Today';
   if (delta == 1) return 'Yesterday';
   if (delta < 7) return _weekdays[day.weekday - 1];
@@ -344,27 +309,11 @@ String _dayLabel(DateTime when, {DateTime? now}) {
 }
 
 const _weekdays = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
+  'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday',
 ];
 const _months = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
 ];
 
 class _DayHeading extends StatelessWidget {
@@ -374,17 +323,17 @@ class _DayHeading extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
-    child: Text(
-      label.toUpperCase(),
-      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-        color: AraColors.textDisabled,
-        fontSize: 10,
-        letterSpacing: 0.8,
-        fontWeight: FontWeight.w600,
-      ),
-    ),
-  );
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+        child: Text(
+          label.toUpperCase(),
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: AraColors.textDisabled,
+                fontSize: 10,
+                letterSpacing: 0.8,
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+      );
 }
 
 /// One entry. Hovering reveals the dismiss control — at rest the row is just
@@ -429,14 +378,11 @@ class _RowState extends ConsumerState<_Row> {
                   onTap: item.read
                       ? null
                       : () => ref
-                            .read(notificationInboxProvider.notifier)
-                            .markRead(item.id),
+                          .read(notificationInboxProvider.notifier)
+                          .markRead(item.id),
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 140),
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 1,
-                    ),
+                    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
                     padding: const EdgeInsets.fromLTRB(10, 9, 6, 9),
                     decoration: BoxDecoration(
                       color: _hovered
@@ -449,11 +395,8 @@ class _RowState extends ConsumerState<_Row> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.only(top: 1),
-                          child: Icon(
-                            _icon(item.severity),
-                            size: 15,
-                            color: _color(item.severity),
-                          ),
+                          child: Icon(_icon(item.severity),
+                              size: 15, color: _color(item.severity)),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -471,21 +414,17 @@ class _RowState extends ConsumerState<_Row> {
                               ),
                               if (item.message.isNotEmpty) ...[
                                 const SizedBox(height: 2),
-                                Text(
-                                  item.message,
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    height: 1.35,
-                                    color: AraColors.textSecondary,
-                                  ),
-                                ),
+                                Text(item.message,
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                        height: 1.35,
+                                        color: AraColors.textSecondary)),
                               ],
                               const SizedBox(height: 3),
                               Text(
                                 '${_categoryLabel(item.category)} · ${relativeTime(item.postedUtc)}',
                                 style: theme.textTheme.bodySmall?.copyWith(
-                                  fontSize: 11,
-                                  color: AraColors.textDisabled,
-                                ),
+                                    fontSize: 11,
+                                    color: AraColors.textDisabled),
                               ),
                             ],
                           ),
@@ -505,27 +444,23 @@ class _RowState extends ConsumerState<_Row> {
                                       tooltip: 'Dismiss',
                                       padding: EdgeInsets.zero,
                                       constraints: const BoxConstraints(
-                                        minWidth: 24,
-                                        minHeight: 24,
-                                      ),
+                                          minWidth: 24, minHeight: 24),
                                       visualDensity: VisualDensity.compact,
                                       color: AraColors.textSecondary,
                                       onPressed: _dismiss,
                                     )
                                   : item.read
-                                  ? const SizedBox(
-                                      key: ValueKey('none'),
-                                      width: 8,
-                                    )
-                                  : Container(
-                                      key: const ValueKey('unread'),
-                                      width: 7,
-                                      height: 7,
-                                      decoration: const BoxDecoration(
-                                        color: AraColors.accentInfo,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
+                                      ? const SizedBox(
+                                          key: ValueKey('none'), width: 8)
+                                      : Container(
+                                          key: const ValueKey('unread'),
+                                          width: 7,
+                                          height: 7,
+                                          decoration: const BoxDecoration(
+                                            color: AraColors.accentInfo,
+                                            shape: BoxShape.circle,
+                                          ),
+                                        ),
                             ),
                           ),
                         ),
@@ -539,27 +474,28 @@ class _RowState extends ConsumerState<_Row> {
   }
 
   static IconData _icon(NotificationSeverity s) => switch (s) {
-    NotificationSeverity.info => Icons.info_outline,
-    NotificationSeverity.warning => Icons.warning_amber_outlined,
-    NotificationSeverity.error => Icons.error_outline,
-    NotificationSeverity.critical => Icons.dangerous_outlined,
-  };
+        NotificationSeverity.info => Icons.info_outline,
+        NotificationSeverity.warning => Icons.warning_amber_outlined,
+        NotificationSeverity.error => Icons.error_outline,
+        NotificationSeverity.critical => Icons.dangerous_outlined,
+      };
 
   static Color _color(NotificationSeverity s) => switch (s) {
-    NotificationSeverity.info => AraColors.accentInfo,
-    NotificationSeverity.warning => AraColors.accentBusy,
-    NotificationSeverity.error ||
-    NotificationSeverity.critical => AraColors.accentError,
-  };
+        NotificationSeverity.info => AraColors.accentInfo,
+        NotificationSeverity.warning => AraColors.accentBusy,
+        NotificationSeverity.error ||
+        NotificationSeverity.critical =>
+          AraColors.accentError,
+      };
 
   static String _categoryLabel(NotificationCategory c) => switch (c) {
-    NotificationCategory.equipment => 'Equipment',
-    NotificationCategory.sequence => 'Run',
-    NotificationCategory.storage => 'Storage',
-    NotificationCategory.software => 'Ara',
-    NotificationCategory.safety => 'Safety',
-    NotificationCategory.alarm => 'Alarm',
-  };
+        NotificationCategory.equipment => 'Equipment',
+        NotificationCategory.sequence => 'Run',
+        NotificationCategory.storage => 'Storage',
+        NotificationCategory.software => 'Ara',
+        NotificationCategory.safety => 'Safety',
+        NotificationCategory.alarm => 'Alarm',
+      };
 }
 
 /// "4 minutes ago" beats a timestamp when you're reading the night back.
@@ -600,24 +536,16 @@ class _Empty extends StatelessWidget {
         children: [
           Icon(icon, size: 26, color: AraColors.textDisabled),
           const SizedBox(height: 12),
-          Text(
-            title,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: AraColors.textSecondary,
-              height: 1.35,
-            ),
-          ),
+          Text(title,
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodyLarge
+                  ?.copyWith(color: AraColors.textSecondary, height: 1.35)),
           if (detail != null) ...[
             const SizedBox(height: 7),
-            Text(
-              detail!,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AraColors.textDisabled,
-                height: 1.4,
-              ),
-            ),
+            Text(detail!,
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textDisabled, height: 1.4)),
           ],
         ],
       ),

@@ -29,7 +29,7 @@ class BugReportCard extends ConsumerStatefulWidget {
   /// Production leaves it null → [pickStreamSavePath] (directory picker +
   /// collision-safe file name, so the download can stream to the path).
   final Future<String?> Function(String dialogTitle, String suggestedName)?
-  savePathPicker;
+      savePathPicker;
 
   /// How often a whole-rig bundle's packing is polled (test seam).
   final Duration pollInterval;
@@ -50,9 +50,7 @@ class BugReportCard extends ConsumerStatefulWidget {
 }
 
 /// §54.3 sharing modes, in the order the review modal lists them.
-List<(String wire, String label, String detail)> _sharingModes(
-  AppLocalizations l,
-) => [
+List<(String wire, String label, String detail)> _sharingModes(AppLocalizations l) => [
   ('full', l.bugModeFull, l.bugModeFullNote),
   ('coarse_gps', l.bugModeCoarse, l.bugModeCoarseNote),
   ('redacted', l.bugModeRedacted, l.bugModeRedactedNote),
@@ -93,7 +91,6 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     await saveClientLog(context, ref, widget.savePathPicker);
     if (mounted) setState(() => _busy = false);
   }
-
   int _rangeIndex = 0;
   // Bytes read so far while a whole-rig bundle packs; null when not packing.
   int? _packed;
@@ -123,9 +120,8 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     try {
       final range = _ranges(l)[_rangeIndex].$1;
       var prep = await api.prepare(
-        mode: _mode,
-        since: range == null ? null : DateTime.now().toUtc().subtract(range),
-      );
+          mode: _mode,
+          since: range == null ? null : DateTime.now().toUtc().subtract(range));
       // A whole-rig bundle packs in the background on the daemon: poll it.
       final deadline = DateTime.now().add(widget.packingTimeout);
       while (prep.isPreparing) {
@@ -151,9 +147,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       // chunk instead of being buffered whole in memory (§54 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
       final savePath = await pick(
-        l.bugPickTitle,
-        'openastroara-bug-report.zip',
-      );
+          l.bugPickTitle, 'openastroara-bug-report.zip');
       if (!mounted || savePath == null) return;
       final name = await api.downloadTo(savePath, prep.preparationId);
       // #1111 — the client's own error log goes beside the ZIP. The bundle
@@ -161,9 +155,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       final clientLogName = await _saveClientLogBeside(savePath);
       if (!mounted) return;
       userNotifier(context)(
-        clientLogName == null
-            ? l.bugSaved(name)
-            : l.bugSavedBoth(name, clientLogName),
+        clientLogName == null ? l.bugSaved(name) : l.bugSavedBoth(name, clientLogName),
       );
     } catch (e) {
       if (!mounted) return;
@@ -243,11 +235,9 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
           'coarse_gps' => l.bugReviewProfileCoarse,
           _ => l.bugReviewProfileFull,
         }),
-        Text(
-          prep.sharingMode == 'redacted'
-              ? l.bugReviewSystemRedacted
-              : l.bugReviewSystemFull,
-        ),
+        Text(prep.sharingMode == 'redacted'
+            ? l.bugReviewSystemRedacted
+            : l.bugReviewSystemFull),
         Text(l.bugReviewClientLog),
         const SizedBox(height: 12),
         Text(l.bugReviewSize(_humanSize(prep.estimatedSizeBytes))),
@@ -278,123 +268,97 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
           spacing: 12,
           children: [
             SupportCardRow(
-              icon: Icon(
-                Icons.bug_report_outlined,
-                // State-only colour in Simple Mode: this blue means nothing.
-                color: simple
-                    ? AraColors.textSecondary
-                    : theme.colorScheme.primary,
-              ),
-              body: (stacked) {
-                // Stacked, the label goes above: the value gets the whole row.
-                Widget option(String label, Widget dropdown) => stacked
-                    ? Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(label, style: theme.textTheme.bodySmall),
-                          dropdown,
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Text(label, style: theme.textTheme.bodySmall),
-                          Flexible(child: dropdown),
-                        ],
-                      );
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(l.bugCardTitle, style: theme.textTheme.titleSmall),
-                    const SizedBox(height: 2),
-                    Text(l.bugCardBody, style: theme.textTheme.bodySmall),
-                    if (_packed != null)
-                      Text(
-                        l.bugCardPacking(_humanSize(_packed!)),
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    if (!logOnly) ...[
-                      const SizedBox(height: 4),
-                      option(
-                        l.bugCardCovers,
-                        DropdownButton<int>(
-                          value: _rangeIndex,
-                          // Simple Mode's 44 px; the full UI stays compact.
-                          isDense: !simple,
-                          isExpanded: true,
-                          style: theme.textTheme.bodySmall,
-                          onChanged: _busy
-                              ? null
-                              : (v) => setState(() => _rangeIndex = v ?? 0),
-                          items: [
-                            for (var i = 0; i < ranges.length; i++)
-                              DropdownMenuItem(
-                                value: i,
-                                child: Text(
-                                  ranges[i].$2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                          ],
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 4),
-                    // §54.3 sharing mode: chosen before the bundle is built, so the
-                    // ZIP the user downloads never held what the mode scrubs.
-                    option(
-                      l.bugCardSharing,
-                      DropdownButton<String>(
-                        value: _mode,
-                        isDense: !simple,
-                        isExpanded: true,
-                        style: theme.textTheme.bodySmall,
-                        onChanged: _busy
-                            ? null
-                            : (v) => setState(() => _mode = v ?? 'full'),
-                        items: [
-                          for (final m in _sharingModes(l))
-                            DropdownMenuItem(
-                              value: m.$1,
-                              child: Tooltip(
-                                message: m.$3,
-                                child: Text(
-                                  m.$2,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          if (simple)
-                            DropdownMenuItem(
-                              value: _clientLogOnly,
-                              child: Text(
-                                l.bugCardAppLog,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                        ],
-                      ),
+            icon: Icon(
+              Icons.bug_report_outlined,
+              // State-only colour in Simple Mode: this blue means nothing.
+              color: simple ? AraColors.textSecondary : theme.colorScheme.primary,
+            ),
+            body: (stacked) {
+              // Stacked, the label goes above: the value gets the whole row.
+              Widget option(String label, Widget dropdown) => stacked
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [Text(label, style: theme.textTheme.bodySmall), dropdown],
+                    )
+                  : Row(
+                      children: [
+                        Text(label, style: theme.textTheme.bodySmall),
+                        Flexible(child: dropdown),
+                      ],
+                    );
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l.bugCardTitle,
+                      style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    l.bugCardBody,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  if (_packed != null)
+                    Text(l.bugCardPacking(_humanSize(_packed!)),
+                        style: theme.textTheme.bodySmall),
+                  if (!logOnly) ...[
+                  const SizedBox(height: 4),
+                  option(
+                    l.bugCardCovers,
+                    DropdownButton<int>(
+                      value: _rangeIndex,
+                      // Simple Mode's 44 px; the full UI stays compact.
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _rangeIndex = v ?? 0),
+                      items: [
+                        for (var i = 0; i < ranges.length; i++)
+                          DropdownMenuItem(
+                            value: i,
+                            child: Text(ranges[i].$2, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
                     ),
+                  ),
                   ],
-                );
-              },
-              action: FilledButton.icon(
-                onPressed: _busy
-                    ? null
-                    : logOnly
-                    ? _saveClientLog
-                    : (api == null ? null : _run),
-                icon: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        logOnly ? Icons.save_alt : Icons.bug_report,
-                        size: 18,
-                      ),
-                label: Text(logOnly ? l.bugCardSaveLog : l.bugCardPrepare),
-              ),
+                  const SizedBox(height: 4),
+                  // §54.3 sharing mode: chosen before the bundle is built, so the
+                  // ZIP the user downloads never held what the mode scrubs.
+                  option(
+                    l.bugCardSharing,
+                    DropdownButton<String>(
+                      value: _mode,
+                      isDense: !simple,
+                      isExpanded: true,
+                      style: theme.textTheme.bodySmall,
+                      onChanged: _busy ? null : (v) => setState(() => _mode = v ?? 'full'),
+                      items: [
+                        for (final m in _sharingModes(l))
+                          DropdownMenuItem(
+                            value: m.$1,
+                            child: Tooltip(message: m.$3, child: Text(m.$2, overflow: TextOverflow.ellipsis)),
+                          ),
+                        if (simple)
+                          DropdownMenuItem(
+                            value: _clientLogOnly,
+                            child: Text(l.bugCardAppLog, overflow: TextOverflow.ellipsis),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
+            action: FilledButton.icon(
+              onPressed: _busy ? null : logOnly ? _saveClientLog : (api == null ? null : _run),
+              icon: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: AdaptiveProgressIndicator(strokeWidth: 2),
+                    )
+                  : Icon(logOnly ? Icons.save_alt : Icons.bug_report, size: 18),
+              label: Text(logOnly ? l.bugCardSaveLog : l.bugCardPrepare),
+            ),
             ),
             if (review != null)
               InlineConfirm(
@@ -420,11 +384,12 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
       return switch (e.type) {
         DioExceptionType.connectionTimeout ||
         DioExceptionType.sendTimeout ||
-        DioExceptionType.receiveTimeout => l.bugFailTimeout,
-        DioExceptionType.connectionError => l.bugFailUnreachable,
-        DioExceptionType.badResponse => l.bugFailStatus(
-          '${e.response?.statusCode}',
-        ),
+        DioExceptionType.receiveTimeout =>
+          l.bugFailTimeout,
+        DioExceptionType.connectionError =>
+          l.bugFailUnreachable,
+        DioExceptionType.badResponse =>
+          l.bugFailStatus('${e.response?.statusCode}'),
         _ => l.bugFailTalking,
       };
     }
@@ -438,9 +403,7 @@ class _BugReportCardState extends ConsumerState<BugReportCard> {
     if (s.files == 0) {
       return '• $label: ${l.bugReviewNone}${s.note == null ? '' : ' (${s.note})'}';
     }
-    final files = s.files == 1
-        ? l.bugReviewOneFile
-        : l.bugReviewFiles('${s.files}');
+    final files = s.files == 1 ? l.bugReviewOneFile : l.bugReviewFiles('${s.files}');
     final cut = s.truncated ? l.bugReviewCut : '';
     final note = s.note == null ? '' : ' (${s.note})';
     return '• $label: $files, ${_humanSize(s.bytes)}$cut$note';

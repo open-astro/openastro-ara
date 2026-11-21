@@ -46,13 +46,8 @@ class _Stats extends StatsTargetsNotifier {
 
 class _Site extends SiteSettingsNotifier {
   @override
-  LoadedSection<SiteSettings> build() => LoadedSection(
-    value: const SiteSettings(
-      latitudeDeg: -33.856784,
-      longitudeDeg: 151.215297,
-    ),
-    source: SectionSource.rig,
-  );
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297), source: SectionSource.rig);
 }
 
 const _m42 = TonightSkyObject(

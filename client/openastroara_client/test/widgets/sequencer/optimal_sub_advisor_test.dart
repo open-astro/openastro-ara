@@ -28,24 +28,25 @@ const _switchFilter =
 
 /// A SmartExposure-shaped body: root container → [SwitchFilter(Ha), TakeExposure].
 SequenceDetail smartExposureDetail() => SequenceDetail(
-  id: 'seq-1',
-  name: 'Veil',
-  body: {
-    'schemaVersion': 'openastroara-sequence-v1',
-    r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-    'Name': 'root',
-    'Items': {
-      r'$type': itemsWrapperType,
-      r'$values': [
-        {
-          r'$type': _switchFilter,
-          'Filter': {'Name': 'Ha 7nm', 'Position': 4},
+      id: 'seq-1',
+      name: 'Veil',
+      body: {
+        'schemaVersion': 'openastroara-sequence-v1',
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {
+              r'$type': _switchFilter,
+              'Filter': {'Name': 'Ha 7nm', 'Position': 4},
+            },
+            {r'$type': takeExposureType, 'ExposureTime': 60.0, 'Gain': 100},
+          ],
         },
-        {r'$type': takeExposureType, 'ExposureTime': 60.0, 'Gain': 100},
-      ],
-    },
-  },
-);
+      },
+    );
 
 void main() {
   group('filterNameForExposure', () {
@@ -79,7 +80,8 @@ void main() {
       expect(filterNameForExposure(body, [2]), 'OIII');
     });
 
-    test('a switch that is a sibling of the exposure\'s CONTAINER counts '
+    test(
+        'a switch that is a sibling of the exposure\'s CONTAINER counts '
         '(the smart-target plan shape), and _name is read', () {
       final body = {
         r'$type': 'X.Seq',
@@ -134,16 +136,9 @@ void main() {
         },
       };
       expect(filterNameForExposure(body, [0]), isNull);
-      expect(
-        filterNameForExposure(body, [2]),
-        isNull,
-        reason: 'a null Filter (unset SwitchFilter) names nothing',
-      );
-      expect(
-        filterNameForExposure(body, []),
-        isNull,
-        reason: 'root has no siblings',
-      );
+      expect(filterNameForExposure(body, [2]), isNull,
+          reason: 'a null Filter (unset SwitchFilter) names nothing');
+      expect(filterNameForExposure(body, []), isNull, reason: 'root has no siblings');
     });
   });
 
@@ -153,29 +148,21 @@ void main() {
     const dsoType =
         'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer';
 
-    Map<String, dynamic> items(List<Map<String, dynamic>> values) => {
-      r'$type': itemsWrapperType,
-      r'$values': values,
-    };
+    Map<String, dynamic> items(List<Map<String, dynamic>> values) =>
+        {r'$type': itemsWrapperType, r'$values': values};
 
     test('a preceding slew names the position — converted to DEGREES', () {
       final body = {
         r'$type': 'X.Seq',
         'Items': items([
-          {
-            r'$type': slewType,
-            'Coordinates': inputCoordinatesFromDeg(83.822, -5.391),
-          },
+          {r'$type': slewType, 'Coordinates': inputCoordinatesFromDeg(83.822, -5.391)},
           {r'$type': takeExposureType, 'ExposureTime': 10.0},
         ]),
       };
       final pos = targetPositionForExposure(body, [1]);
       expect(pos, isNotNull);
-      expect(
-        pos!.raDeg,
-        closeTo(83.822, 1e-6),
-        reason: 'NINA stores RA in HOURS — the scan must hand back degrees',
-      );
+      expect(pos!.raDeg, closeTo(83.822, 1e-6),
+          reason: 'NINA stores RA in HOURS — the scan must hand back degrees');
       expect(pos.decDeg, closeTo(-5.391, 1e-6));
     });
 
@@ -183,10 +170,7 @@ void main() {
       final body = {
         r'$type': 'X.Seq',
         'Items': items([
-          {
-            r'$type': slewType,
-            'Coordinates': inputCoordinatesFromDeg(10.0, 10.0),
-          },
+          {r'$type': slewType, 'Coordinates': inputCoordinatesFromDeg(10.0, 10.0)},
           {
             r'$type': dsoType,
             'Target': {
@@ -200,11 +184,8 @@ void main() {
         ]),
       };
       final pos = targetPositionForExposure(body, [1, 0]);
-      expect(
-        pos!.raDeg,
-        closeTo(83.822, 1e-6),
-        reason: 'the DSO container wraps the exposure more tightly',
-      );
+      expect(pos!.raDeg, closeTo(83.822, 1e-6),
+          reason: 'the DSO container wraps the exposure more tightly');
     });
 
     test('a zeroed default position (fresh instruction) counts as not-set', () {
@@ -215,11 +196,8 @@ void main() {
           {r'$type': takeExposureType, 'ExposureTime': 10.0},
         ]),
       };
-      expect(
-        targetPositionForExposure(body, [1]),
-        isNull,
-        reason: 'RA 0h Dec 0° is the catalog default, not a chosen target',
-      );
+      expect(targetPositionForExposure(body, [1]), isNull,
+          reason: 'RA 0h Dec 0° is the catalog default, not a chosen target');
     });
 
     test('an Inherited slew with stale coordinates yields to the DSO target', () {
@@ -244,11 +222,8 @@ void main() {
         ]),
       };
       final pos = targetPositionForExposure(body, [1]);
-      expect(
-        pos!.raDeg,
-        closeTo(83.822, 1e-6),
-        reason: 'the inherited slew is skipped; the DSO target is the truth',
-      );
+      expect(pos!.raDeg, closeTo(83.822, 1e-6),
+          reason: 'the inherited slew is skipped; the DSO target is the truth');
       expect(pos.decDeg, closeTo(-5.391, 1e-6));
     });
 
@@ -272,12 +247,10 @@ void main() {
     });
 
     test('no coordinates anywhere → null (pure Glover window)', () {
-      expect(
-        targetPositionForExposure(smartExposureDetail().body, [1]),
-        isNull,
-      );
+      expect(targetPositionForExposure(smartExposureDetail().body, [1]), isNull);
     });
   });
+
 
   group('OptimalSubAdvisor (local compute)', () {
     late ProviderContainer container;
@@ -323,178 +296,92 @@ void main() {
         ],
       );
       addTearDown(container.dispose);
-      container
-          .read(sequenceEditorProvider.notifier)
-          .load(smartExposureDetail());
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Scaffold(
-              body: OptimalSubAdvisor(
+      container.read(sequenceEditorProvider.notifier).load(smartExposureDetail());
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: OptimalSubAdvisor(
                 path: const [1],
                 filterName: filterName,
-                targetPosition: targetPosition,
-              ),
-            ),
+                targetPosition: targetPosition),
           ),
         ),
-      );
+      ));
       await tester.pump(); // settle the calibration read…
       await tester.pump(); // …and the compute future
     }
 
-    testWidgets(
-      '#1264 an unguided rig sees the tracking ceiling beside the sky limit',
-      (tester) async {
-        await pumpAdvisor(
-          tester,
+    testWidgets('#1264 an unguided rig sees the tracking ceiling beside the sky limit',
+        (tester) async {
+      await pumpAdvisor(tester,
           tracking: TrackingCalibration(
-            ceilingSeconds: 45,
-            measuredUtc: DateTime.utc(2026, 10, 11),
-            source: 'measured',
-          ),
-        );
-        expect(find.textContaining('Suggested exposure:'), findsOneWidget);
-        expect(
-          find.textContaining('Unguided: about 45 s (measured 2026-10-1'),
-          findsOneWidget,
-        );
-      },
-    );
+              ceilingSeconds: 45,
+              measuredUtc: DateTime.utc(2026, 10, 11),
+              source: 'measured'));
+      expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+      expect(find.textContaining('Unguided: about 45 s (measured 2026-10-1'),
+          findsOneWidget);
+    });
 
-    testWidgets(
-      '#1264 stage 1: with nothing measured, the daemon\'s resolved prior is shown with its source',
-      (tester) async {
-        await pumpAdvisor(
-          tester,
-          prior: const TrackingPrior(
-            seconds: 13.8,
-            source: "the mount's spec sheet (community)",
-          ),
-        );
-        expect(
-          find.textContaining(
-            "from the mount's spec sheet (community); the first run measures it",
-          ),
-          findsOneWidget,
-        );
-      },
-    );
+    testWidgets('#1264 stage 1: with nothing measured, the daemon\'s resolved prior is shown with its source', (tester) async {
+      await pumpAdvisor(tester,
+          prior: const TrackingPrior(seconds: 13.8, source: "the mount's spec sheet (community)"));
+      expect(find.textContaining("from the mount's spec sheet (community); the first run measures it"),
+          findsOneWidget);
+    });
 
     testWidgets('#1264 a guided rig gets no unguided line', (tester) async {
-      await pumpAdvisor(
-        tester,
-        guider: const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.guiding,
-        ),
-        tracking: TrackingCalibration(
-          ceilingSeconds: 45,
-          measuredUtc: DateTime.utc(2026, 10, 11),
-          source: 'measured',
-        ),
-      );
+      await pumpAdvisor(tester,
+          guider: const GuiderStatus(
+              name: 'OpenAstro Guider',
+              connectionState: GuiderConnectionState.connected,
+              runtimeState: GuiderRuntimeState.guiding),
+          tracking: TrackingCalibration(
+              ceilingSeconds: 45,
+              measuredUtc: DateTime.utc(2026, 10, 11),
+              source: 'measured'));
       expect(find.textContaining('Unguided'), findsNothing);
     });
 
-    testWidgets(
-      '#1140 P2 a fitted sky-model k for the filter\'s kind moves the suggested exposure',
-      (tester) async {
-        await pumpAdvisor(tester, filterName: 'Ha 7nm');
-        final spec = tester
-            .widget<Text>(find.textContaining('Suggested exposure:'))
-            .data!;
-        await tester.pumpWidget(const SizedBox());
-        await pumpAdvisor(
-          tester,
-          filterName: 'Ha 7nm',
-          skyModel: SkyModelCalibration(
-            fittedUtc: DateTime.utc(2026, 10, 13),
-            framesConsidered: 9,
-            filters: const [
-              SkyModelFilterCalibration(
-                kind: 'ha',
-                bin: 1,
-                k: 0.5,
-                frameCount: 9,
-                passed: true,
-              ),
-            ],
-          ),
-        );
-        final fitted = tester
-            .widget<Text>(find.textContaining('Suggested exposure:'))
-            .data!;
-        expect(
-          fitted,
-          isNot(spec),
-          reason: 'the advisor read the calibration, not the spec-sheet model',
-        );
-        // A k for another kind, or one that failed the gate, leaves the figure alone.
-        await tester.pumpWidget(const SizedBox());
-        await pumpAdvisor(
-          tester,
-          filterName: 'Ha 7nm',
-          skyModel: SkyModelCalibration(
-            fittedUtc: DateTime.utc(2026, 10, 13),
-            framesConsidered: 9,
-            filters: const [
-              SkyModelFilterCalibration(
-                kind: 'ha',
-                bin: 1,
-                k: 0.5,
-                frameCount: 9,
-                passed: false,
-                note: 'scatter',
-              ),
-            ],
-          ),
-        );
-        expect(
-          tester.widget<Text>(find.textContaining('Suggested exposure:')).data!,
-          spec,
-        );
-      },
-    );
-
-    testWidgets('#1140 the noise-tolerance knob moves the suggested exposure', (
-      tester,
-    ) async {
+    testWidgets('#1140 P2 a fitted sky-model k for the filter\'s kind moves the suggested exposure', (tester) async {
       await pumpAdvisor(tester, filterName: 'Ha 7nm');
-      final at5 = tester
-          .widget<Text>(find.textContaining('Suggested exposure:'))
-          .data!;
+      final spec = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
       await tester.pumpWidget(const SizedBox());
-      await pumpAdvisor(tester, filterName: 'Ha 7nm', noiseTolerancePct: 2);
-      final at2 = tester
-          .widget<Text>(find.textContaining('Suggested exposure:'))
-          .data!;
-      expect(
-        at2,
-        isNot(at5),
-        reason: 'the advisor read the pref, not the 5 % default',
-      );
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', skyModel: SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.5, frameCount: 9, passed: true)]));
+      final fitted = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      expect(fitted, isNot(spec), reason: 'the advisor read the calibration, not the spec-sheet model');
+      // A k for another kind, or one that failed the gate, leaves the figure alone.
+      await tester.pumpWidget(const SizedBox());
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', skyModel: SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.5, frameCount: 9, passed: false, note: 'scatter')]));
+      expect(tester.widget<Text>(find.textContaining('Suggested exposure:')).data!, spec);
     });
 
-    testWidgets('renders the figure, filter and attribution from local math', (
-      tester,
-    ) async {
+    testWidgets('#1140 the noise-tolerance knob moves the suggested exposure', (tester) async {
+      await pumpAdvisor(tester, filterName: 'Ha 7nm');
+      final at5 = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      await tester.pumpWidget(const SizedBox());
+      await pumpAdvisor(tester, filterName: 'Ha 7nm', noiseTolerancePct: 2);
+      final at2 = tester.widget<Text>(find.textContaining('Suggested exposure:')).data!;
+      expect(at2, isNot(at5), reason: 'the advisor read the pref, not the 5 % default');
+    });
+
+    testWidgets('renders the figure, filter and attribution from local math',
+        (tester) async {
       await pumpAdvisor(tester, filterName: 'Ha 7nm');
       expect(find.textContaining('Suggested exposure:'), findsOneWidget);
       expect(find.textContaining('read noise'), findsWidgets);
       expect(find.textContaining('For filter "Ha 7nm"'), findsOneWidget);
-      expect(
-        find.textContaining('Dr. Robin Glover'),
-        findsOneWidget,
-        reason: 'the attribution is a condition of the permission',
-      );
+      expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
+          reason: 'the attribution is a condition of the permission');
     });
 
-    testWidgets('Apply writes ONLY ExposureTime, matching the local resolver', (
-      tester,
-    ) async {
+    testWidgets('Apply writes ONLY ExposureTime, matching the local resolver',
+        (tester) async {
       await pumpAdvisor(tester, filterName: 'Ha 7nm');
       final before = container.read(sequenceEditorProvider)!.body;
 
@@ -508,43 +395,33 @@ void main() {
         site: _rigSite,
         filterSet: _rigFilters,
         filterName: 'Ha 7nm',
-      ) as LocalOptimalSubSuccess).result.recommendedSec.roundToDouble();
+      ) as LocalOptimalSubSuccess)
+          .result
+          .recommendedSec
+          .roundToDouble();
 
       final after = container.read(sequenceEditorProvider)!.body;
       final exposure = nodeAt(after, [1])!;
-      expect(
-        exposure['ExposureTime'],
-        expected,
-        reason: 'a plain double — NINA-valid',
-      );
+      expect(exposure['ExposureTime'], expected,
+          reason: 'a plain double — NINA-valid');
       expect(exposure['Gain'], 100, reason: 'sibling fields untouched');
       expect(exposure[r'$type'], takeExposureType, reason: 'no \$type churn');
-      expect(
-        nodeAt(after, [0]),
-        nodeAt(before, [0]),
-        reason: 'other nodes untouched',
-      );
+      expect(nodeAt(after, [0]), nodeAt(before, [0]),
+          reason: 'other nodes untouched');
     });
 
-    testWidgets('a collapsed window renders the saturation-limited warning', (
-      tester,
-    ) async {
+    testWidgets('a collapsed window renders the saturation-limited warning',
+        (tester) async {
       // Huge read noise over a tiny well: floor >> ceiling.
-      await pumpAdvisor(
-        tester,
-        electronics: const CameraElectronics(
-          readNoiseE: 100,
-          fullWellE: 500,
-          quantumEfficiencyPeak: 0.8,
-        ),
-      );
+      await pumpAdvisor(tester,
+          electronics: const CameraElectronics(
+              readNoiseE: 100, fullWellE: 500, quantumEfficiencyPeak: 0.8));
       expect(find.textContaining('longer subs just saturate'), findsOneWidget);
       expect(find.text('Apply'), findsOneWidget); // still applicable
     });
 
-    testWidgets('unset electronics render the generic-defaults hint', (
-      tester,
-    ) async {
+    testWidgets('unset electronics render the generic-defaults hint',
+        (tester) async {
       await pumpAdvisor(tester, electronics: const CameraElectronics());
       expect(find.textContaining('generic defaults for'), findsOneWidget);
       expect(find.textContaining('read noise'), findsWidgets);
@@ -567,14 +444,11 @@ void main() {
       expect(find.text('Apply'), findsNothing);
     });
 
-    testWidgets('a target position renders the local star line', (
-      tester,
-    ) async {
-      await pumpAdvisor(
-        tester,
-        filterName: 'Ha 7nm',
-        targetPosition: (raDeg: 83.822, decDeg: -5.391),
-      );
+    testWidgets('a target position renders the local star line',
+        (tester) async {
+      await pumpAdvisor(tester,
+          filterName: 'Ha 7nm',
+          targetPosition: (raDeg: 83.822, decDeg: -5.391));
       expect(find.textContaining('stars/sub'), findsOneWidget);
     });
 
@@ -583,46 +457,35 @@ void main() {
       expect(find.textContaining('stars/sub'), findsNothing);
     });
 
-    testWidgets('an unknown filter shows the actionable detail quietly', (
-      tester,
-    ) async {
+    testWidgets('an unknown filter shows the actionable detail quietly',
+        (tester) async {
       await pumpAdvisor(tester, filterName: 'Filter 9');
       expect(find.textContaining("Unknown filter 'Filter 9'"), findsOneWidget);
       expect(find.text('Open filter set'), findsOneWidget);
       expect(find.text('Apply'), findsNothing);
     });
 
-    testWidgets("a wheel name of the same kind finds the planning filter", (
-      tester,
-    ) async {
+    testWidgets("a wheel name of the same kind finds the planning filter",
+        (tester) async {
       // AlpacaBridge / custom spellings of the set's 'Ha 7nm' entry.
       for (final name in ['Hα', 'H-alpha', 'Ha']) {
         await pumpAdvisor(tester, filterName: name);
-        expect(
-          find.textContaining('Unknown filter'),
-          findsNothing,
-          reason: name,
-        );
+        expect(find.textContaining('Unknown filter'), findsNothing,
+            reason: name);
         expect(find.text('Apply'), findsOneWidget, reason: name);
       }
     });
 
     testWidgets('an incomplete imaging train points at optics', (tester) async {
-      await pumpAdvisor(
-        tester,
-        optics: const OpticsSettings(
-          focalLengthMm: 0,
-          reducerFactor: 1,
-          sensorWidthPx: 0,
-          sensorHeightPx: 0,
-          pixelSizeUm: 0,
-          apertureMm: 0,
-        ),
-      );
-      expect(
-        find.textContaining('imaging train is incomplete'),
-        findsOneWidget,
-      );
+      await pumpAdvisor(tester,
+          optics: const OpticsSettings(
+              focalLengthMm: 0,
+              reducerFactor: 1,
+              sensorWidthPx: 0,
+              sensorHeightPx: 0,
+              pixelSizeUm: 0,
+              apertureMm: 0));
+      expect(find.textContaining('imaging train is incomplete'), findsOneWidget);
       expect(find.text('Open optics'), findsOneWidget);
       expect(find.text('Apply'), findsNothing);
     });
@@ -632,20 +495,17 @@ void main() {
 // ── Seeded-notifier doubles + the reference rig ──────────────────────────────
 
 const _rigOptics = OpticsSettings(
-  focalLengthMm: 250,
-  reducerFactor: 1.0,
-  sensorWidthPx: 6248,
-  sensorHeightPx: 4176,
-  pixelSizeUm: 3.76,
-  apertureMm: 51,
-);
+    focalLengthMm: 250,
+    reducerFactor: 1.0,
+    sensorWidthPx: 6248,
+    sensorHeightPx: 4176,
+    pixelSizeUm: 3.76,
+    apertureMm: 51);
 const _rigElectronics = CameraElectronics(
-  sensorName: 'IMX571',
-  readNoiseE: 1.5,
-  fullWellE: 51000,
-  quantumEfficiencyPeak: 0.8,
-);
-
+    sensorName: 'IMX571',
+    readNoiseE: 1.5,
+    fullWellE: 51000,
+    quantumEfficiencyPeak: 0.8);
 class _SeededSkyModel extends SkyModelCalibrationNotifier {
   _SeededSkyModel(this._v);
   final SkyModelCalibration? _v;
@@ -653,19 +513,16 @@ class _SeededSkyModel extends SkyModelCalibrationNotifier {
   Future<SkyModelCalibration?> build() async => _v;
 }
 
-const _rigFilters = FilterSetSettings(
-  filters: [
-    PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha, bandwidthNm: 7),
-    PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),
-  ],
-);
+const _rigFilters = FilterSetSettings(filters: [
+  PlanningFilter(name: 'Ha 7nm', kind: FilterKind.ha, bandwidthNm: 7),
+  PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0),
+]);
 const _rigSite = SiteSettings(
-  siteName: 'test',
-  latitudeDeg: 34,
-  longitudeDeg: -84,
-  bortleClass: 6,
-  typicalSeeingArcsec: 2.5,
-);
+    siteName: 'test',
+    latitudeDeg: 34,
+    longitudeDeg: -84,
+    bortleClass: 6,
+    typicalSeeingArcsec: 2.5);
 
 class _SeededOptics extends OpticsSettingsNotifier {
   _SeededOptics(this._v);
@@ -719,3 +576,4 @@ class _SeededPrefs extends PlanningPrefsNotifier {
   @override
   PlanningPrefs build() => _v;
 }
+

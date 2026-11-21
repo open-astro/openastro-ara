@@ -16,26 +16,18 @@ void main() {
     });
 
     test('an empty store → empty map + null timestamp', () {
-      final cs = ClientSettings.fromJson(const {
-        'settings': {},
-        'updated_utc': null,
-      });
+      final cs = ClientSettings.fromJson(const {'settings': {}, 'updated_utc': null});
       expect(cs.isEmpty, isTrue);
       expect(cs.updatedUtc, isNull);
     });
 
     test('degrades a missing / wrong-typed settings field to an empty map', () {
-      expect(
-        ClientSettings.fromJson(const {'settings': 'nope'}).isEmpty,
-        isTrue,
-      );
+      expect(ClientSettings.fromJson(const {'settings': 'nope'}).isEmpty, isTrue);
       expect(ClientSettings.fromJson(const {}).isEmpty, isTrue);
     });
 
     test('the settings map is unmodifiable', () {
-      final cs = ClientSettings.fromJson(const {
-        'settings': {'a': 1},
-      });
+      final cs = ClientSettings.fromJson(const {'settings': {'a': 1}});
       expect(() => cs.settings['b'] = 2, throwsUnsupportedError);
     });
   });

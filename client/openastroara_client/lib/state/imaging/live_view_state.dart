@@ -16,6 +16,5 @@ class LiveViewController extends Notifier<bool> {
   void set(bool v) => state = v;
 }
 
-final liveViewControllerProvider = NotifierProvider<LiveViewController, bool>(
-  LiveViewController.new,
-);
+final liveViewControllerProvider =
+    NotifierProvider<LiveViewController, bool>(LiveViewController.new);

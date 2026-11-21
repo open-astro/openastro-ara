@@ -33,19 +33,15 @@ class RunSpotlight {
   /// completed-tinting is allowed solely in this mode.
   final bool verified;
 
-  const RunSpotlight({
-    required this.leaves,
-    required this.currentLeaf,
-    required this.verified,
-  });
+  const RunSpotlight(
+      {required this.leaves, required this.currentLeaf, required this.verified});
 
   NodePath? get currentPath =>
       currentLeaf == null ? null : leaves[currentLeaf!];
 
   /// Paths safely known to be completed (ordinal-verified mode only).
-  List<NodePath> get completedPaths => verified && currentLeaf != null
-      ? leaves.sublist(0, currentLeaf!)
-      : const [];
+  List<NodePath> get completedPaths =>
+      verified && currentLeaf != null ? leaves.sublist(0, currentLeaf!) : const [];
 }
 
 /// Depth-first executable leaves (non-container nodes) of [body]'s tree.

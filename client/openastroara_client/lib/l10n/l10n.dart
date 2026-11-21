@@ -10,9 +10,7 @@ export 'app_localizations.dart';
 /// picked in Settings, else the device's, else English.
 AppLocalizations l10nFor(Locale? picked) {
   try {
-    return lookupAppLocalizations(
-      picked ?? WidgetsBinding.instance.platformDispatcher.locale,
-    );
+    return lookupAppLocalizations(picked ?? WidgetsBinding.instance.platformDispatcher.locale);
   } catch (_) {
     return lookupAppLocalizations(const Locale('en'));
   }

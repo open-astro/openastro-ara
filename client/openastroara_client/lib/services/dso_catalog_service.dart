@@ -68,10 +68,7 @@ class PlanningDso {
   bool get hasBarnardDesignation => barnardDesignation != null;
   String? get barnardDesignation {
     bool isB(String s) =>
-        s.length > 1 &&
-        s[0] == 'B' &&
-        s.codeUnitAt(1) >= 48 &&
-        s.codeUnitAt(1) <= 57;
+        s.length > 1 && s[0] == 'B' && s.codeUnitAt(1) >= 48 && s.codeUnitAt(1) <= 57;
     if (isB(id)) return id;
     for (final a in aliases) {
       if (isB(a)) return a;
@@ -213,9 +210,7 @@ class DsoCatalogService {
 /// 7000's coordinates (night of 2026-10-02). No hit → the page's own engine
 /// search, which selects the object and sets both. Pure — unit-tested.
 Map<String, Object?> planetariumSearchCommand(
-  List<PlanningDso> catalog,
-  String query,
-) {
+    List<PlanningDso> catalog, String query) {
   final q = query.trim();
   final hit = findCatalogObject(catalog, q);
   if (hit != null) {
@@ -247,7 +242,8 @@ final RegExp _nameNoise = RegExp(r'[\s\-_]');
 
 /// The key without dashes, for a query typed WITHOUT one ("sh2 117" finds
 /// Sh2-117). A query that carries a dash is never matched loosely.
-String looseDesignationKey(String s) => designationKey(s).replaceAll('-', '');
+String looseDesignationKey(String s) =>
+    designationKey(s).replaceAll('-', '');
 
 /// Whether [query] matches [designation] by key: dash-preserving first; the
 /// dashless form only when the query itself has no dash.
@@ -294,7 +290,6 @@ class CatalogNameIndex {
         _looseAmbiguous.add(lk);
       }
     }
-
     // Ids first, then names, then aliases: an id claim always wins.
     for (final o in catalog) {
       add(o.id, o);
@@ -333,6 +328,7 @@ class CatalogNameIndex {
     return null;
   }
 }
+
 
 /// Case/space/dash-insensitive lookup over the planning mirror: "sh2 129",
 /// "SH2-129", "b 33", "ldn1235" and common names ("horsehead") all resolve.

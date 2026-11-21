@@ -11,22 +11,23 @@ TonightSkyObject obj(
   double hoursFree = 60,
   double? subS = 120,
   double? budgetFullHours,
-}) => TonightSkyObject(
-  id: id,
-  name: id,
-  type: 'HII',
-  magnitude: 7,
-  raDeg: 0,
-  decDeg: 0,
-  altitudeDeg: 50,
-  maxAltitudeDeg: 80,
-  windowStartUtc: winStart,
-  windowEndUtc: winEnd,
-  score: score,
-  hoursFreeScore: hoursFree,
-  optimalSubS: subS,
-  budgetFullHours: budgetFullHours,
-);
+}) =>
+    TonightSkyObject(
+      id: id,
+      name: id,
+      type: 'HII',
+      magnitude: 7,
+      raDeg: 0,
+      decDeg: 0,
+      altitudeDeg: 50,
+      maxAltitudeDeg: 80,
+      windowStartUtc: winStart,
+      windowEndUtc: winEnd,
+      score: score,
+      hoursFreeScore: hoursFree,
+      optimalSubS: subS,
+      budgetFullHours: budgetFullHours,
+    );
 
 void main() {
   _tierHandshakeTests();
@@ -41,18 +42,14 @@ void main() {
   test('one target: the best-valued object gets the whole usable window', () {
     final plan = planImagingSession(
       ranked: [
-        obj(
-          'A',
-          winStart: DateTime.utc(2026, 7, 18, 3),
-          winEnd: DateTime.utc(2026, 7, 18, 9),
-          hoursFree: 70,
-        ),
-        obj(
-          'B',
-          winStart: DateTime.utc(2026, 7, 18, 3),
-          winEnd: DateTime.utc(2026, 7, 18, 9),
-          hoursFree: 50,
-        ),
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 9),
+            hoursFree: 70),
+        obj('B',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 9),
+            hoursFree: 50),
       ],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
@@ -67,17 +64,14 @@ void main() {
 
   test('overheads reduce the sub count honestly', () {
     const none = SessionOverheads(
-      setupMinutesPerTarget: 0,
-      ditherEnabled: false,
-      autofocusEveryHours: 0,
-    );
+        setupMinutesPerTarget: 0,
+        ditherEnabled: false,
+        autofocusEveryHours: 0);
     final ideal = planImagingSession(
       ranked: [
-        obj(
-          'A',
-          winStart: DateTime.utc(2026, 7, 18, 3),
-          winEnd: DateTime.utc(2026, 7, 18, 9),
-        ),
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 9)),
       ],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
@@ -91,16 +85,12 @@ void main() {
     // A sets mid-window; B rises mid-window — the natural split.
     final plan = planImagingSession(
       ranked: [
-        obj(
-          'A',
-          winStart: DateTime.utc(2026, 7, 18, 3),
-          winEnd: DateTime.utc(2026, 7, 18, 5, 30),
-        ),
-        obj(
-          'B',
-          winStart: DateTime.utc(2026, 7, 18, 5),
-          winEnd: DateTime.utc(2026, 7, 18, 9),
-        ),
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 5, 30)),
+        obj('B',
+            winStart: DateTime.utc(2026, 7, 18, 5),
+            winEnd: DateTime.utc(2026, 7, 18, 9)),
       ],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
@@ -110,7 +100,8 @@ void main() {
     expect(plan.targets[0].object.id, 'A');
     expect(plan.targets[1].object.id, 'B');
     // Slices abut inside the window and never overlap.
-    expect(plan.targets[0].endUtc.isAfter(plan.targets[1].startUtc), isFalse);
+    expect(
+        plan.targets[0].endUtc.isAfter(plan.targets[1].startUtc), isFalse);
     expect(plan.targets[0].hours, greaterThanOrEqualTo(0.75));
     expect(plan.targets[1].hours, greaterThanOrEqualTo(0.75));
   });
@@ -118,11 +109,9 @@ void main() {
   test('two targets degrade to one with a note when nothing else fits', () {
     final plan = planImagingSession(
       ranked: [
-        obj(
-          'A',
-          winStart: DateTime.utc(2026, 7, 18, 3),
-          winEnd: DateTime.utc(2026, 7, 18, 9),
-        ),
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 3),
+            winEnd: DateTime.utc(2026, 7, 18, 9)),
       ],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
@@ -132,109 +121,90 @@ void main() {
     expect(plan.notes, isNotEmpty);
   });
 
-  test(
-    'a long window supports 3-4 targets; a short one degrades with a note',
-    () {
-      // Four all-night candidates over a 6 h window: each can get ≥45 min.
-      final longWin = planImagingSession(
-        ranked: [
-          for (final id in ['A', 'B', 'C', 'D'])
-            obj(
-              id,
+  test('a long window supports 3-4 targets; a short one degrades with a note',
+      () {
+    // Four all-night candidates over a 6 h window: each can get ≥45 min.
+    final longWin = planImagingSession(
+      ranked: [
+        for (final id in ['A', 'B', 'C', 'D'])
+          obj(id,
               winStart: DateTime.utc(2026, 7, 18, 2),
               winEnd: DateTime.utc(2026, 7, 18, 12),
-              hoursFree: 70 - 'ABCD'.indexOf(id) * 5,
-            ),
-        ],
-        windowStartUtc: DateTime.utc(2026, 7, 18, 4),
-        windowEndUtc: DateTime.utc(2026, 7, 18, 10),
-        targetCount: 4,
-      );
-      expect(longWin.targets.length, inInclusiveRange(3, 4));
-      // Concave hours value ⇒ near-equal allocation: no slice may hog the
-      // window while others sit at the 45-min floor (the linear-value bug).
-      final hours = longWin.targets.map((t) => t.hours).toList()..sort();
+              hoursFree: 70 - 'ABCD'.indexOf(id) * 5),
+      ],
+      windowStartUtc: DateTime.utc(2026, 7, 18, 4),
+      windowEndUtc: DateTime.utc(2026, 7, 18, 10),
+      targetCount: 4,
+    );
+    expect(longWin.targets.length, inInclusiveRange(3, 4));
+    // Concave hours value ⇒ near-equal allocation: no slice may hog the
+    // window while others sit at the 45-min floor (the linear-value bug).
+    final hours = longWin.targets.map((t) => t.hours).toList()..sort();
+    expect(hours.last / hours.first, lessThanOrEqualTo(2.5),
+        reason: 'slices must be balanced, not floor + remainder');
+    // Slices are chronological and non-overlapping.
+    for (var i = 1; i < longWin.targets.length; i++) {
       expect(
-        hours.last / hours.first,
-        lessThanOrEqualTo(2.5),
-        reason: 'slices must be balanced, not floor + remainder',
-      );
-      // Slices are chronological and non-overlapping.
-      for (var i = 1; i < longWin.targets.length; i++) {
-        expect(
-          longWin.targets[i - 1].endUtc.isAfter(longWin.targets[i].startUtc),
-          isFalse,
-        );
-      }
-      for (final t in longWin.targets) {
-        expect(t.hours, greaterThanOrEqualTo(0.75));
-      }
+          longWin.targets[i - 1]
+              .endUtc
+              .isAfter(longWin.targets[i].startUtc),
+          isFalse);
+    }
+    for (final t in longWin.targets) {
+      expect(t.hours, greaterThanOrEqualTo(0.75));
+    }
 
-      // A 1.5 h window can't honestly hold 4 targets — degrade with a note.
-      final shortWin = planImagingSession(
-        ranked: [
-          for (final id in ['A', 'B', 'C', 'D'])
-            obj(
-              id,
+    // A 1.5 h window can't honestly hold 4 targets — degrade with a note.
+    final shortWin = planImagingSession(
+      ranked: [
+        for (final id in ['A', 'B', 'C', 'D'])
+          obj(id,
               winStart: DateTime.utc(2026, 7, 18, 2),
-              winEnd: DateTime.utc(2026, 7, 18, 12),
-            ),
-        ],
-        windowStartUtc: DateTime.utc(2026, 7, 18, 4),
-        windowEndUtc: DateTime.utc(2026, 7, 18, 5, 30),
-        targetCount: 4,
-      );
-      expect(shortWin.targets.length, lessThan(4));
-      expect(shortWin.notes, isNotEmpty);
-    },
-  );
+              winEnd: DateTime.utc(2026, 7, 18, 12)),
+      ],
+      windowStartUtc: DateTime.utc(2026, 7, 18, 4),
+      windowEndUtc: DateTime.utc(2026, 7, 18, 5, 30),
+      targetCount: 4,
+    );
+    expect(shortWin.targets.length, lessThan(4));
+    expect(shortWin.notes, isNotEmpty);
+  });
 
-  test(
-    'an early-setting candidate is never scheduled past its own window end',
-    () {
-      // A is up all night (the initial best single); B SETS mid-plan-window, so
-      // B can only be added via the candidate-first branch — whose split scan
-      // must be clamped to B's own window end (PR #860 review: unclamped, the
-      // inflated hours made the illegal split WIN the gain comparison).
-      final plan = planImagingSession(
-        ranked: [
-          obj(
-            'A',
+  test('an early-setting candidate is never scheduled past its own window end',
+      () {
+    // A is up all night (the initial best single); B SETS mid-plan-window, so
+    // B can only be added via the candidate-first branch — whose split scan
+    // must be clamped to B's own window end (PR #860 review: unclamped, the
+    // inflated hours made the illegal split WIN the gain comparison).
+    final plan = planImagingSession(
+      ranked: [
+        obj('A',
             winStart: DateTime.utc(2026, 7, 18, 2),
             winEnd: DateTime.utc(2026, 7, 18, 12),
-            hoursFree: 70,
-          ),
-          obj(
-            'B',
+            hoursFree: 70),
+        obj('B',
             winStart: DateTime.utc(2026, 7, 18, 2),
             winEnd: DateTime.utc(2026, 7, 18, 5, 30), // sets 1.5 h in
-            hoursFree: 68,
-          ),
-        ],
-        windowStartUtc: winStart, // 04:00
-        windowEndUtc: DateTime.utc(2026, 7, 18, 10),
-        targetCount: 2,
-      );
-      expect(plan.targets, hasLength(2));
-      for (final t in plan.targets) {
-        expect(
-          t.endUtc.isAfter(t.object.windowEndUtc!),
-          isFalse,
-          reason: '${t.object.id} scheduled after it has set',
-        );
-        expect(t.startUtc.isBefore(t.object.windowStartUtc!), isFalse);
-      }
-    },
-  );
+            hoursFree: 68),
+      ],
+      windowStartUtc: winStart, // 04:00
+      windowEndUtc: DateTime.utc(2026, 7, 18, 10),
+      targetCount: 2,
+    );
+    expect(plan.targets, hasLength(2));
+    for (final t in plan.targets) {
+      expect(t.endUtc.isAfter(t.object.windowEndUtc!), isFalse,
+          reason: '${t.object.id} scheduled after it has set');
+      expect(t.startUtc.isBefore(t.object.windowStartUtc!), isFalse);
+    }
+  });
 
   test('empty window / no overlap produce an explanatory empty plan', () {
     final plan = planImagingSession(
       ranked: [
-        obj(
-          'A',
-          winStart: DateTime.utc(2026, 7, 18, 10),
-          winEnd: DateTime.utc(2026, 7, 18, 12),
-        ),
+        obj('A',
+            winStart: DateTime.utc(2026, 7, 18, 10),
+            winEnd: DateTime.utc(2026, 7, 18, 12)),
       ],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
@@ -247,137 +217,90 @@ void main() {
 void _aimTests() {
   final winStart = DateTime.utc(2026, 7, 18, 4);
   final winEnd = DateTime.utc(2026, 7, 18, 7);
-  test(
-    'aiming offsets the slew centre on the tangent plane, clamped, recentrable',
-    () {
-      final plan = planImagingSession(
+  test('aiming offsets the slew centre on the tangent plane, clamped, recentrable', () {
+    final plan = planImagingSession(
         ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
         windowStartUtc: winStart,
-        windowEndUtc: winEnd,
-      );
-      final t0 = plan.targets.single;
-      expect(t0.isAimed, isFalse);
-      expect(t0.aim.raDeg, closeTo(t0.object.raDeg, 1e-9));
-      // 30' north: Dec +0.5°, RA unchanged (object at RA 0, Dec 0).
-      final north = setPlanAim(plan, 0, (0, 30)).targets.single;
-      expect(north.isAimed, isTrue);
-      expect(north.aim.decDeg, closeTo(0.5, 1e-3));
-      expect(north.aim.raDeg, closeTo(0.0, 1e-6));
-      // 60' east: RA +1°.
-      final east = setPlanAim(plan, 0, (60, 0)).targets.single;
-      expect(east.aim.raDeg, closeTo(1.0, 1e-3));
-      // Runaway drags clamp to ±240'.
-      expect(
-        setPlanAim(plan, 0, (9999, -9999)).targets.single.aimOffsetArcmin,
-        (240.0, -240.0),
-      );
-      // Recentre.
-      expect(
-        setPlanAim(setPlanAim(plan, 0, (60, 0)), 0, (
-          0,
-          0,
-        )).targets.single.isAimed,
-        isFalse,
-      );
-      expect(setPlanAim(plan, 7, (1, 1)), same(plan));
-      // Independent of rotation / mosaic edits.
-      final all = setPlanMosaic(
-        setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45),
-        0,
-        bankedHours: const {},
-        (cols: 2, rows: 1, overlapPct: 10),
-      );
-      expect(all.targets.single.aimOffsetArcmin, (10.0, 5.0));
-      expect(all.targets.single.positionAngleDeg, 45);
-      expect(all.targets.single.mosaic.cols, 2);
-    },
-  );
+        windowEndUtc: winEnd);
+    final t0 = plan.targets.single;
+    expect(t0.isAimed, isFalse);
+    expect(t0.aim.raDeg, closeTo(t0.object.raDeg, 1e-9));
+    // 30' north: Dec +0.5°, RA unchanged (object at RA 0, Dec 0).
+    final north = setPlanAim(plan, 0, (0, 30)).targets.single;
+    expect(north.isAimed, isTrue);
+    expect(north.aim.decDeg, closeTo(0.5, 1e-3));
+    expect(north.aim.raDeg, closeTo(0.0, 1e-6));
+    // 60' east: RA +1°.
+    final east = setPlanAim(plan, 0, (60, 0)).targets.single;
+    expect(east.aim.raDeg, closeTo(1.0, 1e-3));
+    // Runaway drags clamp to ±240'.
+    expect(setPlanAim(plan, 0, (9999, -9999)).targets.single.aimOffsetArcmin,
+        (240.0, -240.0));
+    // Recentre.
+    expect(setPlanAim(setPlanAim(plan, 0, (60, 0)), 0, (0, 0)).targets.single.isAimed, isFalse);
+    expect(setPlanAim(plan, 7, (1, 1)), same(plan));
+    // Independent of rotation / mosaic edits.
+    final all = setPlanMosaic(setPlanRotation(setPlanAim(plan, 0, (10, 5)), 0, 45), 0, bankedHours: const {},
+        (cols: 2, rows: 1, overlapPct: 10));
+    expect(all.targets.single.aimOffsetArcmin, (10.0, 5.0));
+    expect(all.targets.single.positionAngleDeg, 45);
+    expect(all.targets.single.mosaic.cols, 2);
+  });
 }
 
 void _mosaicTests() {
   final winStart = DateTime.utc(2026, 7, 18, 4);
   final winEnd = DateTime.utc(2026, 7, 18, 7);
-  test(
-    'a slot mosaic is clamped, splits subs per panel, and survives rotation',
-    () {
-      final plan = planImagingSession(
+  test('a slot mosaic is clamped, splits subs per panel, and survives rotation', () {
+    final plan = planImagingSession(
         ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
         windowStartUtc: winStart,
-        windowEndUtc: winEnd,
-      );
-      const overheads = SessionOverheads();
-      final single = plan.targets.single;
-      expect(single.mosaic, singleFrame);
-      expect(single.subsPerPanel(overheads), single.subCount);
+        windowEndUtc: winEnd);
+    const overheads = SessionOverheads();
+    final single = plan.targets.single;
+    expect(single.mosaic, singleFrame);
+    expect(single.subsPerPanel(overheads), single.subCount);
 
-      final grid = setPlanMosaic(plan, 0, (
-        cols: 2,
-        rows: 2,
-        overlapPct: 10,
-      ), bankedHours: const {});
-      final t = grid.targets.single;
-      expect(t.mosaic.panelCount, 4);
-      // 3 h / 4 panels = 0.75 h each, each charged its own setup + AF: fewer
-      // than a quarter of the single-frame count.
-      final per = t.subsPerPanel(overheads)!;
-      expect(per, lessThan(single.subCount! ~/ 4));
-      expect(per, greaterThan(0));
-      expect(t.hours, single.hours, reason: 'the slot itself is unchanged');
+    final grid = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10), bankedHours: const {});
+    final t = grid.targets.single;
+    expect(t.mosaic.panelCount, 4);
+    // 3 h / 4 panels = 0.75 h each, each charged its own setup + AF: fewer
+    // than a quarter of the single-frame count.
+    final per = t.subsPerPanel(overheads)!;
+    expect(per, lessThan(single.subCount! ~/ 4));
+    expect(per, greaterThan(0));
+    expect(t.hours, single.hours, reason: 'the slot itself is unchanged');
 
-      expect(
-        setPlanMosaic(plan, 0, (
-          cols: 0,
-          rows: 99,
-          overlapPct: 80,
-        ), bankedHours: const {}).targets.single.mosaic,
-        (cols: 1, rows: 8, overlapPct: 50),
-      );
-      expect(
-        setPlanMosaic(plan, 4, singleFrame, bankedHours: const {}),
-        same(plan),
-      );
-      // Rotation and mosaic are independent edits.
-      final both = setPlanRotation(grid, 0, 30);
-      expect(both.targets.single.mosaic.panelCount, 4);
-      expect(both.targets.single.positionAngleDeg, 30);
-    },
-  );
+    expect(setPlanMosaic(plan, 0, (cols: 0, rows: 99, overlapPct: 80), bankedHours: const {}).targets.single.mosaic,
+        (cols: 1, rows: 8, overlapPct: 50));
+    expect(setPlanMosaic(plan, 4, singleFrame, bankedHours: const {}), same(plan));
+    // Rotation and mosaic are independent edits.
+    final both = setPlanRotation(grid, 0, 30);
+    expect(both.targets.single.mosaic.panelCount, 4);
+    expect(both.targets.single.positionAngleDeg, 30);
+  });
 }
 
 void _rotationTests() {
   final winStart = DateTime.utc(2026, 7, 18, 4);
   final winEnd = DateTime.utc(2026, 7, 18, 7);
-  test(
-    'a slot rotation is normalised, kept through the plan, and clearable',
-    () {
-      final plan = planImagingSession(
+  test('a slot rotation is normalised, kept through the plan, and clearable', () {
+    final plan = planImagingSession(
         ranked: [obj('A', winStart: winStart, winEnd: winEnd)],
         windowStartUtc: winStart,
-        windowEndUtc: winEnd,
-      );
-      expect(plan.targets.single.positionAngleDeg, isNull);
-      final turned = setPlanRotation(plan, 0, 372);
-      expect(turned.targets.single.positionAngleDeg, 12);
-      expect(
-        setPlanRotation(plan, 0, -15).targets.single.positionAngleDeg,
-        345,
-      );
-      expect(turned.targets.single.subCount, plan.targets.single.subCount);
-      expect(turned.plannedHours, plan.plannedHours);
-      expect(
-        setPlanRotation(turned, 0, null).targets.single.positionAngleDeg,
-        isNull,
-      );
-      expect(setPlanRotation(plan, 3, 90), same(plan));
-      // A swap starts the new object fresh — its rotation is not inherited.
-      final swapped = swapPlanTarget(
-        turned,
-        0,
-        obj('B', winStart: winStart, winEnd: winEnd),
-      );
-      expect(swapped.targets.single.positionAngleDeg, isNull);
-    },
-  );
+        windowEndUtc: winEnd);
+    expect(plan.targets.single.positionAngleDeg, isNull);
+    final turned = setPlanRotation(plan, 0, 372);
+    expect(turned.targets.single.positionAngleDeg, 12);
+    expect(setPlanRotation(plan, 0, -15).targets.single.positionAngleDeg, 345);
+    expect(turned.targets.single.subCount, plan.targets.single.subCount);
+    expect(turned.plannedHours, plan.plannedHours);
+    expect(setPlanRotation(turned, 0, null).targets.single.positionAngleDeg, isNull);
+    expect(setPlanRotation(plan, 3, 90), same(plan));
+    // A swap starts the new object fresh — its rotation is not inherited.
+    final swapped = swapPlanTarget(turned, 0, obj('B', winStart: winStart, winEnd: winEnd));
+    expect(swapped.targets.single.positionAngleDeg, isNull);
+  });
 }
 
 void _swapTests() {
@@ -388,62 +311,46 @@ void _swapTests() {
     obj('A', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 70),
     obj('B', winStart: allNight.$1, winEnd: allNight.$2, hoursFree: 60),
     // C sets at 05:30 UTC — only 1.5 h of the 3 h window.
-    obj(
-      'C',
-      winStart: allNight.$1,
-      winEnd: DateTime.utc(2026, 7, 18, 5, 30),
-      hoursFree: 50,
-    ),
+    obj('C',
+        winStart: allNight.$1,
+        winEnd: DateTime.utc(2026, 7, 18, 5, 30),
+        hoursFree: 50),
     // D rises after the window closes.
-    obj(
-      'D',
-      winStart: DateTime.utc(2026, 7, 18, 8),
-      winEnd: allNight.$2,
-      hoursFree: 90,
-    ),
+    obj('D',
+        winStart: DateTime.utc(2026, 7, 18, 8),
+        winEnd: allNight.$2,
+        hoursFree: 90),
   ];
 
   test('swap candidates exclude planned objects and unshootable ones', () {
     final plan = planImagingSession(
-      ranked: ranked,
-      windowStartUtc: winStart,
-      windowEndUtc: winEnd,
-    );
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
     expect(plan.targets.single.object.id, 'A');
     final alts = swapCandidates(
-      ranked: ranked,
-      plan: plan,
-      slice: plan.targets.single,
-    );
+        ranked: ranked, plan: plan, slice: plan.targets.single);
     expect(alts.map((o) => o.id), ['B', 'C']);
   });
 
-  test(
-    'swapping keeps the slot, recomputes subs, and clamps to the dark window',
-    () {
-      final plan = planImagingSession(
-        ranked: ranked,
-        windowStartUtc: winStart,
-        windowEndUtc: winEnd,
-      );
-      final toB = swapPlanTarget(plan, 0, ranked[1]);
-      expect(toB.targets.single.object.id, 'B');
-      expect(toB.targets.single.startUtc, winStart);
-      expect(toB.targets.single.endUtc, winEnd);
-      expect(toB.targets.single.subCount, plan.targets.single.subCount);
-      expect(toB.notes, isEmpty);
+  test('swapping keeps the slot, recomputes subs, and clamps to the dark window', () {
+    final plan = planImagingSession(
+        ranked: ranked, windowStartUtc: winStart, windowEndUtc: winEnd);
+    final toB = swapPlanTarget(plan, 0, ranked[1]);
+    expect(toB.targets.single.object.id, 'B');
+    expect(toB.targets.single.startUtc, winStart);
+    expect(toB.targets.single.endUtc, winEnd);
+    expect(toB.targets.single.subCount, plan.targets.single.subCount);
+    expect(toB.notes, isEmpty);
 
-      final toC = swapPlanTarget(plan, 0, ranked[2]);
-      expect(toC.targets.single.object.id, 'C');
-      expect(toC.targets.single.hours, closeTo(1.5, 0.01));
-      expect(toC.plannedHours, closeTo(1.5, 0.01));
-      expect(toC.notes.single, contains('trimmed'));
+    final toC = swapPlanTarget(plan, 0, ranked[2]);
+    expect(toC.targets.single.object.id, 'C');
+    expect(toC.targets.single.hours, closeTo(1.5, 0.01));
+    expect(toC.plannedHours, closeTo(1.5, 0.01));
+    expect(toC.notes.single, contains('trimmed'));
 
-      // D never overlaps the slot — the plan is returned untouched.
-      expect(swapPlanTarget(plan, 0, ranked[3]), same(plan));
-      expect(swapPlanTarget(plan, 5, ranked[1]), same(plan));
-    },
-  );
+    // D never overlaps the slot — the plan is returned untouched.
+    expect(swapPlanTarget(plan, 0, ranked[3]), same(plan));
+    expect(swapPlanTarget(plan, 5, ranked[1]), same(plan));
+  });
 }
 
 /// §Integration Budget P5 — the planner handshake: closeness to completing a
@@ -453,61 +360,23 @@ void _tierHandshakeTests() {
   final winEnd = DateTime.utc(2026, 7, 18, 7); // 3 h
 
   test('P5: with equal scores, the target whose tier tonight\'s hours complete wins the single slot', () {
-    final nearlyDone = obj(
-      'near',
-      winStart: winStart,
-      winEnd: winEnd,
-      budgetFullHours: 9,
-    );
-    final farOff = obj(
-      'far',
-      winStart: winStart,
-      winEnd: winEnd,
-      budgetFullHours: 9,
-    );
+    final nearlyDone = obj('near', winStart: winStart, winEnd: winEnd, budgetFullHours: 9);
+    final farOff = obj('far', winStart: winStart, winEnd: winEnd, budgetFullHours: 9);
     final plan = planImagingSession(
       ranked: [farOff, nearlyDone],
       windowStartUtc: winStart,
       windowEndUtc: winEnd,
       bankedHours: const {'near': 7.0, 'far': 1.0},
     );
-    expect(
-      plan.targets.single.object.id,
-      'near',
-      reason: '2 h to go fits the 3 h window',
-    );
-    expect(
-      plan.notes,
-      contains('near: this slice completes its full-structure tier.'),
-    );
+    expect(plan.targets.single.object.id, 'near', reason: '2 h to go fits the 3 h window');
+    expect(plan.notes, contains('near: this slice completes its full-structure tier.'));
   });
 
   test('P5: a target whose tier is already complete yields to a fresh one, and says so', () {
-    final done = obj(
-      'done',
-      winStart: winStart,
-      winEnd: winEnd,
-      score: 90,
-      hoursFree: 66,
-      budgetFullHours: 9,
-    );
-    final fresh = obj(
-      'fresh',
-      winStart: winStart,
-      winEnd: winEnd,
-      score: 85,
-      hoursFree: 62,
-    );
-    final plain = planImagingSession(
-      ranked: [done, fresh],
-      windowStartUtc: winStart,
-      windowEndUtc: winEnd,
-    );
-    expect(
-      plain.targets.single.object.id,
-      'done',
-      reason: 'without the library, the higher score wins',
-    );
+    final done = obj('done', winStart: winStart, winEnd: winEnd, score: 90, hoursFree: 66, budgetFullHours: 9);
+    final fresh = obj('fresh', winStart: winStart, winEnd: winEnd, score: 85, hoursFree: 62);
+    final plain = planImagingSession(ranked: [done, fresh], windowStartUtc: winStart, windowEndUtc: winEnd);
+    expect(plain.targets.single.object.id, 'done', reason: 'without the library, the higher score wins');
 
     final informed = planImagingSession(
       ranked: [done, fresh],
@@ -515,11 +384,7 @@ void _tierHandshakeTests() {
       windowEndUtc: winEnd,
       bankedHours: const {'done': 9.5},
     );
-    expect(
-      informed.targets.single.object.id,
-      'fresh',
-      reason: 'diminishing returns steer to the new object',
-    );
+    expect(informed.targets.single.object.id, 'fresh', reason: 'diminishing returns steer to the new object');
 
     final forced = planImagingSession(
       ranked: [done],
@@ -527,20 +392,12 @@ void _tierHandshakeTests() {
       windowEndUtc: winEnd,
       bankedHours: const {'done': 9.5},
     );
-    expect(
-      forced.notes.single,
-      contains('full-structure tier already complete — diminishing returns'),
-    );
+    expect(forced.notes.single, contains('full-structure tier already complete — diminishing returns'));
   });
 
   test('P5: completion is judged on integration, not the clock span', () {
     // 2 h to go. A 2 h slice with 120 s subs at the default overheads integrates ~1.7 h: not complete.
-    final near = obj(
-      'near',
-      winStart: winStart,
-      winEnd: winStart.add(const Duration(hours: 2)),
-      budgetFullHours: 9,
-    );
+    final near = obj('near', winStart: winStart, winEnd: winStart.add(const Duration(hours: 2)), budgetFullHours: 9);
     final plan = planImagingSession(
       ranked: [near],
       windowStartUtc: winStart,
@@ -550,121 +407,48 @@ void _tierHandshakeTests() {
     final slice = plan.targets.single;
     expect(slice.hours, closeTo(2.0, 1e-9));
     expect(slice.subCount! * slice.subSeconds! / 3600, lessThan(2.0));
-    expect(
-      plan.notes,
-      isEmpty,
-      reason: 'about 16 min of integration short of the tier',
-    );
+    expect(plan.notes, isEmpty, reason: 'about 16 min of integration short of the tier');
 
     // The same slice with no sub figure falls back to the clock span and does complete.
-    final clockOnly = obj(
-      'clock',
-      winStart: winStart,
-      winEnd: winStart.add(const Duration(hours: 2)),
-      budgetFullHours: 9,
-      subS: null,
-    );
+    final clockOnly = obj('clock', winStart: winStart, winEnd: winStart.add(const Duration(hours: 2)), budgetFullHours: 9, subS: null);
     final plan2 = planImagingSession(
       ranked: [clockOnly],
       windowStartUtc: winStart,
       windowEndUtc: winStart.add(const Duration(hours: 2)),
       bankedHours: const {'clock': 7.0},
     );
-    expect(
-      plan2.notes.single,
-      'clock: this slice completes its full-structure tier.',
-    );
+    expect(plan2.notes.single, 'clock: this slice completes its full-structure tier.');
   });
 
   test('P5: turning a completing slice into a mosaic redoes its tier note per panel', () {
-    final near = obj(
-      'near',
-      winStart: winStart,
-      winEnd: winEnd,
-      budgetFullHours: 9,
-    ); // 3 h window
+    final near = obj('near', winStart: winStart, winEnd: winEnd, budgetFullHours: 9); // 3 h window
     final plan = planImagingSession(
-      ranked: [near],
-      windowStartUtc: winStart,
-      windowEndUtc: winEnd,
-      bankedHours: const {'near': 7.0},
-    );
-    expect(
-      plan.notes.single,
-      'near: this slice completes its full-structure tier.',
-    );
+      ranked: [near], windowStartUtc: winStart, windowEndUtc: winEnd, bankedHours: const {'near': 7.0});
+    expect(plan.notes.single, 'near: this slice completes its full-structure tier.');
 
-    final mosaic = setPlanMosaic(
-      plan,
-      0,
-      (cols: 2, rows: 2, overlapPct: 10),
-      bankedHours: const {'near': 7.0},
-    );
-    expect(
-      mosaic.notes,
-      isEmpty,
-      reason: 'each panel gets a quarter of the night: the tier is not completed any more',
-    );
-    expect(
-      integrationHoursOf(near, 3.0, const SessionOverheads(), panels: 4),
-      lessThan(integrationHoursOf(near, 3.0, const SessionOverheads()) / 4),
-      reason: 'per-panel setup costs too',
-    );
+    final mosaic = setPlanMosaic(plan, 0, (cols: 2, rows: 2, overlapPct: 10), bankedHours: const {'near': 7.0});
+    expect(mosaic.notes, isEmpty, reason: 'each panel gets a quarter of the night: the tier is not completed any more');
+    expect(integrationHoursOf(near, 3.0, const SessionOverheads(), panels: 4),
+        lessThan(integrationHoursOf(near, 3.0, const SessionOverheads()) / 4), reason: 'per-panel setup costs too');
 
-    final back = setPlanMosaic(
-      mosaic,
-      0,
-      (cols: 1, rows: 1, overlapPct: 0),
-      bankedHours: const {'near': 7.0},
-    );
-    expect(
-      back.notes.single,
-      'near: this slice completes its full-structure tier.',
-    );
+    final back = setPlanMosaic(mosaic, 0, (cols: 1, rows: 1, overlapPct: 0), bankedHours: const {'near': 7.0});
+    expect(back.notes.single, 'near: this slice completes its full-structure tier.');
   });
 
   test('P5: a swapped-in target gets its own tier note', () {
     final a = obj('a', winStart: winStart, winEnd: winEnd);
-    final done = obj(
-      'done',
-      winStart: winStart,
-      winEnd: winEnd,
-      budgetFullHours: 9,
-    );
-    final plan = planImagingSession(
-      ranked: [a, done],
-      windowStartUtc: winStart,
-      windowEndUtc: winEnd,
-    );
-    final swapped = swapPlanTarget(
-      plan,
-      0,
-      done,
-      bankedHours: const {'done': 9.5},
-    );
+    final done = obj('done', winStart: winStart, winEnd: winEnd, budgetFullHours: 9);
+    final plan = planImagingSession(ranked: [a, done], windowStartUtc: winStart, windowEndUtc: winEnd);
+    final swapped = swapPlanTarget(plan, 0, done, bankedHours: const {'done': 9.5});
     expect(swapped.targets.single.object.id, 'done');
     expect(swapped.notes.single, contains('tier already complete'));
   });
 
-  test(
-    'P5: no budget or nothing banked leaves the value function untouched',
-    () {
-      final a = obj('a', winStart: winStart, winEnd: winEnd, score: 80);
-      final b = obj(
-        'b',
-        winStart: winStart,
-        winEnd: winEnd,
-        score: 80,
-        hoursFree: 61,
-      );
-      final plan = planImagingSession(
-        ranked: [a, b],
-        windowStartUtc: winStart,
-        windowEndUtc: winEnd,
-        bankedHours: const {'a': 5},
-      );
-      expect(plan.targets.single.object.id, 'b');
-      expect(plan.notes, isEmpty);
-    },
-  );
+  test('P5: no budget or nothing banked leaves the value function untouched', () {
+    final a = obj('a', winStart: winStart, winEnd: winEnd, score: 80);
+    final b = obj('b', winStart: winStart, winEnd: winEnd, score: 80, hoursFree: 61);
+    final plan = planImagingSession(ranked: [a, b], windowStartUtc: winStart, windowEndUtc: winEnd, bankedHours: const {'a': 5});
+    expect(plan.targets.single.object.id, 'b');
+    expect(plan.notes, isEmpty);
+  });
 }

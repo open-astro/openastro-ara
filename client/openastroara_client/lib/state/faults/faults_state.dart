@@ -11,13 +11,13 @@ import '../saved_server_state.dart';
 import '../ws/ws_providers.dart';
 
 /// Builds a [FaultsClient] for a server. Overridable in tests.
-final faultsApiFactoryProvider = Provider<FaultsClient Function(AraServer)>(
-  (ref) => FaultsApi.new,
-);
+final faultsApiFactoryProvider =
+    Provider<FaultsClient Function(AraServer)>((ref) => FaultsApi.new);
 
 /// [FaultsClient] bound to the active server, or null when none is saved.
 final faultsApiProvider = Provider.autoDispose<FaultsClient?>((ref) {
-  final server = ref.watch(activeServerProvider);
+  final server =
+      ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(faultsApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -73,18 +73,18 @@ class ActiveFault {
 /// until the TTL prune. `degraded` is the exception: amber (the device still
 /// answers, only its reads fail) but standing — see [isStandingFaultKind].
 StatusLevel faultKindLevel(String kind) => switch (kind) {
-  'disconnected' || 'tracking_lost' => StatusLevel.error,
-  _ => StatusLevel.busy,
-};
+      'disconnected' || 'tracking_lost' => StatusLevel.error,
+      _ => StatusLevel.busy,
+    };
 
 /// Kinds with a definite clear signal (`recovered` / `released` / a fresh
 /// connect): they are never TTL-pruned. `degraded` (a device whose essential
 /// read keeps failing while its probe answers — the 2026-10-16 filter wheel)
 /// is standing amber: it holds until the reads come back or a reconnect lands.
 bool isStandingFaultKind(String kind) => switch (kind) {
-  'disconnected' || 'tracking_lost' || 'degraded' => true,
-  _ => false,
-};
+      'disconnected' || 'tracking_lost' || 'degraded' => true,
+      _ => false,
+    };
 
 /// The set of devices with a standing fault, keyed by the lowercase
 /// `DeviceType` token. Reference identity (no value `==`) — change is
@@ -92,9 +92,8 @@ bool isStandingFaultKind(String kind) => switch (kind) {
 /// `DiagnosticsSnapshot`.
 class ActiveFaultsSnapshot {
   final Map<String, ActiveFault> byDeviceType;
-  const ActiveFaultsSnapshot({
-    this.byDeviceType = const <String, ActiveFault>{},
-  });
+  const ActiveFaultsSnapshot(
+      {this.byDeviceType = const <String, ActiveFault>{}});
 
   /// Worst standing-fault severity across [deviceTypes], or null when none of
   /// them has a fault. A chip covering two wire tokens (FLAT =
@@ -104,8 +103,7 @@ class ActiveFaultsSnapshot {
     for (final type in deviceTypes) {
       final fault = byDeviceType[type];
       if (fault == null) continue;
-      if (worst == null ||
-          statusLevelRank(fault.level) > statusLevelRank(worst)) {
+      if (worst == null || statusLevelRank(fault.level) > statusLevelRank(worst)) {
         worst = fault.level;
       }
     }
@@ -116,12 +114,12 @@ class ActiveFaultsSnapshot {
 /// Severity ordering shared by the fault blend: error > busy > info >
 /// connected > disconnected.
 int statusLevelRank(StatusLevel level) => switch (level) {
-  StatusLevel.error => 4,
-  StatusLevel.busy => 3,
-  StatusLevel.info || StatusLevel.changing => 2,
-  StatusLevel.connected || StatusLevel.active => 1,
-  StatusLevel.disconnected => 0,
-};
+      StatusLevel.error => 4,
+      StatusLevel.busy => 3,
+      StatusLevel.info || StatusLevel.changing => 2,
+      StatusLevel.connected || StatusLevel.active => 1,
+      StatusLevel.disconnected => 0,
+    };
 
 /// Blends a chip's connection-derived dot with the device's standing-fault
 /// overlay: worst-of, so a red fault shows through a green "connected" dot and
@@ -129,8 +127,8 @@ int statusLevelRank(StatusLevel level) => switch (level) {
 /// look HEALTHIER than its connection state. Pure → unit-testable.
 StatusLevel blendFaultLevel(StatusLevel base, StatusLevel? fault) =>
     fault != null && statusLevelRank(fault) > statusLevelRank(base)
-    ? fault
-    : base;
+        ? fault
+        : base;
 
 /// Folds the live `equipment.fault` / `equipment.fault_action_taken` /
 /// `equipment.connected` stream into the standing-fault set. Pure — no
@@ -188,8 +186,7 @@ class ActiveFaultsAccumulator {
   }
 
   ActiveFaultsSnapshot get snapshot => ActiveFaultsSnapshot(
-    byDeviceType: Map<String, ActiveFault>.unmodifiable(_active),
-  );
+      byDeviceType: Map<String, ActiveFault>.unmodifiable(_active));
 
   bool _applyFault(WsEvent event) {
     final p = event.payload;
@@ -225,11 +222,7 @@ class ActiveFaultsAccumulator {
   /// Whether an incoming fault of [kind] / [level] takes over a device's
   /// standing entry: a worse one always; an equal one only when the existing
   /// entry is not standing, or the incoming one is standing too.
-  static bool _mayReplace(
-    ActiveFault existing,
-    String kind,
-    StatusLevel level,
-  ) {
+  static bool _mayReplace(ActiveFault existing, String kind, StatusLevel level) {
     final existingRank = statusLevelRank(existing.level);
     final rank = statusLevelRank(level);
     if (rank > existingRank) return true;
@@ -319,10 +312,8 @@ class ActiveFaultsAccumulator {
   ActiveFaultsSnapshot? prune(DateTime now) {
     final cutoff = now.subtract(advisoryTtl);
     final before = _active.length;
-    _active.removeWhere(
-      (_, fault) =>
-          !isStandingFaultKind(fault.kind) && fault.at.isBefore(cutoff),
-    );
+    _active.removeWhere((_, fault) =>
+        !isStandingFaultKind(fault.kind) && fault.at.isBefore(cutoff));
     return _active.length == before ? null : snapshot;
   }
 
@@ -401,5 +392,4 @@ class ActiveFaultsNotifier extends Notifier<ActiveFaultsSnapshot> {
 /// red is never contingent on which tab was open when the fault fired.
 final activeFaultsProvider =
     NotifierProvider<ActiveFaultsNotifier, ActiveFaultsSnapshot>(
-      ActiveFaultsNotifier.new,
-    );
+        ActiveFaultsNotifier.new);

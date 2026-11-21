@@ -32,15 +32,12 @@ class ClientSettingsApi implements ClientSettingsClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   ClientSettingsApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<ClientSettings> fetch() async {
@@ -68,9 +65,7 @@ class ClientSettingsApi implements ClientSettingsClient {
 
   static ClientSettings _parse(dynamic data) {
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'client-settings returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('client-settings returned a non-object body (${data.runtimeType})');
     }
     return ClientSettings.fromJson(data);
   }

@@ -67,10 +67,7 @@ void main() {
         container: container,
         child: MaterialApp(
           home: Scaffold(
-            body: SessionEndedSummaryListener(
-              quiet: quiet,
-              child: const Text('shell'),
-            ),
+            body: SessionEndedSummaryListener(quiet: quiet, child: const Text('shell')),
           ),
         ),
       ),
@@ -85,10 +82,7 @@ void main() {
     (tester) async {
       await pump(tester, summary);
       expect(find.text('Session paused — the rig needs you'), findsOneWidget);
-      expect(
-        find.textContaining('M81 night (M81) paused and is waiting'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('M81 night (M81) paused and is waiting'), findsOneWidget);
       expect(find.text('47 frames captured'), findsOneWidget);
       expect(
         find.textContaining('Unattended shutdown executed'),
@@ -112,50 +106,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'in Simple Mode the morning card is a pill that stays until OK, and leaves nothing for the full UI',
-    (tester) async {
-      final (container, notifier) = await pump(tester, summary, quiet: true);
-      expect(
-        find.byType(AlertDialog),
-        findsNothing,
-        reason: 'no popups in Simple Mode',
-      );
-      final m = container.read(simpleMessagesProvider).single;
-      expect(
-        m.kind,
-        SimpleMessageKind.question,
-        reason: 'stays until answered',
-      );
-      expect(m.title, 'Session paused — the rig needs you');
-      expect(m.detail, contains('47 frames captured'));
-      expect(m.actions.map((a) => a.label), [
-        'OK',
-      ], reason: 'no Open the run: that is the full UI');
-      m.actions.single.onPressed();
-      await tester.pump();
-      expect(notifier.acked, ['r1']);
-      expect(container.read(selectedTabIndexProvider), isNot(kRunTabIndex));
-    },
-  );
+  testWidgets('in Simple Mode the morning card is a pill that stays until OK, and leaves nothing for the full UI',
+      (tester) async {
+    final (container, notifier) = await pump(tester, summary, quiet: true);
+    expect(find.byType(AlertDialog), findsNothing, reason: 'no popups in Simple Mode');
+    final m = container.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.question, reason: 'stays until answered');
+    expect(m.title, 'Session paused — the rig needs you');
+    expect(m.detail, contains('47 frames captured'));
+    expect(m.actions.map((a) => a.label), ['OK'], reason: 'no Open the run: that is the full UI');
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(notifier.acked, ['r1']);
+    expect(container.read(selectedTabIndexProvider), isNot(kRunTabIndex));
+  });
 
-  testWidgets(
-    "the Simple Mode pill's OK still acknowledges after its listener has gone (a switch to the full UI)",
-    (tester) async {
-      final (container, notifier) = await pump(tester, summary, quiet: true);
-      final m = container.read(simpleMessagesProvider).single;
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: SizedBox()),
-        ),
-      );
-      m.actions.single.onPressed();
-      await tester.pump();
-      expect(tester.takeException(), isNull);
-      expect(notifier.acked, ['r1']);
-    },
-  );
+  testWidgets("the Simple Mode pill's OK still acknowledges after its listener has gone (a switch to the full UI)",
+      (tester) async {
+    final (container, notifier) = await pump(tester, summary, quiet: true);
+    final m = container.read(simpleMessagesProvider).single;
+    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: const MaterialApp(home: SizedBox())));
+    m.actions.single.onPressed();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(notifier.acked, ['r1']);
+  });
 
   testWidgets('#1138 nothing to say → no dialog', (tester) async {
     await pump(tester, null);

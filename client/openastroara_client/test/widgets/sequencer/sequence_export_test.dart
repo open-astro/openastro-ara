@@ -12,17 +12,14 @@ void main() {
         'Name': 'M42',
         'Items': {
           r'$values': [
-            {'Exposure': 60},
-          ],
+            {'Exposure': 60}
+          ]
         },
       });
       final decoded = jsonDecode(json) as Map<String, dynamic>;
       expect(decoded.containsKey('schemaVersion'), isFalse); // stripped
       expect(decoded['Name'], 'M42'); // preserved
-      expect(
-        (decoded['Items'] as Map)[r'$values'],
-        hasLength(1),
-      ); // nested kept
+      expect((decoded['Items'] as Map)[r'$values'], hasLength(1)); // nested kept
     });
 
     test('is pretty-printed (2-space indent)', () {
@@ -33,10 +30,7 @@ void main() {
     test('does not mutate the source body', () {
       final body = {'schemaVersion': 1, 'Name': 'M42'};
       prepareNinaExportJson(body);
-      expect(
-        body.containsKey('schemaVersion'),
-        isTrue,
-      ); // shallow-copied, intact
+      expect(body.containsKey('schemaVersion'), isTrue); // shallow-copied, intact
     });
   });
 

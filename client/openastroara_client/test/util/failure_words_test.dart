@@ -13,90 +13,43 @@ final _pt = lookupAppLocalizations(const Locale('pt', 'BR'));
 DioException _status(int code, [Object? data]) => DioException(
   requestOptions: RequestOptions(path: '/x'),
   type: DioExceptionType.badResponse,
-  response: Response(
-    requestOptions: RequestOptions(path: '/x'),
-    statusCode: code,
-    data: data,
-  ),
+  response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: code, data: data),
 );
 
 void main() {
-  const detail = {
-    'detail': "The mount is parked.\n(Parameter 'x')\nActual value was 3.",
-  };
+  const detail = {'detail': "The mount is parked.\n(Parameter 'x')\nActual value was 3."};
   final table = <(String, Object, String)>[
     ('400 detail, first line', _status(400, detail), 'The mount is parked.'),
     ('409 detail, first line', _status(409, detail), 'The mount is parked.'),
     ('422 detail, first line', _status(422, detail), 'The mount is parked.'),
-    (
-      '409 detail in a raw problem+json body',
-      _status(409, '{"detail":"Busy slewing."}'),
-      'Busy slewing.',
-    ),
-    (
-      '500 detail is not for people',
-      _status(500, {'detail': 'NullReferenceException at Foo'}),
-      'Your rig hit an error. Support → Logs has the details.',
-    ),
+    ('409 detail in a raw problem+json body', _status(409, '{"detail":"Busy slewing."}'), 'Busy slewing.'),
+    ('500 detail is not for people', _status(500, {'detail': 'NullReferenceException at Foo'}),
+        'Your rig hit an error. Support → Logs has the details.'),
     // #1764: a 404's detail is the daemon's sentence now; one without a detail keeps the generic words.
-    (
-      '404 without a detail',
-      _status(404, {'title': 'not_found'}),
-      "Your rig doesn't have that. It may be running an older version of Ara.",
-    ),
-    (
-      '409 with no detail',
-      _status(409, {'title': 'run_in_progress'}),
-      'Something else is using it right now.',
-    ),
-    (
-      'a bare 503',
-      _status(503),
-      'Your rig hit an error. Support → Logs has the details.',
-    ),
-    (
-      '507 says what space is missing, which the user can free',
-      _status(507, {
-        'detail': "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB.",
-      }),
-      "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB.",
-    ),
+    ('404 without a detail', _status(404, {'title': 'not_found'}),
+        "Your rig doesn't have that. It may be running an older version of Ara."),
+    ('409 with no detail', _status(409, {'title': 'run_in_progress'}), 'Something else is using it right now.'),
+    ('a bare 503', _status(503), 'Your rig hit an error. Support → Logs has the details.'),
+    ('507 says what space is missing, which the user can free', _status(507, {'detail': "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB."}),
+        "Not enough disk space for 'x': it needs about 1.7 GB free and the volume has 0.3 GB."),
   ];
   for (final (name, error, words) in table) {
-    test(
-      'failureReason: $name',
-      () => expect(failureReason(_en, error), words),
-    );
+    test('failureReason: $name', () => expect(failureReason(_en, error), words));
   }
 
   test('friendlyError follows the same rule: no daemon text on a 500', () {
-    expect(
-      friendlyError(
-        _en,
-        _status(500, {'detail': 'NullReferenceException at Foo'}),
-        action: 'park',
-      ),
-      "Couldn't park — your rig hit an error. Support → Logs has the details.",
-    );
-    expect(
-      friendlyError(_en, _status(422, detail), action: 'park'),
-      'The mount is parked.',
-    );
+    expect(friendlyError(_en, _status(500, {'detail': 'NullReferenceException at Foo'}), action: 'park'),
+        "Couldn't park — your rig hit an error. Support → Logs has the details.");
+    expect(friendlyError(_en, _status(422, detail), action: 'park'), 'The mount is parked.');
   });
 
   test('the sentence is in the app language, never a status code', () {
     final words = failureReason(_pt, _status(500));
     expect(words, isNot(contains('500')));
-    expect(
-      words,
-      _pt.errorServer[0].toUpperCase() + _pt.errorServer.substring(1),
-    );
+    expect(words, _pt.errorServer[0].toUpperCase() + _pt.errorServer.substring(1));
   });
 
   test('our own written-for-people messages pass through', () {
-    expect(
-      failureReason(_en, StateError('Connect to your rig first.')),
-      'Connect to your rig first.',
-    );
+    expect(failureReason(_en, StateError('Connect to your rig first.')), 'Connect to your rig first.');
   });
 }

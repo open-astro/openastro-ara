@@ -19,18 +19,15 @@ void main() {
 
     test('null when no mount is connected', () {
       expect(
-        TelescopeOptics.fromTelescopeJson(const {'state': 'disconnected'}),
-        isNull,
-      );
+          TelescopeOptics.fromTelescopeJson(const {'state': 'disconnected'}),
+          isNull);
     });
 
     test('null when connected but the body has no capabilities block', () {
       // A malformed/unexpected response (connected, no caps) reads the same as
       // "no device" — the UI hint covers both, matching the camera-geometry pattern.
-      expect(
-        TelescopeOptics.fromTelescopeJson(const {'state': 'connected'}),
-        isNull,
-      );
+      expect(TelescopeOptics.fromTelescopeJson(const {'state': 'connected'}),
+          isNull);
     });
 
     test('connected mount that reports neither value → hasAny false', () {
@@ -75,11 +72,7 @@ void main() {
     expect(p.specs!.source, 'community');
     expect(p.specs!.wormPeriodS, 638);
     expect(p.hasAny, isTrue);
-    final none = MountProps.fromTelescopeJson(const {
-      'state': 'connected',
-      'name': 'x',
-      'capabilities': {},
-    });
+    final none = MountProps.fromTelescopeJson(const {'state': 'connected', 'name': 'x', 'capabilities': {}});
     expect(none!.specs, isNull);
   });
 }

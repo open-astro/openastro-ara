@@ -57,17 +57,14 @@ class BackupApi implements BackupClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`; production
   /// passes nothing and a server-bound Dio is built.
   BackupApi(AraServer server, {Dio? dio})
-    : _baseUrl = server.baseUrl,
-      _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _baseUrl = server.baseUrl,
+        _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 30),
-            ),
-          );
+            ));
 
   @override
   Future<List<BackupSnapshot>> listSnapshots() async {
@@ -77,9 +74,7 @@ class BackupApi implements BackupClient {
       // A 2xx with a non-array body means the wire contract changed (or an error
       // envelope slipped through). Throw rather than return [] so the AsyncNotifier
       // surfaces an error state instead of a silently-empty list.
-      throw FormatException(
-        'backup/snapshots returned a non-array body (${data.runtimeType})',
-      );
+      throw FormatException('backup/snapshots returned a non-array body (${data.runtimeType})');
     }
     final snapshots = data
         .whereType<Map<String, dynamic>>()
@@ -92,10 +87,8 @@ class BackupApi implements BackupClient {
     // had entries we couldn't use so a malformed snapshot is diagnosable.
     final dropped = data.length - snapshots.length;
     if (dropped > 0) {
-      debugPrint(
-        '[backup] listSnapshots dropped $dropped malformed/unusable '
-        'snapshot entr${dropped == 1 ? 'y' : 'ies'} of ${data.length}',
-      );
+      debugPrint('[backup] listSnapshots dropped $dropped malformed/unusable '
+          'snapshot entr${dropped == 1 ? 'y' : 'ies'} of ${data.length}');
     }
     return snapshots;
   }
@@ -114,9 +107,7 @@ class BackupApi implements BackupClient {
     final res = await _dio.get<dynamic>('/api/v1/backup/create-status');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'backup/create-status returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('backup/create-status returned a non-object body (${data.runtimeType})');
     }
     return CloneStatus.fromJson(data);
   }
@@ -155,9 +146,7 @@ class BackupApi implements BackupClient {
     final res = await _dio.get<dynamic>('/api/v1/backup/clone-status');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'backup/clone-status returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('backup/clone-status returned a non-object body (${data.runtimeType})');
     }
     return CloneStatus.fromJson(data);
   }

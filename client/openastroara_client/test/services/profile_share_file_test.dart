@@ -7,8 +7,7 @@ void main() {
   group('parseShareManifest', () {
     test('decodes a JSON object into the manifest map', () {
       final bytes = utf8.encode(
-        '{"schema_version":"profile-share-v1","settings":{"a":1}}',
-      );
+          '{"schema_version":"profile-share-v1","settings":{"a":1}}');
       final manifest = parseShareManifest(bytes);
       expect(manifest['schema_version'], 'profile-share-v1');
       expect(manifest['settings'], isA<Map<String, dynamic>>());
@@ -18,13 +17,8 @@ void main() {
       final bytes = utf8.encode('not json at all');
       expect(
         () => parseShareManifest(bytes),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains("isn't a profile share"),
-          ),
-        ),
+        throwsA(isA<FormatException>().having(
+            (e) => e.message, 'message', contains("isn't a profile share"))),
       );
     });
 
@@ -32,13 +26,8 @@ void main() {
       final bytes = utf8.encode('[1,2,3]');
       expect(
         () => parseShareManifest(bytes),
-        throwsA(
-          isA<FormatException>().having(
-            (e) => e.message,
-            'message',
-            contains('expected a JSON object'),
-          ),
-        ),
+        throwsA(isA<FormatException>().having(
+            (e) => e.message, 'message', contains('expected a JSON object'))),
       );
     });
   });
@@ -65,29 +54,12 @@ void main() {
     test('§70.5 sequence export overrides the fallback base + extension', () {
       // Same sanitization, different suffix/fallback for the .araseq.json share.
       expect(
-        shareFileName(
-          'M31 LRGB',
-          fallbackBase: 'sequence',
-          extension: 'araseq.json',
-        ),
-        'M31-LRGB.araseq.json',
-      );
-      expect(
-        shareFileName(
-          '///',
-          fallbackBase: 'sequence',
-          extension: 'araseq.json',
-        ),
-        'sequence.araseq.json',
-      );
-      expect(
-        shareFileName(
-          'NUL',
-          fallbackBase: 'sequence',
-          extension: 'araseq.json',
-        ),
-        '_NUL.araseq.json',
-      );
+          shareFileName('M31 LRGB', fallbackBase: 'sequence', extension: 'araseq.json'),
+          'M31-LRGB.araseq.json');
+      expect(shareFileName('///', fallbackBase: 'sequence', extension: 'araseq.json'),
+          'sequence.araseq.json');
+      expect(shareFileName('NUL', fallbackBase: 'sequence', extension: 'araseq.json'),
+          '_NUL.araseq.json');
     });
   });
 
@@ -99,26 +71,20 @@ void main() {
     });
 
     test('shows minutes remaining for a future expiry', () {
-      final note = shareExpiryNote(
-        now.add(const Duration(minutes: 14)),
-        now: now,
-      );
+      final note =
+          shareExpiryNote(now.add(const Duration(minutes: 14)), now: now);
       expect(note, contains('about 14 minutes'));
     });
 
     test('under a minute remaining reads "less than a minute"', () {
-      final note = shareExpiryNote(
-        now.add(const Duration(seconds: 30)),
-        now: now,
-      );
+      final note =
+          shareExpiryNote(now.add(const Duration(seconds: 30)), now: now);
       expect(note, contains('less than a minute'));
     });
 
     test('says expired once the deadline has passed', () {
-      final note = shareExpiryNote(
-        now.subtract(const Duration(seconds: 1)),
-        now: now,
-      );
+      final note =
+          shareExpiryNote(now.subtract(const Duration(seconds: 1)), now: now);
       expect(note, contains('expired'));
     });
 

@@ -6,12 +6,7 @@ void main() {
     test('parses the full series envelope', () {
       final s = GuidingRmsSeries.fromJson(const {
         'samples': [
-          {
-            'timestamp': '2026-01-15T22:00:00Z',
-            'rms_arcsec': 0.8,
-            'ra_rms': null,
-            'dec_rms': null,
-          },
+          {'timestamp': '2026-01-15T22:00:00Z', 'rms_arcsec': 0.8, 'ra_rms': null, 'dec_rms': null},
           {'timestamp': '2026-01-15T22:05:00Z', 'rms_arcsec': 1.2},
         ],
         'mean_rms_arcsec': 1.0,

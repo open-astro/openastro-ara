@@ -51,14 +51,11 @@ class _FakeProfileApi extends ProfileApi {
   String? lastIfMatch;
   int puts = 0;
   bool failGet = false;
-
   /// The rig's tag for its copy: a write moves it on.
   int version = 1;
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async => failGet
-      ? throw DioException(
-          requestOptions: RequestOptions(path: "/profile/phd2"),
-        )
+      ? throw DioException(requestOptions: RequestOptions(path: "/profile/phd2"))
       : (value: stored.copyWith(), etag: '"v$version"');
   @override
   Future<({Phd2Settings value, String? etag})> putPhd2Section(
@@ -77,15 +74,9 @@ class _FakeProfileApi extends ProfileApi {
   /// The optics read fails, as against a rig that is still booting.
   bool failOptics = false;
   @override
-  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      failOptics
-      ? throw DioException(
-          requestOptions: RequestOptions(path: '/profile/optics'),
-        )
-      : (
-          value: const OpticsSettings(focalLengthMm: 400, reducerFactor: 0.8),
-          etag: '"v1"',
-        );
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => failOptics
+      ? throw DioException(requestOptions: RequestOptions(path: '/profile/optics'))
+      : (value: const OpticsSettings(focalLengthMm: 400, reducerFactor: 0.8), etag: '"v1"');
   @override
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() async =>
@@ -109,10 +100,8 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   }
 
   @override
-  Future<List<String>> discoverAlpaca({
-    int? numQueries,
-    int? timeoutSeconds,
-  }) async {
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async {
     calls.add('discover');
     return const ['127.0.0.1:6800'];
   }
@@ -121,11 +110,9 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   Future<void> pushProfile({bool tuningOnly = false}) async =>
       calls.add(tuningOnly ? 'push-tuning' : 'push');
   @override
-  Future<double?> getAlpacaCameraPixelSize({
-    String? host,
-    int? port,
-    int? device,
-  }) async => null;
+  Future<double?> getAlpacaCameraPixelSize(
+          {String? host, int? port, int? device}) async =>
+      null;
   @override
   void close() {}
 }
@@ -137,19 +124,15 @@ class _FakeGuiderApi implements GuiderClient {
   int? lastPort;
   @override
   Future<GuiderStatus?> getStatus() async => const GuiderStatus(
-    name: 'OpenAstro Guider',
-    connectionState: GuiderConnectionState.disconnected,
-    runtimeState: GuiderRuntimeState.stopped,
-  );
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.disconnected,
+        runtimeState: GuiderRuntimeState.stopped,
+      );
   @override
-  Future<void> connect({
-    String host = kDefaultGuiderHost,
-    int port = kDefaultGuiderPort,
-  }) async {
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
     lastHost = host;
     lastPort = port;
   }
-
   @override
   Future<void> disconnect() async {}
   @override
@@ -162,14 +145,10 @@ class _FakeGuiderApi implements GuiderClient {
 
 class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
   final calls = <String>[];
-
   /// While > 0, every lookup answers empty (an unreachable management API).
   int failuresLeft = 0;
   @override
-  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     calls.add('$host:$port');
     if (failuresLeft > 0) {
       failuresLeft--;
@@ -177,10 +156,7 @@ class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
     }
     if (host == '127.0.0.1' && port == 6800) {
       return const {
-        'camera/0': AlpacaDeviceInfo(
-          name: 'ZWO ASI120MM Mini',
-          uniqueId: 'ZWO_0',
-        ),
+        'camera/0': AlpacaDeviceInfo(name: 'ZWO ASI120MM Mini', uniqueId: 'ZWO_0'),
         'telescope/1': AlpacaDeviceInfo(name: 'Sky-Watcher EQM-35 Pro (EQMOD)'),
       };
     }
@@ -198,13 +174,7 @@ typedef _Harness = ({
   _FakeGuiderApi guider,
 });
 
-Future<_Harness> _pump(
-  WidgetTester tester,
-  Phd2Settings stored, {
-  ValueListenable<bool>? show,
-  bool failLoad = false,
-  bool failOptics = false,
-}) async {
+Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false, bool failOptics = false}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 2400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   final profile = _FakeProfileApi(stored)
@@ -229,8 +199,7 @@ Future<_Harness> _pump(
               // Lets a test take the panel away while the app (and its providers) stay up.
               : ValueListenableBuilder<bool>(
                   valueListenable: show,
-                  builder: (_, visible, _) =>
-                      visible ? const EquipmentGuiderPanel() : const SizedBox(),
+                  builder: (_, visible, _) => visible ? const EquipmentGuiderPanel() : const SizedBox(),
                 ),
         ),
       ),
@@ -242,9 +211,8 @@ Future<_Harness> _pump(
 
 Future<void> _pick(WidgetTester tester, String rowKey, String item) async {
   final dropdown = find.descendant(
-    of: find.byKey(ValueKey(rowKey)),
-    matching: find.byType(DropdownButton<String>),
-  );
+      of: find.byKey(ValueKey(rowKey)),
+      matching: find.byType(DropdownButton<String>));
   await tester.ensureVisible(dropdown);
   await tester.tap(dropdown);
   await tester.pumpAndSettle();
@@ -255,178 +223,102 @@ Future<void> _pick(WidgetTester tester, String rowKey, String item) async {
 void main() {
   group('describeUnservedAlpacaSelection', () {
     test('flags a bare Alpaca choice with no host/port, naming the slot', () {
-      const s = Phd2Settings(
-        guiderCamera: 'Alpaca Camera',
-        guiderMount: 'Alpaca Mount',
-      );
+      const s = Phd2Settings(guiderCamera: 'Alpaca Camera', guiderMount: 'Alpaca Mount');
       final reason = describeUnservedAlpacaSelection(s)!;
       expect(reason, contains("guide camera 'Alpaca Camera'"));
       expect(reason, contains('Alpaca host and port'));
     });
 
     test('names the one missing half', () {
-      const s = Phd2Settings(
-        guiderMount: 'Alpaca Mount',
-        guiderAlpacaHost: '127.0.0.1',
-      );
+      const s = Phd2Settings(guiderMount: 'Alpaca Mount', guiderAlpacaHost: '127.0.0.1');
       expect(describeUnservedAlpacaSelection(s), endsWith('Alpaca port.'));
     });
 
-    test(
-      'flags a suffixed mount beside a non-Alpaca camera with no stored server',
-      () {
-        const s = Phd2Settings(
-          guiderCamera: 'Simulator',
-          guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]',
-        );
-        final reason = describeUnservedAlpacaSelection(s)!;
-        expect(
-          reason,
-          contains("guide mount 'Alpaca Mount [10.0.0.5:6800/1]'"),
-        );
-        expect(reason, contains('10.0.0.5:6800'));
-        expect(reason, contains('set the Alpaca host and port to it'));
-      },
-    );
+    test('flags a suffixed mount beside a non-Alpaca camera with no stored server', () {
+      const s = Phd2Settings(
+          guiderCamera: 'Simulator', guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]');
+      final reason = describeUnservedAlpacaSelection(s)!;
+      expect(reason, contains("guide mount 'Alpaca Mount [10.0.0.5:6800/1]'"));
+      expect(reason, contains('10.0.0.5:6800'));
+      expect(reason, contains('set the Alpaca host and port to it'));
+    });
 
     test('passes served, suffixed and non-Alpaca selections', () {
       expect(
-        describeUnservedAlpacaSelection(
-          const Phd2Settings(
-            guiderCamera: 'Alpaca Camera',
-            guiderAlpacaHost: '127.0.0.1',
-            guiderAlpacaPort: 6800,
-          ),
-        ),
-        isNull,
-      );
+          describeUnservedAlpacaSelection(const Phd2Settings(
+              guiderCamera: 'Alpaca Camera',
+              guiderAlpacaHost: '127.0.0.1',
+              guiderAlpacaPort: 6800)),
+          isNull);
       expect(
-        describeUnservedAlpacaSelection(
-          const Phd2Settings(
-            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
-            guiderMount: 'Alpaca Mount',
-          ),
-        ),
-        isNull,
-        reason: 'the camera endpoint serves the bare mount',
-      );
+          describeUnservedAlpacaSelection(const Phd2Settings(
+              guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+              guiderMount: 'Alpaca Mount')),
+          isNull,
+          reason: 'the camera endpoint serves the bare mount');
       expect(
-        describeUnservedAlpacaSelection(
-          const Phd2Settings(
-            guiderCamera: 'Simulator',
-            guiderMount: 'On-camera',
-          ),
-        ),
-        isNull,
-      );
+          describeUnservedAlpacaSelection(
+              const Phd2Settings(guiderCamera: 'Simulator', guiderMount: 'On-camera')),
+          isNull);
       expect(describeUnservedAlpacaSelection(const Phd2Settings()), isNull);
     });
   });
 
-  testWidgets(
-    'the panel embeds the guider link and the calibration screen entry (no popup)',
-    (tester) async {
-      await _pump(tester, const Phd2Settings());
-      expect(find.byType(GuiderConnectionSection), findsOneWidget);
-      expect(find.byType(GuiderCalibrationSection), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the guider profile is a picker with Automatic first, not a free-text field',
-    (tester) async {
-      await _pump(tester, const Phd2Settings());
-      final row = find.byKey(const ValueKey('guider_profile_picker'));
-      expect(row, findsOneWidget);
-      expect(
-        find.descendant(of: row, matching: find.text('Automatic')),
-        findsOneWidget,
-        reason: 'no guider connected: nothing to name yet',
-      );
-      expect(find.widgetWithText(EditableTextRow, 'Profile'), findsNothing);
-    },
-  );
-
-  test('Automatic names the profile the guider is using; a pinned profile it no longer lists stays visible', () {
-    expect(
-      guiderProfileItems(0, const {
-        1: 'Default',
-        4: 'Skywatcher 72ED',
-      }, 'Skywatcher 72ED'),
-      {0: 'Automatic (Skywatcher 72ED)', 1: 'Default', 4: 'Skywatcher 72ED'},
-    );
-    expect(guiderProfileItems(0, const {}, null), {0: 'Automatic'});
-    expect(
-      guiderProfileItems(9, const {1: 'Default'}, 'Default'),
-      {0: 'Automatic', 1: 'Default', 9: 'Profile #9'},
-      reason: 'while a profile is pinned, the guider is on the pin, not on what Automatic would pick',
-    );
-    expect(
-      guiderProfileItems(4, const {4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
-      {0: 'Automatic', 4: 'Skywatcher 72ED'},
-    );
-    expect(
-      guiderProfileItems(0, const {0: 'No id', 1: 'Default'}, 'Default'),
-      {0: 'Automatic (Default)', 1: 'Default'},
-      reason: 'a guider profile without an id (the server maps it to 0) never replaces Automatic',
-    );
+  testWidgets('the panel embeds the guider link and the calibration screen entry (no popup)',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    expect(find.byType(GuiderConnectionSection), findsOneWidget);
+    expect(find.byType(GuiderCalibrationSection), findsOneWidget);
   });
 
-  testWidgets(
-    'a change saves on its own, like the device pages: no Save button, nothing saved on load',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
-      expect(
-        h.profile.lastPut,
-        isNull,
-        reason: 'loading the page saves nothing',
-      );
-      expect(
-        find.textContaining('Not saved'),
-        findsNothing,
-        reason: 'loading is not an edit',
-      );
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      expect(
-        container.read(panelSaveActionProvider),
-        isNull,
-        reason: 'no header Save button',
-      );
+  testWidgets('the guider profile is a picker with Automatic first, not a free-text field',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    final row = find.byKey(const ValueKey('guider_profile_picker'));
+    expect(row, findsOneWidget);
+    expect(find.descendant(of: row, matching: find.text('Automatic')), findsOneWidget,
+        reason: 'no guider connected: nothing to name yet');
+    expect(find.widgetWithText(EditableTextRow, 'Profile'), findsNothing);
+  });
 
-      final toggle = find.descendant(
-        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-        matching: find.byType(Switch),
-      );
-      await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastPut?.ditherEnabled, isFalse);
-      await tester.pump(const Duration(seconds: 2));
-      expect(
-        h.profile.puts,
-        1,
-        reason:
-            'one edit is one save: the server echo must not schedule another',
-      );
-    },
-  );
+  test('Automatic names the profile the guider is using; a pinned profile it no longer lists stays visible', () {
+    expect(guiderProfileItems(0, const {1: 'Default', 4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
+        {0: 'Automatic (Skywatcher 72ED)', 1: 'Default', 4: 'Skywatcher 72ED'});
+    expect(guiderProfileItems(0, const {}, null), {0: 'Automatic'});
+    expect(guiderProfileItems(9, const {1: 'Default'}, 'Default'),
+        {0: 'Automatic', 1: 'Default', 9: 'Profile #9'},
+        reason: 'while a profile is pinned, the guider is on the pin, not on what Automatic would pick');
+    expect(guiderProfileItems(4, const {4: 'Skywatcher 72ED'}, 'Skywatcher 72ED'),
+        {0: 'Automatic', 4: 'Skywatcher 72ED'});
+    expect(guiderProfileItems(0, const {0: 'No id', 1: 'Default'}, 'Default'),
+        {0: 'Automatic (Default)', 1: 'Default'},
+        reason: 'a guider profile without an id (the server maps it to 0) never replaces Automatic');
+  });
 
-  testWidgets('leaving the page right after an edit still saves it', (
-    tester,
-  ) async {
-    final show = ValueNotifier(true);
-    final h = await _pump(
-      tester,
-      const Phd2Settings(ditherEnabled: true),
-      show: show,
-    );
+  testWidgets('a change saves on its own, like the device pages: no Save button, nothing saved on load',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
+    expect(h.profile.lastPut, isNull, reason: 'loading the page saves nothing');
+    expect(find.textContaining('Not saved'), findsNothing, reason: 'loading is not an edit');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    expect(container.read(panelSaveActionProvider), isNull, reason: 'no header Save button');
+
     final toggle = find.descendant(
-      of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-      matching: find.byType(Switch),
-    );
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.ditherEnabled, isFalse);
+    await tester.pump(const Duration(seconds: 2));
+    expect(h.profile.puts, 1, reason: 'one edit is one save: the server echo must not schedule another');
+  });
+
+  testWidgets('leaving the page right after an edit still saves it', (tester) async {
+    final show = ValueNotifier(true);
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), show: show);
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
     await tester.ensureVisible(toggle);
     await tester.tap(toggle);
     await tester.pump(); // well inside the save delay
@@ -436,474 +328,279 @@ void main() {
     expect(h.profile.lastPut?.ditherEnabled, isFalse);
   });
 
-  testWidgets(
-    'a write that changes nothing (another screen re-loading the settings) saves nothing',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      container.read(phd2SettingsProvider.notifier).setDitherEnabled(true);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastPut, isNull);
-    },
-  );
+  testWidgets('a write that changes nothing (another screen re-loading the settings) saves nothing',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setDitherEnabled(true);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull);
+  });
 
-  testWidgets(
-    'Apply to guider is one save: the pending auto-save does not send it again',
-    (tester) async {
-      final h = await _pump(
-        tester,
-        const Phd2Settings(
-          guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
-          guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]',
-          ditherEnabled: true,
-        ),
-      );
-      final toggle = find.descendant(
-        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-        matching: find.byType(Switch),
-      );
-      await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
-      await tester.pump(); // the auto-save is pending
-      await tester.ensureVisible(find.text('Apply to guider'));
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pumpAndSettle();
-      expect(h.equipment.calls, contains('push'));
-      expect(h.profile.puts, 1);
-    },
-  );
+  testWidgets('Apply to guider is one save: the pending auto-save does not send it again', (tester) async {
+    final h = await _pump(tester,
+        const Phd2Settings(guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]', guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]', ditherEnabled: true));
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(); // the auto-save is pending
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+    expect(h.equipment.calls, contains('push'));
+    expect(h.profile.puts, 1);
+  });
 
-  testWidgets(
-    'Connect sends a pending Host edit first, so the guider connects to the new host',
-    (tester) async {
-      final h = await _pump(
-        tester,
-        const Phd2Settings(host: 'old-sbc', port: 4400),
-      );
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      container.read(phd2SettingsProvider.notifier).setHost('new-sbc');
-      await tester.pump(); // inside the save delay
-      await tester.tap(find.byTooltip('Connect'));
-      await tester.pumpAndSettle();
-      expect(h.guider.lastHost, 'new-sbc');
-      expect(
-        h.profile.puts,
-        1,
-        reason: 'the flushed save is the one save; the timer must not send it again',
-      );
-      await tester.pump(const Duration(seconds: 1));
-      expect(h.profile.puts, 1);
-    },
-  );
-
-  testWidgets(
-    'Guider: not loaded from the rig, the settings wait with Retry and an edit sends nothing (ADR 0015)',
-    (tester) async {
-      final h = await _pump(
-        tester,
-        const Phd2Settings(ditherEnabled: true),
-        failLoad: true,
-      );
-      expect(
-        find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-        findsNothing,
-        reason: 'no client default is shown in place of the rig\'s settings',
-      );
-      expect(find.byKey(const Key('section-retry')), findsOneWidget);
-      expect(
-        find.byType(GuiderConnectionSection),
-        findsOneWidget,
-        reason: 'Connect stays',
-      );
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      container.read(phd2SettingsProvider.notifier).setDitherEnabled(false);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(
-        h.profile.lastPut,
-        isNull,
-        reason: 'never overwrite the rig with settings that did not load',
-      );
-      h.profile.failGet = false;
-      await tester.tap(find.byKey(const Key('section-retry')));
-      await tester.pumpAndSettle();
-      expect(
-        find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-        findsOneWidget,
-      );
-      expect(
-        h.profile.lastPut,
-        isNull,
-        reason: 'Retry loads; it saves nothing',
-      );
-    },
-  );
-
-  testWidgets(
-    'Guider: an auto-save sends the tag of the copy loaded from the rig (ADR 0015)',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
-      final toggle = find.descendant(
-        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'),
-        matching: find.byType(Switch),
-      );
-      await tester.ensureVisible(toggle);
-      await tester.tap(toggle);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastPut?.ditherEnabled, isFalse);
-      expect(h.profile.lastIfMatch, '"v1"');
-    },
-  );
-
-  testWidgets(
-    'Guider: a new rig copy loaded by live sync is shown, not saved back (ADR 0015)',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings());
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      // The guider connected and the daemon filled the guide pixel size; its
-      // profile.updated reloads the section.
-      h.profile
-        ..stored = const Phd2Settings(guidePixelSize: 3.75)
-        ..version += 1;
-      await container.read(phd2SettingsProvider.notifier).load(h.profile);
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
-      expect(find.text('3.75'), findsWidgets);
-      expect(h.profile.puts, 0);
-    },
-  );
-
-  testWidgets(
-    '#1806 Apply to guider after a failed load does not write over the rig',
-    (tester) async {
-      final h = await _pump(
-        tester,
-        const Phd2Settings(
-          guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
-          guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]',
-        ),
-        failLoad: true,
-      );
-      expect(
-        find.text('Apply to guider'),
-        findsNothing,
-        reason: 'not offered over settings that did not load',
-      );
-      expect(
-        h.profile.lastPut,
-        isNull,
-        reason: 'never overwrite the rig with settings that did not load',
-      );
-      expect(h.equipment.calls, isNot(contains('push')));
-    },
-  );
-
-  testWidgets(
-    'an OAG guide focal length is never derived from optics that did not load: Apply writes nothing (ADR 0015)',
-    (tester) async {
-      final h = await _pump(
-        tester,
-        const Phd2Settings(
-          guiderSetupType: 'oag',
-          guideFocalLength: 320,
-          guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
-          guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]',
-        ),
-        failOptics: true,
-      );
-      expect(
-        find.text('Apply to guider'),
-        findsNothing,
-        reason: 'not offered while the optics are not in',
-      );
-      expect(
-        h.profile.lastPut,
-        isNull,
-        reason: 'no focal length derived from optics the rig never sent',
-      );
-      expect(h.equipment.calls, isNot(contains('push')));
-    },
-  );
-
-  testWidgets('#1806 Connect after a failed load does not write over the rig', (
-    tester,
-  ) async {
-    final h = await _pump(
-      tester,
-      const Phd2Settings(ditherEnabled: true),
-      failLoad: true,
-    );
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(EquipmentGuiderPanel)),
-    );
+  testWidgets('Connect sends a pending Host edit first, so the guider connects to the new host',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(host: 'old-sbc', port: 4400));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
     container.read(phd2SettingsProvider.notifier).setHost('new-sbc');
     await tester.pump(); // inside the save delay
     await tester.tap(find.byTooltip('Connect'));
     await tester.pumpAndSettle();
-    expect(
-      h.profile.lastPut,
-      isNull,
-      reason: 'the flushed save must not run on settings that did not load',
-    );
+    expect(h.guider.lastHost, 'new-sbc');
+    expect(h.profile.puts, 1, reason: 'the flushed save is the one save; the timer must not send it again');
+    await tester.pump(const Duration(seconds: 1));
+    expect(h.profile.puts, 1);
+  });
+
+  testWidgets('Guider: not loaded from the rig, the settings wait with Retry and an edit sends nothing (ADR 0015)',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), failLoad: true);
+    expect(find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), findsNothing,
+        reason: 'no client default is shown in place of the rig\'s settings');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    expect(find.byType(GuiderConnectionSection), findsOneWidget, reason: 'Connect stays');
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setDitherEnabled(false);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    h.profile.failGet = false;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), findsOneWidget);
+    expect(h.profile.lastPut, isNull, reason: 'Retry loads; it saves nothing');
+  });
+
+  testWidgets('Guider: an auto-save sends the tag of the copy loaded from the rig (ADR 0015)', (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true));
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.ditherEnabled, isFalse);
+    expect(h.profile.lastIfMatch, '"v1"');
+  });
+
+  testWidgets('Guider: a new rig copy loaded by live sync is shown, not saved back (ADR 0015)', (tester) async {
+    final h = await _pump(tester, const Phd2Settings());
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    // The guider connected and the daemon filled the guide pixel size; its
+    // profile.updated reloads the section.
+    h.profile
+      ..stored = const Phd2Settings(guidePixelSize: 3.75)
+      ..version += 1;
+    await container.read(phd2SettingsProvider.notifier).load(h.profile);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(find.text('3.75'), findsWidgets);
     expect(h.profile.puts, 0);
   });
 
-  testWidgets(
-    'a mount on another server than the camera gets a cross-server warning',
-    (tester) async {
-      await _pump(
+  testWidgets('#1806 Apply to guider after a failed load does not write over the rig', (tester) async {
+    final h = await _pump(
+        tester,
+        const Phd2Settings(guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]', guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
+        failLoad: true);
+    expect(find.text('Apply to guider'), findsNothing, reason: 'not offered over settings that did not load');
+    expect(h.profile.lastPut, isNull, reason: 'never overwrite the rig with settings that did not load');
+    expect(h.equipment.calls, isNot(contains('push')));
+  });
+
+  testWidgets('an OAG guide focal length is never derived from optics that did not load: Apply writes nothing (ADR 0015)',
+      (tester) async {
+    final h = await _pump(
         tester,
         const Phd2Settings(
-          guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
-          guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]',
-        ),
-      );
-      expect(find.byKey(const ValueKey('guider_cross_server')), findsOneWidget);
-      expect(find.textContaining('different Alpaca server'), findsOneWidget);
-    },
-  );
+            guiderSetupType: 'oag',
+            guideFocalLength: 320,
+            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+            guiderMount: 'Alpaca Mount [127.0.0.1:6800/1]'),
+        failOptics: true);
+    expect(find.text('Apply to guider'), findsNothing, reason: 'not offered while the optics are not in');
+    expect(h.profile.lastPut, isNull, reason: 'no focal length derived from optics the rig never sent');
+    expect(h.equipment.calls, isNot(contains('push')));
+  });
 
-  testWidgets(
-    'a bare Alpaca selection shows the reason and Apply refuses to push',
-    (tester) async {
-      final h = await _pump(
+  testWidgets('#1806 Connect after a failed load does not write over the rig', (tester) async {
+    final h = await _pump(tester, const Phd2Settings(ditherEnabled: true), failLoad: true);
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(phd2SettingsProvider.notifier).setHost('new-sbc');
+    await tester.pump(); // inside the save delay
+    await tester.tap(find.byTooltip('Connect'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut, isNull, reason: 'the flushed save must not run on settings that did not load');
+    expect(h.profile.puts, 0);
+  });
+
+  testWidgets('a mount on another server than the camera gets a cross-server warning',
+      (tester) async {
+    await _pump(
         tester,
         const Phd2Settings(
-          guiderCamera: 'Alpaca Camera',
-          guiderMount: 'Alpaca Mount',
-        ),
-      );
+            guiderCamera: 'Alpaca Camera [127.0.0.1:6800/0]',
+            guiderMount: 'Alpaca Mount [10.0.0.5:6800/1]'));
+    expect(find.byKey(const ValueKey('guider_cross_server')), findsOneWidget);
+    expect(find.textContaining('different Alpaca server'), findsOneWidget);
+  });
 
-      expect(
-        find.byKey(const ValueKey('guider_unserved_alpaca')),
-        findsOneWidget,
-      );
-      await tester.ensureVisible(find.text('Apply to guider'));
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pumpAndSettle();
+  testWidgets('a bare Alpaca selection shows the reason and Apply refuses to push',
+      (tester) async {
+    final h = await _pump(
+        tester,
+        const Phd2Settings(
+            guiderCamera: 'Alpaca Camera', guiderMount: 'Alpaca Mount'));
 
-      expect(
-        h.equipment.calls,
-        isNot(contains('push')),
-        reason: 'nothing is pushed while the selection cannot work',
-      );
-      expect(h.profile.lastPut, isNull, reason: 'nothing is saved either');
-      expect(
-        find.textContaining("names an Alpaca driver but no server"),
-        findsWidgets,
-      );
-    },
-  );
+    expect(find.byKey(const ValueKey('guider_unserved_alpaca')), findsOneWidget);
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
 
-  testWidgets(
-    '#1715 a guide scope whose focal length equals the main scope gets a warning',
-    (tester) async {
-      await _pump(tester, const Phd2Settings(guideFocalLength: 375));
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      container.read(opticsSettingsProvider.notifier).setFocalLengthMm(375);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('guider_focal_length_copied')),
-        findsOneWidget,
-      );
+    expect(h.equipment.calls, isNot(contains('push')),
+        reason: 'nothing is pushed while the selection cannot work');
+    expect(h.profile.lastPut, isNull, reason: 'nothing is saved either');
+    expect(find.textContaining("names an Alpaca driver but no server"),
+        findsWidgets);
+  });
 
-      container.read(phd2SettingsProvider.notifier).setGuideFocalLength(128);
-      await tester.pumpAndSettle();
-      expect(
-        find.byKey(const ValueKey('guider_focal_length_copied')),
-        findsNothing,
-      );
-    },
-  );
+  testWidgets('#1715 a guide scope whose focal length equals the main scope gets a warning', (tester) async {
+    await _pump(tester, const Phd2Settings(guideFocalLength: 375));
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    container.read(opticsSettingsProvider.notifier).setFocalLengthMm(375);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guider_focal_length_copied')), findsOneWidget);
 
-  testWidgets('the rotator picker is offered on an off-axis guider only', (
-    tester,
-  ) async {
+    container.read(phd2SettingsProvider.notifier).setGuideFocalLength(128);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('guider_focal_length_copied')), findsNothing);
+  });
+
+  testWidgets('the rotator picker is offered on an off-axis guider only',
+      (tester) async {
     // §63.19 — PHD2 turns its calibration by the rotator it is given, which
     // is only right when the guide camera turns with it (OAG). A guide scope
     // shows "Not used" instead and drops the rotator when switched to.
     final h = await _pump(
-      tester,
-      const Phd2Settings(
-        guiderSetupType: 'oag',
-        guiderRotator: 'Alpaca Rotator [127.0.0.1:6800/0]',
-      ),
-    );
+        tester,
+        const Phd2Settings(
+          guiderSetupType: 'oag',
+          guiderRotator: 'Alpaca Rotator [127.0.0.1:6800/0]',
+        ));
     expect(find.byKey(const ValueKey('guider_pick_rotator')), findsOneWidget);
     expect(find.byKey(const ValueKey('guider_rotator_not_used')), findsNothing);
 
     final element = tester.element(find.byType(EquipmentGuiderPanel));
     final container = ProviderScope.containerOf(element);
-    container
-        .read(phd2SettingsProvider.notifier)
-        .setGuiderSetupType('guide_scope');
+    container.read(phd2SettingsProvider.notifier).setGuiderSetupType('guide_scope');
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('guider_pick_rotator')), findsNothing);
-    expect(
-      find.byKey(const ValueKey('guider_rotator_not_used')),
-      findsOneWidget,
-    );
+    expect(find.byKey(const ValueKey('guider_rotator_not_used')), findsOneWidget);
     expect(container.read(phd2SettingsProvider).value!.guiderRotator, '');
     expect(h.profile, isNotNull);
   });
 
   testWidgets(
-    'Discover Alpaca puts real [host:port/N] devices in the pickers and a pick fills host/port',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings());
-      // No camera picked: a fresh guider has none, so the panel says so.
-      expect(find.byKey(const ValueKey('guider_no_camera')), findsOneWidget);
+      'Discover Alpaca puts real [host:port/N] devices in the pickers and a pick fills host/port',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings());
+    // No camera picked: a fresh guider has none, so the panel says so.
+    expect(find.byKey(const ValueKey('guider_no_camera')), findsOneWidget);
 
-      await tester.ensureVisible(find.text('Discover Alpaca'));
-      await tester.tap(find.text('Discover Alpaca'));
-      await tester.pumpAndSettle();
-      expect(h.names.calls, contains('127.0.0.1:6800'));
+    await tester.ensureVisible(find.text('Discover Alpaca'));
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls, contains('127.0.0.1:6800'));
 
-      await _pick(
-        tester,
-        'guider_pick_camera',
-        'ZWO ASI120MM Mini (127.0.0.1:6800/0)',
-      );
-      await _pick(
-        tester,
-        'guider_pick_mount',
-        'Sky-Watcher EQM-35 Pro (EQMOD) (127.0.0.1:6800/1)',
-      );
+    await _pick(tester, 'guider_pick_camera', 'ZWO ASI120MM Mini (127.0.0.1:6800/0)');
+    await _pick(tester, 'guider_pick_mount',
+        'Sky-Watcher EQM-35 Pro (EQMOD) (127.0.0.1:6800/1)');
 
-      final element = tester.element(find.byType(EquipmentGuiderPanel));
-      final phd2 = ProviderScope.containerOf(element)
-          .read(phd2SettingsProvider)
-          .value!;
-      expect(phd2.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
-      expect(
-        phd2.guiderCameraAlpacaUniqueId,
-        'ZWO_0',
-        reason: '#1308 — pinned by UniqueID so a renumber is caught at push',
-      );
-      expect(phd2.guiderMount, 'Alpaca Mount [127.0.0.1:6800/1]');
-      expect(phd2.guiderAlpacaHost, '127.0.0.1');
-      expect(phd2.guiderAlpacaPort, 6800);
-      expect(
-        find.byKey(const ValueKey('guider_unserved_alpaca')),
-        findsNothing,
-      );
-      expect(find.byKey(const ValueKey('guider_no_camera')), findsNothing);
+    final element = tester.element(find.byType(EquipmentGuiderPanel));
+    final phd2 = ProviderScope.containerOf(element).read(phd2SettingsProvider).value!;
+    expect(phd2.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
+    expect(phd2.guiderCameraAlpacaUniqueId, 'ZWO_0',
+        reason: '#1308 — pinned by UniqueID so a renumber is caught at push');
+    expect(phd2.guiderMount, 'Alpaca Mount [127.0.0.1:6800/1]');
+    expect(phd2.guiderAlpacaHost, '127.0.0.1');
+    expect(phd2.guiderAlpacaPort, 6800);
+    expect(find.byKey(const ValueKey('guider_unserved_alpaca')), findsNothing);
+    expect(find.byKey(const ValueKey('guider_no_camera')), findsNothing);
 
-      await tester.ensureVisible(find.text('Apply to guider'));
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pumpAndSettle();
-      expect(
-        h.profile.lastPut?.guiderCamera,
-        'Alpaca Camera [127.0.0.1:6800/0]',
-      );
-      expect(h.equipment.calls, contains('push'));
-    },
-  );
+    await tester.ensureVisible(find.text('Apply to guider'));
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.guiderCamera, 'Alpaca Camera [127.0.0.1:6800/0]');
+    expect(h.equipment.calls, contains('push'));
+  });
 
-  testWidgets(
-    '#1861 the panel shows the choice module\'s discovery state, not its own',
-    (tester) async {
-      await _pump(tester, const Phd2Settings());
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(EquipmentGuiderPanel)),
-      );
-      final discovery = container.read(guiderDiscoveryProvider.notifier);
+  testWidgets('#1861 the panel shows the choice module\'s discovery state, not its own',
+      (tester) async {
+    await _pump(tester, const Phd2Settings());
+    final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));
+    final discovery = container.read(guiderDiscoveryProvider.notifier);
 
-      discovery.state = (running: true, servers: null);
-      await tester.pump();
-      final button = find.ancestor(
-        of: find.text('Discover Alpaca'),
-        matching: find.byWidgetPredicate((w) => w is OutlinedButton),
-      );
-      expect(
-        tester.widget<OutlinedButton>(button).onPressed,
-        isNull,
-        reason: 'a sweep the module runs disables Discover',
-      );
+    discovery.state = (running: true, servers: null);
+    await tester.pump();
+    final button = find.ancestor(
+        of: find.text('Discover Alpaca'), matching: find.byWidgetPredicate((w) => w is OutlinedButton));
+    expect(tester.widget<OutlinedButton>(button).onPressed, isNull, reason: 'a sweep the module runs disables Discover');
 
-      discovery.state = (running: false, servers: ['192.0.2.10:6800']);
-      await tester.pump();
-      expect(
-        find.widgetWithText(ActionChip, '192.0.2.10:6800'),
-        findsOneWidget,
-        reason: 'servers set in the module appear without the panel running a sweep',
-      );
-    },
-  );
+    discovery.state = (running: false, servers: ['192.0.2.10:6800']);
+    await tester.pump();
+    expect(find.widgetWithText(ActionChip, '192.0.2.10:6800'), findsOneWidget,
+        reason: 'servers set in the module appear without the panel running a sweep');
+  });
 
-  testWidgets(
-    'an endpoint that answered nothing is asked again on the next trigger',
-    (tester) async {
-      final h = await _pump(tester, const Phd2Settings());
-      h.names.failuresLeft = 1; // the management API is briefly unreachable
-      await tester.ensureVisible(find.text('Discover Alpaca'));
-      await tester.tap(find.text('Discover Alpaca'));
-      await tester.pumpAndSettle();
-      expect(h.names.calls, ['127.0.0.1:6800']);
-      await tester.tap(find.text('Discover Alpaca'));
-      await tester.pumpAndSettle();
-      expect(h.names.calls, [
-        '127.0.0.1:6800',
-        '127.0.0.1:6800',
-      ], reason: 'an empty answer is not remembered as resolved');
-      await _pick(
-        tester,
-        'guider_pick_camera',
-        'ZWO ASI120MM Mini (127.0.0.1:6800/0)',
-      );
-      await tester.tap(find.text('Discover Alpaca'));
-      await tester.pumpAndSettle();
-      expect(
-        h.names.calls.length,
-        2,
-        reason: 'a resolved endpoint is not refetched',
-      );
-    },
-  );
+  testWidgets('an endpoint that answered nothing is asked again on the next trigger',
+      (tester) async {
+    final h = await _pump(tester, const Phd2Settings());
+    h.names.failuresLeft = 1; // the management API is briefly unreachable
+    await tester.ensureVisible(find.text('Discover Alpaca'));
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls, ['127.0.0.1:6800']);
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls, ['127.0.0.1:6800', '127.0.0.1:6800'],
+        reason: 'an empty answer is not remembered as resolved');
+    await _pick(tester, 'guider_pick_camera', 'ZWO ASI120MM Mini (127.0.0.1:6800/0)');
+    await tester.tap(find.text('Discover Alpaca'));
+    await tester.pumpAndSettle();
+    expect(h.names.calls.length, 2, reason: 'a resolved endpoint is not refetched');
+  });
 
-  testWidgets(
-    'a stored Alpaca host/port is resolved on load so its devices are pickable',
-    (tester) async {
-      final h = await _pump(
+  testWidgets('a stored Alpaca host/port is resolved on load so its devices are pickable',
+      (tester) async {
+    final h = await _pump(
         tester,
         const Phd2Settings(
-          guiderCamera: 'Alpaca Camera',
-          guiderAlpacaHost: '127.0.0.1',
-          guiderAlpacaPort: 6800,
-        ),
-      );
-      expect(h.names.calls, contains('127.0.0.1:6800'));
-      expect(
-        find.byKey(const ValueKey('guider_unserved_alpaca')),
-        findsNothing,
-        reason: 'host and port serve the bare choice',
-      );
-      await _pick(
-        tester,
-        'guider_pick_camera',
-        'ZWO ASI120MM Mini (127.0.0.1:6800/0)',
-      );
-      final element = tester.element(find.byType(EquipmentGuiderPanel));
-      expect(
-        ProviderScope.containerOf(element)
-            .read(phd2SettingsProvider)
-            .value!
-            .guiderCamera,
-        'Alpaca Camera [127.0.0.1:6800/0]',
-      );
-    },
-  );
+            guiderCamera: 'Alpaca Camera',
+            guiderAlpacaHost: '127.0.0.1',
+            guiderAlpacaPort: 6800));
+    expect(h.names.calls, contains('127.0.0.1:6800'));
+    expect(find.byKey(const ValueKey('guider_unserved_alpaca')), findsNothing,
+        reason: 'host and port serve the bare choice');
+    await _pick(tester, 'guider_pick_camera', 'ZWO ASI120MM Mini (127.0.0.1:6800/0)');
+    final element = tester.element(find.byType(EquipmentGuiderPanel));
+    expect(
+        ProviderScope.containerOf(element).read(phd2SettingsProvider).value!.guiderCamera,
+        'Alpaca Camera [127.0.0.1:6800/0]');
+  });
 }

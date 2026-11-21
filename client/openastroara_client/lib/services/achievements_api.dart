@@ -21,15 +21,12 @@ class AchievementsApi implements AchievementsClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   AchievementsApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<StatsAchievements> fetch() async {
@@ -39,9 +36,7 @@ class AchievementsApi implements AchievementsClient {
       // A 2xx with a non-object body means the wire contract changed (or an error
       // envelope slipped through). Throw rather than return an empty record so the
       // AsyncNotifier surfaces an error state instead of a silent wall of zeros.
-      throw FormatException(
-        'stats/achievements returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('stats/achievements returned a non-object body (${data.runtimeType})');
     }
     return StatsAchievements.fromJson(data);
   }

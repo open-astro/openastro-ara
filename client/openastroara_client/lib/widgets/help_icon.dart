@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../help/registry.dart';
 import '../state/settings/settings_nav.dart';
 import '../state/settings/settings_search.dart';
@@ -195,8 +194,9 @@ void showHelpSheet(BuildContext context, Help entry, {String? device}) {
                             ref
                                 .read(highlightedSettingProvider.notifier)
                                 .highlight(sId);
-                            Navigator.of(modalContext)
-                                .pop(); // Close help modal
+                            Navigator.of(
+                              modalContext,
+                            ).pop(); // Close help modal
                           }
                         },
                       ),

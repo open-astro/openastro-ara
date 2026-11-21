@@ -792,8 +792,7 @@ class ProfileApi {
         defaultBin: (j['bin'] as num).toInt(),
         defaultFrameKind: FrameKind.values.firstWhere(
           (k) => k.name == j['frame_kind'],
-          orElse: () =>
-              throw FormatException('unknown frame kind', j['frame_kind']),
+          orElse: () => throw FormatException('unknown frame kind', j['frame_kind']),
         ),
         coolerTargetC: (j['cooler_target_c'] as num).toDouble(),
         coolerRampRatePerMin: (j['cooler_ramp_c_per_min'] as num).toDouble(),
@@ -820,10 +819,8 @@ class ProfileApi {
         restorePositionOnFailure: j['restore_position_on_failure'] as bool,
         telescopeType: TelescopeType.values.firstWhere(
           (t) => telescopeTypeToWire(t) == j['telescope_type'],
-          orElse: () => throw FormatException(
-            'unknown telescope type',
-            j['telescope_type'],
-          ),
+          orElse: () =>
+              throw FormatException('unknown telescope type', j['telescope_type']),
         ),
         backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
         backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
@@ -894,7 +891,8 @@ class ProfileApi {
       meridianPauseMin: (j['meridian_pause_min'] as num).toInt(),
       // #2044 — a blank flip-off stop comes as null, but its key is there.
       minutesAfterMeridian: (j['minutes_after_meridian'] as num).toInt(),
-      maxMinutesAfterMeridian: (j['max_minutes_after_meridian'] as num).toInt(),
+      maxMinutesAfterMeridian: (j['max_minutes_after_meridian'] as num)
+          .toInt(),
       stopBeforeMeridianMin:
           (nullable('stop_before_meridian_min') as num?)?.toInt() ?? 0,
       meridianRecenter: j['meridian_recenter'] as bool,
@@ -1775,9 +1773,8 @@ class ProfileApi {
     'minutes_after_meridian': v.minutesAfterMeridian,
     'max_minutes_after_meridian': v.maxMinutesAfterMeridian,
     // 0 is the client's Off; the wire's is null.
-    'stop_before_meridian_min': v.stopBeforeMeridianMin > 0
-        ? v.stopBeforeMeridianMin
-        : null,
+    'stop_before_meridian_min':
+        v.stopBeforeMeridianMin > 0 ? v.stopBeforeMeridianMin : null,
     'meridian_recenter': v.meridianRecenter,
     'meridian_recal_guider': v.meridianRecalGuider,
     'meridian_refocus': _meridianRefocusToString(v.meridianRefocus),

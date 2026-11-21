@@ -15,5 +15,4 @@ class LibraryGroupingNotifier extends Notifier<LibraryGrouping> {
 
 final libraryGroupingProvider =
     NotifierProvider<LibraryGroupingNotifier, LibraryGrouping>(
-      LibraryGroupingNotifier.new,
-    );
+        LibraryGroupingNotifier.new);

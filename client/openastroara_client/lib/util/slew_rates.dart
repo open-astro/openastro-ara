@@ -41,14 +41,7 @@
 library;
 
 /// Slew-speed presets as fractions of the mount's max rate.
-const List<double> kSlewRatePresetFractions = [
-  0.01,
-  0.05,
-  0.10,
-  0.25,
-  0.50,
-  1.0,
-];
+const List<double> kSlewRatePresetFractions = [0.01, 0.05, 0.10, 0.25, 0.50, 1.0];
 
 /// One MoveAxis rate band (deg/s): the mount honours any magnitude in
 /// `[min, max]`; `min == max` is a single discrete rate.
@@ -113,9 +106,7 @@ List<SlewRateOption> buildSlewRateOptions(List<double> mountRates) =>
 
 /// Builds the sorted, deduped rate list for the speed picker from the mount's
 /// reported bands. Every option lies inside one of them.
-List<SlewRateOption> buildSlewRateOptionsFromBands(
-  List<SlewRateBand> mountBands,
-) {
+List<SlewRateOption> buildSlewRateOptionsFromBands(List<SlewRateBand> mountBands) {
   final bands = _sanitise(mountBands);
   if (bands.isEmpty) return const [];
 
@@ -152,9 +143,8 @@ List<SlewRateOption> buildSlewRateOptionsFromBands(
   // The band's own minimum stands in for the presets that fell under it, so
   // the slowest speed the mount actually offers is always a chip.
   // A preset within rounding of the minimum already stands for it.
-  final minAlreadyOffered = options.any(
-    (o) => (o.rateDegPerSec - minRate).abs() <= minRate * 1e-9,
-  );
+  final minAlreadyOffered =
+      options.any((o) => (o.rateDegPerSec - minRate).abs() <= minRate * 1e-9);
   if (droppedUnderMin && !minAlreadyOffered) {
     options.add(SlewRateOption(minRate, 'min · ${_fmtDeg(minRate)}'));
   }

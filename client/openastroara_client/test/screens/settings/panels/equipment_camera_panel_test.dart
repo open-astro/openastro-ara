@@ -29,7 +29,6 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
   Future<void> forget() async {
     calls.add('forget');
   }
-
   _FakeCameraApi(this.status);
   CameraStatus? status;
   final List<String> calls = [];
@@ -47,7 +46,6 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
     final fanSpeed = body?['fan_speed'];
     calls.add('command:$subpath:enabled=$enabled:target=$target:fan=$fanSpeed');
   }
-
   @override
   void close() {}
 }
@@ -61,63 +59,63 @@ CameraStatus _status({
   bool coolerOn = false,
   String runtimeState = 'idle',
   String? readoutMode,
-}) => CameraStatus(
-  deviceId: 'cam-0',
-  name: 'ASI2600',
-  connectionState: state,
-  capabilities: CameraCapabilities(
-    sensorWidth: 6248,
-    sensorHeight: 4176,
-    pixelSizeUm: 3.76,
-    canSetTemperature: canSetTemperature,
-    hasCooler: hasCooler ?? canSetTemperature,
-    minGain: 0,
-    maxGain: 500,
-    minOffset: 0,
-    maxOffset: 80,
-    minBinX: 1,
-    maxBinX: 4,
-    minBinY: 1,
-    maxBinY: 4,
-    minExposureSec: 0.0001,
-    maxExposureSec: 3600,
-    bayerPattern: 'RGGB',
-    readoutModes: const ['HCG', 'Low noise', 'High speed'],
-  ),
-  runtimeState: runtimeState,
-  readoutMode: readoutMode,
-  ccdTemperature: -9.8,
-  coolerPowerPct: 42,
-  coolerOn: coolerOn,
-  exposureProgressPct: null,
-);
+}) =>
+    CameraStatus(
+      deviceId: 'cam-0',
+      name: 'ASI2600',
+      connectionState: state,
+      capabilities: CameraCapabilities(
+        sensorWidth: 6248,
+        sensorHeight: 4176,
+        pixelSizeUm: 3.76,
+        canSetTemperature: canSetTemperature,
+        hasCooler: hasCooler ?? canSetTemperature,
+        minGain: 0,
+        maxGain: 500,
+        minOffset: 0,
+        maxOffset: 80,
+        minBinX: 1,
+        maxBinX: 4,
+        minBinY: 1,
+        maxBinY: 4,
+        minExposureSec: 0.0001,
+        maxExposureSec: 3600,
+        bayerPattern: 'RGGB',
+        readoutModes: const ['HCG', 'Low noise', 'High speed'],
+      ),
+      runtimeState: runtimeState,
+      readoutMode: readoutMode,
+      ccdTemperature: -9.8,
+      coolerPowerPct: 42,
+      coolerOn: coolerOn,
+      exposureProgressPct: null,
+    );
 
 Future<void> _wideSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
+
 /// Switches inside the shared CoolerControls widget (cooler first, then fan),
 /// independent of the panel's own auto-connect switch.
-Finder _coolerSwitch(int index) => find
-    .descendant(of: find.byType(CoolerControls), matching: find.byType(Switch))
-    .at(index);
+Finder _coolerSwitch(int index) => find.descendant(
+      of: find.byType(CoolerControls),
+      matching: find.byType(Switch),
+    ).at(index);
 
 Future<_FakeCameraApi> _pump(WidgetTester tester, CameraStatus? status) async {
   await _wideSurface(tester);
   final api = _FakeCameraApi(status);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        serverLinkUpProvider.overrideWith((ref) => true),
-        savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
-        ),
-        cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
-      ],
-      child: const MaterialApp(home: Scaffold(body: EquipmentCameraPanel())),
-    ),
-  );
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      serverLinkUpProvider.overrideWith((ref) => true),
+      savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+      cameraStatusApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+    child: const MaterialApp(home: Scaffold(body: EquipmentCameraPanel())),
+  ));
   await tester.pumpAndSettle();
   return api;
 }
@@ -134,9 +132,8 @@ void main() {
     expect(find.byType(Switch), findsNWidgets(2)); // cooler + auto-connect
   });
 
-  testWidgets('readout mode is a chip row and tapping it sends the command', (
-    tester,
-  ) async {
+  testWidgets('readout mode is a chip row and tapping it sends the command',
+      (tester) async {
     final api = await _pump(tester, _status(readoutMode: 'HCG'));
     expect(find.text('Readout mode'), findsOneWidget);
     expect(find.text('HCG'), findsOneWidget);
@@ -145,42 +142,29 @@ void main() {
     // Select 'Low noise' (index 1) — the chip sends mode_index.
     await tester.tap(find.text('Low noise'));
     await tester.pumpAndSettle();
-    expect(
-      api.calls,
-      contains('command:readoutmode:enabled=null:target=null:fan=null'),
-    );
+    expect(api.calls,
+        contains('command:readoutmode:enabled=null:target=null:fan=null'));
   });
 
-  testWidgets('Set target sends the cooler command (enabled + target)', (
-    tester,
-  ) async {
+  testWidgets('Set target sends the cooler command (enabled + target)',
+      (tester) async {
     final api = await _pump(tester, _status());
     await tester.enterText(find.byType(TextField), '-15');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Set'));
     await tester.pumpAndSettle();
-    expect(
-      api.calls,
-      contains('command:cooler:enabled=true:target=-15.0:fan=null'),
-    );
+    expect(api.calls, contains('command:cooler:enabled=true:target=-15.0:fan=null'));
   });
 
-  testWidgets('toggling the cooler Switch sends enabled only (no set-point)', (
-    tester,
-  ) async {
+  testWidgets('toggling the cooler Switch sends enabled only (no set-point)',
+      (tester) async {
     final api = await _pump(tester, _status());
-    await tester.tap(
-      _coolerSwitch(0),
-    ); // the cooler switch inside CoolerControls
+    await tester.tap(_coolerSwitch(0)); // the cooler switch inside CoolerControls
     await tester.pumpAndSettle();
-    expect(
-      api.calls,
-      contains('command:cooler:enabled=true:target=null:fan=null'),
-    );
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
-  testWidgets('no cooler control when the camera cannot set temperature', (
-    tester,
-  ) async {
+  testWidgets('no cooler control when the camera cannot set temperature',
+      (tester) async {
     await _pump(tester, _status(canSetTemperature: false));
     expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
     expect(find.text('Custom (°C)'), findsNothing);
@@ -194,30 +178,24 @@ void main() {
     expect(find.text('Does not support cooling'), findsOneWidget);
   });
 
-  testWidgets('§25.5.5 dumb cooler: on/off Switch without a set-point field', (
-    tester,
-  ) async {
+  testWidgets(
+      '§25.5.5 dumb cooler: on/off Switch without a set-point field',
+      (tester) async {
     // CoolerOn implemented but no TEC regulation: the Switch must appear
     // (auto-connect + cooler = two switches) with no Target/Set target UI.
-    final api = await _pump(
-      tester,
-      _status(canSetTemperature: false, hasCooler: true),
-    );
+    final api =
+        await _pump(tester, _status(canSetTemperature: false, hasCooler: true));
     expect(find.byType(Switch), findsNWidgets(2));
     expect(find.widgetWithText(OutlinedButton, 'Set'), findsNothing);
     expect(find.text('Custom (°C)'), findsNothing);
     // And the switch actually drives the cooler (never a set-point).
     await tester.tap(_coolerSwitch(0));
     await tester.pumpAndSettle();
-    expect(
-      api.calls,
-      contains('command:cooler:enabled=true:target=null:fan=null'),
-    );
+    expect(api.calls, contains('command:cooler:enabled=true:target=null:fan=null'));
   });
 
-  testWidgets('no device connected shows the empty state + Connect…', (
-    tester,
-  ) async {
+  testWidgets('no device connected shows the empty state + Connect…',
+      (tester) async {
     await _pump(tester, null);
     expect(find.text('No camera connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);

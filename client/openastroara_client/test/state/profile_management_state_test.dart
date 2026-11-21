@@ -39,15 +39,11 @@ class _FakeApi extends ProfileApi {
   Future<void> renameProfile(String id, String name) async {}
   final List<bool> deleteGuiderFlags = [];
   @override
-  Future<ProfileDeleteResult> deleteProfile(
-    String id, {
-    bool deleteGuiderProfile = false,
-  }) async {
+  Future<ProfileDeleteResult> deleteProfile(String id,
+      {bool deleteGuiderProfile = false}) async {
     deleteGuiderFlags.add(deleteGuiderProfile);
     return const ProfileDeleteResult(
-      guiderProfile: GuiderTwinOutcome.queued,
-      reason: 'busy',
-    );
+        guiderProfile: GuiderTwinOutcome.queued, reason: 'busy');
   }
 }
 
@@ -66,13 +62,10 @@ void main() {
 
   test('build surfaces AsyncError when no server is connected', () async {
     final c = ProviderContainer(
-      overrides: [profileApiProvider.overrideWithValue(null)],
-    );
+        overrides: [profileApiProvider.overrideWithValue(null)]);
     addTearDown(c.dispose);
     await expectLater(
-      c.read(profileManagementProvider.future),
-      throwsA(isA<StateError>()),
-    );
+        c.read(profileManagementProvider.future), throwsA(isA<StateError>()));
   });
 
   test('select calls selectProfile then refreshes the active id', () async {
@@ -132,19 +125,16 @@ void main() {
     expect(c.read(profileManagementProvider).hasValue, isTrue);
   });
 
-  test(
-    'delete passes the guider choice through and returns the outcome',
-    () async {
-      final api = _FakeApi();
-      final c = _container(api);
-      addTearDown(c.dispose);
-      await c.read(profileManagementProvider.future);
-      final result = await c
-          .read(profileManagementProvider.notifier)
-          .delete('id-1', deleteGuiderProfile: true);
-      expect(api.deleteGuiderFlags, [true]);
-      expect(result.guiderProfile, GuiderTwinOutcome.queued);
-      expect(result.message, contains('when the guider is free'));
-    },
-  );
+  test('delete passes the guider choice through and returns the outcome', () async {
+    final api = _FakeApi();
+    final c = _container(api);
+    addTearDown(c.dispose);
+    await c.read(profileManagementProvider.future);
+    final result = await c
+        .read(profileManagementProvider.notifier)
+        .delete('id-1', deleteGuiderProfile: true);
+    expect(api.deleteGuiderFlags, [true]);
+    expect(result.guiderProfile, GuiderTwinOutcome.queued);
+    expect(result.message, contains('when the guider is free'));
+  });
 }

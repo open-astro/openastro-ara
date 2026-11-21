@@ -98,8 +98,8 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
     final consequence = widget.isLast
         ? " This is the last profile — you'll be taken back to profile setup."
         : (widget.isActive
-              ? ' The most recent remaining profile becomes active.'
-              : '');
+            ? ' The most recent remaining profile becomes active.'
+            : '');
     final twin = _twin;
     return AlertDialog(
       title: const Text('Delete profile?'),
@@ -107,17 +107,13 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '"${widget.name}" will be permanently removed. This can\'t be '
-            'undone.$consequence',
-          ),
+          Text('"${widget.name}" will be permanently removed. This can\'t be '
+              'undone.$consequence'),
           if (_loading)
             const Padding(
               padding: EdgeInsets.only(top: 12),
-              child: Text(
-                'Checking the guider…',
-                style: TextStyle(color: AraColors.textSecondary),
-              ),
+              child: Text('Checking the guider…',
+                  style: TextStyle(color: AraColors.textSecondary)),
             ),
           if (!_loading && twin != null && _offerGuider) ...[
             const SizedBox(height: 12),
@@ -129,32 +125,25 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
               contentPadding: EdgeInsets.zero,
               dense: true,
               title: Text(
-                'Also delete its OpenAstro Guider profile "${twin.displayName}"',
-              ),
-              subtitle: Text(
-                _guiderNote(twin),
-                style: const TextStyle(color: AraColors.textSecondary),
-              ),
+                  'Also delete its OpenAstro Guider profile "${twin.displayName}"'),
+              subtitle: Text(_guiderNote(twin),
+                  style: const TextStyle(color: AraColors.textSecondary)),
             ),
           ],
         ],
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel')),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: AraColors.accentError),
           // Delete waits for the preview: a tap before it lands would silently
           // keep the guider profile the box is about to offer (default on).
           onPressed: _loading
               ? null
-              : () => Navigator.of(context).pop(
-                  DeleteProfileChoice(
-                    deleteGuiderProfile: _offerGuider && _deleteGuider,
-                  ),
-                ),
+              : () => Navigator.of(context).pop(DeleteProfileChoice(
+                  deleteGuiderProfile: _offerGuider && _deleteGuider)),
           child: const Text('Delete'),
         ),
       ],
@@ -163,13 +152,11 @@ class _DeleteProfileDialogState extends State<DeleteProfileDialog> {
 
   static String _guiderNote(GuiderTwinPreview twin) {
     final lines = <String>[
-      'Its guide calibration and dark library are deleted too.',
+      'Its guide calibration and dark library are deleted too.'
     ];
     if (twin.shared) {
-      lines.add(
-        'Another Ara profile, "${twin.sharedWith ?? twin.displayName}", '
-        'uses this guider profile.',
-      );
+      lines.add('Another Ara profile, "${twin.sharedWith ?? twin.displayName}", '
+          'uses this guider profile.');
     }
     // The daemon's sentence wins when it has one ("No guider is connected.
     // It will be deleted the next time the guider connects.", "The guider is
@@ -204,15 +191,11 @@ void showProfileDeviceMessages(
 /// Show the outcome line for a delete (nothing when the guider was not
 /// asked about); failures use the error colour.
 void showGuiderTwinOutcome(
-  ScaffoldMessengerState messenger,
-  ProfileDeleteResult result,
-) {
+    ScaffoldMessengerState messenger, ProfileDeleteResult result) {
   final message = result.message;
   if (message == null) return;
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(message),
-      backgroundColor: result.isFailure ? AraColors.accentError : null,
-    ),
-  );
+  messenger.showSnackBar(SnackBar(
+    content: Text(message),
+    backgroundColor: result.isFailure ? AraColors.accentError : null,
+  ));
 }

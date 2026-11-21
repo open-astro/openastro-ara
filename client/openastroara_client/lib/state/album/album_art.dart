@@ -31,34 +31,22 @@ class AlbumArt {
   /// The Portuguese distance and trivia; the English ones stand in where missing.
   final AlbumArtText? pt;
 
-  const AlbumArt({
-    this.asset,
-    this.credit,
-    this.licence,
-    this.source,
-    this.distance,
-    this.trivia,
-    this.pt,
-  });
+  const AlbumArt({this.asset, this.credit, this.licence, this.source, this.distance, this.trivia, this.pt});
 
-  String? distanceIn(String languageCode) =>
-      (languageCode == 'pt' ? pt?.distance : null) ?? distance;
-  String? triviaIn(String languageCode) =>
-      (languageCode == 'pt' ? pt?.trivia : null) ?? trivia;
+  String? distanceIn(String languageCode) => (languageCode == 'pt' ? pt?.distance : null) ?? distance;
+  String? triviaIn(String languageCode) => (languageCode == 'pt' ? pt?.trivia : null) ?? trivia;
 
   /// The card back's line, `ESO · CC BY 4.0`; null without art.
-  String? get creditLine =>
-      asset == null || credit == null ? null : [credit!, ?licence].join(' · ');
+  String? get creditLine => asset == null || credit == null ? null : [credit!, ?licence].join(' · ');
 
   /// The licence deed CC BY asks the credit to link; null for public domain.
   String? get licenceUrl => switch (licence) {
-    'CC0' || 'CC0 1.0' => 'https://creativecommons.org/publicdomain/zero/1.0/',
-    // A source that names no version (AstroBin's "Attribution"): the licence family.
-    'CC BY' => 'https://creativecommons.org/licenses/by/',
-    final l? when l.startsWith('CC BY ') =>
-      'https://creativecommons.org/licenses/by/${l.substring(6)}/',
-    _ => null,
-  };
+        'CC0' || 'CC0 1.0' => 'https://creativecommons.org/publicdomain/zero/1.0/',
+        // A source that names no version (AstroBin's "Attribution"): the licence family.
+        'CC BY' => 'https://creativecommons.org/licenses/by/',
+        final l? when l.startsWith('CC BY ') => 'https://creativecommons.org/licenses/by/${l.substring(6)}/',
+        _ => null,
+      };
 }
 
 String? _str(dynamic v) => v is String && v.trim().isNotEmpty ? v.trim() : null;
@@ -80,10 +68,7 @@ Map<String, AlbumArt> parseAlbumManifest(String text) {
         distance: _str(r['distance']),
         trivia: _str(r['trivia']),
         pt: switch (r['pt']) {
-          final Map<String, dynamic> t => AlbumArtText(
-            distance: _str(t['distance']),
-            trivia: _str(t['trivia']),
-          ),
+          final Map<String, dynamic> t => AlbumArtText(distance: _str(t['distance']), trivia: _str(t['trivia'])),
           _ => null,
         },
       ),
@@ -94,9 +79,7 @@ Map<String, AlbumArt> parseAlbumManifest(String text) {
 String albumArtId(String label) => label.replaceAll(' ', '');
 
 /// The bundled manifest; empty (every Card a Placeholder) when the asset is missing.
-final albumManifestProvider = FutureProvider<Map<String, AlbumArt>>((
-  ref,
-) async {
+final albumManifestProvider = FutureProvider<Map<String, AlbumArt>>((ref) async {
   try {
     return parseAlbumManifest(await rootBundle.loadString(albumManifestAsset));
   } catch (_) {
@@ -109,9 +92,7 @@ void registerAlbumArtLicenses() {
   LicenseRegistry.addLicense(() async* {
     final Map<String, AlbumArt> rows;
     try {
-      rows = parseAlbumManifest(
-        await rootBundle.loadString(albumManifestAsset),
-      );
+      rows = parseAlbumManifest(await rootBundle.loadString(albumManifestAsset));
     } catch (_) {
       return;
     }
@@ -119,15 +100,12 @@ void registerAlbumArtLicenses() {
       final a = e.value;
       if (a.creditLine == null) continue;
       // CC BY 2.0 and later ask that a change to the work is marked.
-      yield LicenseEntryWithLineBreaks(
-        ['Sky Album art'],
-        [
-          '${e.key}: ${a.creditLine}',
-          ?a.source,
-          ?a.licenceUrl,
-          'Cropped and resized for the card.',
-        ].join('\n'),
-      );
+      yield LicenseEntryWithLineBreaks(['Sky Album art'], [
+        '${e.key}: ${a.creditLine}',
+        ?a.source,
+        ?a.licenceUrl,
+        'Cropped and resized for the card.',
+      ].join('\n'));
     }
   });
 }

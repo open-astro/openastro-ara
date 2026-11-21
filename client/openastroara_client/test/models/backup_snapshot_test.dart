@@ -29,11 +29,7 @@ void main() {
       expect(s.backupId, 'x');
       expect(s.sizeBytes, 0, reason: 'a non-numeric size degrades to 0');
       expect(s.createdUtc, isNull);
-      expect(
-        s.includedAreas,
-        isEmpty,
-        reason: 'a non-list included_areas degrades to empty',
-      );
+      expect(s.includedAreas, isEmpty, reason: 'a non-list included_areas degrades to empty');
     });
 
     test('included_areas drops non-string entries', () {
@@ -50,21 +46,12 @@ void main() {
         'size_bytes': 10,
         'included_areas': <String>['profiles'],
       };
-      expect(
-        BackupSnapshot.fromJson(json),
-        equals(BackupSnapshot.fromJson(json)),
-      );
+      expect(BackupSnapshot.fromJson(json), equals(BackupSnapshot.fromJson(json)));
     });
 
     test('value equality is sensitive to included_areas order', () {
-      final a = BackupSnapshot.fromJson(const {
-        'backup_id': 'a',
-        'included_areas': ['profiles', 'sequences'],
-      });
-      final b = BackupSnapshot.fromJson(const {
-        'backup_id': 'a',
-        'included_areas': ['sequences', 'profiles'],
-      });
+      final a = BackupSnapshot.fromJson(const {'backup_id': 'a', 'included_areas': ['profiles', 'sequences']});
+      final b = BackupSnapshot.fromJson(const {'backup_id': 'a', 'included_areas': ['sequences', 'profiles']});
       expect(a, isNot(equals(b)));
     });
   });

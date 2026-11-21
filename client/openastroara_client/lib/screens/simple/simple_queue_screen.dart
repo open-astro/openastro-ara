@@ -21,8 +21,10 @@ class SimpleQueueScreen extends SimpleScreen {
   SimpleStatusOrigin get origin => SimpleStatusOrigin.plan;
 
   @override
-  Widget panel(SimpleScreenHost host) =>
-      SimpleRunPanel(onAdd: host.onAddTarget, onEdit: host.onEditTarget);
+  Widget panel(SimpleScreenHost host) => SimpleRunPanel(
+    onAdd: host.onAddTarget,
+    onEdit: host.onEditTarget,
+  );
 
   @override
   Widget overlay(SimpleScreenHost host) => SimpleRunSheet(
@@ -124,6 +126,5 @@ class SimpleQueueSheetNotifier extends Notifier<SimpleQueueSheet> {
   }
 
   /// Image this: over a run the sheet adds to its queue.
-  void pick({required bool overRun}) =>
-      state = (adding: overRun, editing: null);
+  void pick({required bool overRun}) => state = (adding: overRun, editing: null);
 }

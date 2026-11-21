@@ -186,9 +186,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           final v = profile[f.key];
           _text[f.key]?.text = v == null
               ? ''
-              : GuiderAdvancedField.editText(
-                  f.scale == 1 ? v : f.shown(v as num),
-                );
+              : GuiderAdvancedField.editText(f.scale == 1 ? v : f.shown(v as num));
         }
       });
     } catch (e) {
@@ -591,7 +589,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
           DropdownMenuItem<String?>(
             value: o,
             child: Text(
-              offered.isEmpty || offered.contains(o) ? o : '$o (not offered)',
+              offered.isEmpty || offered.contains(o)
+                  ? o
+                  : '$o (not offered)',
             ),
           ),
       ],

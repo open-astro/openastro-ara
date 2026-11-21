@@ -14,16 +14,17 @@ import '../adaptive_controls.dart';
 /// plugged into the server. Copy only: nothing on either drive is deleted or
 /// overwritten, and re-running a copy only adds what is new.
 Future<void> showStorageCopyDialog(BuildContext context) async {
-  await showDialog<void>(context: context, builder: (_) => const _CopyDialog());
+  await showDialog<void>(
+    context: context,
+    builder: (_) => const _CopyDialog(),
+  );
 }
 
 /// Drives a copy can go to: plugged in, not the store, not the server's own
 /// disk, and in a format ARA writes (exFAT or ext4).
 List<StorageDevice> copyTargets(List<StorageDevice> devices) => devices
-    .where(
-      (d) =>
-          !d.isSystemDisk && !d.isAraStore && d.isMountable && d.uuid != null,
-    )
+    .where((d) =>
+        !d.isSystemDisk && !d.isAraStore && d.isMountable && d.uuid != null)
     .toList();
 
 String _size(int bytes) {
@@ -43,75 +44,58 @@ String _files(int n) => n == 1 ? '1 file' : '$n files';
 
 /// Why a copy did not happen (start refused, or the job failed), in the
 /// user's terms.
-String copyFailureMessage(
-  AppLocalizations l,
-  String code,
-  String? detail, {
-  int bytesToCopy = 0,
-}) => switch (code) {
-  'not_enough_space' =>
-    bytesToCopy > 0
-        ? 'The drive doesn\'t have room for ${_size(bytesToCopy)}.'
-        : 'The drive doesn\'t have enough room.',
-  'refused' when detail == 'is_store' =>
-    'That drive is the one frames are saved to.',
-  'refused' ||
-  'system_disk' => 'That drive holds the server\'s operating system.',
-  'device_busy' when detail == 'mounted_elsewhere' =>
-    'That drive is in use somewhere else on the server.',
-  'device_busy' => 'The drive is busy. Try again in a moment.',
-  'not_ext4' =>
-    'ARA can only write to exFAT or ext4 drives, and this one is neither.',
-  'mount_failed' => 'The drive could not be connected.',
-  // The disk chooser's sentence, so it reads the same in both places.
-  'exfat_unsupported' => l.storageConfigureExfatUnsupported,
-  'uuid_not_found' => 'The drive disconnected. Plug it back in and try again.',
-  'no_store' => 'No storage drive is connected, so there is nothing to copy.',
-  'copy_running' => 'A copy is already running.',
-  'bad_folder' => 'One of the folders is no longer on the drive.',
-  'helper_missing' => 'The server is missing part of its installation. Reinstall openastroara-server.',
-  _ => detail ?? 'The copy failed ($code).',
-};
+String copyFailureMessage(AppLocalizations l, String code, String? detail,
+        {int bytesToCopy = 0}) =>
+    switch (code) {
+      'not_enough_space' => bytesToCopy > 0
+          ? 'The drive doesn\'t have room for ${_size(bytesToCopy)}.'
+          : 'The drive doesn\'t have enough room.',
+      'refused' when detail == 'is_store' =>
+        'That drive is the one frames are saved to.',
+      'refused' || 'system_disk' =>
+        'That drive holds the server\'s operating system.',
+      'device_busy' when detail == 'mounted_elsewhere' =>
+        'That drive is in use somewhere else on the server.',
+      'device_busy' => 'The drive is busy. Try again in a moment.',
+      'not_ext4' =>
+        'ARA can only write to exFAT or ext4 drives, and this one is neither.',
+      'mount_failed' => 'The drive could not be connected.',
+      // The disk chooser's sentence, so it reads the same in both places.
+      'exfat_unsupported' => l.storageConfigureExfatUnsupported,
+      'uuid_not_found' => 'The drive disconnected. Plug it back in and try again.',
+      'no_store' => 'No storage drive is connected, so there is nothing to copy.',
+      'copy_running' => 'A copy is already running.',
+      'bad_folder' => 'One of the folders is no longer on the drive.',
+      'helper_missing' =>
+        'The server is missing part of its installation. Reinstall openastroara-server.',
+      _ => detail ?? 'The copy failed ($code).',
+    };
 
 /// The outcome of a finished copy, one sentence per thing worth knowing.
 List<String> copySummary(AppLocalizations l, StorageCopyStatus s) {
   final lines = <String>[];
   switch (s.state) {
     case 'done':
-      lines.add(
-        s.filesCopied == 0
-            ? 'Nothing new to copy.'
-            : 'Copied ${_files(s.filesCopied)} (${_size(s.bytesCopied)}).',
-      );
+      lines.add(s.filesCopied == 0
+          ? 'Nothing new to copy.'
+          : 'Copied ${_files(s.filesCopied)} (${_size(s.bytesCopied)}).');
     case 'cancelled':
-      lines.add(
-        'Copy cancelled after ${_files(s.filesCopied)}. '
-        'Files already copied stay on the drive.',
-      );
+      lines.add('Copy cancelled after ${_files(s.filesCopied)}. '
+          'Files already copied stay on the drive.');
     case 'failed':
-      lines.add(
-        copyFailureMessage(
-          l,
-          s.errorCode ?? 'copy_failed',
-          s.errorDetail,
-          bytesToCopy: s.bytesToCopy,
-        ),
-      );
+      lines.add(copyFailureMessage(l, s.errorCode ?? 'copy_failed', s.errorDetail,
+          bytesToCopy: s.bytesToCopy));
   }
   if (s.filesSkipped > 0) {
     lines.add('${_files(s.filesSkipped)} were already on the drive.');
   }
   if (s.filesConflicting > 0) {
-    lines.add(
-      '${_files(s.filesConflicting)} had a different file with the '
-      'same name on the drive and were left alone.',
-    );
+    lines.add('${_files(s.filesConflicting)} had a different file with the '
+        'same name on the drive and were left alone.');
   }
   if (s.filesFailed > 0) {
-    lines.add(
-      '${_files(s.filesFailed)} could not be copied'
-      '${s.firstFailure == null ? '.' : ' (first: ${s.firstFailure}).'}',
-    );
+    lines.add('${_files(s.filesFailed)} could not be copied'
+        '${s.firstFailure == null ? '.' : ' (first: ${s.firstFailure}).'}');
   }
   if (s.targetReleased) {
     lines.add('Safe to unplug the drive.');
@@ -156,19 +140,10 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       _started = true;
       ref.invalidate(storageCopyStatusProvider);
     } on StorageCopyRefused catch (e) {
-      if (mounted)
-        setState(
-          () => _error = copyFailureMessage(context.l10n, e.code, e.detail),
-        );
+      if (mounted) setState(() => _error = copyFailureMessage(context.l10n, e.code, e.detail));
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionStartCopy,
-          ),
-        );
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionStartCopy));
       }
     } finally {
       api.close();
@@ -184,13 +159,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       await api.cancel();
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionCancelCopy,
-          ),
-        );
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionCancelCopy));
       }
     } finally {
       api.close();
@@ -211,10 +180,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
       actions: showJob
           ? [
               if (status.isRunning)
-                TextButton(
-                  onPressed: _cancel,
-                  child: const Text('Cancel copy'),
-                ),
+                TextButton(onPressed: _cancel, child: const Text('Cancel copy')),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(),
                 child: Text(status.isRunning ? 'Hide' : 'Done'),
@@ -222,9 +188,8 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
             ]
           : [
               TextButton(
-                onPressed: _busy
-                    ? null
-                    : () => ref.invalidate(storageDevicesProvider),
+                onPressed:
+                    _busy ? null : () => ref.invalidate(storageDevicesProvider),
                 child: const Text('Rescan'),
               ),
               TextButton(
@@ -232,8 +197,7 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed:
-                    _busy ||
+                onPressed: _busy ||
                         _targetUuid == null ||
                         (_pickFolders && _picked.isEmpty)
                     ? null
@@ -249,21 +213,12 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
     final devices = ref.watch(storageDevicesProvider);
     return devices.when(
       loading: () => const SizedBox(
-        height: 140,
-        child: Center(child: AdaptiveProgressIndicator()),
-      ),
+          height: 140, child: Center(child: AdaptiveProgressIndicator())),
       error: (e, _) => SizedBox(
         height: 140,
         child: Center(
-          child: Text(
-            friendlyError(
-              context.l10n,
-              e,
-              action: context.l10n.actionReadServerDisks,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
+            child: Text(friendlyError(context.l10n, e, action: context.l10n.actionReadServerDisks),
+                textAlign: TextAlign.center)),
       ),
       data: (all) {
         final store = all.where((d) => d.isAraStore).firstOrNull;
@@ -275,10 +230,8 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
           return const SizedBox(
             height: 120,
             child: Center(
-              child: Text(
-                'Choose a storage drive first: copies are made from it.',
-                textAlign: TextAlign.center,
-              ),
+              child: Text('Choose a storage drive first: copies are made from it.',
+                  textAlign: TextAlign.center),
             ),
           );
         }
@@ -302,26 +255,22 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
             // Drives formatted by ARA all carry the label ARA-DISK: the size and
             // model are what tell the source from the target.
             Text(
-              store.detailLine(context.l10n).isEmpty
-                  ? 'From ${store.friendlyName} to:'
-                  : 'From ${store.friendlyName} (${store.detailLine(context.l10n)}) to:',
-              style: theme.textTheme.bodySmall,
-            ),
+                store.detailLine(context.l10n).isEmpty
+                    ? 'From ${store.friendlyName} to:'
+                    : 'From ${store.friendlyName} (${store.detailLine(context.l10n)}) to:',
+                style: theme.textTheme.bodySmall),
             const SizedBox(height: 4),
             for (final d in targets)
               ListTile(
                 dense: true,
                 contentPadding: EdgeInsets.zero,
                 selected: d.uuid == _targetUuid,
-                selectedTileColor: AraColors.textSecondary.withValues(
-                  alpha: 0.12,
-                ),
+                selectedTileColor:
+                    AraColors.textSecondary.withValues(alpha: 0.12),
                 leading: Icon(d.removable ? Icons.usb : Icons.storage),
                 title: Text(d.friendlyName),
                 subtitle: Text(d.detailLine(context.l10n)),
-                onTap: _busy
-                    ? null
-                    : () => setState(() => _targetUuid = d.uuid),
+                onTap: _busy ? null : () => setState(() => _targetUuid = d.uuid),
               ),
             const Divider(height: 20),
             RadioGroup<bool>(
@@ -356,18 +305,14 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
             Text(
               'Files already on the drive are skipped, and nothing is deleted '
               'or overwritten on either drive.',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AraColors.textSecondary,
-              ),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
             if (_error != null) ...[
               const SizedBox(height: 12),
-              Text(
-                _error!,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AraColors.accentBusy,
-                ),
-              ),
+              Text(_error!,
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: AraColors.accentBusy)),
             ],
           ],
         );
@@ -398,8 +343,8 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
           s.state == 'preparing'
               ? 'Connecting the drive and listing files…'
               : 'Copying ${s.filesCopied + s.filesFailed} of '
-                    '${_files(s.filesToCopy)} '
-                    '(${_size(s.bytesCopied)} of ${_size(s.bytesToCopy)})',
+                  '${_files(s.filesToCopy)} '
+                  '(${_size(s.bytesCopied)} of ${_size(s.bytesToCopy)})',
         ),
         const SizedBox(height: 10),
         ClipRRect(
@@ -414,30 +359,23 @@ class _CopyDialogState extends ConsumerState<_CopyDialog> {
         ),
         if (s.currentFile != null) ...[
           const SizedBox(height: 8),
-          Text(
-            s.currentFile!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AraColors.textSecondary,
-            ),
-          ),
+          Text(s.currentFile!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary)),
         ],
         const SizedBox(height: 10),
         Text(
           'You can hide this window; the copy keeps going on the server.',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AraColors.textSecondary,
-          ),
+          style: theme.textTheme.bodySmall
+              ?.copyWith(color: AraColors.textSecondary),
         ),
         if (_error != null) ...[
           const SizedBox(height: 12),
-          Text(
-            _error!,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: AraColors.accentBusy,
-            ),
-          ),
+          Text(_error!,
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AraColors.accentBusy)),
         ],
       ],
     );
@@ -487,13 +425,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
       });
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyError(
-            context.l10n,
-            e,
-            action: context.l10n.actionListFolders,
-          ),
-        );
+        setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionListFolders));
       }
     } finally {
       api.close();
@@ -513,9 +445,7 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
     return Container(
       constraints: const BoxConstraints(maxHeight: 240),
       decoration: BoxDecoration(
-        border: Border.all(
-          color: AraColors.textSecondary.withValues(alpha: 0.35),
-        ),
+        border: Border.all(color: AraColors.textSecondary.withValues(alpha: 0.35)),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Column(
@@ -564,16 +494,14 @@ class _FolderChecklistState extends ConsumerState<_FolderChecklist> {
                     CheckboxListTile(
                       dense: true,
                       controlAffinity: ListTileControlAffinity.leading,
-                      value:
-                          widget.picked.contains(dir.path) ||
+                      value: widget.picked.contains(dir.path) ||
                           _underPicked(dir.path),
                       onChanged: _underPicked(dir.path)
                           ? null
                           : (v) {
                               if (v ?? false) {
-                                widget.picked.removeWhere(
-                                  (p) => p.startsWith('${dir.path}/'),
-                                );
+                                widget.picked
+                                    .removeWhere((p) => p.startsWith('${dir.path}/'));
                                 widget.picked.add(dir.path);
                               } else {
                                 widget.picked.remove(dir.path);

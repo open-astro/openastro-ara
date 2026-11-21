@@ -77,80 +77,46 @@ void main() {
       expect(node.keys.toSet(), {r'$type', 'Parent', 'TriggerRunner'});
     });
 
-    test(
-      'each build produces its own TriggerRunner (not a shared instance)',
-      () {
-        final a = triggerForType(_meridianFlip)!.build();
-        final b = triggerForType(_meridianFlip)!.build();
-        // Distinct runner instances; deep fresh-list isolation of the container is
-        // covered by the instruction catalog's container test (the runner is built
-        // through instructionForType, so it inherits that guarantee).
-        expect(identical(a['TriggerRunner'], b['TriggerRunner']), isFalse);
-        expect(childrenOf(a['TriggerRunner'] as Map<String, dynamic>), isEmpty);
-        expect(childrenOf(b['TriggerRunner'] as Map<String, dynamic>), isEmpty);
-      },
-    );
+    test('each build produces its own TriggerRunner (not a shared instance)', () {
+      final a = triggerForType(_meridianFlip)!.build();
+      final b = triggerForType(_meridianFlip)!.build();
+      // Distinct runner instances; deep fresh-list isolation of the container is
+      // covered by the instruction catalog's container test (the runner is built
+      // through instructionForType, so it inherits that guarantee).
+      expect(identical(a['TriggerRunner'], b['TriggerRunner']), isFalse);
+      expect(childrenOf(a['TriggerRunner'] as Map<String, dynamic>), isEmpty);
+      expect(childrenOf(b['TriggerRunner'] as Map<String, dynamic>), isEmpty);
+    });
 
-    test(
-      'ReconnectTrigger builds with a SelectedDevice from the device set',
-      () {
-        final def = triggerForType(_reconnect)!;
-        // SelectedDevice is a stringEnum over the grounded device names.
-        final field = def.fields.single;
-        expect(field.key, 'SelectedDevice');
-        expect(field.type, InstructionFieldType.stringEnum);
-        expect(field.enumValues, reconnectDeviceNames);
-        expect(
-          field.enumValues,
-          contains(field.defaultValue),
-        ); // default is valid
-        final node = def.build();
-        expect(node['SelectedDevice'], 'Camera'); // C# constructor default
-        expect(node.keys.toSet(), {
-          r'$type',
-          'SelectedDevice',
-          'Parent',
-          'TriggerRunner',
-        });
-        // "Mount" replaced the legacy "Telescope" name; "Telescope" must be absent.
-        expect(reconnectDeviceNames, contains('Mount'));
-        expect(reconnectDeviceNames, isNot(contains('Telescope')));
-      },
-    );
+    test('ReconnectTrigger builds with a SelectedDevice from the device set', () {
+      final def = triggerForType(_reconnect)!;
+      // SelectedDevice is a stringEnum over the grounded device names.
+      final field = def.fields.single;
+      expect(field.key, 'SelectedDevice');
+      expect(field.type, InstructionFieldType.stringEnum);
+      expect(field.enumValues, reconnectDeviceNames);
+      expect(field.enumValues, contains(field.defaultValue)); // default is valid
+      final node = def.build();
+      expect(node['SelectedDevice'], 'Camera'); // C# constructor default
+      expect(node.keys.toSet(), {r'$type', 'SelectedDevice', 'Parent', 'TriggerRunner'});
+      // "Mount" replaced the legacy "Telescope" name; "Telescope" must be absent.
+      expect(reconnectDeviceNames, contains('Mount'));
+      expect(reconnectDeviceNames, isNot(contains('Telescope')));
+    });
 
     test('CenterAfterDriftTrigger carries the target, the threshold and the cadence', () {
       final def = triggerForType(centerAfterDriftType)!;
-      expect(def.fields.map((f) => f.key), [
-        'Coordinates',
-        'DistanceArcMinutes',
-        'AfterExposures',
-      ]);
-      expect(
-        def.runnerItems,
-        isEmpty,
-        reason: 'the daemon re-centres through its own seam',
-      );
+      expect(def.fields.map((f) => f.key), ['Coordinates', 'DistanceArcMinutes', 'AfterExposures']);
+      expect(def.runnerItems, isEmpty, reason: 'the daemon re-centres through its own seam');
       final node = def.build();
       // C# constructor defaults.
       expect(node['DistanceArcMinutes'], 10.0);
       expect(node['AfterExposures'], 1);
-      expect(
-        (node['Coordinates'] as Map)[r'$type'],
-        contains('InputCoordinates'),
-      );
-      expect(node.keys.toSet(), {
-        r'$type',
-        'Coordinates',
-        'DistanceArcMinutes',
-        'AfterExposures',
-        'Parent',
-        'TriggerRunner',
-      });
+      expect((node['Coordinates'] as Map)[r'$type'], contains('InputCoordinates'));
+      expect(node.keys.toSet(),
+          {r'$type', 'Coordinates', 'DistanceArcMinutes', 'AfterExposures', 'Parent', 'TriggerRunner'});
       // Each build gets its own coordinates map (deep-cloned default).
-      expect(
-        identical(def.build()['Coordinates'], node['Coordinates']),
-        isFalse,
-      );
+      expect(identical(def.build()['Coordinates'], node['Coordinates']), isFalse);
     });
 
     test('build() throws if a field key collides with a reserved base key', () {
@@ -159,12 +125,8 @@ void main() {
         label: 'bad',
         icon: Icons.error,
         fields: [
-          InstructionField(
-            'TriggerRunner',
-            'oops',
-            InstructionFieldType.text,
-            defaultValue: '',
-          ),
+          InstructionField('TriggerRunner', 'oops', InstructionFieldType.text,
+              defaultValue: ''),
         ],
       );
       expect(() => bad.build(), throwsStateError);

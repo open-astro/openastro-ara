@@ -33,9 +33,7 @@ void main() {
 
     test('parses the guider profile list for the Settings picker', () {
       final s = GuiderStatus.fromJson({
-        'device_id': 'PHD2_Single',
-        'name': 'PHD2',
-        'state': 'connected',
+        'device_id': 'PHD2_Single', 'name': 'PHD2', 'state': 'connected',
         'runtime': {
           'state': 'stopped',
           'profiles': [
@@ -46,11 +44,7 @@ void main() {
         },
       });
       expect(s.profiles, {1: 'Default', 4: 'ara-main'});
-      expect(
-        GuiderStatus.fromJson(const {'name': 'PHD2', 'state': 'disconnected'})
-            .profiles,
-        isEmpty,
-      );
+      expect(GuiderStatus.fromJson(const {'name': 'PHD2', 'state': 'disconnected'}).profiles, isEmpty);
     });
 
     test('parses the daemon arcsec RMS alongside the pixel figures', () {
@@ -84,14 +78,10 @@ void main() {
     });
 
     test('the out-of-step reason makes a different status, so listeners rebuild (#1665)', () {
-      GuiderStatus at(String? reason) =>
-          GuiderStatus.fromJson(<String, dynamic>{
-            'state': 'connected',
-            'runtime': <String, dynamic>{
-              'state': 'stopped',
-              'out_of_step_reason': reason,
-            },
-          });
+      GuiderStatus at(String? reason) => GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'stopped', 'out_of_step_reason': reason},
+      });
       expect(at('refused'), isNot(at(null)));
       expect(at('refused'), at('refused'));
     });
@@ -118,16 +108,12 @@ void main() {
     });
 
     test('looping, a selected star and settling are their own phases', () {
-      GuiderStatus withState(String token) =>
-          GuiderStatus.fromJson(<String, dynamic>{
+      GuiderStatus withState(String token) => GuiderStatus.fromJson(<String, dynamic>{
             'state': 'connected',
             'runtime': <String, dynamic>{'state': token},
           });
       expect(withState('looping').runtimeState, GuiderRuntimeState.looping);
-      expect(
-        withState('star_selected').runtimeState,
-        GuiderRuntimeState.starSelected,
-      );
+      expect(withState('star_selected').runtimeState, GuiderRuntimeState.starSelected);
       expect(withState('settling').runtimeState, GuiderRuntimeState.settling);
       expect(withState('assistant').runtimeState, GuiderRuntimeState.assistant);
       expect(withState('assistant').runtimeSummary(_en), 'Guiding Assistant');
@@ -135,29 +121,22 @@ void main() {
       expect(withState('settling').runtimeSummary(_en), 'Settling');
     });
 
-    test(
-      'the summary carries the calibration leg and says when not connected',
-      () {
-        final cal = GuiderStatus.fromJson(<String, dynamic>{
-          'state': 'connected',
-          'runtime': <String, dynamic>{
-            'state': 'calibrating',
-            'calibration_direction': 'West',
-            'calibration_step': 3,
-            'calibration_distance_px': 4.2,
-          },
-        });
-        expect(cal.runtimeSummary(_en), 'Calibrating · West step 3 · 4.2 px');
-        expect(
-          GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'})
-              .runtimeSummary(_en),
-          'Not connected',
-        );
-        for (final s in GuiderRuntimeState.values) {
-          expect(guiderRuntimeText(_en, s), isNotEmpty);
-        }
-      },
-    );
+    test('the summary carries the calibration leg and says when not connected', () {
+      final cal = GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{
+          'state': 'calibrating',
+          'calibration_direction': 'West',
+          'calibration_step': 3,
+          'calibration_distance_px': 4.2,
+        },
+      });
+      expect(cal.runtimeSummary(_en), 'Calibrating · West step 3 · 4.2 px');
+      expect(GuiderStatus.fromJson(<String, dynamic>{'state': 'disconnected'}).runtimeSummary(_en), 'Not connected');
+      for (final s in GuiderRuntimeState.values) {
+        expect(guiderRuntimeText(_en, s), isNotEmpty);
+      }
+    });
 
     test('a disconnected guider has null RMS and stopped/unknown runtime', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
@@ -182,19 +161,16 @@ void main() {
       expect(s.name, 'Guider', reason: 'defaults when name absent');
     });
 
-    test(
-      'a missing runtime object degrades to unknown runtime, not a throw',
-      () {
-        final s = GuiderStatus.fromJson(<String, dynamic>{
-          'device_id': 'phd2',
-          'name': 'OpenAstro Guider',
-          'state': 'connecting',
-        });
-        expect(s.connectionState, GuiderConnectionState.connecting);
-        expect(s.runtimeState, GuiderRuntimeState.unknown);
-        expect(s.rmsTotal, isNull);
-      },
-    );
+    test('a missing runtime object degrades to unknown runtime, not a throw', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 'phd2',
+        'name': 'OpenAstro Guider',
+        'state': 'connecting',
+      });
+      expect(s.connectionState, GuiderConnectionState.connecting);
+      expect(s.runtimeState, GuiderRuntimeState.unknown);
+      expect(s.rmsTotal, isNull);
+    });
 
     test('integer RMS values coerce to double', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
@@ -204,31 +180,24 @@ void main() {
       expect(s.rmsTotal, 1.0);
     });
 
-    test(
-      'wrong-typed string fields degrade to null/default rather than throwing',
-      () {
-        final s = GuiderStatus.fromJson(<String, dynamic>{
-          'device_id': 42, // not a String
-          'name': 7, // not a String
-          'state': <String, dynamic>{}, // not a String
-          'runtime': <String, dynamic>{'state': 99, 'current_profile': true},
-        });
-        expect(s.deviceId, isNull);
-        expect(s.name, 'Guider');
-        expect(s.connectionState, GuiderConnectionState.unknown);
-        expect(s.runtimeState, GuiderRuntimeState.unknown);
-        expect(s.currentProfile, isNull);
-      },
-    );
+    test('wrong-typed string fields degrade to null/default rather than throwing', () {
+      final s = GuiderStatus.fromJson(<String, dynamic>{
+        'device_id': 42, // not a String
+        'name': 7, // not a String
+        'state': <String, dynamic>{}, // not a String
+        'runtime': <String, dynamic>{'state': 99, 'current_profile': true},
+      });
+      expect(s.deviceId, isNull);
+      expect(s.name, 'Guider');
+      expect(s.connectionState, GuiderConnectionState.unknown);
+      expect(s.runtimeState, GuiderRuntimeState.unknown);
+      expect(s.currentProfile, isNull);
+    });
 
     test('string-encoded RMS values are coerced to double', () {
       final s = GuiderStatus.fromJson(<String, dynamic>{
         'state': 'connected',
-        'runtime': <String, dynamic>{
-          'state': 'guiding',
-          'rms_total': '0.42',
-          'rms_ra': 'nope',
-        },
+        'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': '0.42', 'rms_ra': 'nope'},
       });
       expect(s.rmsTotal, 0.42);
       expect(s.rmsRa, isNull, reason: 'unparseable string → null');
@@ -249,33 +218,26 @@ void main() {
       expect(s.rmsDec, isNull);
     });
 
-    test(
-      'value equality — equal-content parses compare equal (no rebuild churn)',
-      () {
-        Map<String, dynamic> frame() => <String, dynamic>{
-          'device_id': 'phd2',
-          'name': 'OpenAstro Guider',
-          'state': 'connected',
-          'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': 0.4},
-        };
-        final a = GuiderStatus.fromJson(frame());
-        final b = GuiderStatus.fromJson(frame());
-        expect(a, equals(b));
-        expect(a.hashCode, b.hashCode);
+    test('value equality — equal-content parses compare equal (no rebuild churn)', () {
+      Map<String, dynamic> frame() => <String, dynamic>{
+            'device_id': 'phd2',
+            'name': 'OpenAstro Guider',
+            'state': 'connected',
+            'runtime': <String, dynamic>{'state': 'guiding', 'rms_total': 0.4},
+          };
+      final a = GuiderStatus.fromJson(frame());
+      final b = GuiderStatus.fromJson(frame());
+      expect(a, equals(b));
+      expect(a.hashCode, b.hashCode);
 
-        final c = GuiderStatus.fromJson(frame()..['state'] = 'disconnected');
-        expect(a, isNot(equals(c)));
-      },
-    );
+      final c = GuiderStatus.fromJson(frame()..['state'] = 'disconnected');
+      expect(a, isNot(equals(c)));
+    });
   });
 
   group('the three guider questions', () {
     // Which phases answer yes, connected; disconnected answers no to all.
-    const correcting = {
-      GuiderRuntimeState.guiding,
-      GuiderRuntimeState.settling,
-      GuiderRuntimeState.dithering,
-    };
+    const correcting = {GuiderRuntimeState.guiding, GuiderRuntimeState.settling, GuiderRuntimeState.dithering};
     const notBusy = {GuiderRuntimeState.stopped, GuiderRuntimeState.unknown};
     const stopEnds = {
       GuiderRuntimeState.calibrating,
@@ -296,22 +258,13 @@ void main() {
       });
     }
 
-    test(
-      'a guider not connected answers no, whatever phase it last reported',
-      () {
-        for (final c in GuiderConnectionState.values.where(
-          (c) => c != GuiderConnectionState.connected,
-        )) {
-          for (final r in GuiderRuntimeState.values) {
-            final g = at(c, r);
-            expect(
-              [g.isCorrecting, g.isBusy, g.stopEndsPhase],
-              [false, false, false],
-              reason: '$c $r',
-            );
-          }
+    test('a guider not connected answers no, whatever phase it last reported', () {
+      for (final c in GuiderConnectionState.values.where((c) => c != GuiderConnectionState.connected)) {
+        for (final r in GuiderRuntimeState.values) {
+          final g = at(c, r);
+          expect([g.isCorrecting, g.isBusy, g.stopEndsPhase], [false, false, false], reason: '$c $r');
         }
-      },
-    );
+      }
+    });
   });
 }

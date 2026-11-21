@@ -73,24 +73,21 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
     AraServer server, {
     required String path,
     required this.fromJson,
-  }) : _base = '/api/v1/equipment/$path',
-       _dio = Dio(
-         BaseOptions(
-           baseUrl: server.baseUrl,
-           connectTimeout: const Duration(seconds: 3),
-           receiveTimeout: const Duration(seconds: 5),
-           // Bound the body write too — connect/disconnect are POSTs, so a server
-           // that accepts the socket but stalls reading the body must not hang.
-           sendTimeout: const Duration(seconds: 5),
-         ),
-       );
+  })  : _base = '/api/v1/equipment/$path',
+        _dio = Dio(BaseOptions(
+          baseUrl: server.baseUrl,
+          connectTimeout: const Duration(seconds: 3),
+          receiveTimeout: const Duration(seconds: 5),
+          // Bound the body write too — connect/disconnect are POSTs, so a server
+          // that accepts the socket but stalls reading the body must not hang.
+          sendTimeout: const Duration(seconds: 5),
+        ));
 
   // A "not connected" device is a legitimate 404 on the status GET (only) — scope
   // the exemption to that request so a 404 on the connect/disconnect POSTs (a
   // routing/version bug) still throws instead of looking like a silent success.
   static final Options _getStatusOptions = Options(
-    validateStatus: (status) =>
-        status != null && (status < 400 || status == 404),
+    validateStatus: (status) => status != null && (status < 400 || status == 404),
   );
 
   @override
@@ -104,8 +101,7 @@ class EquipmentDeviceApi<T> implements EquipmentDeviceClient<T> {
     // by the caller's AsyncValue.guard; no TypeError escapes.
     if (data is! Map<String, dynamic>) {
       throw Exception(
-        'unexpected ${res.statusCode} body from $_base — not a JSON object',
-      );
+          'unexpected ${res.statusCode} body from $_base — not a JSON object');
     }
     return fromJson(data);
   }

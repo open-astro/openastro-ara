@@ -25,12 +25,12 @@ class AraServer {
   String get baseUrl => 'http://$hostname:$port';
 
   AraServer copyWith({String? serverVersion}) => AraServer(
-    hostname: hostname,
-    port: port,
-    mdnsName: mdnsName,
-    serverVersion: serverVersion ?? this.serverVersion,
-    uuid: uuid,
-  );
+        hostname: hostname,
+        port: port,
+        mdnsName: mdnsName,
+        serverVersion: serverVersion ?? this.serverVersion,
+        uuid: uuid,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -40,6 +40,5 @@ class AraServer {
   int get hashCode => Object.hash(hostname, port);
 
   @override
-  String toString() =>
-      'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion, uuid=$uuid)';
+  String toString() => 'AraServer($hostname:$port, mdns=$mdnsName, ver=$serverVersion, uuid=$uuid)';
 }

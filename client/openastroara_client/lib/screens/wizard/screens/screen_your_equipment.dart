@@ -61,31 +61,31 @@ const List<EquipmentDeviceType> _otherTypes = [
 ];
 
 String _typeLabel(EquipmentDeviceType t) => switch (t) {
-  EquipmentDeviceType.camera => 'Camera',
-  EquipmentDeviceType.mount => 'Mount (Telescope)',
-  EquipmentDeviceType.filterWheel => 'Filter wheel',
-  EquipmentDeviceType.focuser => 'Focuser',
-  EquipmentDeviceType.rotator => 'Rotator',
-  EquipmentDeviceType.dome => 'Dome',
-  EquipmentDeviceType.weather => 'Observing conditions',
-  EquipmentDeviceType.safetyMonitor => 'Safety monitor',
-  EquipmentDeviceType.flatPanel => 'Flat panel',
-  EquipmentDeviceType.switchDevice => 'Switch',
-  EquipmentDeviceType.guider => 'Guider',
-};
+      EquipmentDeviceType.camera => 'Camera',
+      EquipmentDeviceType.mount => 'Mount (Telescope)',
+      EquipmentDeviceType.filterWheel => 'Filter wheel',
+      EquipmentDeviceType.focuser => 'Focuser',
+      EquipmentDeviceType.rotator => 'Rotator',
+      EquipmentDeviceType.dome => 'Dome',
+      EquipmentDeviceType.weather => 'Observing conditions',
+      EquipmentDeviceType.safetyMonitor => 'Safety monitor',
+      EquipmentDeviceType.flatPanel => 'Flat panel',
+      EquipmentDeviceType.switchDevice => 'Switch',
+      EquipmentDeviceType.guider => 'Guider',
+    };
 
 String? _slotGet(EquipmentSlots e, EquipmentDeviceType t) => switch (t) {
-  EquipmentDeviceType.camera => e.cameraDeviceId,
-  EquipmentDeviceType.mount => e.mountDeviceId,
-  EquipmentDeviceType.filterWheel => e.filterWheelDeviceId,
-  EquipmentDeviceType.focuser => e.focuserDeviceId,
-  EquipmentDeviceType.rotator => e.rotatorDeviceId,
-  EquipmentDeviceType.dome => e.domeDeviceId,
-  EquipmentDeviceType.weather => e.observingConditionsDeviceId,
-  EquipmentDeviceType.safetyMonitor => e.safetyMonitorDeviceId,
-  EquipmentDeviceType.flatPanel => e.flatPanelDeviceId,
-  _ => null,
-};
+      EquipmentDeviceType.camera => e.cameraDeviceId,
+      EquipmentDeviceType.mount => e.mountDeviceId,
+      EquipmentDeviceType.filterWheel => e.filterWheelDeviceId,
+      EquipmentDeviceType.focuser => e.focuserDeviceId,
+      EquipmentDeviceType.rotator => e.rotatorDeviceId,
+      EquipmentDeviceType.dome => e.domeDeviceId,
+      EquipmentDeviceType.weather => e.observingConditionsDeviceId,
+      EquipmentDeviceType.safetyMonitor => e.safetyMonitorDeviceId,
+      EquipmentDeviceType.flatPanel => e.flatPanelDeviceId,
+      _ => null,
+    };
 
 void _slotSet(EquipmentSlots e, EquipmentDeviceType t, String? v) {
   switch (t) {
@@ -128,6 +128,7 @@ class ScreenYourEquipment extends ConsumerStatefulWidget {
 class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   late final ProfileDraft _draft;
 
+
   bool _preparing = false;
   String? _prepareError;
 
@@ -152,10 +153,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     final server = await ref.read(activeServerFutureProvider.future);
     if (!mounted) return;
     if (server == null) {
-      setState(
-        () =>
-            _prepareError = 'Not connected — connect to your rig to save this.',
-      );
+      setState(() =>
+          _prepareError = 'Not connected — connect to your rig to save this.');
       return;
     }
     setState(() {
@@ -195,11 +194,9 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
       // ignore: avoid_catches_without_on_clauses
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _prepareError =
-              'Discovery failed: ${failureReason(context.l10n, e)} '
-              'Check the bridge, then Re-scan.',
-        );
+        setState(() => _prepareError =
+            'Discovery failed: ${failureReason(context.l10n, e)} '
+            'Check the bridge, then Re-scan.');
       }
     } finally {
       if (mounted) setState(() => _preparing = false);
@@ -213,9 +210,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   /// daemon's manual filter wheel (#1298) is in every filter-wheel listing, so
   /// it never counts: a hand-swapped wheel is the user's choice, not a guess.
   Future<void> _autoAssign(
-    EquipmentDiscoveryApi api,
-    EquipmentDeviceType type,
-  ) async {
+      EquipmentDiscoveryApi api, EquipmentDeviceType type) async {
     try {
       final devices = (await api.discover(type))
           .where((d) => !d.isManualFilterWheel)
@@ -251,15 +246,17 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
 
   Future<void> _choose(EquipmentDeviceType type) async {
     final server = ref.read(activeServerProvider);
-    final api = server == null
-        ? null
-        : ref.read(equipmentDiscoveryApiFactoryProvider)(server);
+    final api =
+        server == null ? null : ref.read(equipmentDiscoveryApiFactoryProvider)(server);
     final picked = await showModalBottomSheet<DeviceChoice>(
       context: context,
       backgroundColor: AraColors.bgPanel,
       isScrollControlled: true,
-      builder: (_) =>
-          DiscoverySheet(slotLabel: _typeLabel(type), type: type, api: api),
+      builder: (_) => DiscoverySheet(
+        slotLabel: _typeLabel(type),
+        type: type,
+        api: api,
+      ),
     );
     api?.close();
     if (picked == null || !mounted) return;
@@ -286,9 +283,8 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
 
   Future<void> _addSwitch() async {
     final server = ref.read(activeServerProvider);
-    final api = server == null
-        ? null
-        : ref.read(equipmentDiscoveryApiFactoryProvider)(server);
+    final api =
+        server == null ? null : ref.read(equipmentDiscoveryApiFactoryProvider)(server);
     final picked = await showModalBottomSheet<DeviceChoice>(
       context: context,
       backgroundColor: AraColors.bgPanel,
@@ -314,21 +310,15 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
     final server = ref.read(activeServerProvider);
     final id = _slotGet(_draft.equipment, type);
     if (server == null || id == null) return;
-    unawaited(
-      ref
-          .read(wizardEquipmentReadinessProvider.notifier)
-          .recheck(server, type, id),
-    );
+    unawaited(ref
+        .read(wizardEquipmentReadinessProvider.notifier)
+        .recheck(server, type, id));
   }
 
   @override
   Widget build(BuildContext context) {
-    final fan =
-        _draft.coolingFan ??
-        ref.watch(coolingFanProvider).value ??
-        CoolingFan.none;
-    final switches =
-        ref.watch(switchListProvider).value ?? const <SwitchDevice>[];
+    final fan = _draft.coolingFan ?? ref.watch(coolingFanProvider).value ?? CoolingFan.none;
+    final switches = ref.watch(switchListProvider).value ?? const <SwitchDevice>[];
     // Every landed read writes its facts into the draft — the save mappers
     // consume the draft, and inline fallback fields must not fight fresh
     // device truth.
@@ -345,8 +335,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
 
     return WizardScreenScaffold(
       step: 3,
-      intro:
-          'ARA read your gear straight from AlpacaBridge — confirm it, '
+      intro: 'ARA read your gear straight from AlpacaBridge — confirm it, '
           'don\'t re-type it. Anything marked ⚠ is fixed at the source: open '
           'the device in AlpacaBridge, correct it, then Recheck.',
       children: [
@@ -363,13 +352,11 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
                   onChoose: () => unawaited(_choose(type)),
                 )
               : _DeviceCard(
-                  readiness:
-                      readiness[type] ??
+                  readiness: readiness[type] ??
                       DeviceReadiness(
-                        type: type,
-                        label: _typeLabel(type),
-                        state: ReadinessState.reading,
-                      ),
+                          type: type,
+                          label: _typeLabel(type),
+                          state: ReadinessState.reading),
                   draft: _draft,
                   onRecheck: () => _recheck(type),
                   onChange: () => unawaited(_choose(type)),
@@ -382,7 +369,7 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
             assigned: _slotGet(_draft.equipment, type) == null
                 ? null
                 : (_draft.deviceNames[_slotGet(_draft.equipment, type)!] ??
-                      _slotGet(_draft.equipment, type)!),
+                    _slotGet(_draft.equipment, type)!),
             onChoose: () => unawaited(_choose(type)),
           ),
         _switchSection(context),
@@ -410,22 +397,20 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    ids.isEmpty
-                        ? 'Switches — none (add every switch hub your rig uses)'
-                        : 'Switches — ${ids.length} assigned',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+            Row(children: [
+              Expanded(
+                child: Text(
+                  ids.isEmpty
+                      ? 'Switches — none (add every switch hub your rig uses)'
+                      : 'Switches — ${ids.length} assigned',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                TextButton(
-                  onPressed: () => unawaited(_addSwitch()),
-                  child: const Text('Add switch'),
-                ),
-              ],
-            ),
+              ),
+              TextButton(
+                onPressed: () => unawaited(_addSwitch()),
+                child: const Text('Add switch'),
+              ),
+            ]),
             if (ids.isNotEmpty)
               Wrap(
                 spacing: 8,
@@ -448,33 +433,28 @@ class _ScreenYourEquipmentState extends ConsumerState<ScreenYourEquipment> {
   }
 
   Widget _errorBanner(BuildContext context, String message) => Padding(
-    padding: const EdgeInsets.only(bottom: 16),
-    child: Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: AraColors.accentError.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(4),
-        border: Border.all(color: AraColors.accentError),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            Icons.error_outline,
-            size: 18,
-            color: AraColors.accentError,
+        padding: const EdgeInsets.only(bottom: 16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: AraColors.accentError.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: AraColors.accentError),
           ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(message, style: Theme.of(context).textTheme.bodySmall),
-          ),
-          TextButton(
-            onPressed: _preparing ? null : () => unawaited(_prepare()),
-            child: const Text('Re-scan'),
-          ),
-        ],
-      ),
-    ),
-  );
+          child: Row(children: [
+            const Icon(Icons.error_outline,
+                size: 18, color: AraColors.accentError),
+            const SizedBox(width: 8),
+            Expanded(
+                child:
+                    Text(message, style: Theme.of(context).textTheme.bodySmall)),
+            TextButton(
+              onPressed: _preparing ? null : () => unawaited(_prepare()),
+              child: const Text('Re-scan'),
+            ),
+          ]),
+        ),
+      );
 }
 
 /// A fact type nothing was auto-assigned to: a quiet row, not an amber card —
@@ -495,35 +475,27 @@ class _UnassignedRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AraColors.border),
         ),
-        child: Row(
-          children: [
-            const Icon(
-              Icons.radio_button_unchecked,
-              size: 18,
-              color: AraColors.textDisabled,
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '$label — none',
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: AraColors.textSecondary),
-              ),
-            ),
-            TextButton(onPressed: onChoose, child: const Text('Choose')),
-          ],
-        ),
+        child: Row(children: [
+          const Icon(Icons.radio_button_unchecked,
+              size: 18, color: AraColors.textDisabled),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('$label — none',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AraColors.textSecondary)),
+          ),
+          TextButton(onPressed: onChoose, child: const Text('Choose')),
+        ]),
       ),
     );
   }
 }
 
 class _OtherRow extends StatelessWidget {
-  const _OtherRow({
-    required this.label,
-    required this.assigned,
-    required this.onChoose,
-  });
+  const _OtherRow(
+      {required this.label, required this.assigned, required this.onChoose});
   final String label;
   final String? assigned;
   final VoidCallback onChoose;
@@ -539,34 +511,29 @@ class _OtherRow extends StatelessWidget {
           borderRadius: BorderRadius.circular(4),
           border: Border.all(color: AraColors.border),
         ),
-        child: Row(
-          children: [
-            Icon(
-              assigned != null
-                  ? Icons.check_circle
-                  : Icons.radio_button_unchecked,
-              size: 18,
-              color: assigned != null
-                  ? AraColors.accentConnected
-                  : AraColors.textDisabled,
+        child: Row(children: [
+          Icon(
+            assigned != null ? Icons.check_circle : Icons.radio_button_unchecked,
+            size: 18,
+            color: assigned != null
+                ? AraColors.accentConnected
+                : AraColors.textDisabled,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              assigned != null ? '$label — $assigned' : '$label — none',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: assigned != null
+                        ? AraColors.textPrimary
+                        : AraColors.textSecondary,
+                  ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                assigned != null ? '$label — $assigned' : '$label — none',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: assigned != null
-                      ? AraColors.textPrimary
-                      : AraColors.textSecondary,
-                ),
-              ),
-            ),
-            TextButton(
+          ),
+          TextButton(
               onPressed: onChoose,
-              child: Text(assigned == null ? 'Choose' : 'Change'),
-            ),
-          ],
-        ),
+              child: Text(assigned == null ? 'Choose' : 'Change')),
+        ]),
       ),
     );
   }
@@ -594,14 +561,8 @@ class _DeviceCard extends ConsumerWidget {
     final (icon, color) = switch (r.state) {
       ReadinessState.reading => (Icons.sync, AraColors.textSecondary),
       ReadinessState.ready => (Icons.check_circle, AraColors.accentConnected),
-      ReadinessState.gaps => (
-        Icons.warning_amber_rounded,
-        AraColors.accentBusy,
-      ),
-      ReadinessState.unreachable => (
-        Icons.error_outline,
-        AraColors.accentError,
-      ),
+      ReadinessState.gaps => (Icons.warning_amber_rounded, AraColors.accentBusy),
+      ReadinessState.unreachable => (Icons.error_outline, AraColors.accentError),
     };
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -611,44 +572,38 @@ class _DeviceCard extends ConsumerWidget {
           color: AraColors.bgPanel,
           borderRadius: BorderRadius.circular(4),
           border: Border.all(
-            color: r.hasBlockingGap && r.state != ReadinessState.reading
-                ? color
-                : AraColors.border,
-          ),
+              color: r.hasBlockingGap && r.state != ReadinessState.reading
+                  ? color
+                  : AraColors.border),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                if (r.state == ReadinessState.reading)
-                  const SizedBox(
+            Row(children: [
+              if (r.state == ReadinessState.reading)
+                const SizedBox(
                     width: 18,
                     height: 18,
-                    child: AdaptiveProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  Icon(icon, size: 18, color: color),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        r.label,
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                      Text(
-                        _typeLabel(r.type),
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: AraColors.textSecondary),
-                      ),
-                    ],
-                  ),
+                    child: AdaptiveProgressIndicator(strokeWidth: 2))
+              else
+                Icon(icon, size: 18, color: color),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(r.label,
+                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(_typeLabel(r.type),
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: AraColors.textSecondary)),
+                  ],
                 ),
-                TextButton(onPressed: onChange, child: const Text('Change')),
-              ],
-            ),
+              ),
+              TextButton(onPressed: onChange, child: const Text('Change')),
+            ]),
             if (r.facts.isNotEmpty) ...[
               const SizedBox(height: 6),
               Wrap(
@@ -656,11 +611,11 @@ class _DeviceCard extends ConsumerWidget {
                 runSpacing: 4,
                 children: [
                   for (final f in r.facts)
-                    Text(
-                      '${f.label}: ${f.value}',
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AraColors.textSecondary),
-                    ),
+                    Text('${f.label}: ${f.value}',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: AraColors.textSecondary)),
                 ],
               ),
             ],
@@ -681,37 +636,33 @@ class _DeviceCard extends ConsumerWidget {
                     ),
                     const SizedBox(width: 6),
                     Expanded(
-                      child: Text(
-                        '${gap.label} — ${gap.hint}',
-                        style: Theme.of(context).textTheme.bodySmall
-                            ?.copyWith(color: AraColors.textSecondary),
-                      ),
+                      child: Text('${gap.label} — ${gap.hint}',
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodySmall
+                              ?.copyWith(color: AraColors.textSecondary)),
                     ),
                   ],
                 ),
               ),
             if (r.state != ReadinessState.reading) ...[
               const SizedBox(height: 6),
-              Wrap(
-                spacing: 8,
-                children: [
-                  if (r.hasBlockingGap && r.setupUri != null)
-                    OutlinedButton.icon(
-                      onPressed: () =>
-                          unawaited(_openBridge(context, r.setupUri!)),
-                      icon: const Icon(Icons.open_in_new, size: 15),
-                      label: const Text('Open in AlpacaBridge'),
-                    ),
-                  if (r.hasBlockingGap ||
-                      r.gaps.isNotEmpty ||
-                      r.state == ReadinessState.unreachable)
-                    OutlinedButton.icon(
-                      onPressed: onRecheck,
-                      icon: const Icon(Icons.refresh, size: 15),
-                      label: const Text('Recheck'),
-                    ),
-                ],
-              ),
+              Wrap(spacing: 8, children: [
+                if (r.hasBlockingGap && r.setupUri != null)
+                  OutlinedButton.icon(
+                    onPressed: () => unawaited(_openBridge(context, r.setupUri!)),
+                    icon: const Icon(Icons.open_in_new, size: 15),
+                    label: const Text('Open in AlpacaBridge'),
+                  ),
+                if (r.hasBlockingGap ||
+                    r.gaps.isNotEmpty ||
+                    r.state == ReadinessState.unreachable)
+                  OutlinedButton.icon(
+                    onPressed: onRecheck,
+                    icon: const Icon(Icons.refresh, size: 15),
+                    label: const Text('Recheck'),
+                  ),
+              ]),
             ],
             _DetailsDisclosure(readiness: r, draft: draft),
           ],
@@ -724,9 +675,8 @@ class _DeviceCard extends ConsumerWidget {
     final messenger = ScaffoldMessenger.of(context);
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Couldn\'t open $uri — browse to it manually.')),
-      );
+      messenger.showSnackBar(SnackBar(
+          content: Text('Couldn\'t open $uri — browse to it manually.')));
     }
   }
 }
@@ -773,15 +723,14 @@ class _DetailsDisclosure extends StatelessWidget {
 
   Widget _tile(BuildContext context, List<Widget> children) {
     return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(top: 4),
-      title: Text(
-        'Details',
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: AraColors.textSecondary),
-      ),
-      children: children,
-    );
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(top: 4),
+        title: Text('Details',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: AraColors.textSecondary)),
+        children: children);
   }
 
   List<Widget> _camera() {
@@ -802,10 +751,8 @@ class _DetailsDisclosure extends StatelessWidget {
         label: 'Cooling target (°C)',
         initialValue: c.coolingTargetC?.toString(),
         hint: 'e.g. -10',
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
-        ),
+        keyboardType:
+            const TextInputType.numberWithOptions(decimal: true, signed: true),
         inputFormatters: WizardInput.signedDecimal,
         onChanged: (v) => _assignDouble(v, (d) => c.coolingTargetC = d),
       ),
@@ -829,8 +776,7 @@ class _DetailsDisclosure extends StatelessWidget {
         key: const ValueKey('details-camera-readnoise'),
         label: 'Read noise (e⁻)',
         initialValue: c.readNoiseE?.toString(),
-        helperText:
-            'Spec-sheet value — Alpaca doesn\'t report it. Feeds '
+        helperText: 'Spec-sheet value — Alpaca doesn\'t report it. Feeds '
             'exposure planning; leave blank to set later in Settings.',
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
         inputFormatters: WizardInput.unsignedDecimal,
@@ -881,9 +827,7 @@ class _DetailsDisclosure extends StatelessWidget {
         entries: const [
           DropdownMenuEntry(value: MeridianFlipBehavior.auto, label: 'Auto'),
           DropdownMenuEntry(
-            value: MeridianFlipBehavior.prompt,
-            label: 'Prompt me',
-          ),
+              value: MeridianFlipBehavior.prompt, label: 'Prompt me'),
           DropdownMenuEntry(value: MeridianFlipBehavior.never, label: 'Never'),
         ],
         onChanged: (v) => m.meridianFlip = v ?? MeridianFlipBehavior.auto,
@@ -893,13 +837,9 @@ class _DetailsDisclosure extends StatelessWidget {
         value: m.parkMode,
         entries: const [
           DropdownMenuEntry(
-            value: ParkPositionMode.syncCurrent,
-            label: 'Sync current',
-          ),
+              value: ParkPositionMode.syncCurrent, label: 'Sync current'),
           DropdownMenuEntry(
-            value: ParkPositionMode.defineManually,
-            label: 'Define manually',
-          ),
+              value: ParkPositionMode.defineManually, label: 'Define manually'),
         ],
         onChanged: (v) => m.parkMode = v ?? ParkPositionMode.syncCurrent,
       ),
@@ -932,8 +872,7 @@ class _DetailsDisclosure extends StatelessWidget {
             .whereType<String>()
             .join(', '),
         hint: 'L, R, G, B, Hα, OIII, SII',
-        helperText:
-            'Only needed because the wheel didn\'t report its slots. '
+        helperText: 'Only needed because the wheel didn\'t report its slots. '
             'Comma-separated, in slot order.',
         onChanged: (v) {
           final names = v
@@ -943,13 +882,9 @@ class _DetailsDisclosure extends StatelessWidget {
               .toList();
           draft.filterWheel.filters
             ..clear()
-            ..addAll(
-              names.map(
-                (n) => FilterDef()
-                  ..name = n
-                  ..type = inferFilterType(n),
-              ),
-            );
+            ..addAll(names.map((n) => FilterDef()
+              ..name = n
+              ..type = inferFilterType(n)));
         },
       ),
     ];
@@ -994,13 +929,10 @@ class _DetailsDisclosure extends StatelessWidget {
         key: const ValueKey('details-rotator-min'),
         label: 'Minimum angle (°)',
         initialValue: r.minAngleDeg?.toString(),
-        helperText:
-            'Your mechanical cable-wrap limits — not an Alpaca '
+        helperText: 'Your mechanical cable-wrap limits — not an Alpaca '
             'concept, so ARA has to ask.',
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
-        ),
+        keyboardType:
+            const TextInputType.numberWithOptions(decimal: true, signed: true),
         inputFormatters: WizardInput.signedDecimal,
         onChanged: (v) => _assignDouble(v, (d) => r.minAngleDeg = d),
       ),
@@ -1008,10 +940,8 @@ class _DetailsDisclosure extends StatelessWidget {
         key: const ValueKey('details-rotator-max'),
         label: 'Maximum angle (°)',
         initialValue: r.maxAngleDeg?.toString(),
-        keyboardType: const TextInputType.numberWithOptions(
-          decimal: true,
-          signed: true,
-        ),
+        keyboardType:
+            const TextInputType.numberWithOptions(decimal: true, signed: true),
         inputFormatters: WizardInput.signedDecimal,
         onChanged: (v) => _assignDouble(v, (d) => r.maxAngleDeg = d),
       ),
@@ -1113,17 +1043,11 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
     }
     final c = widget.draft.camera;
     final h = fieldOfViewHeightDeg(
-      focalLengthMm: t.focalLengthMm,
-      reducerFactor: t.reducerFactor,
-      heightPx: c.sensorHeightPx,
-      pixelSizeUm: c.pixelSizeMicrons,
-    );
+        focalLengthMm: t.focalLengthMm, reducerFactor: t.reducerFactor,
+        heightPx: c.sensorHeightPx, pixelSizeUm: c.pixelSizeMicrons);
     final w = fieldOfViewHeightDeg(
-      focalLengthMm: t.focalLengthMm,
-      reducerFactor: t.reducerFactor,
-      heightPx: c.sensorWidthPx,
-      pixelSizeUm: c.pixelSizeMicrons,
-    );
+        focalLengthMm: t.focalLengthMm, reducerFactor: t.reducerFactor,
+        heightPx: c.sensorWidthPx, pixelSizeUm: c.pixelSizeMicrons);
     final field = (h != null && w != null)
         ? ' · field ${w.toStringAsFixed(2)}° × ${h.toStringAsFixed(2)}°'
         : ' · field known once the camera reports its sensor';
@@ -1138,10 +1062,7 @@ class _ReducerFieldState extends ConsumerState<_ReducerField> {
 
   void _set(double? v) {
     if (v != null && v > 0 && (v < _minFactor || v > _maxFactor)) {
-      setState(
-        () => _rangeError =
-            'Enter a factor between ${formatReducer(_minFactor)} and ${formatReducer(_maxFactor)}× (kept ${formatReducer(widget.draft.telescope.reducerFactor ?? 1)}×).',
-      );
+      setState(() => _rangeError = 'Enter a factor between ${formatReducer(_minFactor)} and ${formatReducer(_maxFactor)}× (kept ${formatReducer(widget.draft.telescope.reducerFactor ?? 1)}×).');
       return;
     }
     setState(() {

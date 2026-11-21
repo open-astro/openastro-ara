@@ -32,21 +32,18 @@ class FocuserPropsApi {
   final Dio _dio;
 
   FocuserPropsApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   /// The connected focuser's props, or null when none is connected. Throws
   /// `DioException` on transport failure.
   Future<FocuserProps?> read() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/equipment/focuser',
-      );
+      final res =
+          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/focuser');
       final data = res.data;
       return data is Map<String, dynamic>
           ? FocuserProps.fromFocuserJson(data)

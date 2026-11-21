@@ -14,14 +14,10 @@ void main() {
 
   test('the header shows the SNR while guiding and for a chosen star', () {
     // #1364 tap item (2026-10-18): a tapped star read "Looping" with no SNR.
-    expect(
-      live('Guiding', snr: 42, mass: 12000).summary,
-      'Guiding · SNR 42 · mass 12.0k',
-    );
-    expect(
-      live('Selected', snr: 42, mass: 12000).summary,
-      'Star selected · SNR 42 · mass 12.0k',
-    );
+    expect(live('Guiding', snr: 42, mass: 12000).summary,
+        'Guiding · SNR 42 · mass 12.0k');
+    expect(live('Selected', snr: 42, mass: 12000).summary,
+        'Star selected · SNR 42 · mass 12.0k');
   });
 
   test('a looping or stopped guider shows no stale reading', () {

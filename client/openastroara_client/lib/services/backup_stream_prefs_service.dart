@@ -15,7 +15,7 @@ class BackupStreamPrefsService {
   /// [supportDir] overrides the app-support directory lookup (tests use a
   /// temp dir; production uses path_provider).
   BackupStreamPrefsService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _fileName = 'backup_stream.json';
@@ -38,9 +38,7 @@ class BackupStreamPrefsService {
       final decoded = jsonDecode(await f.readAsString());
       if (decoded is! Map) return (enabled: false, root: '', maxMbps: 0);
       return (
-        enabled: decoded['enabled'] is bool
-            ? decoded['enabled'] as bool
-            : false,
+        enabled: decoded['enabled'] is bool ? decoded['enabled'] as bool : false,
         root: decoded['root'] is String ? decoded['root'] as String : '',
         maxMbps: decoded['mbps'] is int ? decoded['mbps'] as int : 0,
       );
@@ -49,21 +47,14 @@ class BackupStreamPrefsService {
     }
   }
 
-  Future<void> save({
-    required bool enabled,
-    required String root,
-    required int maxMbps,
-  }) {
+  Future<void> save({required bool enabled, required String root, required int maxMbps}) {
     final task = _chain.then((_) async {
       try {
         final f = await _file();
         await f.writeAsString(
-          jsonEncode({'enabled': enabled, 'root': root, 'mbps': maxMbps}),
-          flush: true,
-        );
-      } catch (_) {
-        /* best effort — a failed prefs write must not break the stream */
-      }
+            jsonEncode({'enabled': enabled, 'root': root, 'mbps': maxMbps}),
+            flush: true);
+      } catch (_) {/* best effort — a failed prefs write must not break the stream */}
     });
     _chain = task;
     return task;

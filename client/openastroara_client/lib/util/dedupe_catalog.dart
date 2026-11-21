@@ -281,8 +281,7 @@ List<PlanningDso> mergeDuplicates(
     var name = primary.name;
     if (designationKey(name) == designationKey(primary.id)) {
       for (final m in members) {
-        if (m != best &&
-            designationKey(rows[m].name) != designationKey(rows[m].id)) {
+        if (m != best && designationKey(rows[m].name) != designationKey(rows[m].id)) {
           name = rows[m].name;
           break;
         }

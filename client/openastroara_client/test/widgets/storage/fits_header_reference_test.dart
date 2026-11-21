@@ -13,21 +13,12 @@ void main() {
     final seen = <String>{};
     for (final group in fitsHeaderReference) {
       for (final e in group.entries) {
-        expect(
-          e.keyword.length,
-          lessThanOrEqualTo(8),
-          reason: '${e.keyword} exceeds the FITS 8-character keyword limit',
-        );
-        expect(
-          e.keyword,
-          equals(e.keyword.toUpperCase()),
-          reason: 'FITS keywords are uppercase',
-        );
-        expect(
-          seen.add(e.keyword),
-          isTrue,
-          reason: '${e.keyword} is listed twice',
-        );
+        expect(e.keyword.length, lessThanOrEqualTo(8),
+            reason: '${e.keyword} exceeds the FITS 8-character keyword limit');
+        expect(e.keyword, equals(e.keyword.toUpperCase()),
+            reason: 'FITS keywords are uppercase');
+        expect(seen.add(e.keyword), isTrue,
+            reason: '${e.keyword} is listed twice');
         expect(e.longName, isNotEmpty);
         expect(e.example, isNotEmpty);
       }
@@ -47,30 +38,24 @@ void main() {
         .where((g) => g.controlledBy != null)
         .map((g) => g.controlledBy!)
         .toSet();
-    expect(
-      named,
-      switches,
-      reason: 'the reference and the panel must describe the same switches',
-    );
+    expect(named, switches,
+        reason: 'the reference and the panel must describe the same switches');
   });
 
   testWidgets('the sheet reads as words, not just keywords', (tester) async {
-    await tester.pumpWidget(
-      ProviderScope(
+    await tester.pumpWidget(ProviderScope(
         child: MaterialApp(
-          home: Builder(
-            builder: (context) => Scaffold(
-              body: Center(
-                child: TextButton(
-                  onPressed: () => showFitsHeaderReference(context),
-                  child: const Text('open'),
-                ),
-              ),
+      home: Builder(
+        builder: (context) => Scaffold(
+          body: Center(
+            child: TextButton(
+              onPressed: () => showFitsHeaderReference(context),
+              child: const Text('open'),
             ),
           ),
         ),
       ),
-    );
+    )));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Everything a frame can carry'), findsOneWidget);
@@ -79,23 +64,16 @@ void main() {
     expect(find.text('IMAGETYP'), findsOneWidget);
     expect(find.text('Frame type'), findsOneWidget);
     // Deeper groups live below the fold of the virtualized list — scroll.
-    await tester.scrollUntilVisible(
-      find.text('SQM'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('SQM'), 300,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('Sky quality in magnitudes per arcsec²'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('MOONPHSE'),
-      300,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('MOONPHSE'), 300,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('Moon phase by name'), findsOneWidget);
   });
 
-  testWidgets('settings-backed headers show the user\'s own values', (
-    tester,
-  ) async {
+  testWidgets('settings-backed headers show the user\'s own values',
+      (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     // ADR 0015: the edits land on the rig's copy of the site.
@@ -107,8 +85,7 @@ void main() {
       ..setLatitudeDeg(51.477811)
       ..setLongitudeDeg(-0.001475)
       ..setElevationM(46);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
+    await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
           home: Builder(
@@ -121,37 +98,25 @@ void main() {
               ),
             ),
           ),
-        ),
-      ),
-    );
+        )));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     // Live values replace the catalog examples...
-    await tester.scrollUntilVisible(
-      find.text('OBSERVER'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('OBSERVER'), 100,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('Test Observer'), findsOneWidget);
     expect(find.text('Jane Doe'), findsNothing);
-    await tester.scrollUntilVisible(
-      find.text('SITELAT'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('SITELAT'), 100,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('51.477811'), findsOneWidget);
     // ...while unset ones keep their generic example.
-    await tester.scrollUntilVisible(
-      find.text('FOCALLEN'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('FOCALLEN'), 100,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('448.0'), findsOneWidget);
   });
 
-  testWidgets('a group whose switch is off reads as not written', (
-    tester,
-  ) async {
+  testWidgets('a group whose switch is off reads as not written',
+      (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
     await tester.runAsync(
@@ -166,8 +131,7 @@ void main() {
     container.read(siteSettingsProvider.notifier)
       ..setLatitudeDeg(51.477811)
       ..setLongitudeDeg(-0.001475);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
+    await tester.pumpWidget(UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
           home: Builder(
@@ -180,16 +144,11 @@ void main() {
               ),
             ),
           ),
-        ),
-      ),
-    );
+        )));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('SITELAT'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
+    await tester.scrollUntilVisible(find.text('SITELAT'), 100,
+        scrollable: find.byType(Scrollable).last);
     // The off group is marked and struck through...
     expect(find.text('off — not written'), findsOneWidget);
     final lat = tester.widget<Text>(find.text('SITELAT'));

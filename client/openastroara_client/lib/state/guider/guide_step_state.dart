@@ -61,12 +61,10 @@ class GuideStep {
   /// RA offset in arcsec: the daemon's figure, else the client's own scale
   /// (§63.5 guide train), else null.
   double? raArcsecWith(double? fallbackScale) =>
-      raArcsec ??
-      (raPx != null && fallbackScale != null ? raPx! * fallbackScale : null);
+      raArcsec ?? (raPx != null && fallbackScale != null ? raPx! * fallbackScale : null);
 
   double? decArcsecWith(double? fallbackScale) =>
-      decArcsec ??
-      (decPx != null && fallbackScale != null ? decPx! * fallbackScale : null);
+      decArcsec ?? (decPx != null && fallbackScale != null ? decPx! * fallbackScale : null);
 
   @override
   bool operator ==(Object other) =>
@@ -82,17 +80,8 @@ class GuideStep {
       other.snr == snr;
 
   @override
-  int get hashCode => Object.hash(
-    at,
-    raPx,
-    decPx,
-    raArcsec,
-    decArcsec,
-    raPulseMs,
-    decPulseMs,
-    pixelScaleArcsec,
-    snr,
-  );
+  int get hashCode => Object.hash(at, raPx, decPx, raArcsec, decArcsec,
+      raPulseMs, decPulseMs, pixelScaleArcsec, snr);
 }
 
 /// How many guide frames the Live-tab graph keeps — PHD2's widest graph
@@ -120,11 +109,9 @@ enum GuideMarkerKind {
 class GuideMarker {
   final DateTime at;
   final GuideMarkerKind kind;
-
   /// Dither offset (px) for [GuideMarkerKind.dithered].
   final double? dxPx;
   final double? dyPx;
-
   /// PHD2's status: settle_done 0 = ok; star_lost error code.
   final int? status;
   final String? error;
@@ -139,20 +126,20 @@ class GuideMarker {
   });
 
   static GuideMarkerKind? kindFromWire(String? token) => switch (token) {
-    'dithered' => GuideMarkerKind.dithered,
-    'settling' => GuideMarkerKind.settling,
-    'settle_done' => GuideMarkerKind.settleDone,
-    'star_lost' => GuideMarkerKind.starLost,
-    'calibration_started' => GuideMarkerKind.calibrationStarted,
-    'calibration_complete' => GuideMarkerKind.calibrationComplete,
-    'calibration_failed' => GuideMarkerKind.calibrationFailed,
-    'guiding_started' => GuideMarkerKind.guidingStarted,
-    'guiding_stopped' => GuideMarkerKind.guidingStopped,
-    'paused' => GuideMarkerKind.paused,
-    'resumed' => GuideMarkerKind.resumed,
-    'lock_position_lost' => GuideMarkerKind.lockPositionLost,
-    _ => null,
-  };
+        'dithered' => GuideMarkerKind.dithered,
+        'settling' => GuideMarkerKind.settling,
+        'settle_done' => GuideMarkerKind.settleDone,
+        'star_lost' => GuideMarkerKind.starLost,
+        'calibration_started' => GuideMarkerKind.calibrationStarted,
+        'calibration_complete' => GuideMarkerKind.calibrationComplete,
+        'calibration_failed' => GuideMarkerKind.calibrationFailed,
+        'guiding_started' => GuideMarkerKind.guidingStarted,
+        'guiding_stopped' => GuideMarkerKind.guidingStopped,
+        'paused' => GuideMarkerKind.paused,
+        'resumed' => GuideMarkerKind.resumed,
+        'lock_position_lost' => GuideMarkerKind.lockPositionLost,
+        _ => null,
+      };
 
   static GuideMarker? fromPayload(Map<String, dynamic> p, DateTime at) {
     final kind = kindFromWire(p['kind'] is String ? p['kind'] as String : null);
@@ -225,8 +212,7 @@ class GuideMarkerNotifier extends Notifier<List<GuideMarker>> {
 
 final guideMarkersProvider =
     NotifierProvider<GuideMarkerNotifier, List<GuideMarker>>(
-      GuideMarkerNotifier.new,
-    );
+        GuideMarkerNotifier.new);
 
 /// Rolling guide-step history for the active server, newest last. Root-scoped
 /// (not autoDispose) so the trace keeps filling while the user is on another
@@ -294,17 +280,12 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
     final api = ref.read(guiderLiveApiProvider);
     if (api == null || state.isNotEmpty) return;
     // Only a connected guider has history; the status listener seeds on connect.
-    final connected =
-        ref.read(guiderStatusProvider).asData?.value?.isConnected ?? false;
+    final connected = ref.read(guiderStatusProvider).asData?.value?.isConnected ?? false;
     if (!connected) return;
     try {
       final clears = _clears;
       final history = await api.getHistory();
-      if (!ref.mounted ||
-          state.isNotEmpty ||
-          history.isEmpty ||
-          clears != _clears)
-        return;
+      if (!ref.mounted || state.isNotEmpty || history.isEmpty || clears != _clears) return;
       state = historySteps(history, now());
     } catch (_) {
       // No history (older daemon, guider not connected): the graph fills live.
@@ -313,26 +294,16 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
 
   /// History payloads → steps stamped `age_sec` before [at], oldest first,
   /// capped at [kGuideStepHistory]. Pure — tested.
-  static List<GuideStep> historySteps(
-    List<Map<String, dynamic>> history,
-    DateTime at,
-  ) {
+  static List<GuideStep> historySteps(List<Map<String, dynamic>> history, DateTime at) {
     final steps = <GuideStep>[];
     for (final p in history) {
       final age = p['age_sec'];
-      final ms = age is num && age.isFinite && age >= 0
-          ? (age * 1000).round()
-          : 0;
-      final step = GuideStep.fromPayload(
-        p,
-        at.subtract(Duration(milliseconds: ms)),
-      );
+      final ms = age is num && age.isFinite && age >= 0 ? (age * 1000).round() : 0;
+      final step = GuideStep.fromPayload(p, at.subtract(Duration(milliseconds: ms)));
       if (step != null) steps.add(step);
     }
     steps.sort((a, b) => a.at.compareTo(b.at));
-    return steps.length > kGuideStepHistory
-        ? steps.sublist(steps.length - kGuideStepHistory)
-        : steps;
+    return steps.length > kGuideStepHistory ? steps.sublist(steps.length - kGuideStepHistory) : steps;
   }
 
   void add(GuideStep step) {
@@ -349,6 +320,5 @@ class GuideStepNotifier extends Notifier<List<GuideStep>> {
   }
 }
 
-final guideStepsProvider = NotifierProvider<GuideStepNotifier, List<GuideStep>>(
-  GuideStepNotifier.new,
-);
+final guideStepsProvider =
+    NotifierProvider<GuideStepNotifier, List<GuideStep>>(GuideStepNotifier.new);

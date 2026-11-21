@@ -72,8 +72,7 @@ class WizardState {
 
 final wizardControllerProvider =
     NotifierProvider.autoDispose<WizardController, WizardState>(
-      WizardController.new,
-    );
+        WizardController.new);
 
 /// Whether the current wizard screen's inline field validation currently passes.
 /// A validated screen (the capture-setup screens — plate-solve, autofocus,
@@ -101,26 +100,10 @@ class ProfileWizard {
   ///
   /// 1-based step → (stage number, stage label, screen title)
   static const Map<int, WizardStepInfo> steps = <int, WizardStepInfo>{
-    1: WizardStepInfo(
-      stage: 1,
-      stageLabel: 'Welcome',
-      title: 'Profile name + location',
-    ),
-    2: WizardStepInfo(
-      stage: 2,
-      stageLabel: 'Connect',
-      title: 'Connect to AlpacaBridge',
-    ),
-    3: WizardStepInfo(
-      stage: 3,
-      stageLabel: 'Your equipment',
-      title: 'Your equipment',
-    ),
-    4: WizardStepInfo(
-      stage: 4,
-      stageLabel: 'Guiding',
-      title: 'OpenAstro Guider',
-    ),
+    1: WizardStepInfo(stage: 1, stageLabel: 'Welcome', title: 'Profile name + location'),
+    2: WizardStepInfo(stage: 2, stageLabel: 'Connect', title: 'Connect to AlpacaBridge'),
+    3: WizardStepInfo(stage: 3, stageLabel: 'Your equipment', title: 'Your equipment'),
+    4: WizardStepInfo(stage: 4, stageLabel: 'Guiding', title: 'OpenAstro Guider'),
     5: WizardStepInfo(stage: 5, stageLabel: 'Done', title: 'Review + Save'),
   };
 }

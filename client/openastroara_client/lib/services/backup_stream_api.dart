@@ -38,8 +38,7 @@ class BackupStreamSlotLostException implements Exception {
   final String? holder;
   const BackupStreamSlotLostException(this.holder);
   @override
-  String toString() =>
-      'backup-stream slot held by ${holder ?? 'another desktop'}';
+  String toString() => 'backup-stream slot held by ${holder ?? 'another desktop'}';
 }
 
 /// Dio wrapper over `/api/v1/server/backup-stream/*` + the frame download.
@@ -49,27 +48,20 @@ class BackupStreamApi implements BackupStreamClient {
   /// [dio] is injectable for tests; production builds a server-bound Dio. The
   /// download timeout is generous — a full-frame FITS over Wi-Fi takes a while.
   BackupStreamApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 10),
               receiveTimeout: const Duration(minutes: 5),
-            ),
-          );
+            ));
 
   @override
   Future<BackupStreamStatus> status() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/server/backup-stream/status',
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/server/backup-stream/status');
     final data = res.data;
     if (data == null) {
-      throw const FormatException(
-        'backup-stream/status returned a non-object body',
-      );
+      throw const FormatException('backup-stream/status returned a non-object body');
     }
     return BackupStreamStatus.fromJson(data);
   }
@@ -77,10 +69,8 @@ class BackupStreamApi implements BackupStreamClient {
   @override
   Future<bool> claim(String hostname) async {
     try {
-      await _dio.post<dynamic>(
-        '/api/v1/server/backup-stream/claim',
-        data: {'hostname': hostname},
-      );
+      await _dio.post<dynamic>('/api/v1/server/backup-stream/claim',
+          data: {'hostname': hostname});
       return true;
     } on DioException catch (e) {
       if (e.response?.statusCode == 409) return false;
@@ -91,10 +81,8 @@ class BackupStreamApi implements BackupStreamClient {
   @override
   Future<void> release(String hostname) async {
     try {
-      await _dio.post<dynamic>(
-        '/api/v1/server/backup-stream/release',
-        data: {'hostname': hostname},
-      );
+      await _dio.post<dynamic>('/api/v1/server/backup-stream/release',
+          data: {'hostname': hostname});
     } on DioException catch (e) {
       // 404 = we weren't the holder — already the desired end state.
       if (e.response?.statusCode != 404) rethrow;
@@ -102,20 +90,13 @@ class BackupStreamApi implements BackupStreamClient {
   }
 
   @override
-  Future<List<BackupStreamQueueEntry>> queue(
-    String hostname, {
-    int limit = 50,
-  }) async {
+  Future<List<BackupStreamQueueEntry>> queue(String hostname, {int limit = 50}) async {
     try {
-      final res = await _dio.get<dynamic>(
-        '/api/v1/server/backup-stream/queue',
-        queryParameters: {'hostname': hostname, 'limit': limit},
-      );
+      final res = await _dio.get<dynamic>('/api/v1/server/backup-stream/queue',
+          queryParameters: {'hostname': hostname, 'limit': limit});
       final data = res.data;
       if (data is! List) {
-        throw FormatException(
-          'backup-stream/queue returned a non-array body (${data.runtimeType})',
-        );
+        throw FormatException('backup-stream/queue returned a non-array body (${data.runtimeType})');
       }
       return data
           .whereType<Map<String, dynamic>>()
@@ -133,11 +114,9 @@ class BackupStreamApi implements BackupStreamClient {
   @override
   Future<void> ack(String hostname, String frameId) async {
     try {
-      await _dio.post<dynamic>(
-        '/api/v1/server/backup-stream/ack',
-        queryParameters: {'hostname': hostname},
-        data: {'frame_id': frameId, 'sha256_verified': true},
-      );
+      await _dio.post<dynamic>('/api/v1/server/backup-stream/ack',
+          queryParameters: {'hostname': hostname},
+          data: {'frame_id': frameId, 'sha256_verified': true});
     } on DioException catch (e) {
       if (e.response?.statusCode == 409) {
         throw BackupStreamSlotLostException(_holderFrom(e));
@@ -150,10 +129,8 @@ class BackupStreamApi implements BackupStreamClient {
 
   @override
   Future<Uint8List> downloadFrame(String frameId) async {
-    final res = await _dio.get<List<int>>(
-      '/api/v1/frames/$frameId/download',
-      options: Options(responseType: ResponseType.bytes),
-    );
+    final res = await _dio.get<List<int>>('/api/v1/frames/$frameId/download',
+        options: Options(responseType: ResponseType.bytes));
     final data = res.data;
     if (data == null) {
       throw const FormatException('frame download returned an empty body');

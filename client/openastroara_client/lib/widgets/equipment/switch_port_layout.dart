@@ -221,10 +221,8 @@ double quantiseSwitchWrite(SwitchPort port, double value) {
   // Round on the port's OWN grid: a 0.5..3.5 port has a whole span but its
   // steps land on 0.5/1.5/2.5, so snapping to absolute integers would write a
   // value the device never offers — the very thing this exists to prevent.
-  return (port.min + (value - port.min).roundToDouble()).clamp(
-    port.min,
-    port.max,
-  );
+  return (port.min + (value - port.min).roundToDouble())
+      .clamp(port.min, port.max);
 }
 
 /// Slider stops at most: a wide range (a 0..65535 device) must not build tens

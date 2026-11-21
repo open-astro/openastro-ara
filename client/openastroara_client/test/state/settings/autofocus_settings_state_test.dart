@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/section_load.dart';
-
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 
 void main() {
@@ -35,16 +34,10 @@ void main() {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setStepSize(80);
       n.setStepSizeAuto(false);
-      expect(
-        container.read(autofocusSettingsProvider).value!.stepSizeAuto,
-        isFalse,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.stepSizeAuto, isFalse);
       expect(container.read(autofocusSettingsProvider).value!.stepSize, 80);
       n.setStepSizeAuto(true);
-      expect(
-        container.read(autofocusSettingsProvider).value!.stepSizeAuto,
-        isTrue,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.stepSizeAuto, isTrue);
     });
 
     test('setSteps clamps to [3, 31]', () {
@@ -91,15 +84,11 @@ void main() {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setTriggerHfrDriftPct(-1);
       n.setTriggerHfrDriftPct(101);
-      expect(
-        container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
-        15,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
+          15);
       n.setTriggerHfrDriftPct(25);
-      expect(
-        container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
-        25,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
+          25);
     });
 
     test('triggerTempDeltaC + everyNHours reject negative', () {
@@ -125,17 +114,13 @@ void main() {
     });
 
     test('telescope type defaults to other and assigns directly (§59.4)', () {
-      expect(
-        container.read(autofocusSettingsProvider).value!.telescopeType,
-        TelescopeType.other,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.telescopeType,
+          TelescopeType.other);
       container
           .read(autofocusSettingsProvider.notifier)
           .setTelescopeType(TelescopeType.sct);
-      expect(
-        container.read(autofocusSettingsProvider).value!.telescopeType,
-        TelescopeType.sct,
-      );
+      expect(container.read(autofocusSettingsProvider).value!.telescopeType,
+          TelescopeType.sct);
     });
 
     test('telescope type wire strings are exact §59.13 values', () {
@@ -154,16 +139,10 @@ void main() {
         expect(telescopeTypeFromWire(e.value), e.key);
       }
       expect(telescopeTypeFromWire(null), TelescopeType.other);
-      expect(
-        telescopeTypeFromWire('SCT'),
-        TelescopeType.other,
-        reason: 'wire strings are case-sensitive-exact',
-      );
-      expect(
-        telescopeTypeFromWire('dobsonian'),
-        TelescopeType.other,
-        reason: 'a future/unknown value must degrade, not throw',
-      );
+      expect(telescopeTypeFromWire('SCT'), TelescopeType.other,
+          reason: 'wire strings are case-sensitive-exact');
+      expect(telescopeTypeFromWire('dobsonian'), TelescopeType.other,
+          reason: 'a future/unknown value must degrade, not throw');
     });
   });
 }

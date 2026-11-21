@@ -45,23 +45,14 @@ class _AddressLookupFailsMdns extends MDnsClient {
   }) {
     if (T == PtrResourceRecord) {
       return Stream<T>.fromIterable([
-        const PtrResourceRecord(
-          '_openastroara._tcp.local',
-          0,
-          domainName: 'rig._openastroara._tcp.local',
-        ) as T,
+        const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'rig._openastroara._tcp.local') as T,
       ]);
     }
     if (T == SrvResourceRecord) {
       return Stream<T>.fromIterable([
-        const SrvResourceRecord(
-          'rig._openastroara._tcp.local',
-          0,
-          target: 'rig.local',
-          port: 5555,
-          priority: 0,
-          weight: 0,
-        ) as T,
+        const SrvResourceRecord('rig._openastroara._tcp.local', 0,
+            target: 'rig.local', port: 5555, priority: 0, weight: 0) as T,
       ]);
     }
     return Stream<T>.error(const SocketException('no route to multicast'));
@@ -89,31 +80,18 @@ class _AnsweringMdns extends MDnsClient {
   }) {
     if (T == PtrResourceRecord) {
       return Stream<T>.fromIterable([
-        const PtrResourceRecord(
-          '_openastroara._tcp.local',
-          0,
-          domainName: 'openastro._openastroara._tcp.local',
-        ) as T,
+        const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'openastro._openastroara._tcp.local') as T,
       ]);
     }
     if (T == SrvResourceRecord) {
       return Stream<T>.fromIterable([
-        const SrvResourceRecord(
-          'openastro._openastroara._tcp.local',
-          0,
-          target: 'openastro.local',
-          port: 5555,
-          priority: 0,
-          weight: 0,
-        ) as T,
+        const SrvResourceRecord('openastro._openastroara._tcp.local', 0,
+            target: 'openastro.local', port: 5555, priority: 0, weight: 0) as T,
       ]);
     }
     return Stream<T>.fromIterable([
-      IPAddressResourceRecord(
-        'openastro.local',
-        0,
-        address: InternetAddress('192.0.2.20'),
-      ) as T,
+      IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
     ]);
   }
 
@@ -132,16 +110,8 @@ class _TwoAddressMdns extends _AnsweringMdns {
   }) {
     if (T == IPAddressResourceRecord) {
       return Stream<T>.fromIterable([
-        IPAddressResourceRecord(
-          'openastro.local',
-          0,
-          address: InternetAddress('172.24.1.1'),
-        ) as T,
-        IPAddressResourceRecord(
-          'openastro.local',
-          0,
-          address: InternetAddress('192.0.2.20'),
-        ) as T,
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('172.24.1.1')) as T,
+        IPAddressResourceRecord('openastro.local', 0, address: InternetAddress('192.0.2.20')) as T,
       ]);
     }
     return super.lookup<T>(query, timeout: timeout);
@@ -216,16 +186,11 @@ class _AsyncSendErrorMdns extends MDnsClient {
         (cb as void Function(Object, StackTrace))(err, StackTrace.current);
       });
       if (!answerAfterError) return const Stream.empty();
-      return Stream<T>.fromFuture(
-        Future.delayed(
-          const Duration(milliseconds: 10),
-          () => const PtrResourceRecord(
-            '_openastroara._tcp.local',
-            0,
-            domainName: 'rig._openastroara._tcp.local',
-          ) as T,
-        ),
-      );
+      return Stream<T>.fromFuture(Future.delayed(
+        const Duration(milliseconds: 10),
+        () => const PtrResourceRecord('_openastroara._tcp.local', 0,
+            domainName: 'rig._openastroara._tcp.local') as T,
+      ));
     }
     return const Stream.empty();
   }
@@ -268,25 +233,23 @@ void main() {
       addTearDown(() => debugPrint = prior);
     });
 
-    test(
-      'EHOSTUNREACH is logged, flags a Local Network block, no leak',
-      () async {
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: () => _AsyncSendErrorMdns(),
-          localAddresses: () async => const ['192.168.1.2'],
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        expect(svc.localNetworkBlocked.value, isFalse);
-        final found = await svc.discover().toList();
-        expect(found, isEmpty);
-        expect(
-          lines.where((l) => l.startsWith('[discovery] mDNS socket error')),
-          hasLength(1),
-        );
-        expect(lines.single, contains('No route to host'));
-        expect(svc.localNetworkBlocked.value, isTrue);
-      },
-    );
+    test('EHOSTUNREACH is logged, flags a Local Network block, no leak',
+        () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      expect(svc.localNetworkBlocked.value, isFalse);
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(
+        lines.where((l) => l.startsWith('[discovery] mDNS socket error')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('No route to host'));
+      expect(svc.localNetworkBlocked.value, isTrue);
+    });
 
     test('a later answered query clears the block', () async {
       final svc = ServerDiscoveryService(
@@ -295,11 +258,8 @@ void main() {
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       await svc.discover().toList();
-      expect(
-        svc.localNetworkBlocked.value,
-        isFalse,
-        reason: 'a PTR answer proves the query went out',
-      );
+      expect(svc.localNetworkBlocked.value, isFalse,
+          reason: 'a PTR answer proves the query went out');
     });
 
     test('Linux EHOSTUNREACH (113) is a block too', () async {
@@ -325,33 +285,33 @@ void main() {
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
-    test(
-      'a later answerless pass with no socket error clears the block',
-      () async {
-        // Permission granted, user taps ⟳, no rig powered on: nothing answers
-        // the PTR query, so only the end-of-pass clear can take the banner
-        // down.
-        var pass = 0;
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: () =>
-              ++pass == 1 ? _AsyncSendErrorMdns() : _SilentMdns(),
-          localAddresses: () async => const ['192.168.1.2'],
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        await svc.discover().toList();
-        expect(svc.localNetworkBlocked.value, isTrue);
-        await svc.discover().toList();
-        expect(svc.localNetworkBlocked.value, isFalse);
-      },
-    );
+    test('a later answerless pass with no socket error clears the block',
+        () async {
+      // Permission granted, user taps ⟳, no rig powered on: nothing answers
+      // the PTR query, so only the end-of-pass clear can take the banner
+      // down.
+      var pass = 0;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _SilentMdns(),
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isTrue);
+      await svc.discover().toList();
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
 
     test('a pass that fails before sending leaves the flag alone', () async {
       // start() throwing (port 5353 contention) never queried, so it can't
       // vouch that the block is gone.
       var pass = 0;
       final svc = ServerDiscoveryService(
-        mdnsClientFactory: () =>
-            ++pass == 1 ? _AsyncSendErrorMdns() : _UnstartableMdns(),
+        mdnsClientFactory: () => ++pass == 1
+            ? _AsyncSendErrorMdns()
+            : _UnstartableMdns(),
         localAddresses: () async => const ['192.168.1.2'],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
@@ -361,190 +321,165 @@ void main() {
       expect(svc.localNetworkBlocked.value, isTrue);
     });
 
-    test(
-      'an unrelated socket error is logged but not called a block',
-      () async {
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: () =>
-              _AsyncSendErrorMdns(errno: 49), // EADDRNOTAVAIL
-          localAddresses: () async => const ['192.168.1.2'],
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        await svc.discover().toList();
-        expect(lines.single, contains('[discovery] mDNS socket error'));
-        expect(svc.localNetworkBlocked.value, isFalse);
-      },
-    );
+    test('an unrelated socket error is logged but not called a block',
+        () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => _AsyncSendErrorMdns(errno: 49), // EADDRNOTAVAIL
+        localAddresses: () async => const ['192.168.1.2'],
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      expect(lines.single, contains('[discovery] mDNS socket error'));
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
   });
 
   group('mDNS send failure (#1111 release-build miss)', () {
-    test(
-      'a synchronous send failure is caught and logged, scan completes',
-      () async {
-        final lines = <String>[];
-        final prior = debugPrint;
-        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: _SendFailsMdns.new,
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        final found = await svc.discover().toList();
-        expect(found, isEmpty);
-        expect(lines.where((l) => l.startsWith('[discovery]')), hasLength(1));
-        expect(lines.single, contains('No route to host'));
-      },
-    );
+    test('a synchronous send failure is caught and logged, scan completes',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _SendFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(lines.where((l) => l.startsWith('[discovery]')), hasLength(1));
+      expect(lines.single, contains('No route to host'));
+    });
 
-    test(
-      'cancelling the scan while mDNS is starting never leaks an error',
-      () async {
-        // The connect screen restarts discovery within milliseconds of the
-        // first pass on a fresh launch; the first pass's send then fails
-        // after its subscription is already gone.
-        final lines = <String>[];
-        final prior = debugPrint;
-        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: _SendFailsMdns.new,
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        final sub = svc.discover().listen((_) {});
-        // Cancel before the async* body reaches lookup() (start() and the
-        // interface enumeration are both awaited first).
-        await sub.cancel();
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-        // An unhandled async error here fails the test via the zone.
-      },
-    );
+    test('cancelling the scan while mDNS is starting never leaks an error',
+        () async {
+      // The connect screen restarts discovery within milliseconds of the
+      // first pass on a fresh launch; the first pass's send then fails
+      // after its subscription is already gone.
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _SendFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final sub = svc.discover().listen((_) {});
+      // Cancel before the async* body reaches lookup() (start() and the
+      // interface enumeration are both awaited first).
+      await sub.cancel();
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      // An unhandled async error here fails the test via the zone.
+    });
   });
 
   group('mDNS failures are logged, not swallowed (#1111)', () {
-    test(
-      'a client that cannot start is reported and the scan still ends',
-      () async {
-        final lines = <String>[];
-        final prior = debugPrint;
-        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: _UnstartableMdns.new,
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        final found = await svc.discover().toList();
-        expect(found, isEmpty);
-        expect(
-          lines.where((l) => l.startsWith('[discovery] mDNS browse failed')),
-          hasLength(1),
-        );
-        expect(lines.single, contains('Operation not permitted'));
-      },
-    );
+    test('a client that cannot start is reported and the scan still ends',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _UnstartableMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty);
+      expect(
+        lines.where((l) => l.startsWith('[discovery] mDNS browse failed')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('Operation not permitted'));
+    });
 
-    test(
-      'a repeated browse failure is printed once per instance (#1144)',
-      () async {
+    test('a repeated browse failure is printed once per instance (#1144)',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _UnstartableMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      // The connect screen restarts discovery every ~4 s on the same
+      // singleton; three passes used to be three identical lines.
+      for (var i = 0; i < 3; i++) {
+        await svc.discover().toList();
+      }
+      expect(lines, hasLength(1));
+      expect(lines.single, startsWith('[discovery] mDNS browse failed'));
+    });
+
+    test('a failure that returns after a healthy pass is printed again',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      var fail = true;
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: () => fail ? _UnstartableMdns() : _SilentMdns(),
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      await svc.discover().toList();
+      fail = false;
+      await svc.discover().toList();
+      fail = true;
+      await svc.discover().toList();
+      expect(lines, hasLength(2), reason: 'a clean pass resets the throttle');
+    });
+
+    test('socket-error and A-record lines are throttled too (#1295 review)',
+        () async {
+      for (final factory in <MDnsClient Function()>[
+        _AsyncSendErrorMdns.new,
+        _AddressLookupFailsMdns.new,
+      ]) {
         final lines = <String>[];
         final prior = debugPrint;
         debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
         final svc = ServerDiscoveryService(
-          mdnsClientFactory: _UnstartableMdns.new,
+          mdnsClientFactory: factory,
+          localAddresses: () async => const ['192.0.2.5'],
           sweepSource: () => const Stream<AraServer>.empty(),
         );
-        // The connect screen restarts discovery every ~4 s on the same
-        // singleton; three passes used to be three identical lines.
         for (var i = 0; i < 3; i++) {
           await svc.discover().toList();
         }
-        expect(lines, hasLength(1));
-        expect(lines.single, startsWith('[discovery] mDNS browse failed'));
-      },
-    );
+        debugPrint = prior;
+        // Neither failure throws out of the browse, so a clear keyed on
+        // "did not throw" reprinted them on every ~4 s restart.
+        expect(lines.map((l) => l.split(':').first).toSet(), hasLength(1),
+            reason: '$factory: $lines');
+        expect(lines, hasLength(1), reason: '$factory: $lines');
+      }
+    });
 
-    test(
-      'a failure that returns after a healthy pass is printed again',
-      () async {
-        final lines = <String>[];
-        final prior = debugPrint;
-        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
-        var fail = true;
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: () => fail ? _UnstartableMdns() : _SilentMdns(),
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        await svc.discover().toList();
-        fail = false;
-        await svc.discover().toList();
-        fail = true;
-        await svc.discover().toList();
-        expect(lines, hasLength(2), reason: 'a clean pass resets the throttle');
-      },
-    );
-
-    test(
-      'socket-error and A-record lines are throttled too (#1295 review)',
-      () async {
-        for (final factory in <MDnsClient Function()>[
-          _AsyncSendErrorMdns.new,
-          _AddressLookupFailsMdns.new,
-        ]) {
-          final lines = <String>[];
-          final prior = debugPrint;
-          debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-          final svc = ServerDiscoveryService(
-            mdnsClientFactory: factory,
-            localAddresses: () async => const ['192.0.2.5'],
-            sweepSource: () => const Stream<AraServer>.empty(),
-          );
-          for (var i = 0; i < 3; i++) {
-            await svc.discover().toList();
-          }
-          debugPrint = prior;
-          // Neither failure throws out of the browse, so a clear keyed on
-          // "did not throw" reprinted them on every ~4 s restart.
-          expect(
-            lines.map((l) => l.split(':').first).toSet(),
-            hasLength(1),
-            reason: '$factory: $lines',
-          );
-          expect(lines, hasLength(1), reason: '$factory: $lines');
-        }
-      },
-    );
-
-    test(
-      'a failed A-record lookup is reported and the rig is skipped',
-      () async {
-        final lines = <String>[];
-        final prior = debugPrint;
-        debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
-        addTearDown(() => debugPrint = prior);
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: _AddressLookupFailsMdns.new,
-          sweepSource: () => const Stream<AraServer>.empty(),
-        );
-        final found = await svc.discover().toList();
-        expect(
-          found,
-          isEmpty,
-          reason: 'an unresolved .local name is never emitted',
-        );
-        expect(
-          lines.where(
-            (l) =>
-                l.startsWith('[discovery] mDNS A-record lookup for rig.local'),
-          ),
-          hasLength(1),
-        );
-        expect(lines.single, contains('no route to multicast'));
-      },
-    );
+    test('a failed A-record lookup is reported and the rig is skipped',
+        () async {
+      final lines = <String>[];
+      final prior = debugPrint;
+      debugPrint = (m, {wrapWidth}) => lines.add(m ?? '');
+      addTearDown(() => debugPrint = prior);
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _AddressLookupFailsMdns.new,
+        sweepSource: () => const Stream<AraServer>.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found, isEmpty, reason: 'an unresolved .local name is never emitted');
+      expect(
+        lines.where((l) =>
+            l.startsWith('[discovery] mDNS A-record lookup for rig.local')),
+        hasLength(1),
+      );
+      expect(lines.single, contains('no route to multicast'));
+    });
   });
   group('ServerDiscoveryService.discover', () {
-    test('a rig advertising its LAN and hotspot addresses is ONE row, the reachable one', () async {
+    test('a rig advertising its LAN and hotspot addresses is ONE row, the reachable one',
+        () async {
       // Review on #1277: discover() dedups on hostname:port and the first-run
       // screen lists every entry, so an off-subnet address would surface as a
       // dead row under the same mDNS name. The filter, not the order, is what
@@ -559,18 +494,15 @@ void main() {
       expect(found.single.mdnsName, 'openastro');
     });
 
-    test(
-      'with no on-subnet address every advertised address is offered',
-      () async {
-        final svc = ServerDiscoveryService(
-          mdnsClientFactory: _TwoAddressMdns.new,
-          localAddresses: () async => const ['10.9.9.9'],
-          sweepSource: () => const Stream.empty(),
-        );
-        final found = await svc.discover().toList();
-        expect(found.map((s) => s.hostname), ['172.24.1.1', '192.0.2.20']);
-      },
-    );
+    test('with no on-subnet address every advertised address is offered', () async {
+      final svc = ServerDiscoveryService(
+        mdnsClientFactory: _TwoAddressMdns.new,
+        localAddresses: () async => const ['10.9.9.9'],
+        sweepSource: () => const Stream.empty(),
+      );
+      final found = await svc.discover().toList();
+      expect(found.map((s) => s.hostname), ['172.24.1.1', '192.0.2.20']);
+    });
 
     test('sweep does NOT run when mDNS produced a result', () async {
       var sweepRan = false;
@@ -623,10 +555,7 @@ void main() {
     });
 
     group('one row per rig by uuid (#1741)', () {
-      Future<List<AraServer>> browse(
-        List<String> local,
-        List<Map<String, Object?>> rigs,
-      ) {
+      Future<List<AraServer>> browse(List<String> local, List<Map<String, Object?>> rigs) {
         debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
         addTearDown(() => debugDefaultTargetPlatformOverride = null);
         return ServerDiscoveryService(
@@ -637,62 +566,37 @@ void main() {
         ).discover().toList();
       }
 
-      const lan = {
-        'name': 'openastro',
-        'host': '192.0.2.20',
-        'port': 5555,
-        'uuid': 'u1',
-      };
-      const hotspot = {
-        'name': 'openastro',
-        'host': '172.24.1.1',
-        'port': 5555,
-        'uuid': 'u1',
-      };
+      const lan = {'name': 'openastro', 'host': '192.0.2.20', 'port': 5555, 'uuid': 'u1'};
+      const hotspot = {'name': 'openastro', 'host': '172.24.1.1', 'port': 5555, 'uuid': 'u1'};
 
       test('a device on the LAN gets one row, the LAN address', () async {
         final found = await browse(const ['192.0.2.5'], const [hotspot, lan]);
         expect(found.map((s) => s.hostname), ['192.0.2.20']);
       });
 
-      test(
-        'a device on the hotspot gets one row, the hotspot address',
-        () async {
-          final found = await browse(
-            const ['172.24.1.9'],
-            const [lan, hotspot],
-          );
-          expect(found.map((s) => s.hostname), ['172.24.1.1']);
-        },
-      );
+      test('a device on the hotspot gets one row, the hotspot address', () async {
+        final found = await browse(const ['172.24.1.9'], const [lan, hotspot]);
+        expect(found.map((s) => s.hostname), ['172.24.1.1']);
+      });
 
-      test(
-        'with no shared subnet one row keeps the first address found',
-        () async {
-          final found = await browse(const ['10.9.9.9'], const [hotspot, lan]);
-          expect(found.map((s) => s.hostname), ['172.24.1.1']);
-        },
-      );
+      test('with no shared subnet one row keeps the first address found', () async {
+        final found = await browse(const ['10.9.9.9'], const [hotspot, lan]);
+        expect(found.map((s) => s.hostname), ['172.24.1.1']);
+      });
 
       test('two rigs with different uuids stay two rows', () async {
-        final found = await browse(
-          const ['192.0.2.5'],
-          const [
-            lan,
-            {'name': 'other', 'host': '192.0.2.21', 'port': 5555, 'uuid': 'u2'},
-          ],
-        );
+        final found = await browse(const ['192.0.2.5'], const [
+          lan,
+          {'name': 'other', 'host': '192.0.2.21', 'port': 5555, 'uuid': 'u2'},
+        ]);
         expect(found.map((s) => s.hostname), ['192.0.2.20', '192.0.2.21']);
       });
 
       test('results with no uuid are still listed by endpoint', () async {
-        final found = await browse(
-          const ['192.0.2.5'],
-          const [
-            {'name': 'a', 'host': '192.0.2.20', 'port': 5555},
-            {'name': 'b', 'host': '192.0.2.21', 'port': 5555},
-          ],
-        );
+        final found = await browse(const ['192.0.2.5'], const [
+          {'name': 'a', 'host': '192.0.2.20', 'port': 5555},
+          {'name': 'b', 'host': '192.0.2.21', 'port': 5555},
+        ]);
         expect(found.map((s) => s.hostname), ['192.0.2.20', '192.0.2.21']);
       });
 
@@ -1021,28 +925,12 @@ void main() {
 void _preferLocalSubnetTests() {
   group('ServerDiscoveryService.isTunnelName', () {
     test('tunnels and container/VM interfaces are ignored, physical and shared ones kept', () {
-      for (final n in [
-        'utun3',
-        'tun0',
-        'wg0',
-        'ppp0',
-        'docker0',
-        'vmnet8',
-        'veth1a2b',
-        'ZT1234',
-      ]) {
+      for (final n in ['utun3', 'tun0', 'wg0', 'ppp0', 'docker0', 'vmnet8', 'veth1a2b', 'ZT1234']) {
         expect(ServerDiscoveryService.isTunnelName(n), isTrue, reason: n);
       }
       // bridge100 is macOS Internet Sharing: a rig on the shared Ethernet is
       // reachable there, so it is NOT excluded (review on #1277).
-      for (final n in [
-        'en0',
-        'eth0',
-        'wlan0',
-        'bridge100',
-        'Ethernet',
-        'Wi-Fi',
-      ]) {
+      for (final n in ['en0', 'eth0', 'wlan0', 'bridge100', 'Ethernet', 'Wi-Fi']) {
         expect(ServerDiscoveryService.isTunnelName(n), isFalse, reason: n);
       }
     });
@@ -1121,11 +1009,8 @@ void _preferLocalSubnetTests() {
       final sw = Stopwatch()..start();
       expect(await svc.discover().toList(), [rig]);
       expect(mdnsClients, 0);
-      expect(
-        sw.elapsed,
-        lessThan(ServerDiscoveryService.mdnsGracePeriod),
-        reason: 'no mDNS grace wait before the sweep',
-      );
+      expect(sw.elapsed, lessThan(ServerDiscoveryService.mdnsGracePeriod),
+          reason: 'no mDNS grace wait before the sweep');
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
@@ -1138,110 +1023,65 @@ void _preferLocalSubnetTests() {
         mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
         localAddresses: () async => const ['192.0.2.10'],
         nativeBrowse: () async => [
-          {
-            'name': 'openastro',
-            'host': '198.51.100.20',
-            'port': 5555,
-            'uuid': 'u-ios',
-          },
+          {'name': 'openastro', 'host': '198.51.100.20', 'port': 5555, 'uuid': 'u-ios'},
           {'name': 'broken', 'host': null, 'port': 5555},
         ],
         sweepSource: () => const Stream<AraServer>.empty(),
       );
       final found = await svc.discover().toList();
       expect(found, [
-        const AraServer(
-          hostname: '198.51.100.20',
-          port: 5555,
-          mdnsName: 'openastro',
-        ),
+        const AraServer(hostname: '198.51.100.20', port: 5555, mdnsName: 'openastro'),
       ]);
       expect(found.single.uuid, 'u-ios', reason: 'from the TXT record (#1485)');
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
-    test(
-      'blocked only when nothing on the subnet answered and the OS refused',
-      () {
-        expect(
-          ServerDiscoveryService.sweepSaysBlocked(
-            anyHostAnswered: false,
-            blockedFailures: 40,
-          ),
-          isTrue,
-        );
-        expect(
-          ServerDiscoveryService.sweepSaysBlocked(
-            anyHostAnswered: true,
-            blockedFailures: 40,
-          ),
-          isFalse,
-          reason: 'the router refusing the port proves the LAN is reachable (the rig is just off)',
-        );
-        expect(
-          ServerDiscoveryService.sweepSaysBlocked(
-            anyHostAnswered: false,
-            blockedFailures: 0,
-          ),
-          isFalse,
-          reason: 'silent timeouts are a quiet network, not a denial',
-        );
-      },
-    );
+    test('blocked only when nothing on the subnet answered and the OS refused', () {
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 40), isTrue);
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: true, blockedFailures: 40), isFalse,
+          reason: 'the router refusing the port proves the LAN is reachable (the rig is just off)');
+      expect(ServerDiscoveryService.sweepSaysBlocked(anyHostAnswered: false, blockedFailures: 0), isFalse,
+          reason: 'silent timeouts are a quiet network, not a denial');
+    });
   });
 
-  test(
-    'a rig found by the sweep clears a banner the mDNS send raised',
-    () async {
-      final svc = ServerDiscoveryService(
-        mdnsClientFactory: () => _AsyncSendErrorMdns(),
-        localAddresses: () async => const ['192.0.2.10'],
-        sweepSource: () =>
-            Stream.value(const AraServer(hostname: 'rig.test', port: 5555)),
-      );
-      final found = await svc.discover().toList();
-      expect(found, hasLength(1));
-      expect(svc.localNetworkBlocked.value, isFalse);
-    },
-  );
+  test('a rig found by the sweep clears a banner the mDNS send raised', () async {
+    final svc = ServerDiscoveryService(
+      mdnsClientFactory: () => _AsyncSendErrorMdns(),
+      localAddresses: () async => const ['192.0.2.10'],
+      sweepSource: () => Stream.value(const AraServer(hostname: 'rig.test', port: 5555)),
+    );
+    final found = await svc.discover().toList();
+    expect(found, hasLength(1));
+    expect(svc.localNetworkBlocked.value, isFalse);
+  });
 
   // #1129 review: the sweep's "blocked" verdict rests on how a failed probe
   // is classified — a refusal proves the LAN works; an OS refusal is a block.
   group('probeErrorOutcome', () {
-    SocketException err(int errno) =>
-        SocketException('x', osError: OSError('x', errno));
+    SocketException err(int errno) => SocketException('x', osError: OSError('x', errno));
 
     test('a refused port means the host answered', () {
       for (final errno in [61, 111, 10061, 1225]) {
-        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)), (
-          answered: true,
-          blocked: false,
-        ), reason: 'errno $errno');
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: true, blocked: false), reason: 'errno $errno');
       }
     });
 
     test('an OS refusal means blocked', () {
       for (final errno in [65, 113, 1, 13, 10013, 10065]) {
-        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)), (
-          answered: false,
-          blocked: true,
-        ), reason: 'errno $errno');
+        expect(ServerDiscoveryService.probeErrorOutcome(err(errno)),
+            (answered: false, blocked: true), reason: 'errno $errno');
       }
     });
 
     test('timeouts and other failures say neither', () {
-      expect(ServerDiscoveryService.probeErrorOutcome(TimeoutException('x')), (
-        answered: false,
-        blocked: false,
-      ));
-      expect(ServerDiscoveryService.probeErrorOutcome(err(60)), (
-        answered: false,
-        blocked: false,
-      ), reason: 'ETIMEDOUT');
-      expect(
-        ServerDiscoveryService.probeErrorOutcome(const FormatException('x')),
-        (answered: false, blocked: false),
-      );
+      expect(ServerDiscoveryService.probeErrorOutcome(TimeoutException('x')),
+          (answered: false, blocked: false));
+      expect(ServerDiscoveryService.probeErrorOutcome(err(60)),
+          (answered: false, blocked: false), reason: 'ETIMEDOUT');
+      expect(ServerDiscoveryService.probeErrorOutcome(const FormatException('x')),
+          (answered: false, blocked: false));
     });
   });
 
@@ -1266,31 +1106,14 @@ void _preferLocalSubnetTests() {
   // #1129: the rig list showed `openastro._openastroara._tcp.local`.
   group('instanceName', () {
     test('strips the service suffix', () {
-      expect(
-        ServerDiscoveryService.instanceName(
-          'openastro._openastroara._tcp.local',
-        ),
-        'openastro',
-      );
-      expect(
-        ServerDiscoveryService.instanceName('My Rig._openastroara._tcp.local'),
-        'My Rig',
-      );
+      expect(ServerDiscoveryService.instanceName('openastro._openastroara._tcp.local'), 'openastro');
+      expect(ServerDiscoveryService.instanceName('My Rig._openastroara._tcp.local'), 'My Rig');
     });
 
     test('leaves the bare service type and other names alone', () {
-      expect(
-        ServerDiscoveryService.instanceName('_openastroara._tcp.local'),
-        '_openastroara._tcp.local',
-      );
-      expect(
-        ServerDiscoveryService.instanceName('._openastroara._tcp.local'),
-        '._openastroara._tcp.local',
-      );
-      expect(
-        ServerDiscoveryService.instanceName('openastro.local'),
-        'openastro.local',
-      );
+      expect(ServerDiscoveryService.instanceName('_openastroara._tcp.local'), '_openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('._openastroara._tcp.local'), '._openastroara._tcp.local');
+      expect(ServerDiscoveryService.instanceName('openastro.local'), 'openastro.local');
     });
 
     test('an mDNS answer reaches the list under the rig\'s own name', () async {
@@ -1312,24 +1135,20 @@ void _preferLocalSubnetTests() {
     tearDown(() => debugDefaultTargetPlatformOverride = null);
     final hosts = [for (var n = 1; n <= 10; n++) '192.0.2.$n'];
 
-    ServerDiscoveryService sweeping(
-      Future<ProbeResult> Function(String) probe,
-    ) => ServerDiscoveryService(
-      mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
-      localAddresses: () async => const ['192.0.2.100'],
-      sweepHosts: () async => hosts,
-      probeHost: probe,
-    );
+    ServerDiscoveryService sweeping(Future<ProbeResult> Function(String) probe) =>
+        ServerDiscoveryService(
+          mdnsClientFactory: () => throw StateError('iOS must not open mDNS'),
+          localAddresses: () async => const ['192.0.2.100'],
+          sweepHosts: () async => hosts,
+          probeHost: probe,
+        );
 
-    test(
-      'every host refusing the port (rig off, LAN fine): no banner',
-      () async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-        final svc = sweeping((_) async => const ProbeResult(answered: true));
-        expect(await svc.discover().toList(), isEmpty);
-        expect(svc.localNetworkBlocked.value, isFalse);
-      },
-    );
+    test('every host refusing the port (rig off, LAN fine): no banner', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      final svc = sweeping((_) async => const ProbeResult(answered: true));
+      expect(await svc.discover().toList(), isEmpty);
+      expect(svc.localNetworkBlocked.value, isFalse);
+    });
 
     test('every connect refused by the OS: banner', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
@@ -1340,47 +1159,34 @@ void _preferLocalSubnetTests() {
 
     test('a rig found: listed, and the banner clears', () async {
       debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-      const rig = AraServer(
-        hostname: '192.0.2.7',
-        port: 5555,
-        mdnsName: 'openastro',
-      );
-      final svc = sweeping(
-        (h) async => h == '192.0.2.7'
-            ? const ProbeResult(answered: true, server: rig)
-            : const ProbeResult(blocked: true),
-      );
+      const rig = AraServer(hostname: '192.0.2.7', port: 5555, mdnsName: 'openastro');
+      final svc = sweeping((h) async => h == '192.0.2.7'
+          ? const ProbeResult(answered: true, server: rig)
+          : const ProbeResult(blocked: true));
       expect(await svc.discover().toList(), [rig]);
       expect(svc.localNetworkBlocked.value, isFalse);
     });
 
-    test(
-      'iOS reuses a recent sweep instead of re-walking the subnet every pass',
-      () async {
-        debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
-        var probes = 0;
-        final svc = sweeping((_) async {
-          probes++;
-          return const ProbeResult(answered: true);
-        });
-        await svc.discover().toList();
-        await svc
-            .discover()
-            .toList(); // the next ~4 s pass, inside the replay window
-        expect(probes, hosts.length);
-      },
-    );
+    test('iOS reuses a recent sweep instead of re-walking the subnet every pass', () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      var probes = 0;
+      final svc = sweeping((_) async {
+        probes++;
+        return const ProbeResult(answered: true);
+      });
+      await svc.discover().toList();
+      await svc.discover().toList(); // the next ~4 s pass, inside the replay window
+      expect(probes, hosts.length);
+    });
   });
 
   test('ENETUNREACH counts as an OS refusal for the sweep', () {
     for (final errno in [51, 101, 10051]) {
       expect(
-        ServerDiscoveryService.probeErrorOutcome(
-          SocketException('x', osError: OSError('x', errno)),
-        ),
-        (answered: false, blocked: true),
-        reason: 'errno $errno',
-      );
+          ServerDiscoveryService.probeErrorOutcome(
+              SocketException('x', osError: OSError('x', errno))),
+          (answered: false, blocked: true),
+          reason: 'errno $errno');
     }
   });
 
@@ -1400,21 +1206,11 @@ void _preferLocalSubnetTests() {
     }
 
     test('an Ara daemon is found, under its nickname', () async {
-      final http = await serve(200, {
-        'server_uuid': 'u',
-        'nickname': 'openastro',
-      });
+      final http = await serve(200, {'server_uuid': 'u', 'nickname': 'openastro'});
       addTearDown(() => http.close(force: true));
-      final r = await ServerDiscoveryService.probeForTest(
-        '127.0.0.1',
-        http.port,
-      );
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
       expect(r.server?.mdnsName, 'openastro');
-      expect(
-        r.server?.uuid,
-        'u',
-        reason: 'the auto-connect matches on it (#1485)',
-      );
+      expect(r.server?.uuid, 'u', reason: 'the auto-connect matches on it (#1485)');
       expect(r.server?.port, http.port);
       expect(r.answered, isTrue);
     });
@@ -1422,10 +1218,7 @@ void _preferLocalSubnetTests() {
     test('another HTTP server answered, but is not a rig', () async {
       final http = await serve(404, 'nope');
       addTearDown(() => http.close(force: true));
-      final r = await ServerDiscoveryService.probeForTest(
-        '127.0.0.1',
-        http.port,
-      );
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
       expect(r.server, isNull);
       expect(r.answered, isTrue, reason: 'proof the LAN is reachable');
     });
@@ -1436,32 +1229,26 @@ void _preferLocalSubnetTests() {
       // would read as blocked.
       final http = await serve(200, 'not json at all');
       addTearDown(() => http.close(force: true));
-      final r = await ServerDiscoveryService.probeForTest(
-        '127.0.0.1',
-        http.port,
-      );
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', http.port);
       expect(r.server, isNull);
       expect(r.answered, isTrue);
     });
 
-    test(
-      'a closed port is a refusal: answered, not blocked',
-      () async {
-        final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-        final port = probe.port;
-        await probe.close();
-        final r = await ServerDiscoveryService.probeForTest('127.0.0.1', port);
-        expect(r.server, isNull);
-        expect(r.answered, isTrue);
-        expect(r.blocked, isFalse);
-      },
-      // Windows retries a refused SYN for ~2 s before reporting it, past the
-      // probe's 800 ms connect timeout, so a closed port reads as a timeout
-      // there. The refusal verdict only feeds the iOS banner, so nothing
-      // depends on it on Windows (CI windows-latest, #1129).
-      skip: Platform.isWindows
-          ? 'Windows reports a refused connect only after ~2 s of SYN retries'
-          : false,
-    );
+    test('a closed port is a refusal: answered, not blocked', () async {
+      final probe = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final port = probe.port;
+      await probe.close();
+      final r = await ServerDiscoveryService.probeForTest('127.0.0.1', port);
+      expect(r.server, isNull);
+      expect(r.answered, isTrue);
+      expect(r.blocked, isFalse);
+    },
+        // Windows retries a refused SYN for ~2 s before reporting it, past the
+        // probe's 800 ms connect timeout, so a closed port reads as a timeout
+        // there. The refusal verdict only feeds the iOS banner, so nothing
+        // depends on it on Windows (CI windows-latest, #1129).
+        skip: Platform.isWindows
+            ? 'Windows reports a refused connect only after ~2 s of SYN retries'
+            : false);
   });
 }

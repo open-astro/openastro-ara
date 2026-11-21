@@ -8,8 +8,7 @@ import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/switch_device.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
-import 'package:openastroara/screens/simple/simple_shell.dart'
-    show SimpleSegment;
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/services/switch_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
@@ -36,11 +35,7 @@ class _Rig implements SwitchClient {
   }
 
   @override
-  Future<void> setValue({
-    required String deviceId,
-    required int portId,
-    required double value,
-  }) async {
+  Future<void> setValue({required String deviceId, required int portId, required double value}) async {
     writes.add('$deviceId/$portId=$value');
     await hold?.future;
     final e = refuse;
@@ -75,53 +70,24 @@ class _Camera extends CameraStatusNotifier {
   Future<CameraStatus?> build() async => CameraStatus.fromJson(json);
 }
 
-Map<String, dynamic> _wire({
-  Map<String, dynamic>? heater = const {'device_id': 'sw', 'port_id': 2},
-}) => {
+Map<String, dynamic> _wire({Map<String, dynamic>? heater = const {'device_id': 'sw', 'port_id': 2}}) => {
   'device_id': 'ZWO_SN_A',
   'name': 'ASI2600MM',
   'state': 'connected',
   'capabilities': {'has_cooler': true, 'can_set_temperature': true},
-  'runtime': {
-    'ccd_temperature': -9.8,
-    'cooler_on': true,
-    'cooler_setpoint_c': -10,
-  },
+  'runtime': {'ccd_temperature': -9.8, 'cooler_on': true, 'cooler_setpoint_c': -10},
   'dew_heater': ?heater,
 };
 
-SwitchPort _port(
-  int id,
-  String name,
-  double value, {
-  double max = 1,
-  bool write = true,
-}) => SwitchPort(
-  id: id,
-  name: name,
-  value: value,
-  min: 0,
-  max: max,
-  canWrite: write,
-  step: 0,
-);
+SwitchPort _port(int id, String name, double value, {double max = 1, bool write = true}) =>
+    SwitchPort(id: id, name: name, value: value, min: 0, max: max, canWrite: write, step: 0);
 
-SwitchDevice _heater({
-  double value = 0,
-  double max = 1,
-  bool write = true,
-  bool connected = true,
-}) => SwitchDevice(
+SwitchDevice _heater({double value = 0, double max = 1, bool write = true, bool connected = true}) => SwitchDevice(
   deviceId: 'sw',
   alpacaDeviceNumber: 0,
   name: 'ZWO Dew Heater',
-  connectionState: connected
-      ? SwitchConnectionState.connected
-      : SwitchConnectionState.disconnected,
-  ports: [
-    _port(0, 'Other', 0),
-    _port(2, 'DewHeater', value, max: max, write: write),
-  ],
+  connectionState: connected ? SwitchConnectionState.connected : SwitchConnectionState.disconnected,
+  ports: [_port(0, 'Other', 0), _port(2, 'DewHeater', value, max: max, write: write)],
 );
 
 Future<(ProviderContainer, _Rig)> _pump(
@@ -148,13 +114,7 @@ Future<(ProviderContainer, _Rig)> _pump(
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: c,
-      child: MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: SimpleCameraWindow(inSettings: inSettings),
-          ),
-        ),
-      ),
+      child: MaterialApp(home: Scaffold(body: SingleChildScrollView(child: SimpleCameraWindow(inSettings: inSettings)))),
     ),
   );
   await tester.pumpAndSettle();
@@ -164,111 +124,57 @@ Future<(ProviderContainer, _Rig)> _pump(
 Finder get _row => find.byKey(const Key('simple-window-row-dewheater'));
 
 void main() {
-  testWidgets('no heater in the camera status: no Dew heater row', (
-    tester,
-  ) async {
+  testWidgets('no heater in the camera status: no Dew heater row', (tester) async {
     await _pump(tester, _wire(heater: null), _heater());
     expect(find.text('Dew heater'), findsNothing);
   });
 
-  testWidgets(
-    'a heater the status names is a Dew heater row; the camera status field parses to it',
-    (tester) async {
-      expect(
-        CameraStatus.fromJson(_wire()).dewHeater,
-        const DewHeaterRef(deviceId: 'sw', portId: 2),
-      );
-      expect(CameraStatus.fromJson(_wire(heater: null)).dewHeater, isNull);
-      await _pump(tester, _wire(), _heater());
-      expect(find.text('Dew heater'), findsOneWidget);
-      expect(tester.getSize(_row).height, greaterThanOrEqualTo(44));
-    },
-  );
+  testWidgets('a heater the status names is a Dew heater row; the camera status field parses to it', (tester) async {
+    expect(CameraStatus.fromJson(_wire()).dewHeater, const DewHeaterRef(deviceId: 'sw', portId: 2));
+    expect(CameraStatus.fromJson(_wire(heater: null)).dewHeater, isNull);
+    await _pump(tester, _wire(), _heater());
+    expect(find.text('Dew heater'), findsOneWidget);
+    expect(tester.getSize(_row).height, greaterThanOrEqualTo(44));
+  });
 
-  testWidgets(
-    'an on/off port is On / Off segments; a tap writes the port max or min',
-    (tester) async {
-      final (c, rig) = await _pump(tester, _wire(), _heater());
-      expect(
-        find.byKey(const Key('simple-camera-dewheater')),
-        findsNothing,
-        reason: 'no slider',
-      );
-      expect(
-        tester
-            .widget<SimpleSegment>(
-              find.byKey(const Key('simple-camera-dewheater-off')),
-            )
-            .selected,
-        isTrue,
-      );
-      await tester.tap(find.byKey(const Key('simple-camera-dewheater-on')));
-      await tester.pumpAndSettle();
-      expect(rig.writes, ['sw/2=1.0']);
-      rig.devices = [_heater(value: 1)];
-      await c.read(switchListProvider.notifier).refresh();
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-camera-dewheater-off')));
-      await tester.pumpAndSettle();
-      expect(rig.writes.last, 'sw/2=0.0');
-    },
-  );
+  testWidgets('an on/off port is On / Off segments; a tap writes the port max or min', (tester) async {
+    final (c, rig) = await _pump(tester, _wire(), _heater());
+    expect(find.byKey(const Key('simple-camera-dewheater')), findsNothing, reason: 'no slider');
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-camera-dewheater-off'))).selected, isTrue);
+    await tester.tap(find.byKey(const Key('simple-camera-dewheater-on')));
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['sw/2=1.0']);
+    rig.devices = [_heater(value: 1)];
+    await c.read(switchListProvider.notifier).refresh();
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-camera-dewheater-off')));
+    await tester.pumpAndSettle();
+    expect(rig.writes.last, 'sw/2=0.0');
+  });
 
-  testWidgets(
-    'a port with a range is a slider with its level; release writes the rounded level, drag writes nothing',
-    (tester) async {
-      final (_, rig) = await _pump(
-        tester,
-        _wire(),
-        _heater(value: 60, max: 100),
-      );
-      expect(find.text('60 %'), findsOneWidget);
-      final slider = tester.widget<Slider>(
-        find.byKey(const Key('simple-camera-dewheater')),
-      );
-      slider.onChanged!(37.4);
-      await tester.pump();
-      expect(
-        find.text('37 %'),
-        findsOneWidget,
-        reason: 'the level follows the drag',
-      );
-      expect(rig.writes, isEmpty);
-      slider.onChangeEnd!(37.4);
-      await tester.pumpAndSettle();
-      expect(rig.writes, ['sw/2=37.0']);
-    },
-  );
+  testWidgets('a port with a range is a slider with its level; release writes the rounded level, drag writes nothing', (tester) async {
+    final (_, rig) = await _pump(tester, _wire(), _heater(value: 60, max: 100));
+    expect(find.text('60 %'), findsOneWidget);
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-dewheater')));
+    slider.onChanged!(37.4);
+    await tester.pump();
+    expect(find.text('37 %'), findsOneWidget, reason: 'the level follows the drag');
+    expect(rig.writes, isEmpty);
+    slider.onChangeEnd!(37.4);
+    await tester.pumpAndSettle();
+    expect(rig.writes, ['sw/2=37.0']);
+  });
 
-  testWidgets(
-    'the row is busy while the write is in flight and shows the asked state',
-    (tester) async {
-      final (_, rig) = await _pump(tester, _wire(), _heater());
-      rig.hold = Completer<void>();
-      await tester.tap(find.byKey(const Key('simple-camera-dewheater-on')));
-      await tester.pump();
-      expect(
-        tester
-            .widget<SimpleSegment>(
-              find.byKey(const Key('simple-camera-dewheater-on')),
-            )
-            .selected,
-        isTrue,
-        reason: 'the asked state',
-      );
-      expect(
-        tester
-            .widget<SimpleSegment>(
-              find.byKey(const Key('simple-camera-dewheater-off')),
-            )
-            .onTap,
-        isNull,
-        reason: 'locked while writing',
-      );
-      rig.hold!.complete();
-      await tester.pumpAndSettle();
-    },
-  );
+  testWidgets('the row is busy while the write is in flight and shows the asked state', (tester) async {
+    final (_, rig) = await _pump(tester, _wire(), _heater());
+    rig.hold = Completer<void>();
+    await tester.tap(find.byKey(const Key('simple-camera-dewheater-on')));
+    await tester.pump();
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-camera-dewheater-on'))).selected, isTrue, reason: 'the asked state');
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-camera-dewheater-off'))).onTap, isNull, reason: 'locked while writing');
+    rig.hold!.complete();
+    await tester.pumpAndSettle();
+  });
 
   testWidgets('a refused write says why in an error pill', (tester) async {
     final (c, rig) = await _pump(tester, _wire(), _heater());
@@ -281,9 +187,7 @@ void main() {
     await tester.pump(const Duration(seconds: 11));
   });
 
-  testWidgets('the switch not connected, read-only or absent: no row', (
-    tester,
-  ) async {
+  testWidgets('the switch not connected, read-only or absent: no row', (tester) async {
     await _pump(tester, _wire(), _heater(connected: false));
     expect(find.text('Dew heater'), findsNothing);
     await _pump(tester, _wire(), _heater(write: false));
@@ -294,33 +198,20 @@ void main() {
 
   testWidgets('the switch list is read as the window opens', (tester) async {
     final (_, rig) = await _pump(tester, _wire(), _heater());
-    expect(
-      rig.reads,
-      greaterThanOrEqualTo(2),
-      reason: 'once by the provider, once as the row opened',
-    );
+    expect(rig.reads, greaterThanOrEqualTo(2), reason: 'once by the provider, once as the row opened');
   });
 
-  testWidgets(
-    'the row shows in Settings and from the dot, and reads as Dew heater with its state',
-    (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pump(tester, _wire(), _heater(), inSettings: true);
-      expect(find.text('Dew heater'), findsOneWidget);
-      expect(find.bySemanticsLabel(RegExp('Dew heater')), findsOneWidget);
-      expect(
-        tester.getSemantics(find.bySemanticsLabel('Dew heater')),
-        isSemantics(label: 'Dew heater', value: 'Off'),
-      );
-      await _pump(tester, _wire(), _heater());
-      expect(find.text('Dew heater'), findsOneWidget);
-      await _pump(tester, _wire(), _heater(value: 60, max: 100));
-      expect(
-        tester.getSemantics(find.bySemanticsLabel('Dew heater')),
-        isSemantics(label: 'Dew heater', value: '60 %'),
-        reason: 'the level, for a heater with a range',
-      );
-      handle.dispose();
-    },
-  );
+  testWidgets('the row shows in Settings and from the dot, and reads as Dew heater with its state', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _wire(), _heater(), inSettings: true);
+    expect(find.text('Dew heater'), findsOneWidget);
+    expect(find.bySemanticsLabel(RegExp('Dew heater')), findsOneWidget);
+    expect(tester.getSemantics(find.bySemanticsLabel('Dew heater')), isSemantics(label: 'Dew heater', value: 'Off'));
+    await _pump(tester, _wire(), _heater());
+    expect(find.text('Dew heater'), findsOneWidget);
+    await _pump(tester, _wire(), _heater(value: 60, max: 100));
+    expect(tester.getSemantics(find.bySemanticsLabel('Dew heater')), isSemantics(label: 'Dew heater', value: '60 %'),
+        reason: 'the level, for a heater with a range');
+    handle.dispose();
+  });
 }

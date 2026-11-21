@@ -11,14 +11,12 @@ class CameraExposureApi {
   final Dio _dio;
 
   CameraExposureApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           // The POST returns 202 immediately; capture runs in the background.
           receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
+        ));
 
   /// Fire one exposure with the current Imaging-tab params. Returns the
   /// `frame_id` the daemon assigned. Throws `DioException` on HTTP failure —

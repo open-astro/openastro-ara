@@ -24,11 +24,8 @@ class _FakeGuiderEquipment implements GuiderEquipmentClient {
   int? lastDevice;
 
   @override
-  Future<double?> getAlpacaCameraPixelSize({
-    String? host,
-    int? port,
-    int? device,
-  }) async {
+  Future<double?> getAlpacaCameraPixelSize(
+      {String? host, int? port, int? device}) async {
     lastHost = host;
     lastPort = port;
     lastDevice = device;
@@ -45,22 +42,19 @@ class _FreshGuiderEquipment extends _FakeGuiderEquipment {
   @override
   Future<GuiderEquipmentChoicesResponse> getChoices() async =>
       const GuiderEquipmentChoicesResponse(
-        connected: true,
-        choices: GuiderEquipmentChoices(
-          cameras: ['Alpaca Camera [localhost:6800/0]', 'None'],
-        ),
-      );
+          connected: true,
+          choices: GuiderEquipmentChoices(
+              cameras: ['Alpaca Camera [localhost:6800/0]', 'None']));
   @override
-  Future<List<String>> discoverAlpaca({
-    int? numQueries,
-    int? timeoutSeconds,
-  }) async => const [];
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async =>
+      const [];
 }
 
 /// The base profile the wizard clones: [camera] is its guide camera.
 class _BaseProfileApi extends ProfileApi {
   _BaseProfileApi(this.camera)
-    : super(const AraServer(hostname: 'h', port: 5555));
+      : super(const AraServer(hostname: 'h', port: 5555));
   final String camera;
   @override
   Future<Phd2Settings> getPhd2Settings() async =>
@@ -72,35 +66,28 @@ class _BaseProfileApi extends ProfileApi {
 class _NoAlpacaNames extends AlpacaDeviceNamesClient {
   @override
   Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async => const {};
+          String host, int port) async =>
+      const {};
   @override
   void close() {}
 }
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester, {
-  GuiderEquipmentClient? equipment,
-  ProfileApi? profile,
-  void Function(ProviderContainer)? seedDraft,
-}) async {
-  final container = ProviderContainer(
-    overrides: [
-      guiderEquipmentApiProvider.overrideWithValue(equipment),
-      if (profile != null) profileApiProvider.overrideWithValue(profile),
-      alpacaDeviceNamesApiProvider.overrideWithValue(_NoAlpacaNames()),
-    ],
-  );
+Future<ProviderContainer> _pump(WidgetTester tester,
+    {GuiderEquipmentClient? equipment,
+    ProfileApi? profile,
+    void Function(ProviderContainer)? seedDraft}) async {
+  final container = ProviderContainer(overrides: [
+    guiderEquipmentApiProvider.overrideWithValue(equipment),
+    if (profile != null) profileApiProvider.overrideWithValue(profile),
+    alpacaDeviceNamesApiProvider.overrideWithValue(_NoAlpacaNames()),
+  ]);
   addTearDown(container.dispose);
   container.listen(wizardStepValidProvider, (_, _) {});
   seedDraft?.call(container);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ScreenGuider())),
-    ),
-  );
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: Scaffold(body: ScreenGuider())),
+  ));
   await tester.pump();
   return container;
 }
@@ -110,70 +97,56 @@ void main() {
     const cameras = ['Alpaca Camera [localhost:6800/0]', 'None'];
     test('a fresh profile on a reachable guider must pick a camera', () {
       expect(
-        guideCameraPickNeeded(
-          baseLoaded: true,
-          baseCamera: null,
-          draftCamera: null,
-          cameraChoices: cameras,
-        ),
-        isTrue,
-      );
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isTrue);
     });
     test('any pick, None included, clears the gate', () {
       for (final pick in ['Alpaca Camera [localhost:6800/0]', 'None']) {
         expect(
-          guideCameraPickNeeded(
-            baseLoaded: true,
-            baseCamera: null,
-            draftCamera: pick,
-            cameraChoices: cameras,
-          ),
-          isFalse,
-          reason: pick,
-        );
+            guideCameraPickNeeded(
+                baseLoaded: true,
+                baseCamera: null,
+                draftCamera: pick,
+                cameraChoices: cameras),
+            isFalse,
+            reason: pick);
       }
     });
     test('a base profile camera is kept, so no pick is needed', () {
       expect(
-        guideCameraPickNeeded(
-          baseLoaded: true,
-          baseCamera: 'Alpaca Camera [localhost:6800/0]',
-          draftCamera: null,
-          cameraChoices: cameras,
-        ),
-        isFalse,
-      );
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: 'Alpaca Camera [localhost:6800/0]',
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
     });
     test('offline never blocks: base unread or no choices', () {
       expect(
-        guideCameraPickNeeded(
-          baseLoaded: false,
-          baseCamera: null,
-          draftCamera: null,
-          cameraChoices: cameras,
-        ),
-        isFalse,
-      );
+          guideCameraPickNeeded(
+              baseLoaded: false,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: cameras),
+          isFalse);
       expect(
-        guideCameraPickNeeded(
-          baseLoaded: true,
-          baseCamera: null,
-          draftCamera: null,
-          cameraChoices: null,
-        ),
-        isFalse,
-      );
+          guideCameraPickNeeded(
+              baseLoaded: true,
+              baseCamera: null,
+              draftCamera: null,
+              cameraChoices: null),
+          isFalse);
     });
   });
 
-  testWidgets('a fresh profile holds Next until a guide camera is picked', (
-    tester,
-  ) async {
-    final container = await _pump(
-      tester,
-      equipment: _FreshGuiderEquipment(),
-      profile: _BaseProfileApi(''),
-    );
+  testWidgets('a fresh profile holds Next until a guide camera is picked',
+      (tester) async {
+    final container = await _pump(tester,
+        equipment: _FreshGuiderEquipment(), profile: _BaseProfileApi(''));
     await tester.pumpAndSettle();
     expect(container.read(wizardStepValidProvider), isFalse);
     expect(find.textContaining('No guide camera picked'), findsOneWidget);
@@ -186,14 +159,11 @@ void main() {
     expect(find.textContaining('No guide camera picked'), findsNothing);
   });
 
-  testWidgets('a base profile with a guide camera keeps Next open', (
-    tester,
-  ) async {
-    final container = await _pump(
-      tester,
-      equipment: _FreshGuiderEquipment(),
-      profile: _BaseProfileApi('Alpaca Camera [localhost:6800/0]'),
-    );
+  testWidgets('a base profile with a guide camera keeps Next open',
+      (tester) async {
+    final container = await _pump(tester,
+        equipment: _FreshGuiderEquipment(),
+        profile: _BaseProfileApi('Alpaca Camera [localhost:6800/0]'));
     await tester.pumpAndSettle();
     expect(container.read(wizardStepValidProvider), isTrue);
     expect(find.textContaining('No guide camera picked'), findsNothing);
@@ -227,10 +197,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(wizardStepValidProvider), isFalse);
-    expect(
-      find.text('Shortest exposure must not exceed the longest.'),
-      findsOneWidget,
-    );
+    expect(find.text('Shortest exposure must not exceed the longest.'),
+        findsOneWidget);
 
     tester.widget<DropdownMenu<int>>(longest).onSelected!(4000);
     await tester.pumpAndSettle();
@@ -243,26 +211,18 @@ void main() {
 
   testWidgets('remounting with an inverted range persisted in the draft '
       're-locks Next (Back → Next cannot bypass the gate)', (tester) async {
-    final container = await _pump(
-      tester,
-      seedDraft: (c) {
-        c.read(wizardControllerProvider).draft.guider
-          ..darkMinExposureMs = 2500
-          ..darkMaxExposureMs = 1000;
-        // Simulate the controller's unconditional reset on navigation.
-        c.read(wizardStepValidProvider.notifier).setValid(true);
-      },
-    );
+    final container = await _pump(tester, seedDraft: (c) {
+      c.read(wizardControllerProvider).draft.guider
+        ..darkMinExposureMs = 2500
+        ..darkMaxExposureMs = 1000;
+      // Simulate the controller's unconditional reset on navigation.
+      c.read(wizardStepValidProvider.notifier).setValid(true);
+    });
     await tester.pump();
-    expect(
-      container.read(wizardStepValidProvider),
-      isFalse,
-      reason: 'mount re-derives the gate from the persisted draft',
-    );
-    expect(
-      find.text('Shortest exposure must not exceed the longest.'),
-      findsOneWidget,
-    );
+    expect(container.read(wizardStepValidProvider), isFalse,
+        reason: 'mount re-derives the gate from the persisted draft');
+    expect(find.text('Shortest exposure must not exceed the longest.'),
+        findsOneWidget);
     // Tear the tree down and elapse any straggler one-shot timers (the
     // screen's providers arm short-lived ones) so the binding's
     // pending-timer teardown assert stays quiet.
@@ -273,14 +233,10 @@ void main() {
   testWidgets('a chosen Alpaca guide camera fills the pixel size from the '
       'driver and shows it as a read fact', (tester) async {
     final fake = _FakeGuiderEquipment(pixelSize: 2.9);
-    final container = await _pump(
-      tester,
-      equipment: fake,
-      seedDraft: (c) {
-        c.read(wizardControllerProvider).draft.guider.guiderCamera =
-            'Alpaca Camera [10.0.0.9:11111/1]';
-      },
-    );
+    final container = await _pump(tester, equipment: fake, seedDraft: (c) {
+      c.read(wizardControllerProvider).draft.guider.guiderCamera =
+          'Alpaca Camera [10.0.0.9:11111/1]';
+    });
     await tester.pumpAndSettle();
 
     expect(fake.lastHost, '10.0.0.9');
@@ -293,12 +249,9 @@ void main() {
 
   testWidgets('a non-Alpaca camera choice leaves the manual pixel-size field '
       'in Advanced', (tester) async {
-    final container = await _pump(
-      tester,
-      seedDraft: (c) {
-        c.read(wizardControllerProvider).draft.guider.guiderCamera = 'QHY5-II';
-      },
-    );
+    final container = await _pump(tester, seedDraft: (c) {
+      c.read(wizardControllerProvider).draft.guider.guiderCamera = 'QHY5-II';
+    });
     await tester.pumpAndSettle();
     expect(find.textContaining('read from the camera driver'), findsNothing);
 
@@ -306,10 +259,8 @@ void main() {
     await tester.tap(find.text('Advanced'));
     await tester.pumpAndSettle();
     expect(find.text('Guide pixel size (µm)'), findsOneWidget);
-    expect(
-      container.read(wizardControllerProvider).draft.guider.guidePixelSizeUm,
-      isNull,
-    );
+    expect(container.read(wizardControllerProvider).draft.guider.guidePixelSizeUm,
+        isNull);
   });
 
   group('Guide Camera must not be the Main Camera', () {
@@ -321,32 +272,20 @@ void main() {
     }
 
     testWidgets('the same device holds Next and says why', (tester) async {
-      final container = await _pump(
-        tester,
-        seedDraft: (c) {
-          seed(
-            c,
-            '127.0.0.1:32323/0',
-            guide: 'Alpaca Camera [127.0.0.1:32323/0]',
-          );
-        },
-      );
+      final container = await _pump(tester, seedDraft: (c) {
+        seed(c, '127.0.0.1:32323/0',
+            guide: 'Alpaca Camera [127.0.0.1:32323/0]');
+      });
       await tester.pumpAndSettle();
       expect(container.read(wizardStepValidProvider), isFalse);
       expect(find.textContaining('separate Guide Camera'), findsOneWidget);
     });
 
     testWidgets('localhost and 127.0.0.1 are the same host', (tester) async {
-      final container = await _pump(
-        tester,
-        seedDraft: (c) {
-          seed(
-            c,
-            '127.0.0.1:32323/0',
-            guide: 'Alpaca Camera [localhost:32323/0]',
-          );
-        },
-      );
+      final container = await _pump(tester, seedDraft: (c) {
+        seed(c, '127.0.0.1:32323/0',
+            guide: 'Alpaca Camera [localhost:32323/0]');
+      });
       await tester.pumpAndSettle();
       expect(container.read(wizardStepValidProvider), isFalse);
       expect(find.textContaining('separate Guide Camera'), findsOneWidget);
@@ -356,15 +295,11 @@ void main() {
       'Alpaca Camera [127.0.0.1:6800/0]',
       'Alpaca Camera [10.0.0.9:32323/0]',
     ]) {
-      testWidgets('the same device number elsewhere is allowed: $guide', (
-        tester,
-      ) async {
-        final container = await _pump(
-          tester,
-          seedDraft: (c) {
-            seed(c, '127.0.0.1:32323/0', guide: guide);
-          },
-        );
+      testWidgets('the same device number elsewhere is allowed: $guide',
+          (tester) async {
+        final container = await _pump(tester, seedDraft: (c) {
+          seed(c, '127.0.0.1:32323/0', guide: guide);
+        });
         await tester.pumpAndSettle();
         expect(container.read(wizardStepValidProvider), isTrue);
         expect(find.textContaining('separate Guide Camera'), findsNothing);
@@ -373,12 +308,10 @@ void main() {
 
     testWidgets('a base-profile Guide Camera that clashes with the new Main '
         'Camera holds Next without touching the picker', (tester) async {
-      final container = await _pump(
-        tester,
-        equipment: _FreshGuiderEquipment(),
-        profile: _BaseProfileApi('Alpaca Camera [127.0.0.1:32323/0]'),
-        seedDraft: (c) => seed(c, '127.0.0.1:32323/0'),
-      );
+      final container = await _pump(tester,
+          equipment: _FreshGuiderEquipment(),
+          profile: _BaseProfileApi('Alpaca Camera [127.0.0.1:32323/0]'),
+          seedDraft: (c) => seed(c, '127.0.0.1:32323/0'));
       await tester.pumpAndSettle();
       expect(container.read(wizardStepValidProvider), isFalse);
       expect(find.textContaining('separate Guide Camera'), findsOneWidget);

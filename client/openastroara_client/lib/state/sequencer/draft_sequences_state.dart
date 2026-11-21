@@ -4,9 +4,8 @@ import '../../models/sequence/draft_sequence.dart';
 import '../../services/draft_sequence_service.dart';
 import 'sequence_list_state.dart';
 
-final draftSequenceServiceProvider = Provider<DraftSequenceService>(
-  (ref) => DraftSequenceService(),
-);
+final draftSequenceServiceProvider =
+    Provider<DraftSequenceService>((ref) => DraftSequenceService());
 
 /// §2/§28.9 offline planning — the locally-stored draft sequences (newest
 /// first). Lives beside [sequenceListProvider]: that is the daemon's list,
@@ -18,11 +17,8 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
 
   /// Create a new draft from a built body; returns its id. Throws on a failed
   /// disk write — the caller surfaces it.
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? pushKey,
-  }) async {
+  Future<String> create(String name, Map<String, dynamic> body,
+      {String? pushKey}) async {
     final svc = ref.read(draftSequenceServiceProvider);
     final draft = DraftSequence(
       id: svc.newId(),
@@ -50,15 +46,13 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
         break;
       }
     }
-    await svc.save(
-      DraftSequence(
-        id: id,
-        name: existing?.name ?? '',
-        updatedUtc: DateTime.now().toUtc(),
-        body: body,
-        pushKey: existing?.pushKey,
-      ),
-    );
+    await svc.save(DraftSequence(
+      id: id,
+      name: existing?.name ?? '',
+      updatedUtc: DateTime.now().toUtc(),
+      body: body,
+      pushKey: existing?.pushKey,
+    ));
     await _reload();
   }
 
@@ -85,13 +79,11 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
     }
     if (draft == null) throw StateError('That draft no longer exists.');
     final newId = await api.create(
-      draft.name.isEmpty ? 'Offline draft' : draft.name,
-      draft.body,
-      // Stable across retries: a push whose response was lost dedupes on
-      // the daemon instead of duplicating. A degraded connected create's
-      // original key wins (the daemon may have already applied it).
-      idempotencyKey: draft.pushKey ?? draft.id,
-    );
+        draft.name.isEmpty ? 'Offline draft' : draft.name, draft.body,
+        // Stable across retries: a push whose response was lost dedupes on
+        // the daemon instead of duplicating. A degraded connected create's
+        // original key wins (the daemon may have already applied it).
+        idempotencyKey: draft.pushKey ?? draft.id);
     await ref.read(draftSequenceServiceProvider).delete(id);
     await _reload();
     // The daemon now owns it — surface it in the server list.
@@ -101,12 +93,10 @@ class DraftSequencesNotifier extends AsyncNotifier<List<DraftSequence>> {
 
   Future<void> _reload() async {
     state = AsyncValue.data(
-      await ref.read(draftSequenceServiceProvider).loadAll(),
-    );
+        await ref.read(draftSequenceServiceProvider).loadAll());
   }
 }
 
 final draftSequencesProvider =
     AsyncNotifierProvider<DraftSequencesNotifier, List<DraftSequence>>(
-      DraftSequencesNotifier.new,
-    );
+        DraftSequencesNotifier.new);

@@ -16,44 +16,35 @@ class _Prefs extends SimpleModePrefsService {
   Future<void> save(bool enabled) async {}
 }
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester, {
-  required bool simple,
-}) async {
-  final c = ProviderContainer(
-    overrides: [
-      simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
-      // Simple Mode shows only with the Experimental switch on too.
-      simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
-      activeServerProvider.overrideWithValue(null),
-    ],
-  );
+Future<ProviderContainer> _pump(WidgetTester tester, {required bool simple}) async {
+  final c = ProviderContainer(overrides: [
+    simpleModePrefsProvider.overrideWithValue(_Prefs(simple)),
+    // Simple Mode shows only with the Experimental switch on too.
+    simpleModeFeaturePrefsProvider.overrideWithValue(_Prefs(true)),
+    activeServerProvider.overrideWithValue(null),
+  ]);
   addTearDown(c.dispose);
   await c.read(simpleModeProvider.future);
   await c.read(simpleModeFeatureProvider.future);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: c,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Consumer(
-            builder: (context, ref, _) => TextButton(
-              onPressed: () => takeOne(context, ref),
-              child: const Text('Take One'),
-            ),
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: c,
+    child: MaterialApp(
+      home: Scaffold(
+        body: Consumer(
+          builder: (context, ref, _) => TextButton(
+            onPressed: () => takeOne(context, ref),
+            child: const Text('Take One'),
           ),
         ),
       ),
     ),
-  );
+  ));
   return c;
 }
 
 void main() {
   // No server saved in a test: Take One can't go anywhere.
-  testWidgets('Take One with no rig: an error pill in Simple Mode', (
-    tester,
-  ) async {
+  testWidgets('Take One with no rig: an error pill in Simple Mode', (tester) async {
     final c = await _pump(tester, simple: true);
     await tester.tap(find.text('Take One'));
     await tester.pump(const Duration(milliseconds: 10));
@@ -63,18 +54,12 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
   });
 
-  testWidgets('Take One with no rig: the full UI keeps its plain snackbar', (
-    tester,
-  ) async {
+  testWidgets('Take One with no rig: the full UI keeps its plain snackbar', (tester) async {
     final c = await _pump(tester, simple: false);
     await tester.tap(find.text('Take One'));
     await tester.pump(const Duration(milliseconds: 10));
     expect(c.read(simpleMessagesProvider), isEmpty);
     expect(find.text('Not connected to a server.'), findsOneWidget);
-    expect(
-      tester.widget<SnackBar>(find.byType(SnackBar)).backgroundColor,
-      isNull,
-      reason: 'not red, as before',
-    );
+    expect(tester.widget<SnackBar>(find.byType(SnackBar)).backgroundColor, isNull, reason: 'not red, as before');
   });
 }

@@ -15,30 +15,30 @@ import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
 import 'toolbar_surface.dart';
 
 SequenceDetail _detail(String id) => SequenceDetail(
-  id: id,
-  name: id,
-  body: {
-    r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-    'Name': 'root',
-    'Items': {
-      r'$type': itemsWrapperType,
-      r'$values': [
-        instructionForType(
-          'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer',
-        )!.build(),
-      ],
-    },
-  },
-);
+      id: id,
+      name: id,
+      body: {
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            instructionForType(
+                    'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer')!
+                .build(),
+          ],
+        },
+      },
+    );
 
 class _SaveClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) => throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -47,11 +47,9 @@ class _SaveClient implements SequenceClient {
       throw UnimplementedError();
 
   @override
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  }) => throw UnimplementedError();
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
   Map<String, dynamic>? savedBody;
   int saveCalls = 0;
   Map<String, dynamic>? validatedBody;
@@ -75,12 +73,8 @@ class _SaveClient implements SequenceClient {
   }
 
   @override
-  Future<SequenceDetail> updateSequence(
-    String id, {
-    String? name,
-    String? description,
-    Map<String, dynamic>? body,
-  }) async {
+  Future<SequenceDetail> updateSequence(String id,
+      {String? name, String? description, Map<String, dynamic>? body}) async {
     saveCalls++;
     if (throwGeneric) throw StateError('unexpected response shape');
     if (throwStatus != null) {
@@ -105,18 +99,14 @@ class _SaveClient implements SequenceClient {
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
   @override
-  Future<SequencePage> list({int limit = 50, String? cursor}) async =>
-      const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<String> start(String id) async => 'op';
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  }) async => 'op';
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
@@ -124,53 +114,42 @@ class _SaveClient implements SequenceClient {
   @override
   Future<String> stop(String id) async => 'op';
   @override
-  Future<SequenceShareExport> exportShare(String id) async =>
-      throw UnimplementedError();
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? description,
-    String? idempotencyKey,
-  }) async => 'new-seq';
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description, String? idempotencyKey}) async =>
+      'new-seq';
   @override
   void close() {}
 }
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester,
-  _SaveClient client, {
-  required bool dirty,
-}) async {
-  final container = ProviderContainer(
-    overrides: [sequenceApiProvider.overrideWithValue(client)],
-  );
+Future<ProviderContainer> _pump(WidgetTester tester, _SaveClient client,
+    {required bool dirty}) async {
+  final container = ProviderContainer(overrides: [
+    sequenceApiProvider.overrideWithValue(client),
+  ]);
   addTearDown(container.dispose);
   container.read(selectedSequenceIdProvider.notifier).select('seq-1');
   container.read(sequenceEditorProvider.notifier).load(_detail('seq-1'));
   if (dirty) {
     // Edit the WaitForTimeSpan's Time → the editor goes dirty.
-    container
-        .read(sequenceEditorProvider.notifier)
-        .setNodeField(const [0], 'Time', 99.0);
+    container.read(sequenceEditorProvider.notifier).setNodeField(const [0], 'Time', 99.0);
   }
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-    ),
-  );
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+  ));
   await tester.pump();
   return container;
 }
 
 TextButton _saveButton(WidgetTester tester) => tester.widget<TextButton>(
-  find.ancestor(of: find.text('Save'), matching: find.byType(TextButton)),
-);
+      find.ancestor(of: find.text('Save'), matching: find.byType(TextButton)),
+    );
 
 void main() {
   testWidgets('Save is disabled when the editor is not dirty', (tester) async {
@@ -179,9 +158,7 @@ void main() {
     expect(_saveButton(tester).onPressed, isNull);
   });
 
-  testWidgets('Import (NINA) is present and enabled while connected', (
-    tester,
-  ) async {
+  testWidgets('Import (NINA) is present and enabled while connected', (tester) async {
     await wideSurface(tester);
     await _pump(tester, _SaveClient(), dirty: false);
     final importBtn = tester.widget<TextButton>(
@@ -192,16 +169,14 @@ void main() {
 
   testWidgets('Import is disabled when disconnected', (tester) async {
     await wideSurface(tester);
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(null)],
-    );
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(null),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+    ));
     await tester.pump();
     final importBtn = tester.widget<TextButton>(
       find.ancestor(of: find.text('Import'), matching: find.byType(TextButton)),
@@ -219,28 +194,19 @@ void main() {
     expect(find.text('Sequence is valid.'), findsOneWidget);
   });
 
-  testWidgets('Validate surfaces the validator reason when invalid', (
-    tester,
-  ) async {
+  testWidgets('Validate surfaces the validator reason when invalid', (tester) async {
     await wideSurface(tester);
     final client = _SaveClient(
-      validateResult: const SequenceValidationResult(
-        valid: false,
-        reason: 'needs a capturable instruction',
-      ),
-    );
+        validateResult: const SequenceValidationResult(
+            valid: false, reason: 'needs a capturable instruction'));
     await _pump(tester, client, dirty: false);
     await tester.tap(find.text('Validate'));
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('needs a capturable instruction'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('needs a capturable instruction'), findsOneWidget);
   });
 
-  testWidgets('Save PATCHes the body, rebaselines dirty, and confirms', (
-    tester,
-  ) async {
+  testWidgets('Save PATCHes the body, rebaselines dirty, and confirms',
+      (tester) async {
     await wideSurface(tester);
     final client = _SaveClient();
     final container = await _pump(tester, client, dirty: true);
@@ -260,24 +226,18 @@ void main() {
   testWidgets('a 422 surfaces the validator message', (tester) async {
     await wideSurface(tester);
     final client = _SaveClient(
-      throwStatus: 422,
-      throwData: {'detail': 'needs a capturable instruction'},
-    );
+        throwStatus: 422, throwData: {'detail': 'needs a capturable instruction'});
     final container = await _pump(tester, client, dirty: true);
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('needs a capturable instruction'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('needs a capturable instruction'), findsOneWidget);
     // Still dirty (save failed) so the user can retry.
     expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
   });
 
-  testWidgets('a non-422 failure shows a generic error and keeps edits dirty', (
-    tester,
-  ) async {
+  testWidgets('a non-422 failure shows a generic error and keeps edits dirty',
+      (tester) async {
     await wideSurface(tester);
     final client = _SaveClient(throwStatus: 500);
     final container = await _pump(tester, client, dirty: true);
@@ -288,9 +248,8 @@ void main() {
     expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
   });
 
-  testWidgets('a non-Dio exception is caught (generic error, edits kept)', (
-    tester,
-  ) async {
+  testWidgets('a non-Dio exception is caught (generic error, edits kept)',
+      (tester) async {
     await wideSurface(tester);
     final client = _SaveClient(throwGeneric: true);
     final container = await _pump(tester, client, dirty: true);

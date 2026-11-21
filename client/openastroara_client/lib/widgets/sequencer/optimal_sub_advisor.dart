@@ -329,7 +329,8 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
       // Lead with the ACTION ("use N s per sub"), not the maths. The window
       // bounds read as jargon ("8 s – 24 min") — demote them to a plain-
       // language explanation line below the headline.
-      final headline = 'Suggested exposure: ${_fmt(r.recommendedSec)} per sub';
+      final headline =
+          'Suggested exposure: ${_fmt(r.recommendedSec)} per sub';
       final explain = saturationLimited
           ? 'Your sky is bright enough here that longer subs just saturate — '
                 'keep them at ${_fmt(r.recommendedSec)} or shorter.'
@@ -377,12 +378,11 @@ class _OptimalSubAdvisorState extends ConsumerState<OptimalSubAdvisor> {
           if (unguidedCeilingLine(
                 guided: guiderConfigured(
                   ref.watch(guiderStatusProvider).asData?.value,
-                  ref.watch(phd2SettingsProvider).value ?? const Phd2Settings(),
+                  ref.watch(phd2SettingsProvider).value ??
+                      const Phd2Settings(),
                 ),
-                calibration: ref
-                    .watch(trackingCalibrationProvider)
-                    .asData
-                    ?.value,
+                calibration:
+                    ref.watch(trackingCalibrationProvider).asData?.value,
                 skyLimitedSeconds: r.recommendedSec,
                 priorSeconds: prior?.seconds,
                 priorSource: prior?.source,

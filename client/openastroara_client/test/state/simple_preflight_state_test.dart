@@ -33,12 +33,8 @@ class _Step extends Notifier<SetupStepState> {
   void set(SetupStepState s) => state = s;
 }
 
-final _focus = NotifierProvider<_Step, SetupStepState>(
-  () => _Step(SetupStepState.pending),
-);
-final _aligned = NotifierProvider<_Step, SetupStepState>(
-  () => _Step(SetupStepState.pending),
-);
+final _focus = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
+final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
 
 /// The view's shortest side, set by the test: 800 is a tablet, under 600 a
 /// phone (Companion Mode on Android).
@@ -90,10 +86,7 @@ class _Live extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
   void running() => state = PolarAlignLive(phase: PolarAlignStates.adjusting);
-  void checked() => state = const PolarAlignLive(
-    phase: PolarAlignStates.checked,
-    stage: PolarAlignStages.check,
-  );
+  void checked() => state = const PolarAlignLive(phase: PolarAlignStates.checked, stage: PolarAlignStages.check);
   void stopped({String? zone}) => state = PolarAlignLive(
     phase: PolarAlignStates.stopped,
     stage: PolarAlignStages.fine,
@@ -168,10 +161,7 @@ class _Guider extends GuiderStatusNotifier {
   Future<void> startGuiding() async => _asks.add('startGuiding');
 }
 
-Future<ProviderContainer> _container({
-  bool prefs = true,
-  bool refuseTracking = false,
-}) async {
+Future<ProviderContainer> _container({bool prefs = true, bool refuseTracking = false}) async {
   _asks.clear();
   final c = ProviderContainer(
     overrides: [
@@ -206,31 +196,20 @@ void main() {
 
   // Falsified by: simple_preflight_state.dart SimpleShowingNotifier.build, drop the simpleModeProvider listen.
   for (final (name, toggle) in [
-    (
-      'the mode',
-      (ProviderContainer c, bool on) =>
-          c.read(simpleModeProvider.notifier).set(on),
-    ),
-    (
-      'the feature',
-      (ProviderContainer c, bool on) =>
-          c.read(simpleModeFeatureProvider.notifier).set(on),
-    ),
+    ('the mode', (ProviderContainer c, bool on) => c.read(simpleModeProvider.notifier).set(on)),
+    ('the feature', (ProviderContainer c, bool on) => c.read(simpleModeFeatureProvider.notifier).set(on)),
   ]) {
-    test(
-      'Simple Mode opening again ($name toggled) shows Preview and ends a Preflight left running',
-      () async {
-        final c = await _container();
-        await c.read(simpleModeProvider.future);
-        await c.read(simpleModeFeatureProvider.future);
-        expect(c.read(simpleModeActiveProvider), isTrue);
-        c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-        await toggle(c, false);
-        await toggle(c, true);
-        expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
-        expect(c.read(simplePreflightProvider), isNull);
-      },
-    );
+    test('Simple Mode opening again ($name toggled) shows Preview and ends a Preflight left running', () async {
+      final c = await _container();
+      await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
+      expect(c.read(simpleModeActiveProvider), isTrue);
+      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+      await toggle(c, false);
+      await toggle(c, true);
+      expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
+      expect(c.read(simplePreflightProvider), isNull);
+    });
   }
 
   test('picking Preflight starts it on Plan, and Plan is what shows; the pick itself never shows', () async {
@@ -256,18 +235,15 @@ void main() {
     expect(c.read(simpleShowingProvider), SimpleModeScreen.preview);
   });
 
-  test(
-    'imaging started by hand ends Preflight and leaves Plan on screen',
-    () async {
-      final c = await _container();
-      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-      c.read(simplePreflightProvider.notifier).next();
-      expect(c.read(simpleShowingProvider), SimpleModeScreen.focus);
-      (c.read(simpleRunProvider.notifier) as _Plan).started();
-      expect(c.read(simplePreflightProvider), isNull);
-      expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
-    },
-  );
+  test('imaging started by hand ends Preflight and leaves Plan on screen', () async {
+    final c = await _container();
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(simplePreflightProvider.notifier).next();
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.focus);
+    (c.read(simpleRunProvider.notifier) as _Plan).started();
+    expect(c.read(simplePreflightProvider), isNull);
+    expect(c.read(simpleShowingProvider), SimpleModeScreen.plan);
+  });
 
   test('stop() from anywhere leaves Plan on screen', () async {
     final c = await _container();
@@ -279,32 +255,22 @@ void main() {
 
   // Falsified by: simple_preflight_state.dart SimplePreflightNotifier.build, drop the close listens (#1513).
   for (final (name, toggle) in [
-    (
-      'the mode',
-      (ProviderContainer c) => c.read(simpleModeProvider.notifier).set(false),
-    ),
-    (
-      'the feature',
-      (ProviderContainer c) =>
-          c.read(simpleModeFeatureProvider.notifier).set(false),
-    ),
+    ('the mode', (ProviderContainer c) => c.read(simpleModeProvider.notifier).set(false)),
+    ('the feature', (ProviderContainer c) => c.read(simpleModeFeatureProvider.notifier).set(false)),
   ]) {
-    test(
-      'Simple Mode closing ($name off) ends Preflight: a focus finished in Advanced starts no polar routine',
-      () async {
-        final c = await _container();
-        await c.read(simpleModeProvider.future);
-        await c.read(simpleModeFeatureProvider.future);
-        c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-        c.read(simplePreflightProvider.notifier).next();
-        expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
-        await toggle(c);
-        expect(c.read(simplePreflightProvider), isNull);
-        c.read(_focus.notifier).set(SetupStepState.done);
-        expect(c.read(simplePreflightProvider), isNull);
-        expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
-      },
-    );
+    test('Simple Mode closing ($name off) ends Preflight: a focus finished in Advanced starts no polar routine', () async {
+      final c = await _container();
+      await c.read(simpleModeProvider.future);
+      await c.read(simpleModeFeatureProvider.future);
+      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+      c.read(simplePreflightProvider.notifier).next();
+      expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
+      await toggle(c);
+      expect(c.read(simplePreflightProvider), isNull);
+      c.read(_focus.notifier).set(SetupStepState.done);
+      expect(c.read(simplePreflightProvider), isNull);
+      expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
+    });
   }
 
   // Falsified by: simple_preflight_state.dart SimplePreflightNotifier.build, drop the companionModeProvider close listen (#1513).
@@ -362,15 +328,12 @@ void main() {
     expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
   });
 
-  test(
-    'closing Simple Mode on Polar with its routine running stops it once',
-    () async {
-      final c = await onPolar();
-      await c.read(simpleModeProvider.notifier).set(false);
-      expect(c.read(simplePreflightProvider), isNull);
-      expect((c.read(polarAlignApiProvider) as _PolarApi).calls, ['stop']);
-    },
-  );
+  test('closing Simple Mode on Polar with its routine running stops it once', () async {
+    final c = await onPolar();
+    await c.read(simpleModeProvider.notifier).set(false);
+    expect(c.read(simplePreflightProvider), isNull);
+    expect((c.read(polarAlignApiProvider) as _PolarApi).calls, ['stop']);
+  });
 
   test('a routine Advanced starts after Simple Mode closed is not stopped on reopening (#1514)', () async {
     final c = await onPolar();
@@ -380,23 +343,20 @@ void main() {
     expect((c.read(polarAlignApiProvider) as _PolarApi).calls, isEmpty);
   });
 
-  test(
-    'a queue Preflight started keeps running after Simple Mode closes',
-    () async {
-      final c = await _container();
-      await c.read(simpleModeProvider.future);
-      await c.read(simpleModeFeatureProvider.future);
-      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-      (c.read(simpleRunProvider.notifier) as _Plan).queued();
-      c.read(_focus.notifier).set(SetupStepState.done);
-      c.read(_aligned.notifier).set(SetupStepState.done);
-      c.read(simplePreflightProvider.notifier).next();
-      c.read(simplePreflightProvider.notifier).next();
-      await c.read(simpleModeProvider.notifier).set(false);
-      expect(c.read(simpleRunProvider).started, isTrue);
-      expect(c.read(simplePreflightProvider), isNull);
-    },
-  );
+  test('a queue Preflight started keeps running after Simple Mode closes', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(simpleModeFeatureProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    (c.read(simpleRunProvider.notifier) as _Plan).queued();
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(simplePreflightProvider.notifier).next();
+    c.read(simplePreflightProvider.notifier).next();
+    await c.read(simpleModeProvider.notifier).set(false);
+    expect(c.read(simpleRunProvider).started, isTrue);
+    expect(c.read(simplePreflightProvider), isNull);
+  });
 
   // Falsified by: simple_preflight_state.dart polarAlignLastResultProvider, drop the polarAlignLiveProvider watch.
   test('a polar routine that ends reads the last result again', () async {
@@ -551,39 +511,33 @@ void main() {
   });
 
   // Falsified by: simple_preflight_state.dart _go, call startGuiding instead of startGuidingTracked.
-  test(
-    '2026-11-14: the Guide step turns tracking on before it starts the guider',
-    () async {
-      final c = await _container();
-      await c.read(simpleModeProvider.future);
-      await c.read(guiderStatusProvider.future);
-      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-      c.read(_focus.notifier).set(SetupStepState.done);
-      c.read(_aligned.notifier).set(SetupStepState.done);
-      c.read(simplePreflightProvider.notifier).start();
-      c.read(simplePreflightProvider.notifier).next();
-      await Future<void>.delayed(Duration.zero);
-      expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-      expect(_asks, ['tracking:true', 'startGuiding']);
-    },
-  );
+  test('2026-11-14: the Guide step turns tracking on before it starts the guider', () async {
+    final c = await _container();
+    await c.read(simpleModeProvider.future);
+    await c.read(guiderStatusProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(simplePreflightProvider.notifier).start();
+    c.read(simplePreflightProvider.notifier).next();
+    await Future<void>.delayed(Duration.zero);
+    expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
+    expect(_asks, ['tracking:true', 'startGuiding']);
+  });
 
   // Falsified by: mount_state.dart ensureTracking, return true after the last refused try.
-  test(
-    'a mount that refuses tracking every time: no guiding, an error pill',
-    () async {
-      final c = await _container(refuseTracking: true);
-      await c.read(simpleModeProvider.future);
-      await c.read(guiderStatusProvider.future);
-      c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
-      c.read(_focus.notifier).set(SetupStepState.done);
-      c.read(_aligned.notifier).set(SetupStepState.done);
-      c.read(simplePreflightProvider.notifier).start();
-      c.read(simplePreflightProvider.notifier).next();
-      await Future<void>.delayed(const Duration(seconds: 6));
-      expect(_asks.where((a) => a == 'tracking:true').length, 5);
-      expect(_asks, isNot(contains('startGuiding')));
-      expect(c.read(simpleMessagesProvider), isNotEmpty);
-    },
-  );
+  test('a mount that refuses tracking every time: no guiding, an error pill', () async {
+    final c = await _container(refuseTracking: true);
+    await c.read(simpleModeProvider.future);
+    await c.read(guiderStatusProvider.future);
+    c.read(simpleShowingProvider.notifier).pick(SimpleModeScreen.preflight);
+    c.read(_focus.notifier).set(SetupStepState.done);
+    c.read(_aligned.notifier).set(SetupStepState.done);
+    c.read(simplePreflightProvider.notifier).start();
+    c.read(simplePreflightProvider.notifier).next();
+    await Future<void>.delayed(const Duration(seconds: 6));
+    expect(_asks.where((a) => a == 'tracking:true').length, 5);
+    expect(_asks, isNot(contains('startGuiding')));
+    expect(c.read(simpleMessagesProvider), isNotEmpty);
+  });
 }

@@ -47,16 +47,18 @@ enum SequenceRunState {
   /// can't silently fall through to one side (e.g. `aborting` must count as
   /// active, or Start would wrongly appear enabled mid-abort).
   bool get isActive => switch (this) {
-    SequenceRunState.idle ||
-    SequenceRunState.completed ||
-    SequenceRunState.stopped ||
-    SequenceRunState.failed => false,
-    SequenceRunState.starting ||
-    SequenceRunState.running ||
-    SequenceRunState.paused ||
-    SequenceRunState.pausedAwaitingUser ||
-    SequenceRunState.aborting => true,
-  };
+        SequenceRunState.idle ||
+        SequenceRunState.completed ||
+        SequenceRunState.stopped ||
+        SequenceRunState.failed =>
+          false,
+        SequenceRunState.starting ||
+        SequenceRunState.running ||
+        SequenceRunState.paused ||
+        SequenceRunState.pausedAwaitingUser ||
+        SequenceRunState.aborting =>
+          true,
+      };
 
   /// True in either paused flavor — the states the Run button relabels to
   /// Resume for, and from which `/resume` releases the engine.
@@ -134,13 +136,8 @@ class SequenceImportResult {
       listEquals(other.droppedInstructionTypes, droppedInstructionTypes);
 
   @override
-  int get hashCode => Object.hash(
-    createdSequenceId,
-    name,
-    lossyTranslation,
-    Object.hashAll(warnings),
-    Object.hashAll(droppedInstructionTypes),
-  );
+  int get hashCode => Object.hash(createdSequenceId, name, lossyTranslation,
+      Object.hashAll(warnings), Object.hashAll(droppedInstructionTypes));
 }
 
 /// Result of `POST /api/v1/sequences/validate` (§38.5): whether the body passes
@@ -185,14 +182,11 @@ Object? _deepUnmodifiable(Object? value, [int depth = 0]) {
     // so save-b's editor can `as Map<String, dynamic>` without a runtime cast
     // failure on the frozen nested maps.
     return Map<String, dynamic>.unmodifiable(<String, dynamic>{
-      for (final e in value.entries)
-        '${e.key}': _deepUnmodifiable(e.value, depth + 1),
+      for (final e in value.entries) '${e.key}': _deepUnmodifiable(e.value, depth + 1),
     });
   }
   if (value is List) {
-    return List<dynamic>.unmodifiable(
-      value.map((v) => _deepUnmodifiable(v, depth + 1)),
-    );
+    return List<dynamic>.unmodifiable(value.map((v) => _deepUnmodifiable(v, depth + 1)));
   }
   return value;
 }
@@ -238,39 +232,36 @@ class SequenceDetail {
   });
 
   factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
-    id: _str(json['id']) ?? '',
-    name: _str(json['name']) ?? '',
-    description: _str(json['description']),
-    body: json['body'] is Map<String, dynamic>
-        ? json['body'] as Map<String, dynamic>
-        : const <String, dynamic>{},
-    templateOrigin: _str(json['template_origin']),
-  );
+        id: _str(json['id']) ?? '',
+        name: _str(json['name']) ?? '',
+        description: _str(json['description']),
+        body: json['body'] is Map<String, dynamic>
+            ? json['body'] as Map<String, dynamic>
+            : const <String, dynamic>{},
+        templateOrigin: _str(json['template_origin']),
+      );
 
   // NOTE: like the PATCH payload, a null arg means "keep current" — there's no
   // way to CLEAR description back to null here. Fine for the create/rename flows;
   // if save-b's editor needs to blank a description, add a clear sentinel.
-  SequenceDetail copyWith({
-    String? name,
-    String? description,
-    Map<String, dynamic>? body,
-  }) => body == null
-      // Body unchanged → reuse the already-unmodifiable map (no re-wrap),
-      // the common path for a metadata-only edit like rename.
-      ? SequenceDetail._raw(
-          id: id,
-          name: name ?? this.name,
-          description: description ?? this.description,
-          body: this.body,
-          templateOrigin: templateOrigin,
-        )
-      : SequenceDetail(
-          id: id,
-          name: name ?? this.name,
-          description: description ?? this.description,
-          body: body,
-          templateOrigin: templateOrigin,
-        );
+  SequenceDetail copyWith({String? name, String? description, Map<String, dynamic>? body}) =>
+      body == null
+          // Body unchanged → reuse the already-unmodifiable map (no re-wrap),
+          // the common path for a metadata-only edit like rename.
+          ? SequenceDetail._raw(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: this.body,
+              templateOrigin: templateOrigin,
+            )
+          : SequenceDetail(
+              id: id,
+              name: name ?? this.name,
+              description: description ?? this.description,
+              body: body,
+              templateOrigin: templateOrigin,
+            );
 
   // DeepCollectionEquality (not mapEquals): the NINA body is deeply nested JSON,
   // and mapEquals compares nested-Map values by identity — so two fresh parses
@@ -296,13 +287,8 @@ class SequenceDetail {
   int? _bodyHashCache;
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    name,
-    description,
-    templateOrigin,
-    _bodyHashCache ??= _bodyEq.hash(body),
-  );
+  int get hashCode => Object.hash(id, name, description, templateOrigin,
+      _bodyHashCache ??= _bodyEq.hash(body));
 }
 
 /// A starting-point sequence template (`GET /api/v1/sequences/templates`) —
@@ -370,7 +356,6 @@ class MeridianFlipInfo {
 class SequenceRunStateInfo {
   final String sequenceId;
   final String runId;
-
   /// Nullable on purpose: an unrecognized/absent wire state stays `null` rather
   /// than silently degrading to `idle` (which would wrongly enable Start on a
   /// running sequence). Mirrors [SequenceListItem.currentRunState].
@@ -382,7 +367,6 @@ class SequenceRunStateInfo {
   final int instructionsCompleted;
   final int instructionsTotal;
   final String? currentInstructionDescription;
-
   /// #1068 — the sequencer's own duration model (`RunEtaEstimator` server-side),
   /// published in run state + every `sequence.progress` frame. Null until the
   /// run tree has loaded; the client never re-derives these from the body.
@@ -449,17 +433,13 @@ class SequenceRunStateInfo {
       completedUtc: _dt(json['completed_utc']),
       instructionsCompleted: _int(json['instructions_completed']),
       instructionsTotal: _int(json['instructions_total']),
-      currentInstructionDescription: _str(
-        json['current_instruction_description'],
-      ),
+      currentInstructionDescription: _str(json['current_instruction_description']),
       estimatedTotalSeconds: _doubleOrNull(json['estimated_total_seconds']),
-      estimatedRemainingSeconds: _doubleOrNull(
-        json['estimated_remaining_seconds'],
-      ),
+      estimatedRemainingSeconds:
+          _doubleOrNull(json['estimated_remaining_seconds']),
       framesCaptured: _int(json['frames_captured']),
-      currentInstructionProgress: _doubleOrNull(
-        json['current_instruction_progress'],
-      ),
+      currentInstructionProgress:
+          _doubleOrNull(json['current_instruction_progress']),
       reasonCode: _str(json['reason_code']),
       reasonText: _str(json['reason_text']),
       meridianWaitSecondsLeft: _intOrNull(json['meridian_wait_seconds_left']),
@@ -486,36 +466,31 @@ class SequenceRunStateInfo {
       // count preserves the last-known value instead of flashing 0/0.
       currentInstructionIndex:
           _intOrNull(payload['current_instruction_index']) ??
-          currentInstructionIndex,
-      currentTargetName:
-          _str(payload['current_target_name']) ?? currentTargetName,
+              currentInstructionIndex,
+      currentTargetName: _str(payload['current_target_name']) ?? currentTargetName,
       startedUtc: startedUtc,
       completedUtc: completedUtc,
       // An older daemon omits it; a rebuild without it read 0 frames mid-run.
       framesCaptured: _intOrNull(payload['frames_captured']) ?? framesCaptured,
       instructionsCompleted:
-          _intOrNull(payload['instructions_completed']) ??
-          instructionsCompleted,
-      instructionsTotal:
-          _intOrNull(payload['instructions_total']) ?? instructionsTotal,
+          _intOrNull(payload['instructions_completed']) ?? instructionsCompleted,
+      instructionsTotal: _intOrNull(payload['instructions_total']) ?? instructionsTotal,
       // Older daemons send no description: keep the REST-read one.
-      currentInstructionDescription:
-          _str(payload['current_instruction_description']) ??
+      currentInstructionDescription: _str(payload['current_instruction_description']) ??
           currentInstructionDescription,
       // Present on every progress frame; keep the last-known value if a frame
       // ever omits them.
       estimatedTotalSeconds:
-          _doubleOrNull(payload['estimated_total_seconds']) ??
-          estimatedTotalSeconds,
+          _doubleOrNull(payload['estimated_total_seconds']) ?? estimatedTotalSeconds,
       estimatedRemainingSeconds:
           _doubleOrNull(payload['estimated_remaining_seconds']) ??
-          estimatedRemainingSeconds,
+              estimatedRemainingSeconds,
       // A null clears it (the next step reports none yet); an older daemon
       // omits the key, which keeps the last known.
       currentInstructionProgress:
           payload.containsKey('current_instruction_progress')
-          ? _doubleOrNull(payload['current_instruction_progress'])
-          : currentInstructionProgress,
+              ? _doubleOrNull(payload['current_instruction_progress'])
+              : currentInstructionProgress,
       // Cleared by a null the way the progress is (the wait is over); an older
       // daemon omits the keys and keeps the last known.
       reasonCode: payload.containsKey('reason_code')
@@ -562,24 +537,23 @@ class SequenceRunStateInfo {
 
   @override
   int get hashCode => Object.hash(
-    sequenceId,
-    runId,
-    state,
-    currentInstructionIndex,
-    currentTargetName,
-    startedUtc,
-    completedUtc,
-    instructionsCompleted,
-    instructionsTotal,
-    currentInstructionDescription,
-    estimatedTotalSeconds,
-    estimatedRemainingSeconds,
-    framesCaptured,
-    currentInstructionProgress,
-    reasonCode,
-    reasonText,
-    meridianWaitSecondsLeft,
-  );
+      sequenceId,
+      runId,
+      state,
+      currentInstructionIndex,
+      currentTargetName,
+      startedUtc,
+      completedUtc,
+      instructionsCompleted,
+      instructionsTotal,
+      currentInstructionDescription,
+      estimatedTotalSeconds,
+      estimatedRemainingSeconds,
+      framesCaptured,
+      currentInstructionProgress,
+      reasonCode,
+      reasonText,
+      meridianWaitSecondsLeft);
 }
 
 /// One row in the sequence list — daemon's `SequenceListItemDto`.
@@ -634,15 +608,6 @@ class SequenceListItem {
       other.templateOrigin == templateOrigin;
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    name,
-    description,
-    createdUtc,
-    modifiedUtc,
-    currentRunState,
-    instructionCount,
-    targetCount,
-    templateOrigin,
-  );
+  int get hashCode => Object.hash(id, name, description, createdUtc, modifiedUtc,
+      currentRunState, instructionCount, targetCount, templateOrigin);
 }

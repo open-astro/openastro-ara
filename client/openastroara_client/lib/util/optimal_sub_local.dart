@@ -67,9 +67,8 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
           ? filterSet.filters.map((f) => "'${f.name}'").join(', ')
           : '(none configured)';
       return LocalOptimalSubUnavailable(
-        "Unknown filter '$name' — configured planning filters: $known. "
-        'Add it in Settings → Filter set.',
-      );
+          "Unknown filter '$name' — configured planning filters: $known. "
+          'Add it in Settings → Filter set.');
     }
     bandwidth = match.bandwidthNm > 0
         ? match.bandwidthNm
@@ -112,18 +111,16 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
       optics.pixelSizeUm.isFinite &&
       optics.pixelSizeUm > 0)) {
     return const LocalOptimalSubUnavailable(
-      'The imaging train is incomplete — aperture, focal length and pixel '
-      'size have no honest defaults. Set them up in Settings → Optics '
-      '(including the aperture field).',
-    );
+        'The imaging train is incomplete — aperture, focal length and pixel '
+        'size have no honest defaults. Set them up in Settings → Optics '
+        '(including the aperture field).');
   }
   if (!(optics.reducerFactor.isFinite &&
       optics.reducerFactor > 0 &&
       optics.reducerFactor <= _maxReducerFactor)) {
     return LocalOptimalSubUnavailable(
-      'The reducer factor (${optics.reducerFactor}) is out of range — set '
-      'it in Settings → Optics to a value in (0, $_maxReducerFactor].',
-    );
+        'The reducer factor (${optics.reducerFactor}) is out of range — set '
+        'it in Settings → Optics to a value in (0, $_maxReducerFactor].');
   }
 
   final input = OptimalSubInput(
@@ -151,8 +148,7 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   if (raDeg != null && decDeg != null) {
     if (optics.sensorWidthPx < 1 || optics.sensorHeightPx < 1) {
       // Advisory rider degrades; the Glover window still flows.
-      starReason =
-          'Star-count advice needs your sensor dimensions (no '
+      starReason = 'Star-count advice needs your sensor dimensions (no '
           'honest default) — set them in Settings → Optics.';
     } else {
       double seeing;
@@ -162,42 +158,32 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
         seeing = 2.5;
         assumed.add('seeing_arcsec');
       }
-      final scale =
-          206.265 *
+      final scale = 206.265 *
           optics.pixelSizeUm /
           (optics.focalLengthMm * optics.reducerFactor);
-      final fovDeg2 =
-          (optics.sensorWidthPx * scale / 3600.0) *
+      final fovDeg2 = (optics.sensorWidthPx * scale / 3600.0) *
           (optics.sensorHeightPx * scale / 3600.0);
       window = star_model.augmentWithStarFloor(
-        window,
-        input,
-        seeing,
-        raDeg,
-        decDeg,
-        fovDeg2,
-      );
+          window, input, seeing, raDeg, decDeg, fovDeg2);
       starReason = window.starReason;
     }
   }
 
-  return LocalOptimalSubSuccess(
-    api.OptimalSubResult(
-      skyFluxEPerSecPerPx: window.skyFluxEPerSecPerPx,
-      floorSec: window.floorSec,
-      ceilingSec: window.ceilingSec,
-      viable: window.viable,
-      limitingBound: switch (window.limitingBound) {
-        OptimalSubBound.readNoiseFloor => 'readnoisefloor',
-        OptimalSubBound.saturationCeiling => 'saturationceiling',
-        OptimalSubBound.starFloor => 'starfloor',
-      },
-      recommendedSec: window.recommendedSec,
-      assumedDefaults: assumed.isEmpty ? null : assumed,
-      starFloorSec: window.starFloorSec,
-      starsDetectedPerSub: window.starsDetectedPerSub,
-      starsRegistrationPerSub: window.starsRegistrationPerSub,
-      starReason: starReason,
-    ),
-  );
+  return LocalOptimalSubSuccess(api.OptimalSubResult(
+    skyFluxEPerSecPerPx: window.skyFluxEPerSecPerPx,
+    floorSec: window.floorSec,
+    ceilingSec: window.ceilingSec,
+    viable: window.viable,
+    limitingBound: switch (window.limitingBound) {
+      OptimalSubBound.readNoiseFloor => 'readnoisefloor',
+      OptimalSubBound.saturationCeiling => 'saturationceiling',
+      OptimalSubBound.starFloor => 'starfloor',
+    },
+    recommendedSec: window.recommendedSec,
+    assumedDefaults: assumed.isEmpty ? null : assumed,
+    starFloorSec: window.starFloorSec,
+    starsDetectedPerSub: window.starsDetectedPerSub,
+    starsRegistrationPerSub: window.starsRegistrationPerSub,
+    starReason: starReason,
+  ));
 }

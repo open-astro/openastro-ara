@@ -16,11 +16,11 @@ enum TonightFilterAdvice {
   final String label;
 
   static TonightFilterAdvice? fromWire(Object? raw) => switch (raw) {
-    'narrowband' => TonightFilterAdvice.narrowband,
-    'duoband' => TonightFilterAdvice.duoband,
-    'broadband' => TonightFilterAdvice.broadband,
-    _ => null,
-  };
+        'narrowband' => TonightFilterAdvice.narrowband,
+        'duoband' => TonightFilterAdvice.duoband,
+        'broadband' => TonightFilterAdvice.broadband,
+        _ => null,
+      };
 }
 
 /// §36.8 framing fit of an object against the active optical train: does it
@@ -39,12 +39,12 @@ enum TonightFraming {
   tooBig;
 
   static TonightFraming fromWire(Object? raw) => switch (raw) {
-    'toosmall' => TonightFraming.tooSmall,
-    'goodfit' => TonightFraming.goodFit,
-    'good' => TonightFraming.good,
-    'toobig' => TonightFraming.tooBig,
-    _ => TonightFraming.unknown,
-  };
+        'toosmall' => TonightFraming.tooSmall,
+        'goodfit' => TonightFraming.goodFit,
+        'good' => TonightFraming.good,
+        'toobig' => TonightFraming.tooBig,
+        _ => TonightFraming.unknown,
+      };
 }
 
 /// §36/§25.5 — one Tonight's Sky entry from `GET /api/v1/planning/tonight`:
@@ -231,21 +231,15 @@ class TonightSkyObject {
       score: _optDouble(json['score'])?.clamp(0.0, 100.0).toDouble(),
       scoreReasons: _optStringList(json['score_reasons']),
       filterAdvice: TonightFilterAdvice.fromWire(json['filter_advice']),
-      adviceReason: json['advice_reason'] is String
-          ? json['advice_reason'] as String
-          : null,
+      adviceReason: json['advice_reason'] is String ? json['advice_reason'] as String : null,
       optimalSubS: _optDouble(json['optimal_sub_s']),
       // Moon advisory (slice 4) — clamped to their invariants at the data layer,
       // like `score`, so a mangled value can't render as "430° away".
-      moonSeparationDeg: _optDouble(json['moon_separation_deg'])
-          ?.clamp(0.0, 180.0)
-          .toDouble(),
-      moonIlluminationPct: _optDouble(json['moon_illumination_pct'])
-          ?.clamp(0.0, 100.0)
-          .toDouble(),
-      moonUpFraction: _optDouble(json['moon_up_fraction'])
-          ?.clamp(0.0, 1.0)
-          .toDouble(),
+      moonSeparationDeg:
+          _optDouble(json['moon_separation_deg'])?.clamp(0.0, 180.0).toDouble(),
+      moonIlluminationPct:
+          _optDouble(json['moon_illumination_pct'])?.clamp(0.0, 100.0).toDouble(),
+      moonUpFraction: _optDouble(json['moon_up_fraction'])?.clamp(0.0, 1.0).toDouble(),
     );
   }
 
@@ -261,10 +255,8 @@ class TonightSkyObject {
   /// shouldn't blow up the "why this score" expansion.
   static List<String>? _optStringList(Object? v) {
     if (v is! List) return null;
-    final out = <String>[
-      for (final e in v)
-        if (e is String) e,
-    ];
+    final out = <String>[for (final e in v) if (e is String) e];
     return out.isEmpty ? null : out;
   }
 }
+

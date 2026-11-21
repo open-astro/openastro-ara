@@ -1,5 +1,4 @@
-import 'package:flutter/cupertino.dart'
-    show CupertinoAlertDialog, CupertinoDialogAction;
+import 'package:flutter/cupertino.dart' show CupertinoAlertDialog, CupertinoDialogAction;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -273,38 +272,18 @@ void main() {
   });
 
   testWidgets('#1311: the session header shows the polar alignment residual '
-      'measured from guiding, every measurement in the tooltip', (
-    tester,
-  ) async {
+      'measured from guiding, every measurement in the tooltip', (tester) async {
     final fake = _FakeLibraryClient(sessions: [_session()])
       ..paResiduals = {
         'sess-1': const [
-          PaResidual(
-            id: 'late',
-            status: PaResidualStatus.done,
-            sampleSeconds: 300,
-            paErrorMinArcmin: 2.5,
-          ),
-          PaResidual(
-            id: 'early',
-            status: PaResidualStatus.done,
-            sampleSeconds: 300,
-            paErrorMinArcmin: 0.8,
-          ),
+          PaResidual(id: 'late', status: PaResidualStatus.done, sampleSeconds: 300, paErrorMinArcmin: 2.5),
+          PaResidual(id: 'early', status: PaResidualStatus.done, sampleSeconds: 300, paErrorMinArcmin: 0.8),
         ],
       };
     await _pump(tester, fake);
 
-    expect(
-      find.text('PA ≥ 2′'),
-      findsNothing,
-      reason: 'under 10′ reads in arcseconds',
-    );
-    expect(
-      find.text('PA ≥ 150″'),
-      findsOneWidget,
-      reason: 'the newest measurement',
-    );
+    expect(find.text('PA ≥ 2′'), findsNothing, reason: 'under 10′ reads in arcseconds');
+    expect(find.text('PA ≥ 150″'), findsOneWidget, reason: 'the newest measurement');
     final tip = tester.widget<Tooltip>(
       find.ancestor(of: find.text('PA ≥ 150″'), matching: find.byType(Tooltip)),
     );
@@ -726,10 +705,7 @@ void main() {
         await tester.pumpAndSettle();
         expect(find.byType(CupertinoAlertDialog), findsOneWidget);
         final delete = find.widgetWithText(CupertinoDialogAction, 'Delete');
-        expect(
-          tester.widget<CupertinoDialogAction>(delete).isDestructiveAction,
-          isTrue,
-        );
+        expect(tester.widget<CupertinoDialogAction>(delete).isDestructiveAction, isTrue);
         await tester.tap(delete);
         await tester.pumpAndSettle();
         expect(fake.deleted!.$1, ['f1']);
@@ -754,10 +730,7 @@ void main() {
         expect(find.byType(CupertinoAlertDialog), findsOneWidget);
         await tester.enterText(find.byType(TextField).last, 'lucky');
         final add = find.widgetWithText(CupertinoDialogAction, 'Add');
-        expect(
-          tester.widget<CupertinoDialogAction>(add).isDefaultAction,
-          isTrue,
-        );
+        expect(tester.widget<CupertinoDialogAction>(add).isDefaultAction, isTrue);
         await tester.tap(add);
         await tester.pumpAndSettle();
         expect(fake.tagged!.$2, ['lucky']);

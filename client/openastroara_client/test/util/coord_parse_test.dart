@@ -23,10 +23,8 @@ void main() {
 
     test('a single decimal above 24 is degrees', () {
       expect(parseRa('83.82208'), closeTo(83.82208, 1e-9));
-      expect(
-        parseRa('83.82208', decimalUnit: RaUnit.hours),
-        closeTo(83.82208, 1e-9),
-      );
+      expect(parseRa('83.82208', decimalUnit: RaUnit.hours),
+          closeTo(83.82208, 1e-9));
     });
 
     test('a single decimal below 24 follows the chosen unit', () {

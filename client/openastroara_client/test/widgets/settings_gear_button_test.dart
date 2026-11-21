@@ -15,12 +15,10 @@ void main() {
   testWidgets('the top-bar gear opens Settings', (tester) async {
     final container = ProviderContainer();
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SettingsGearButton())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SettingsGearButton())),
+    ));
     expect(find.byTooltip('Settings'), findsOneWidget);
     await tester.tap(find.byTooltip('Settings'));
     await tester.pump();

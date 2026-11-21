@@ -31,12 +31,12 @@ class BestFrame {
   });
 
   factory BestFrame.fromJson(Map<String, dynamic> json) => BestFrame(
-    frameId: _str(json['frame_id']),
-    targetName: _str(json['target_name']),
-    capturedUtc: parseStatsUtc(json['captured_utc']),
-    compositeScore: _dbl(json['composite_score']),
-    filterName: _strOrNull(json['filter_name']),
-  );
+        frameId: _str(json['frame_id']),
+        targetName: _str(json['target_name']),
+        capturedUtc: parseStatsUtc(json['captured_utc']),
+        compositeScore: _dbl(json['composite_score']),
+        filterName: _strOrNull(json['filter_name']),
+      );
 
   /// Parses the `{ "frames": [...] }` envelope, dropping non-object rows and
   /// rows without a usable `frame_id`.
@@ -47,15 +47,11 @@ class BestFrame {
       for (final e in raw)
         if (e is Map<String, dynamic>) BestFrame.fromJson(e),
     ];
-    final usable = frames
-        .where((f) => f.frameId.isNotEmpty)
-        .toList(growable: false);
+    final usable = frames.where((f) => f.frameId.isNotEmpty).toList(growable: false);
     final dropped = raw.length - usable.length;
     if (dropped > 0) {
-      debugPrint(
-        '[stats] best-frames dropped $dropped malformed/unkeyed '
-        'row${dropped == 1 ? '' : 's'} of ${raw.length}',
-      );
+      debugPrint('[stats] best-frames dropped $dropped malformed/unkeyed '
+          'row${dropped == 1 ? '' : 's'} of ${raw.length}');
     }
     return usable;
   }

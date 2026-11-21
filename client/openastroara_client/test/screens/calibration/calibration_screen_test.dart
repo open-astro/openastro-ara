@@ -51,10 +51,9 @@ class _FakeCalibrationClient implements CalibrationClient {
   });
 
   @override
-  Future<CursorPage<CalibrationSession>> listSessions({
-    int limit = 200,
-    String? cursor,
-  }) async => CursorPage(items: sessions, nextCursor: null, hasMore: false);
+  Future<CursorPage<CalibrationSession>> listSessions(
+          {int limit = 200, String? cursor}) async =>
+      CursorPage(items: sessions, nextCursor: null, hasMore: false);
 
   @override
   Future<CalibrationSession?> getSession(String sessionId) async {
@@ -115,54 +114,43 @@ CalibrationSession _session({
   bool bias = true,
   double? coolerSetpointC,
   List<CalibrationFilterSummary>? filters,
-}) => CalibrationSession(
-  id: 'cal-sess-1',
-  targetName: 'M42',
-  sessionStartUtc: DateTime.utc(2026, 6, 30, 22),
-  sessionEndUtc: DateTime.utc(2026, 7, 1, 3),
-  lightFrameCount: 40,
-  filtersUsed:
-      filters ??
-      const [
-        CalibrationFilterSummary(
-          filterName: 'Ha',
-          lightFrameCount: 24,
-          meanExposureSeconds: 300,
-        ),
-        CalibrationFilterSummary(
-          filterName: 'OIII',
-          lightFrameCount: 16,
-          meanExposureSeconds: 180,
-        ),
-      ],
-  matchingFlatsAvailable: flats,
-  matchingDarksAvailable: darks,
-  matchingBiasAvailable: bias,
-  coolerSetpointC: coolerSetpointC,
-);
+}) =>
+    CalibrationSession(
+      id: 'cal-sess-1',
+      targetName: 'M42',
+      sessionStartUtc: DateTime.utc(2026, 6, 30, 22),
+      sessionEndUtc: DateTime.utc(2026, 7, 1, 3),
+      lightFrameCount: 40,
+      filtersUsed: filters ??
+          const [
+            CalibrationFilterSummary(
+                filterName: 'Ha', lightFrameCount: 24, meanExposureSeconds: 300),
+            CalibrationFilterSummary(
+                filterName: 'OIII', lightFrameCount: 16, meanExposureSeconds: 180),
+          ],
+      matchingFlatsAvailable: flats,
+      matchingDarksAvailable: darks,
+      matchingBiasAvailable: bias,
+      coolerSetpointC: coolerSetpointC,
+    );
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester,
-  _FakeCalibrationClient fake,
-) async {
-  final container = ProviderContainer(
-    overrides: [calibrationApiProvider.overrideWithValue(fake)],
-  );
+Future<ProviderContainer> _pump(WidgetTester tester,
+    _FakeCalibrationClient fake) async {
+  final container = ProviderContainer(overrides: [
+    calibrationApiProvider.overrideWithValue(fake),
+  ]);
   addTearDown(container.dispose);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: CalibrationScreen()),
-    ),
-  );
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: CalibrationScreen()),
+  ));
   await tester.pumpAndSettle();
   return container;
 }
 
 void main() {
-  testWidgets('sessions render per-filter summary and coverage badges', (
-    tester,
-  ) async {
+  testWidgets('sessions render per-filter summary and coverage badges',
+      (tester) async {
     await _pump(tester, _FakeCalibrationClient(sessions: [_session()]));
 
     expect(find.textContaining('M42'), findsWidgets);
@@ -172,44 +160,31 @@ void main() {
     expect(find.text('Bias matched'), findsOneWidget);
   });
 
-  testWidgets('a session with flats but no bias offers the bias on its own', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      sessions: [
-        _session(
-          flats: true,
-          bias: false,
-          filters: const [
-            CalibrationFilterSummary(
-              filterName: 'Ha',
-              lightFrameCount: 5,
-              meanExposureSeconds: 60,
-              matchingFlatFrames: 30,
-            ),
-          ],
+  testWidgets('a session with flats but no bias offers the bias on its own',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, bias: false, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
         ),
-      ],
-    );
+      ]),
+    ]);
     await _pump(tester, fake);
     expect(find.text('Bias needed'), findsOneWidget);
 
     await tester.tap(find.text('Capture Bias'));
     await tester.pumpAndSettle();
     final generate = find.widgetWithText(FilledButton, 'Generate & open');
-    expect(
-      tester.widget<FilledButton>(generate).onPressed,
-      isNotNull,
-      reason: 'the bias is still to shoot',
-    );
+    expect(tester.widget<FilledButton>(generate).onPressed, isNotNull,
+        reason: 'the bias is still to shoot');
 
     await tester.tap(find.text('Bias'));
     await tester.pumpAndSettle();
-    expect(
-      tester.widget<FilledButton>(generate).onPressed,
-      isNull,
-      reason: 'flats covered and bias unticked: nothing to shoot',
-    );
+    expect(tester.widget<FilledButton>(generate).onPressed, isNull,
+        reason: 'flats covered and bias unticked: nothing to shoot');
 
     await tester.tap(find.text('Bias'));
     await tester.pumpAndSettle();
@@ -220,57 +195,41 @@ void main() {
     expect(fake.flatsIncludeCovered, isFalse);
   });
 
-  testWidgets(
-    'missing bias and darks come with the lens-cap pause by default',
-    (tester) async {
-      final fake = _FakeCalibrationClient(
-        sessions: [
-          _session(
-            flats: true,
-            bias: false,
-            darks: false,
-            filters: const [
-              CalibrationFilterSummary(
-                filterName: 'Ha',
-                lightFrameCount: 5,
-                meanExposureSeconds: 60,
-                matchingFlatFrames: 30,
-              ),
-            ],
-          ),
-        ],
-      );
-      await _pump(tester, fake);
+  testWidgets('missing bias and darks come with the lens-cap pause by default',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, bias: false, darks: false, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
+        ),
+      ]),
+    ]);
+    await _pump(tester, fake);
 
-      await tester.tap(find.text('Capture Bias & Darks'));
-      await tester.pumpAndSettle();
-      expect(find.text('Darks'), findsOneWidget);
-      expect(
-        find.text('Pause for the lens cap first'),
-        findsOneWidget,
-        reason: 'no flats in this run, so the cap goes on before anything',
-      );
-      await tester.tap(find.text('Generate & open'));
-      await tester.pumpAndSettle();
-      expect(fake.flatsIncludeBias, isTrue);
-      expect(fake.flatsIncludeDarks, isTrue);
-      expect(fake.flatsLensCap, isTrue);
-    },
-  );
+    await tester.tap(find.text('Capture Bias & Darks'));
+    await tester.pumpAndSettle();
+    expect(find.text('Darks'), findsOneWidget);
+    expect(find.text('Pause for the lens cap first'), findsOneWidget,
+        reason: 'no flats in this run, so the cap goes on before anything');
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeBias, isTrue);
+    expect(fake.flatsIncludeDarks, isTrue);
+    expect(fake.flatsLensCap, isTrue);
+  });
 
-  testWidgets('the lens-cap pause is an option the user can turn off', (
-    tester,
-  ) async {
+  testWidgets('the lens-cap pause is an option the user can turn off',
+      (tester) async {
     final fake = _FakeCalibrationClient(
-      sessions: [_session(bias: false, darks: false)],
-    );
+        sessions: [_session(bias: false, darks: false)]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Capture Flats, Bias & Darks'));
     await tester.pumpAndSettle();
-    await tester.ensureVisible(
-      find.text('Pause for the lens cap after the flats'),
-    );
+    await tester.ensureVisible(find.text('Pause for the lens cap after the flats'));
     await tester.tap(find.text('Pause for the lens cap after the flats'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Generate & open'));
@@ -285,15 +244,9 @@ void main() {
 
     await tester.tap(find.text('Capture Flats'));
     await tester.pumpAndSettle();
-    expect(
-      find.text('The lights already have matching bias frames.'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('Pause for the lens cap'),
-      findsNothing,
-      reason: 'no bias or darks to shoot, so nothing to pause for',
-    );
+    expect(find.text('The lights already have matching bias frames.'), findsOneWidget);
+    expect(find.textContaining('Pause for the lens cap'), findsNothing,
+        reason: 'no bias or darks to shoot, so nothing to pause for');
     await tester.tap(find.text('Generate & open'));
     await tester.pumpAndSettle();
     expect(fake.flatsIncludeBias, isFalse);
@@ -301,53 +254,35 @@ void main() {
   });
 
   testWidgets(
-    '§39.5 flow: generate matching flats selects the sequence and jumps to Run',
-    (tester) async {
-      final fake = _FakeCalibrationClient(sessions: [_session()]);
-      final container = await _pump(tester, fake);
+      '§39.5 flow: generate matching flats selects the sequence and jumps to Run',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [_session()]);
+    final container = await _pump(tester, fake);
 
-      await tester.tap(find.text('Capture Flats'));
-      await tester.pumpAndSettle();
-      expect(find.text('Generate & open'), findsOneWidget);
+    await tester.tap(find.text('Capture Flats'));
+    await tester.pumpAndSettle();
+    expect(find.text('Generate & open'), findsOneWidget);
 
-      await tester.tap(find.text('Generate & open'));
-      await tester.pumpAndSettle();
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
 
-      expect(fake.flatsSessionId, 'cal-sess-1');
-      expect(
-        fake.flatsFrameCount,
-        30,
-        reason: 'the dialog starts from the profile frames per filter',
-      );
-      expect(
-        fake.flatsCoolCamera,
-        isFalse,
-        reason: 'lights taken warm → the cooling switch starts off',
-      );
-      expect(
-        fake.flatsPark,
-        isFalse,
-        reason: 'the mount never parks unless this run asks for it',
-      );
-      expect(
-        container.read(selectedSequenceIdProvider),
-        'seq-flats-1',
-        reason: 'the generated sequence is selected for the Run tab',
-      );
-      expect(
-        container.read(selectedTabIndexProvider),
-        kRunTabIndex,
-        reason: 'the shell switches to the Run tab',
-      );
-    },
-  );
+    expect(fake.flatsSessionId, 'cal-sess-1');
+    expect(fake.flatsFrameCount, 30,
+        reason: 'the dialog starts from the profile frames per filter');
+    expect(fake.flatsCoolCamera, isFalse,
+        reason: 'lights taken warm → the cooling switch starts off');
+    expect(fake.flatsPark, isFalse,
+        reason: 'the mount never parks unless this run asks for it');
+    expect(container.read(selectedSequenceIdProvider), 'seq-flats-1',
+        reason: 'the generated sequence is selected for the Run tab');
+    expect(container.read(selectedTabIndexProvider), kRunTabIndex,
+        reason: 'the shell switches to the Run tab');
+  });
 
-  testWidgets('flats for cooled lights cool to the lights\' set-point', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      sessions: [_session(coolerSetpointC: -10)],
-    );
+  testWidgets('flats for cooled lights cool to the lights\' set-point',
+      (tester) async {
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Capture Flats'));
@@ -355,10 +290,7 @@ void main() {
     expect(find.text('The lights ran at -10 °C.'), findsOneWidget);
     expect(find.widgetWithText(TextField, 'Cool to (°C)'), findsOneWidget);
 
-    await tester.enterText(
-      find.widgetWithText(TextField, 'Cool to (°C)'),
-      '-8',
-    );
+    await tester.enterText(find.widgetWithText(TextField, 'Cool to (°C)'), '-8');
     await tester.tap(find.text('Generate & open'));
     await tester.pumpAndSettle();
 
@@ -366,9 +298,8 @@ void main() {
     expect(fake.flatsCoolTo, -8, reason: 'the user can adjust the target');
   });
 
-  testWidgets('ticking park asks the daemon to park after the flats', (
-    tester,
-  ) async {
+  testWidgets('ticking park asks the daemon to park after the flats',
+      (tester) async {
     final fake = _FakeCalibrationClient(sessions: [_session()]);
     await _pump(tester, fake);
 
@@ -384,89 +315,59 @@ void main() {
   });
 
   testWidgets(
-    'each filter says which flats cover it, and the dialog shoots only the rest',
-    (tester) async {
-      final fake = _FakeCalibrationClient(
-        sessions: [
-          _session(
-            filters: [
-              CalibrationFilterSummary(
-                filterName: 'Ha',
-                lightFrameCount: 5,
-                meanExposureSeconds: 60,
-                matchingFlatFrames: 10,
-                matchingFlatsNewestUtc: DateTime.utc(2026, 10, 21, 3, 55),
-                flatsNote: "rotator angle not recorded for these frames — assumes the camera wasn't rotated",
-              ),
-              const CalibrationFilterSummary(
-                filterName: 'SII',
-                lightFrameCount: 5,
-                meanExposureSeconds: 60,
-                flatsNote:
-                    'flats exist at rotator 34.8°, the lights were at 120°',
-              ),
-            ],
-          ),
-        ],
-      );
-      await _pump(tester, fake);
-
-      expect(find.textContaining('Ha · 10 flats from Oct'), findsOneWidget);
-      expect(
-        find.textContaining('SII · flats exist at rotator 34.8°'),
-        findsOneWidget,
-      );
-
-      await tester.tap(find.text('Capture Flats'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining(
-          'Already covered by flats from this setup (skipped)',
+      'each filter says which flats cover it, and the dialog shoots only the rest',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(filters: [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 10,
+          matchingFlatsNewestUtc: DateTime.utc(2026, 10, 21, 3, 55),
+          flatsNote: "rotator angle not recorded for these frames — assumes the camera wasn't rotated",
         ),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Generate & open'));
-      await tester.pumpAndSettle();
-      expect(
-        fake.flatsIncludeCovered,
-        isFalse,
-        reason: 'covered filters are skipped',
-      );
-    },
-  );
-
-  testWidgets('a fully covered session offers only a deliberate re-shoot', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      sessions: [
-        _session(
-          flats: true,
-          filters: const [
-            CalibrationFilterSummary(
-              filterName: 'Ha',
-              lightFrameCount: 5,
-              meanExposureSeconds: 60,
-              matchingFlatFrames: 30,
-            ),
-          ],
+        const CalibrationFilterSummary(
+          filterName: 'SII',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          flatsNote: 'flats exist at rotator 34.8°, the lights were at 120°',
         ),
-      ],
-    );
+      ]),
+    ]);
+    await _pump(tester, fake);
+
+    expect(find.textContaining('Ha · 10 flats from Oct'), findsOneWidget);
+    expect(find.textContaining('SII · flats exist at rotator 34.8°'), findsOneWidget);
+
+    await tester.tap(find.text('Capture Flats'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Already covered by flats from this setup (skipped)'), findsOneWidget);
+    await tester.tap(find.text('Generate & open'));
+    await tester.pumpAndSettle();
+    expect(fake.flatsIncludeCovered, isFalse, reason: 'covered filters are skipped');
+  });
+
+  testWidgets('a fully covered session offers only a deliberate re-shoot',
+      (tester) async {
+    final fake = _FakeCalibrationClient(sessions: [
+      _session(flats: true, filters: const [
+        CalibrationFilterSummary(
+          filterName: 'Ha',
+          lightFrameCount: 5,
+          meanExposureSeconds: 60,
+          matchingFlatFrames: 30,
+        ),
+      ]),
+    ]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Re-shoot flats'));
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Every filter already has flats from this setup'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Every filter already has flats from this setup'), findsOneWidget);
     final generate = find.widgetWithText(FilledButton, 'Generate & open');
-    expect(
-      tester.widget<FilledButton>(generate).onPressed,
-      isNull,
-      reason: 'nothing to shoot until Flats is ticked',
-    );
+    expect(tester.widget<FilledButton>(generate).onPressed, isNull,
+        reason: 'nothing to shoot until Flats is ticked');
 
     await tester.tap(find.text('Flats'));
     await tester.pumpAndSettle();
@@ -476,12 +377,10 @@ void main() {
     expect(fake.flatsIncludeCovered, isTrue);
   });
 
-  testWidgets('flats can be left out for a bias-and-darks-only run', (
-    tester,
-  ) async {
+  testWidgets('flats can be left out for a bias-and-darks-only run',
+      (tester) async {
     final fake = _FakeCalibrationClient(
-      sessions: [_session(bias: false, darks: false)],
-    );
+        sessions: [_session(bias: false, darks: false)]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Capture Flats, Bias & Darks'));
@@ -489,11 +388,8 @@ void main() {
     await tester.tap(find.text('Flats'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(TextField, 'Flats per filter'), findsNothing);
-    expect(
-      find.text('Capture Bias & Darks'),
-      findsOneWidget,
-      reason: 'the title says what the run shoots',
-    );
+    expect(find.text('Capture Bias & Darks'), findsOneWidget,
+        reason: 'the title says what the run shoots');
     expect(find.text('Pause for the lens cap first'), findsOneWidget);
 
     await tester.tap(find.text('Generate & open'));
@@ -506,9 +402,8 @@ void main() {
   });
 
   testWidgets('switching cooling off sends cool_camera false', (tester) async {
-    final fake = _FakeCalibrationClient(
-      sessions: [_session(coolerSetpointC: -10)],
-    );
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Capture Flats'));
@@ -523,76 +418,58 @@ void main() {
     expect(fake.flatsCoolTo, isNull);
   });
 
-  testWidgets('the dark form starts from the sessions\' set-points', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      sessions: [_session(coolerSetpointC: -10)],
-    );
+  testWidgets('the dark form starts from the sessions\' set-points',
+      (tester) async {
+    final fake =
+        _FakeCalibrationClient(sessions: [_session(coolerSetpointC: -10)]);
     await _pump(tester, fake);
 
     await tester.tap(find.text('Dark Library'));
     await tester.pumpAndSettle();
-    final temps = tester.widget<TextField>(
-      find.widgetWithText(
-        TextField,
-        'Sensor temperatures (°C, comma-separated)',
-      ),
-    );
+    final temps = tester.widget<TextField>(find.widgetWithText(
+        TextField, 'Sensor temperatures (°C, comma-separated)'));
     expect(temps.controller!.text, '-10');
   });
 
-  testWidgets(
-    'the dark form takes the cooler target from the profile once it is in from the rig (ADR 0015)',
-    (tester) async {
-      final defaults = FakeImagingDefaultsSection(initial: null);
-      final camera = CameraStatus.fromJson({
-        'device_id': 'c',
-        'name': 'ASI2600MM',
-        'state': 'connected',
-        'capabilities': {'has_cooler': true, 'can_set_temperature': true},
-      });
-      final container = ProviderContainer(
-        overrides: [
-          calibrationApiProvider.overrideWithValue(_FakeCalibrationClient()),
-          profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
-          imagingDefaultsProvider.overrideWith(() => defaults),
-          cameraStatusProvider.overrideWith(() => _Camera(camera)),
-        ],
-      );
-      addTearDown(container.dispose);
-      await container.read(cameraStatusProvider.future);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: CalibrationScreen()),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Dark Library'));
-      await tester.pumpAndSettle();
-      final temps = find.widgetWithText(
-        TextField,
-        'Sensor temperatures (°C, comma-separated)',
-      );
-      expect(
-        tester.widget<TextField>(temps).controller!.text,
-        '',
-        reason: 'no client default while the rig has not answered',
-      );
+  testWidgets('the dark form takes the cooler target from the profile once it is in from the rig (ADR 0015)',
+      (tester) async {
+    final defaults = FakeImagingDefaultsSection(initial: null);
+    final camera = CameraStatus.fromJson({
+      'device_id': 'c',
+      'name': 'ASI2600MM',
+      'state': 'connected',
+      'capabilities': {'has_cooler': true, 'can_set_temperature': true},
+    });
+    final container = ProviderContainer(overrides: [
+      calibrationApiProvider.overrideWithValue(_FakeCalibrationClient()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      imagingDefaultsProvider.overrideWith(() => defaults),
+      cameraStatusProvider.overrideWith(() => _Camera(camera)),
+    ]);
+    addTearDown(container.dispose);
+    await container.read(cameraStatusProvider.future);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: CalibrationScreen()),
+    ));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Dark Library'));
+    await tester.pumpAndSettle();
+    final temps = find.widgetWithText(
+        TextField, 'Sensor temperatures (°C, comma-separated)');
+    expect(tester.widget<TextField>(temps).controller!.text, '',
+        reason: 'no client default while the rig has not answered');
 
-      defaults.initial = const ImagingDefaults(coolerTargetC: -15);
-      await container
-          .read(imagingDefaultsProvider.notifier)
-          .load(container.read(profileApiProvider)!);
-      await tester.pump();
-      expect(tester.widget<TextField>(temps).controller!.text, '-15');
-    },
-  );
+    defaults.initial = const ImagingDefaults(coolerTargetC: -15);
+    await container
+        .read(imagingDefaultsProvider.notifier)
+        .load(container.read(profileApiProvider)!);
+    await tester.pump();
+    expect(tester.widget<TextField>(temps).controller!.text, '-15');
+  });
 
-  testWidgets('dark library lists entries and opens the build sequence', (
-    tester,
-  ) async {
+  testWidgets('dark library lists entries and opens the build sequence',
+      (tester) async {
     final fake = _FakeCalibrationClient(
       darkState: DarkLibraryState(
         status: 'pending',
@@ -640,11 +517,8 @@ void main() {
     expect(find.text('Status: pending'), findsOneWidget);
     expect(find.text('1/2 combinations'), findsOneWidget);
     expect(find.textContaining('300s · gain 100'), findsOneWidget);
-    expect(
-      find.textContaining('0.5s · default gain'),
-      findsOneWidget,
-      reason: 'null gain renders honestly, sub-second exposures keep precision',
-    );
+    expect(find.textContaining('0.5s · default gain'), findsOneWidget,
+        reason: 'null gain renders honestly, sub-second exposures keep precision');
     expect(find.text('gain 100 · offset 50 · bin 1×1'), findsOneWidget);
     expect(find.text('50 frames · 3.0 MB · newest 2026-06-22'), findsOneWidget);
 
@@ -662,16 +536,11 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.enterText(
-      find.widgetWithText(TextField, 'Exposures (s, comma-separated)'),
-      '0.5, 60',
-    );
+        find.widgetWithText(TextField, 'Exposures (s, comma-separated)'),
+        '0.5, 60');
     await tester.enterText(
-      find.widgetWithText(
-        TextField,
-        'Sensor temperatures (°C, comma-separated)',
-      ),
-      '-10',
-    );
+        find.widgetWithText(TextField, 'Sensor temperatures (°C, comma-separated)'),
+        '-10');
     await tester.ensureVisible(find.text('Generate build sequence'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Generate build sequence'), warnIfMissed: true);

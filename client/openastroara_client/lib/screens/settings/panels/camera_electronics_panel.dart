@@ -42,8 +42,9 @@ class _CameraElectronicsPanelState extends ConsumerState<CameraElectronicsPanel>
     if (gate != null) return gate;
     final e = ref.watch(cameraElectronicsProvider).value!;
     final n = ref.read(cameraElectronicsProvider.notifier);
-    final dim = Theme.of(context).textTheme.bodyMedium
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

@@ -30,10 +30,7 @@ class _FakeNames extends AlpacaDeviceNamesClient {
   Completer<void>? gate;
 
   @override
-  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     asked.add('$host:$port');
     await gate?.future;
     return byServer['$host:$port'] ?? const {};
@@ -59,14 +56,12 @@ class _FakeEquipment implements GuiderEquipmentClient {
 
 void main() {
   ProviderContainer container(_FakeNames names) {
-    final c = ProviderContainer(
-      overrides: [
-        alpacaDeviceNamesApiProvider.overrideWithValue(names),
-        activeServerProvider.overrideWith((ref) => ref.watch(_rig)),
-        // A pick edits the rig's copy of the guider settings (ADR 0015).
-        phd2FromRig(),
-      ],
-    );
+    final c = ProviderContainer(overrides: [
+      alpacaDeviceNamesApiProvider.overrideWithValue(names),
+      activeServerProvider.overrideWith((ref) => ref.watch(_rig)),
+      // A pick edits the rig's copy of the guider settings (ADR 0015).
+      phd2FromRig(),
+    ]);
     addTearDown(c.dispose);
     return c;
   }
@@ -74,119 +69,63 @@ void main() {
   test("a camera pick is pinned by the UniqueID its server reports", () async {
     final names = _FakeNames({
       'rig.lan:6800': {
-        'camera/1': const AlpacaDeviceInfo(
-          name: 'ASI290MM Mini',
-          uniqueId: 'cam-uid',
-        ),
+        'camera/1': const AlpacaDeviceInfo(name: 'ASI290MM Mini', uniqueId: 'cam-uid'),
       },
     });
     final c = container(names);
-    await c.read(guiderAlpacaDevicesProvider.notifier).resolve([
-      'rig.lan:6800',
-    ]);
+    await c.read(guiderAlpacaDevicesProvider.notifier).resolve(['rig.lan:6800']);
 
     final devices = c.read(guiderAlpacaDevicesProvider);
     expect(devices.names['rig.lan:6800|camera/1'], 'ASI290MM Mini');
-    expect(
-      c
-          .read(guiderAlpacaDevicesProvider.notifier)
-          .uniqueIdFor('Alpaca Camera [rig.lan:6800/1]'),
-      'cam-uid',
-    );
-    expect(
-      c
-          .read(guiderAlpacaDevicesProvider.notifier)
-          .uniqueIdFor('Alpaca Camera [rig.lan:6800/2]'),
-      '',
-    );
+    expect(c.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor('Alpaca Camera [rig.lan:6800/1]'),
+        'cam-uid');
+    expect(c.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor('Alpaca Camera [rig.lan:6800/2]'), '');
   });
 
-  test(
-    'a named server is not asked again; one that answered nothing is',
-    () async {
-      final names = _FakeNames({
-        'rig.lan:6800': {'camera/1': const AlpacaDeviceInfo(name: 'Cam')},
-      });
-      final c = container(names);
-      final devices = c.read(guiderAlpacaDevicesProvider.notifier);
-      await devices.resolve(['rig.lan:6800', 'down.lan:6800']);
-      await devices.resolve(['rig.lan:6800', 'down.lan:6800']);
+  test('a named server is not asked again; one that answered nothing is', () async {
+    final names = _FakeNames({
+      'rig.lan:6800': {'camera/1': const AlpacaDeviceInfo(name: 'Cam')},
+    });
+    final c = container(names);
+    final devices = c.read(guiderAlpacaDevicesProvider.notifier);
+    await devices.resolve(['rig.lan:6800', 'down.lan:6800']);
+    await devices.resolve(['rig.lan:6800', 'down.lan:6800']);
 
-      expect(names.asked.where((e) => e == 'rig.lan:6800'), hasLength(1));
-      expect(names.asked.where((e) => e == 'down.lan:6800'), hasLength(2));
-    },
-  );
+    expect(names.asked.where((e) => e == 'rig.lan:6800'), hasLength(1));
+    expect(names.asked.where((e) => e == 'down.lan:6800'), hasLength(2));
+  });
 
-  test(
-    'a pick on another Alpaca server than the camera is a cross-server pick',
-    () {
-      expect(
-        isCrossServerPick(
-          'rig.lan:6800',
-          'Alpaca Telescope [other.lan:11111/0]',
-        ),
-        isTrue,
-      );
-      expect(
-        isCrossServerPick('rig.lan:6800', 'Alpaca Telescope [rig.lan:6800/0]'),
-        isFalse,
-      );
-      expect(
-        isCrossServerPick(null, 'Alpaca Telescope [other.lan:11111/0]'),
-        isFalse,
-      );
-      expect(isCrossServerPick('rig.lan:6800', 'EQMOD ASCOM'), isFalse);
-    },
-  );
+  test('a pick on another Alpaca server than the camera is a cross-server pick', () {
+    expect(isCrossServerPick('rig.lan:6800', 'Alpaca Telescope [other.lan:11111/0]'), isTrue);
+    expect(isCrossServerPick('rig.lan:6800', 'Alpaca Telescope [rig.lan:6800/0]'), isFalse);
+    expect(isCrossServerPick(null, 'Alpaca Telescope [other.lan:11111/0]'), isFalse);
+    expect(isCrossServerPick('rig.lan:6800', 'EQMOD ASCOM'), isFalse);
+  });
 
   test('a server switch forgets the last rig\'s names and UniqueIDs', () async {
     final names = _FakeNames({
-      'localhost:11111': {
-        'camera/0': const AlpacaDeviceInfo(
-          name: 'ASI120',
-          uniqueId: 'rig-a-cam',
-        ),
-      },
+      'localhost:11111': {'camera/0': const AlpacaDeviceInfo(name: 'ASI120', uniqueId: 'rig-a-cam')},
     });
     final c = container(names);
     c.listen(guiderAlpacaDevicesProvider, (_, _) {});
-    await c.read(guiderAlpacaDevicesProvider.notifier).resolve([
-      'localhost:11111',
-    ]);
+    await c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
     expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isNotEmpty);
 
     c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
-    expect(
-      c.read(guiderAlpacaDevicesProvider).uniqueIds,
-      isEmpty,
-      reason: 'rig B has its own localhost',
-    );
-    names.byServer['localhost:11111'] = {
-      'camera/0': const AlpacaDeviceInfo(name: 'ASI290', uniqueId: 'rig-b-cam'),
-    };
-    await c.read(guiderAlpacaDevicesProvider.notifier).resolve([
-      'localhost:11111',
-    ]);
-    expect(
-      c
-          .read(guiderAlpacaDevicesProvider.notifier)
-          .uniqueIdFor('Alpaca Camera [localhost:11111/0]'),
-      'rig-b-cam',
-    );
+    expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty, reason: 'rig B has its own localhost');
+    names.byServer['localhost:11111'] = {'camera/0': const AlpacaDeviceInfo(name: 'ASI290', uniqueId: 'rig-b-cam')};
+    await c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
+    expect(c.read(guiderAlpacaDevicesProvider.notifier).uniqueIdFor('Alpaca Camera [localhost:11111/0]'), 'rig-b-cam');
   });
 
   test('an explicit refresh asks a named server again, so a swapped camera is pinned by its own UniqueID', () async {
     final names = _FakeNames({
-      'rig.lan:6800': {
-        'camera/0': const AlpacaDeviceInfo(name: 'Old', uniqueId: 'old-cam'),
-      },
+      'rig.lan:6800': {'camera/0': const AlpacaDeviceInfo(name: 'Old', uniqueId: 'old-cam')},
     });
     final c = container(names);
     final devices = c.read(guiderAlpacaDevicesProvider.notifier);
     await devices.resolve(['rig.lan:6800']);
-    names.byServer['rig.lan:6800'] = {
-      'camera/0': const AlpacaDeviceInfo(name: 'New', uniqueId: 'new-cam'),
-    };
+    names.byServer['rig.lan:6800'] = {'camera/0': const AlpacaDeviceInfo(name: 'New', uniqueId: 'new-cam')};
     await devices.resolve(['rig.lan:6800'], fresh: true);
     expect(devices.uniqueIdFor('Alpaca Camera [rig.lan:6800/0]'), 'new-cam');
   });
@@ -329,58 +268,35 @@ void main() {
       c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
       expect(c.read(guiderDiscoveryProvider).servers, isNull);
     });
-    test(
-      'a sweep started on one rig does not write its servers into the next rig',
-      () async {
-        final gate = Completer<List<String>>();
-        final eq = _FakeEquipment()..gate = gate;
-        final c = withEquipment(
-          _FakeNames({
-            'rig-a-alpaca.lan:11111': {
-              'camera/0': const AlpacaDeviceInfo(
-                name: 'X',
-                uniqueId: 'rig-a-cam',
-              ),
-            },
-          }),
-          eq,
-        );
-        c.listen(guiderDiscoveryProvider, (_, _) {});
-        c.listen(guiderAlpacaDevicesProvider, (_, _) {});
-        final f = c.read(guiderAlpacaDevicesProvider.notifier).discover();
+    test('a sweep started on one rig does not write its servers into the next rig', () async {
+      final gate = Completer<List<String>>();
+      final eq = _FakeEquipment()..gate = gate;
+      final c = withEquipment(
+        _FakeNames({
+          'rig-a-alpaca.lan:11111': {'camera/0': const AlpacaDeviceInfo(name: 'X', uniqueId: 'rig-a-cam')},
+        }),
+        eq,
+      );
+      c.listen(guiderDiscoveryProvider, (_, _) {});
+      c.listen(guiderAlpacaDevicesProvider, (_, _) {});
+      final f = c.read(guiderAlpacaDevicesProvider.notifier).discover();
 
-        c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
-        expect(c.read(guiderDiscoveryProvider).servers, isNull);
-        gate.complete(['rig-a-alpaca.lan:11111']);
-        await f;
-        expect(
-          c.read(guiderDiscoveryProvider).servers,
-          isNull,
-          reason: 'rig A\'s servers stay out of rig B',
-        );
-        expect(
-          c.read(guiderAlpacaDevicesProvider).uniqueIds,
-          isEmpty,
-          reason: 'rig A\'s UniqueIDs stay out of rig B',
-        );
-      },
-    );
+      c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
+      expect(c.read(guiderDiscoveryProvider).servers, isNull);
+      gate.complete(['rig-a-alpaca.lan:11111']);
+      await f;
+      expect(c.read(guiderDiscoveryProvider).servers, isNull, reason: 'rig A\'s servers stay out of rig B');
+      expect(c.read(guiderAlpacaDevicesProvider).uniqueIds, isEmpty, reason: 'rig A\'s UniqueIDs stay out of rig B');
+    });
 
     test('a name lookup started on one rig does not write its UniqueIDs into the next rig', () async {
       final gate = Completer<void>();
       final names = _FakeNames({
-        'localhost:11111': {
-          'camera/0': const AlpacaDeviceInfo(
-            name: 'ASI120',
-            uniqueId: 'rig-a-cam',
-          ),
-        },
+        'localhost:11111': {'camera/0': const AlpacaDeviceInfo(name: 'ASI120', uniqueId: 'rig-a-cam')},
       })..gate = gate;
       final c = container(names);
       c.listen(guiderAlpacaDevicesProvider, (_, _) {});
-      final f = c.read(guiderAlpacaDevicesProvider.notifier).resolve([
-        'localhost:11111',
-      ]);
+      final f = c.read(guiderAlpacaDevicesProvider.notifier).resolve(['localhost:11111']);
 
       c.read(_rig.notifier).set(const AraServer(hostname: 'rig-b', port: 1));
       gate.complete();

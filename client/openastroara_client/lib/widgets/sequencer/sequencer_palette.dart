@@ -47,20 +47,13 @@ class _SequencerPaletteState extends ConsumerState<SequencerPalette> {
             style: const TextStyle(fontSize: 12.5),
             decoration: InputDecoration(
               isDense: true,
-              prefixIcon: const Icon(
-                Icons.search,
-                size: 16,
-                color: AraColors.textSecondary,
-              ),
-              prefixIconConstraints: const BoxConstraints(
-                minWidth: 30,
-                minHeight: 0,
-              ),
+              prefixIcon:
+                  const Icon(Icons.search, size: 16, color: AraColors.textSecondary),
+              prefixIconConstraints:
+                  const BoxConstraints(minWidth: 30, minHeight: 0),
               hintText: 'Find an instruction…',
               hintStyle: const TextStyle(
-                color: AraColors.textDisabled,
-                fontSize: 12.5,
-              ),
+                  color: AraColors.textDisabled, fontSize: 12.5),
               contentPadding: const EdgeInsets.symmetric(vertical: 8),
               filled: true,
               fillColor: AraColors.bgInput,
@@ -77,18 +70,18 @@ class _SequencerPaletteState extends ConsumerState<SequencerPalette> {
             children: [
               for (final entry in instructionCatalogByCategory.entries)
                 if (entry.value.any(matches)) ...[
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                    child: Text(
-                      entry.key.label.toUpperCase(),
-                      style: const TextStyle(
-                        color: AraColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+            child: Text(
+              entry.key.label.toUpperCase(),
+              style: const TextStyle(
+                color: AraColors.textSecondary,
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ),
                   for (final def in entry.value)
                     if (matches(def))
                       _PaletteTile(
@@ -108,11 +101,7 @@ class _SequencerPaletteState extends ConsumerState<SequencerPalette> {
 }
 
 class _PaletteTile extends StatelessWidget {
-  const _PaletteTile({
-    required this.def,
-    required this.enabled,
-    required this.onAdd,
-  });
+  const _PaletteTile({required this.def, required this.enabled, required this.onAdd});
 
   final InstructionDef def;
   final bool enabled;
@@ -135,13 +124,11 @@ class _PaletteTile extends StatelessWidget {
             children: [
               // S7 — category hue on the icon only (labels stay neutral):
               // scannable by kind without turning the palette into lights.
-              Icon(
-                def.icon,
-                size: 15,
-                color: enabled
-                    ? instructionCategoryColor(def.category)
-                    : AraColors.textDisabled,
-              ),
+              Icon(def.icon,
+                  size: 15,
+                  color: enabled
+                      ? instructionCategoryColor(def.category)
+                      : AraColors.textDisabled),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -161,11 +148,10 @@ class _PaletteTile extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: enabled
-                              ? AraColors.textSecondary
-                              : AraColors.textDisabled,
-                          fontSize: 10.5,
-                        ),
+                            color: enabled
+                                ? AraColors.textSecondary
+                                : AraColors.textDisabled,
+                            fontSize: 10.5),
                       ),
                   ],
                 ),

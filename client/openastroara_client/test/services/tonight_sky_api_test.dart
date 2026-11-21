@@ -1,3 +1,4 @@
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 
@@ -7,27 +8,27 @@ import 'package:openastroara/services/tonight_sky_api.dart';
 void main() {
   group('TonightSkyObject.fromJson', () {
     Map<String, dynamic> body() => {
-      'id': 'M31',
-      'name': 'Andromeda Galaxy',
-      'type': 'galaxy',
-      'magnitude': 3.4,
-      'ra_deg': 10.685,
-      'dec_deg': 41.269,
-      'altitude_deg': 62.5,
-      'max_altitude_deg': 89.0,
-      'size_maj_arcmin': 190.0,
-      'size_min_arcmin': 60.0,
-      'pos_angle_deg': 35.0,
-      'surface_brightness': 13.5,
-      'window_start_utc': '2026-06-29T20:14:00Z',
-      'window_end_utc': '2026-06-30T04:32:00Z',
-      'transit_utc': '2026-06-30T01:10:00Z',
-      'integration_hours': 6.3,
-      'remaining_hours': 3.2,
-      'framing': 'good',
-      'score': 88.0,
-      'score_reasons': ['fills the frame (+35)', '6 h dark window (+25)'],
-    };
+          'id': 'M31',
+          'name': 'Andromeda Galaxy',
+          'type': 'galaxy',
+          'magnitude': 3.4,
+          'ra_deg': 10.685,
+          'dec_deg': 41.269,
+          'altitude_deg': 62.5,
+          'max_altitude_deg': 89.0,
+          'size_maj_arcmin': 190.0,
+          'size_min_arcmin': 60.0,
+          'pos_angle_deg': 35.0,
+          'surface_brightness': 13.5,
+          'window_start_utc': '2026-06-29T20:14:00Z',
+          'window_end_utc': '2026-06-30T04:32:00Z',
+          'transit_utc': '2026-06-30T01:10:00Z',
+          'integration_hours': 6.3,
+          'remaining_hours': 3.2,
+          'framing': 'good',
+          'score': 88.0,
+          'score_reasons': ['fills the frame (+35)', '6 h dark window (+25)'],
+        };
 
     test('parses a full object', () {
       final o = TonightSkyObject.fromJson(body());
@@ -44,10 +45,7 @@ void main() {
 
     test('parses the aliases, tolerating a missing or mixed list (#1267)', () {
       expect(TonightSkyObject.fromJson(body())!.aliases, isEmpty);
-      final o = TonightSkyObject.fromJson({
-        ...body(),
-        'aliases': ['Sh2-117', 3, 'C 020'],
-      })!;
+      final o = TonightSkyObject.fromJson({...body(), 'aliases': ['Sh2-117', 3, 'C 020']})!;
       expect(o.aliases, ['Sh2-117', 'C 020']);
     });
 
@@ -76,8 +74,7 @@ void main() {
       final o = TonightSkyObject.fromJson({
         ...body(),
         'filter_advice': 'narrowband',
-        'advice_reason':
-            'Emission-line target — narrowband sees ~14× less sky glow.',
+        'advice_reason': 'Emission-line target — narrowband sees ~14× less sky glow.',
         'optimal_sub_s': 300.0,
       })!;
       expect(o.filterAdvice, TonightFilterAdvice.narrowband);
@@ -135,18 +132,9 @@ void main() {
     });
 
     test('advice enum maps each wire value', () {
-      expect(
-        TonightFilterAdvice.fromWire('narrowband'),
-        TonightFilterAdvice.narrowband,
-      );
-      expect(
-        TonightFilterAdvice.fromWire('duoband'),
-        TonightFilterAdvice.duoband,
-      );
-      expect(
-        TonightFilterAdvice.fromWire('broadband'),
-        TonightFilterAdvice.broadband,
-      );
+      expect(TonightFilterAdvice.fromWire('narrowband'), TonightFilterAdvice.narrowband);
+      expect(TonightFilterAdvice.fromWire('duoband'), TonightFilterAdvice.duoband);
+      expect(TonightFilterAdvice.fromWire('broadband'), TonightFilterAdvice.broadband);
       expect(TonightFilterAdvice.fromWire(null), isNull);
       expect(TonightFilterAdvice.fromWire(1), isNull);
     });
@@ -167,26 +155,23 @@ void main() {
       // A naive (no Z/offset) instant must be treated as UTC as-is, not run through
       // .toUtc() (which would shift it by the client's local offset). 01:10 stays 01:10.
       final o = TonightSkyObject.fromJson(
-        body()..['transit_utc'] = '2026-06-30T01:10:00',
-      )!;
+          body()..['transit_utc'] = '2026-06-30T01:10:00')!;
       expect(o.transitUtc!.isUtc, isTrue);
       expect(o.transitUtc, DateTime.utc(2026, 6, 30, 1, 10));
     });
 
     test('§36.8 fields tolerate missing/wrong types without throwing', () {
       // A pre-§36.8 server omits all of them — the required fields still parse.
-      final bare = TonightSkyObject.fromJson(
-        body()
-          ..remove('size_maj_arcmin')
-          ..remove('window_start_utc')
-          ..remove('window_end_utc')
-          ..remove('transit_utc')
-          ..remove('integration_hours')
-          ..remove('remaining_hours')
-          ..remove('framing')
-          ..remove('score')
-          ..remove('score_reasons'),
-      );
+      final bare = TonightSkyObject.fromJson(body()
+        ..remove('size_maj_arcmin')
+        ..remove('window_start_utc')
+        ..remove('window_end_utc')
+        ..remove('transit_utc')
+        ..remove('integration_hours')
+        ..remove('remaining_hours')
+        ..remove('framing')
+        ..remove('score')
+        ..remove('score_reasons'));
       expect(bare, isNotNull);
       expect(bare!.sizeMajArcmin, isNull);
       expect(bare.windowStartUtc, isNull);
@@ -198,14 +183,12 @@ void main() {
       expect(bare.scoreReasons, isNull);
 
       // Wrong-typed values fall back to null/default rather than crashing.
-      final junk = TonightSkyObject.fromJson(
-        body()
-          ..['size_maj_arcmin'] = 'big'
-          ..['window_start_utc'] = 'not-a-date'
-          ..['integration_hours'] = 'lots'
-          ..['score'] = 'high'
-          ..['score_reasons'] = 'one reason',
-      ); // not a list
+      final junk = TonightSkyObject.fromJson(body()
+        ..['size_maj_arcmin'] = 'big'
+        ..['window_start_utc'] = 'not-a-date'
+        ..['integration_hours'] = 'lots'
+        ..['score'] = 'high'
+        ..['score_reasons'] = 'one reason'); // not a list
       expect(junk, isNotNull);
       expect(junk!.sizeMajArcmin, isNull);
       expect(junk.windowStartUtc, isNull);
@@ -237,39 +220,18 @@ void main() {
     });
 
     test('a missing/wrong-typed magnitude is null, not the real value 0.0', () {
-      expect(
-        TonightSkyObject.fromJson(body()..remove('magnitude'))!.magnitude,
-        isNull,
-      );
-      expect(
-        TonightSkyObject.fromJson(body()..['magnitude'] = 'bright')!.magnitude,
-        isNull,
-      );
+      expect(TonightSkyObject.fromJson(body()..remove('magnitude'))!.magnitude, isNull);
+      expect(TonightSkyObject.fromJson(body()..['magnitude'] = 'bright')!.magnitude, isNull);
     });
 
     test('a genuine magnitude of 0.0 is preserved, not treated as missing', () {
-      expect(
-        TonightSkyObject.fromJson(body()..['magnitude'] = 0.0)!.magnitude,
-        0.0,
-      );
+      expect(TonightSkyObject.fromJson(body()..['magnitude'] = 0.0)!.magnitude, 0.0);
     });
 
-    test(
-      'missing/wrong-typed altitude → null (no misleading 0° on the horizon)',
-      () {
-        expect(
-          TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high'),
-          isNull,
-        );
-        expect(
-          TonightSkyObject.fromJson(body()..remove('altitude_deg')),
-          isNull,
-        );
-        expect(
-          TonightSkyObject.fromJson(body()..['max_altitude_deg'] = 'high'),
-          isNull,
-        );
-      },
-    );
+    test('missing/wrong-typed altitude → null (no misleading 0° on the horizon)', () {
+      expect(TonightSkyObject.fromJson(body()..['altitude_deg'] = 'high'), isNull);
+      expect(TonightSkyObject.fromJson(body()..remove('altitude_deg')), isNull);
+      expect(TonightSkyObject.fromJson(body()..['max_altitude_deg'] = 'high'), isNull);
+    });
   });
 }

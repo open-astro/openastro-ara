@@ -189,9 +189,7 @@ class TimeSyncApi implements TimeSyncClient {
       },
     );
     final data = res.data;
-    return TimeSyncPushResult.fromJson(
-      data is Map<String, dynamic> ? data : const {},
-    );
+    return TimeSyncPushResult.fromJson(data is Map<String, dynamic> ? data : const {});
   }
 
   @override

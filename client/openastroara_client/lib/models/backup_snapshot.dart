@@ -58,9 +58,8 @@ class BackupSnapshot {
       includedAreas: areas is List
           ? areas.whereType<String>().toList(growable: false)
           : const <String>[],
-      framesMetadataRows: json['frames_metadata_rows'] is int
-          ? json['frames_metadata_rows'] as int
-          : null,
+      framesMetadataRows:
+          json['frames_metadata_rows'] is int ? json['frames_metadata_rows'] as int : null,
     );
   }
 
@@ -76,15 +75,8 @@ class BackupSnapshot {
       _listEq(other.includedAreas, includedAreas);
 
   @override
-  int get hashCode => Object.hash(
-    backupId,
-    createdUtc,
-    sizeBytes,
-    sha256,
-    downloadUrl,
-    framesMetadataRows,
-    Object.hashAll(includedAreas),
-  );
+  int get hashCode => Object.hash(backupId, createdUtc, sizeBytes, sha256, downloadUrl,
+      framesMetadataRows, Object.hashAll(includedAreas));
 
   static bool _listEq(List<String> a, List<String> b) {
     if (a.length != b.length) return false;

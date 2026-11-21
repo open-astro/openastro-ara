@@ -27,8 +27,7 @@ abstract final class AutofocusProbePhases {
 double? _num(Map<String, dynamic> json, String key) =>
     (json[key] as num?)?.toDouble();
 
-int? _int(Map<String, dynamic> json, String key) =>
-    (json[key] as num?)?.toInt();
+int? _int(Map<String, dynamic> json, String key) => (json[key] as num?)?.toInt();
 
 String? _str(Map<String, dynamic> json, String key) {
   final v = json[key];
@@ -66,14 +65,14 @@ class AutofocusProbe {
   });
 
   factory AutofocusProbe.fromJson(Map<String, dynamic> json) => AutofocusProbe(
-    index: _int(json, 'index') ?? 0,
-    phase: _str(json, 'phase') ?? AutofocusProbePhases.fine,
-    position: _int(json, 'position') ?? 0,
-    hfr: _num(json, 'hfr') ?? 0,
-    stars: _int(json, 'stars') ?? 0,
-    kept: json['kept'] as bool? ?? true,
-    asymmetry: _num(json, 'asymmetry'),
-  );
+        index: _int(json, 'index') ?? 0,
+        phase: _str(json, 'phase') ?? AutofocusProbePhases.fine,
+        position: _int(json, 'position') ?? 0,
+        hfr: _num(json, 'hfr') ?? 0,
+        stars: _int(json, 'stars') ?? 0,
+        kept: json['kept'] as bool? ?? true,
+        asymmetry: _num(json, 'asymmetry'),
+      );
 }
 
 /// A sampled point of the fitted curve.
@@ -107,9 +106,8 @@ class AutofocusFit {
     if (raw is List) {
       for (final p in raw) {
         if (p is Map<String, dynamic>) {
-          curve.add(
-            AutofocusCurvePoint(_num(p, 'position') ?? 0, _num(p, 'hfr') ?? 0),
-          );
+          curve.add(AutofocusCurvePoint(
+              _num(p, 'position') ?? 0, _num(p, 'hfr') ?? 0));
         }
       }
     }
@@ -194,11 +192,9 @@ class AutofocusRun {
 
   /// Probes that feed the V-curve (fine + smart), kept or not.
   List<AutofocusProbe> get sweepProbes => probes
-      .where(
-        (p) =>
-            p.phase != AutofocusProbePhases.coarse &&
-            p.phase != AutofocusProbePhases.backlash,
-      )
+      .where((p) =>
+          p.phase != AutofocusProbePhases.coarse &&
+          p.phase != AutofocusProbePhases.backlash)
       .toList(growable: false);
 
   /// §59.7 — the backlash probe's shots, shown on their own, never on the curve.
@@ -241,9 +237,7 @@ class AutofocusRun {
       stepSize: _int(json, 'step_size'),
       stepSizeSource: _str(json, 'step_size_source'),
       probes: probes,
-      fit: fitJson is Map<String, dynamic>
-          ? AutofocusFit.fromJson(fitJson)
-          : null,
+      fit: fitJson is Map<String, dynamic> ? AutofocusFit.fromJson(fitJson) : null,
       reason: _str(json, 'reason'),
       restoredPosition: _int(json, 'restored_position'),
       hasFrame: json['has_frame'] as bool? ?? false,

@@ -23,27 +23,15 @@ void main() {
     });
 
     test('degrades missing/wrong-typed fields rather than throwing', () {
-      final p = DataPackage.fromJson(const <String, dynamic>{
-        'id': 'x',
-        'size_bytes': 'nope',
-        'is_installed': 1,
-      });
+      final p = DataPackage.fromJson(const <String, dynamic>{'id': 'x', 'size_bytes': 'nope', 'is_installed': 1});
       expect(p.id, 'x');
       expect(p.sizeBytes, 0, reason: 'a non-numeric size degrades to 0');
-      expect(
-        p.isInstalled,
-        isFalse,
-        reason: 'a non-bool is_installed degrades to false',
-      );
+      expect(p.isInstalled, isFalse, reason: 'a non-bool is_installed degrades to false');
       expect(p.installedUtc, isNull);
     });
 
     test('value equality holds for identical payloads', () {
-      const json = <String, dynamic>{
-        'id': 'a',
-        'size_bytes': 10,
-        'is_installed': false,
-      };
+      const json = <String, dynamic>{'id': 'a', 'size_bytes': 10, 'is_installed': false};
       expect(DataPackage.fromJson(json), equals(DataPackage.fromJson(json)));
     });
   });
@@ -76,32 +64,18 @@ void main() {
     });
 
     test('clamps an out-of-range percent into [0, 100]', () {
-      final over = DownloadProgress.fromPayload(const {
-        'download_id': 'd',
-        'package_id': 'p',
-        'percent_complete': 150.0,
-      }, DownloadPhase.downloading);
-      final under = DownloadProgress.fromPayload(const {
-        'download_id': 'd',
-        'package_id': 'p',
-        'percent_complete': -5.0,
-      }, DownloadPhase.downloading);
+      final over = DownloadProgress.fromPayload(
+          const {'download_id': 'd', 'package_id': 'p', 'percent_complete': 150.0}, DownloadPhase.downloading);
+      final under = DownloadProgress.fromPayload(
+          const {'download_id': 'd', 'package_id': 'p', 'percent_complete': -5.0}, DownloadPhase.downloading);
       expect(over!.percentComplete, 100.0);
-      expect(
-        over.fraction,
-        1.0,
-        reason: 'fraction is the [0,1] form for a progress bar',
-      );
+      expect(over.fraction, 1.0, reason: 'fraction is the [0,1] form for a progress bar');
       expect(under!.percentComplete, 0.0);
     });
 
     test('returns null when the package/download id is missing', () {
-      expect(
-        DownloadProgress.fromPayload(const <String, dynamic>{
-          'package_id': 'x',
-        }, DownloadPhase.downloading),
-        isNull,
-      );
+      expect(DownloadProgress.fromPayload(const <String, dynamic>{'package_id': 'x'}, DownloadPhase.downloading),
+          isNull);
     });
   });
 }

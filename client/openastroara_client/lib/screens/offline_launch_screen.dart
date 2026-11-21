@@ -44,15 +44,11 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    context.l10n.offlineTitle,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text(context.l10n.offlineTitle,
+                      style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 4),
-                  Text(
-                    context.l10n.offlineSubtitle,
-                    style: const TextStyle(color: AraColors.textSecondary),
-                  ),
+                  Text(context.l10n.offlineSubtitle,
+                      style: const TextStyle(color: AraColors.textSecondary)),
                   const SizedBox(height: 24),
                   ...async.when(
                     loading: () => const [
@@ -79,31 +75,28 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
   // deleted between the gate check and this screen — offline planning without
   // a profile is deliberately NOT offered (maintainer call), only the way back.
   List<Widget> _emptyCache() => [
-    Text(
-      context.l10n.offlineNoProfiles,
-      textAlign: TextAlign.center,
-      style: const TextStyle(color: AraColors.textSecondary),
-    ),
-    const SizedBox(height: 16),
-    FilledButton(
-      onPressed: () => ref.read(offlineModeProvider.notifier).exit(),
-      child: Text(context.l10n.offlineBackToSetup),
-    ),
-  ];
+        Text(
+          context.l10n.offlineNoProfiles,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AraColors.textSecondary),
+        ),
+        const SizedBox(height: 16),
+        FilledButton(
+          onPressed: () => ref.read(offlineModeProvider.notifier).exit(),
+          child: Text(context.l10n.offlineBackToSetup),
+        ),
+      ];
 
   List<Widget> _picker(CachedProfileList cached) {
     final ids = {for (final p in cached.profiles) p.id};
     final selected = (_pickedId != null && ids.contains(_pickedId))
         ? _pickedId!
         : (cached.activeId != null && ids.contains(cached.activeId)
-              ? cached.activeId!
-              : cached.profiles.first.id);
+            ? cached.activeId!
+            : cached.profiles.first.id);
     final pick = cached.profiles.firstWhere((p) => p.id == selected);
     return [
-      Text(
-        context.l10n.offlinePlanWithProfile,
-        style: Theme.of(context).textTheme.titleSmall,
-      ),
+      Text(context.l10n.offlinePlanWithProfile, style: Theme.of(context).textTheme.titleSmall),
       const SizedBox(height: 8),
       DropdownButtonFormField<String>(
         key: ValueKey('offline-profile-dropdown-${cached.activeId}'),
@@ -111,11 +104,9 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
         items: [
           for (final p in cached.profiles)
             DropdownMenuItem(
-              value: p.id,
-              child: Text(
-                p.name.isEmpty ? context.l10n.offlineUnnamedProfile : p.name,
-              ),
-            ),
+                value: p.id,
+                child: Text(
+                    p.name.isEmpty ? context.l10n.offlineUnnamedProfile : p.name)),
         ],
         onChanged: (v) => setState(() => _pickedId = v),
       ),
@@ -139,8 +130,7 @@ class _OfflineLaunchScreenState extends ConsumerState<OfflineLaunchScreen> {
             ? const SizedBox(
                 width: 18,
                 height: 18,
-                child: AdaptiveProgressIndicator(strokeWidth: 2),
-              )
+                child: AdaptiveProgressIndicator(strokeWidth: 2))
             : Text(context.l10n.offlinePlan),
       ),
     ];

@@ -91,7 +91,10 @@ class CoolingFanPicker extends ConsumerWidget {
 /// notice. A copy changed on the rig (412) keeps the choice and shows the
 /// conflict banner, whose Reload loads the rig's copy.
 class ProfileCoolingFanPicker extends ConsumerWidget {
-  const ProfileCoolingFanPicker({super.key, this.style});
+  const ProfileCoolingFanPicker({
+    super.key,
+    this.style,
+  });
 
   final TextStyle? style;
 

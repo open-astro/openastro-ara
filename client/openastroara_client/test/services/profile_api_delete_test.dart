@@ -17,11 +17,8 @@ class _StubAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 
   @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
+  Future<ResponseBody> fetch(RequestOptions options,
+      Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     lastRequest = options;
     return ResponseBody.fromString(
       jsonBody == null ? '' : jsonEncode(jsonBody),
@@ -34,41 +31,33 @@ class _StubAdapter implements HttpClientAdapter {
 }
 
 ProfileApi _api(_StubAdapter adapter) => ProfileApi(
-  const AraServer(hostname: 'rig', port: 5555),
-  dio: Dio(
-    BaseOptions(
-      baseUrl: 'http://rig:5555',
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  )..httpClientAdapter = adapter,
-);
+      const AraServer(hostname: 'rig', port: 5555),
+      dio: Dio(BaseOptions(
+        baseUrl: 'http://rig:5555',
+        receiveTimeout: const Duration(seconds: 5),
+      ))
+        ..httpClientAdapter = adapter,
+    );
 
 void main() {
-  test(
-    'deleteProfile with the guider waits longer than the daemon\'s 15 s bound',
-    () async {
-      // §63.4: the daemon releases and reconnects the guider's equipment inside
-      // the DELETE and allows itself 15 s; a 5 s receive timeout reports
-      // "Couldn't delete profile" for a profile that WAS deleted.
-      final adapter = _StubAdapter(const {'guider_profile': 'deleted'});
-      final result = await _api(adapter)
-          .deleteProfile('id-1', deleteGuiderProfile: true);
-      expect(result.guiderProfile, GuiderTwinOutcome.deleted);
-      expect(adapter.lastRequest!.queryParameters['guider_profile'], 'delete');
-      expect(
-        adapter.lastRequest!.receiveTimeout,
-        greaterThanOrEqualTo(const Duration(seconds: 45)),
-      );
-    },
-  );
+  test('deleteProfile with the guider waits longer than the daemon\'s 15 s bound',
+      () async {
+    // §63.4: the daemon releases and reconnects the guider's equipment inside
+    // the DELETE and allows itself 15 s; a 5 s receive timeout reports
+    // "Couldn't delete profile" for a profile that WAS deleted.
+    final adapter = _StubAdapter(const {'guider_profile': 'deleted'});
+    final result =
+        await _api(adapter).deleteProfile('id-1', deleteGuiderProfile: true);
+    expect(result.guiderProfile, GuiderTwinOutcome.deleted);
+    expect(adapter.lastRequest!.queryParameters['guider_profile'], 'delete');
+    expect(adapter.lastRequest!.receiveTimeout,
+        greaterThanOrEqualTo(const Duration(seconds: 45)));
+  });
 
-  test(
-    'deleteProfile defaults to keep and reads an empty 204 as kept',
-    () async {
-      final adapter = _StubAdapter(null, status: 204);
-      final result = await _api(adapter).deleteProfile('id-1');
-      expect(result.guiderProfile, GuiderTwinOutcome.kept);
-      expect(adapter.lastRequest!.queryParameters['guider_profile'], 'keep');
-    },
-  );
+  test('deleteProfile defaults to keep and reads an empty 204 as kept', () async {
+    final adapter = _StubAdapter(null, status: 204);
+    final result = await _api(adapter).deleteProfile('id-1');
+    expect(result.guiderProfile, GuiderTwinOutcome.kept);
+    expect(adapter.lastRequest!.queryParameters['guider_profile'], 'keep');
+  });
 }

@@ -15,11 +15,8 @@ class SettingsGearButton extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final open = ref.watch(selectedTabIndexProvider) == kOptionsTabIndex;
     return IconButton(
-      icon: Icon(
-        open ? Icons.settings : Icons.settings_outlined,
-        size: 22,
-        color: open ? AraColors.accentInfo : null,
-      ),
+      icon: Icon(open ? Icons.settings : Icons.settings_outlined,
+          size: 22, color: open ? AraColors.accentInfo : null),
       tooltip: 'Settings',
       onPressed: () =>
           ref.read(selectedTabIndexProvider.notifier).select(kOptionsTabIndex),

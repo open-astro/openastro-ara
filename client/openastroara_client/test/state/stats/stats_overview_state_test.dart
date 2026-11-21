@@ -59,14 +59,10 @@ class _GatedStatsOverviewClient implements StatsOverviewClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 ProviderContainer _container(List<AraServer> servers, StatsOverviewClient api) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      statsOverviewApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    statsOverviewApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -82,9 +78,7 @@ void main() {
     });
 
     test('fetches the active server overview', () async {
-      final api = _FakeStatsOverviewClient(
-        const StatsOverview(totalFrames: 10, totalSessions: 2),
-      );
+      final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 10, totalSessions: 2));
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       final o = await c.read(statsOverviewProvider.future);
@@ -106,58 +100,42 @@ void main() {
     });
 
     test('an initial-load failure lands in the provider error state', () async {
-      final api = _FakeStatsOverviewClient(const StatsOverview())
-        ..throwOnFetch = true;
+      final api = _FakeStatsOverviewClient(const StatsOverview())..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(
-        c.read(statsOverviewProvider.future),
-        throwsA(isA<StateError>()),
-      );
+      await expectLater(c.read(statsOverviewProvider.future), throwsA(isA<StateError>()));
       expect(c.read(statsOverviewProvider).hasError, isTrue);
     });
 
-    test(
-      'a failed refresh keeps the prior data and rethrows (no blanking)',
-      () async {
-        final api = _FakeStatsOverviewClient(
-          const StatsOverview(totalFrames: 7),
-        );
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(statsOverviewProvider.future);
+    test('a failed refresh keeps the prior data and rethrows (no blanking)', () async {
+      final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 7));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsOverviewProvider.future);
 
-        api.throwOnFetch = true;
-        await expectLater(
-          c.read(statsOverviewProvider.notifier).refresh(),
-          throwsA(isA<StateError>()),
-        );
-        // State still holds the last-good totals (the widget shows a stale banner).
-        expect(c.read(statsOverviewProvider).hasError, isFalse);
-        expect(c.read(statsOverviewProvider).value!.totalFrames, 7);
-      },
-    );
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(statsOverviewProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      // State still holds the last-good totals (the widget shows a stale banner).
+      expect(c.read(statsOverviewProvider).hasError, isFalse);
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 7);
+    });
 
-    test(
-      'a successful refresh swaps the new totals in without a loading flash',
-      () async {
-        final api = _FakeStatsOverviewClient(
-          const StatsOverview(totalFrames: 1),
-        );
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(statsOverviewProvider.future);
+    test('a successful refresh swaps the new totals in without a loading flash', () async {
+      final api = _FakeStatsOverviewClient(const StatsOverview(totalFrames: 1));
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsOverviewProvider.future);
 
-        api.value = const StatsOverview(totalFrames: 9);
-        final future = c.read(statsOverviewProvider.notifier).refresh();
-        // refresh() never drops to a loading state — the prior data stays readable
-        // throughout, then the new value swaps in.
-        expect(c.read(statsOverviewProvider).isLoading, isFalse);
-        expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
-        await future;
-        expect(c.read(statsOverviewProvider).value!.totalFrames, 9);
-      },
-    );
+      api.value = const StatsOverview(totalFrames: 9);
+      final future = c.read(statsOverviewProvider.notifier).refresh();
+      // refresh() never drops to a loading state — the prior data stays readable
+      // throughout, then the new value swaps in.
+      expect(c.read(statsOverviewProvider).isLoading, isFalse);
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 1);
+      await future;
+      expect(c.read(statsOverviewProvider).value!.totalFrames, 9);
+    });
 
     test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedStatsOverviewClient();
@@ -168,8 +146,7 @@ void main() {
       await built;
 
       final notifier = c.read(statsOverviewProvider.notifier);
-      final refreshing = notifier
-          .refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
       // Stand in for the active server changing: build() re-runs and bumps the
       // generation via markBuild(), invalidating the in-flight refresh.
       notifier.markBuild();

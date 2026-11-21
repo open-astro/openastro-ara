@@ -35,45 +35,31 @@ void main() {
     expect(loaded, hasLength(2), reason: 'a re-add must never duplicate');
   });
 
-  test(
-    're-adding refreshes stored metadata (version/mDNS can change)',
-    () async {
-      final svc = SavedServerService();
-      await svc.add(
-        const AraServer(
-          hostname: 'observatory',
-          port: 8080,
-          serverVersion: '0.0.1',
-        ),
-      );
-      // Same identity (host:port), newer handshake metadata.
-      await svc.add(
-        const AraServer(
-          hostname: 'observatory',
-          port: 8080,
-          mdnsName: 'ara-obs',
-          serverVersion: '0.0.2',
-        ),
-      );
-      final loaded = await svc.loadAll();
-      expect(loaded, hasLength(1));
-      expect(loaded.single.serverVersion, '0.0.2');
-      expect(loaded.single.mdnsName, 'ara-obs');
-    },
-  );
+  test('re-adding refreshes stored metadata (version/mDNS can change)', () async {
+    final svc = SavedServerService();
+    await svc.add(const AraServer(
+        hostname: 'observatory', port: 8080, serverVersion: '0.0.1'));
+    // Same identity (host:port), newer handshake metadata.
+    await svc.add(const AraServer(
+        hostname: 'observatory',
+        port: 8080,
+        mdnsName: 'ara-obs',
+        serverVersion: '0.0.2'));
+    final loaded = await svc.loadAll();
+    expect(loaded, hasLength(1));
+    expect(loaded.single.serverVersion, '0.0.2');
+    expect(loaded.single.mdnsName, 'ara-obs');
+  });
 
   test('a bare manual re-entry keeps earlier-recorded metadata', () async {
     // A manual add types only host:port; that re-confirmation must not blank
     // the mDNS name / version a richer earlier confirmation stored.
     final svc = SavedServerService();
-    await svc.add(
-      const AraServer(
+    await svc.add(const AraServer(
         hostname: 'observatory',
         port: 8080,
         mdnsName: 'ara-obs',
-        serverVersion: '0.0.2',
-      ),
-    );
+        serverVersion: '0.0.2'));
     await svc.add(const AraServer(hostname: 'observatory', port: 8080));
     final loaded = await svc.loadAll();
     expect(loaded, hasLength(1));
@@ -94,20 +80,16 @@ void main() {
     expect(await SavedServerService().loadAll(), isEmpty);
   });
 
-  test(
-    'the address list older versions stored is wiped on first load',
-    () async {
-      // What an older version of the app left on the device (test data only).
-      FlutterSecureStorage.setMockInitialValues({
-        SavedServerService.legacyStorageKey:
-            '[{"hostname":"old-rig.test","port":5555}]',
-        'unrelated.key': 'kept',
-      });
-      final loaded = await SavedServerService().loadAll();
-      expect(loaded, isEmpty, reason: 'an old saved address is never used');
-      final left = await const FlutterSecureStorage().readAll();
-      expect(left.containsKey(SavedServerService.legacyStorageKey), isFalse);
-      expect(left['unrelated.key'], 'kept');
-    },
-  );
+  test('the address list older versions stored is wiped on first load', () async {
+    // What an older version of the app left on the device (test data only).
+    FlutterSecureStorage.setMockInitialValues({
+      SavedServerService.legacyStorageKey: '[{"hostname":"old-rig.test","port":5555}]',
+      'unrelated.key': 'kept',
+    });
+    final loaded = await SavedServerService().loadAll();
+    expect(loaded, isEmpty, reason: 'an old saved address is never used');
+    final left = await const FlutterSecureStorage().readAll();
+    expect(left.containsKey(SavedServerService.legacyStorageKey), isFalse);
+    expect(left['unrelated.key'], 'kept');
+  });
 }

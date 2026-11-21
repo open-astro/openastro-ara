@@ -9,7 +9,6 @@ import '../models/server.dart';
 abstract interface class GuiderEquipmentClient {
   Future<GuiderEquipmentChoicesResponse> getChoices();
   Future<List<String>> discoverAlpaca({int? numQueries, int? timeoutSeconds});
-
   /// Re-push the profile to the guider. [tuningOnly] sends just the
   /// runtime-safe subset (`?scope=tuning`: aggressiveness, minimum move, dec
   /// guide mode, guide exposure) with the equipment left connected, so guiding
@@ -40,16 +39,14 @@ class GuiderEquipmentApi implements GuiderEquipmentClient {
   final Dio _dio;
 
   GuiderEquipmentApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           sendTimeout: const Duration(seconds: 5),
           // Base budget for choices + the quick 202 push; discoverAlpaca()
           // overrides with a sweep-sized read budget below.
           receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
+        ));
 
   @override
   Future<GuiderEquipmentChoicesResponse> getChoices() async {

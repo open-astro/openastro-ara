@@ -27,7 +27,9 @@ enum NinaFileError { tooLarge, readError, notJson }
 /// [error] is null; on failure [error] says which message to show.
 class NinaFileReadResult {
   const NinaFileReadResult.success(this.nina, this.name) : error = null;
-  const NinaFileReadResult.failure(this.error) : nina = null, name = null;
+  const NinaFileReadResult.failure(this.error)
+      : nina = null,
+        name = null;
 
   final Map<String, dynamic>? nina;
 
@@ -79,12 +81,12 @@ Future<NinaFileReadResult> readNinaSequenceFile(String path) async {
 
 /// The user-facing message for a [NinaFileError].
 String _messageFor(NinaFileError error) => switch (error) {
-  NinaFileError.tooLarge =>
-    'That sequence file is too large to import (32 MiB limit).',
-  NinaFileError.readError =>
-    "Couldn't read that file — check it still exists and you have access.",
-  NinaFileError.notJson => "That file isn't a valid sequence JSON.",
-};
+      NinaFileError.tooLarge =>
+        'That sequence file is too large to import (32 MiB limit).',
+      NinaFileError.readError =>
+        "Couldn't read that file — check it still exists and you have access.",
+      NinaFileError.notJson => "That file isn't a valid sequence JSON.",
+    };
 
 /// §38.4 — let the user pick a NINA sequence `.json` and import it. A cancelled
 /// pick is a no-op; an oversized / unreadable / non-JSON file surfaces a
@@ -108,12 +110,10 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
     // Resolve the messenger only after confirming the context is still mounted
     // (it survived the picker await), so we never reach for a disposed Scaffold.
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_messageFor(read.error!)),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_messageFor(read.error!)),
+        backgroundColor: AraColors.accentError,
+      ));
     }
     return false;
   }
@@ -125,12 +125,7 @@ Future<bool> pickAndImportSequence(BuildContext context, WidgetRef ref) async {
   final name = (rootName is String && rootName.trim().isNotEmpty)
       ? rootName.trim()
       : read.name!;
-  final id = await importSequenceFromJson(
-    context,
-    ref,
-    name: name,
-    ninaJson: nina,
-  );
+  final id = await importSequenceFromJson(context, ref, name: name, ninaJson: nina);
   return id != null;
 }
 
@@ -166,10 +161,7 @@ Future<String?> importSequenceFromJson(
         .read(draftSequencesProvider.notifier)
         .create(name, translated.body, pushKey: importKey);
     return SequenceImportResult(
-      createdSequenceId: draftId,
-      name: name,
-      warnings: translated.warnings,
-    );
+        createdSequenceId: draftId, name: name, warnings: translated.warnings);
   }
 
   SequenceImportResult result;
@@ -179,17 +171,10 @@ Future<String?> importSequenceFromJson(
       result = await saveAsDraft();
     } else {
       try {
-        final id = await api.create(
-          name,
-          translated.body,
-          description: 'Imported from NINA',
-          idempotencyKey: importKey,
-        );
+        final id = await api.create(name, translated.body,
+            description: 'Imported from NINA', idempotencyKey: importKey);
         result = SequenceImportResult(
-          createdSequenceId: id,
-          name: name,
-          warnings: translated.warnings,
-        );
+            createdSequenceId: id, name: name, warnings: translated.warnings);
       } on DioException catch (e) {
         // A chosen server isn't necessarily a reachable one. Pure transport failure
         // (no response at all) → degrade to a local draft, same as
@@ -201,21 +186,17 @@ Future<String?> importSequenceFromJson(
     }
   } catch (_) {
     if (context.mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Couldn't import the sequence. Check the file and connection.",
-          ),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(
+        content:
+            Text("Couldn't import the sequence. Check the file and connection."),
+        backgroundColor: AraColors.accentError,
+      ));
     }
     return null;
   }
 
   final id = result.createdSequenceId;
-  final hasWarnings =
-      result.lossyTranslation ||
+  final hasWarnings = result.lossyTranslation ||
       result.warnings.isNotEmpty ||
       result.droppedInstructionTypes.isNotEmpty;
 
@@ -227,11 +208,9 @@ Future<String?> importSequenceFromJson(
     // a lossy translation vanish silently — at least record it (a lossy NINA
     // import can change what the rig actually does).
     if (hasWarnings) {
-      debugPrint(
-        '[sequencer] import warnings not shown (context unmounted): '
-        'lossy=${result.lossyTranslation} '
-        'dropped=${result.droppedInstructionTypes} warnings=${result.warnings}',
-      );
+      debugPrint('[sequencer] import warnings not shown (context unmounted): '
+          'lossy=${result.lossyTranslation} '
+          'dropped=${result.droppedInstructionTypes} warnings=${result.warnings}');
     }
     return id;
   }
@@ -248,22 +227,14 @@ Future<String?> importSequenceFromJson(
   if (hasWarnings) {
     await _showImportWarnings(context, result, name);
   } else {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'Imported "${result.name.isEmpty ? name : result.name}".',
-        ),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content: Text('Imported "${result.name.isEmpty ? name : result.name}".')));
   }
   return id;
 }
 
 Future<void> _showImportWarnings(
-  BuildContext context,
-  SequenceImportResult result,
-  String fallbackName,
-) {
+    BuildContext context, SequenceImportResult result, String fallbackName) {
   final title = result.name.isEmpty ? fallbackName : result.name;
   return showDialog<void>(
     context: context,
@@ -285,22 +256,14 @@ Future<void> _showImportWarnings(
               if (result.droppedInstructionTypes.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Dropped instruction types:'),
-                ...result.droppedInstructionTypes.map(
-                  (t) => Text(
-                    ' • $t',
-                    style: const TextStyle(color: AraColors.textSecondary),
-                  ),
-                ),
+                ...result.droppedInstructionTypes.map((t) => Text(' • $t',
+                    style: const TextStyle(color: AraColors.textSecondary))),
               ],
               if (result.warnings.isNotEmpty) ...[
                 const SizedBox(height: 12),
                 const Text('Warnings:'),
-                ...result.warnings.map(
-                  (w) => Text(
-                    ' • $w',
-                    style: const TextStyle(color: AraColors.textSecondary),
-                  ),
-                ),
+                ...result.warnings.map((w) => Text(' • $w',
+                    style: const TextStyle(color: AraColors.textSecondary))),
               ],
             ],
           ),
@@ -308,9 +271,7 @@ Future<void> _showImportWarnings(
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('OK'),
-        ),
+            onPressed: () => Navigator.of(ctx).pop(), child: const Text('OK')),
       ],
     ),
   );

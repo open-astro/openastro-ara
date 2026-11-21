@@ -17,7 +17,8 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
-import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
+import '../../widgets/status_indicator.dart'
+    show StatusBlink, StatusDot;
 import '../../util/friendly_error.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
@@ -29,11 +30,14 @@ import 'simple_device_windows.dart'
         simpleWindowRow,
         simpleWindowStepper;
 import 'simple_preview_panel.dart'
-    show SimplePresetTile, SimpleShutterButton, formatExposure, kSimpleText;
+    show
+        SimplePresetTile,
+        SimpleShutterButton,
+        formatExposure,
+        kSimpleText;
 import 'simple_shell.dart' show SimplePanel, SimpleSegments, kSimpleGoStyle;
 import '../../widgets/adaptive_controls.dart';
-import '../../widgets/imaging/guide_calibration_panel.dart'
-    show CalibrationStepsPainter;
+import '../../widgets/imaging/guide_calibration_panel.dart' show CalibrationStepsPainter;
 
 /// Guide mode: the guider's routine (loop, pick a star, calibrate when
 /// needed, settle, guide) runs from the shutter; its red square stops it.
@@ -58,15 +62,15 @@ class SimpleGuiderTab extends Notifier<int> {
   void set(int v) => state = v;
 }
 
-final simpleGuiderTabProvider = NotifierProvider<SimpleGuiderTab, int>(
-  SimpleGuiderTab.new,
-);
+final simpleGuiderTabProvider =
+    NotifierProvider<SimpleGuiderTab, int>(SimpleGuiderTab.new);
 
 /// The guider's dot: the top bar's colour (a lost star amber, settling blue),
 /// grey without a guider.
 Color simpleGuiderColour(GuiderStatus? g) => g == null || !g.isConnected
     ? AraColors.textDisabled
     : guiderStatusLevel(g).color;
+
 
 /// The rail chip in Guide mode: the RMS while it guides, else Off.
 String simpleGuideSummary(WidgetRef ref) {
@@ -114,7 +118,10 @@ class SimpleGuideShutter extends ConsumerWidget {
 }
 
 /// Starts (the whole routine) or stops guiding; a refusal says why in a pill.
-Future<void> simpleGuideRun(BuildContext context, {required bool start}) async {
+Future<void> simpleGuideRun(
+  BuildContext context, {
+  required bool start,
+}) async {
   final notify = userNotifier(context, origin: SimpleStatusOrigin.guide);
   final l10n = context.l10n;
   // The container, not ref or context: a mode change unmounts the shutter
@@ -141,9 +148,7 @@ Future<void> simpleGuideRun(BuildContext context, {required bool start}) async {
     if (!start && (g?.isBusy ?? false)) {
       notify(
         // Lower case inside the sentence, as the guiding strip writes the phase.
-        l10n.guideStopRefused(
-          guiderRuntimeText(l10n, g!.runtimeState).toLowerCase(),
-        ),
+        l10n.guideStopRefused(guiderRuntimeText(l10n, g!.runtimeState).toLowerCase()),
         error: true,
         snackBarRed: false,
       );
@@ -175,8 +180,7 @@ class SimpleGuidePanel extends ConsumerWidget {
     final connected = g != null && g.isConnected;
     final active = g?.isBusy ?? false;
     final guiding = g?.isCorrecting ?? false;
-    final calibrating =
-        connected && g.runtimeState == GuiderRuntimeState.calibrating;
+    final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
     // Not in from the rig yet: the class values show. A change loads the
     // rig's copy first and steps from it, never from the shown value, or is
@@ -206,10 +210,7 @@ class SimpleGuidePanel extends ConsumerWidget {
           spacing: 4,
           children: [
             if (connected && !active && pending == null)
-              Text(
-                g.outOfStepReason ?? l10n.guideTapShutter,
-                style: AraText.caption,
-              ),
+              Text(g.outOfStepReason ?? l10n.guideTapShutter, style: AraText.caption),
             if (!connected)
               Text(l10n.guideConnectFirst, style: AraText.caption),
             if (preflightDone)
@@ -227,112 +228,107 @@ class SimpleGuidePanel extends ConsumerWidget {
               1 => const _SimpleGuiderTuning(),
               2 => const _SimpleGuiderTools(),
               _ => Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                spacing: 4,
-                children: [
-                  // While the guider calibrates, its steps take the place of the
-                  // RMS and Exposure figures, as the guider's own plot, in the same
-                  // room (#1875 slice 3, #1884 audit); the plot keeps 160 pt over
-                  // its key, so the panel grows down from its held top
-                  // (#1884 re-audit).
-                  Stack(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  spacing: 4,
+                  children: [
+            // While the guider calibrates, its steps take the place of the
+            // RMS and Exposure figures, as the guider's own plot, in the same
+            // room (#1875 slice 3, #1884 audit); the plot keeps 160 pt over
+            // its key, so the panel grows down from its held top
+            // (#1884 re-audit).
+            Stack(
+              children: [
+                Visibility(
+                  visible: !calibrating,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    spacing: 4,
                     children: [
-                      Visibility(
-                        visible: !calibrating,
-                        maintainSize: true,
-                        maintainAnimation: true,
-                        maintainState: true,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          spacing: 4,
-                          children: [
-                            simpleWindowRow(
-                              l10n.deviceRms,
-                              id: 'RMS',
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    total == null ? '—' : _arcsec(total),
-                                    style: kSimpleText.copyWith(
-                                      fontSize: AraFontSize.simpleReadingLarge,
-                                      fontWeight: FontWeight.w300,
-                                    ),
-                                  ),
-                                  if (ra != null && dec != null)
-                                    Text(
-                                      l10n.deviceRmsRaDec(
-                                        _arcsec(ra),
-                                        _arcsec(dec),
-                                      ),
-                                      style: AraText.caption,
-                                    ),
-                                ],
-                              ),
-                            ),
-                            const SimpleGuiderExposureTile(),
-                          ],
-                        ),
-                      ),
-                      if (calibrating)
-                        const _SimpleCalibrationPlot(
-                          key: Key('simple-guider-calibration-plot'),
-                        ),
-                    ],
-                  ),
-                  const SimpleGuideGainSlider(oneLine: true),
-                  Text(l10n.guideAggressiveness, style: AraText.caption),
-                  _SimpleAggressiveness(
-                    id: 'ra',
-                    axis: l10n.guideAxisRa,
-                    label: l10n.guideRaAggressiveness,
-                    value: phd2.raAggressiveness,
-                    set: (p, v) =>
-                        p.copyWith(raAggressiveness: v.clamp(0.0, 1.0)),
-                  ),
-                  _SimpleAggressiveness(
-                    id: 'dec',
-                    axis: l10n.guideAxisDec,
-                    label: l10n.guideDecAggressiveness,
-                    value: phd2.decAggressiveness,
-                    set: (p, v) =>
-                        p.copyWith(decAggressiveness: v.clamp(0.0, 1.0)),
-                  ),
-                  // Four named choices: one row of segments, no list to open.
-                  Text(l10n.guideDecMode, style: AraText.caption),
-                  SimpleSegments<String>(
-                    key: const Key('simple-guide-dec-mode'),
-                    keyPrefix: 'simple-guide-dec-mode',
-                    group: l10n.guideDecMode,
-                    shrinkToFit: true,
-                    selected: phd2.decGuideMode,
-                    options: [
-                      for (final m in const ['auto', 'north', 'south', 'off'])
-                        (m, _decModeName(l10n, m) ?? l10n.guideDecAuto, m),
-                    ],
-                    onPick: (m) => simpleSaveGuider(
-                      context,
-                      ref,
-                      (p) => p.copyWith(decGuideMode: m),
-                      live: true,
+            simpleWindowRow(
+              l10n.deviceRms,
+              id: 'RMS',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    total == null ? '—' : _arcsec(total),
+                    style: kSimpleText.copyWith(
+                      fontSize: AraFontSize.simpleReadingLarge,
+                      fontWeight: FontWeight.w300,
                     ),
                   ),
-                  simpleWindowRow(
-                    l10n.deviceDither,
-                    id: 'Dither',
-                    simpleWindowStepper(
-                      id: 'simple-guider-dither',
-                      text: switch (every) {
-                        0 => l10n.deviceOff,
-                        _ => l10n.deviceDitherEveryFrames(every),
-                      },
-                      onLess: () => _stepDither(context, ref, -1),
-                      onMore: () => _stepDither(context, ref, 1),
+                  if (ra != null && dec != null)
+                    Text(
+                      l10n.deviceRmsRaDec(_arcsec(ra), _arcsec(dec)),
+                      style: AraText.caption,
                     ),
-                  ),
                 ],
               ),
+            ),
+            const SimpleGuiderExposureTile(),
+                    ],
+                  ),
+                ),
+                if (calibrating)
+                  const _SimpleCalibrationPlot(
+                    key: Key('simple-guider-calibration-plot'),
+                  ),
+              ],
+            ),
+            const SimpleGuideGainSlider(oneLine: true),
+            Text(l10n.guideAggressiveness, style: AraText.caption),
+            _SimpleAggressiveness(
+              id: 'ra',
+              axis: l10n.guideAxisRa,
+              label: l10n.guideRaAggressiveness,
+              value: phd2.raAggressiveness,
+              set: (p, v) => p.copyWith(raAggressiveness: v.clamp(0.0, 1.0)),
+            ),
+            _SimpleAggressiveness(
+              id: 'dec',
+              axis: l10n.guideAxisDec,
+              label: l10n.guideDecAggressiveness,
+              value: phd2.decAggressiveness,
+              set: (p, v) => p.copyWith(decAggressiveness: v.clamp(0.0, 1.0)),
+            ),
+            // Four named choices: one row of segments, no list to open.
+            Text(l10n.guideDecMode, style: AraText.caption),
+            SimpleSegments<String>(
+              key: const Key('simple-guide-dec-mode'),
+              keyPrefix: 'simple-guide-dec-mode',
+              group: l10n.guideDecMode,
+              shrinkToFit: true,
+              selected: phd2.decGuideMode,
+              options: [
+                for (final m in const ['auto', 'north', 'south', 'off'])
+                  (m, _decModeName(l10n, m) ?? l10n.guideDecAuto, m),
+              ],
+              onPick: (m) => simpleSaveGuider(
+                context,
+                ref,
+                (p) => p.copyWith(decGuideMode: m),
+                live: true,
+              ),
+            ),
+            simpleWindowRow(
+              l10n.deviceDither,
+              id: 'Dither',
+              simpleWindowStepper(
+                id: 'simple-guider-dither',
+                text: switch (every) {
+                  0 => l10n.deviceOff,
+                  _ => l10n.deviceDitherEveryFrames(every),
+                },
+                onLess: () => _stepDither(context, ref, -1),
+                onMore: () => _stepDither(context, ref, 1),
+              ),
+            ),
+                  ],
+                ),
             },
           ],
         ),
@@ -368,18 +364,12 @@ class _SimpleCalibrationPlot extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final steps = ref.watch(
-      guiderLiveProvider.select((s) => s.calibration.steps),
-    );
+    final steps = ref.watch(guiderLiveProvider.select((s) => s.calibration.steps));
     Widget key(Color color, String label) => Row(
       mainAxisSize: MainAxisSize.min,
       spacing: 4,
       children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
+        Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
         Text(label, style: AraText.caption),
       ],
     );
@@ -461,12 +451,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
     final px = phd2.ditherPixels;
     // Label beside a narrower stepper: this tab has six of them to fit on an iPad.
     // Read whole, because "For" or "RA" means nothing without its group.
-    Widget row(
-      String label,
-      Widget stepper, {
-      required String id,
-      String? group,
-    }) => Semantics(
+    Widget row(String label, Widget stepper, {required String id, String? group}) => Semantics(
       container: true,
       explicitChildNodes: true,
       label: group == null ? label : '$group, $label',
@@ -474,9 +459,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         key: Key('simple-window-row-$id'),
         spacing: AraSpace.s8,
         children: [
-          Expanded(
-            child: ExcludeSemantics(child: Text(label, style: kSimpleText)),
-          ),
+          Expanded(child: ExcludeSemantics(child: Text(label, style: kSimpleText))),
           SizedBox(width: 176, child: stepper),
         ],
       ),
@@ -487,46 +470,28 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         simpleSaveGuider(context, ref, change);
     // Each step is worked out from the rig's copy the save goes over, not the
     // shown value: that may be the class value while the load is retried.
-    Widget minMove(
-      String axis,
-      String label,
-      String id,
-      double Function(Phd2Settings) v,
-      Phd2Settings Function(Phd2Settings, double) set,
-    ) => row(
-      axis,
-      id: label,
-      group: l10n.guideMinimumMoveName,
-      simpleWindowStepper(
-        name: '${l10n.guideMinimumMoveName}, $axis',
-        id: 'simple-guider-min-move-$id',
-        text: '${v(phd2).toStringAsFixed(2)} px',
-        onLess: () => live(
-          (p) => v(p) > 0 ? set(p, math.max(0, _stepped(v(p), -0.05))) : p,
-        ),
-        onMore: () => live((p) => set(p, _stepped(v(p), 0.05))),
-      ),
-    );
+    Widget minMove(String axis, String label, String id, double Function(Phd2Settings) v,
+            Phd2Settings Function(Phd2Settings, double) set) =>
+        row(
+          axis,
+          id: label,
+          group: l10n.guideMinimumMoveName,
+          simpleWindowStepper(
+            name: '${l10n.guideMinimumMoveName}, $axis',
+            id: 'simple-guider-min-move-$id',
+            text: '${v(phd2).toStringAsFixed(2)} px',
+            onLess: () => live((p) => v(p) > 0 ? set(p, math.max(0, _stepped(v(p), -0.05))) : p),
+            onMore: () => live((p) => set(p, _stepped(v(p), 0.05))),
+          ),
+        );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: 2,
       children: [
         Text(l10n.guideMinimumMove, style: AraText.caption),
-        minMove(
-          l10n.guideAxisRa,
-          'RA minimum move',
-          'ra',
-          (p) => p.minimumMove,
-          (p, v) => p.copyWith(minimumMove: v),
-        ),
-        minMove(
-          l10n.guideAxisDec,
-          'Dec minimum move',
-          'dec',
-          (p) => p.decMinimumMove,
-          (p, v) => p.copyWith(decMinimumMove: v),
-        ),
+        minMove(l10n.guideAxisRa, 'RA minimum move', 'ra', (p) => p.minimumMove, (p, v) => p.copyWith(minimumMove: v)),
+        minMove(l10n.guideAxisDec, 'Dec minimum move', 'dec', (p) => p.decMinimumMove, (p, v) => p.copyWith(decMinimumMove: v)),
         if (phd2.ditherEnabled)
           row(
             l10n.deviceDitherBy,
@@ -535,16 +500,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
               id: 'simple-guider-dither-px',
               name: l10n.deviceDitherBy,
               text: '${px == px.roundToDouble() ? px.round() : px} px',
-              onLess: () => save(
-                (p) => p.ditherPixels > 1
-                    ? p.copyWith(ditherPixels: p.ditherPixels - 1)
-                    : p,
-              ),
-              onMore: () => save(
-                (p) => p.ditherPixels < 30
-                    ? p.copyWith(ditherPixels: p.ditherPixels + 1)
-                    : p,
-              ),
+              onLess: () => save((p) => p.ditherPixels > 1 ? p.copyWith(ditherPixels: p.ditherPixels - 1) : p),
+              onMore: () => save((p) => p.ditherPixels < 30 ? p.copyWith(ditherPixels: p.ditherPixels + 1) : p),
             ),
           ),
         Text(l10n.guideSettle, style: AraText.caption),
@@ -556,14 +513,9 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-px',
             name: '${l10n.guideSettle}, ${l10n.guideSettleWithin}',
             text: '${phd2.settlePixels.toStringAsFixed(1)} px',
-            onLess: () => save(
-              (p) => p.settlePixels > 0.1
-                  ? p.copyWith(settlePixels: _stepped(p.settlePixels, -0.1))
-                  : p,
-            ),
-            onMore: () => save(
-              (p) => p.copyWith(settlePixels: _stepped(p.settlePixels, 0.1)),
-            ),
+            onLess: () => save((p) =>
+                p.settlePixels > 0.1 ? p.copyWith(settlePixels: _stepped(p.settlePixels, -0.1)) : p),
+            onMore: () => save((p) => p.copyWith(settlePixels: _stepped(p.settlePixels, 0.1))),
           ),
         ),
         row(
@@ -574,13 +526,8 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-time',
             name: '${l10n.guideSettle}, ${l10n.guideSettleFor}',
             text: '${phd2.settleTimeSec} s',
-            onLess: () => save(
-              (p) => p.settleTimeSec > 1
-                  ? p.copyWith(settleTimeSec: p.settleTimeSec - 1)
-                  : p,
-            ),
-            onMore: () =>
-                save((p) => p.copyWith(settleTimeSec: p.settleTimeSec + 1)),
+            onLess: () => save((p) => p.settleTimeSec > 1 ? p.copyWith(settleTimeSec: p.settleTimeSec - 1) : p),
+            onMore: () => save((p) => p.copyWith(settleTimeSec: p.settleTimeSec + 1)),
           ),
         ),
         row(
@@ -591,14 +538,9 @@ class _SimpleGuiderTuning extends ConsumerWidget {
             id: 'simple-guider-settle-timeout',
             name: '${l10n.guideSettle}, ${l10n.guideSettleGiveUp}',
             text: '${phd2.settleTimeoutSec} s',
-            onLess: () => save(
-              (p) => p.settleTimeoutSec > 5
-                  ? p.copyWith(settleTimeoutSec: p.settleTimeoutSec - 5)
-                  : p,
-            ),
-            onMore: () => save(
-              (p) => p.copyWith(settleTimeoutSec: p.settleTimeoutSec + 5),
-            ),
+            onLess: () => save((p) =>
+                p.settleTimeoutSec > 5 ? p.copyWith(settleTimeoutSec: p.settleTimeoutSec - 5) : p),
+            onMore: () => save((p) => p.copyWith(settleTimeoutSec: p.settleTimeoutSec + 5)),
           ),
         ),
       ],
@@ -656,11 +598,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
       final notifier = container.read(guiderLiveProvider.notifier);
       await notifier.refresh();
       if (live().calibration.data?.calibrated != true) {
-        notify(
-          l10n.guideAssistantCalibrateFirst,
-          error: true,
-          snackBarRed: false,
-        );
+        notify(l10n.guideAssistantCalibrateFirst, error: true, snackBarRed: false);
         return;
       }
       if (!starHeld()) {
@@ -668,16 +606,11 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
         await notifier.refresh();
       }
       if (!starHeld()) {
-        notify(
-          guiderLiveFailure(l10n, live()) ?? l10n.guideAssistantNoStar,
-          error: true,
-          snackBarRed: false,
-        );
+        notify(guiderLiveFailure(l10n, live()) ?? l10n.guideAssistantNoStar,
+            error: true, snackBarRed: false);
         return;
       }
-      await container
-          .read(guidingAssistantProvider.notifier)
-          .start(measureBacklash: true);
+      await container.read(guidingAssistantProvider.notifier).start(measureBacklash: true);
     } finally {
       keep.close();
       if (mounted) setState(() => _preparing = false);
@@ -688,24 +621,18 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     ref.listen(guidingAssistantProvider, (previous, next) {
-      if (next.status.isRunning ||
-          (next.status.isDone && previous?.status.isDone != true)) {
+      if (next.status.isRunning || (next.status.isDone && previous?.status.isDone != true)) {
         _unticked.clear();
       }
       // A run failing now, not the last run's result found on opening this tab.
-      final runFailed =
-          previous != null && previous.status.isRunning && next.status.isFailed;
+      final runFailed = previous != null && previous.status.isRunning && next.status.isFailed;
       final problem = next.error != null && next.error != previous?.error
           ? failureReason(l10n, next.error!)
           : runFailed
           ? next.status.error
           : null;
       if (problem != null) {
-        userNotifier(context, origin: SimpleStatusOrigin.guide)(
-          problem,
-          error: true,
-          snackBarRed: false,
-        );
+        userNotifier(context, origin: SimpleStatusOrigin.guide)(problem, error: true, snackBarRed: false);
       }
     });
     final g = ref.watch(guiderStatusProvider).value;
@@ -722,9 +649,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     final done = ref.watch(guidingAssistantAppliedProvider);
     final suggestions = [
       if (status.isDone)
-        for (final s
-            in status.recommendations?.suggestions ??
-                const <GuidingAssistantSuggestion>[])
+        for (final s in status.recommendations?.suggestions ?? const <GuidingAssistantSuggestion>[])
           if (!done.contains(s.key)) s,
     ];
     final ticked = [
@@ -746,9 +671,7 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
     final measuring = status.isRunning;
     // A loop stops Recalibrate only: the Assistant needs one, so it goes on that row.
     // While the Assistant measures the runtime is busy too, but stopping it would end the run.
-    final loop = shared == null && active && !measuring
-        ? l10n.guideStopLoopFirst
-        : null;
+    final loop = shared == null && active && !measuring ? l10n.guideStopLoopFirst : null;
     final canRun = connected && shared == null && pending == null;
     final dec = calibration?.declinationDeg;
     final calibrationLine = !calibrated
@@ -877,14 +800,8 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
                                     _unticked.add(s.key);
                                   }
                                 }),
-                          title: Text(
-                            _suggestionName(l10n, s),
-                            style: kSimpleText,
-                          ),
-                          secondary: Text(
-                            _suggestionValue(l10n, s),
-                            style: kSimpleText,
-                          ),
+                          title: Text(_suggestionName(l10n, s), style: kSimpleText),
+                          secondary: Text(_suggestionValue(l10n, s), style: kSimpleText),
                         ),
                       ),
                     FilledButton(
@@ -903,23 +820,21 @@ class _SimpleGuiderToolsState extends ConsumerState<_SimpleGuiderTools> {
 }
 
 /// A suggestion's setting name in the user's language; the model's names are English.
-String _suggestionName(AppLocalizations l10n, GuidingAssistantSuggestion s) =>
-    switch (s.key) {
-      'exposure' => l10n.guideSuggestExposure,
-      'min_move_ra' => l10n.guideSuggestMinMoveRa,
-      'min_move_dec' => l10n.guideSuggestMinMoveDec,
-      'dec_backlash' => l10n.guideSuggestDecBacklash,
-      'dec_guide_mode' => l10n.guideDecMode,
-      'dec_algorithm' => l10n.guideSuggestDecAlgorithm,
-      _ => s.label,
-    };
+String _suggestionName(AppLocalizations l10n, GuidingAssistantSuggestion s) => switch (s.key) {
+  'exposure' => l10n.guideSuggestExposure,
+  'min_move_ra' => l10n.guideSuggestMinMoveRa,
+  'min_move_dec' => l10n.guideSuggestMinMoveDec,
+  'dec_backlash' => l10n.guideSuggestDecBacklash,
+  'dec_guide_mode' => l10n.guideDecMode,
+  'dec_algorithm' => l10n.guideSuggestDecAlgorithm,
+  _ => s.label,
+};
 
 /// A suggestion's value; the guider names its Dec guide mode in English ("North").
-String _suggestionValue(AppLocalizations l10n, GuidingAssistantSuggestion s) =>
-    switch (s.key) {
-      'dec_guide_mode' => _decModeName(l10n, s.value.toLowerCase()) ?? s.value,
-      _ => s.value,
-    };
+String _suggestionValue(AppLocalizations l10n, GuidingAssistantSuggestion s) => switch (s.key) {
+  'dec_guide_mode' => _decModeName(l10n, s.value.toLowerCase()) ?? s.value,
+  _ => s.value,
+};
 
 /// A Dec guide mode (auto, north, south, off) in the user's language; null for any other word.
 String? _decModeName(AppLocalizations l10n, String mode) => switch (mode) {
@@ -1008,11 +923,7 @@ Widget simpleToolButton({
     side: const BorderSide(color: AraColors.border),
   ),
   onPressed: onPressed,
-  child: Semantics(
-    label: semantics,
-    excludeSemantics: true,
-    child: Text(label),
-  ),
+  child: Semantics(label: semantics, excludeSemantics: true, child: Text(label)),
 );
 
 /// A status line: a dot (a ring for blue, blinking while a tool works) and the
@@ -1145,9 +1056,8 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
 
 /// "2 s", or "The guider's own" while none is set: the guider's exposure as
 /// Simple Mode writes it.
-String simpleGuiderExposureText(AppLocalizations l10n, int ms) => ms <= 0
-    ? l10n.guideExposureOwn
-    : formatExposure(Duration(milliseconds: ms));
+String simpleGuiderExposureText(AppLocalizations l10n, int ms) =>
+    ms <= 0 ? l10n.guideExposureOwn : formatExposure(Duration(milliseconds: ms));
 
 /// The guider's exposure, set live: what its loop and its guiding run at.
 /// Shared by Guide and Preview › Guide, whose shutter loops the guider
@@ -1162,9 +1072,7 @@ class SimpleGuiderExposureTile extends ConsumerWidget {
       key: const Key('simple-guide-exposure'),
       label: l10n.previewExposure,
       value: ref.watch(
-        phd2SettingsProvider.select(
-          (p) => (p.value ?? const Phd2Settings()).guideExposureMs,
-        ),
+        phd2SettingsProvider.select((p) => (p.value ?? const Phd2Settings()).guideExposureMs),
       ),
       options: [
         for (final ms in guideExposureChoicesMs)

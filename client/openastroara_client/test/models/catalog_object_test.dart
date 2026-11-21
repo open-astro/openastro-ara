@@ -18,54 +18,22 @@ void main() {
     });
 
     test('a missing magnitude is null (not a parse failure)', () {
-      final o = CatalogObject.tryFromJson(const {
-        'name': 'X',
-        'ra_deg': 1,
-        'dec_deg': 2,
-      });
+      final o = CatalogObject.tryFromJson(const {'name': 'X', 'ra_deg': 1, 'dec_deg': 2});
       expect(o, isNotNull);
       expect(o!.magnitude, isNull);
     });
 
     test('an integer coordinate is accepted (wire may send 0 not 0.0)', () {
-      final o = CatalogObject.tryFromJson(const {
-        'name': 'Sol',
-        'ra_deg': 0,
-        'dec_deg': 0,
-      });
+      final o = CatalogObject.tryFromJson(const {'name': 'Sol', 'ra_deg': 0, 'dec_deg': 0});
       expect(o, isNotNull);
       expect(o!.raDeg, 0.0);
     });
 
     test('a row without a finite position is dropped (null)', () {
-      expect(
-        CatalogObject.tryFromJson(const {'name': 'NoPos', 'magnitude': 5}),
-        isNull,
-      );
-      expect(
-        CatalogObject.tryFromJson(const {
-          'name': 'BadRa',
-          'ra_deg': 'x',
-          'dec_deg': 2,
-        }),
-        isNull,
-      );
-      expect(
-        CatalogObject.tryFromJson(const {
-          'name': 'NaN',
-          'ra_deg': double.nan,
-          'dec_deg': 2,
-        }),
-        isNull,
-      );
-      expect(
-        CatalogObject.tryFromJson(const {
-          'name': 'Inf',
-          'ra_deg': 1,
-          'dec_deg': double.infinity,
-        }),
-        isNull,
-      );
+      expect(CatalogObject.tryFromJson(const {'name': 'NoPos', 'magnitude': 5}), isNull);
+      expect(CatalogObject.tryFromJson(const {'name': 'BadRa', 'ra_deg': 'x', 'dec_deg': 2}), isNull);
+      expect(CatalogObject.tryFromJson(const {'name': 'NaN', 'ra_deg': double.nan, 'dec_deg': 2}), isNull);
+      expect(CatalogObject.tryFromJson(const {'name': 'Inf', 'ra_deg': 1, 'dec_deg': double.infinity}), isNull);
     });
 
     test('a missing name degrades to empty (still placeable)', () {

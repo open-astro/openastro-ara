@@ -65,8 +65,7 @@ class RmsRingBuffer {
     }
     _samples.add(sample);
     final cutoff = sample.time.subtract(window);
-    while (_samples.length > maxSamples ||
-        _samples.first.time.isBefore(cutoff)) {
+    while (_samples.length > maxSamples || _samples.first.time.isBefore(cutoff)) {
       _samples.removeAt(0);
     }
   }
@@ -153,14 +152,12 @@ class LiveGuidingNotifier extends Notifier<List<RmsSample>> {
   void _fold(GuiderStatus status) {
     final total = status.rmsTotal;
     if (!status.isCorrecting || total == null) return;
-    _buffer.add(
-      RmsSample(
-        time: _nextStamp(),
-        total: total,
-        ra: status.rmsRa,
-        dec: status.rmsDec,
-      ),
-    );
+    _buffer.add(RmsSample(
+      time: _nextStamp(),
+      total: total,
+      ra: status.rmsRa,
+      dec: status.rmsDec,
+    ));
     state = _buffer.samples;
   }
 }
@@ -169,5 +166,4 @@ class LiveGuidingNotifier extends Notifier<List<RmsSample>> {
 /// [LiveGuidingNotifier].
 final liveGuidingRmsProvider =
     NotifierProvider.autoDispose<LiveGuidingNotifier, List<RmsSample>>(
-      LiveGuidingNotifier.new,
-    );
+        LiveGuidingNotifier.new);

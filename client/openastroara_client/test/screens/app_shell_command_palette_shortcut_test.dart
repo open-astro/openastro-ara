@@ -15,9 +15,8 @@ class _StartOnSettings extends SelectedTabIndexNotifier {
 }
 
 void main() {
-  testWidgets('§61 ⌘K opens the command palette under the root NightHotkey', (
-    tester,
-  ) async {
+  testWidgets('§61 ⌘K opens the command palette under the root NightHotkey',
+      (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
@@ -26,16 +25,14 @@ void main() {
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     // NightHotkey (main.dart) wraps the whole app in an autofocus Focus that
     // wins focus before the shell mounts; ⌘K must still reach the shell.
-    final container = ProviderContainer(
-      overrides: [selectedTabIndexProvider.overrideWith(_StartOnSettings.new)],
-    );
+    final container = ProviderContainer(overrides: [
+      selectedTabIndexProvider.overrideWith(_StartOnSettings.new),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: NightHotkey(child: AppShell())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: NightHotkey(child: AppShell())),
+    ));
     await tester.pump();
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);

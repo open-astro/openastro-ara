@@ -40,31 +40,20 @@ class _FakeBackupClient implements BackupClient {
   @override
   Future<String> createBackup() async {
     creates++;
-    snapshots = [
-      const BackupSnapshot(backupId: 'new', downloadUrl: '/dl/new'),
-      ...snapshots,
-    ];
+    snapshots = [const BackupSnapshot(backupId: 'new', downloadUrl: '/dl/new'), ...snapshots];
     return 'op';
   }
 
   bool? lastRestoreFrameMetadata;
   @override
-  Future<String> restore({
-    required String sourceUrl,
-    required bool profiles,
-    required bool sequences,
-    required bool frameMetadata,
-  }) async {
+  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences, required bool frameMetadata}) async {
     lastRestoreFrameMetadata = frameMetadata;
     if (throwOnRestore) throw StateError('restore failed');
     return 'op-r';
   }
 
   // §43-2b: the restore worker's terminal state the modal polls for after the POST.
-  CloneStatus cloneStatusResult = const CloneStatus(
-    state: 'done',
-    progressPct: 100,
-  );
+  CloneStatus cloneStatusResult = const CloneStatus(state: 'done', progressPct: 100);
   @override
   Future<CloneStatus> cloneStatus() async => cloneStatusResult;
 
@@ -74,15 +63,12 @@ class _FakeBackupClient implements BackupClient {
   Future<CloneStatus> createStatus() async => createStatusResult;
 
   @override
-  String absoluteDownloadUrl(BackupSnapshot snapshot) =>
-      'http://h:5555${snapshot.downloadUrl}';
+  String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
   @override
   void close() {}
 }
 
-class _FakeUrlLauncher extends Fake
-    with MockPlatformInterfaceMixin
-    implements UrlLauncherPlatform {
+class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
   String? launched;
   bool throwOnLaunch = false;
 
@@ -101,22 +87,21 @@ Widget _host(
   List<AraServer> servers = const [_server],
   Duration pollInterval = const Duration(milliseconds: 1),
   Duration pollTimeout = const Duration(seconds: 5),
-}) => ProviderScope(
-  overrides: [
-    savedServerServiceProvider.overrideWithValue(
-      _FakeSavedServerService(servers),
-    ),
-    backupApiFactoryProvider.overrideWithValue((_) => api),
-  ],
-  child: MaterialApp(
-    home: BackupRestoreModal(
-      restorePollInterval: pollInterval,
-      restorePollTimeout: pollTimeout,
-      createPollInterval: pollInterval,
-      createPollTimeout: pollTimeout,
-    ),
-  ),
-);
+}) =>
+    ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+        backupApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child: MaterialApp(
+        home: BackupRestoreModal(
+          restorePollInterval: pollInterval,
+          restorePollTimeout: pollTimeout,
+          createPollInterval: pollInterval,
+          createPollTimeout: pollTimeout,
+        ),
+      ),
+    );
 
 void main() {
   // The download tests overwrite the global UrlLauncherPlatform.instance; restore it
@@ -131,16 +116,12 @@ void main() {
   });
 
   testWidgets('no server shows the connect message', (tester) async {
-    await tester.pumpWidget(
-      _host(_FakeBackupClient(const []), servers: const []),
-    );
+    await tester.pumpWidget(_host(_FakeBackupClient(const []), servers: const []));
     await tester.pumpAndSettle();
     expect(find.textContaining('Connect to a server'), findsOneWidget);
   });
 
-  testWidgets('renders a snapshot row with size, areas, and a Restore action', (
-    tester,
-  ) async {
+  testWidgets('renders a snapshot row with size, areas, and a Restore action', (tester) async {
     final api = _FakeBackupClient([
       BackupSnapshot(
         backupId: 'b1',
@@ -169,34 +150,25 @@ void main() {
     expect(find.text('Backup created.'), findsOneWidget);
   });
 
-  testWidgets(
-    'A worker-side create failure surfaces the daemon message in the snackbar',
-    (tester) async {
-      // §43-2: the POST 202s fine, but the daemon-side packaging fails — the modal's
-      // create-status poll must turn that into the failure snack, not "created".
-      final api = _FakeBackupClient(const [])
-        ..createStatusResult = const CloneStatus(
-          state: 'failed',
-          message: 'disk exploded mid-zip',
-        );
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
+  testWidgets('A worker-side create failure surfaces the daemon message in the snackbar', (tester) async {
+    // §43-2: the POST 202s fine, but the daemon-side packaging fails — the modal's
+    // create-status poll must turn that into the failure snack, not "created".
+    final api = _FakeBackupClient(const [])
+      ..createStatusResult = const CloneStatus(state: 'failed', message: 'disk exploded mid-zip');
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Create backup'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('disk exploded'), findsOneWidget);
-      expect(find.text('Backup created.'), findsNothing);
-    },
-  );
+    await tester.tap(find.text('Create backup'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disk exploded'), findsOneWidget);
+    expect(find.text('Backup created.'), findsNothing);
+  });
 
   testWidgets('Download launches the snapshot URL', (tester) async {
     final launcher = _FakeUrlLauncher();
     UrlLauncherPlatform.instance = launcher;
     final api = _FakeBackupClient([
-      const BackupSnapshot(
-        backupId: 'b1',
-        downloadUrl: '/api/v1/backup/snapshot/b1/download',
-      ),
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/api/v1/backup/snapshot/b1/download'),
     ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
@@ -206,179 +178,116 @@ void main() {
     expect(launcher.launched, contains('/api/v1/backup/snapshot/b1/download'));
   });
 
-  testWidgets(
-    'Download failure surfaces a snackbar instead of swallowing the error',
-    (tester) async {
-      UrlLauncherPlatform.instance = _FakeUrlLauncher()..throwOnLaunch = true;
-      final api = _FakeBackupClient([
-        const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1'),
-      ]);
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
+  testWidgets('Download failure surfaces a snackbar instead of swallowing the error', (tester) async {
+    UrlLauncherPlatform.instance = _FakeUrlLauncher()..throwOnLaunch = true;
+    final api = _FakeBackupClient([const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1')]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Download'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Could not open the download'),
-        findsOneWidget,
-      );
-    },
-  );
+    await tester.tap(find.byTooltip('Download'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Could not open the download'), findsOneWidget);
+  });
 
-  testWidgets('Restore on a snapshot with no areas refuses with a snackbar', (
-    tester,
-  ) async {
-    final api = _FakeBackupClient([
-      const BackupSnapshot(
-        backupId: 'b1',
-        downloadUrl: '/dl/b1',
-        includedAreas: [],
-      ),
-    ]);
+  testWidgets('Restore on a snapshot with no areas refuses with a snackbar', (tester) async {
+    final api = _FakeBackupClient([const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: [])]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('Restore'));
     await tester.pump();
-    expect(
-      find.text('Restore backup'),
-      findsNothing,
-      reason: 'no confirm dialog opens',
-    );
+    expect(find.text('Restore backup'), findsNothing, reason: 'no confirm dialog opens');
     expect(find.textContaining('no restorable areas'), findsOneWidget);
   });
 
-  testWidgets(
-    'Restore opens a destructive confirm dialog with area checkboxes',
-    (tester) async {
-      final api = _FakeBackupClient([
-        const BackupSnapshot(
-          backupId: 'b1',
-          downloadUrl: '/dl/b1',
-          includedAreas: ['profiles', 'sequences'],
-        ),
-      ]);
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Restore'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('overwrites the selected areas'),
-        findsOneWidget,
-      );
-      expect(find.text('Profile settings'), findsOneWidget);
-      expect(find.text('Sequences'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the frame-catalog checkbox is opt-in and flows through the restore',
-    (tester) async {
-      final api = _FakeBackupClient([
-        const BackupSnapshot(
-          backupId: 'b1',
-          downloadUrl: '/dl/b1',
-          includedAreas: ['profiles', 'frames_metadata'],
-        ),
-      ]);
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Restore'));
-      await tester.pumpAndSettle();
-      expect(find.text('Frame catalog (metadata)'), findsOneWidget);
-
-      // Defaults OFF (rolling the catalog back forgets frames captured since the
-      // snapshot) — opt in, then confirm.
-      await tester.tap(find.text('Frame catalog (metadata)'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
-      await tester.pumpAndSettle();
-
-      expect(api.lastRestoreFrameMetadata, isTrue);
-    },
-  );
-
-  testWidgets('a failed restore surfaces a snackbar', (tester) async {
+  testWidgets('Restore opens a destructive confirm dialog with area checkboxes', (tester) async {
     final api = _FakeBackupClient([
-      const BackupSnapshot(
-        backupId: 'b1',
-        downloadUrl: '/dl/b1',
-        includedAreas: ['profiles', 'sequences'],
-      ),
-    ])..throwOnRestore = true;
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
-    await tester.tap(
-      find.text('Restore'),
-    ); // row action → opens the confirm dialog
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('overwrites the selected areas'), findsOneWidget);
+    expect(find.text('Profile settings'), findsOneWidget);
+    expect(find.text('Sequences'), findsOneWidget);
+  });
+
+  testWidgets('the frame-catalog checkbox is opt-in and flows through the restore', (tester) async {
+    final api = _FakeBackupClient([
+      const BackupSnapshot(
+          backupId: 'b1',
+          downloadUrl: '/dl/b1',
+          includedAreas: ['profiles', 'frames_metadata']),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    expect(find.text('Frame catalog (metadata)'), findsOneWidget);
+
+    // Defaults OFF (rolling the catalog back forgets frames captured since the
+    // snapshot) — opt in, then confirm.
+    await tester.tap(find.text('Frame catalog (metadata)'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastRestoreFrameMetadata, isTrue);
+  });
+
+  testWidgets('a failed restore surfaces a snackbar', (tester) async {
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..throwOnRestore = true;
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Restore')); // row action → opens the confirm dialog
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Restore')); // confirm
     await tester.pumpAndSettle();
     expect(find.textContaining('Restore failed'), findsOneWidget);
   });
 
-  testWidgets(
-    'a worker-side restore failure (clone-status failed) surfaces a snackbar',
-    (tester) async {
-      // §43-2b: the POST succeeds (202), but the background worker fails — the modal
-      // now polls clone-status and must surface that, not a premature "complete".
-      final api =
-          _FakeBackupClient([
-              const BackupSnapshot(
-                backupId: 'b1',
-                downloadUrl: '/dl/b1',
-                includedAreas: ['profiles', 'sequences'],
-              ),
-            ])
-            ..cloneStatusResult = const CloneStatus(
-              state: 'failed',
-              message: 'disk gone',
-            );
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
+  testWidgets('a worker-side restore failure (clone-status failed) surfaces a snackbar', (tester) async {
+    // §43-2b: the POST succeeds (202), but the background worker fails — the modal
+    // now polls clone-status and must surface that, not a premature "complete".
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..cloneStatusResult = const CloneStatus(state: 'failed', message: 'disk gone');
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Restore'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('disk gone'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('disk gone'), findsOneWidget);
+  });
 
-  testWidgets(
-    'a restore that never reaches a terminal state surfaces the timeout snackbar',
-    (tester) async {
-      // §43-2b: the worker stays `running` past the poll deadline — the modal must
-      // surface a "taking longer" message via the on TimeoutException branch, not hang.
-      final api =
-          _FakeBackupClient([
-              const BackupSnapshot(
-                backupId: 'b1',
-                downloadUrl: '/dl/b1',
-                includedAreas: ['profiles', 'sequences'],
-              ),
-            ])
-            ..cloneStatusResult = const CloneStatus(
-              state: 'running',
-              progressPct: 10,
-            );
-      await tester.pumpWidget(
-        _host(
-          api,
-          pollInterval: const Duration(milliseconds: 1),
-          pollTimeout: const Duration(milliseconds: 30),
-        ),
-      );
-      await tester.pumpAndSettle();
+  testWidgets('a restore that never reaches a terminal state surfaces the timeout snackbar', (tester) async {
+    // §43-2b: the worker stays `running` past the poll deadline — the modal must
+    // surface a "taking longer" message via the on TimeoutException branch, not hang.
+    final api = _FakeBackupClient([
+      const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1', includedAreas: ['profiles', 'sequences']),
+    ])
+      ..cloneStatusResult = const CloneStatus(state: 'running', progressPct: 10);
+    await tester.pumpWidget(_host(
+      api,
+      pollInterval: const Duration(milliseconds: 1),
+      pollTimeout: const Duration(milliseconds: 30),
+    ));
+    await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Restore'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
-      await tester.pumpAndSettle();
-      expect(find.textContaining('taking longer'), findsOneWidget);
-    },
-  );
+    await tester.tap(find.text('Restore'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Restore'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('taking longer'), findsOneWidget);
+  });
 }

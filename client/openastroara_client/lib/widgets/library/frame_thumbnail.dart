@@ -77,11 +77,8 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                 children: [
                   const ColoredBox(
                     color: AraColors.bgInput,
-                    child: Icon(
-                      Icons.image_outlined,
-                      color: AraColors.textDisabled,
-                      size: 28,
-                    ),
+                    child: Icon(Icons.image_outlined,
+                        color: AraColors.textDisabled, size: 28),
                   ),
                   if (widget.imageUrl != null)
                     Image.network(
@@ -91,12 +88,11 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                       // rig, and popping in reads as glitchy.
                       frameBuilder: (context, child, frame, wasSync) =>
                           wasSync || frame != null
-                          ? AnimatedOpacity(
-                              opacity: 1,
-                              duration: const Duration(milliseconds: 200),
-                              child: child,
-                            )
-                          : const SizedBox.shrink(),
+                              ? AnimatedOpacity(
+                                  opacity: 1,
+                                  duration: const Duration(milliseconds: 200),
+                                  child: child)
+                              : const SizedBox.shrink(),
                       // Keep the placeholder icon on 404/network failure —
                       // a thumbnail may not exist for recovered orphans.
                       errorBuilder: (_, _, _) => const SizedBox.shrink(),
@@ -112,10 +108,7 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
-                          colors: [
-                            Colors.transparent,
-                            AraColors.thumbnailCaptionShade,
-                          ],
+                          colors: [Colors.transparent, AraColors.thumbnailCaptionShade],
                         ),
                       ),
                       child: Row(
@@ -125,7 +118,9 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                               widget.filter,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.labelSmall
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelSmall
                                   ?.copyWith(color: AraColors.onImageText),
                             ),
                           ),
@@ -133,11 +128,8 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                           // rating outside 0..5 and overflow the tile.
                           if (widget.rating > 0)
                             for (var i = 0; i < widget.rating.clamp(0, 5); i++)
-                              const Icon(
-                                Icons.star,
-                                size: 9,
-                                color: AraColors.accentBusy,
-                              ),
+                              const Icon(Icons.star,
+                                  size: 9, color: AraColors.accentBusy),
                         ],
                       ),
                     ),
@@ -180,17 +172,11 @@ class _FrameThumbnailState extends State<FrameThumbnail> {
                                 ? AraColors.selectionBg
                                 : AraColors.thumbnailTickShade,
                             shape: BoxShape.circle,
-                            border: Border.all(
-                              color: AraColors.onFill,
-                              width: 1.5,
-                            ),
+                            border: Border.all(color: AraColors.onFill, width: 1.5),
                           ),
                           child: selected
-                              ? const Icon(
-                                  Icons.check,
-                                  size: 14,
-                                  color: AraColors.onFill,
-                                )
+                              ? const Icon(Icons.check,
+                                  size: 14, color: AraColors.onFill)
                               : null,
                         ),
                       ),

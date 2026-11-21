@@ -34,11 +34,7 @@ void main() {
     });
 
     test('coerces an integer hours value to double', () {
-      expect(
-        StatsOverview.fromJson(const {'total_integration_hours': 12})
-            .totalIntegrationHours,
-        12.0,
-      );
+      expect(StatsOverview.fromJson(const {'total_integration_hours': 12}).totalIntegrationHours, 12.0);
     });
   });
 }

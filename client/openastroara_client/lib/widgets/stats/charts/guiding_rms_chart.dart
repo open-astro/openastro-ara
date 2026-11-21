@@ -106,11 +106,7 @@ class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart>
             const Positioned(
               top: 12,
               right: 16,
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: AdaptiveProgressIndicator(strokeWidth: 2),
-              ),
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
         ],
       ),
@@ -142,9 +138,7 @@ class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart>
       return const _Hint('Connect to a server to see guiding RMS.');
     }
     if (series.isEmpty) {
-      return const _Hint(
-        'No guiding data yet — RMS appears here once guided frames are captured.',
-      );
+      return const _Hint('No guiding data yet — RMS appears here once guided frames are captured.');
     }
 
     final spots = <FlSpot>[];
@@ -172,10 +166,14 @@ class _GuidingRmsChartState extends ConsumerState<GuidingRmsChart>
           ),
           gridData: FlGridData(
             show: true,
-            getDrawingHorizontalLine: (_) =>
-                const FlLine(color: AraColors.border, strokeWidth: 0.5),
-            getDrawingVerticalLine: (_) =>
-                const FlLine(color: AraColors.border, strokeWidth: 0.5),
+            getDrawingHorizontalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
+            getDrawingVerticalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
           ),
           titlesData: FlTitlesData(
             leftTitles: const AxisTitles(
@@ -250,8 +248,9 @@ class _Hint extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textDisabled),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
             ),
           ),
           if (onRetry != null)

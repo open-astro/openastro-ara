@@ -60,13 +60,11 @@ bool? boltDirectionNudge({
   required double? az,
   double noiseArcmin = polarSolveNoiseArcmin,
 }) {
-  if (prevAlt == null || prevAz == null || alt == null || az == null)
-    return null;
+  if (prevAlt == null || prevAz == null || alt == null || az == null) return null;
   bool grew(double before, double after) =>
       before.sign == after.sign &&
       after.abs() - before.abs() > math.max(noiseArcmin, before.abs() * 0.1);
-  bool still(double before, double after) =>
-      (after - before).abs() <= noiseArcmin;
+  bool still(double before, double after) => (after - before).abs() <= noiseArcmin;
   if (grew(prevAlt, alt) && still(prevAz, az)) {
     return true;
   }
@@ -92,8 +90,7 @@ class BoltNudgeTracker {
   /// Compare this frame's errors with the previous frame's. Call on every
   /// live-state change; a seed or a new run resets the baseline.
   void track(PolarAlignLive live) {
-    if (live.phase == PolarAlignStates.paused)
-      return; // no solve: hold the baseline
+    if (live.phase == PolarAlignStates.paused) return; // no solve: hold the baseline
     if (live.phase != PolarAlignStates.adjusting) {
       // Leaving adjust (stopped, failed, a new run's seed): the next adjust
       // frame starts a new baseline, so a new run whose first iteration
@@ -107,11 +104,7 @@ class BoltNudgeTracker {
     if (live.iteration == _iteration) return;
     _iteration = live.iteration;
     final found = boltDirectionNudge(
-      prevAlt: _prevAlt,
-      prevAz: _prevAz,
-      alt: live.altErrorArcmin,
-      az: live.azErrorArcmin,
-    );
+        prevAlt: _prevAlt, prevAz: _prevAz, alt: live.altErrorArcmin, az: live.azErrorArcmin);
     if (found != null) {
       nudge = found;
       _untilIteration = live.iteration + _frames;
@@ -120,8 +113,7 @@ class BoltNudgeTracker {
       // noise (the user turned the bolt back), else after a few frames.
       final before = nudge! ? _prevAlt : _prevAz;
       final after = nudge! ? live.altErrorArcmin : live.azErrorArcmin;
-      final improved =
-          before != null &&
+      final improved = before != null &&
           after != null &&
           before.abs() - after.abs() > polarSolveNoiseArcmin;
       if (improved || live.iteration > _untilIteration) nudge = null;
@@ -136,12 +128,8 @@ class BoltNudgeTracker {
 /// facing the NCP and to the LEFT facing the SCP ([southern]); y = altitude
 /// (above pole → up). Clamped to the ring edge so an off-scale dot stays
 /// visible. Pure — unit-tested.
-Offset bullseyeDotFraction(
-  double? azErrArcmin,
-  double? altErrArcmin,
-  double rangeArcmin, {
-  bool southern = false,
-}) {
+Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double rangeArcmin,
+    {bool southern = false}) {
   final az = (azErrArcmin ?? 0) / rangeArcmin * (southern ? -1 : 1);
   final alt = (altErrArcmin ?? 0) / rangeArcmin;
   final len = math.sqrt(az * az + alt * alt);
@@ -155,9 +143,7 @@ Offset bullseyeDotFraction(
 (IconData, String) polarAltHint(AppLocalizations l, double? alt) {
   if (alt == null) return (Icons.remove, '—');
   if (alt.abs() <= 0.05) return (Icons.check, l.polarHintOnTarget);
-  return alt > 0
-      ? (Icons.arrow_downward, l.polarHintLower)
-      : (Icons.arrow_upward, l.polarHintRaise);
+  return alt > 0 ? (Icons.arrow_downward, l.polarHintLower) : (Icons.arrow_upward, l.polarHintRaise);
 }
 
 /// Azimuth knob direction for the current error: positive = axis east of the
@@ -165,23 +151,13 @@ Offset bullseyeDotFraction(
 /// facing the pole: west is on the LEFT facing the NCP and on the RIGHT facing
 /// the SCP ([southern]). 2026-10-17: a southern site read "Move east" beside an
 /// arrow to the right. Pure — unit-tested.
-(IconData, String) polarAzHint(
-  AppLocalizations l,
-  double? az, {
-  required bool southern,
-}) {
+(IconData, String) polarAzHint(AppLocalizations l, double? az, {required bool southern}) {
   if (az == null) return (Icons.remove, '—');
   if (az.abs() <= 0.05) return (Icons.check, l.polarHintOnTarget);
   final westIsLeft = !southern;
   return az > 0
-      ? (
-          westIsLeft ? Icons.arrow_back : Icons.arrow_forward,
-          l.polarHintMoveWest,
-        )
-      : (
-          westIsLeft ? Icons.arrow_forward : Icons.arrow_back,
-          l.polarHintMoveEast,
-        );
+      ? (westIsLeft ? Icons.arrow_back : Icons.arrow_forward, l.polarHintMoveWest)
+      : (westIsLeft ? Icons.arrow_forward : Icons.arrow_back, l.polarHintMoveEast);
 }
 
 /// #2083 the azimuth error as NINA's three-point polar alignment shows it.
@@ -191,8 +167,7 @@ Offset bullseyeDotFraction(
 /// at latitude 48°. Null without a readout or a site latitude. Pure —
 /// unit-tested.
 double? ninaAzimuthArcmin(double? azArcmin, double? latitudeDeg) {
-  if (azArcmin == null || latitudeDeg == null || latitudeDeg.abs() >= 89.0)
-    return null;
+  if (azArcmin == null || latitudeDeg == null || latitudeDeg.abs() >= 89.0) return null;
   return azArcmin / math.cos(latitudeDeg.abs() * math.pi / 180.0);
 }
 
@@ -205,11 +180,8 @@ enum PolarInitialErrorWarning { none, large, huge }
 /// The warning for a stage that started at [initialArcmin]. Pure —
 /// unit-tested.
 PolarInitialErrorWarning polarInitialErrorWarning(double? initialArcmin) {
-  if (initialArcmin == null || initialArcmin <= 120.0)
-    return PolarInitialErrorWarning.none;
-  return initialArcmin > 600.0
-      ? PolarInitialErrorWarning.huge
-      : PolarInitialErrorWarning.large;
+  if (initialArcmin == null || initialArcmin <= 120.0) return PolarInitialErrorWarning.none;
+  return initialArcmin > 600.0 ? PolarInitialErrorWarning.huge : PolarInitialErrorWarning.large;
 }
 
 /// The warning's sentence in the user's language, or null for none.
@@ -227,13 +199,8 @@ String? polarInitialErrorText(AppLocalizations l10n, double? initialArcmin) =>
 /// unit-tested.
 String? polarHandTurnText(AppLocalizations l10n, PolarAlignHandTurn? wait) {
   if (wait == null || !wait.waiting) return null;
-  final direction = wait.direction == PolarAlignDirections.west
-      ? l10n.polarDirectionWest
-      : l10n.polarDirectionEast;
-  final ask = l10n.polarHandTurnAsk(
-    wait.targetDeg.toStringAsFixed(0),
-    direction,
-  );
+  final direction = wait.direction == PolarAlignDirections.west ? l10n.polarDirectionWest : l10n.polarDirectionEast;
+  final ask = l10n.polarHandTurnAsk(wait.targetDeg.toStringAsFixed(0), direction);
   final turned = wait.turnedDeg;
   if (turned == null) return ask;
   if (turned < -1.0) return '$ask ${l10n.polarHandTurnWrongWay(direction)}';
@@ -251,8 +218,7 @@ String formatArcmin(double? v) {
 /// [arcmin] causes over [seconds]: error × Earth's rotation rate
 /// (7.292e-5 rad/s), i.e. ~0.26″ per minute per arcminute of error.
 /// Pure — unit-tested.
-double maxDriftArcsec(double arcmin, double seconds) =>
-    arcmin.abs() * 60 * 7.2921e-5 * seconds;
+double maxDriftArcsec(double arcmin, double seconds) => arcmin.abs() * 60 * 7.2921e-5 * seconds;
 
 /// [arcmin] as a share of the Moon's ~31′ width: `1/39 of the Moon's width`
 /// or `1.5× the Moon's width`. Pure — unit-tested.
@@ -272,32 +238,25 @@ enum PolarSide { above, below, east, west }
 /// way). Positive az = east of the pole as seen facing it, in both
 /// hemispheres. Pure — the English sentence and Simple Mode's localised one
 /// are built on it.
-({PolarSide? vertical, PolarSide? side})? polarSideOfPole(
-  double? altArcmin,
-  double? azArcmin,
-) {
+({PolarSide? vertical, PolarSide? side})? polarSideOfPole(double? altArcmin, double? azArcmin) {
   if (altArcmin == null || azArcmin == null) return null;
   final vertical = altArcmin.abs() < 0.5
       ? null
       : altArcmin > 0
-      ? PolarSide.above
-      : PolarSide.below;
+          ? PolarSide.above
+          : PolarSide.below;
   final side = azArcmin.abs() < 0.5
       ? null
       : azArcmin > 0
-      ? PolarSide.east
-      : PolarSide.west;
+          ? PolarSide.east
+          : PolarSide.west;
   return (vertical: vertical, side: side);
 }
 
 /// Rough stage: which side of the pole the axis sits, in words, in the user's
 /// language — the one sentence the Full UI and Simple Mode share. Null until
 /// both errors are known. Pure — unit-tested.
-String? polarSideOfPoleText(
-  AppLocalizations l10n,
-  double? altArcmin,
-  double? azArcmin,
-) {
+String? polarSideOfPoleText(AppLocalizations l10n, double? altArcmin, double? azArcmin) {
   final where = polarSideOfPole(altArcmin, azArcmin);
   if (where == null) return null;
   if (where.vertical == null && where.side == null) return l10n.polarSideOnPole;
@@ -309,9 +268,7 @@ String? polarSideOfPoleText(
   ];
   final joined = parts.join(l10n.polarSideJoin);
   // "above the pole" but "east of the pole" / "above and east of the pole".
-  return where.side == null
-      ? l10n.polarSideSitsVertical(joined)
-      : l10n.polarSideSits(joined);
+  return where.side == null ? l10n.polarSideSitsVertical(joined) : l10n.polarSideSits(joined);
 }
 
 /// The zooming bullseye: three concentric rings, cross-hairs, and the RA-axis
@@ -328,16 +285,10 @@ class BullseyePainter extends CustomPainter {
   /// The room left outside the outer ring.
   final double edgeInset;
 
-  const BullseyePainter({
-    required this.dotFraction,
-    required this.zoneColor,
-    this.reticle = false,
-    this.edgeInset = 4,
-  });
+  const BullseyePainter({required this.dotFraction, required this.zoneColor, this.reticle = false, this.edgeInset = 4});
 
   /// The outer ring's radius on a canvas of [size].
-  double ringRadius(Size size) =>
-      math.min(size.width, size.height) / 2 - edgeInset;
+  double ringRadius(Size size) => math.min(size.width, size.height) / 2 - edgeInset;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -347,50 +298,27 @@ class BullseyePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1
       ..color = AraColors.textSecondary.withValues(alpha: 0.5);
-    final rings = reticle
-        ? const [1.0, 0.75, 0.5, 0.25]
-        : const [1.0, 2 / 3, 1 / 3];
+    final rings = reticle ? const [1.0, 0.75, 0.5, 0.25] : const [1.0, 2 / 3, 1 / 3];
     for (final f in rings) {
       canvas.drawCircle(center, radius * f, ring);
     }
-    canvas.drawLine(
-      center - Offset(radius, 0),
-      center + Offset(radius, 0),
-      ring,
-    );
-    canvas.drawLine(
-      center - Offset(0, radius),
-      center + Offset(0, radius),
-      ring,
-    );
+    canvas.drawLine(center - Offset(radius, 0), center + Offset(radius, 0), ring);
+    canvas.drawLine(center - Offset(0, radius), center + Offset(0, radius), ring);
     if (reticle) {
       // 15″ ticks (every eighth of the field) on both cross-hairs.
       final tick = math.max(4.0, radius * 0.04);
       for (var i = 1; i < 8; i++) {
         final d = radius * i / 8;
         for (final s in const [-1.0, 1.0]) {
-          canvas.drawLine(
-            center + Offset(s * d, -tick),
-            center + Offset(s * d, tick),
-            ring,
-          );
-          canvas.drawLine(
-            center + Offset(-tick, s * d),
-            center + Offset(tick, s * d),
-            ring,
-          );
+          canvas.drawLine(center + Offset(s * d, -tick), center + Offset(s * d, tick), ring);
+          canvas.drawLine(center + Offset(-tick, s * d), center + Offset(tick, s * d), ring);
         }
       }
     }
 
     final dot = Paint()..color = zoneColor;
-    final pos =
-        center + Offset(dotFraction.dx * radius, dotFraction.dy * radius);
-    canvas.drawCircle(
-      pos,
-      reticle ? math.max(6.0, radius * 0.035) : math.max(10.0, radius * 0.06),
-      dot,
-    );
+    final pos = center + Offset(dotFraction.dx * radius, dotFraction.dy * radius);
+    canvas.drawCircle(pos, reticle ? math.max(6.0, radius * 0.035) : math.max(10.0, radius * 0.06), dot);
     // A subtle line from the dot back to the pole — the direction to drive it.
     final tether = Paint()
       ..strokeWidth = math.max(2.5, radius * 0.015)
@@ -400,8 +328,5 @@ class BullseyePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant BullseyePainter old) =>
-      old.dotFraction != dotFraction ||
-      old.zoneColor != zoneColor ||
-      old.reticle != reticle ||
-      old.edgeInset != edgeInset;
+      old.dotFraction != dotFraction || old.zoneColor != zoneColor || old.reticle != reticle || old.edgeInset != edgeInset;
 }

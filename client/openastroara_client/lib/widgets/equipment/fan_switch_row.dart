@@ -89,9 +89,7 @@ class FanSwitchRow extends ConsumerWidget {
       if (!context.mounted) return;
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            "Couldn't set the fan: ${failureReason(context.l10n, e)}",
-          ),
+          content: Text("Couldn't set the fan: ${failureReason(context.l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

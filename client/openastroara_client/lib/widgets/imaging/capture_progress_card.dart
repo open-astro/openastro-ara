@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import '../status_indicator.dart' show StatusBlink;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -18,7 +17,6 @@ import '../adaptive_controls.dart';
 class CaptureProgressCard extends ConsumerStatefulWidget {
   /// Re-triggers the capture with the current exposure params (Take One).
   final VoidCallback? onRetry;
-
   /// Aborts the in-flight exposure.
   final VoidCallback? onCancel;
   const CaptureProgressCard({super.key, this.onRetry, this.onCancel});
@@ -47,7 +45,8 @@ class _CaptureProgressCardState extends ConsumerState<CaptureProgressCard> {
   /// bar, remaining time, and ready-in estimate count down live even though
   /// the daemon's equipment poll is slow (15 s).
   void _syncTick() {
-    final active = ref.read(captureProgressProvider).isActive;
+    final active =
+        ref.read(captureProgressProvider).isActive;
     if (active && _tick == null) {
       _tick = Timer.periodic(const Duration(milliseconds: 250), (_) {
         if (mounted) setState(() {});
@@ -84,9 +83,7 @@ class _CaptureProgressCardState extends ConsumerState<CaptureProgressCard> {
               Text(
                 _exposingSubtitle(progress),
                 style: const TextStyle(
-                  fontSize: 11,
-                  color: AraColors.textSecondary,
-                ),
+                    fontSize: 11, color: AraColors.textSecondary),
               ),
               if (widget.onCancel != null) _cancelButton(),
             ],
@@ -170,8 +167,7 @@ class _CaptureProgressCardState extends ConsumerState<CaptureProgressCard> {
     final remaining = p.exposureRemaining;
     if (remaining == null) return 'Starting…';
     final ready = p.timeToDisplay;
-    final left =
-        '~${(remaining.inMilliseconds / 1000.0).toStringAsFixed(1)} s left';
+    final left = '~${(remaining.inMilliseconds / 1000.0).toStringAsFixed(1)} s left';
     if (ready == null) return left;
     return '$left · ready in ~${(ready.inMilliseconds / 1000.0).toStringAsFixed(1)} s';
   }
@@ -232,11 +228,7 @@ class _Row extends StatelessWidget {
           // The exposing row (no colour of its own) is working: blinking green.
           StatusBlink(
             on: iconColor == null,
-            child: Icon(
-              icon,
-              size: 18,
-              color: iconColor ?? AraColors.accentConnected,
-            ),
+            child: Icon(icon, size: 18, color: iconColor ?? AraColors.accentConnected),
           ),
         const SizedBox(width: 8),
         Expanded(
@@ -244,21 +236,12 @@ class _Row extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+              Text(title,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
               if (subtitle != null)
-                Text(
-                  subtitle!,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AraColors.textSecondary,
-                  ),
-                ),
+                Text(subtitle!,
+                    style: const TextStyle(
+                        fontSize: 11, color: AraColors.textSecondary)),
             ],
           ),
         ),

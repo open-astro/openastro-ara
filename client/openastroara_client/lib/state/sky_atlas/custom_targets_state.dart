@@ -7,9 +7,8 @@ import '../../services/profile_api.dart';
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
 
-final customTargetsServiceProvider = Provider<CustomTargetsService>(
-  (ref) => CustomTargetsService(),
-);
+final customTargetsServiceProvider =
+    Provider<CustomTargetsService>((ref) => CustomTargetsService());
 
 /// The mirror's scope for a server and profile.
 String customTargetsScope(AraServer server, String profileId) =>
@@ -36,17 +35,14 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
     final api = ref.watch(profileApiProvider);
     final server = ref.watch(activeServerProvider);
     _scope = null;
-    if (api == null || server == null)
-      return (await svc.loadScope(null)).targets;
+    if (api == null || server == null) return (await svc.loadScope(null)).targets;
     // The profile list is loaded asynchronously; the scope needs its active
     // id, so wait for it (and rebuild when a profile is selected).
     String? id;
     try {
       id = (await ref.watch(profileManagementProvider.future)).activeId;
     } catch (e) {
-      debugPrint(
-        '[custom-targets] profile list unavailable, using the mirror: $e',
-      );
+      debugPrint('[custom-targets] profile list unavailable, using the mirror: $e');
     }
     if (id == null) return (await svc.loadScope(null)).targets;
     final scope = customTargetsScope(server, id);
@@ -59,10 +55,7 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
   }
 
   Future<List<CustomTarget>> _sync(
-    ProfileApi api,
-    CustomTargetsService svc,
-    String scope,
-  ) async {
+      ProfileApi api, CustomTargetsService svc, String scope) async {
     final local = await svc.loadScope(scope);
     List<CustomTarget> remote;
     try {
@@ -72,17 +65,12 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
       return local.targets;
     }
     final merged = threeWayMergeSavedTargets(
-      remote: remote,
-      mirror: local.targets,
-      base: local.base,
-    );
+        remote: remote, mirror: local.targets, base: local.base);
     if (sameSavedTargets(merged, remote)) {
       return svc.commitSync(scope, remote);
     }
     try {
-      final echoed = await api.putSavedTargets(
-        merged.where(isAcceptableSavedTarget).toList(),
-      );
+      final echoed = await api.putSavedTargets(merged.where(isAcceptableSavedTarget).toList());
       return await svc.commitSync(scope, echoed);
     } catch (e) {
       debugPrint('[custom-targets] profile push failed, kept locally: $e');
@@ -92,18 +80,14 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
 
   Future<void> remember(CustomTarget t) async {
     final scope = _scope;
-    final list = await ref
-        .read(customTargetsServiceProvider)
-        .remember(t, scope: scope);
+    final list = await ref.read(customTargetsServiceProvider).remember(t, scope: scope);
     if (ref.mounted) state = AsyncData(list);
     await _push(scope, list);
   }
 
   Future<void> forget(CustomTarget t) async {
     final scope = _scope;
-    final list = await ref
-        .read(customTargetsServiceProvider)
-        .forget(t, scope: scope);
+    final list = await ref.read(customTargetsServiceProvider).forget(t, scope: scope);
     if (ref.mounted) state = AsyncData(list);
     await _push(scope, list);
   }
@@ -121,13 +105,8 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
         final local = await svc.loadScope(scope);
         final remote = await api.getSavedTargets();
         final merged = threeWayMergeSavedTargets(
-          remote: remote,
-          mirror: local.targets,
-          base: local.base,
-        );
-        final echoed = await api.putSavedTargets(
-          merged.where(isAcceptableSavedTarget).toList(),
-        );
+            remote: remote, mirror: local.targets, base: local.base);
+        final echoed = await api.putSavedTargets(merged.where(isAcceptableSavedTarget).toList());
         if (!ref.mounted) return;
         final committed = await svc.commitSync(scope, echoed);
         if (ref.mounted) state = AsyncData(committed);
@@ -171,9 +150,7 @@ List<CustomTarget> threeWayMergeSavedTargets({
   out.sort((a, b) {
     final byTime = b.savedUtc.compareTo(a.savedUtc);
     // OrdinalIgnoreCase on the daemon compares upper-cased text.
-    return byTime != 0
-        ? byTime
-        : a.name.toUpperCase().compareTo(b.name.toUpperCase());
+    return byTime != 0 ? byTime : a.name.toUpperCase().compareTo(b.name.toUpperCase());
   });
   return out.take(CustomTargetsService.maxEntries).toList();
 }
@@ -197,5 +174,4 @@ bool sameSavedTarget(CustomTarget a, CustomTarget b) =>
 
 final customTargetsProvider =
     AsyncNotifierProvider<CustomTargetsNotifier, List<CustomTarget>>(
-      CustomTargetsNotifier.new,
-    );
+        CustomTargetsNotifier.new);

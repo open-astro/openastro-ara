@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/loaded_section.dart';
@@ -369,8 +367,8 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
                 key: const Key('confirm_first_flip'),
                 // Immediate daemon round-trip, like Re-arm: the confirmation
                 // is daemon-owned and the general Save can't touch it.
-                onPressed:
-                    !s.firstFlipConfirmed && s.firstFlipCompletedUtc != null
+                onPressed: !s.firstFlipConfirmed &&
+                        s.firstFlipCompletedUtc != null
                     ? _confirmFirstFlip
                     : null,
                 child: Text(context.l10n.safetyFirstFlipConfirmButton),
@@ -382,8 +380,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
                 // fields are daemon-owned and the general Save deliberately
                 // can't touch them. A completed flip awaiting Confirm can be
                 // dropped too (the rig changed since it ran).
-                onPressed:
-                    s.firstFlipConfirmed || s.firstFlipCompletedUtc != null
+                onPressed: s.firstFlipConfirmed || s.firstFlipCompletedUtc != null
                     ? _rearmFirstFlip
                     : null,
                 child: const Text('Re-arm'),

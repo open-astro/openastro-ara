@@ -30,48 +30,29 @@ void main() {
       expect(o.fovHeightArcmin, closeTo(53.984, 1e-2));
     });
 
-    test(
-      'a reducer shortens the effective focal length and widens the FOV',
-      () {
-        const base = OpticsSettings(
-          focalLengthMm: 1000,
-          sensorWidthPx: 6248,
-          sensorHeightPx: 4176,
-          pixelSizeUm: 3.76,
-        );
-        final reduced = base.copyWith(reducerFactor: 0.8);
-        expect(reduced.effectiveFocalLengthMm, 800);
-        // Scale and FOV grow by exactly 1/0.8 = 1.25×.
-        expect(
-          reduced.pixelScaleArcsecPerPx! / base.pixelScaleArcsecPerPx!,
-          closeTo(1.25, 1e-9),
-        );
-        expect(
-          reduced.fovWidthArcmin! / base.fovWidthArcmin!,
-          closeTo(1.25, 1e-9),
-        );
-      },
-    );
+    test('a reducer shortens the effective focal length and widens the FOV', () {
+      const base = OpticsSettings(
+        focalLengthMm: 1000,
+        sensorWidthPx: 6248,
+        sensorHeightPx: 4176,
+        pixelSizeUm: 3.76,
+      );
+      final reduced = base.copyWith(reducerFactor: 0.8);
+      expect(reduced.effectiveFocalLengthMm, 800);
+      // Scale and FOV grow by exactly 1/0.8 = 1.25×.
+      expect(reduced.pixelScaleArcsecPerPx! / base.pixelScaleArcsecPerPx!,
+          closeTo(1.25, 1e-9));
+      expect(reduced.fovWidthArcmin! / base.fovWidthArcmin!, closeTo(1.25, 1e-9));
+    });
 
-    test(
-      'any zero input (except the 1.0 reducer default) leaves it unconfigured',
-      () {
-        const noFocal = OpticsSettings(
-          sensorWidthPx: 100,
-          sensorHeightPx: 100,
-          pixelSizeUm: 3,
-        );
-        const noPixel = OpticsSettings(
-          focalLengthMm: 500,
-          sensorWidthPx: 100,
-          sensorHeightPx: 100,
-        );
-        const noSensor = OpticsSettings(focalLengthMm: 500, pixelSizeUm: 3);
-        expect(noFocal.isConfigured, isFalse);
-        expect(noPixel.isConfigured, isFalse);
-        expect(noSensor.isConfigured, isFalse);
-      },
-    );
+    test('any zero input (except the 1.0 reducer default) leaves it unconfigured', () {
+      const noFocal = OpticsSettings(sensorWidthPx: 100, sensorHeightPx: 100, pixelSizeUm: 3);
+      const noPixel = OpticsSettings(focalLengthMm: 500, sensorWidthPx: 100, sensorHeightPx: 100);
+      const noSensor = OpticsSettings(focalLengthMm: 500, pixelSizeUm: 3);
+      expect(noFocal.isConfigured, isFalse);
+      expect(noPixel.isConfigured, isFalse);
+      expect(noSensor.isConfigured, isFalse);
+    });
   });
 
   group('OpticsSettingsNotifier', () {

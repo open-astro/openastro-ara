@@ -8,9 +8,8 @@ import '../../services/dso_catalog_service.dart';
 import '../../util/dedupe_catalog.dart';
 import '../saved_server_state.dart';
 
-final dsoCatalogServiceProvider = Provider<DsoCatalogService>(
-  (ref) => DsoCatalogService(),
-);
+final dsoCatalogServiceProvider =
+    Provider<DsoCatalogService>((ref) => DsoCatalogService());
 
 /// Best-effort mirror refresh: whenever a server becomes active, fetch the
 /// daemon-hosted DSO catalog into the local cache. The state is a bump
@@ -30,28 +29,24 @@ class DsoCatalogSyncNotifier extends Notifier<int> {
     if (server != null && !_refreshing) {
       _refreshing = true;
       final svc = ref.read(dsoCatalogServiceProvider);
-      unawaited(
-        svc.refreshFrom(server).then((fetched) {
-          _refreshing = false;
-          // ref.mounted guards the post-await write (server switch/dispose).
-          if (fetched != null && ref.mounted) state = state + 1;
-        }),
-      );
+      unawaited(svc.refreshFrom(server).then((fetched) {
+        _refreshing = false;
+        // ref.mounted guards the post-await write (server switch/dispose).
+        if (fetched != null && ref.mounted) state = state + 1;
+      }));
     }
     return 0;
   }
 }
 
-final dsoCatalogSyncProvider = NotifierProvider<DsoCatalogSyncNotifier, int>(
-  DsoCatalogSyncNotifier.new,
-);
+final dsoCatalogSyncProvider =
+    NotifierProvider<DsoCatalogSyncNotifier, int>(DsoCatalogSyncNotifier.new);
 
 /// Every bundled catalog row (~16k: OpenNGC, Sharpless, LDN, Barnard, vdB,
 /// Abell, Arp, WR), parsed once per session. The search and the Catalogs
 /// overlays read this — the full set, no magnitude cull, no server needed.
-final bundledCatalogProvider = FutureProvider<List<PlanningDso>>(
-  (ref) => loadBundledCatalogs(),
-);
+final bundledCatalogProvider =
+    FutureProvider<List<PlanningDso>>((ref) => loadBundledCatalogs());
 
 /// The planning catalog Tonight's Sky ranks: the bundled set culled the way
 /// the daemon's /dso-catalog was (mag ≤ 12 + magnitude-less nebulae), plus

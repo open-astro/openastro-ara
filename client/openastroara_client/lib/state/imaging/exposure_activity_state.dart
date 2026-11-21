@@ -16,13 +16,11 @@ import '../ws/ws_providers.dart';
 class ExposureActivity {
   final String frameId;
   final Duration exposure;
-
   /// Stamped on the CLIENT clock when the started event arrived — the two
   /// machines' clocks can disagree by seconds (the Pi syncs from the client,
   /// §31), and a countdown that starts at −4 s or jumps to done reads as a
   /// bug. The WS hop adds a few tens of ms at most.
   final DateTime startedAt;
-
   /// `light` / `flat` / `dark` / `bias` for a catalogued frame, `analysis`
   /// (an autofocus probe) or `plate-solve` for the unpersisted captures.
   final String kind;
@@ -49,10 +47,8 @@ class ExposureActivity {
   /// 0..1 of the exposure itself (the download that follows is open-ended).
   double progress(DateTime now) {
     if (exposure <= Duration.zero) return 1;
-    return (elapsed(now).inMilliseconds / exposure.inMilliseconds).clamp(
-      0.0,
-      1.0,
-    );
+    return (elapsed(now).inMilliseconds / exposure.inMilliseconds)
+        .clamp(0.0, 1.0);
   }
 
   /// The shutter should have closed: the daemon is reading the sensor out
@@ -63,14 +59,14 @@ class ExposureActivity {
   /// Human label for the kind, matching the client's existing frame-type
   /// vocabulary.
   String get kindLabel => switch (kind) {
-    'light' || 'snapshot' => 'Light',
-    'flat' => 'Flat',
-    'dark' || 'darkflat' => 'Dark',
-    'bias' => 'Bias',
-    'analysis' => 'Focus probe',
-    'plate-solve' => 'Plate solve',
-    _ => kind,
-  };
+        'light' || 'snapshot' => 'Light',
+        'flat' => 'Flat',
+        'dark' || 'darkflat' => 'Dark',
+        'bias' => 'Bias',
+        'analysis' => 'Focus probe',
+        'plate-solve' => 'Plate solve',
+        _ => kind,
+      };
 
   @override
   bool operator ==(Object other) =>
@@ -124,15 +120,13 @@ class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
           }
           if (p.frameId.isEmpty) return;
           final filter = p.filterName;
-          _begin(
-            ExposureActivity(
-              frameId: p.frameId,
-              exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
-              startedAt: clock.now(),
-              kind: p.kind.isNotEmpty ? p.kind : 'light',
-              filterName: filter != null && filter.isNotEmpty ? filter : null,
-            ),
-          );
+          _begin(ExposureActivity(
+            frameId: p.frameId,
+            exposure: Duration(milliseconds: (p.exposureSec * 1000).round()),
+            startedAt: clock.now(),
+            kind: p.kind.isNotEmpty ? p.kind : 'light',
+            filterName: filter != null && filter.isNotEmpty ? filter : null,
+          ));
         case WsEventTypes.cameraExposureComplete:
           final String id;
           try {
@@ -184,5 +178,4 @@ class ExposureActivityNotifier extends Notifier<ExposureActivity?> {
 
 final exposureActivityProvider =
     NotifierProvider<ExposureActivityNotifier, ExposureActivity?>(
-      ExposureActivityNotifier.new,
-    );
+        ExposureActivityNotifier.new);

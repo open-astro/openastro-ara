@@ -77,10 +77,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           // zone from the coordinates (worldwide polygon lookup, offline). The
           // NAME stays valid through DST-policy changes (the OS tz database
           // carries the rules); only boundary redraws would need a package bump.
-          _draft.timezone = tz_map.latLngToTimezoneString(
-            result.lat,
-            result.lng,
-          );
+          _draft.timezone = tz_map.latLngToTimezoneString(result.lat, result.lng);
           _tzUserEdited = false; // a fresh fix re-arms coordinate derivation
           _gpsFill++; // remount the fields so the fill is visible
           _gpsStatus = l.wizardBasicsGpsFilled(result.sourceLabel);
@@ -253,11 +250,8 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(
-                Icons.power_settings_new,
-                size: 20,
-                color: AraColors.accentInfo,
-              ),
+              const Icon(Icons.power_settings_new,
+                  size: 20, color: AraColors.accentInfo),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -273,15 +267,13 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           required: true,
           initialValue: _draft.profileName,
           hint: context.l10n.wizardBasicsProfileNameHint,
-          onChanged: (v) =>
-              _draft.profileName = v.trim().isEmpty ? null : v.trim(),
+          onChanged: (v) => _draft.profileName = v.trim().isEmpty ? null : v.trim(),
         ),
         WizardTextField(
           label: context.l10n.wizardBasicsSiteName,
           initialValue: _draft.siteName,
           hint: context.l10n.wizardBasicsSiteNameHint,
-          onChanged: (v) =>
-              _draft.siteName = v.trim().isEmpty ? null : v.trim(),
+          onChanged: (v) => _draft.siteName = v.trim().isEmpty ? null : v.trim(),
         ),
         WizardSectionHeader(context.l10n.wizardBasicsLocation),
         Padding(
@@ -293,20 +285,17 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
                 onPressed: _gpsBusy ? null : () => _fillFromGps(),
                 icon: _gpsBusy
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
+                        width: 16, height: 16,
+                        child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.gps_fixed, size: 18),
                 label: Text(context.l10n.wizardBasicsFillGps),
               ),
               const SizedBox(height: 4),
               Text(
-                _gpsStatus ?? context.l10n.wizardBasicsGpsTip,
-                style: const TextStyle(
-                  color: AraColors.textSecondary,
-                  fontSize: 12,
-                ),
+                _gpsStatus ??
+                    context.l10n.wizardBasicsGpsTip,
+                style:
+                    const TextStyle(color: AraColors.textSecondary, fontSize: 12),
               ),
             ],
           ),
@@ -316,9 +305,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           label: context.l10n.wizardBasicsLatitude,
           initialValue: _draft.latitudeDeg?.toString(),
           keyboardType: const TextInputType.numberWithOptions(
-            signed: true,
-            decimal: true,
-          ),
+              signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           helperText: context.l10n.wizardBasicsNorthPositive,
           onChanged: (v) => _setDouble(v, (d) {
@@ -331,9 +318,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           label: context.l10n.wizardBasicsLongitude,
           initialValue: _draft.longitudeDeg?.toString(),
           keyboardType: const TextInputType.numberWithOptions(
-            signed: true,
-            decimal: true,
-          ),
+              signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           helperText: context.l10n.wizardBasicsEastPositive,
           onChanged: (v) => _setDouble(v, (d) {
@@ -345,10 +330,8 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           key: ValueKey('wiz-alt-$_gpsFill'),
           label: context.l10n.wizardBasicsAltitude,
           initialValue: _draft.altitudeMeters?.toString(),
-          keyboardType: const TextInputType.numberWithOptions(
-            signed: true,
-            decimal: true,
-          ),
+          keyboardType:
+              const TextInputType.numberWithOptions(signed: true, decimal: true),
           inputFormatters: WizardInput.signedDecimal,
           onChanged: (v) => _setDouble(v, (d) => _draft.altitudeMeters = d),
         ),

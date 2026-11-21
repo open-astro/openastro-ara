@@ -67,21 +67,15 @@ Map<String, dynamic> inputCoordinatesFromDeg(double raDeg, double decDeg) {
   final dd = coordinates['DecDegrees'];
   final dm = coordinates['DecMinutes'];
   final ds = coordinates['DecSeconds'];
-  if (rh is! num ||
-      rm is! num ||
-      rs is! num ||
-      dd is! num ||
-      dm is! num ||
-      ds is! num) {
+  if (rh is! num || rm is! num || rs is! num || dd is! num || dm is! num || ds is! num) {
     return null;
   }
   final raHours = rh + rm / 60.0 + rs / 3600.0;
   final raDeg = _normalizeRaDeg(raHours * 15.0);
   // Both shapes read: NINA's signed DecDegrees (-5, flag true) and the
   // unsigned-plus-flag shape this client wrote before the sign fix.
-  final decMagnitude = (dd.abs() + dm / 60.0 + ds / 3600.0)
-      .clamp(0.0, 90.0)
-      .toDouble();
+  final decMagnitude =
+      (dd.abs() + dm / 60.0 + ds / 3600.0).clamp(0.0, 90.0).toDouble();
   final negative = coordinates['NegativeDec'] == true || dd < 0;
   final decDeg = negative ? -decMagnitude : decMagnitude;
   return (raDeg: raDeg, decDeg: decDeg);

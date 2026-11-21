@@ -62,8 +62,7 @@ class SwitchDeviceBody extends StatelessWidget {
       // range (reading). _LevelCard's Auto branch renders either fine, and
       // pairing them keeps the channel from splitting into a stray row plus an
       // orphan picker.
-      final mode =
-          kind == SwitchPortKind.level ||
+      final mode = kind == SwitchPortKind.level ||
               kind == SwitchPortKind.toggle ||
               kind == SwitchPortKind.indicator ||
               kind == SwitchPortKind.reading
@@ -142,7 +141,9 @@ class SwitchDeviceBody extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const _GroupHeader('Unavailable'),
-            _InsetGroup(children: [for (final p in stuck) _ValueRow(port: p)]),
+            _InsetGroup(
+              children: [for (final p in stuck) _ValueRow(port: p)],
+            ),
           ],
         ),
       if (sensors.isNotEmpty) _SensorStrip(sensors: sensors),
@@ -171,24 +172,24 @@ class _GroupHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(left: 2, bottom: AraSpace.s8),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // The header can be a device-supplied port name; a narrow settings
-        // pane must ellipsise it rather than overflow.
-        Flexible(
-          child: Text(
-            text.toUpperCase(),
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: AraText.section,
-          ),
+        padding: const EdgeInsets.only(left: 2, bottom: AraSpace.s8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // The header can be a device-supplied port name; a narrow settings
+            // pane must ellipsise it rather than overflow.
+            Flexible(
+              child: Text(
+                text.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AraText.section,
+              ),
+            ),
+            if (helpKey != null) HelpIcon(helpKey: helpKey!),
+          ],
         ),
-        if (helpKey != null) HelpIcon(helpKey: helpKey!),
-      ],
-    ),
-  );
+      );
 }
 
 /// Rounded inset container that holds a run of rows, separated by hairlines.
@@ -334,52 +335,47 @@ class _SensorStrip extends StatelessWidget {
           runSpacing: AraSpace.s8,
           children: [
             for (final s in sensors)
-              Builder(
-                builder: (context) {
-                  final on = s.value >= 0.5;
-                  final color = on
-                      ? AraColors.accentConnected
-                      : AraColors.textDisabled;
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AraSpace.s12,
-                      vertical: 7,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AraColors.bgPanelAlt,
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: AraColors.border, width: 0.5),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Container(
-                          width: 7,
-                          height: 7,
-                          decoration: BoxDecoration(
-                            color: color,
-                            shape: BoxShape.circle,
-                          ),
+              Builder(builder: (context) {
+                final on = s.value >= 0.5;
+                final color =
+                    on ? AraColors.accentConnected : AraColors.textDisabled;
+                return Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AraSpace.s12,
+                    vertical: 7,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AraColors.bgPanelAlt,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AraColors.border, width: 0.5),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 7,
+                        height: 7,
+                        decoration: BoxDecoration(
+                          color: color,
+                          shape: BoxShape.circle,
                         ),
-                        const SizedBox(width: AraSpace.s8),
-                        Flexible(
-                          child: Text(
-                            s.label,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: AraText.body,
-                          ),
+                      ),
+                      const SizedBox(width: AraSpace.s8),
+                      Flexible(
+                        child: Text(
+                          s.label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AraText.body,
                         ),
-                        const SizedBox(width: 6),
-                        Text(
-                          on ? 'Attached' : 'Absent',
-                          style: AraText.caption.copyWith(color: color),
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(on ? 'Attached' : 'Absent',
+                          style: AraText.caption.copyWith(color: color)),
+                    ],
+                  ),
+                );
+              }),
           ],
         ),
       ],
@@ -430,7 +426,10 @@ class _ToggleRow extends StatelessWidget {
           children: [
             Expanded(child: Text(port.label, style: AraText.body)),
             if (!port.canWrite)
-              Text(on ? 'Always on' : 'Off', style: AraText.caption)
+              Text(
+                on ? 'Always on' : 'Off',
+                style: AraText.caption,
+              )
             else
               Transform.scale(
                 scale: 0.8,
@@ -560,9 +559,8 @@ class _LevelCardState extends State<_LevelCard> {
     final mode = widget.mode;
     final title = port?.label ?? mode?.label ?? '';
     final unit = port == null ? '' : switchPortUnit(port);
-    final value = port == null
-        ? 0.0
-        : (_dragValue ?? port.value).clamp(port.min, port.max);
+    final value =
+        port == null ? 0.0 : (_dragValue ?? port.value).clamp(port.min, port.max);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -617,12 +615,10 @@ class _LevelCardState extends State<_LevelCard> {
                         activeTrackColor: AraColors.accentInfo,
                         inactiveTrackColor: AraColors.border,
                         thumbColor: AraColors.textPrimary,
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 12,
-                        ),
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 7,
-                        ),
+                        overlayShape:
+                            const RoundSliderOverlayShape(overlayRadius: 12),
+                        thumbShape:
+                            const RoundSliderThumbShape(enabledThumbRadius: 7),
                       ),
                       child: AdaptiveSlider(
                         min: port.min,
@@ -694,7 +690,10 @@ class _ModePicker extends StatelessWidget {
         for (var i = 0; i < labels.length; i++)
           base + i: Padding(
             padding: const EdgeInsets.symmetric(horizontal: AraSpace.s8),
-            child: Text(labels[i], style: AraText.body.copyWith(fontSize: 12)),
+            child: Text(
+              labels[i],
+              style: AraText.body.copyWith(fontSize: 12),
+            ),
           ),
       },
       onValueChanged: (v) {

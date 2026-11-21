@@ -50,9 +50,7 @@ class SimpleCalibrationScreen extends SimpleScreen {
             .read(simpleMessagesProvider.notifier)
             .show(
               failed ? SimpleMessageKind.error : SimpleMessageKind.result,
-              failed
-                  ? l.calibrationGuideBuildFailed(name)
-                  : l.calibrationGuideBuilt(name),
+              failed ? l.calibrationGuideBuildFailed(name) : l.calibrationGuideBuilt(name),
               detail: failed ? next[a]!.error : null,
               origin: SimpleStatusOrigin.calibration,
             );

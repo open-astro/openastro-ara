@@ -24,49 +24,43 @@ const int _veryBrightSkyBortle = 6;
 /// Emission character from the catalog type — OpenNGC codes (HII/EmN/PN/SNR/
 /// G…/OCl/GCl/RfN/Neb/Cl+N) plus the starter catalog's plain names.
 EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
-  'HII' || 'EmN' || 'PN' || 'SNR' => EmissionClass.emissionLine,
-  'G' ||
-  'GPair' ||
-  'GTrpl' ||
-  'GGroup' ||
-  'OCl' ||
-  'GCl' ||
-  'RfN' => EmissionClass.continuum,
-  'galaxy' || 'cluster' => EmissionClass.continuum,
-  'Neb' || 'Cl+N' || 'nebula' => EmissionClass.mixed,
-  _ => EmissionClass.unknown,
-};
+      'HII' || 'EmN' || 'PN' || 'SNR' => EmissionClass.emissionLine,
+      'G' ||
+      'GPair' ||
+      'GTrpl' ||
+      'GGroup' ||
+      'OCl' ||
+      'GCl' ||
+      'RfN' =>
+        EmissionClass.continuum,
+      'galaxy' || 'cluster' => EmissionClass.continuum,
+      'Neb' || 'Cl+N' || 'nebula' => EmissionClass.mixed,
+      _ => EmissionClass.unknown,
+    };
 
 /// The recommendation + one-line reason, or null when there is nothing honest
 /// to say (empty filter set, unknown emission character).
 (TonightFilterAdvice, String)? adviseFilter(
-  EmissionClass emission,
-  FilterSetSettings filterSet,
-  SkyState sky,
-) {
+    EmissionClass emission, FilterSetSettings filterSet, SkyState sky) {
   final bortleClass = sky.bortle;
   final filters = filterSet.filters;
   if (filters.isEmpty || emission == EmissionClass.unknown) return null;
 
   final monoNb = filters
-      .where(
-        (f) =>
-            f.kind == FilterKind.ha ||
-            f.kind == FilterKind.oiii ||
-            f.kind == FilterKind.sii,
-      )
+      .where((f) =>
+          f.kind == FilterKind.ha ||
+          f.kind == FilterKind.oiii ||
+          f.kind == FilterKind.sii)
       .toList();
   final duo = filters
       .where((f) => f.kind == FilterKind.duo || f.kind == FilterKind.tri)
       .toList();
-  final hasBroadband = filters.any(
-    (f) =>
-        f.kind == FilterKind.l ||
-        f.kind == FilterKind.r ||
-        f.kind == FilterKind.g ||
-        f.kind == FilterKind.b ||
-        f.kind == FilterKind.osc,
-  );
+  final hasBroadband = filters.any((f) =>
+      f.kind == FilterKind.l ||
+      f.kind == FilterKind.r ||
+      f.kind == FilterKind.g ||
+      f.kind == FilterKind.b ||
+      f.kind == FilterKind.osc);
 
   switch (emission) {
     case EmissionClass.emissionLine:
@@ -75,7 +69,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           TonightFilterAdvice.narrowband,
           'Emission-line target — narrowband (${_filterNames(monoNb)}) sees '
               '${_skyRatio(monoNb)}× less sky glow than broadband, efficient '
-              'even under a ${sky.label} sky.',
+              'even under a ${sky.label} sky.'
         );
       }
       if (duo.isNotEmpty) {
@@ -83,18 +77,18 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           TonightFilterAdvice.duoband,
           'Emission-line target — OSC + ${_filterNames(duo)} cuts the sky '
               'glow ~${_skyRatio(duo)}× per Bayer channel vs unfiltered '
-              'broadband.',
+              'broadband.'
         );
       }
       return (
         TonightFilterAdvice.broadband,
         bortleClass >= brightSkyBortle
             ? 'Emission-line target with broadband-only filters under a '
-                  '${sky.label} sky — expect many hours of integration; '
-                  'a dual-band filter would cut this dramatically.'
+                '${sky.label} sky — expect many hours of integration; '
+                'a dual-band filter would cut this dramatically.'
             : 'Emission-line target with broadband-only filters — workable '
-                  'under your dark sky, but a narrowband/dual-band filter would '
-                  'still cut the integration needed.',
+                'under your dark sky, but a narrowband/dual-band filter would '
+                'still cut the integration needed.'
       );
 
     case EmissionClass.continuum:
@@ -103,8 +97,7 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           'it; shoot '
           '${hasBroadband ? _filterNames(_broadbandOf(filterSet)) : 'broadband'}';
       if (bortleClass >= _veryBrightSkyBortle) {
-        reason +=
-            '. Faint under a ${sky.label} sky — plan generous '
+        reason += '. Faint under a ${sky.label} sky — plan generous '
             'integration or a darker site';
       }
       return (TonightFilterAdvice.broadband, '$reason.');
@@ -115,20 +108,20 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
           TonightFilterAdvice.narrowband,
           'Mixed emission/continuum target under a ${sky.label} sky — '
               'lead with narrowband (${_filterNames(monoNb)}) for the '
-              'emission structure.',
+              'emission structure.'
         );
       }
       if (bortleClass >= brightSkyBortle && duo.isNotEmpty) {
         return (
           TonightFilterAdvice.duoband,
           'Mixed emission/continuum target under a ${sky.label} sky — '
-              'OSC + ${_filterNames(duo)} favours the emission structure.',
+              'OSC + ${_filterNames(duo)} favours the emission structure.'
         );
       }
       return (
         TonightFilterAdvice.broadband,
         'Mixed emission/continuum target — broadband captures both components'
-            '${monoNb.isNotEmpty || duo.isNotEmpty ? '; add narrowband subs for the emission detail' : ''}.',
+            '${monoNb.isNotEmpty || duo.isNotEmpty ? '; add narrowband subs for the emission detail' : ''}.'
       );
 
     case EmissionClass.unknown:
@@ -139,37 +132,29 @@ EmissionClass classifyEmission(String? type) => switch (type?.trim()) {
 /// The user's filter that best represents an approach — what the Optimal-Sub
 /// figure is computed for. Null when the set has no filter of that approach.
 PlanningFilter? representativeFilter(
-  FilterSetSettings filterSet,
-  TonightFilterAdvice approach,
-) {
+    FilterSetSettings filterSet, TonightFilterAdvice approach) {
   final filters = filterSet.filters;
   if (filters.isEmpty) return null;
   PlanningFilter? first(bool Function(PlanningFilter) test) =>
       filters.where(test).firstOrNull;
   return switch (approach) {
-    TonightFilterAdvice.narrowband =>
-      first((f) => f.kind == FilterKind.ha) ??
-          first((f) => f.kind == FilterKind.oiii || f.kind == FilterKind.sii),
-    TonightFilterAdvice.duoband =>
-      first((f) => f.kind == FilterKind.duo) ??
-          first((f) => f.kind == FilterKind.tri),
-    TonightFilterAdvice.broadband =>
-      first((f) => f.kind == FilterKind.l) ??
-          first((f) => f.kind == FilterKind.osc) ??
-          first(
-            (f) =>
-                f.kind == FilterKind.r ||
-                f.kind == FilterKind.g ||
-                f.kind == FilterKind.b,
-          ),
+    TonightFilterAdvice.narrowband => first((f) => f.kind == FilterKind.ha) ??
+        first((f) => f.kind == FilterKind.oiii || f.kind == FilterKind.sii),
+    TonightFilterAdvice.duoband => first((f) => f.kind == FilterKind.duo) ??
+        first((f) => f.kind == FilterKind.tri),
+    TonightFilterAdvice.broadband => first((f) => f.kind == FilterKind.l) ??
+        first((f) => f.kind == FilterKind.osc) ??
+        first((f) =>
+            f.kind == FilterKind.r ||
+            f.kind == FilterKind.g ||
+            f.kind == FilterKind.b),
   };
 }
 
 /// A filter entry's effective passband: its own bandwidth, or its kind's
 /// default.
-double effectiveBandwidthNm(PlanningFilter filter) => filter.bandwidthNm > 0
-    ? filter.bandwidthNm
-    : filter.kind.defaultBandwidthNm;
+double effectiveBandwidthNm(PlanningFilter filter) =>
+    filter.bandwidthNm > 0 ? filter.bandwidthNm : filter.kind.defaultBandwidthNm;
 
 String _skyRatio(List<PlanningFilter> nb) {
   final narrowest = nb.map(effectiveBandwidthNm).reduce(math.min);
@@ -178,14 +163,12 @@ String _skyRatio(List<PlanningFilter> nb) {
 }
 
 List<PlanningFilter> _broadbandOf(FilterSetSettings set) => set.filters
-    .where(
-      (f) =>
-          f.kind == FilterKind.l ||
-          f.kind == FilterKind.r ||
-          f.kind == FilterKind.g ||
-          f.kind == FilterKind.b ||
-          f.kind == FilterKind.osc,
-    )
+    .where((f) =>
+        f.kind == FilterKind.l ||
+        f.kind == FilterKind.r ||
+        f.kind == FilterKind.g ||
+        f.kind == FilterKind.b ||
+        f.kind == FilterKind.osc)
     .toList();
 
 String _filterNames(List<PlanningFilter> filters) =>

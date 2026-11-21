@@ -8,34 +8,17 @@ import 'package:openastroara/widgets/ws_connection_indicator.dart';
 void main() {
   group('describeWsConnection', () {
     test('maps each link state to a status level + label', () {
-      expect(describeWsConnection(WsConnectionState.connecting), (
-        StatusLevel.info,
-        'Server connecting…',
-      ));
-      expect(describeWsConnection(WsConnectionState.connected), (
-        StatusLevel.connected,
-        'Server connected',
-      ));
-      expect(describeWsConnection(WsConnectionState.reconnecting), (
-        StatusLevel.changing,
-        'Server reconnecting…',
-      )); // DESIGN.md status rule: on its way (blue)
-      expect(describeWsConnection(WsConnectionState.disconnected), (
-        StatusLevel.disconnected,
-        'Server disconnected',
-      ));
+      expect(describeWsConnection(WsConnectionState.connecting), (StatusLevel.info, 'Server connecting…'));
+      expect(describeWsConnection(WsConnectionState.connected), (StatusLevel.connected, 'Server connected'));
+      expect(describeWsConnection(WsConnectionState.reconnecting), (StatusLevel.changing, 'Server reconnecting…')); // DESIGN.md status rule: on its way (blue)
+      expect(describeWsConnection(WsConnectionState.disconnected), (StatusLevel.disconnected, 'Server disconnected'));
     });
   });
 
-  testWidgets(
-    'renders Server disconnected by default (no server / provider loading)',
-    (tester) async {
-      await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: Scaffold(body: WsConnectionIndicator())),
-        ),
-      );
-      expect(find.text('Server disconnected'), findsOneWidget);
-    },
-  );
+  testWidgets('renders Server disconnected by default (no server / provider loading)', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(home: Scaffold(body: WsConnectionIndicator())),
+    ));
+    expect(find.text('Server disconnected'), findsOneWidget);
+  });
 }

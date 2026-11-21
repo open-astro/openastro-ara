@@ -18,35 +18,19 @@ class _Daemon implements HttpClientAdapter {
   void close({bool force = false}) {}
 
   @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? requestStream,
-    Future<void>? cancelFuture,
-  ) async {
+  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
     seen.add('${options.method} ${options.path}');
-    return ResponseBody.fromString(
-      jsonEncode(body),
-      status,
-      headers: {
-        Headers.contentTypeHeader: [Headers.jsonContentType],
-      },
-    );
+    return ResponseBody.fromString(jsonEncode(body), status,
+        headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
   }
 }
 
-PolarAlignerApi _api(_Daemon d) => PolarAlignerApi(
-  const AraServer(hostname: 'x', port: 80),
-  dio: Dio()..httpClientAdapter = d,
-);
+PolarAlignerApi _api(_Daemon d) =>
+    PolarAlignerApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
 
 void main() {
   test('PolarAlignerApi reads the device and sends the four commands to their routes', () async {
-    final d = _Daemon(200, {
-      'present': true,
-      'name': 'Polar base',
-      'drivable': true,
-      'moving': false,
-    });
+    final d = _Daemon(200, {'present': true, 'name': 'Polar base', 'drivable': true, 'moving': false});
     final api = _api(d);
     final device = await api.get();
     expect((device!.present, device.name), (true, 'Polar base'));
@@ -65,11 +49,7 @@ void main() {
 
   test('PolarAlignerApi: a daemon without the route reads as none; a refusal is thrown for the panel to word', () async {
     expect(await _api(_Daemon(404)).get(), isNull);
-    expect(
-      () =>
-          _api(_Daemon(409, {'detail': 'the Polar Aligner is not stopped'}))
-              .resumeInRoutine(),
-      throwsA(isA<DioException>()),
-    );
+    expect(() => _api(_Daemon(409, {'detail': 'the Polar Aligner is not stopped'})).resumeInRoutine(),
+        throwsA(isA<DioException>()));
   });
 }

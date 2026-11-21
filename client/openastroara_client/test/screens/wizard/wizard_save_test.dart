@@ -789,8 +789,9 @@ void main() {
     );
 
     test('wizard stock Storage values equal the daemon defaults', () {
-      final src = File('../../OpenAstroAra.Server/Services/ProfileSections.cs')
-          .readAsStringSync();
+      final src = File(
+        '../../OpenAstroAra.Server/Services/ProfileSections.cs',
+      ).readAsStringSync();
       expect(src, contains('SaveDirectory: "$wizardStockSaveDirectory"'));
       expect(
         src,

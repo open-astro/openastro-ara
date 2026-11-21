@@ -111,10 +111,7 @@ class StatsDashboardScreen extends ConsumerWidget {
                     const CalendarHeatmap(),
                   ],
                   const SizedBox(height: 24),
-                  if (!simple) ...[
-                    const TargetsSection(),
-                    const SizedBox(height: 24),
-                  ],
+                  if (!simple) ...[const TargetsSection(), const SizedBox(height: 24)],
                   const BestFramesSection(),
                   const SizedBox(height: 24),
                   AchievementsSection(dashboard: simple),

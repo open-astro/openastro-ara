@@ -46,29 +46,29 @@ class _FakeSwitchClient implements SwitchClient {
 }
 
 SwitchDevice _fanDevice({double value = 1.0}) => SwitchDevice(
-  deviceId: 'switch-5',
-  alpacaDeviceNumber: 5,
-  name: 'Any Box',
-  connectionState: SwitchConnectionState.connected,
-  ports: [
-    SwitchPort(
-      id: 0,
-      name: 'DewHeater',
-      value: 0,
-      min: 0,
-      max: 1,
-      canWrite: true,
-    ),
-    SwitchPort(
-      id: 1,
-      name: 'Fan',
-      value: value,
-      min: 0,
-      max: 1,
-      canWrite: true,
-    ),
-  ],
-);
+      deviceId: 'switch-5',
+      alpacaDeviceNumber: 5,
+      name: 'Any Box',
+      connectionState: SwitchConnectionState.connected,
+      ports: [
+        SwitchPort(
+          id: 0,
+          name: 'DewHeater',
+          value: 0,
+          min: 0,
+          max: 1,
+          canWrite: true,
+        ),
+        SwitchPort(
+          id: 1,
+          name: 'Fan',
+          value: value,
+          min: 0,
+          max: 1,
+          canWrite: true,
+        ),
+      ],
+    );
 
 Future<_FakeSwitchClient> _pump(
   WidgetTester tester, {
@@ -78,19 +78,18 @@ Future<_FakeSwitchClient> _pump(
   CoolingFan? fan = const CoolingFan(deviceId: 'switch-5', portId: 1),
 }) async {
   final fake = switchClient ?? _FakeSwitchClient(switches ?? const []);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        switchApiProvider.overrideWithValue(fake),
-        coolingFanProvider.overrideWith(() => _FixedFan(fan)),
-        switchListProvider.overrideWith(() => _SwitchListNotifierForTest(fake)),
-        cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
-      ],
-      child: const MaterialApp(
-        home: Scaffold(body: SingleChildScrollView(child: FanSwitchRow())),
-      ),
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      switchApiProvider.overrideWithValue(fake),
+      coolingFanProvider.overrideWith(() => _FixedFan(fan)),
+      switchListProvider.overrideWith(
+          () => _SwitchListNotifierForTest(fake)),
+      cameraStatusProvider.overrideWith(() => _FixedCameraNotifier(camera)),
+    ],
+    child: const MaterialApp(
+      home: Scaffold(body: SingleChildScrollView(child: FanSwitchRow())),
     ),
-  );
+  ));
   await tester.pumpAndSettle();
   return fake;
 }
@@ -103,30 +102,21 @@ void main() {
   });
 
   testWidgets(
-    'ignores a Fan port that is not the designated one (same scoping as '
-    'the cooler auto-sync)',
-    (tester) async {
-      final relayBox = SwitchDevice(
-        deviceId: 'switch-9',
-        alpacaDeviceNumber: 9,
-        name: 'ToupTek Thermal Switch',
-        connectionState: SwitchConnectionState.connected,
-        ports: [
-          SwitchPort(
-            id: 0,
-            name: 'Fan',
-            value: 1,
-            min: 0,
-            max: 1,
-            canWrite: true,
-          ),
-        ],
-      );
-      await _pump(tester, switches: [relayBox]);
-      expect(find.byType(Switch), findsNothing);
-      expect(find.text('Cooling fan'), findsNothing);
-    },
-  );
+      'ignores a Fan port that is not the designated one (same scoping as '
+      'the cooler auto-sync)', (tester) async {
+    final relayBox = SwitchDevice(
+      deviceId: 'switch-9',
+      alpacaDeviceNumber: 9,
+      name: 'ToupTek Thermal Switch',
+      connectionState: SwitchConnectionState.connected,
+      ports: [
+        SwitchPort(id: 0, name: 'Fan', value: 1, min: 0, max: 1, canWrite: true),
+      ],
+    );
+    await _pump(tester, switches: [relayBox]);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
+  });
 
   testWidgets('shows the fan switch from the designated port', (tester) async {
     await _pump(tester, switches: [_fanDevice(value: 1.0)]);
@@ -135,14 +125,12 @@ void main() {
     expect(sw.value, isTrue);
   });
 
-  testWidgets(
-    'a Thermal Switch with a Fan port shows nothing when none is designated',
-    (tester) async {
-      await _pump(tester, switches: [_fanDevice()], fan: CoolingFan.none);
-      expect(find.byType(Switch), findsNothing);
-      expect(find.text('Cooling fan'), findsNothing);
-    },
-  );
+  testWidgets('a Thermal Switch with a Fan port shows nothing when none is designated',
+      (tester) async {
+    await _pump(tester, switches: [_fanDevice()], fan: CoolingFan.none);
+    expect(find.byType(Switch), findsNothing);
+    expect(find.text('Cooling fan'), findsNothing);
+  });
 
   testWidgets('a fan designation not loaded shows no fan switch', (
     tester,
@@ -159,9 +147,8 @@ void main() {
     expect(fake.calls, contains('setValue:switch-5:1:0.0'));
   });
 
-  testWidgets('a failed fan write surfaces a snackbar (no silent swallow)', (
-    tester,
-  ) async {
+  testWidgets('a failed fan write surfaces a snackbar (no silent swallow)',
+      (tester) async {
     final sw = _FakeSwitchClient([_fanDevice(value: 1.0)], throwOnSet: true);
     await _pump(tester, switches: sw.devices, switchClient: sw);
     await tester.tap(find.byType(Switch));
@@ -181,9 +168,8 @@ void main() {
     expect(fake.calls, contains('setValue:switch-5:1:0.0'));
   });
 
-  testWidgets("the daemon's fan-off refusal (409 detail) is shown verbatim", (
-    tester,
-  ) async {
+  testWidgets("the daemon's fan-off refusal (409 detail) is shown verbatim",
+      (tester) async {
     final sw = _FakeSwitchClient(
       [_fanDevice(value: 1.0)],
       throwOnSet: true,
@@ -193,20 +179,15 @@ void main() {
           requestOptions: RequestOptions(path: '/switch'),
           statusCode: 409,
           data: const {
-            'detail':
-                'Turn the cooler off before stopping the fan — cooling '
-                'with the fan off can damage the camera.',
+            'detail': 'Turn the cooler off before stopping the fan — cooling '
+                'with the fan off can damage the camera.'
           },
         ),
         type: DioExceptionType.badResponse,
       ),
     );
-    await _pump(
-      tester,
-      switches: sw.devices,
-      switchClient: sw,
-      camera: FakeCameraStatus(coolerOn: true),
-    );
+    await _pump(tester, switches: sw.devices, switchClient: sw,
+        camera: FakeCameraStatus(coolerOn: true));
     await tester.tap(find.byType(Switch));
     await tester.pumpAndSettle();
     expect(find.textContaining('damage the camera'), findsOneWidget);
@@ -216,16 +197,16 @@ void main() {
 // Minimal camera fake — a connected camera with the given cooler state.
 class FakeCameraStatus extends CameraStatus {
   FakeCameraStatus({required super.coolerOn})
-    : super(
-        deviceId: 'cam-2',
-        name: 'ATR2600M',
-        connectionState: EquipmentConnectionState.connected,
-        capabilities: null,
-        runtimeState: 'idle',
-        ccdTemperature: 17.9,
-        coolerPowerPct: 0,
-        exposureProgressPct: null,
-      );
+      : super(
+          deviceId: 'cam-2',
+          name: 'ATR2600M',
+          connectionState: EquipmentConnectionState.connected,
+          capabilities: null,
+          runtimeState: 'idle',
+          ccdTemperature: 17.9,
+          coolerPowerPct: 0,
+          exposureProgressPct: null,
+        );
 }
 
 class _FixedCameraNotifier extends CameraStatusNotifier {

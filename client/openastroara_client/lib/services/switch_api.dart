@@ -56,8 +56,7 @@ class SwitchApi implements SwitchClient {
   final Dio _dio;
 
   SwitchApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
@@ -65,8 +64,7 @@ class SwitchApi implements SwitchClient {
           // POSTs on the control path, so a server that accepts the socket but
           // stalls reading the body must not hang the call indefinitely.
           sendTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   static const String _base = '/api/v1/equipment/switch';
 

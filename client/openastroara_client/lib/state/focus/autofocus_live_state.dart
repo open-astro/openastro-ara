@@ -103,23 +103,18 @@ class AutofocusLive {
 /// already complete on this session's first snapshot. Exposed for unit tests.
 AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) {
   final staleFromEarlierSession = current.hydrated
-      ? current.staleRunStartedUtc != null &&
-            _runIdentity(run) == current.staleRunStartedUtc
+      ? current.staleRunStartedUtc != null && _runIdentity(run) == current.staleRunStartedUtc
       : run.isComplete;
   return current.copyWith(
     run: run,
-    focusedThisSession:
-        current.focusedThisSession ||
-        (run.isComplete && !staleFromEarlierSession),
+    focusedThisSession: current.focusedThisSession || (run.isComplete && !staleFromEarlierSession),
     hydrated: true,
     // A new run (another start time) ends the manual mark of the one before;
     // the first snapshot only learns which run is the latest.
     manualMarkSinceRun:
         current.manualMarkSinceRun &&
         (!current.hydrated || _runIdentity(run) == _runIdentity(current.run)),
-    staleRunStartedUtc: !current.hydrated && run.isComplete
-        ? _runIdentity(run)
-        : null,
+    staleRunStartedUtc: !current.hydrated && run.isComplete ? _runIdentity(run) : null,
     // A new run drops the previous run's picture until its own arrives.
     clearFrame: run.isRunning && !run.hasFrame,
   );
@@ -127,8 +122,7 @@ AutofocusLive applyRunSnapshot(AutofocusLive current, AutofocusRun run) {
 
 /// A run's identity across snapshots: its start time (a run with none, which
 /// Ara does not send for a finished run, still matches itself).
-DateTime _runIdentity(AutofocusRun run) =>
-    run.startedUtc ?? run.completedUtc ?? DateTime.utc(0);
+DateTime _runIdentity(AutofocusRun run) => run.startedUtc ?? run.completedUtc ?? DateTime.utc(0);
 
 /// Drives the main-telescope card. The daemon's record is the source of truth:
 /// every `autofocus.*` event is a change notification that triggers a REST
@@ -175,10 +169,7 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
     // run clears the previous one so a refractor's run never shows last
     // night's SCT verdict.
     if (event.type == AutofocusWsEvents.collimationVerdict) {
-      final verdict = CollimationVerdict.fromPayload(
-        event.payload,
-        at: event.ts,
-      );
+      final verdict = CollimationVerdict.fromPayload(event.payload, at: event.ts);
       if (verdict != null) state = state.copyWith(collimation: verdict);
       return;
     }
@@ -267,5 +258,4 @@ class AutofocusLiveNotifier extends Notifier<AutofocusLive> {
 
 final autofocusLiveProvider =
     NotifierProvider<AutofocusLiveNotifier, AutofocusLive>(
-      AutofocusLiveNotifier.new,
-    );
+        AutofocusLiveNotifier.new);

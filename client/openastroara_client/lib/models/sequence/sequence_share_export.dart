@@ -23,8 +23,7 @@ class SequenceShareExport {
     final rawManifest = json['manifest'];
     if (rawManifest is! Map || rawManifest.isEmpty) {
       throw const FormatException(
-        'Export response did not include a sequence-share manifest.',
-      );
+          'Export response did not include a sequence-share manifest.');
     }
     return SequenceShareExport(
       sequenceName: json['sequence_name']?.toString() ?? '',

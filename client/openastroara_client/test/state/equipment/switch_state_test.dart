@@ -43,12 +43,12 @@ class _FakeSwitchApi implements SwitchClient {
   Completer<void>? getAllGate;
 
   SwitchDevice _dev(int n, SwitchConnectionState s) => SwitchDevice(
-    deviceId: 'sw-$n',
-    alpacaDeviceNumber: n,
-    name: 'Switch $n',
-    connectionState: s,
-    ports: const [],
-  );
+        deviceId: 'sw-$n',
+        alpacaDeviceNumber: n,
+        name: 'Switch $n',
+        connectionState: s,
+        ports: const [],
+      );
 
   @override
   Future<List<SwitchDevice>> getAll() async {
@@ -67,15 +67,12 @@ class _FakeSwitchApi implements SwitchClient {
     calls.add('connect:${device.alpacaDeviceNumber}');
     if (connectGate != null) await connectGate!.future;
     if (throwOnConnect) throw StateError('connect failed');
-    devices = [
-      ...devices,
-      _dev(device.alpacaDeviceNumber, SwitchConnectionState.connected),
-    ];
+    devices = [...devices, _dev(device.alpacaDeviceNumber, SwitchConnectionState.connected)];
   }
 
   @override
-  Future<void> reconnect() async => calls.add("reconnect");
 
+  Future<void> reconnect() async => calls.add("reconnect");
   /// Thrown by [reconnectDevice] when set (an older daemon answers 404).
   Object? reconnectDeviceError;
 
@@ -85,15 +82,14 @@ class _FakeSwitchApi implements SwitchClient {
     if (reconnectDeviceError != null) throw reconnectDeviceError!;
   }
 
+
   @override
   Future<void> disconnect(String deviceId) async {
     calls.add('disconnect:$deviceId');
     devices = devices
-        .map(
-          (d) => d.deviceId == deviceId
-              ? _dev(d.alpacaDeviceNumber, SwitchConnectionState.disconnected)
-              : d,
-        )
+        .map((d) => d.deviceId == deviceId
+            ? _dev(d.alpacaDeviceNumber, SwitchConnectionState.disconnected)
+            : d)
         .toList();
   }
 
@@ -134,22 +130,19 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
 
 DioException _notFound() => DioException(
   requestOptions: RequestOptions(path: '/x'),
-  response: Response(
-    requestOptions: RequestOptions(path: '/x'),
-    statusCode: 404,
-  ),
+  response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: 404),
 );
 
 DiscoveredDevice _discovered(int n) => DiscoveredDevice(
-  uniqueId: 'sw-$n',
-  name: 'Switch $n',
-  deviceType: EquipmentDeviceType.switchDevice,
-  hostName: 'h',
-  ipAddress: '1.2.3.4',
-  ipPort: 11111,
-  alpacaDeviceNumber: n,
-  useHttps: false,
-);
+      uniqueId: 'sw-$n',
+      name: 'Switch $n',
+      deviceType: EquipmentDeviceType.switchDevice,
+      hostName: 'h',
+      ipAddress: '1.2.3.4',
+      ipPort: 11111,
+      alpacaDeviceNumber: n,
+      useHttps: false,
+    );
 
 ProviderContainer _container(
   List<AraServer> servers,
@@ -157,19 +150,13 @@ ProviderContainer _container(
   EquipmentDiscoveryApi? discovery,
   Stream<WsEvent>? events,
 }) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      switchApiFactoryProvider.overrideWithValue((_) => api),
-      if (discovery != null)
-        equipmentDiscoveryApiFactoryProvider.overrideWithValue(
-          (_) => discovery,
-        ),
-      if (events != null) wsEventsProvider.overrideWith((ref) => events),
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    switchApiFactoryProvider.overrideWithValue((_) => api),
+    if (discovery != null)
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => discovery),
+    if (events != null) wsEventsProvider.overrideWith((ref) => events),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -193,14 +180,7 @@ void main() {
           name: 'PowerBox',
           connectionState: SwitchConnectionState.connected,
           ports: const [
-            SwitchPort(
-              id: 0,
-              name: 'Dew',
-              value: 1,
-              min: 0,
-              max: 1,
-              canWrite: true,
-            ),
+            SwitchPort(id: 0, name: 'Dew', value: 1, min: 0, max: 1, canWrite: true),
           ],
         ),
       ];
@@ -223,61 +203,41 @@ void main() {
 
     expect(api.calls, containsAllInOrder(['connect:0', 'connect:1']));
     final list = c.read(switchListProvider).value!;
-    expect(list.map((d) => d.alpacaDeviceNumber), [
-      0,
-      1,
-    ], reason: 'both switches present after connecting two');
+    expect(list.map((d) => d.alpacaDeviceNumber), [0, 1],
+        reason: 'both switches present after connecting two');
   });
 
-  test(
-    'reconnectDevice uses the per-switch route when the daemon has it',
-    () async {
-      final api = _FakeSwitchApi();
-      final discovery = _FakeDiscoveryApi([_discovered(0)]);
-      final c = _container(const [server], api, discovery: discovery);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
+  test('reconnectDevice uses the per-switch route when the daemon has it', () async {
+    final api = _FakeSwitchApi();
+    final discovery = _FakeDiscoveryApi([_discovered(0)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
 
-      expect(
-        await c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
-        isTrue,
-      );
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
 
-      expect(api.calls, ['reconnectDevice:sw-0']);
-      expect(discovery.scans, 0, reason: 'no discovery when the route exists');
-    },
-  );
+    expect(api.calls, ['reconnectDevice:sw-0']);
+    expect(discovery.scans, 0, reason: 'no discovery when the route exists');
+  });
 
-  test('reconnectDevice falls back to discovery + /connect on a 404 (older daemon)', () async {
+  test('reconnectDevice falls back to discovery + /connect on a 404 (older daemon)',
+      () async {
     final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
     final discovery = _FakeDiscoveryApi([_discovered(3), _discovered(0)]);
     final c = _container(const [server], api, discovery: discovery);
     await c.read(savedServersProvider.future);
     await c.read(switchListProvider.future);
 
-    expect(
-      await c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
-      isTrue,
-    );
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
 
-    expect(
-      api.calls,
-      ['reconnectDevice:sw-0', 'connect:0'],
-      reason: 'the discovered device with the matching unique id is connected',
-    );
-    expect(
-      discovery.scans,
-      1,
-      reason: 'the cached list had it — no forced rescan',
-    );
-    expect(
-      discovery.closed,
-      isTrue,
-      reason: 'one-shot discovery client is closed',
-    );
+    expect(api.calls, ['reconnectDevice:sw-0', 'connect:0'],
+        reason: 'the discovered device with the matching unique id is connected');
+    expect(discovery.scans, 1, reason: 'the cached list had it — no forced rescan');
+    expect(discovery.closed, isTrue, reason: 'one-shot discovery client is closed');
   });
 
-  test('reconnectDevice on a 404 reuses the record from an earlier connect — no broadcast', () async {
+  test('reconnectDevice on a 404 reuses the record from an earlier connect — no broadcast',
+      () async {
     // Add switch handed the notifier the discovery record; a later Connect on
     // an older daemon must not pay the ~2 s discovery broadcast again.
     final api = _FakeSwitchApi();
@@ -288,16 +248,14 @@ void main() {
     await c.read(switchListProvider.notifier).connect(_discovered(0));
     api.reconnectDeviceError = _notFound();
 
-    expect(
-      await c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
-      isTrue,
-    );
+    expect(await c.read(switchListProvider.notifier).reconnectDevice('sw-0'), isTrue);
 
     expect(api.calls, ['connect:0', 'reconnectDevice:sw-0', 'connect:0']);
     expect(discovery.scans, 0, reason: 'the record from Add switch is reused');
   });
 
-  test('a discovery fallback keeps the record, so the next Connect skips the broadcast', () async {
+  test('a discovery fallback keeps the record, so the next Connect skips the broadcast',
+      () async {
     final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
     final discovery = _FakeDiscoveryApi([_discovered(0)]);
     final c = _container(const [server], api, discovery: discovery);
@@ -311,27 +269,21 @@ void main() {
     expect(api.calls.where((c) => c == 'connect:0').length, 2);
   });
 
-  test(
-    'reconnectDevice rethrows the 404 when discovery has no such switch',
-    () async {
-      final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
-      final discovery = _FakeDiscoveryApi([_discovered(3)]);
-      final c = _container(const [server], api, discovery: discovery);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
+  test('reconnectDevice rethrows the 404 when discovery has no such switch', () async {
+    final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
+    final discovery = _FakeDiscoveryApi([_discovered(3)]);
+    final c = _container(const [server], api, discovery: discovery);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
 
-      await expectLater(
-        c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
-        throwsA(isA<DioException>()),
-      );
-      expect(
-        discovery.scans,
-        1,
-        reason: 'a populated cached list without the id is the answer — no forced rescan',
-      );
-      expect(api.calls, isNot(contains(startsWith('connect:'))));
-    },
-  );
+    await expectLater(
+      c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
+      throwsA(isA<DioException>()),
+    );
+    expect(discovery.scans, 1,
+        reason: 'a populated cached list without the id is the answer — no forced rescan');
+    expect(api.calls, isNot(contains(startsWith('connect:'))));
+  });
 
   test('an EMPTY cached discovery list earns one forced rescan', () async {
     final api = _FakeSwitchApi()..reconnectDeviceError = _notFound();
@@ -344,114 +296,71 @@ void main() {
       c.read(switchListProvider.notifier).reconnectDevice('sw-0'),
       throwsA(isA<DioException>()),
     );
-    expect(
-      discovery.scans,
-      2,
-      reason: 'cached (empty), then one forced rescan',
-    );
+    expect(discovery.scans, 2, reason: 'cached (empty), then one forced rescan');
   });
 
-  test(
-    '§25.3 switchActingProvider is true exactly while an action is in flight',
-    () async {
-      final api = _FakeSwitchApi()..connectGate = Completer<void>();
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
-      expect(
-        c.read(switchActingProvider),
-        isFalse,
-        reason: 'idle before any action',
-      );
+  test('§25.3 switchActingProvider is true exactly while an action is in flight',
+      () async {
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+    expect(c.read(switchActingProvider), isFalse, reason: 'idle before any action');
 
-      final action = c
-          .read(switchListProvider.notifier)
-          .connect(_discovered(0));
-      expect(
-        c.read(switchActingProvider),
-        isTrue,
-        reason: 'amber signal raised while the action holds the gate',
-      );
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchActingProvider), isTrue,
+        reason: 'amber signal raised while the action holds the gate');
 
-      api.connectGate!.complete();
-      await action;
-      expect(
-        c.read(switchActingProvider),
-        isFalse,
-        reason: 'cleared when the action unwinds',
-      );
-    },
-  );
+    api.connectGate!.complete();
+    await action;
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'cleared when the action unwinds');
+  });
 
-  test(
-    '§25.3 the acting signal resets on a mid-action server change (r1 fix)',
-    () async {
-      // The abandoned action's finally deliberately SKIPS the clear when the
-      // generation has moved on (it must not stomp a newer action's signal), so
-      // without the notifier's own server-change reset the chip would stick
-      // amber forever. Mutable server list → we can change the active server.
-      final servers = [server];
-      final api = _FakeSwitchApi()..connectGate = Completer<void>();
-      final c = _container(servers, api);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
+  test('§25.3 the acting signal resets on a mid-action server change (r1 fix)',
+      () async {
+    // The abandoned action's finally deliberately SKIPS the clear when the
+    // generation has moved on (it must not stomp a newer action's signal), so
+    // without the notifier's own server-change reset the chip would stick
+    // amber forever. Mutable server list → we can change the active server.
+    final servers = [server];
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(servers, api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
 
-      final action = c
-          .read(switchListProvider.notifier)
-          .connect(_discovered(0));
-      expect(c.read(switchActingProvider), isTrue, reason: 'action in flight');
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchActingProvider), isTrue, reason: 'action in flight');
 
-      // Active server changes while the action is still holding the gate.
-      servers.add(const AraServer(hostname: 'h2', port: 5556));
-      c.invalidate(savedServersProvider);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
-      expect(
-        c.read(switchActingProvider),
-        isFalse,
-        reason: 'server change must reset the signal — nothing else ever will',
-      );
+    // Active server changes while the action is still holding the gate.
+    servers.add(const AraServer(hostname: 'h2', port: 5556));
+    c.invalidate(savedServersProvider);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'server change must reset the signal — nothing else ever will');
 
-      // The abandoned action unwinding later must not re-raise the signal.
-      api.connectGate!.complete();
-      await action;
-      expect(
-        c.read(switchActingProvider),
-        isFalse,
-        reason: 'the stale generation must not clear-or-set anything',
-      );
-    },
-  );
+    // The abandoned action unwinding later must not re-raise the signal.
+    api.connectGate!.complete();
+    await action;
+    expect(c.read(switchActingProvider), isFalse,
+        reason: 'the stale generation must not clear-or-set anything');
+  });
 
-  test(
-    'an action while another is in flight is dropped (returns false)',
-    () async {
-      final api = _FakeSwitchApi()..connectGate = Completer<void>();
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
+  test('an action while another is in flight is dropped (returns false)', () async {
+    final api = _FakeSwitchApi()..connectGate = Completer<void>();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
 
-      final first = c
-          .read(switchListProvider.notifier)
-          .connect(_discovered(0)); // holds the gate
-      final dropped = await c
-          .read(switchListProvider.notifier)
-          .connect(_discovered(1));
-      expect(
-        dropped,
-        isFalse,
-        reason: 'second action dropped while the first is in flight',
-      );
+    final first = c.read(switchListProvider.notifier).connect(_discovered(0)); // holds the gate
+    final dropped = await c.read(switchListProvider.notifier).connect(_discovered(1));
+    expect(dropped, isFalse, reason: 'second action dropped while the first is in flight');
 
-      api.connectGate!.complete();
-      expect(await first, isTrue, reason: 'the first action ran');
-      expect(
-        api.calls,
-        isNot(contains('connect:1')),
-        reason: 'the dropped call never hit the API',
-      );
-    },
-  );
+    api.connectGate!.complete();
+    expect(await first, isTrue, reason: 'the first action ran');
+    expect(api.calls, isNot(contains('connect:1')), reason: 'the dropped call never hit the API');
+  });
 
   test('a manual refresh racing an in-flight action is safe', () async {
     final api = _FakeSwitchApi()..connectGate = Completer<void>();
@@ -459,153 +368,116 @@ void main() {
     await c.read(savedServersProvider.future);
     await c.read(switchListProvider.future);
 
-    final action = c
-        .read(switchListProvider.notifier)
-        .connect(_discovered(0)); // gated, in flight
-    await c
-        .read(switchListProvider.notifier)
-        .refresh(); // racing read — must not throw/corrupt
+    final action = c.read(switchListProvider.notifier).connect(_discovered(0)); // gated, in flight
+    await c.read(switchListProvider.notifier).refresh(); // racing read — must not throw/corrupt
     api.connectGate!.complete();
     await action;
 
     final list = c.read(switchListProvider).value!;
-    expect(
-      list.map((d) => d.alpacaDeviceNumber),
-      [0],
-      reason: 'the action result lands; the racing refresh neither lost nor duplicated it',
-    );
+    expect(list.map((d) => d.alpacaDeviceNumber), [0],
+        reason: 'the action result lands; the racing refresh neither lost nor duplicated it');
   });
 
-  test(
-    'a post-action list read failure surfaces as the provider error',
-    () async {
-      final api = _FakeSwitchApi();
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future); // initial read ok (empty)
+  test('a post-action list read failure surfaces as the provider error', () async {
+    final api = _FakeSwitchApi();
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future); // initial read ok (empty)
 
-      api.throwOnGetAll = true; // the post-connect refresh read fails
-      await c.read(switchListProvider.notifier).connect(_discovered(0));
-      expect(
-        c.read(switchListProvider).hasError,
-        isTrue,
-        reason: "a list we can't re-read becomes the provider's error",
-      );
-    },
-  );
+    api.throwOnGetAll = true; // the post-connect refresh read fails
+    await c.read(switchListProvider.notifier).connect(_discovered(0));
+    expect(c.read(switchListProvider).hasError, isTrue,
+        reason: "a list we can't re-read becomes the provider's error");
+  });
 
   test('disconnect targets one switch; setValue forwards the write', () async {
     final api = _FakeSwitchApi()
       ..devices = [
         SwitchDevice(
-          deviceId: 'sw-0',
-          alpacaDeviceNumber: 0,
-          name: 'A',
-          connectionState: SwitchConnectionState.connected,
-          ports: const [],
-        ),
+            deviceId: 'sw-0',
+            alpacaDeviceNumber: 0,
+            name: 'A',
+            connectionState: SwitchConnectionState.connected,
+            ports: const []),
         SwitchDevice(
-          deviceId: 'sw-1',
-          alpacaDeviceNumber: 1,
-          name: 'B',
-          connectionState: SwitchConnectionState.connected,
-          ports: const [],
-        ),
+            deviceId: 'sw-1',
+            alpacaDeviceNumber: 1,
+            name: 'B',
+            connectionState: SwitchConnectionState.connected,
+            ports: const []),
       ];
     final c = _container(const [server], api);
     await c.read(savedServersProvider.future);
     await c.read(switchListProvider.future);
 
     await c.read(switchListProvider.notifier).disconnect('sw-0');
-    await c
-        .read(switchListProvider.notifier)
+    await c.read(switchListProvider.notifier)
         .setValue(deviceId: 'sw-1', portId: 3, value: 42.0);
 
     expect(api.calls, contains('disconnect:sw-0'));
     expect(api.calls, contains('setValue:sw-1:3=42.0'));
     final list = c.read(switchListProvider).value!;
-    expect(
-      list.firstWhere((d) => d.alpacaDeviceNumber == 0).connectionState,
-      SwitchConnectionState.disconnected,
-    );
-    expect(
-      list.firstWhere((d) => d.alpacaDeviceNumber == 1).isConnected,
-      isTrue,
-    );
+    expect(list.firstWhere((d) => d.alpacaDeviceNumber == 0).connectionState,
+        SwitchConnectionState.disconnected);
+    expect(list.firstWhere((d) => d.alpacaDeviceNumber == 1).isConnected, isTrue);
   });
 
-  test(
-    'a failed action throws to the caller and keeps the list intact',
-    () async {
-      final api = _FakeSwitchApi()
-        ..devices = [
-          SwitchDevice(
+  test('a failed action throws to the caller and keeps the list intact', () async {
+    final api = _FakeSwitchApi()
+      ..devices = [
+        SwitchDevice(
             deviceId: 'sw-0',
             alpacaDeviceNumber: 0,
             name: 'A',
             connectionState: SwitchConnectionState.connected,
-            ports: const [],
-          ),
-        ]
-        ..throwOnConnect = true;
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(switchListProvider.future);
+            ports: const []),
+      ]
+      ..throwOnConnect = true;
+    final c = _container(const [server], api);
+    await c.read(savedServersProvider.future);
+    await c.read(switchListProvider.future);
 
-      // The error propagates to the caller (the UI surfaces it per-control)...
-      await expectLater(
-        c.read(switchListProvider.notifier).connect(_discovered(1)),
-        throwsA(isA<StateError>()),
-      );
-      // ...and the loaded list is NOT wiped — a one-off failure on one device
-      // doesn't blow away the view of every other switch.
-      final state = c.read(switchListProvider);
-      expect(state.hasError, isFalse);
-      expect(state.value!.single.alpacaDeviceNumber, 0);
-    },
-  );
+    // The error propagates to the caller (the UI surfaces it per-control)...
+    await expectLater(
+      c.read(switchListProvider.notifier).connect(_discovered(1)),
+      throwsA(isA<StateError>()),
+    );
+    // ...and the loaded list is NOT wiped — a one-off failure on one device
+    // doesn't blow away the view of every other switch.
+    final state = c.read(switchListProvider);
+    expect(state.hasError, isFalse);
+    expect(state.value!.single.alpacaDeviceNumber, 0);
+  });
 
-  test(
-    'a state_changed push during a manual read is replayed when it ends',
-    () async {
-      // The daemon pushes Connected, then again once the switch's ports are
-      // cached. A push landing while a read is in flight must not be dropped —
-      // that read may predate the ports.
-      final events = StreamController<WsEvent>.broadcast();
-      addTearDown(events.close);
-      final api = _FakeSwitchApi();
-      final c = _container(const [server], api, events: events.stream);
-      await c.read(savedServersProvider.future);
-      c.listen(switchListProvider, (_, _) {});
-      await c.read(switchListProvider.future);
-      expect(api.getAllCalls, 1);
+  test('a state_changed push during a manual read is replayed when it ends',
+      () async {
+    // The daemon pushes Connected, then again once the switch's ports are
+    // cached. A push landing while a read is in flight must not be dropped —
+    // that read may predate the ports.
+    final events = StreamController<WsEvent>.broadcast();
+    addTearDown(events.close);
+    final api = _FakeSwitchApi();
+    final c = _container(const [server], api, events: events.stream);
+    await c.read(savedServersProvider.future);
+    c.listen(switchListProvider, (_, _) {});
+    await c.read(switchListProvider.future);
+    expect(api.getAllCalls, 1);
 
-      final gate = api.getAllGate = Completer<void>();
-      final read = c.read(switchListProvider.notifier).refresh();
-      await pumpEventQueue();
-      events.add(
-        WsEvent(
-          type: 'equipment.state_changed',
-          ts: DateTime.utc(2026, 10, 22),
-          seq: 1,
-          payload: {
-            'device_type': 'switch',
-            'device_id': 'sw-0',
-            'state': 'connected',
-          },
-        ),
-      );
-      await pumpEventQueue();
-      expect(
-        api.getAllCalls,
-        2,
-        reason: 'held while the manual read is in flight',
-      );
+    final gate = api.getAllGate = Completer<void>();
+    final read = c.read(switchListProvider.notifier).refresh();
+    await pumpEventQueue();
+    events.add(WsEvent(
+      type: 'equipment.state_changed',
+      ts: DateTime.utc(2026, 10, 22),
+      seq: 1,
+      payload: {'device_type': 'switch', 'device_id': 'sw-0', 'state': 'connected'},
+    ));
+    await pumpEventQueue();
+    expect(api.getAllCalls, 2, reason: 'held while the manual read is in flight');
 
-      gate.complete();
-      await read;
-      await pumpEventQueue();
-      expect(api.getAllCalls, 3, reason: 'the held push re-reads once');
-    },
-  );
+    gate.complete();
+    await read;
+    await pumpEventQueue();
+    expect(api.getAllCalls, 3, reason: 'the held push re-reads once');
+  });
 }

@@ -1,9 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import '../models/sequence/imaging_run_body.dart';
 import '../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../models/sequence/sequence_summary.dart';
@@ -204,10 +202,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
       imagingDefaultsProvider.select((d) => d.value?.defaultExposure),
       (_, _) => _reseed(),
     );
-    ref.listen(
-      filterWheelProvider.select((w) => w.value != null),
-      (_, _) => _reseed(),
-    );
+    ref.listen(filterWheelProvider.select((w) => w.value != null), (_, _) => _reseed());
     _darkHours = ref.read(simpleDarkHoursProvider);
     return _defaults();
   }
@@ -607,7 +602,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         // The daemon refused the append (the run is winding down) and a
         // second sequence was made: don't leave it behind.
         try {
-          await ref.read(sequenceApiProvider)?.deleteSequence(r.sequenceId);
+          await ref
+              .read(sequenceApiProvider)
+              ?.deleteSequence(r.sequenceId);
         } catch (_) {}
         state = state.copyWith(
           busy: false,
@@ -683,7 +680,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   /// Edit target [i]'s rows (one not started yet): its block is replaced on
   /// the rig (removed, added again with [steps], moved back into place), live
   /// while imaging. True once saved.
-  Future<bool> edit(int i, List<FilterPlanStep> steps, {int? gain}) async {
+  Future<bool> edit(
+    int i,
+    List<FilterPlanStep> steps, {
+    int? gain,
+  }) async {
     final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
     if (api == null || id == null || i >= state.targets.length || state.busy) {
@@ -934,10 +935,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   Future<String?> runCalibration(Map<String, dynamic> block) async {
     final api = ref.read(sequenceApiProvider);
     if (api == null || state.busy) return null;
-    final phase = simpleRunPhase(
-      state,
-      ref.read(sequenceRunStateProvider).value,
-    );
+    final phase = simpleRunPhase(state, ref.read(sequenceRunStateProvider).value);
     if (state.sequenceId == null || phase == SimpleRunPhase.done) {
       state = const SimpleRun().copyWith(busy: true);
       try {
@@ -947,14 +945,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         );
         ref.read(selectedSequenceIdProvider.notifier).select(id);
         final time = calibrationBlockTime(block);
-        state = SimpleRun(sequenceId: id, targets: [_calibrationTarget(time)]);
+        state = SimpleRun(
+          sequenceId: id,
+          targets: [_calibrationTarget(time)],
+        );
         // Calibration frames do not depend on the clock: no #1945 question.
         return await _start() ? id : null;
       } catch (e) {
-        _fail(
-          _why(e, (l) => l.calibrationActionShoot),
-          undo: const SimpleRun(),
-        );
+        _fail(_why(e, (l) => l.calibrationActionShoot), undo: const SimpleRun());
         return null;
       }
     }
@@ -969,10 +967,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
             origin: SimpleStatusOrigin.plan,
             actions: [
               SimpleMessageAction(l.calibrationNotNow, () {}),
-              SimpleMessageAction(
-                l.calibrationStartQueueNow,
-                () => startQueue(),
-              ),
+              SimpleMessageAction(l.calibrationStartQueueNow, () => startQueue()),
             ],
           );
     }
@@ -1023,10 +1018,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         await api.updateSequence(id, body: appendTargetToRunBody(body, block));
       }
       state = state.copyWith(
-        targets: [
-          ...state.targets,
-          _calibrationTarget(calibrationBlockTime(block)),
-        ],
+        targets: [...state.targets, _calibrationTarget(calibrationBlockTime(block))],
         busy: false,
       );
       return true;
@@ -1192,7 +1184,6 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       return false;
     }
   }
-
   Future<void> pause() => _op(
     (api, id) => api.pause(id),
     (l) => l.planActionPause,
@@ -1204,8 +1195,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     (api, id) => api.resume(id, recenter: recenter, refocus: refocus),
     (l) => l.planActionResume,
   );
-  Future<void> stop() =>
-      _op((api, id) => api.stop(id), (l) => l.planActionStop);
+  Future<void> stop() => _op((api, id) => api.stop(id), (l) => l.planActionStop);
 
   /// Night done's New plan: back to the sheet.
   void newPlan() => state = const SimpleRun();
@@ -1292,8 +1282,7 @@ class SimpleMountStoppedNotifier extends Notifier<bool> {
       }
     });
     ref.listen(sequenceRunStateProvider, (prev, next) {
-      if (simpleRunPaused(prev?.value?.state) &&
-          !simpleRunPaused(next.value?.state)) {
+      if (simpleRunPaused(prev?.value?.state) && !simpleRunPaused(next.value?.state)) {
         state = false;
       }
     });
@@ -1332,16 +1321,11 @@ class SimpleMountLimitNotifier extends Notifier<String?> {
       ].join(' ');
       ref
           .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            text,
-            origin: SimpleStatusOrigin.mount,
-          );
+          .show(SimpleMessageKind.error, text, origin: SimpleStatusOrigin.mount);
       state = p.runsPaused > 0 ? text : null;
     });
     ref.listen(sequenceRunStateProvider, (prev, next) {
-      if (simpleRunPaused(prev?.value?.state) &&
-          !simpleRunPaused(next.value?.state)) {
+      if (simpleRunPaused(prev?.value?.state) && !simpleRunPaused(next.value?.state)) {
         state = null;
       }
     });
@@ -1353,3 +1337,4 @@ final simpleMountLimitProvider =
     NotifierProvider<SimpleMountLimitNotifier, String?>(
       SimpleMountLimitNotifier.new,
     );
+

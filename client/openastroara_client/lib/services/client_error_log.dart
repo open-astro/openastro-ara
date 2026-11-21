@@ -277,10 +277,7 @@ class ClientErrorLog {
         library: library,
         prints: prints,
       );
-      await _append(
-        repeatNote + droppedNote + text,
-        countsAsEntry: kind != noteKind,
-      );
+      await _append(repeatNote + droppedNote + text, countsAsEntry: kind != noteKind);
       // A successful write clears an earlier failure: the disk came back.
       if (!_status.value.available) {
         _status.value = _status.value.copyWith(available: true);
@@ -351,11 +348,10 @@ class ClientErrorLog {
           for (final f in [rotated, current]) {
             if (!await f.exists()) continue;
             any = true;
-            await for (final line
-                in f
-                    .openRead()
-                    .transform(const Utf8Decoder(allowMalformed: true))
-                    .transform(const LineSplitter())) {
+            await for (final line in f
+                .openRead()
+                .transform(const Utf8Decoder(allowMalformed: true))
+                .transform(const LineSplitter())) {
               final kept = redactor.push(line);
               if (kept != null) sink.writeln(kept);
             }
@@ -432,32 +428,31 @@ class ClientErrorLog {
       final f = File('${dir.path}/$name');
       if (!await f.exists()) continue;
       final before = count;
-      await for (final line
-          in f
-              .openRead()
-              .transform(utf8.decoder)
-              .transform(const LineSplitter())) {
-        if (line.startsWith(entryMarker)) {
-          count++;
-          // "=== <iso> <kind> ==="
-          final parts = line
-              .substring(entryMarker.length)
-              .replaceFirst(RegExp(r' ===$'), '')
-              .split(' ');
-          final kind = parts.length > 1 ? parts[1] : null;
-          if (kind == noteKind) {
-            count--;
-            pendingMessage = false;
-            continue;
-          }
-          lastAt = parts.isNotEmpty ? DateTime.tryParse(parts.first) : null;
-          lastKind = kind;
-          lastMessage = null;
-          pendingMessage = true;
-        } else if (pendingMessage && line.startsWith('error: ')) {
-          lastMessage = line.substring('error: '.length);
+      await for (final line in f
+          .openRead()
+          .transform(utf8.decoder)
+          .transform(const LineSplitter())) {
+      if (line.startsWith(entryMarker)) {
+        count++;
+        // "=== <iso> <kind> ==="
+        final parts = line
+            .substring(entryMarker.length)
+            .replaceFirst(RegExp(r' ===$'), '')
+            .split(' ');
+        final kind = parts.length > 1 ? parts[1] : null;
+        if (kind == noteKind) {
+          count--;
           pendingMessage = false;
+          continue;
         }
+        lastAt = parts.isNotEmpty ? DateTime.tryParse(parts.first) : null;
+        lastKind = kind;
+        lastMessage = null;
+        pendingMessage = true;
+      } else if (pendingMessage && line.startsWith('error: ')) {
+        lastMessage = line.substring('error: '.length);
+        pendingMessage = false;
+      }
       }
       if (name == rotatedFileName) {
         _rotatedEntries = count - before;
@@ -552,9 +547,7 @@ class ClientErrorLog {
       ..writeln('$entryMarker${at.toIso8601String()} $kind ===');
     if (library != null && library.isNotEmpty) buf.writeln('library: $library');
     if (context != null && context.isNotEmpty) buf.writeln('context: $context');
-    buf.writeln(
-      '${kind == noteKind ? 'message' : 'error'}: ${_describe(error)}',
-    );
+    buf.writeln('${kind == noteKind ? 'message' : 'error'}: ${_describe(error)}');
     if (stack != null) {
       final trace = stack.toString().trimRight();
       if (trace.isNotEmpty) {

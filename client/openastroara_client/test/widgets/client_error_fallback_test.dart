@@ -3,9 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/widgets/client_error_fallback.dart';
 
 void main() {
-  testWidgets('renders with no MaterialApp, Theme or Directionality above it', (
-    tester,
-  ) async {
+  testWidgets('renders with no MaterialApp, Theme or Directionality above it',
+      (tester) async {
     // Bare root: exactly the situation when the widget that failed was the
     // one that would have provided those ancestors.
     await tester.pumpWidget(const ClientErrorFallback());

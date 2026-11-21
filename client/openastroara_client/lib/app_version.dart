@@ -40,8 +40,7 @@ String get buildDateLabel => kBuildDate.isEmpty ? 'dev' : kBuildDate;
 /// dangles.
 String formatFullVersion(PackageInfo info) {
   final version = displayVersion(kAraAppVersion);
-  final withBuild = info.buildNumber.isEmpty
-      ? version
-      : '$version+${info.buildNumber}';
+  final withBuild =
+      info.buildNumber.isEmpty ? version : '$version+${info.buildNumber}';
   return '$withBuild ($buildDateLabel)';
 }

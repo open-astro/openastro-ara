@@ -28,8 +28,9 @@ class SkyDataPanel extends StatelessWidget {
             'own sky). Everything below ships pre-installed with the rig '
             'server, so nothing here is required at a remote site; download '
             'buttons fetch updates or restore a removed catalog.',
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
           const SizedBox(height: 16),
           const Expanded(child: DataManagerView()),

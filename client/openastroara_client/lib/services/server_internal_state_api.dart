@@ -15,24 +15,19 @@ class ServerInternalStateApi implements ServerInternalStateClient {
   final Dio _dio;
 
   ServerInternalStateApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<ServerInternalState> fetch() async {
     final res = await _dio.get<dynamic>('/api/v1/server/internal-state');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'server/internal-state returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('server/internal-state returned a non-object body (${data.runtimeType})');
     }
     return ServerInternalState.fromJson(data);
   }

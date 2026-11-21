@@ -48,27 +48,21 @@ class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
   /// [dio] is the test seam (a stubbed transport); production builds one
   /// against the active daemon.
   AlpacaDeviceNamesApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               // The daemon's own lookup is capped at 3 s per host; leave
               // headroom.
               receiveTimeout: const Duration(seconds: 8),
-            ),
-          );
+            ));
 
   /// The daemon route this client dials — pinned by test so a typo can't
   /// degrade silently into "labels stay generic forever".
   static const String route = '/api/v1/equipment/guider/alpacadevicenames';
 
   @override
-  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     try {
       final res = await _dio.get<dynamic>(
         route,
@@ -82,9 +76,8 @@ class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
 
   /// Parse the daemon's `{names: {"camera/1": "…"}}` envelope. Pure —
   /// unit-tested. Anything malformed yields an empty map.
-  static Map<String, String> parseNames(Object? data) => {
-    for (final e in parseDevices(data).entries) e.key: e.value.name,
-  };
+  static Map<String, String> parseNames(Object? data) =>
+      {for (final e in parseDevices(data).entries) e.key: e.value.name};
 
   /// Parse `{names: {"camera/1": "…"}, unique_ids: {"camera/1": "…"}}`
   /// (`unique_ids` is additive, #1308; absent on an older daemon). Pure —
@@ -122,10 +115,8 @@ class AlpacaDeviceNamesApi extends AlpacaDeviceNamesClient {
 class NoServerAlpacaDeviceNames extends AlpacaDeviceNamesClient {
   const NoServerAlpacaDeviceNames();
   @override
-  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async => const {};
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async =>
+      const {};
   @override
   void close() {}
 }

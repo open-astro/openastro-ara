@@ -223,8 +223,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         helpKey: 'imaging.defaults.gain',
         currentValue: d.defaultGain.toString(),
         getCanonical: () =>
-            ref.read(imagingDefaultsProvider).value?.defaultGain.toString() ??
-            '',
+            ref.read(imagingDefaultsProvider).value?.defaultGain.toString() ?? '',
         parse: (s) {
           final i = int.tryParse(s);
           if (i != null) n.setGain(i);
@@ -235,8 +234,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         helpKey: 'imaging.defaults.offset',
         currentValue: d.defaultOffset.toString(),
         getCanonical: () =>
-            ref.read(imagingDefaultsProvider).value?.defaultOffset.toString() ??
-            '',
+            ref.read(imagingDefaultsProvider).value?.defaultOffset.toString() ?? '',
         parse: (s) {
           final i = int.tryParse(s);
           if (i != null) n.setOffset(i);
@@ -247,8 +245,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         helpKey: 'imaging.defaults.bin',
         currentValue: d.defaultBin.toString(),
         getCanonical: () =>
-            ref.read(imagingDefaultsProvider).value?.defaultBin.toString() ??
-            '',
+            ref.read(imagingDefaultsProvider).value?.defaultBin.toString() ?? '',
         parse: (s) {
           final i = int.tryParse(s);
           if (i != null) n.setBin(i);
@@ -273,8 +270,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         helpKey: 'imaging.defaults.cooling_target',
         currentValue: d.coolerTargetC.toString(),
         getCanonical: () =>
-            ref.read(imagingDefaultsProvider).value?.coolerTargetC.toString() ??
-            '',
+            ref.read(imagingDefaultsProvider).value?.coolerTargetC.toString() ?? '',
         parse: (s) {
           final v = double.tryParse(s);
           if (v != null) n.setCoolerTargetC(v);
@@ -285,12 +281,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
         helpKey: 'imaging.defaults.cooler_ramp_c_per_min',
         currentValue: d.coolerRampRatePerMin.toString(),
         getCanonical: () =>
-            ref
-                .read(imagingDefaultsProvider)
-                .value
-                ?.coolerRampRatePerMin
-                .toString() ??
-            '',
+            ref.read(imagingDefaultsProvider).value?.coolerRampRatePerMin.toString() ?? '',
         parse: (s) {
           final v = double.tryParse(s);
           if (v != null) n.setCoolerRampRate(v);
@@ -383,9 +374,7 @@ class _ImagingDefaultsPanelState extends ConsumerState<ImagingDefaultsPanel>
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            friendlyError(l10n, e, action: l10n.actionRefitSkyModel),
-          ),
+          content: Text(friendlyError(l10n, e, action: l10n.actionRefitSkyModel)),
         ),
       );
     } finally {

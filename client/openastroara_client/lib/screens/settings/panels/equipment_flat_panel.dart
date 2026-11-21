@@ -53,8 +53,7 @@ class EquipmentFlatPanel extends ConsumerWidget {
         SettingsRow(
           label: 'Auto-brightness target',
           helpKey: 'eq.flat.auto_brightness_target',
-          value:
-              '${policies.flatTargetPercent.toStringAsFixed(0)}% of the camera\'s range',
+          value: '${policies.flatTargetPercent.toStringAsFixed(0)}% of the camera\'s range',
           hint: 'Edit in Settings → Your night → Calibration',
         ),
         SettingsRow(
@@ -236,7 +235,10 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
               ),
               SizedBox(
                 width: 48,
-                child: Text(max > 0 ? '$level' : '—', textAlign: TextAlign.end),
+                child: Text(
+                  max > 0 ? '$level' : '—',
+                  textAlign: TextAlign.end,
+                ),
               ),
               HelpIcon(helpKey: 'eq.flat.brightness', device: s.name),
             ],
@@ -263,8 +265,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
     // any positive level to CalibratorOn and 0 to CalibratorOff), so the switch
     // must follow the slider — otherwise dragging up from 0 leaves the switch
     // reading "off" until the next poll, contradicting the light itself.
-    final impliedLight =
-        lightOn ?? (brightness == null ? null : brightness > 0);
+    final impliedLight = lightOn ?? (brightness == null ? null : brightness > 0);
     if (impliedLight != null) setState(() => _pendingLight = impliedLight);
     final l10n = context.l10n;
     try {
@@ -294,9 +295,7 @@ class _FlatControlsState extends ConsumerState<_FlatControls> {
     } catch (e) {
       messenger.showSnackBar(
         SnackBar(
-          content: Text(
-            "Couldn't drive the flat panel: ${failureReason(l10n, e)}",
-          ),
+          content: Text("Couldn't drive the flat panel: ${failureReason(l10n, e)}"),
           backgroundColor: AraColors.accentError,
         ),
       );

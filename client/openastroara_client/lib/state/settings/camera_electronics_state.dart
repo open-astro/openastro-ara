@@ -55,15 +55,17 @@ class CameraElectronics {
     int? gain,
     double? quantumEfficiencyPeak,
     bool? autoCaptured,
-  }) => CameraElectronics(
-    sensorName: sensorName ?? this.sensorName,
-    readNoiseE: readNoiseE ?? this.readNoiseE,
-    fullWellE: fullWellE ?? this.fullWellE,
-    electronsPerAdu: electronsPerAdu ?? this.electronsPerAdu,
-    gain: gain ?? this.gain,
-    quantumEfficiencyPeak: quantumEfficiencyPeak ?? this.quantumEfficiencyPeak,
-    autoCaptured: autoCaptured ?? this.autoCaptured,
-  );
+  }) =>
+      CameraElectronics(
+        sensorName: sensorName ?? this.sensorName,
+        readNoiseE: readNoiseE ?? this.readNoiseE,
+        fullWellE: fullWellE ?? this.fullWellE,
+        electronsPerAdu: electronsPerAdu ?? this.electronsPerAdu,
+        gain: gain ?? this.gain,
+        quantumEfficiencyPeak:
+            quantumEfficiencyPeak ?? this.quantumEfficiencyPeak,
+        autoCaptured: autoCaptured ?? this.autoCaptured,
+      );
 }
 
 class CameraElectronicsNotifier extends SectionNotifier<CameraElectronics> {

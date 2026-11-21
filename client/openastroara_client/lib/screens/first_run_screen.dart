@@ -122,9 +122,8 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             // cannot work until the user allows it; say so instead of
             // showing "looking for servers" forever.
             ValueListenableBuilder<bool>(
-              valueListenable: ref
-                  .watch(discoveryServiceProvider)
-                  .localNetworkBlocked,
+              valueListenable:
+                  ref.watch(discoveryServiceProvider).localNetworkBlocked,
               builder: (context, blocked, _) => blocked
                   ? const _LocalNetworkBlockedBanner()
                   : const SizedBox.shrink(),
@@ -190,17 +189,13 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
                   width: 100,
                   child: TextField(
                     controller: _manualPortCtrl,
-                    decoration: InputDecoration(
-                      labelText: context.l10n.firstRunPortLabel,
-                    ),
+                    decoration:
+                        InputDecoration(labelText: context.l10n.firstRunPortLabel),
                     keyboardType: TextInputType.number,
                   ),
                 ),
                 const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _addManual,
-                  child: Text(context.l10n.firstRunUse),
-                ),
+                FilledButton(onPressed: _addManual, child: Text(context.l10n.firstRunUse)),
               ],
             ),
             const SizedBox(height: 16),
@@ -210,7 +205,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
             // until a profile has been cached from a connected session.
             Align(
               alignment: Alignment.centerLeft,
-              child: PlanOfflineButton(label: context.l10n.firstRunPlanOffline),
+              child: PlanOfflineButton(
+                label: context.l10n.firstRunPlanOffline,
+              ),
             ),
             const SizedBox(height: 8),
             if (selected != null)
@@ -262,11 +259,9 @@ class _FirstRunScreenState extends ConsumerState<FirstRunScreen> {
   Future<void> _confirm(AraServer server) async {
     final info = ref.read(serverHandshakeProvider).value;
     if (info != null) {
-      unawaited(
-        ref
-            .read(lastRigServiceProvider)
-            .save(LastRig(info.name, uuid: info.uuid)),
-      );
+      unawaited(ref
+          .read(lastRigServiceProvider)
+          .save(LastRig(info.name, uuid: info.uuid)));
     }
     await ref.read(savedServersProvider.notifier).add(server);
     // A Launchpad-forced visit ends here: the server is chosen, so the router
@@ -369,10 +364,10 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
   /// override it.
   @visibleForTesting
   static String messageFor(TargetPlatform platform) => switch (platform) {
-    TargetPlatform.macOS => macMessage,
-    TargetPlatform.iOS => iosMessage,
-    _ => otherMessage,
-  };
+        TargetPlatform.macOS => macMessage,
+        TargetPlatform.iOS => iosMessage,
+        _ => otherMessage,
+      };
 
   @override
   Widget build(BuildContext context) {
@@ -387,18 +382,14 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                Icons.wifi_off,
-                size: 20,
-                color: theme.colorScheme.onErrorContainer,
-              ),
+              Icon(Icons.wifi_off,
+                  size: 20, color: theme.colorScheme.onErrorContainer),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   messageFor(defaultTargetPlatform),
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onErrorContainer,
-                  ),
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: theme.colorScheme.onErrorContainer),
                 ),
               ),
             ],
@@ -408,3 +399,4 @@ class _LocalNetworkBlockedBanner extends StatelessWidget {
     );
   }
 }
+

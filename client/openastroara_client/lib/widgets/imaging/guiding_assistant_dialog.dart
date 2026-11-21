@@ -63,10 +63,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
     // freely); Ara says so up front instead of letting a run's guiding be
     // interrupted by a Start that only fails (review of #1387).
     final guiding = ref.watch(
-      guiderStatusProvider.select(
-        (s) => s.asData?.value?.stopEndsPhase ?? false,
-      ),
-    );
+        guiderStatusProvider.select((s) => s.asData?.value?.stopEndsPhase ?? false));
     final liveState = ref.watch(guiderLiveProvider);
     final live = liveState.live;
     final liveNotifier = ref.read(guiderLiveProvider.notifier);
@@ -141,7 +138,10 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
             lockX: live.lockX,
             lockY: live.lockY,
             onFindStar:
-                !live.connected || liveState.busy || guiding || status.isRunning
+                !live.connected ||
+                    liveState.busy ||
+                    guiding ||
+                    status.isRunning
                 ? null
                 : () => unawaited(liveNotifier.findStar()),
           ),
@@ -239,8 +239,7 @@ class _GuidingAssistantPanelState extends ConsumerState<GuidingAssistantPanel> {
                 ),
                 FilledButton.icon(
                   key: const Key('guiding-assistant-start'),
-                  onPressed:
-                      !status.connected || state.busy || guiding || !ready
+                  onPressed: !status.connected || state.busy || guiding || !ready
                       ? null
                       : () => unawaited(
                           notifier.start(

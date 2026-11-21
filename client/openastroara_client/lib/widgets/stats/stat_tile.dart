@@ -39,8 +39,9 @@ class StatTile extends StatelessWidget {
                 child: Text(
                   label,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context).textTheme.labelMedium
-                      ?.copyWith(color: AraColors.textSecondary),
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
                 ),
               ),
             ],
@@ -53,9 +54,9 @@ class StatTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-              color: AraColors.textPrimary,
-              fontWeight: FontWeight.w600,
-            ),
+                  color: AraColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
           Padding(
             padding: const EdgeInsets.only(top: 4),
@@ -63,8 +64,9 @@ class StatTile extends StatelessWidget {
               subtitle ?? '',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
             ),
           ),
         ],

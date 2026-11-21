@@ -12,15 +12,13 @@ class EquipmentDiscoveryApi {
   final Dio _dio;
 
   EquipmentDiscoveryApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           // Discovery can take 3-5s on a local subnet (Alpaca UDP timeout +
           // ID exchange per device). Generous read budget.
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 10),
-        ),
-      );
+        ));
 
   /// Returns the discovered devices of the given type. Throws `DioException`
   /// on connect/HTTP failure — caller surfaces the error UI.

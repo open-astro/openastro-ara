@@ -45,9 +45,7 @@ void main() {
 
   test('#1140 ready completes after the saved value is applied', () async {
     final prefs = _MemPrefs(const PlanningPrefs(noiseTolerancePct: 7));
-    final c = ProviderContainer(
-      overrides: [planningPrefsServiceProvider.overrideWithValue(prefs)],
-    );
+    final c = ProviderContainer(overrides: [planningPrefsServiceProvider.overrideWithValue(prefs)]);
     addTearDown(c.dispose);
     await c.read(planningPrefsProvider.notifier).ready;
     expect(c.read(planningPrefsProvider).noiseTolerancePct, 7);

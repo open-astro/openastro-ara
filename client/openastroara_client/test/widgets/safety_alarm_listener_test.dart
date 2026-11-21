@@ -25,84 +25,11 @@ class _ManualAlarm extends SafetyAlarmController {
 
 void main() {
   testWidgets(
-    'Silence dismisses the modal exactly once — the screen underneath survives',
-    (tester) async {
-      final container = ProviderContainer(
-        overrides: [safetyAlarmProvider.overrideWith(_ManualAlarm.new)],
-      );
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(
-            home: Scaffold(
-              body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
-            ),
-          ),
-        ),
-      );
-
-      (container.read(safetyAlarmProvider.notifier) as _ManualAlarm)
-          .startPending('wind over the limit');
-      await tester.pumpAndSettle();
-
-      expect(find.text('SAFETY ALERT'), findsOneWidget);
-      expect(find.textContaining('wind'), findsOneWidget);
-
-      await tester.tap(find.text('Silence alarm'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('SAFETY ALERT'), findsNothing);
-      expect(
-        find.text('UNDERLYING SCREEN'),
-        findsOneWidget,
-        reason: 'a double pop would take the screen under the modal with it',
-      );
-    },
-  );
-
-  testWidgets(
-    'the alarm dialog speaks Brazilian Portuguese when that is the language (#1751)',
-    (tester) async {
-      final container = ProviderContainer(
-        overrides: [safetyAlarmProvider.overrideWith(_ManualAlarm.new)],
-      );
-      addTearDown(container.dispose);
-
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(
-            locale: Locale('pt', 'BR'),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
-            ),
-          ),
-        ),
-      );
-
-      // No reason from the rig: the dialog states the default itself.
-      (container.read(safetyAlarmProvider.notifier) as _ManualAlarm)
-          .startPending('');
-      await tester.pumpAndSettle();
-
-      expect(find.text('ALERTA DE SEGURANÇA'), findsOneWidget);
-      expect(find.text('Condições INSEGURAS.'), findsOneWidget);
-      expect(find.text('Silenciar alarme'), findsOneWidget);
-      expect(find.text('SAFETY ALERT'), findsNothing);
-      expect(find.text('Silence alarm'), findsNothing);
-    },
-  );
-
-  testWidgets('safety.safe clearing the state also drops the modal', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [safetyAlarmProvider.overrideWith(_ManualAlarm.new)],
-    );
+      'Silence dismisses the modal exactly once — the screen underneath survives',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    ]);
     addTearDown(container.dispose);
 
     await tester.pumpWidget(
@@ -116,7 +43,74 @@ void main() {
       ),
     );
 
-    final alarm = container.read(safetyAlarmProvider.notifier) as _ManualAlarm;
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm)
+        .startPending('wind over the limit');
+    await tester.pumpAndSettle();
+
+    expect(find.text('SAFETY ALERT'), findsOneWidget);
+    expect(find.textContaining('wind'), findsOneWidget);
+
+    await tester.tap(find.text('Silence alarm'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('SAFETY ALERT'), findsNothing);
+    expect(find.text('UNDERLYING SCREEN'), findsOneWidget,
+        reason: 'a double pop would take the screen under the modal with it');
+  });
+
+  testWidgets('the alarm dialog speaks Brazilian Portuguese when that is the language (#1751)',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          locale: Locale('pt', 'BR'),
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
+          ),
+        ),
+      ),
+    );
+
+    // No reason from the rig: the dialog states the default itself.
+    (container.read(safetyAlarmProvider.notifier) as _ManualAlarm)
+        .startPending('');
+    await tester.pumpAndSettle();
+
+    expect(find.text('ALERTA DE SEGURANÇA'), findsOneWidget);
+    expect(find.text('Condições INSEGURAS.'), findsOneWidget);
+    expect(find.text('Silenciar alarme'), findsOneWidget);
+    expect(find.text('SAFETY ALERT'), findsNothing);
+    expect(find.text('Silence alarm'), findsNothing);
+  });
+
+  testWidgets('safety.safe clearing the state also drops the modal',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      safetyAlarmProvider.overrideWith(_ManualAlarm.new),
+    ]);
+    addTearDown(container.dispose);
+
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(
+          home: Scaffold(
+            body: SafetyAlarmListener(child: Text('UNDERLYING SCREEN')),
+          ),
+        ),
+      ),
+    );
+
+    final alarm =
+        container.read(safetyAlarmProvider.notifier) as _ManualAlarm;
     alarm.startPending('unsafe');
     await tester.pumpAndSettle();
     expect(find.text('SAFETY ALERT'), findsOneWidget);

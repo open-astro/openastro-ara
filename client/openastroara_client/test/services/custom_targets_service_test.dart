@@ -42,8 +42,7 @@ void main() {
     await svc.remember(_t('A', 10, 20));
     final list = await svc.remember(_t('B', 30, -40, jnow: true));
     expect(list.map((t) => t.name), ['B', 'A']);
-    final again = await CustomTargetsService(supportDir: () async => dir)
-        .load();
+    final again = await CustomTargetsService(supportDir: () async => dir).load();
     expect(again.map((t) => t.name), ['B', 'A']);
     expect(again.first.typedAsJNow, isTrue);
     expect(again.first.decDeg, -40);
@@ -79,9 +78,8 @@ void main() {
     await f.writeAsString('not json');
     expect(await svc.load(), isEmpty);
     await f.writeAsString(
-      '[{"name":"ok","ra_deg":1,"dec_deg":2},{"name":"bad","ra_deg":1,'
-      '"dec_deg":95},{"ra_deg":1,"dec_deg":2},"x"]',
-    );
+        '[{"name":"ok","ra_deg":1,"dec_deg":2},{"name":"bad","ra_deg":1,'
+        '"dec_deg":95},{"ra_deg":1,"dec_deg":2},"x"]');
     final list = await svc.load();
     expect(list.map((t) => t.name), ['ok']);
   });
@@ -118,20 +116,13 @@ void main() {
     final f = File('${dir.path}/custom_targets.json');
     await f.writeAsString(jsonEncode([_t('Old field', 1, 2).toJson()]));
     final legacy = await svc.loadScope('http://a|p1');
-    expect(legacy.targets.map((t) => t.name), [
-      'Old field',
-    ], reason: 'adopted by the first scope');
+    expect(legacy.targets.map((t) => t.name), ['Old field'], reason: 'adopted by the first scope');
     expect(legacy.base, isEmpty);
     await svc.remember(_t('A1', 1, 1), scope: 'http://a|p1');
     await svc.remember(_t('B1', 2, 2), scope: 'http://b|p9');
-    expect((await svc.load(scope: 'http://a|p1')).map((t) => t.name), [
-      'A1',
-      'Old field',
-    ]);
+    expect((await svc.load(scope: 'http://a|p1')).map((t) => t.name), ['A1', 'Old field']);
     expect((await svc.load(scope: 'http://b|p9')).map((t) => t.name), ['B1']);
-    expect((await svc.loadScope(null)).targets.map((t) => t.name), [
-      'B1',
-    ], reason: 'offline: the scope used last');
+    expect((await svc.loadScope(null)).targets.map((t) => t.name), ['B1'], reason: 'offline: the scope used last');
     // commitSync records the profile's names as the base; forget keeps it.
     await svc.commitSync('http://a|p1', [_t('A1', 1, 1), _t('A2', 3, 3)]);
     final synced = await svc.loadScope('http://a|p1');
@@ -140,58 +131,32 @@ void main() {
     await svc.forget(_t('A2', 3, 3), scope: 'http://a|p1');
     final after = await svc.loadScope('http://a|p1');
     expect(after.targets.map((t) => t.name), ['A1']);
-    expect(after.base, {
-      'a1',
-      'a2',
-    }, reason: 'the base is what the profile held at the last sync');
+    expect(after.base, {'a1', 'a2'}, reason: 'the base is what the profile held at the last sync');
     await svc.remember(_t('A2', 4, 4), scope: 'http://a|p1');
-    expect((await svc.loadScope('http://a|p1')).base, {
-      'a1',
-    }, reason: 'a re-add is a fresh local add');
+    expect((await svc.loadScope('http://a|p1')).base, {'a1'}, reason: 'a re-add is a fresh local add');
     // Targets saved before this device had a server and profile live in
     // 'local' and are adopted by the first real scope.
     final freshDir = await Directory.systemTemp.createTemp('ct-local');
     addTearDown(() => freshDir.delete(recursive: true));
     final fresh = CustomTargetsService(supportDir: () async => freshDir);
     await fresh.remember(_t('Offline first', 1, 1));
-    expect((await fresh.loadScope(null)).targets.map((t) => t.name), [
-      'Offline first',
-    ]);
-    expect((await fresh.loadScope('http://c|p1')).targets.map((t) => t.name), [
-      'Offline first',
-    ]);
+    expect((await fresh.loadScope(null)).targets.map((t) => t.name), ['Offline first']);
+    expect((await fresh.loadScope('http://c|p1')).targets.map((t) => t.name), ['Offline first']);
     await fresh.commitSync('http://c|p1', [_t('Offline first', 1, 1)]);
-    expect(
-      (await fresh.loadScope('http://d|p2')).targets,
-      isEmpty,
-      reason: 'adopted once, then gone',
-    );
+    expect((await fresh.loadScope('http://d|p2')).targets, isEmpty, reason: 'adopted once, then gone');
   });
 
   test('isAcceptableSavedTarget mirrors the daemon rules', () {
     expect(isAcceptableSavedTarget(_t('ok', 1, 2)), isTrue);
     expect(isAcceptableSavedTarget(_t('  ', 1, 2)), isFalse);
     expect(isAcceptableSavedTarget(_t('a\nb', 1, 2)), isFalse);
-    expect(
-      isAcceptableSavedTarget(_t('a\u0085b', 1, 2)),
-      isFalse,
-      reason: 'C1 controls, like the daemon',
-    );
+    expect(isAcceptableSavedTarget(_t('a\u0085b', 1, 2)), isFalse, reason: 'C1 controls, like the daemon');
     expect(isAcceptableSavedTarget(_t('Ünïcode', 1, 2)), isTrue);
     expect(isAcceptableSavedTarget(_t('x' * 129, 1, 2)), isFalse);
     expect(isAcceptableSavedTarget(_t('ok', 1, 91)), isFalse);
     expect(isAcceptableSavedTarget(_t('ok', double.nan, 2)), isFalse);
     expect(
-      isAcceptableSavedTarget(
-        CustomTarget(
-          name: 'ok',
-          raDeg: 1,
-          decDeg: 2,
-          typedAsJNow: false,
-          savedUtc: DateTime.utc(2026),
-          source: 'gaia',
-        ),
-      ),
+      isAcceptableSavedTarget(CustomTarget(name: 'ok', raDeg: 1, decDeg: 2, typedAsJNow: false, savedUtc: DateTime.utc(2026), source: 'gaia')),
       isFalse,
     );
   });

@@ -12,37 +12,36 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 // A template-shaped body: a root SequentialContainer wrapping a SwitchFilter and
 // a nested container that holds one TakeExposure.
 SequenceDetail sampleDetail() => SequenceDetail(
-  id: 'seq-1',
-  name: 'M42',
-  body: {
-    'schemaVersion': 'openastroara-sequence-v1',
-    r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-    'Name': 'root',
-    'Items': {
-      r'$type': itemsWrapperType,
-      r'$values': [
-        {r'$type': 'X.SwitchFilter', 'Filter': 'L'},
-        {
-          r'$type': 'X.SequentialContainer',
-          'Items': {
-            r'$type': itemsWrapperType,
-            r'$values': [
-              {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
-            ],
-          },
+      id: 'seq-1',
+      name: 'M42',
+      body: {
+        'schemaVersion': 'openastroara-sequence-v1',
+        r'$type':
+            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+        'Name': 'root',
+        'Items': {
+          r'$type': itemsWrapperType,
+          r'$values': [
+            {r'$type': 'X.SwitchFilter', 'Filter': 'L'},
+            {
+              r'$type': 'X.SequentialContainer',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': [
+                  {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
+                ],
+              },
+            },
+          ],
         },
-      ],
-    },
-  },
-);
+      },
+    );
 
 InstructionDef takeExposure() => instructionForType(
-  'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer',
-)!;
+    'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer')!;
 
 InstructionDef sequentialContainer() => instructionForType(
-  'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-)!;
+    'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer')!;
 
 void main() {
   late ProviderContainer container;
@@ -178,10 +177,7 @@ void main() {
       ctrl().addInstruction(sequentialContainer());
       final node = nodeAt(read()!.body, read()!.selectedPath!)!;
       expect(node['Name'], 'Sequential Instruction Set');
-      expect(
-        (node['Strategy'] as Map)[r'$type'],
-        contains('SequentialStrategy'),
-      );
+      expect((node['Strategy'] as Map)[r'$type'], contains('SequentialStrategy'));
       expect(node['Triggers'], isA<Map>());
       expect(node['Conditions'], isA<Map>());
     });
@@ -214,10 +210,8 @@ void main() {
       // Flutter onReorder: drag child 0 to the end of a 2-item list → newIndex 2.
       ctrl().reorder(const [], 0, 2);
       final s = read()!;
-      expect(childrenOf(s.body).map((n) => n[r'$type']), [
-        'X.SequentialContainer',
-        'X.SwitchFilter',
-      ]);
+      expect(childrenOf(s.body).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
       expect(s.selectedPath, isNull);
     });
 
@@ -235,10 +229,8 @@ void main() {
       ctrl().select(const [0]);
       ctrl().moveNode(const [0], up: false);
       final s = read()!;
-      expect(childrenOf(s.body).map((n) => n[r'$type']), [
-        'X.SequentialContainer',
-        'X.SwitchFilter',
-      ]);
+      expect(childrenOf(s.body).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
       expect(s.selectedPath, [1]); // selection followed the node
       expect(s.isDirty, isTrue);
     });
@@ -247,10 +239,8 @@ void main() {
       ctrl().load(sampleDetail());
       ctrl().moveNode(const [1], up: true);
       final s = read()!;
-      expect(childrenOf(s.body).map((n) => n[r'$type']), [
-        'X.SequentialContainer',
-        'X.SwitchFilter',
-      ]);
+      expect(childrenOf(s.body).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
       expect(s.selectedPath, [0]);
     });
 
@@ -265,29 +255,18 @@ void main() {
   });
 
   group('moveNodeTo (drag-and-drop reparent)', () {
-    test(
-      'reparents a leaf into a sibling container, clears selection, dirty',
-      () {
-        ctrl().load(
-          sampleDetail(),
-        ); // root: [SwitchFilter, container([TakeExposure])]
-        ctrl().select(const [0]);
-        ctrl().moveNodeTo(
-          const [0],
-          const [1],
-          0,
-        ); // SwitchFilter into the container
-        final s = read()!;
-        expect(childrenOf(s.body), hasLength(1)); // root now just the container
-        final container = nodeAt(s.body, [0])!;
-        expect(childrenOf(container).map((n) => n[r'$type']), [
-          'X.SwitchFilter',
-          'X.TakeExposure',
-        ]);
-        expect(s.selectedPath, isNull); // selection cleared (paths shifted)
-        expect(s.isDirty, isTrue);
-      },
-    );
+    test('reparents a leaf into a sibling container, clears selection, dirty', () {
+      ctrl().load(sampleDetail()); // root: [SwitchFilter, container([TakeExposure])]
+      ctrl().select(const [0]);
+      ctrl().moveNodeTo(const [0], const [1], 0); // SwitchFilter into the container
+      final s = read()!;
+      expect(childrenOf(s.body), hasLength(1)); // root now just the container
+      final container = nodeAt(s.body, [0])!;
+      expect(childrenOf(container).map((n) => n[r'$type']),
+          ['X.SwitchFilter', 'X.TakeExposure']);
+      expect(s.selectedPath, isNull); // selection cleared (paths shifted)
+      expect(s.isDirty, isTrue);
+    });
 
     test('reparents a nested leaf out to the root container', () {
       ctrl().load(sampleDetail());
@@ -295,21 +274,14 @@ void main() {
       final s = read()!;
       expect(childrenOf(s.body), hasLength(3));
       expect(childrenOf(s.body)[0][r'$type'], 'X.TakeExposure');
-      expect(
-        childrenOf(nodeAt(s.body, [2])!),
-        isEmpty,
-      ); // the emptied container
+      expect(childrenOf(nodeAt(s.body, [2])!), isEmpty); // the emptied container
       expect(s.isDirty, isTrue);
     });
 
     test('no-op into a leaf, into self/descendant, or for the root', () {
       ctrl().load(sampleDetail());
       final before = read()!.body;
-      ctrl().moveNodeTo(
-        const [1],
-        const [0],
-        0,
-      ); // [0] is a leaf → not a container
+      ctrl().moveNodeTo(const [1], const [0], 0); // [0] is a leaf → not a container
       ctrl().moveNodeTo(const [1], const [1], 0); // into self
       ctrl().moveNodeTo(const [1], const [1, 0], 0); // into descendant
       ctrl().moveNodeTo(const [], const [1], 0); // moving the root
@@ -338,33 +310,26 @@ void main() {
 
   group('conditions on a container', () {
     ConditionDef loopCondition() => conditionForType(
-      'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
-    )!;
+        'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!;
 
-    test(
-      'addConditionTo appends to a container, keeps selection, goes dirty',
-      () {
-        ctrl().load(sampleDetail());
-        ctrl().select(const [1]); // the nested container
-        ctrl().addConditionTo(const [1], loopCondition());
-        final s = read()!;
-        final container = nodeAt(s.body, [1])!;
-        expect(conditionsOf(container), hasLength(1));
-        expect(conditionsOf(container).single['Iterations'], 2);
-        expect(s.selectedPath, [1]); // container stays selected
-        expect(s.isDirty, isTrue);
-      },
-    );
+    test('addConditionTo appends to a container, keeps selection, goes dirty', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [1]); // the nested container
+      ctrl().addConditionTo(const [1], loopCondition());
+      final s = read()!;
+      final container = nodeAt(s.body, [1])!;
+      expect(conditionsOf(container), hasLength(1));
+      expect(conditionsOf(container).single['Iterations'], 2);
+      expect(s.selectedPath, [1]); // container stays selected
+      expect(s.isDirty, isTrue);
+    });
 
-    test(
-      'addConditionTo is a no-op on a leaf (no spurious Conditions wrapper)',
-      () {
-        ctrl().load(sampleDetail());
-        final before = read()!.body;
-        ctrl().addConditionTo(const [0], loopCondition()); // [0] is a leaf
-        expect(read()!.body, same(before));
-      },
-    );
+    test('addConditionTo is a no-op on a leaf (no spurious Conditions wrapper)', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().addConditionTo(const [0], loopCondition()); // [0] is a leaf
+      expect(read()!.body, same(before));
+    });
 
     test('setConditionFieldOn edits a condition in place', () {
       ctrl().load(sampleDetail());
@@ -373,62 +338,49 @@ void main() {
       expect(conditionsOf(nodeAt(read()!.body, [1])!).single['Iterations'], 12);
     });
 
-    test(
-      'removeConditionFrom drops one and bounds-checks (no-op out of range)',
-      () {
-        ctrl().load(sampleDetail());
-        ctrl().addConditionTo(const [1], loopCondition());
-        final afterAdd = read()!.body;
-        ctrl().removeConditionFrom(const [1], 9); // out of range → no-op
-        expect(read()!.body, same(afterAdd));
-        ctrl().removeConditionFrom(const [1], 0);
-        expect(conditionsOf(nodeAt(read()!.body, [1])!), isEmpty);
-      },
-    );
+    test('removeConditionFrom drops one and bounds-checks (no-op out of range)', () {
+      ctrl().load(sampleDetail());
+      ctrl().addConditionTo(const [1], loopCondition());
+      final afterAdd = read()!.body;
+      ctrl().removeConditionFrom(const [1], 9); // out of range → no-op
+      expect(read()!.body, same(afterAdd));
+      ctrl().removeConditionFrom(const [1], 0);
+      expect(conditionsOf(nodeAt(read()!.body, [1])!), isEmpty);
+    });
   });
 
   group('triggers on a container', () {
     TriggerDef meridianFlip() => triggerForType(
-      'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
-    )!;
+        'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer')!;
 
-    test(
-      'addTriggerTo appends to a container, keeps selection, goes dirty',
-      () {
-        ctrl().load(sampleDetail());
-        ctrl().select(const [1]); // the nested container
-        ctrl().addTriggerTo(const [1], meridianFlip());
-        final s = read()!;
-        final container = nodeAt(s.body, [1])!;
-        expect(triggersOf(container), hasLength(1));
-        expect(triggersOf(container).single['TriggerRunner'], isA<Map>());
-        expect(s.selectedPath, [1]); // container stays selected
-        expect(s.isDirty, isTrue);
-      },
-    );
+    test('addTriggerTo appends to a container, keeps selection, goes dirty', () {
+      ctrl().load(sampleDetail());
+      ctrl().select(const [1]); // the nested container
+      ctrl().addTriggerTo(const [1], meridianFlip());
+      final s = read()!;
+      final container = nodeAt(s.body, [1])!;
+      expect(triggersOf(container), hasLength(1));
+      expect(triggersOf(container).single['TriggerRunner'], isA<Map>());
+      expect(s.selectedPath, [1]); // container stays selected
+      expect(s.isDirty, isTrue);
+    });
 
-    test(
-      'addTriggerTo is a no-op on a leaf (no spurious Triggers wrapper)',
-      () {
-        ctrl().load(sampleDetail());
-        final before = read()!.body;
-        ctrl().addTriggerTo(const [0], meridianFlip()); // [0] is a leaf
-        expect(read()!.body, same(before));
-      },
-    );
+    test('addTriggerTo is a no-op on a leaf (no spurious Triggers wrapper)', () {
+      ctrl().load(sampleDetail());
+      final before = read()!.body;
+      ctrl().addTriggerTo(const [0], meridianFlip()); // [0] is a leaf
+      expect(read()!.body, same(before));
+    });
 
-    test(
-      'removeTriggerFrom drops one and bounds-checks (no-op out of range)',
-      () {
-        ctrl().load(sampleDetail());
-        ctrl().addTriggerTo(const [1], meridianFlip());
-        final afterAdd = read()!.body;
-        ctrl().removeTriggerFrom(const [1], 9); // out of range → no-op
-        expect(read()!.body, same(afterAdd));
-        ctrl().removeTriggerFrom(const [1], 0);
-        expect(triggersOf(nodeAt(read()!.body, [1])!), isEmpty);
-      },
-    );
+    test('removeTriggerFrom drops one and bounds-checks (no-op out of range)', () {
+      ctrl().load(sampleDetail());
+      ctrl().addTriggerTo(const [1], meridianFlip());
+      final afterAdd = read()!.body;
+      ctrl().removeTriggerFrom(const [1], 9); // out of range → no-op
+      expect(read()!.body, same(afterAdd));
+      ctrl().removeTriggerFrom(const [1], 0);
+      expect(triggersOf(nodeAt(read()!.body, [1])!), isEmpty);
+    });
 
     test('setTriggerFieldOn edits a trigger in place, guards no-ops', () {
       ctrl().load(sampleDetail());
@@ -436,19 +388,9 @@ void main() {
       ctrl().setTriggerFieldOn(const [1], 0, 'Parent', 'x');
       expect(triggersOf(nodeAt(read()!.body, [1])!).single['Parent'], 'x');
       final before = read()!.body;
-      ctrl().setTriggerFieldOn(
-        const [1],
-        9,
-        'Parent',
-        'y',
-      ); // out of range → no-op
+      ctrl().setTriggerFieldOn(const [1], 9, 'Parent', 'y'); // out of range → no-op
       expect(read()!.body, same(before));
-      ctrl().setTriggerFieldOn(
-        const [0],
-        0,
-        'Parent',
-        'y',
-      ); // leaf → no triggers → no-op
+      ctrl().setTriggerFieldOn(const [0], 0, 'Parent', 'y'); // leaf → no triggers → no-op
       expect(read()!.body, same(before));
     });
   });
@@ -497,35 +439,30 @@ void main() {
   });
 
   group('undo/redo (S12)', () {
-    test(
-      'every structural mutator is undoable; redo replays; edits clear redo',
-      () {
-        final n = ctrl();
-        n.load(sampleDetail());
-        final original = read()!.body;
+    test('every structural mutator is undoable; redo replays; edits clear redo',
+        () {
+      final n = ctrl();
+      n.load(sampleDetail());
+      final original = read()!.body;
 
-        n.addInstruction(takeExposure());
-        final afterAdd = read()!.body;
-        expect(n.canUndo, isTrue);
+      n.addInstruction(takeExposure());
+      final afterAdd = read()!.body;
+      expect(n.canUndo, isTrue);
 
-        n.undo();
-        expect(identical(read()!.body, original), isTrue);
-        expect(
-          read()!.selectedPath,
-          isNull,
-          reason: 'undo clears selection (stale paths are a trap)',
-        );
-        expect(n.canRedo, isTrue);
+      n.undo();
+      expect(identical(read()!.body, original), isTrue);
+      expect(read()!.selectedPath, isNull,
+          reason: 'undo clears selection (stale paths are a trap)');
+      expect(n.canRedo, isTrue);
 
-        n.redo();
-        expect(identical(read()!.body, afterAdd), isTrue);
+      n.redo();
+      expect(identical(read()!.body, afterAdd), isTrue);
 
-        // A fresh edit clears the redo stack.
-        n.undo();
-        n.addInstruction(takeExposure());
-        expect(n.canRedo, isFalse);
-      },
-    );
+      // A fresh edit clears the redo stack.
+      n.undo();
+      n.addInstruction(takeExposure());
+      expect(n.canRedo, isFalse);
+    });
 
     test('consecutive edits to the same field coalesce into one undo step', () {
       final n = ctrl();
@@ -599,11 +536,8 @@ void main() {
       n.selectAdjacent(next: false);
       final after = c.read(sequenceEditorProvider)!;
       expect(after.selectedPath, [1, 0]);
-      expect(
-        identical(after.body, before),
-        isTrue,
-        reason: 'navigation must never touch the body (no dirty, no undo)',
-      );
+      expect(identical(after.body, before), isTrue,
+          reason: 'navigation must never touch the body (no dirty, no undo)');
       expect(n.canUndo, isFalse);
     });
   });
@@ -618,22 +552,16 @@ void main() {
     // (TakeExposure). Running index 0 → leaf [0] is the current item.
     ProviderContainer liveContainer() {
       api = _LiveFakeClient();
-      final c = ProviderContainer(
-        overrides: [
-          sequenceApiProvider.overrideWithValue(api),
-          sequenceRunStateProvider.overrideWith(
-            () => _FakeRunNotifier(
-              const SequenceRunStateInfo(
+      final c = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(api),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(
+            const SequenceRunStateInfo(
                 sequenceId: 'seq-1',
                 runId: 'run-1',
                 state: SequenceRunState.running,
                 currentInstructionIndex: 0,
-                instructionsTotal: 2,
-              ),
-            ),
-          ),
-        ],
-      );
+                instructionsTotal: 2))),
+      ]);
       addTearDown(c.dispose);
       return c;
     }
@@ -652,7 +580,7 @@ void main() {
       n.removeNode(const [1]);
       await Future<void>.delayed(Duration.zero);
       expect(api.removedPaths, [
-        [1],
+        [1]
       ]);
       // The editor reloaded the daemon's returned detail (fresh, not dirty).
       expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
@@ -675,11 +603,8 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       expect(api.addedItems, hasLength(1));
       final sent = api.addedItems.single;
-      expect(
-        sent[r'$type'],
-        contains('SequentialContainer'),
-        reason: 'bare instructions ride inside a fresh group',
-      );
+      expect(sent[r'$type'], contains('SequentialContainer'),
+          reason: 'bare instructions ride inside a fresh group');
       expect(childrenOf(sent).single[r'$type'], contains('TakeExposure'));
     });
 
@@ -695,11 +620,7 @@ void main() {
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
       final c = liveContainer();
       final n = await liveCtrl(c);
-      n.moveNodeTo(
-        const [0],
-        const [1],
-        0,
-      ); // reparent into the nested container
+      n.moveNodeTo(const [0], const [1], 0); // reparent into the nested container
       expect(api.moves, isEmpty);
       expect(c.read(liveEditNoticeProvider), isNotNull);
     });
@@ -720,12 +641,10 @@ class _LiveFakeClient implements SequenceClient {
   final List<(List<int>, int)> moves = [];
 
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) async {
+  Future<SequenceDetail> addRunItem(String id,
+      {required List<int> parentPath,
+      int? index,
+      required Map<String, dynamic> item}) async {
     addedItems.add(item);
     return sampleDetail();
   }
@@ -738,10 +657,7 @@ class _LiveFakeClient implements SequenceClient {
 
   @override
   Future<SequenceDetail> moveRunItem(
-    String id,
-    List<int> path,
-    int newIndex,
-  ) async {
+      String id, List<int> path, int newIndex) async {
     moves.add((path, newIndex));
     return sampleDetail();
   }

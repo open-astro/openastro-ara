@@ -104,19 +104,18 @@ class PolarAlignCheckResult {
     this.noisy = false,
   });
 
-  factory PolarAlignCheckResult.fromJson(
-    Map<String, dynamic> json,
-  ) => PolarAlignCheckResult(
-    altErrorArcmin: (json['altitude_error_arcmin'] as num?)?.toDouble() ?? 0,
-    azErrorArcmin: (json['azimuth_error_arcmin'] as num?)?.toDouble() ?? 0,
-    totalErrorArcmin: (json['total_error_arcmin'] as num?)?.toDouble() ?? 0,
-    coneHalfAngleDeg: (json['cone_half_angle_deg'] as num?)?.toDouble() ?? 0,
-    turnMismatchDeg: (json['turn_mismatch_deg'] as num?)?.toDouble() ?? 0,
-    fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
-    fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
-    verdict: json['verdict'] is String ? json['verdict'] as String : '',
-    noisy: json['noisy'] == true,
-  );
+  factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
+      PolarAlignCheckResult(
+        altErrorArcmin: (json['altitude_error_arcmin'] as num?)?.toDouble() ?? 0,
+        azErrorArcmin: (json['azimuth_error_arcmin'] as num?)?.toDouble() ?? 0,
+        totalErrorArcmin: (json['total_error_arcmin'] as num?)?.toDouble() ?? 0,
+        coneHalfAngleDeg: (json['cone_half_angle_deg'] as num?)?.toDouble() ?? 0,
+        turnMismatchDeg: (json['turn_mismatch_deg'] as num?)?.toDouble() ?? 0,
+        fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
+        fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
+        verdict: json['verdict'] is String ? json['verdict'] as String : '',
+        noisy: json['noisy'] == true,
+      );
 }
 
 /// The last routine to end with an error reading outside the rough stage
@@ -168,17 +167,8 @@ abstract final class PolarAlignerCauses {
   static const stoppedByUser = 'stopped_by_user';
 
   static const all = [
-    wrongDirection,
-    wrongScale,
-    deviceFault,
-    notCalibrated,
-    deviceRefused,
-    diverging,
-    timeout,
-    linkLost,
-    mountTracking,
-    mountSlewing,
-    stoppedByUser,
+    wrongDirection, wrongScale, deviceFault, notCalibrated, deviceRefused, diverging,
+    timeout, linkLost, mountTracking, mountSlewing, stoppedByUser,
   ];
 }
 
@@ -259,19 +249,15 @@ class PolarAligner {
   });
 
   factory PolarAligner.fromJson(Map<String, dynamic> json) => PolarAligner(
-    present: json['present'] == true,
-    carrier: json['carrier'] is String ? json['carrier'] as String : null,
-    name: json['name'] is String ? json['name'] as String : null,
-    drivable: json['drivable'] == true,
-    notDrivableReason: json['not_drivable_reason'] is String
-        ? json['not_drivable_reason'] as String
-        : null,
-    moving: json['moving'] == true,
-    azimuthPositionArcmin: (json['azimuth_position_arcmin'] as num?)
-        ?.toDouble(),
-    altitudePositionArcmin: (json['altitude_position_arcmin'] as num?)
-        ?.toDouble(),
-  );
+        present: json['present'] == true,
+        carrier: json['carrier'] is String ? json['carrier'] as String : null,
+        name: json['name'] is String ? json['name'] as String : null,
+        drivable: json['drivable'] == true,
+        notDrivableReason: json['not_drivable_reason'] is String ? json['not_drivable_reason'] as String : null,
+        moving: json['moving'] == true,
+        azimuthPositionArcmin: (json['azimuth_position_arcmin'] as num?)?.toDouble(),
+        altitudePositionArcmin: (json['altitude_position_arcmin'] as num?)?.toDouble(),
+      );
 }
 
 /// Live-adjust capture modes (`PolarAlignSettingsDto.loop_mode`).
@@ -399,7 +385,6 @@ class PolarAlignStatus {
   /// #2082 a point of the measurement stayed scattered over 3″ after its
   /// retake: the readout rests on noisy solves.
   final bool measurementNoisy;
-
   /// #2083 the current or last run turns RA by hand (Ara moves nothing).
   final bool handTurn;
 
@@ -430,35 +415,25 @@ class PolarAlignStatus {
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
       PolarAlignStatus(
-        state: json['state'] is String
-            ? json['state'] as String
-            : PolarAlignStates.idle,
+        state: json['state'] is String ? json['state'] as String : PolarAlignStates.idle,
         currentErrorArcmin: (json['current_error_arcmin'] as num?)?.toDouble(),
-        azimuthAdjustmentArcmin: (json['azimuth_adjustment_arcmin'] as num?)
-            ?.toDouble(),
-        altitudeAdjustmentArcmin: (json['altitude_adjustment_arcmin'] as num?)
-            ?.toDouble(),
+        azimuthAdjustmentArcmin: (json['azimuth_adjustment_arcmin'] as num?)?.toDouble(),
+        altitudeAdjustmentArcmin: (json['altitude_adjustment_arcmin'] as num?)?.toDouble(),
         framesCaptured: (json['frames_captured'] as num?)?.toInt() ?? 0,
         lastFrameId: json['last_frame_id'] as String?,
         waitingForCapture: json['waiting_for_capture'] == true,
         lastFrame: json['last_frame'] is Map<String, dynamic>
-            ? PolarAlignFrameInfo.fromJson(
-                json['last_frame'] as Map<String, dynamic>,
-              )
+            ? PolarAlignFrameInfo.fromJson(json['last_frame'] as Map<String, dynamic>)
             : null,
         stage: json['stage'] is String ? json['stage'] as String : null,
         waitingForHome: json['waiting_for_home'] == true,
         checkSolvesDone: (json['check_solves_done'] as num?)?.toInt() ?? 0,
         checkResult: json['check_result'] is Map<String, dynamic>
-            ? PolarAlignCheckResult.fromJson(
-                json['check_result'] as Map<String, dynamic>,
-              )
+            ? PolarAlignCheckResult.fromJson(json['check_result'] as Map<String, dynamic>)
             : null,
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
         correction: PolarAlignerRun.tryParse(json['correction']),
-        readoutCaution: json['readout_caution'] is String
-            ? json['readout_caution'] as String
-            : null,
+        readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
         camera: json['camera'] is String ? json['camera'] as String : null,
         measurementNoisy: json['measurement_noisy'] == true,
         handTurn: json['hand_turn'] == true,
@@ -524,20 +499,20 @@ class PolarAlignSettings {
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'exposure_seconds': exposureSeconds,
-    'binning': binning,
-    'target_tolerance_arcmin': targetToleranceArcmin,
-    'seed_rotation_deg': seedRotationDeg,
-    'loop_cadence_ms': loopCadenceMs,
-    'settle_seconds': settleSeconds,
-    'loop_mode': loopMode,
-    'check_step_deg': checkStepDeg,
-    'coarse_exposure_seconds': coarseExposureSeconds,
-    'polar_aligner_auto': polarAlignerAuto,
-    'stop_tracking_when_done': stopTrackingWhenDone,
-    'camera': camera,
-    'frames_per_point': framesPerPoint,
-  };
+        'exposure_seconds': exposureSeconds,
+        'binning': binning,
+        'target_tolerance_arcmin': targetToleranceArcmin,
+        'seed_rotation_deg': seedRotationDeg,
+        'loop_cadence_ms': loopCadenceMs,
+        'settle_seconds': settleSeconds,
+        'loop_mode': loopMode,
+        'check_step_deg': checkStepDeg,
+        'coarse_exposure_seconds': coarseExposureSeconds,
+        'polar_aligner_auto': polarAlignerAuto,
+        'stop_tracking_when_done': stopTrackingWhenDone,
+        'camera': camera,
+        'frames_per_point': framesPerPoint,
+      };
 
   PolarAlignSettings copyWith({
     double? exposureSeconds,
@@ -553,21 +528,24 @@ class PolarAlignSettings {
     bool? stopTrackingWhenDone,
     String? camera,
     int? framesPerPoint,
-  }) => PolarAlignSettings(
-    exposureSeconds: exposureSeconds ?? this.exposureSeconds,
-    binning: binning ?? this.binning,
-    targetToleranceArcmin: targetToleranceArcmin ?? this.targetToleranceArcmin,
-    seedRotationDeg: seedRotationDeg ?? this.seedRotationDeg,
-    loopCadenceMs: loopCadenceMs ?? this.loopCadenceMs,
-    settleSeconds: settleSeconds ?? this.settleSeconds,
-    loopMode: loopMode ?? this.loopMode,
-    checkStepDeg: checkStepDeg ?? this.checkStepDeg,
-    coarseExposureSeconds: coarseExposureSeconds ?? this.coarseExposureSeconds,
-    polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
-    stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
-    camera: camera ?? this.camera,
-    framesPerPoint: framesPerPoint ?? this.framesPerPoint,
-  );
+  }) =>
+      PolarAlignSettings(
+        exposureSeconds: exposureSeconds ?? this.exposureSeconds,
+        binning: binning ?? this.binning,
+        targetToleranceArcmin:
+            targetToleranceArcmin ?? this.targetToleranceArcmin,
+        seedRotationDeg: seedRotationDeg ?? this.seedRotationDeg,
+        loopCadenceMs: loopCadenceMs ?? this.loopCadenceMs,
+        settleSeconds: settleSeconds ?? this.settleSeconds,
+        loopMode: loopMode ?? this.loopMode,
+        checkStepDeg: checkStepDeg ?? this.checkStepDeg,
+        coarseExposureSeconds:
+            coarseExposureSeconds ?? this.coarseExposureSeconds,
+        polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
+        stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
+        camera: camera ?? this.camera,
+        framesPerPoint: framesPerPoint ?? this.framesPerPoint,
+      );
 }
 
 /// The RA turn directions of a [PolarAlignStartPlan].
@@ -628,36 +606,34 @@ class PolarAlignStartPlan {
 
   /// This plan, turned by hand: the start asks the rig to move nothing.
   PolarAlignStartPlan byHand() => PolarAlignStartPlan(
-    stage: stage,
-    direction: direction,
-    stepDeg: stepDeg,
-    turns: turns,
-    maxSweepDeg: maxSweepDeg,
-    newOrigin: newOrigin,
-    originOffsetDeg: originOffsetDeg,
-    sweepLimitDeg: sweepLimitDeg,
-    camera: camera,
-    handTurnAvailable: handTurnAvailable,
-    handTurn: true,
-  );
+        stage: stage,
+        direction: direction,
+        stepDeg: stepDeg,
+        turns: turns,
+        maxSweepDeg: maxSweepDeg,
+        newOrigin: newOrigin,
+        originOffsetDeg: originOffsetDeg,
+        sweepLimitDeg: sweepLimitDeg,
+        camera: camera,
+        handTurnAvailable: handTurnAvailable,
+        handTurn: true,
+      );
 
-  factory PolarAlignStartPlan.fromJson(
-    Map<String, dynamic> json, {
-    String? stage,
-  }) => PolarAlignStartPlan(
-    stage: json['stage'] as String? ?? stage,
-    direction: json['direction'] == PolarAlignDirections.west
-        ? PolarAlignDirections.west
-        : PolarAlignDirections.east,
-    stepDeg: (json['step_deg'] as num?)?.toDouble() ?? 10.0,
-    turns: (json['turns'] as num?)?.toInt() ?? 2,
-    maxSweepDeg: (json['max_sweep_deg'] as num?)?.toDouble() ?? 20.0,
-    newOrigin: json['new_origin'] != false,
-    originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
-    sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
-    camera: json['camera'] == PolarAlignCameras.main
-        ? PolarAlignCameras.main
-        : PolarAlignCameras.guide,
-    handTurnAvailable: json['hand_turn_available'] == true,
-  );
+  factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
+      PolarAlignStartPlan(
+        stage: json['stage'] as String? ?? stage,
+        direction: json['direction'] == PolarAlignDirections.west
+            ? PolarAlignDirections.west
+            : PolarAlignDirections.east,
+        stepDeg: (json['step_deg'] as num?)?.toDouble() ?? 10.0,
+        turns: (json['turns'] as num?)?.toInt() ?? 2,
+        maxSweepDeg: (json['max_sweep_deg'] as num?)?.toDouble() ?? 20.0,
+        newOrigin: json['new_origin'] != false,
+        originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
+        sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
+        camera: json['camera'] == PolarAlignCameras.main
+            ? PolarAlignCameras.main
+            : PolarAlignCameras.guide,
+        handTurnAvailable: json['hand_turn_available'] == true,
+      );
 }

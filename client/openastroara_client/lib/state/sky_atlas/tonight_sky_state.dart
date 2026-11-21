@@ -200,11 +200,8 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     if (_pinned) return state;
     // The site's own twilight line: the list's dark windows open there, so a
     // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).
-    return isDarkNow(
-      site,
-      nowUtc: ref.read(clockProvider)(),
-      belowDeg: twilightSunAltitudeDeg(site.twilightDefinition),
-    );
+    return isDarkNow(site, nowUtc: ref.read(clockProvider)(),
+        belowDeg: twilightSunAltitudeDeg(site.twilightDefinition));
   }
 
   void toggle() {

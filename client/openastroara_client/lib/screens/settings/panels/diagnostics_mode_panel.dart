@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../state/settings/diagnostics_mode_state.dart';
@@ -146,8 +144,9 @@ class _ModeOption extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(
                       description,
-                      style: Theme.of(context).textTheme.bodySmall
-                          ?.copyWith(color: AraColors.textSecondary),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
                     ),
                   ],
                 ),

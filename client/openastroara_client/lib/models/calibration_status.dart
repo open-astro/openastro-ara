@@ -60,12 +60,8 @@ class CalibrationStatus {
       autoLoadDarks: _bool(json['auto_load_darks']),
       autoLoadDefectMap: _bool(json['auto_load_defect_map']),
       darkCountLoaded: _int(json['dark_count_loaded']),
-      darkMinExposureSecondsLoaded: _double(
-        json['dark_min_exposure_seconds_loaded'],
-      ),
-      darkMaxExposureSecondsLoaded: _double(
-        json['dark_max_exposure_seconds_loaded'],
-      ),
+      darkMinExposureSecondsLoaded: _double(json['dark_min_exposure_seconds_loaded']),
+      darkMaxExposureSecondsLoaded: _double(json['dark_max_exposure_seconds_loaded']),
     );
   }
 
@@ -99,21 +95,21 @@ class CalibrationStatus {
 
   @override
   int get hashCode => Object.hashAll([
-    profileId,
-    darkLibraryPath,
-    defectMapPath,
-    darkLibraryExists,
-    defectMapExists,
-    darkLibraryCompatible,
-    defectMapCompatible,
-    darkLibraryLoaded,
-    defectMapLoaded,
-    autoLoadDarks,
-    autoLoadDefectMap,
-    darkCountLoaded,
-    darkMinExposureSecondsLoaded,
-    darkMaxExposureSecondsLoaded,
-  ]);
+        profileId,
+        darkLibraryPath,
+        defectMapPath,
+        darkLibraryExists,
+        defectMapExists,
+        darkLibraryCompatible,
+        defectMapCompatible,
+        darkLibraryLoaded,
+        defectMapLoaded,
+        autoLoadDarks,
+        autoLoadDefectMap,
+        darkCountLoaded,
+        darkMinExposureSecondsLoaded,
+        darkMaxExposureSecondsLoaded,
+      ]);
 }
 
 /// The status read's envelope: [connected] distinguishes "guider not connected"

@@ -24,10 +24,8 @@ class SequenceLoadDialog extends ConsumerWidget {
   const SequenceLoadDialog({super.key});
 
   /// Show the dialog. Returns the selected sequence id, or null if dismissed.
-  static Future<String?> show(BuildContext context) => showDialog<String>(
-    context: context,
-    builder: (_) => const SequenceLoadDialog(),
-  );
+  static Future<String?> show(BuildContext context) =>
+      showDialog<String>(context: context, builder: (_) => const SequenceLoadDialog());
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -60,70 +58,66 @@ class SequenceLoadDialog extends ConsumerWidget {
     );
   }
 
-  Widget _serverList(
-    BuildContext context,
-    WidgetRef ref,
-    AsyncValue<List<SequenceListItem>?> async,
-  ) {
+  Widget _serverList(BuildContext context, WidgetRef ref,
+      AsyncValue<List<SequenceListItem>?> async) {
     return async.when(
-      loading: () => const SizedBox(
-        height: 120,
-        child: Center(child: AdaptiveProgressIndicator()),
-      ),
-      error: (e, st) {
-        // Keep the raw error in the logs (diagnosable in dev); show the user
-        // a clean, actionable message.
-        debugPrint('[sequencer] sequence list load failed: $e\n$st');
-        return const _Message(
-          'Couldn\'t load sequences from the server. Check the connection and try again.',
-        );
-      },
-      data: (list) {
-        if (list == null) {
-          return const _Message('Connect to your rig to load saved sequences.');
-        }
-        if (list.isEmpty) {
-          return const _Message('No saved sequences yet.');
-        }
-        // Cap the height so a server with dozens of sequences can't grow the
-        // dialog past the screen; the list scrolls within the cap.
-        return ConstrainedBox(
-          constraints: const BoxConstraints(maxHeight: 360),
-          child: ListView.builder(
-            // No shrinkWrap: the ConstrainedBox bounds the viewport, so the
-            // builder can lazily build only visible rows.
-            itemCount: list.length,
-            itemBuilder: (context, i) {
-              final s = list[i];
-              return ListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(s.name.isEmpty ? '(untitled)' : s.name),
-                subtitle: Text(
-                  '${s.instructionCount} instruction(s) · ${s.targetCount} target(s)',
-                  style: const TextStyle(color: AraColors.textSecondary),
-                ),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    RunStateBadge(s.currentRunState),
-                    // §70.5: export this sequence to a shareable .araseq.json
-                    // file. Doesn't select/pop — the user may export several.
-                    _ExportSequenceButton(id: s.id, name: s.name),
-                    // Delete (with confirm). Doesn't pop either — the list
-                    // refreshes in place so several can be cleaned up in one go.
-                    _DeleteSequenceButton(id: s.id, name: s.name),
-                  ],
-                ),
-                onTap: () {
-                  ref.read(selectedSequenceIdProvider.notifier).select(s.id);
-                  Navigator.of(context).pop(s.id);
-                },
-              );
-            },
+          loading: () => const SizedBox(
+            height: 120,
+            child: Center(child: AdaptiveProgressIndicator()),
           ),
+          error: (e, st) {
+            // Keep the raw error in the logs (diagnosable in dev); show the user
+            // a clean, actionable message.
+            debugPrint('[sequencer] sequence list load failed: $e\n$st');
+            return const _Message(
+                'Couldn\'t load sequences from the server. Check the connection and try again.');
+          },
+          data: (list) {
+            if (list == null) {
+              return const _Message('Connect to your rig to load saved sequences.');
+            }
+            if (list.isEmpty) {
+              return const _Message('No saved sequences yet.');
+            }
+            // Cap the height so a server with dozens of sequences can't grow the
+            // dialog past the screen; the list scrolls within the cap.
+            return ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 360),
+              child: ListView.builder(
+              // No shrinkWrap: the ConstrainedBox bounds the viewport, so the
+              // builder can lazily build only visible rows.
+              itemCount: list.length,
+              itemBuilder: (context, i) {
+                final s = list[i];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(s.name.isEmpty ? '(untitled)' : s.name),
+                  subtitle: Text(
+                    '${s.instructionCount} instruction(s) · ${s.targetCount} target(s)',
+                    style: const TextStyle(color: AraColors.textSecondary),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RunStateBadge(s.currentRunState),
+                      // §70.5: export this sequence to a shareable .araseq.json
+                      // file. Doesn't select/pop — the user may export several.
+                      _ExportSequenceButton(id: s.id, name: s.name),
+                      // Delete (with confirm). Doesn't pop either — the list
+                      // refreshes in place so several can be cleaned up in one go.
+                      _DeleteSequenceButton(id: s.id, name: s.name),
+                    ],
+                  ),
+                  onTap: () {
+                    ref.read(selectedSequenceIdProvider.notifier).select(s.id);
+                    Navigator.of(context).pop(s.id);
+                  },
+                );
+              },
+              ),
+            );
+          },
         );
-      },
-    );
   }
 }
 
@@ -155,13 +149,10 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
       children: [
         const Padding(
           padding: EdgeInsets.only(bottom: 4),
-          child: Text(
-            'Offline drafts',
-            style: TextStyle(
-              color: AraColors.textSecondary,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
+          child: Text('Offline drafts',
+              style: TextStyle(
+                  color: AraColors.textSecondary,
+                  fontWeight: FontWeight.bold)),
         ),
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 180),
@@ -172,7 +163,8 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
               final d = drafts[i];
               return ListTile(
                 contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.cloud_off_outlined, size: 18),
+                leading:
+                    const Icon(Icons.cloud_off_outlined, size: 18),
                 title: Text(d.name.isEmpty ? '(untitled draft)' : d.name),
                 trailing: Row(
                   mainAxisSize: MainAxisSize.min,
@@ -189,9 +181,8 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18),
                       tooltip: 'Delete draft',
-                      onPressed: _busy
-                          ? null
-                          : () => _delete(context, d.id, d.name),
+                      onPressed:
+                          _busy ? null : () => _delete(context, d.id, d.name),
                     ),
                   ],
                 ),
@@ -216,7 +207,8 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
       // Was the pushed draft the one open in the editor? Read BEFORE the push
       // (the await is a gap the selection could change under).
       final wasOpen = ref.read(selectedSequenceIdProvider) == id;
-      final newId = await ref.read(draftSequencesProvider.notifier).push(id);
+      final newId =
+          await ref.read(draftSequencesProvider.notifier).push(id);
       // Swap the editor to the pushed copy ONLY when this draft was already
       // the open one — pushing an unrelated draft must not clobber whatever
       // (possibly dirty) sequence the user is editing (review #845).
@@ -224,18 +216,14 @@ class _DraftsSectionState extends ConsumerState<_DraftsSection> {
         ref.read(selectedSequenceIdProvider.notifier).select(newId);
       }
       messenger.showSnackBar(
-        const SnackBar(content: Text('Draft pushed to the server.')),
-      );
+          const SnackBar(content: Text('Draft pushed to the server.')));
     } catch (e) {
       debugPrint('[sequencer] draft push failed: $e');
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            "Couldn't push the draft. Check the connection and try again.",
-          ),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(
+        content: Text(
+            "Couldn't push the draft. Check the connection and try again."),
+        backgroundColor: AraColors.accentError,
+      ));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -322,8 +310,7 @@ class _ExportSequenceButton extends ConsumerStatefulWidget {
   final String name;
 
   @override
-  ConsumerState<_ExportSequenceButton> createState() =>
-      _ExportSequenceButtonState();
+  ConsumerState<_ExportSequenceButton> createState() => _ExportSequenceButtonState();
 }
 
 class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
@@ -333,12 +320,9 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     final api = ref.read(sequenceApiProvider);
     final messenger = ScaffoldMessenger.of(context);
     if (api == null) {
-      messenger.showSnackBar(
-        const SnackBar(
+      messenger.showSnackBar(const SnackBar(
           content: Text('Connect to your rig to export sequences.'),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+          backgroundColor: AraColors.accentError));
       return;
     }
     setState(() => _busy = true);
@@ -348,34 +332,24 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
       // bytes itself on the desktop targets and returns the saved location as a
       // Uri (null on cancel).
       final bytes = Uint8List.fromList(
-        utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)),
-      );
+          utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
       final saved = await FilePicker.saveFile(
         dialogTitle: 'Save sequence share',
         fileName: shareFileName(
-          share.sequenceName.isEmpty ? widget.name : share.sequenceName,
-          fallbackBase: 'sequence',
-          extension: 'araseq.json',
-        ),
+            share.sequenceName.isEmpty ? widget.name : share.sequenceName,
+            fallbackBase: 'sequence',
+            extension: 'araseq.json'),
         bytes: bytes,
       );
       if (saved == null || !mounted) return; // cancelled / dialog gone
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Exported "${widget.name.isEmpty ? 'sequence' : widget.name}" '
-            '— share this file; the recipient imports it.',
-          ),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+          content: Text('Exported "${widget.name.isEmpty ? 'sequence' : widget.name}" '
+              '— share this file; the recipient imports it.')));
     } catch (e, st) {
       debugPrint('[sequencer] export error: $e\n$st');
-      messenger.showSnackBar(
-        const SnackBar(
+      messenger.showSnackBar(const SnackBar(
           content: Text("Couldn't export that sequence."),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+          backgroundColor: AraColors.accentError));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -386,10 +360,7 @@ class _ExportSequenceButtonState extends ConsumerState<_ExportSequenceButton> {
     return IconButton(
       icon: _busy
           ? const SizedBox(
-              width: 18,
-              height: 18,
-              child: AdaptiveProgressIndicator(strokeWidth: 2),
-            )
+              width: 18, height: 18, child: AdaptiveProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.save_alt, size: 18),
       tooltip: 'Export…',
       onPressed: _busy ? null : _run,
@@ -419,12 +390,8 @@ class _DeleteSequenceButtonState extends ConsumerState<_DeleteSequenceButton> {
   Future<void> _run() async {
     setState(() => _busy = true);
     try {
-      await confirmAndDeleteSequence(
-        context,
-        ref,
-        id: widget.id,
-        name: widget.name,
-      );
+      await confirmAndDeleteSequence(context, ref,
+          id: widget.id, name: widget.name);
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -440,12 +407,13 @@ class _DeleteSequenceButtonState extends ConsumerState<_DeleteSequenceButton> {
   }
 }
 
+
 class _Message extends StatelessWidget {
   const _Message(this.text);
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 24),
-    child: Text(text, style: const TextStyle(color: AraColors.textSecondary)),
-  );
+        padding: const EdgeInsets.symmetric(vertical: 24),
+        child: Text(text, style: const TextStyle(color: AraColors.textSecondary)),
+      );
 }

@@ -35,13 +35,14 @@ class GuideFocusLive {
     Object? error,
     bool clearError = false,
     bool clearFrame = false,
-  }) => GuideFocusLive(
-    status: status ?? this.status,
-    frame: clearFrame ? null : (frame ?? this.frame),
-    frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
-    busy: busy ?? this.busy,
-    error: clearError ? null : (error ?? this.error),
-  );
+  }) =>
+      GuideFocusLive(
+        status: status ?? this.status,
+        frame: clearFrame ? null : (frame ?? this.frame),
+        frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
+        busy: busy ?? this.busy,
+        error: clearError ? null : (error ?? this.error),
+      );
 }
 
 /// Builds a [GuideFocusClient] for a server. Overridable in tests.
@@ -112,11 +113,7 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
     final base = active ? _pollInterval : _idlePollInterval;
     final delay = _consecutiveErrors == 0
         ? base
-        : Duration(
-            milliseconds:
-                (base.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 4)))
-                    .clamp(500, 5000),
-          );
+        : Duration(milliseconds: (base.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 4))).clamp(500, 5000));
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
@@ -154,6 +151,5 @@ class GuideFocusNotifier extends Notifier<GuideFocusLive> {
   }
 }
 
-final guideFocusProvider = NotifierProvider<GuideFocusNotifier, GuideFocusLive>(
-  GuideFocusNotifier.new,
-);
+final guideFocusProvider =
+    NotifierProvider<GuideFocusNotifier, GuideFocusLive>(GuideFocusNotifier.new);

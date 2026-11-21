@@ -33,13 +33,13 @@ final lastCapturedFrameIdProvider =
 
 /// The stretched preview JPEG bytes for a given frame id. autoDispose so the
 /// bytes are released when the viewer moves on to the next frame.
-final framePreviewProvider = FutureProvider.autoDispose
-    .family<Uint8List, String>((ref, id) async {
-      // Snapshot the server at fetch time (read, not watch): a later server-list
-      // change shouldn't re-fetch and blank the currently-displayed frame.
-      final server = ref.read(activeServerProvider);
-      if (server == null) {
-        throw StateError('Not connected to a server.');
-      }
-      return FramesApi(server).preview(id);
-    });
+final framePreviewProvider =
+    FutureProvider.autoDispose.family<Uint8List, String>((ref, id) async {
+  // Snapshot the server at fetch time (read, not watch): a later server-list
+  // change shouldn't re-fetch and blank the currently-displayed frame.
+  final server = ref.read(activeServerProvider);
+  if (server == null) {
+    throw StateError('Not connected to a server.');
+  }
+  return FramesApi(server).preview(id);
+});

@@ -86,11 +86,7 @@ abstract interface class SequenceClient {
   /// paused target before imaging continues (daemon skips it when the run
   /// moved past that target or no solver is configured); [refocus] also runs
   /// an autofocus sweep. Both execute BEFORE the pause gate releases.
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  });
+  Future<String> resume(String id, {bool recenter = true, bool refocus = false});
 
   /// §38 skip-current: cancel whatever the run is executing right now (e.g. a
   /// target that's no longer well-positioned) so the sequence advances to the
@@ -104,11 +100,8 @@ abstract interface class SequenceClient {
   /// (`panel_at_end` | `sky_at_twilight` | `later`); [remember] persists it
   /// as the profile's calibration capture default ("later" persists as
   /// "never" per §48.2).
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  });
+  Future<String> decideAutoFlats(String id,
+      {required String choice, required bool remember});
 
   /// §38.9 live mid-run edit: insert [item] (a container node in the raw body
   /// dialect) into the RUNNING sequence's plan, inside the container at
@@ -151,26 +144,24 @@ class SequenceApi implements SequenceClient {
   /// list endpoint can be slow on a cold daemon / NFS-backed storage. It applies
   /// only to the internally-constructed Dio; when a [dio] is injected (tests),
   /// its own options govern and [receiveTimeout] is ignored.
-  SequenceApi(
-    AraServer server, {
-    Dio? dio,
-    Duration receiveTimeout = const Duration(seconds: 12),
-  }) : _dio =
-           dio ??
-           Dio(
-             BaseOptions(
-               baseUrl: server.baseUrl,
-               connectTimeout: const Duration(seconds: 3),
-               sendTimeout: const Duration(seconds: 5),
-               receiveTimeout: receiveTimeout,
-             ),
-           );
+  SequenceApi(AraServer server,
+      {Dio? dio, Duration receiveTimeout = const Duration(seconds: 12)})
+      : _dio = dio ??
+            Dio(BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 5),
+              receiveTimeout: receiveTimeout,
+            ));
 
   @override
   Future<SequencePage> list({int limit = 50, String? cursor}) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/sequences',
-      queryParameters: <String, dynamic>{'limit': limit, 'cursor': ?cursor},
+      queryParameters: <String, dynamic>{
+        'limit': limit,
+        'cursor': ?cursor,
+      },
     );
     final data = res.data;
     // The endpoint returns a CursorPage envelope: { items: [...], next_cursor,
@@ -179,8 +170,7 @@ class SequenceApi implements SequenceClient {
     // list. (Dio already throws on 4xx/5xx.)
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
-        'sequences list returned an unexpected body (${data.runtimeType})',
-      );
+          'sequences list returned an unexpected body (${data.runtimeType})');
     }
     final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
@@ -206,8 +196,7 @@ class SequenceApi implements SequenceClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'sequence validate returned an unexpected body (${data.runtimeType})',
-      );
+          'sequence validate returned an unexpected body (${data.runtimeType})');
     }
     return SequenceValidationResult.fromJson(data);
   }
@@ -220,8 +209,7 @@ class SequenceApi implements SequenceClient {
     // shape means the wire contract changed — throw rather than silently empty.
     if (data is! List) {
       throw FormatException(
-        'sequence templates returned an unexpected body (${data.runtimeType})',
-      );
+          'sequence templates returned an unexpected body (${data.runtimeType})');
     }
     return data
         .whereType<Map<String, dynamic>>()
@@ -232,23 +220,14 @@ class SequenceApi implements SequenceClient {
   }
 
   @override
-  Future<String> instantiateTemplate(
-    String templateName,
-    String newName,
-  ) async {
+  Future<String> instantiateTemplate(String templateName, String newName) async {
     if (templateName.trim().isEmpty) {
       throw ArgumentError.value(
-        templateName,
-        'templateName',
-        'template name must not be empty',
-      );
+          templateName, 'templateName', 'template name must not be empty');
     }
     if (newName.trim().isEmpty) {
       throw ArgumentError.value(
-        newName,
-        'newName',
-        'new sequence name must not be empty',
-      );
+          newName, 'newName', 'new sequence name must not be empty');
     }
     final res = await _dio.post<dynamic>(
       '/api/v1/sequences/templates/${Uri.encodeComponent(templateName.trim())}/instantiate',
@@ -258,8 +237,7 @@ class SequenceApi implements SequenceClient {
     final id = data is Map<String, dynamic> ? data['id'] : null;
     if (id is! String || id.isEmpty) {
       throw FormatException(
-        'template instantiate returned no sequence id (${data.runtimeType})',
-      );
+          'template instantiate returned no sequence id (${data.runtimeType})');
     }
     return id;
   }
@@ -272,11 +250,7 @@ class SequenceApi implements SequenceClient {
     String? idempotencyKey,
   }) async {
     if (name.trim().isEmpty) {
-      throw ArgumentError.value(
-        name,
-        'name',
-        'sequence name must not be empty',
-      );
+      throw ArgumentError.value(name, 'name', 'sequence name must not be empty');
     }
     final res = await _dio.post<dynamic>(
       '/api/v1/sequences',
@@ -295,8 +269,7 @@ class SequenceApi implements SequenceClient {
     final id = data is Map<String, dynamic> ? data['id'] : null;
     if (id is! String || id.isEmpty) {
       throw FormatException(
-        'sequence create returned no sequence id (${data.runtimeType})',
-      );
+          'sequence create returned no sequence id (${data.runtimeType})');
     }
     return id;
   }
@@ -306,14 +279,12 @@ class SequenceApi implements SequenceClient {
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
     }
-    final res = await _dio.get<dynamic>(
-      '/api/v1/sequences/${Uri.encodeComponent(id)}',
-    );
+    final res =
+        await _dio.get<dynamic>('/api/v1/sequences/${Uri.encodeComponent(id)}');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'sequence detail returned an unexpected body (${data.runtimeType})',
-      );
+          'sequence detail returned an unexpected body (${data.runtimeType})');
     }
     final body = data['body'];
     if (body is Map<String, dynamic>) return parseNinaSequenceBody(body);
@@ -331,14 +302,12 @@ class SequenceApi implements SequenceClient {
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
     }
-    final res = await _dio.get<dynamic>(
-      '/api/v1/sequences/${Uri.encodeComponent(id)}',
-    );
+    final res =
+        await _dio.get<dynamic>('/api/v1/sequences/${Uri.encodeComponent(id)}');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'sequence detail returned an unexpected body (${data.runtimeType})',
-      );
+          'sequence detail returned an unexpected body (${data.runtimeType})');
     }
     return SequenceDetail.fromJson(data);
   }
@@ -370,8 +339,7 @@ class SequenceApi implements SequenceClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'sequence update returned an unexpected body (${data.runtimeType})',
-      );
+          'sequence update returned an unexpected body (${data.runtimeType})');
     }
     return SequenceDetail.fromJson(data);
   }
@@ -397,13 +365,11 @@ class SequenceApi implements SequenceClient {
     }
     try {
       final res = await _dio.get<dynamic>(
-        '/api/v1/sequences/${Uri.encodeComponent(id)}/state',
-      );
+          '/api/v1/sequences/${Uri.encodeComponent(id)}/state');
       final data = res.data;
       if (data is! Map<String, dynamic>) {
         throw FormatException(
-          'sequence state returned an unexpected body (${data.runtimeType})',
-        );
+            'sequence state returned an unexpected body (${data.runtimeType})');
       }
       return SequenceRunStateInfo.fromJson(data);
     } on DioException catch (e) {
@@ -414,48 +380,34 @@ class SequenceApi implements SequenceClient {
   }
 
   @override
-  Future<String> start(String id) => _lifecycle(
-    id,
-    'start',
-    body: const {
-      // TODO(sequencer-ui-slice): promote dry_run / continue_on_recoverable_errors
-      // (and start_from_instruction_index) to start() params on SequenceClient
-      // when the toolbar needs a dry-run / continue-on-error / resume-from mode —
-      // extend the interface rather than having callers build the request body.
-      //
-      // start_from_instruction_index is omitted, not sent as null: the daemon's
-      // SequenceStartRequestDto field is `int?`, so a missing key deserializes
-      // to null ("start from the beginning") — the intent here — without
-      // relying on the server accepting an explicit JSON null for an int field.
-      'dry_run': false,
-      'continue_on_recoverable_errors': false,
-    },
-  );
+  Future<String> start(String id) => _lifecycle(id, 'start', body: const {
+        // TODO(sequencer-ui-slice): promote dry_run / continue_on_recoverable_errors
+        // (and start_from_instruction_index) to start() params on SequenceClient
+        // when the toolbar needs a dry-run / continue-on-error / resume-from mode —
+        // extend the interface rather than having callers build the request body.
+        //
+        // start_from_instruction_index is omitted, not sent as null: the daemon's
+        // SequenceStartRequestDto field is `int?`, so a missing key deserializes
+        // to null ("start from the beginning") — the intent here — without
+        // relying on the server accepting an explicit JSON null for an int field.
+        'dry_run': false,
+        'continue_on_recoverable_errors': false,
+      });
 
   @override
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  }) => _lifecycle(
-    id,
-    'auto-flats-decision',
-    body: {'choice': choice, 'remember': remember},
-  );
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      _lifecycle(id, 'auto-flats-decision',
+          body: {'choice': choice, 'remember': remember});
 
   @override
   Future<String> pause(String id) => _lifecycle(id, 'pause');
 
   @override
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  }) => _lifecycle(
-    id,
-    'resume',
-    body: {'recenter': recenter, 'refocus': refocus},
-  );
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) =>
+      _lifecycle(id, 'resume',
+          body: {'recenter': recenter, 'refocus': refocus});
 
   @override
   Future<String> skipCurrent(String id) => _lifecycle(id, 'skip-current');
@@ -472,42 +424,33 @@ class SequenceApi implements SequenceClient {
     required List<int> parentPath,
     int? index,
     required Map<String, dynamic> item,
-  }) => _liveEdit(
-    id,
-    (url, options) => _dio.post<dynamic>(
-      url,
-      options: options,
-      data: {
-        'parent_path': parentPath,
-        // Omitted when null: a missing key means "append" server-side.
-        'index': ?index,
-        'item': item,
-      },
-    ),
-  );
+  }) =>
+      _liveEdit(
+          id,
+          (url, options) => _dio.post<dynamic>(url,
+              options: options,
+              data: {
+                'parent_path': parentPath,
+                // Omitted when null: a missing key means "append" server-side.
+                'index': ?index,
+                'item': item,
+              }));
 
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) => _liveEdit(
-    id,
-    // The item address rides the query string — DELETE bodies are dropped by
-    // some intermediaries (mirrors the daemon's contract).
-    (url, options) => _dio.delete<dynamic>(
-      url,
-      options: options,
-      queryParameters: {'path': path.join(',')},
-    ),
-  );
+      id,
+      // The item address rides the query string — DELETE bodies are dropped by
+      // some intermediaries (mirrors the daemon's contract).
+      (url, options) => _dio.delete<dynamic>(url,
+          options: options, queryParameters: {'path': path.join(',')}));
 
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
       _liveEdit(
-        id,
-        (url, options) => _dio.post<dynamic>(
-          '$url/move',
-          options: options,
-          data: {'path': path, 'new_index': newIndex},
-        ),
-      );
+          id,
+          (url, options) => _dio.post<dynamic>('$url/move',
+              options: options,
+              data: {'path': path, 'new_index': newIndex}));
 
   /// Shared §38.9 live-edit plumbing: build the run-items URL, stamp a fresh
   /// Idempotency-Key (a retry after a lost response replays the original
@@ -516,14 +459,13 @@ class SequenceApi implements SequenceClient {
   /// (409/422/500 with an RFC 7807 body) propagate as DioExceptions the caller
   /// maps to UX.
   Future<SequenceDetail> _liveEdit(
-    String id,
-    Future<Response<dynamic>> Function(String url, Options options) send,
-  ) async {
+      String id,
+      Future<Response<dynamic>> Function(String url, Options options)
+          send) async {
     if (id.isEmpty) {
       throw ArgumentError.value(id, 'id', 'sequence id must not be empty');
     }
-    final key =
-        'le-${DateTime.now().microsecondsSinceEpoch}-'
+    final key = 'le-${DateTime.now().microsecondsSinceEpoch}-'
         '${identityHashCode(this).toRadixString(16)}';
     final url = '/api/v1/sequences/${Uri.encodeComponent(id)}/run/items';
     final options = Options(headers: {'Idempotency-Key': key});
@@ -542,8 +484,7 @@ class SequenceApi implements SequenceClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'live edit returned an unexpected body (${data.runtimeType})',
-      );
+          'live edit returned an unexpected body (${data.runtimeType})');
     }
     return SequenceDetail.fromJson(data);
   }
@@ -559,8 +500,7 @@ class SequenceApi implements SequenceClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-        'share-export returned an unexpected body (${data.runtimeType})',
-      );
+          'share-export returned an unexpected body (${data.runtimeType})');
     }
     return SequenceShareExport.fromJson(data);
   }
@@ -569,11 +509,8 @@ class SequenceApi implements SequenceClient {
   /// daemon answers 202 with an OperationAccepted envelope ({ operation_id, … });
   /// a 409 (illegal transition for the current state) propagates as a DioException
   /// the caller surfaces.
-  Future<String> _lifecycle(
-    String id,
-    String action, {
-    Map<String, dynamic>? body,
-  }) async {
+  Future<String> _lifecycle(String id, String action,
+      {Map<String, dynamic>? body}) async {
     // Hard guard (not assert): an empty id would POST to `/api/v1/sequences//$action`
     // — a malformed path that 404s or hits the wrong route. asserts are stripped
     // in release, so a direct caller with an empty id must fail loudly here.
@@ -587,9 +524,7 @@ class SequenceApi implements SequenceClient {
     final data = res.data;
     final opId = data is Map<String, dynamic> ? data['operation_id'] : null;
     if (opId is! String) {
-      throw FormatException(
-        '$action accepted but no operation_id was returned',
-      );
+      throw FormatException('$action accepted but no operation_id was returned');
     }
     return opId;
   }

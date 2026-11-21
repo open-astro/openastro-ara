@@ -16,9 +16,8 @@ import 'ws/ws_providers.dart';
 /// start, and the first entry of a session can pass it on its own
 /// ([launchAutoEnterProvider], ALP-4890). In-session it only re-arms through
 /// the shell's explicit "Launchpad" action ([ProfileGateNotifier.reset]).
-final profileGatePassedProvider = NotifierProvider<ProfileGateNotifier, bool>(
-  ProfileGateNotifier.new,
-);
+final profileGatePassedProvider =
+    NotifierProvider<ProfileGateNotifier, bool>(ProfileGateNotifier.new);
 
 /// Riverpod 3.x removed StateProvider, so the gate flip is a Notifier.
 class ProfileGateNotifier extends Notifier<bool> {
@@ -45,9 +44,8 @@ class ProfileGateNotifier extends Notifier<bool> {
 /// server. Session-scoped like the profile gate: a cold start goes through
 /// the launch sequence again. The shell's "Launchpad" action clears it
 /// ([OfflineModeNotifier.exit]) so the relaunched flow can pick a server.
-final offlineModeProvider = NotifierProvider<OfflineModeNotifier, bool>(
-  OfflineModeNotifier.new,
-);
+final offlineModeProvider =
+    NotifierProvider<OfflineModeNotifier, bool>(OfflineModeNotifier.new);
 
 class OfflineModeNotifier extends Notifier<bool> {
   @override
@@ -67,8 +65,7 @@ class OfflineModeNotifier extends Notifier<bool> {
 /// other gates).
 final serverChooserRequestedProvider =
     NotifierProvider<ServerChooserRequestNotifier, bool>(
-      ServerChooserRequestNotifier.new,
-    );
+        ServerChooserRequestNotifier.new);
 
 class ServerChooserRequestNotifier extends Notifier<bool> {
   @override
@@ -104,9 +101,7 @@ bool shouldRearmLaunchGate({
 final launchGateRearmProvider = Provider<void>((ref) {
   ref.listen<AraServer?>(activeServerProvider, (previous, next) {
     if (shouldRearmLaunchGate(
-      previous: previous == null
-          ? null
-          : (hostname: previous.hostname, port: previous.port),
+      previous: previous == null ? null : (hostname: previous.hostname, port: previous.port),
       next: next == null ? null : (hostname: next.hostname, port: next.port),
       gatePassed: ref.read(profileGatePassedProvider),
       offline: ref.read(offlineModeProvider),
@@ -165,7 +160,8 @@ bool rigUnreachableInFullUi({
   required bool offline,
   required bool simple,
   required bool linkUp,
-}) => gatePassed && !offline && !simple && !linkUp;
+}) =>
+    gatePassed && !offline && !simple && !linkUp;
 
 /// #1570 — root-mounted (`main.dart` keeps it alive with a listen): after
 /// [rigUnreachableGrace] of a lost link in the full UI, re-arm the launch gate.
@@ -175,11 +171,11 @@ bool rigUnreachableInFullUi({
 final rigUnreachableReturnProvider = Provider<void>((ref) {
   Timer? timer;
   bool unreachable() => rigUnreachableInFullUi(
-    gatePassed: ref.read(profileGatePassedProvider),
-    offline: ref.read(offlineModeProvider),
-    simple: ref.read(simpleModeActiveProvider),
-    linkUp: ref.read(serverLinkUpProvider),
-  );
+        gatePassed: ref.read(profileGatePassedProvider),
+        offline: ref.read(offlineModeProvider),
+        simple: ref.read(simpleModeActiveProvider),
+        linkUp: ref.read(serverLinkUpProvider),
+      );
   void update() {
     if (!unreachable()) {
       timer?.cancel();

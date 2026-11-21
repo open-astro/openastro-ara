@@ -32,36 +32,34 @@ Future<List<String>> applyWizardEquipment(
   // forget a rig they configured elsewhere.
   final singles = <(EquipmentDeviceType, String?, String)>[
     (EquipmentDeviceType.camera, slots.cameraDeviceId, 'Camera'),
-    (
-      EquipmentDeviceType.filterWheel,
-      slots.filterWheelDeviceId,
-      'Filter wheel',
-    ),
+    (EquipmentDeviceType.filterWheel, slots.filterWheelDeviceId, 'Filter wheel'),
     (EquipmentDeviceType.focuser, slots.focuserDeviceId, 'Focuser'),
     (EquipmentDeviceType.mount, slots.mountDeviceId, 'Mount'),
     (EquipmentDeviceType.rotator, slots.rotatorDeviceId, 'Rotator'),
     (EquipmentDeviceType.dome, slots.domeDeviceId, 'Dome'),
-    (EquipmentDeviceType.weather, slots.observingConditionsDeviceId, 'Weather'),
+    (
+      EquipmentDeviceType.weather,
+      slots.observingConditionsDeviceId,
+      'Weather'
+    ),
     (
       EquipmentDeviceType.safetyMonitor,
       slots.safetyMonitorDeviceId,
-      'Safety monitor',
+      'Safety monitor'
     ),
     (EquipmentDeviceType.flatPanel, slots.flatPanelDeviceId, 'Flat panel'),
   ];
-  final anyAssigned =
-      slots.switchDeviceIds.isNotEmpty || singles.any((s) => s.$2 != null);
+  final anyAssigned = slots.switchDeviceIds.isNotEmpty ||
+      singles.any((s) => s.$2 != null);
   if (!anyAssigned) return const [];
 
   final notes = <String>[];
-  final dio = Dio(
-    BaseOptions(
-      baseUrl: server.baseUrl,
-      connectTimeout: const Duration(seconds: 3),
-      receiveTimeout: const Duration(seconds: 5),
-      sendTimeout: const Duration(seconds: 5),
-    ),
-  );
+  final dio = Dio(BaseOptions(
+    baseUrl: server.baseUrl,
+    connectTimeout: const Duration(seconds: 3),
+    receiveTimeout: const Duration(seconds: 5),
+    sendTimeout: const Duration(seconds: 5),
+  ));
   final discovery = EquipmentDiscoveryApi(server);
   try {
     for (final (type, assignedId, label) in singles) {
@@ -71,23 +69,13 @@ Future<List<String>> applyWizardEquipment(
         // (possibly errored) connection so the toolbar dot goes grey now, not
         // after the next daemon restart. Both are idempotent; failures here are
         // cleanup-only and not worth alarming the user over.
+        await _quietly(() => dio.delete<void>(
+            '/api/v1/equipment/$segment/remembered'));
         await _quietly(
-          () => dio.delete<void>('/api/v1/equipment/$segment/remembered'),
-        );
-        await _quietly(
-          () => dio.post<void>('/api/v1/equipment/$segment/disconnect'),
-        );
+            () => dio.post<void>('/api/v1/equipment/$segment/disconnect'));
         continue;
       }
-      final note = await _connect(
-        dio,
-        discovery,
-        type,
-        segment,
-        assignedId,
-        label,
-        l,
-      );
+      final note = await _connect(dio, discovery, type, segment, assignedId, label, l);
       if (note != null) notes.add(note);
     }
 
@@ -95,19 +83,12 @@ Future<List<String>> applyWizardEquipment(
     // the user visited discovery means "no switches" — forget the stale ones.
     if (slots.switchDeviceIds.isEmpty) {
       await _quietly(
-        () => dio.delete<void>('/api/v1/equipment/switch/remembered'),
-      );
+          () => dio.delete<void>('/api/v1/equipment/switch/remembered'));
     } else {
       for (final id in slots.switchDeviceIds) {
         final note = await _connect(
-          dio,
-          discovery,
-          EquipmentDeviceType.switchDevice,
-          'switch',
-          id,
-          'Switch',
-          l,
-        );
+            dio, discovery, EquipmentDeviceType.switchDevice, 'switch', id,
+            'Switch', l);
         if (note != null) notes.add(note);
       }
     }
@@ -132,7 +113,8 @@ Future<String?> _connect(
 ) async {
   try {
     final devices = await discovery.discover(type);
-    final device = devices.where((d) => d.uniqueId == assignedId).firstOrNull;
+    final device =
+        devices.where((d) => d.uniqueId == assignedId).firstOrNull;
     if (device == null) {
       return '$label: assigned device is no longer on the Alpaca bridge.';
     }
@@ -159,15 +141,15 @@ Future<void> _quietly(Future<void> Function() call) async {
 /// segment for the flat panel ('flatdevice' group vs 'covercalibrator'
 /// discovery type) — see DiscoveredDevice.pathSegmentFor.
 String _restSegment(EquipmentDeviceType t) => switch (t) {
-  EquipmentDeviceType.camera => 'camera',
-  EquipmentDeviceType.mount => 'telescope',
-  EquipmentDeviceType.focuser => 'focuser',
-  EquipmentDeviceType.filterWheel => 'filterwheel',
-  EquipmentDeviceType.rotator => 'rotator',
-  EquipmentDeviceType.guider => 'guider',
-  EquipmentDeviceType.flatPanel => 'flatdevice',
-  EquipmentDeviceType.dome => 'dome',
-  EquipmentDeviceType.weather => 'observingconditions',
-  EquipmentDeviceType.safetyMonitor => 'safetymonitor',
-  EquipmentDeviceType.switchDevice => 'switch',
-};
+      EquipmentDeviceType.camera => 'camera',
+      EquipmentDeviceType.mount => 'telescope',
+      EquipmentDeviceType.focuser => 'focuser',
+      EquipmentDeviceType.filterWheel => 'filterwheel',
+      EquipmentDeviceType.rotator => 'rotator',
+      EquipmentDeviceType.guider => 'guider',
+      EquipmentDeviceType.flatPanel => 'flatdevice',
+      EquipmentDeviceType.dome => 'dome',
+      EquipmentDeviceType.weather => 'observingconditions',
+      EquipmentDeviceType.safetyMonitor => 'safetymonitor',
+      EquipmentDeviceType.switchDevice => 'switch',
+    };

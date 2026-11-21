@@ -80,31 +80,24 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final midMs =
         (start.millisecondsSinceEpoch + end.millisecondsSinceEpoch) ~/ 2;
     final mid = DateTime.fromMillisecondsSinceEpoch(
-      midMs - midMs % (5 * 60 * 1000),
-      isUtc: false,
-    );
+        midMs - midMs % (5 * 60 * 1000),
+        isUtc: false);
     final List<TonightSkyObject> ranked;
     // Hold a subscription for the await: a bare read of an autoDispose family
     // doesn't keep it alive, so the provider was disposed mid-computation and
     // the future errored ("could not rank" on every plan).
-    final keepAlive = ref.listenManual(
-      tonightSkyAtProvider(mid.toUtc()),
-      (_, _) {},
-    );
+    final keepAlive =
+        ref.listenManual(tonightSkyAtProvider(mid.toUtc()), (_, _) {});
     try {
       ranked = await ref.read(tonightSkyAtProvider(mid.toUtc()).future);
     } catch (e) {
       debugPrint('[session-plan] ranking failed: $e');
       if (!mounted) return;
       setState(() => _planning = false);
-      ref
-          .read(sessionPlanProvider.notifier)
-          .setPlan(
-            const SessionPlan(
-              targets: [],
-              plannedHours: 0,
-              notes: ['Could not rank the sky for that window — try again.'],
-            ),
+      ref.read(sessionPlanProvider.notifier).setPlan(
+            const SessionPlan(targets: [], plannedHours: 0, notes: [
+              'Could not rank the sky for that window — try again.'
+            ]),
             ranked: const [],
             overheads: const SessionOverheads(),
           );
@@ -132,9 +125,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final banked = bankedHoursByObjectId(await _statsBestEffort(), ranked);
     if (!mounted) return;
     setState(() => _planning = false);
-    ref
-        .read(sessionPlanProvider.notifier)
-        .setPlan(
+    ref.read(sessionPlanProvider.notifier).setPlan(
           planImagingSession(
             ranked: ranked,
             windowStartUtc: start.toUtc(),
@@ -194,11 +185,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
   /// Add one slice to a run, sized to ITS hours (not the whole dark window).
   /// The first add creates a sequence and selects it; later adds append to
   /// it, so adding the plan's targets in order builds one night plan.
-  Future<bool> _addOne(
-    SessionPlanTarget t,
-    ScaffoldMessengerState messenger, {
-    bool quiet = false,
-  }) async {
+  Future<bool> _addOne(SessionPlanTarget t, ScaffoldMessengerState messenger,
+      {bool quiet = false}) async {
     final o = t.object;
     // A mosaic becomes one target block per panel, on the same grid the
     // preview drew (mosaic_geometry ports the overlay's math). Each panel
@@ -223,7 +211,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         raDeg: aim.raDeg,
         decDeg: aim.decDeg,
         targetName: o.name,
-        remainingDarkHours: panels.isEmpty ? t.hours : t.hours / panels.length,
+        remainingDarkHours:
+            panels.isEmpty ? t.hours : t.hours / panels.length,
         mosaicPanels: panels,
         // Same rule as the framing overlay: a dialled angle upgrades the
         // slew to Center and Rotate; not set (or an untouched 0) stays a
@@ -234,8 +223,8 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
         positionAngleDeg: panels.isNotEmpty
             ? (t.positionAngleDeg ?? 0)
             : (t.positionAngleDeg ?? 0) != 0
-            ? t.positionAngleDeg
-            : null,
+                ? t.positionAngleDeg
+                : null,
         jumpToRun: false,
       );
     } catch (e, st) {
@@ -278,15 +267,11 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
       if (mounted) setState(() => _adding = false);
     }
     if (added > 0) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            added == plan.targets.length
-                ? 'Added all ${plan.targets.length} planned targets to the run.'
-                : 'Added $added of ${plan.targets.length} planned targets.',
-          ),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+        content: Text(added == plan.targets.length
+            ? 'Added all ${plan.targets.length} planned targets to the run.'
+            : 'Added $added of ${plan.targets.length} planned targets.'),
+      ));
     }
   }
 
@@ -321,17 +306,13 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                 'optimal-exposure criterion and charge your real overheads — '
                 'slew, plate solve, focus, dither settles from your OpenAstro Guider '
                 'settings, and periodic autofocus.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Window',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
-              ),
+              Text('Window',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textSecondary)),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -353,12 +334,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                 ],
               ),
               const SizedBox(height: 12),
-              Text(
-                'Targets',
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
-              ),
+              Text('Targets',
+                  style: theme.textTheme.labelSmall
+                      ?.copyWith(color: AraColors.textSecondary)),
               const SizedBox(height: 6),
               SegmentedButton<int>(
                 segments: const [
@@ -381,16 +359,14 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                         ? const SizedBox(
                             width: 14,
                             height: 14,
-                            child: AdaptiveProgressIndicator(strokeWidth: 2),
-                          )
+                            child:
+                                AdaptiveProgressIndicator(strokeWidth: 2))
                         : const Icon(Icons.auto_awesome, size: 16),
-                    label: Text(
-                      _planning
-                          ? 'Planning…'
-                          : plan == null
-                          ? 'Plan it'
-                          : 'Plan it again',
-                    ),
+                    label: Text(_planning
+                        ? 'Planning…'
+                        : plan == null
+                            ? 'Plan it'
+                            : 'Plan it again'),
                     onPressed: _planning ? null : _makePlan,
                   ),
                   if (plan != null) ...[
@@ -399,8 +375,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                       Text(
                         plan.notes.join(' '),
                         style: theme.textTheme.bodySmall?.copyWith(
-                          color: AraColors.textSecondary,
-                        ),
+                            color: AraColors.textSecondary),
                       )
                     else ...[
                       for (var i = 0; i < plan.targets.length; i++)
@@ -424,8 +399,9 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                           onAim: (off) => ref
                               .read(sessionPlanProvider.notifier)
                               .setAim(i, off),
-                          onSwap: (o) =>
-                              ref.read(sessionPlanProvider.notifier).swap(i, o),
+                          onSwap: (o) => ref
+                              .read(sessionPlanProvider.notifier)
+                              .swap(i, o),
                           onShow: () => _showOnAtlas(plan.targets[i]),
                           onAdd: () => _addSingle(plan.targets[i]),
                         ),
@@ -435,8 +411,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                           child: Text(
                             plan.notes.join(' '),
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: AraColors.textSecondary,
-                            ),
+                                color: AraColors.textSecondary),
                           ),
                         ),
                       if (plan.targets.length > 1) ...[
@@ -447,15 +422,11 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
                                   width: 14,
                                   height: 14,
                                   child: AdaptiveProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
+                                      strokeWidth: 2))
                               : const Icon(Icons.playlist_add, size: 16),
-                          label: Text(
-                            _adding
-                                ? 'Adding…'
-                                : 'Add all ${plan.targets.length} to a run',
-                          ),
+                          label: Text(_adding
+                              ? 'Adding…'
+                              : 'Add all ${plan.targets.length} to a run'),
                           onPressed: _adding ? null : () => _addAll(plan),
                         ),
                       ],
@@ -513,19 +484,18 @@ class _PlanTargetCard extends StatelessWidget {
     final perPanel = target.subsPerPanel(overheads);
     final subs = perPanel != null && target.subSeconds != null
         ? m.isMosaic
-              ? '≈ $perPanel subs × ${target.subSeconds!.round()} s per panel '
-                    '(${m.panelCount} panels)'
-              : '≈ $perPanel subs × ${target.subSeconds!.round()} s'
+            ? '≈ $perPanel subs × ${target.subSeconds!.round()} s per panel '
+                '(${m.panelCount} panels)'
+            : '≈ $perPanel subs × ${target.subSeconds!.round()} s'
         : null;
     // SHO planning helper: with a narrowband recommendation, the slice is
     // typically split across the three lines.
-    final sho =
-        o.filterAdvice == TonightFilterAdvice.narrowband && perPanel != null
+    final sho = o.filterAdvice == TonightFilterAdvice.narrowband &&
+            perPanel != null
         ? ' (SHO ≈ ${(perPanel / 3).floor()} each)'
         : '';
-    final suggested = frameFovArcmin == null
-        ? null
-        : suggestMosaic(o.sizeMajArcmin, frameFovArcmin!);
+    final suggested =
+        frameFovArcmin == null ? null : suggestMosaic(o.sizeMajArcmin, frameFovArcmin!);
     return Card(
       color: AraColors.bgPanelAlt,
       margin: const EdgeInsets.only(bottom: 8),
@@ -548,18 +518,14 @@ class _PlanTargetCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              regionAwareName(o.id, o.aliases, o.name),
-              style: theme.textTheme.bodyMedium,
-            ),
+            Text(regionAwareName(o.id, o.aliases, o.name), style: theme.textTheme.bodyMedium),
             const SizedBox(height: 4),
             Text(
               '${fmtLocal(target.startUtc)}–${fmtLocal(target.endUtc)} · '
               '${target.hours.toStringAsFixed(1)} h'
               '${o.score != null ? ' · score ${o.score!.round()}' : ''}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: AraColors.textSecondary,
-              ),
+              style: theme.textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
             if (subs != null) ...[
               const SizedBox(height: 4),
@@ -572,16 +538,14 @@ class _PlanTargetCard extends StatelessWidget {
                     child: Text(
                       'Aimed ${_fmtOffset(target.aimOffsetArcmin)} from the '
                       'catalogue centre',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
-                      ),
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: theme.colorScheme.primary),
                     ),
                   ),
                   TextButton(
                     style: TextButton.styleFrom(
-                      visualDensity: VisualDensity.compact,
-                      foregroundColor: AraColors.textSecondary,
-                    ),
+                        visualDensity: VisualDensity.compact,
+                        foregroundColor: AraColors.textSecondary),
                     onPressed: busy ? null : () => onAim((0.0, 0.0)),
                     child: const Text('Recentre'),
                   ),
@@ -595,13 +559,11 @@ class _PlanTargetCard extends StatelessWidget {
                 children: [
                   Tooltip(
                     message: 'Camera rotation for this target',
-                    child: Icon(
-                      Icons.rotate_right,
-                      size: 16,
-                      color: target.positionAngleDeg == null
-                          ? AraColors.textSecondary
-                          : theme.colorScheme.primary,
-                    ),
+                    child: Icon(Icons.rotate_right,
+                        size: 16,
+                        color: target.positionAngleDeg == null
+                            ? AraColors.textSecondary
+                            : theme.colorScheme.primary),
                   ),
                   Expanded(
                     child: SliderTheme(
@@ -609,12 +571,10 @@ class _PlanTargetCard extends StatelessWidget {
                         trackHeight: 3,
                         activeTrackColor: theme.colorScheme.primary,
                         inactiveTrackColor: AraColors.border,
-                        thumbShape: const RoundSliderThumbShape(
-                          enabledThumbRadius: 6,
-                        ),
-                        overlayShape: const RoundSliderOverlayShape(
-                          overlayRadius: 12,
-                        ),
+                        thumbShape:
+                            const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape:
+                            const RoundSliderOverlayShape(overlayRadius: 12),
                       ),
                       child: AdaptiveSlider(
                         min: 0,
@@ -658,13 +618,11 @@ class _PlanTargetCard extends StatelessWidget {
                 children: [
                   Tooltip(
                     message: 'Mosaic grid for this target',
-                    child: Icon(
-                      Icons.grid_on,
-                      size: 16,
-                      color: m.isMosaic
-                          ? theme.colorScheme.primary
-                          : AraColors.textSecondary,
-                    ),
+                    child: Icon(Icons.grid_on,
+                        size: 16,
+                        color: m.isMosaic
+                            ? theme.colorScheme.primary
+                            : AraColors.textSecondary),
                   ),
                   const SizedBox(width: 6),
                   _Stepper(
@@ -673,11 +631,7 @@ class _PlanTargetCard extends StatelessWidget {
                     min: 1,
                     max: 8,
                     enabled: !busy,
-                    onChanged: (v) => onMosaic((
-                      cols: v,
-                      rows: m.rows,
-                      overlapPct: m.overlapPct,
-                    )),
+                    onChanged: (v) => onMosaic((cols: v, rows: m.rows, overlapPct: m.overlapPct)),
                   ),
                   const SizedBox(width: 6),
                   _Stepper(
@@ -686,11 +640,7 @@ class _PlanTargetCard extends StatelessWidget {
                     min: 1,
                     max: 8,
                     enabled: !busy,
-                    onChanged: (v) => onMosaic((
-                      cols: m.cols,
-                      rows: v,
-                      overlapPct: m.overlapPct,
-                    )),
+                    onChanged: (v) => onMosaic((cols: m.cols, rows: v, overlapPct: m.overlapPct)),
                   ),
                   if (m.isMosaic) ...[
                     const SizedBox(width: 6),
@@ -701,26 +651,22 @@ class _PlanTargetCard extends StatelessWidget {
                       max: 50,
                       step: 5,
                       enabled: !busy,
-                      onChanged: (v) =>
-                          onMosaic((cols: m.cols, rows: m.rows, overlapPct: v)),
+                      onChanged: (v) => onMosaic((cols: m.cols, rows: m.rows, overlapPct: v)),
                     ),
                   ],
                   if (suggested != null && suggested != m)
                     TextButton(
                       style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                      ),
+                          visualDensity: VisualDensity.compact),
                       onPressed: busy ? null : () => onMosaic(suggested),
                       child: Text(
-                        'Suggest ${suggested.cols}×${suggested.rows}',
-                      ),
+                          'Suggest ${suggested.cols}×${suggested.rows}'),
                     )
                   else if (m.isMosaic)
                     TextButton(
                       style: TextButton.styleFrom(
-                        visualDensity: VisualDensity.compact,
-                        foregroundColor: AraColors.textSecondary,
-                      ),
+                          visualDensity: VisualDensity.compact,
+                          foregroundColor: AraColors.textSecondary),
                       onPressed: busy ? null : () => onMosaic(singleFrame),
                       child: const Text('Single frame'),
                     ),
@@ -749,28 +695,21 @@ class _PlanTargetCard extends StatelessWidget {
                   ],
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
+                        horizontal: 8, vertical: 6),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(
-                          Icons.swap_horiz,
-                          size: 16,
-                          color: alternatives.isEmpty
-                              ? AraColors.textSecondary
-                              : theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Swap',
-                          style: theme.textTheme.labelLarge?.copyWith(
+                        Icon(Icons.swap_horiz,
+                            size: 16,
                             color: alternatives.isEmpty
                                 ? AraColors.textSecondary
-                                : theme.colorScheme.primary,
-                          ),
-                        ),
+                                : theme.colorScheme.primary),
+                        const SizedBox(width: 4),
+                        Text('Swap',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                                color: alternatives.isEmpty
+                                    ? AraColors.textSecondary
+                                    : theme.colorScheme.primary)),
                       ],
                     ),
                   ),
@@ -785,8 +724,7 @@ class _PlanTargetCard extends StatelessWidget {
                 IconButton(
                   iconSize: 18,
                   visualDensity: VisualDensity.compact,
-                  tooltip:
-                      'Add to a run (${target.hours.toStringAsFixed(1)} h)',
+                  tooltip: 'Add to a run (${target.hours.toStringAsFixed(1)} h)',
                   icon: const Icon(Icons.playlist_add),
                   onPressed: busy ? null : onAdd,
                 ),
@@ -824,12 +762,9 @@ class _Stepper extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: AraColors.textSecondary,
-          ),
-        ),
+        Text(label,
+            style: theme.textTheme.bodySmall
+                ?.copyWith(color: AraColors.textSecondary)),
         IconButton(
           iconSize: 14,
           padding: EdgeInsets.zero,

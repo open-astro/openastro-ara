@@ -9,17 +9,14 @@ class FilterSlot {
   final String name;
   final int focusOffset;
 
-  const FilterSlot({
-    required this.position,
-    required this.name,
-    required this.focusOffset,
-  });
+  const FilterSlot(
+      {required this.position, required this.name, required this.focusOffset});
 
   factory FilterSlot.fromJson(Map<String, dynamic> json) => FilterSlot(
-    position: (json['position'] as num?)?.toInt() ?? 0,
-    name: json['name'] as String? ?? '',
-    focusOffset: (json['focus_offset'] as num?)?.toInt() ?? 0,
-  );
+        position: (json['position'] as num?)?.toInt() ?? 0,
+        name: json['name'] as String? ?? '',
+        focusOffset: (json['focus_offset'] as num?)?.toInt() ?? 0,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -44,7 +41,6 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
   final EquipmentConnectionState connectionState;
 
   final String runtimeState;
-
   /// The active slot position, or `null` while moving (`-1` on the wire) / unknown.
   final int? currentSlot;
   final List<FilterSlot> slots;
@@ -71,8 +67,7 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
   bool get isMoving => runtimeState == 'moving';
 
   /// A manual wheel is waiting for the user to swap in [pending].
-  bool get isAwaitingUser =>
-      runtimeState == 'awaiting_user' && pendingSlot != null;
+  bool get isAwaitingUser => runtimeState == 'awaiting_user' && pendingSlot != null;
 
   /// The slot a pending hand swap wants, or `null`.
   FilterSlot? get pending {
@@ -95,15 +90,13 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
 
   factory FilterWheelStatus.fromJson(Map<String, dynamic> json) {
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic>
-        ? runtime
-        : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     final rawSlots = json['slots'];
     final slots = rawSlots is List
         ? rawSlots
-              .whereType<Map<String, dynamic>>()
-              .map(FilterSlot.fromJson)
-              .toList(growable: false)
+            .whereType<Map<String, dynamic>>()
+            .map(FilterSlot.fromJson)
+            .toList(growable: false)
         : const <FilterSlot>[];
     // The wire sends -1 while moving / when no slot is selected; normalize that to
     // null so `currentSlot != null` reliably means "a slot is selected".
@@ -111,9 +104,7 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
     return FilterWheelStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(
-        json['state'] as String?,
-      ),
+      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
       runtimeState: r['state'] as String? ?? '',
       currentSlot: (rawSlot != null && rawSlot >= 0) ? rawSlot : null,
       slots: slots,
@@ -136,14 +127,6 @@ class FilterWheelStatus extends EquipmentDeviceStatus {
           listEquals(other.slots, slots));
 
   @override
-  int get hashCode => Object.hash(
-    deviceId,
-    name,
-    connectionState,
-    runtimeState,
-    currentSlot,
-    Object.hashAll(slots),
-    manual,
-    pendingSlot,
-  );
+  int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
+      currentSlot, Object.hashAll(slots), manual, pendingSlot);
 }

@@ -41,11 +41,8 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
     entries: [
       FitsHeaderEntry('IMAGETYP', 'Frame type', 'LIGHT'),
       FitsHeaderEntry('EXPTIME', 'Exposure time in seconds', '180.0'),
-      FitsHeaderEntry(
-        'DATE-OBS',
-        'When the exposure started (UTC)',
-        '2026-08-04T03:14:00.000',
-      ),
+      FitsHeaderEntry('DATE-OBS', 'When the exposure started (UTC)',
+          '2026-08-04T03:14:00.000'),
       FitsHeaderEntry('GAIN', 'Camera gain', '100'),
       FitsHeaderEntry('OFFSET', 'Camera offset (pedestal)', '30'),
       FitsHeaderEntry('XBINNING', 'Binning, horizontal', '1'),
@@ -54,17 +51,11 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
       FitsHeaderEntry('FOCUSPOS', 'Focuser position in steps', '10877'),
       FitsHeaderEntry('BAYERPAT', 'Color sensor mosaic pattern', 'RGGB'),
       FitsHeaderEntry('INSTRUME', 'Camera model', 'ZWO ASI2600MM Pro'),
-      FitsHeaderEntry(
-        'SWCREATE',
-        'Software that took the frame',
-        'OpenAstro Ara',
-      ),
+      FitsHeaderEntry('SWCREATE', 'Software that took the frame',
+          'OpenAstro Ara'),
       FitsHeaderEntry('OBJECT', 'Target name (when a target is set)', 'M 31'),
-      FitsHeaderEntry(
-        'OBJCTRA',
-        'Mount RA at readout (H M S, when a mount is connected)',
-        '00 42 44',
-      ),
+      FitsHeaderEntry('OBJCTRA', 'Mount RA at readout (H M S, when a mount is connected)',
+          '00 42 44'),
       FitsHeaderEntry('OBJCTDEC', 'Mount Dec at readout (D M S)', '+41 16 09'),
       FitsHeaderEntry('RA', 'Mount RA at readout in degrees', '10.6847'),
       FitsHeaderEntry('DEC', 'Mount Dec at readout in degrees', '41.2692'),
@@ -83,16 +74,9 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
     title: 'Your site',
     controlledBy: 'Your site',
     entries: [
+      FitsHeaderEntry('SITELAT', 'Observatory latitude in degrees', '32.780278'),
       FitsHeaderEntry(
-        'SITELAT',
-        'Observatory latitude in degrees',
-        '32.780278',
-      ),
-      FitsHeaderEntry(
-        'SITELONG',
-        'Observatory longitude in degrees (east+)',
-        '-105.820278',
-      ),
+          'SITELONG', 'Observatory longitude in degrees (east+)', '-105.820278'),
       FitsHeaderEntry('SITEELEV', 'Observatory elevation in meters', '2788.0'),
     ],
   ),
@@ -101,21 +85,12 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
     controlledBy: 'Optics',
     entries: [
       FitsHeaderEntry(
-        'FOCALLEN',
-        'Effective focal length in millimeters',
-        '448.0',
-      ),
+          'FOCALLEN', 'Effective focal length in millimeters', '448.0'),
       FitsHeaderEntry('APTDIA', 'Aperture diameter in millimeters', '91.0'),
       FitsHeaderEntry(
-        'XPIXSZ',
-        'Pixel width in microns, after binning',
-        '3.76',
-      ),
+          'XPIXSZ', 'Pixel width in microns, after binning', '3.76'),
       FitsHeaderEntry(
-        'YPIXSZ',
-        'Pixel height in microns, after binning',
-        '3.76',
-      ),
+          'YPIXSZ', 'Pixel height in microns, after binning', '3.76'),
     ],
   ),
   FitsHeaderGroup(
@@ -156,9 +131,9 @@ const List<FitsHeaderGroup> fitsHeaderReference = [
 
 /// Opens the reference as a scrollable sheet.
 Future<void> showFitsHeaderReference(BuildContext context) => showDialog<void>(
-  context: context,
-  builder: (_) => const _ReferenceDialog(),
-);
+      context: context,
+      builder: (_) => const _ReferenceDialog(),
+    );
 
 class _ReferenceDialog extends ConsumerWidget {
   const _ReferenceDialog();
@@ -230,21 +205,17 @@ class _ReferenceDialog extends ConsumerWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Everything a frame can carry',
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
+                        Text('Everything a frame can carry',
+                            style: theme.textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600)),
                         const SizedBox(height: 2),
                         Text(
                           'The FITS header travels inside the file — stackers, '
                           'plate solvers and archives read it decades later. '
                           'Values in white are yours, from your settings; the '
                           'rest are examples measured at capture time.',
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                          style: theme.textTheme.bodySmall
+                              ?.copyWith(color: AraColors.textSecondary),
                         ),
                       ],
                     ),
@@ -268,28 +239,23 @@ class _ReferenceDialog extends ConsumerWidget {
                       child: Row(
                         children: [
                           Expanded(
-                            child: Text(
-                              group.title.toUpperCase(),
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: AraColors.textDisabled,
-                                fontSize: 10,
-                                letterSpacing: 0.8,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
+                            child: Text(group.title.toUpperCase(),
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                    color: AraColors.textDisabled,
+                                    fontSize: 10,
+                                    letterSpacing: 0.8,
+                                    fontWeight: FontWeight.w600)),
                           ),
                           if (group.controlledBy != null)
                             Text(
-                              _groupEnabled(fs, group)
-                                  ? 'switch: ${group.controlledBy}'
-                                  : 'off — not written',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: _groupEnabled(fs, group)
-                                    ? AraColors.textDisabled
-                                    : AraColors.accentBusy,
-                                fontSize: 10,
-                              ),
-                            ),
+                                _groupEnabled(fs, group)
+                                    ? 'switch: ${group.controlledBy}'
+                                    : 'off — not written',
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                    color: _groupEnabled(fs, group)
+                                        ? AraColors.textDisabled
+                                        : AraColors.accentBusy,
+                                    fontSize: 10)),
                         ],
                       ),
                     ),
@@ -301,29 +267,27 @@ class _ReferenceDialog extends ConsumerWidget {
                         children: [
                           for (final e in group.entries)
                             Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 3),
                               child: Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   SizedBox(
                                     width: 92,
-                                    child: Text(
-                                      e.keyword,
-                                      style: theme.textTheme.bodySmall
-                                          ?.copyWith(
-                                            fontFamily: 'monospace',
-                                            fontWeight: FontWeight.w600,
-                                            decoration: _groupEnabled(fs, group)
-                                                ? null
-                                                : TextDecoration.lineThrough,
-                                          ),
-                                    ),
+                                    child: Text(e.keyword,
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                                fontFamily: 'monospace',
+                                                fontWeight: FontWeight.w600,
+                                                decoration:
+                                                    _groupEnabled(fs, group)
+                                                        ? null
+                                                        : TextDecoration
+                                                            .lineThrough)),
                                   ),
                                   Expanded(
-                                    child: Text(
-                                      e.longName,
-                                      style: theme.textTheme.bodySmall,
-                                    ),
+                                    child: Text(e.longName,
+                                        style: theme.textTheme.bodySmall),
                                   ),
                                   const SizedBox(width: 12),
                                   // An off group shows the generic example,
@@ -331,18 +295,17 @@ class _ReferenceDialog extends ConsumerWidget {
                                   // written" and real data side by side
                                   // would contradict each other.
                                   Text(
-                                    _groupEnabled(fs, group)
-                                        ? (live[e.keyword] ?? e.example)
-                                        : e.example,
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      fontFamily: 'monospace',
-                                      color:
-                                          _groupEnabled(fs, group) &&
-                                              live.containsKey(e.keyword)
-                                          ? null
-                                          : AraColors.textSecondary,
-                                    ),
-                                  ),
+                                      _groupEnabled(fs, group)
+                                          ? (live[e.keyword] ?? e.example)
+                                          : e.example,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                              fontFamily: 'monospace',
+                                              color: _groupEnabled(fs, group) &&
+                                                      live.containsKey(
+                                                          e.keyword)
+                                                  ? null
+                                                  : AraColors.textSecondary)),
                                 ],
                               ),
                             ),

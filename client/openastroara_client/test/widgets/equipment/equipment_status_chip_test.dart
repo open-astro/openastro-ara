@@ -22,196 +22,129 @@ void main() {
   group('equipmentStatusLevel', () {
     test('maps connection state to a dot colour', () {
       expect(equipmentStatusLevel(null), StatusLevel.disconnected);
+      expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connected)),
+          StatusLevel.connected);
       expect(
-        equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connected)),
-        StatusLevel.connected,
-      );
-      expect(
-        equipmentStatusLevel(
-          _FakeStatus(EquipmentConnectionState.connected, isBusy: true),
-        ),
-        StatusLevel.active,
-        reason: 'exposing / slewing / moving is a good state: blinking green, not amber',
-      );
-      expect(
-        equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connecting)),
-        StatusLevel.info,
-      );
-      expect(
-        equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.error)),
-        StatusLevel.error,
-      );
-      expect(
-        equipmentStatusLevel(
-          _FakeStatus(EquipmentConnectionState.disconnected),
-        ),
-        StatusLevel.disconnected,
-      );
-      expect(
-        equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.unknown)),
-        StatusLevel.disconnected,
-      );
+          equipmentStatusLevel(
+              _FakeStatus(EquipmentConnectionState.connected, isBusy: true)),
+          StatusLevel.active,
+          reason: 'exposing / slewing / moving is a good state: blinking green, not amber');
+      expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.connecting)),
+          StatusLevel.info);
+      expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.error)),
+          StatusLevel.error);
+      expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.disconnected)),
+          StatusLevel.disconnected);
+      expect(equipmentStatusLevel(_FakeStatus(EquipmentConnectionState.unknown)),
+          StatusLevel.disconnected);
     });
   });
 
   group('equipmentChipLevel (async)', () {
     test('loading → info, error → error, data → mapped', () {
+      expect(equipmentChipLevel(const AsyncLoading<_FakeStatus?>()), StatusLevel.info);
+      expect(equipmentChipLevel(AsyncError<_FakeStatus?>('x', StackTrace.empty)),
+          StatusLevel.error);
       expect(
-        equipmentChipLevel(const AsyncLoading<_FakeStatus?>()),
-        StatusLevel.info,
-      );
-      expect(
-        equipmentChipLevel(AsyncError<_FakeStatus?>('x', StackTrace.empty)),
-        StatusLevel.error,
-      );
-      expect(
-        equipmentChipLevel(
-          AsyncData<_FakeStatus?>(
-            _FakeStatus(EquipmentConnectionState.connected),
-          ),
-        ),
-        StatusLevel.connected,
-      );
-      expect(
-        equipmentChipLevel(const AsyncData<_FakeStatus?>(null)),
-        StatusLevel.disconnected,
-      );
+          equipmentChipLevel(
+              AsyncData<_FakeStatus?>(_FakeStatus(EquipmentConnectionState.connected))),
+          StatusLevel.connected);
+      expect(equipmentChipLevel(const AsyncData<_FakeStatus?>(null)),
+          StatusLevel.disconnected);
     });
   });
 
   group('switchChipLevel (multi-instance)', () {
     SwitchDevice dev(SwitchConnectionState s) => SwitchDevice(
-      deviceId: 'sw',
-      alpacaDeviceNumber: 0,
-      name: 'sw',
-      connectionState: s,
-      ports: const [],
-    );
+        deviceId: 'sw', alpacaDeviceNumber: 0, name: 'sw', connectionState: s,
+        ports: const []);
     test('green if any switch is connected, grey if none', () {
       expect(
-        switchChipLevel(
-          AsyncData([
+          switchChipLevel(AsyncData([
             dev(SwitchConnectionState.disconnected),
             dev(SwitchConnectionState.connected),
-          ]),
-        ),
-        StatusLevel.connected,
-      );
-      expect(
-        switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)])),
-        StatusLevel.disconnected,
-      );
+          ])),
+          StatusLevel.connected);
+      expect(switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)])),
+          StatusLevel.disconnected);
       expect(switchChipLevel(const AsyncData([])), StatusLevel.disconnected);
       expect(switchChipLevel(const AsyncLoading()), StatusLevel.info);
-      expect(
-        switchChipLevel(AsyncError('x', StackTrace.empty)),
-        StatusLevel.error,
-      );
+      expect(switchChipLevel(AsyncError('x', StackTrace.empty)), StatusLevel.error);
     });
 
-    test(
-      'red when devices errored (failed connect) and none are connected',
-      () {
-        // The list fetch succeeded but every device is in an error state (a failed
-        // auto-connect): the chip must read red like the single-instance chips do,
-        // not a misleading grey. Regression for the SW-stayed-grey report.
-        expect(
-          switchChipLevel(
-            AsyncData([
-              dev(SwitchConnectionState.error),
-              dev(SwitchConnectionState.error),
-            ]),
-          ),
-          StatusLevel.error,
-        );
-        // A mix of disconnected + errored (none connected) is still an error.
-        expect(
-          switchChipLevel(
-            AsyncData([
-              dev(SwitchConnectionState.disconnected),
-              dev(SwitchConnectionState.error),
-            ]),
-          ),
-          StatusLevel.error,
-        );
-        // But a live connection outranks a sibling's error — green wins.
-        expect(
-          switchChipLevel(
-            AsyncData([
-              dev(SwitchConnectionState.error),
-              dev(SwitchConnectionState.connected),
-            ]),
-          ),
-          StatusLevel.connected,
-        );
-        // An in-flight action still outranks the error state (blue, changing).
-        expect(
-          switchChipLevel(
-            AsyncData([dev(SwitchConnectionState.error)]),
-            acting: true,
-          ),
-          StatusLevel.changing,
-        );
-      },
-    );
+    test('red when devices errored (failed connect) and none are connected', () {
+      // The list fetch succeeded but every device is in an error state (a failed
+      // auto-connect): the chip must read red like the single-instance chips do,
+      // not a misleading grey. Regression for the SW-stayed-grey report.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.error),
+            dev(SwitchConnectionState.error),
+          ])),
+          StatusLevel.error);
+      // A mix of disconnected + errored (none connected) is still an error.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.disconnected),
+            dev(SwitchConnectionState.error),
+          ])),
+          StatusLevel.error);
+      // But a live connection outranks a sibling's error — green wins.
+      expect(
+          switchChipLevel(AsyncData([
+            dev(SwitchConnectionState.error),
+            dev(SwitchConnectionState.connected),
+          ])),
+          StatusLevel.connected);
+      // An in-flight action still outranks the error state (blue, changing).
+      expect(
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.error)]),
+              acting: true),
+          StatusLevel.changing);
+    });
 
     test('§25.3 blue (changing) while an action is in flight, whatever the list says (DESIGN.md status rule)', () {
       // A port write on a connected switch...
       expect(
-        switchChipLevel(
-          AsyncData([dev(SwitchConnectionState.connected)]),
-          acting: true,
-        ),
-        StatusLevel.changing,
-      );
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.connected)]),
+              acting: true),
+          StatusLevel.changing);
       // ...and a connect still in flight (nothing connected yet) both read busy.
       expect(
-        switchChipLevel(
-          AsyncData([dev(SwitchConnectionState.disconnected)]),
-          acting: true,
-        ),
-        StatusLevel.changing,
-      );
+          switchChipLevel(AsyncData([dev(SwitchConnectionState.disconnected)]),
+              acting: true),
+          StatusLevel.changing);
       // Loading/error outrank the acting signal (an unreadable list is the
       // stronger fact — same precedence as the other chips).
-      expect(
-        switchChipLevel(const AsyncLoading(), acting: true),
-        StatusLevel.info,
-      );
-      expect(
-        switchChipLevel(AsyncError('x', StackTrace.empty), acting: true),
-        StatusLevel.error,
-      );
+      expect(switchChipLevel(const AsyncLoading(), acting: true), StatusLevel.info);
+      expect(switchChipLevel(AsyncError('x', StackTrace.empty), acting: true),
+          StatusLevel.error);
     });
   });
 
-  testWidgets(
-    'tapping a chip routes to its device Settings panel (Options tab)',
-    (tester) async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Scaffold(
-              body: EquipmentStatusChip(
-                icon: Icons.camera_alt,
-                label: 'Camera',
-                panelId: 'eq.camera',
-                watchLevel: (_) => StatusLevel.connected,
-              ),
-            ),
+  testWidgets('tapping a chip routes to its device Settings panel (Options tab)',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: EquipmentStatusChip(
+            icon: Icons.camera_alt,
+            label: 'Camera',
+            panelId: 'eq.camera',
+            watchLevel: (_) => StatusLevel.connected,
           ),
         ),
-      );
+      ),
+    ));
 
-      expect(find.text('Camera'), findsOneWidget);
-      await tester.tap(find.text('Camera'));
-      await tester.pump();
+    expect(find.text('Camera'), findsOneWidget);
+    await tester.tap(find.text('Camera'));
+    await tester.pump();
 
-      expect(container.read(selectedSettingsPanelProvider), 'eq.camera');
-      expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
-    },
-  );
+    expect(container.read(selectedSettingsPanelProvider), 'eq.camera');
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+  });
 }

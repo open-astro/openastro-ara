@@ -295,24 +295,23 @@ void main() {
       );
     });
 
-    testWidgets(
-      'after typing a count, + steps from it and the field shows the new count',
-      (tester) async {
-        final sets = await pumpCount(tester);
-        await tester.enterText(find.byKey(const Key('n')), '47');
-        await tester.pump();
-        // A touch on + leaves the phone's focus in the field.
-        await tester.tap(find.byKey(const Key('n-up')));
-        await tester.pump();
-        await tester.tap(find.byKey(const Key('n-up')));
-        await tester.pump();
-        expect(sets, [47, 48, 49]);
-        expect(
-          tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
-          '49',
-        );
-      },
-    );
+    testWidgets('after typing a count, + steps from it and the field shows the new count', (
+      tester,
+    ) async {
+      final sets = await pumpCount(tester);
+      await tester.enterText(find.byKey(const Key('n')), '47');
+      await tester.pump();
+      // A touch on + leaves the phone's focus in the field.
+      await tester.tap(find.byKey(const Key('n-up')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('n-up')));
+      await tester.pump();
+      expect(sets, [47, 48, 49]);
+      expect(
+        tester.widget<TextField>(find.byKey(const Key('n'))).controller!.text,
+        '49',
+      );
+    });
 
     testWidgets('holding + repeats the step, and letting go stops it', (
       tester,

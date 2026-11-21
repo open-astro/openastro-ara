@@ -22,28 +22,23 @@ class _ThrowsTwiceInBuild extends StatelessWidget {
 }
 
 void main() {
-  testWidgets('a repeated error recorded mid-build does not break the frame', (
-    tester,
-  ) async {
+  testWidgets('a repeated error recorded mid-build does not break the frame',
+      (tester) async {
     final log = ClientErrorLog(
       supportDir: () async => throw const FileSystemException('no disk'),
       appVersion: () async => 'v',
     );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [clientErrorLogProvider.overrideWithValue(log)],
-        child: MaterialApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                const ClientLogCard(savePathPicker: null),
-                _ThrowsTwiceInBuild(log),
-              ],
-            ),
-          ),
+    await tester.pumpWidget(ProviderScope(
+      overrides: [clientErrorLogProvider.overrideWithValue(log)],
+      child: MaterialApp(
+        home: Scaffold(
+          body: Column(children: [
+            const ClientLogCard(savePathPicker: null),
+            _ThrowsTwiceInBuild(log),
+          ]),
         ),
       ),
-    );
+    ));
     // A synchronous status write from the second record() would surface
     // here as "setState() or markNeedsBuild() called during build".
     expect(tester.takeException(), isNull);

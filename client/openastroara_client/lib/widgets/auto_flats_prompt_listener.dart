@@ -68,16 +68,10 @@ class _AutoFlatsPromptListenerState
       );
     } catch (e) {
       if (!mounted) return;
-      ref
-          .read(simpleMessagesProvider.notifier)
-          .show(
-            SimpleMessageKind.error,
-            friendlyError(
-              context.l10n,
-              e,
-              action: context.l10n.actionSendCalibrationChoice,
-            ),
-          );
+      ref.read(simpleMessagesProvider.notifier).show(
+        SimpleMessageKind.error,
+        friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice),
+      );
     }
   }
 
@@ -101,24 +95,13 @@ class _AutoFlatsPromptListenerState
             final api = ref.read(sequenceApiProvider);
             if (api == null) return;
             try {
-              await api.decideAutoFlats(
-                sequenceId,
-                choice: choice,
-                remember: remember,
-              );
+              await api.decideAutoFlats(sequenceId,
+                  choice: choice, remember: remember);
             } catch (e) {
               if (!mounted) return;
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    friendlyError(
-                      context.l10n,
-                      e,
-                      action: context.l10n.actionSendCalibrationChoice,
-                    ),
-                  ),
-                ),
-              );
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content:
+                      Text(friendlyError(context.l10n, e, action: context.l10n.actionSendCalibrationChoice))));
             }
           },
         ),

@@ -44,17 +44,12 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
   // "Stream has already been listened to" on that second subscribe and took
   // the whole Run tab down (#1363, 2026-10-16, second run of the night); a
   // plain `asBroadcastStream()` would keep its timer alive with no listener.
-  late final StreamController<void> _ticker = StreamController<void>.broadcast(
-    onListen: _startTicking,
-    onCancel: _stopTicking,
-  );
+  late final StreamController<void> _ticker =
+      StreamController<void>.broadcast(onListen: _startTicking, onCancel: _stopTicking);
   Timer? _tickTimer;
 
   void _startTicking() {
-    _tickTimer ??= Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => _ticker.add(null),
-    );
+    _tickTimer ??= Timer.periodic(const Duration(seconds: 1), (_) => _ticker.add(null));
   }
 
   void _stopTicking() {
@@ -117,21 +112,14 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
         return Container(
           key: const Key('run-dashboard-band'),
           padding: const EdgeInsets.fromLTRB(
-            AraSpace.s16,
-            AraSpace.s12,
-            AraSpace.s16,
-            AraSpace.s12,
-          ),
+              AraSpace.s16, AraSpace.s12, AraSpace.s16, AraSpace.s12),
           decoration: BoxDecoration(
             color: needsAttention
                 ? AraColors.accentError.withValues(alpha: 0.08)
                 : AraColors.bgPanel,
             border: Border(
               bottom: BorderSide(
-                color: needsAttention
-                    ? AraColors.accentError
-                    : AraColors.border,
-              ),
+                  color: needsAttention ? AraColors.accentError : AraColors.border),
             ),
           ),
           child: Row(
@@ -144,131 +132,119 @@ class _RunDashboardBandState extends ConsumerState<RunDashboardBand> {
               const _LatestFrameThumb(),
               Expanded(
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Row(
                       children: [
-                        Expanded(
-                          child: Row(
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  run.currentTargetName?.isNotEmpty == true
-                                      ? run.currentTargetName!
-                                      : 'Sequence run',
-                                  style: AraText.title,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                              const SizedBox(width: AraSpace.s8),
-                              Flexible(
-                                child: RunStateBadge(
-                                  state,
-                                  reason: run.reasonText,
-                                ),
-                              ),
-                            ],
+                        Flexible(
+                          child: Text(
+                            run.currentTargetName?.isNotEmpty == true
+                                ? run.currentTargetName!
+                                : 'Sequence run',
+                            style: AraText.title,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (run.startedUtc != null)
-                          Text(_fmtDuration(elapsed), style: AraText.numeric),
-                        if (remainingS > 0) ...[
-                          Text(' ·  ', style: AraText.caption),
-                          Text(
-                            '~${_fmtDuration(Duration(seconds: remainingS.round()))} left',
-                            style: AraText.numeric,
-                          ),
-                        ],
+                        const SizedBox(width: AraSpace.s8),
+                        Flexible(child: RunStateBadge(state, reason: run.reasonText)),
                       ],
                     ),
-                    const SizedBox(height: AraSpace.s8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(3),
-                      // S13 — the bar glides to each new fraction instead of
-                      // snapping (respects reduced motion).
-                      child: TweenAnimationBuilder<double>(
-                        tween: Tween(begin: 0, end: progress ?? 0),
-                        duration: reduceMotionOf(context)
-                            ? Duration.zero
-                            : const Duration(milliseconds: 400),
-                        curve: Curves.easeOutCubic,
-                        builder: (context, v, _) => LinearProgressIndicator(
-                          value: progress == null ? null : v,
-                          minHeight: 5,
-                          backgroundColor: AraColors.bgInput,
-                          valueColor: AlwaysStoppedAnimation(color),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: AraSpace.s8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: InkWell(
-                            // Tapping the current-instruction line jumps the tree to
-                            // the spotlighted node (the tree autoscrolls on change;
-                            // reselecting the spotlight path re-fires attention).
-                            onTap: () {
-                              final path = ref
-                                  .read(runSpotlightProvider)
-                                  ?.currentPath;
-                              if (path != null) {
-                                ref
-                                    .read(sequenceEditorProvider.notifier)
-                                    .select(path);
-                              }
-                            },
-                            child: Text(
-                              handSwap != null
-                                  ? 'The rig needs you — install the $handSwap filter'
-                                  : needsAttention
-                                  ? 'The rig needs you — ${run.currentInstructionDescription ?? 'check the mount/guider and resume'}'
-                                  : (run
-                                                .currentInstructionDescription
-                                                ?.isNotEmpty ==
-                                            true
-                                        ? '▶ ${run.currentInstructionDescription}'
-                                        : 'Running…'),
-                              style: AraText.caption.copyWith(
-                                color: needsAttention
-                                    ? AraColors.accentError
-                                    : AraColors.textSecondary,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                        // Frames landed so far — the number the user actually watches — then the
-                        // instruction count (a loop's exposure stays one instruction for all its frames).
-                        if (run.framesCaptured > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(right: AraSpace.s12),
-                            child: Text(
-                              '${run.framesCaptured} frames',
-                              style: AraText.numeric,
-                            ),
-                          ),
-                        if (total > 0)
-                          Text('$completed/$total', style: AraText.numeric),
-                      ],
-                    ),
-                    // #1364 item 6 — what the guider is doing, in the same words as
-                    // the Live tab's strip, so "Start guiding" never looks stuck
-                    // while the guider calibrates.
-                    const RunGuiderLine(),
-                    // #1264 — the Tracking Probe's ladder while it runs, then the
-                    // ceiling it chose, the way the autofocus run shows its curve.
-                    const _TrackingProbeStrip(),
-                    // S11 — the run's heartbeat: collapsed shows the newest event;
-                    // tap to expand the recent history.
-                    _TickerStrip(
-                      expanded: _tickerExpanded,
-                      onToggle: () =>
-                          setState(() => _tickerExpanded = !_tickerExpanded),
+                  ),
+                  if (run.startedUtc != null)
+                    Text(_fmtDuration(elapsed), style: AraText.numeric),
+                  if (remainingS > 0) ...[
+                    Text(' ·  ', style: AraText.caption),
+                    Text(
+                      '~${_fmtDuration(Duration(seconds: remainingS.round()))} left',
+                      style: AraText.numeric,
                     ),
                   ],
+                ],
+              ),
+              const SizedBox(height: AraSpace.s8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                // S13 — the bar glides to each new fraction instead of
+                // snapping (respects reduced motion).
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: progress ?? 0),
+                  duration: reduceMotionOf(context)
+                      ? Duration.zero
+                      : const Duration(milliseconds: 400),
+                  curve: Curves.easeOutCubic,
+                  builder: (context, v, _) => LinearProgressIndicator(
+                    value: progress == null ? null : v,
+                    minHeight: 5,
+                    backgroundColor: AraColors.bgInput,
+                    valueColor: AlwaysStoppedAnimation(color),
+                  ),
                 ),
+              ),
+              const SizedBox(height: AraSpace.s8),
+              Row(
+                children: [
+                  Expanded(
+                    child: InkWell(
+                      // Tapping the current-instruction line jumps the tree to
+                      // the spotlighted node (the tree autoscrolls on change;
+                      // reselecting the spotlight path re-fires attention).
+                      onTap: () {
+                        final path =
+                            ref.read(runSpotlightProvider)?.currentPath;
+                        if (path != null) {
+                          ref
+                              .read(sequenceEditorProvider.notifier)
+                              .select(path);
+                        }
+                      },
+                      child: Text(
+                        handSwap != null
+                            ? 'The rig needs you — install the $handSwap filter'
+                            : needsAttention
+                            ? 'The rig needs you — ${run.currentInstructionDescription ?? 'check the mount/guider and resume'}'
+                            : (run.currentInstructionDescription?.isNotEmpty ==
+                                    true
+                                ? '▶ ${run.currentInstructionDescription}'
+                                : 'Running…'),
+                        style: AraText.caption.copyWith(
+                            color: needsAttention
+                                ? AraColors.accentError
+                                : AraColors.textSecondary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  // Frames landed so far — the number the user actually watches — then the
+                  // instruction count (a loop's exposure stays one instruction for all its frames).
+                  if (run.framesCaptured > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(right: AraSpace.s12),
+                      child: Text('${run.framesCaptured} frames', style: AraText.numeric),
+                    ),
+                  if (total > 0)
+                    Text('$completed/$total', style: AraText.numeric),
+                ],
+              ),
+              // #1364 item 6 — what the guider is doing, in the same words as
+              // the Live tab's strip, so "Start guiding" never looks stuck
+              // while the guider calibrates.
+              const RunGuiderLine(),
+              // #1264 — the Tracking Probe's ladder while it runs, then the
+              // ceiling it chose, the way the autofocus run shows its curve.
+              const _TrackingProbeStrip(),
+              // S11 — the run's heartbeat: collapsed shows the newest event;
+              // tap to expand the recent history.
+              _TickerStrip(
+                expanded: _tickerExpanded,
+                onToggle: () =>
+                    setState(() => _tickerExpanded = !_tickerExpanded),
+              ),
+            ],
+          ),
               ),
             ],
           ),
@@ -298,18 +274,14 @@ class _TrackingProbeStrip extends ConsumerWidget {
             live.done
                 ? describeTrackingCeiling(live)
                 : 'Tracking probe · ${live.rungs.length}${live.ladder.isEmpty ? '' : '/${live.ladder.length}'} rungs'
-                      '${live.priorSeconds != null ? ' · prior ${formatExposureSeconds(live.priorSeconds!)}' : ''}',
+                    '${live.priorSeconds != null ? ' · prior ${formatExposureSeconds(live.priorSeconds!)}' : ''}',
             style: AraText.caption.copyWith(
               color: live.done ? AraColors.textPrimary : AraColors.accentInfo,
             ),
             overflow: TextOverflow.ellipsis,
           ),
           for (final r in live.rungs)
-            Text(
-              describeTrackingRung(r),
-              style: dim,
-              overflow: TextOverflow.ellipsis,
-            ),
+            Text(describeTrackingRung(r), style: dim, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -340,11 +312,8 @@ class _LatestFrameThumb extends ConsumerWidget {
             gaplessPlayback: true,
             errorBuilder: (_, _, _) => Container(
               color: AraColors.bgInput,
-              child: const Icon(
-                Icons.image_outlined,
-                size: 18,
-                color: AraColors.textDisabled,
-              ),
+              child: const Icon(Icons.image_outlined,
+                  size: 18, color: AraColors.textDisabled),
             ),
           ),
         ),
@@ -352,6 +321,7 @@ class _LatestFrameThumb extends ConsumerWidget {
     );
   }
 }
+
 
 /// Collapsed: the latest ticker event on one tappable line. Expanded: the run's
 /// recent history (newest first, capped in the provider).
@@ -361,11 +331,11 @@ class _TickerStrip extends ConsumerWidget {
   final VoidCallback onToggle;
 
   Color _dot(RunTickerKind k) => switch (k) {
-    RunTickerKind.lifecycle => AraColors.accentInfo,
-    RunTickerKind.instruction => AraColors.textSecondary,
-    RunTickerKind.frame => AraColors.accentConnected,
-    RunTickerKind.attention => AraColors.accentError,
-  };
+        RunTickerKind.lifecycle => AraColors.accentInfo,
+        RunTickerKind.instruction => AraColors.textSecondary,
+        RunTickerKind.frame => AraColors.accentConnected,
+        RunTickerKind.attention => AraColors.accentError,
+      };
 
   String _time(DateTime utc) {
     final l = utc.toLocal();
@@ -373,32 +343,21 @@ class _TickerStrip extends ConsumerWidget {
   }
 
   Widget _line(RunTickerEvent e) => Padding(
-    padding: const EdgeInsets.only(top: 4),
-    child: Row(
-      children: [
-        Container(
-          width: 6,
-          height: 6,
-          decoration: BoxDecoration(
-            color: _dot(e.kind),
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: AraSpace.s8),
-        Expanded(
-          child: Text(
-            e.label,
-            style: AraText.caption,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-        Text(
-          _time(e.at),
-          style: AraText.caption.copyWith(color: AraColors.textDisabled),
-        ),
-      ],
-    ),
-  );
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          Container(
+              width: 6,
+              height: 6,
+              decoration:
+                  BoxDecoration(color: _dot(e.kind), shape: BoxShape.circle)),
+          const SizedBox(width: AraSpace.s8),
+          Expanded(
+              child: Text(e.label,
+                  style: AraText.caption, overflow: TextOverflow.ellipsis)),
+          Text(_time(e.at),
+              style: AraText.caption.copyWith(color: AraColors.textDisabled)),
+        ]),
+      );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -416,12 +375,9 @@ class _TickerStrip extends ConsumerWidget {
             if (events.length > 1)
               Padding(
                 padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  expanded ? 'Show less' : '${events.length - 1} more…',
-                  style: AraText.caption.copyWith(
-                    color: AraColors.textDisabled,
-                  ),
-                ),
+                child: Text(expanded ? 'Show less' : '${events.length - 1} more…',
+                    style:
+                        AraText.caption.copyWith(color: AraColors.textDisabled)),
               ),
           ],
         ),

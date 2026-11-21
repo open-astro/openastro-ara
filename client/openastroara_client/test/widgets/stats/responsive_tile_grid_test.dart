@@ -43,19 +43,23 @@ void main() {
       const MaterialApp(
         home: Scaffold(
           body: ResponsiveTileGrid(
-            children: [Text('a'), Text('b'), Text('c'), Text('d'), Text('e')],
+            children: [
+              Text('a'),
+              Text('b'),
+              Text('c'),
+              Text('d'),
+              Text('e'),
+            ],
           ),
         ),
       ),
     );
 
     final widths = tester
-        .widgetList<SizedBox>(
-          find.descendant(
-            of: find.byType(Wrap),
-            matching: find.byType(SizedBox),
-          ),
-        )
+        .widgetList<SizedBox>(find.descendant(
+          of: find.byType(Wrap),
+          matching: find.byType(SizedBox),
+        ))
         .map((s) => s.width)
         .toSet();
     // One shared width for all five tiles, matching the pure math for 800 px.

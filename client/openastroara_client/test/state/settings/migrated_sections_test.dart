@@ -422,16 +422,8 @@ void main() {
     c.read(opticsSettingsProvider.notifier).setFocalLengthMm(382);
     await c.read(opticsSettingsProvider.notifier).save(rig.api());
     final put = rig.puts.single;
-    expect(
-      put.ifMatch,
-      isNot('"optics-v1"'),
-      reason: 'the tag of the copy the daemon wrote',
-    );
-    expect(
-      (put.body as Map)['sensor_width_px'],
-      6248,
-      reason: 'the daemon\'s fill is kept',
-    );
+    expect(put.ifMatch, isNot('"optics-v1"'), reason: 'the tag of the copy the daemon wrote');
+    expect((put.body as Map)['sensor_width_px'], 6248, reason: 'the daemon\'s fill is kept');
     expect((put.body as Map)['focal_length_mm'], 382);
   });
 
@@ -452,17 +444,9 @@ void main() {
     c.read(siteSettingsProvider.notifier).setObserverName('J. Troy');
     await c.read(siteSettingsProvider.notifier).save(rig.api());
     final put = rig.puts.single;
-    expect(
-      put.ifMatch,
-      '"site-v2"',
-      reason: 'the tag of the copy the daemon wrote',
-    );
+    expect(put.ifMatch, '"site-v2"', reason: 'the tag of the copy the daemon wrote');
     final body = put.body as Map;
-    expect(
-      body['latitude_deg'],
-      51.477833,
-      reason: 'the daemon\'s fix is kept',
-    );
+    expect(body['latitude_deg'], 51.477833, reason: 'the daemon\'s fix is kept');
     expect(body['observer_name'], 'J. Troy');
   });
 
@@ -480,19 +464,11 @@ void main() {
     final put = rig.puts.single;
     expect(put.ifMatch, tag);
     expect((put.body as Map)['permanent_pier'], isTrue);
-    expect(
-      (put.body as Map)['latitude_deg'],
-      0.0,
-      reason: 'the edit is not sent',
-    );
+    expect((put.body as Map)['latitude_deg'], 0.0, reason: 'the edit is not sent');
     final shown = c.read(siteSettingsProvider);
     expect(shown.value!.latitudeDeg, 51.477833, reason: 'the edit stays');
     expect(shown.value!.permanentPier, isTrue);
-    expect(
-      shown.etag,
-      rig.etagOf('site'),
-      reason: 'the next Save is not refused',
-    );
+    expect(shown.etag, rig.etagOf('site'), reason: 'the next Save is not refused');
   });
 
   test('safety: a meridian flip write announced by profile.updated reloads '
@@ -511,16 +487,10 @@ void main() {
     c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12);
     await c.read(safetyPoliciesProvider.notifier).save(rig.api());
     final put = rig.puts.single;
-    expect(
-      put.ifMatch,
-      '"safety-v2"',
-      reason: 'the tag of the copy the daemon wrote',
-    );
+    expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
     expect((put.body as Map)['meridian_pause_min'], 12);
-    expect(
-      c.read(safetyPoliciesProvider).value!.firstFlipCompletedUtc,
-      DateTime.utc(2026, 11, 20, 2),
-    );
+    expect(c.read(safetyPoliciesProvider).value!.firstFlipCompletedUtc,
+        DateTime.utc(2026, 11, 20, 2));
   });
 
   test('phd2: a guide camera fill announced by profile.updated reloads the '
@@ -540,53 +510,38 @@ void main() {
     c.read(phd2SettingsProvider.notifier).setSettleTimeSec(15);
     await c.read(phd2SettingsProvider.notifier).save(rig.api());
     final put = rig.puts.single;
-    expect(
-      put.ifMatch,
-      '"phd2-v2"',
-      reason: 'the tag of the copy the daemon wrote',
-    );
+    expect(put.ifMatch, '"phd2-v2"', reason: 'the tag of the copy the daemon wrote');
     final body = put.body as Map;
-    expect(
-      body['guide_pixel_size'],
-      3.75,
-      reason: 'the daemon\'s fill is kept',
-    );
+    expect(body['guide_pixel_size'], 3.75, reason: 'the daemon\'s fill is kept');
     expect(body['settle_time_sec'], 15);
   });
 
-  test(
-    'phd2: a guide camera fill announced moments after this device\'s own '
-    'guider save still lands, so the next Save is not refused (ADR 0015)',
-    () async {
-      final rig = _rig();
-      final c = _container(rig);
-      await settle(() => c.read(phd2SettingsProvider).canSave);
-      final guider = c.read(phd2SettingsProvider.notifier);
-      // Settings → Guider's Connect saves the pending edit, then connects.
-      guider.setSettleTimeSec(12);
-      await guider.save(rig.api());
-      expect(ProfileApi.wroteRecently('phd2'), isTrue);
-      await applyProfileUpdated(c, 'phd2'); // that save's own announcement
-      // The guider connects within the same moments; the daemon fills the guide
-      // camera's pixel size and the guide train, then announces it.
-      rig.daemonWrote('phd2', {
-        ...rig.sectionOf('phd2')! as Map,
-        'guide_pixel_size': 3.75,
-        'guide_focal_length': 128,
-      });
-      final filled = rig.etagOf('phd2');
-      await applyProfileUpdated(c, 'phd2');
-      expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75);
-      guider.setSettleTimeSec(15);
-      await guider.save(rig.api());
-      expect(
-        rig.puts.last.ifMatch,
-        filled,
-        reason: 'the tag of the copy the daemon wrote',
-      );
-      expect((rig.puts.last.body as Map)['guide_focal_length'], 128);
-    },
-  );
+  test('phd2: a guide camera fill announced moments after this device\'s own '
+      'guider save still lands, so the next Save is not refused (ADR 0015)', () async {
+    final rig = _rig();
+    final c = _container(rig);
+    await settle(() => c.read(phd2SettingsProvider).canSave);
+    final guider = c.read(phd2SettingsProvider.notifier);
+    // Settings → Guider's Connect saves the pending edit, then connects.
+    guider.setSettleTimeSec(12);
+    await guider.save(rig.api());
+    expect(ProfileApi.wroteRecently('phd2'), isTrue);
+    await applyProfileUpdated(c, 'phd2'); // that save's own announcement
+    // The guider connects within the same moments; the daemon fills the guide
+    // camera's pixel size and the guide train, then announces it.
+    rig.daemonWrote('phd2', {
+      ...rig.sectionOf('phd2')! as Map,
+      'guide_pixel_size': 3.75,
+      'guide_focal_length': 128,
+    });
+    final filled = rig.etagOf('phd2');
+    await applyProfileUpdated(c, 'phd2');
+    expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75);
+    guider.setSettleTimeSec(15);
+    await guider.save(rig.api());
+    expect(rig.puts.last.ifMatch, filled, reason: 'the tag of the copy the daemon wrote');
+    expect((rig.puts.last.body as Map)['guide_focal_length'], 128);
+  });
 
   test('phd2: a rig copy from before the Dec split reads Dec as RA, and an '
       'Automatic guider profile as 0 (ADR 0015)', () async {

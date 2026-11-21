@@ -15,8 +15,7 @@ import 'package:openastroara/widgets/equipment/guider_dialog.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 import 'package:openastroara/l10n/l10n.dart';
 
-GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) =>
-    GuiderStatus(
+GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) => GuiderStatus(
       deviceId: 'phd2',
       name: 'OpenAstro Guider',
       connectionState: c,
@@ -25,9 +24,7 @@ GuiderStatus _status(GuiderConnectionState c, GuiderRuntimeState r) =>
 
 class _FakeSavedServerService implements SavedServerService {
   @override
-  Future<List<AraServer>> loadAll() async => const [
-    AraServer(hostname: 'h', port: 5555),
-  ];
+  Future<List<AraServer>> loadAll() async => const [AraServer(hostname: 'h', port: 5555)];
   @override
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
@@ -43,10 +40,7 @@ class _FakeGuiderClient implements GuiderClient {
   @override
   Future<GuiderStatus?> getStatus() async => status;
   @override
-  Future<void> connect({
-    String host = kDefaultGuiderHost,
-    int port = kDefaultGuiderPort,
-  }) async {
+  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
     connectCalls++;
     if (throwOnConnect) throw StateError('connect failed');
   }
@@ -62,12 +56,12 @@ class _FakeGuiderClient implements GuiderClient {
 }
 
 Widget _app(GuiderClient fake) => ProviderScope(
-  overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    guiderApiFactoryProvider.overrideWithValue((_) => fake),
-  ],
-  child: const MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
-);
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+        guiderApiFactoryProvider.overrideWithValue((_) => fake),
+      ],
+      child: const MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
+    );
 
 final _en = lookupAppLocalizations(const Locale('en'));
 
@@ -79,65 +73,43 @@ void main() {
 
     test('connecting → info', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connecting, GuiderRuntimeState.stopped),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connecting, GuiderRuntimeState.stopped)),
         StatusLevel.info,
       );
     });
 
     test('connected + guiding → active (working: blinking green, DESIGN.md status rule)', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.guiding)),
         StatusLevel.active,
       );
     });
 
     test('connected + star lost → busy, a warning: still searching (runtime overrides link)', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connected, GuiderRuntimeState.starLost),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.starLost)),
         StatusLevel.busy,
       );
     });
 
     test('connected + calibrating/dithering/paused → changing (blue: on its way, or paused by Ara)', () {
       expect(
-        guiderStatusLevel(
-          _status(
-            GuiderConnectionState.connected,
-            GuiderRuntimeState.calibrating,
-          ),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.calibrating)),
         StatusLevel.changing,
       );
       expect(
-        guiderStatusLevel(
-          _status(
-            GuiderConnectionState.connected,
-            GuiderRuntimeState.dithering,
-          ),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.dithering)),
         StatusLevel.changing,
       );
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connected, GuiderRuntimeState.paused),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.paused)),
         StatusLevel.changing,
         reason: 'a paused guider must not read as a healthy green guide',
       );
     });
 
     test('connected + settling/looping/star selected → changing (#1364: the guide camera is in use)', () {
-      for (final r in [
-        GuiderRuntimeState.settling,
-        GuiderRuntimeState.looping,
-        GuiderRuntimeState.starSelected,
-      ]) {
+      for (final r in [GuiderRuntimeState.settling, GuiderRuntimeState.looping, GuiderRuntimeState.starSelected]) {
         expect(
           guiderStatusLevel(_status(GuiderConnectionState.connected, r)),
           StatusLevel.changing,
@@ -148,33 +120,25 @@ void main() {
 
     test('connected + stopped → connected (idle but healthy)', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connected, GuiderRuntimeState.stopped),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.stopped)),
         StatusLevel.connected,
       );
     });
 
     test('connected + unknown runtime → info (not a misleading green)', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.connected, GuiderRuntimeState.unknown),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.connected, GuiderRuntimeState.unknown)),
         StatusLevel.info,
       );
     });
 
     test('error / unknown link → error / disconnected', () {
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.error, GuiderRuntimeState.stopped),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.error, GuiderRuntimeState.stopped)),
         StatusLevel.error,
       );
       expect(
-        guiderStatusLevel(
-          _status(GuiderConnectionState.unknown, GuiderRuntimeState.unknown),
-        ),
+        guiderStatusLevel(_status(GuiderConnectionState.unknown, GuiderRuntimeState.unknown)),
         StatusLevel.disconnected,
       );
     });
@@ -182,23 +146,11 @@ void main() {
 
   group('guiderChipLevel (AsyncValue)', () {
     test('loading → info, error → error, data delegates', () {
+      expect(guiderChipLevel(const AsyncValue<GuiderStatus?>.loading()), StatusLevel.info);
+      expect(guiderChipLevel(AsyncValue<GuiderStatus?>.error('x', StackTrace.empty)), StatusLevel.error);
       expect(
-        guiderChipLevel(const AsyncValue<GuiderStatus?>.loading()),
-        StatusLevel.info,
-      );
-      expect(
-        guiderChipLevel(AsyncValue<GuiderStatus?>.error('x', StackTrace.empty)),
-        StatusLevel.error,
-      );
-      expect(
-        guiderChipLevel(
-          AsyncValue<GuiderStatus?>.data(
-            _status(
-              GuiderConnectionState.connected,
-              GuiderRuntimeState.guiding,
-            ),
-          ),
-        ),
+        guiderChipLevel(AsyncValue<GuiderStatus?>.data(
+            _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding))),
         StatusLevel.active,
       );
     });
@@ -211,46 +163,34 @@ void main() {
     });
   });
 
-  testWidgets('GuiderChip renders the Guider label (disconnected by default)', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: Scaffold(body: GuiderChip())),
-      ),
-    );
+  testWidgets('GuiderChip renders the Guider label (disconnected by default)', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(home: Scaffold(body: GuiderChip())),
+    ));
     await tester.pump();
     expect(find.text('Guider'), findsOneWidget);
   });
 
-  testWidgets(
-    'tapping the chip routes to the guider Settings panel (Options tab), like the other devices',
-    (tester) async {
-      final container = ProviderContainer();
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: GuiderChip())),
-        ),
-      );
-      await tester.pump();
-      await tester.tap(find.byType(GuiderChip));
-      await tester.pump();
-      expect(container.read(selectedSettingsPanelProvider), 'eq.guider');
-      expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
-      expect(find.byType(Dialog), findsNothing, reason: 'no popup any more');
-    },
-  );
+  testWidgets('tapping the chip routes to the guider Settings panel (Options tab), like the other devices',
+      (tester) async {
+    final container = ProviderContainer();
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: GuiderChip())),
+    ));
+    await tester.pump();
+    await tester.tap(find.byType(GuiderChip));
+    await tester.pump();
+    expect(container.read(selectedSettingsPanelProvider), 'eq.guider');
+    expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
+    expect(find.byType(Dialog), findsNothing, reason: 'no popup any more');
+  });
 
-  testWidgets('the connection section shows "not configured" with no server', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
-      ),
-    );
+  testWidgets('the connection section shows "not configured" with no server', (tester) async {
+    await tester.pumpWidget(const ProviderScope(
+      child: MaterialApp(home: Scaffold(body: GuiderConnectionSection())),
+    ));
     await tester.pumpAndSettle();
     expect(find.text('No guider configured on this server.'), findsOneWidget);
     expect(find.byTooltip('Connect'), findsOneWidget);
@@ -258,12 +198,9 @@ void main() {
     expect(find.byType(EquipmentStateChip), findsOneWidget);
   });
 
-  testWidgets('tapping Connect on a disconnected guider calls the notifier', (
-    tester,
-  ) async {
+  testWidgets('tapping Connect on a disconnected guider calls the notifier', (tester) async {
     final fake = _FakeGuiderClient(
-      _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped),
-    );
+        _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped));
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Connect'));
@@ -271,13 +208,10 @@ void main() {
     expect(fake.connectCalls, 1);
   });
 
-  testWidgets('a failed connect shows the error message in the section', (
-    tester,
-  ) async {
+  testWidgets('a failed connect shows the error message in the section', (tester) async {
     final fake = _FakeGuiderClient(
-      _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped),
-      throwOnConnect: true,
-    );
+        _status(GuiderConnectionState.disconnected, GuiderRuntimeState.stopped),
+        throwOnConnect: true);
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('Connect'));
@@ -285,20 +219,13 @@ void main() {
     expect(find.textContaining('Could not reach the guider'), findsOneWidget);
   });
 
-  testWidgets('tapping Disconnect on a connected guider calls the notifier', (
-    tester,
-  ) async {
+  testWidgets('tapping Disconnect on a connected guider calls the notifier', (tester) async {
     final fake = _FakeGuiderClient(
-      _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding),
-    );
+        _status(GuiderConnectionState.connected, GuiderRuntimeState.guiding));
     await tester.pumpWidget(_app(fake));
     await tester.pumpAndSettle();
     expect(find.byTooltip('Disconnect'), findsOneWidget);
-    expect(
-      find.text('Guiding'),
-      findsOneWidget,
-      reason: 'the runtime state is in the card body',
-    );
+    expect(find.text('Guiding'), findsOneWidget, reason: 'the runtime state is in the card body');
     await tester.tap(find.byTooltip('Disconnect'));
     await tester.pumpAndSettle();
     expect(fake.disconnectCalls, 1);

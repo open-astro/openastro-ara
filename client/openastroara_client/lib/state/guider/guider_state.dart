@@ -144,9 +144,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   static GuideStartFailed? _failureOf(Map<String, dynamic> p) {
     if (p['ok'] != false) return null;
     final error = p['error'];
-    return GuideStartFailed(
-      error is String && error.isNotEmpty && error != 'refused' ? error : null,
-    );
+    return GuideStartFailed(error is String && error.isNotEmpty && error != 'refused' ? error : null);
   }
 
   /// Simple Mode's start: tracking on first (a Polar Align hands the mount back
@@ -162,61 +160,58 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
   /// A failure after the Guider reached calibrating goes to
   /// [guideStartLateFailureProvider] instead (#1756).
   Future<void> startGuiding() => _guideAction((api) async {
-    _dropLateStart();
-    // Listening before the ask: a guider that refuses at once can answer
-    // before the 202 does.
-    final done = <Object?, Map<String, dynamic>>{};
-    final sub = ref.listen(wsEventsProvider, (_, next) {
-      final e = next.asData?.value;
-      if (e != null && e.type == 'guider.operation_complete') {
-        done[e.payload['operation_id']] = e.payload;
-      }
-    });
-    try {
-      final id = await api.startGuiding();
-      if (id == null) return;
-      // A start that works can run long (calibration): stop waiting once the
-      // guider is past picking a star, or after 10 s, as before (no false failure).
-      for (var i = 0; ref.mounted; i++) {
-        final p = done[id];
-        if (p != null) {
-          final failed = _failureOf(p);
-          if (failed != null) throw failed;
-          return;
-        }
-        final runtime = state.value?.runtimeState;
-        if (i >= 40 ||
-            runtime == GuiderRuntimeState.calibrating ||
-            runtime == GuiderRuntimeState.guiding ||
-            runtime == GuiderRuntimeState.settling) {
-          // Still running: keep listening for its outcome. No await since the
-          // check above, so no event falls between the two listeners.
-          final late = ref.read(guideStartLateFailureProvider.notifier);
-          _lateStart = ref.listen(wsEventsProvider, (_, next) {
-            final e = next.asData?.value;
-            if (e == null ||
-                e.type != 'guider.operation_complete' ||
-                e.payload['operation_id'] != id)
+        _dropLateStart();
+        // Listening before the ask: a guider that refuses at once can answer
+        // before the 202 does.
+        final done = <Object?, Map<String, dynamic>>{};
+        final sub = ref.listen(wsEventsProvider, (_, next) {
+          final e = next.asData?.value;
+          if (e != null && e.type == 'guider.operation_complete') {
+            done[e.payload['operation_id']] = e.payload;
+          }
+        });
+        try {
+          final id = await api.startGuiding();
+          if (id == null) return;
+          // A start that works can run long (calibration): stop waiting once the
+          // guider is past picking a star, or after 10 s, as before (no false failure).
+          for (var i = 0; ref.mounted; i++) {
+            final p = done[id];
+            if (p != null) {
+              final failed = _failureOf(p);
+              if (failed != null) throw failed;
               return;
-            _dropLateStart();
-            if (_failureOf(e.payload) case final failed?) late.report(failed);
-          });
-          return;
+            }
+            final runtime = state.value?.runtimeState;
+            if (i >= 40 ||
+                runtime == GuiderRuntimeState.calibrating ||
+                runtime == GuiderRuntimeState.guiding ||
+                runtime == GuiderRuntimeState.settling) {
+              // Still running: keep listening for its outcome. No await since the
+              // check above, so no event falls between the two listeners.
+              final late = ref.read(guideStartLateFailureProvider.notifier);
+              _lateStart = ref.listen(wsEventsProvider, (_, next) {
+                final e = next.asData?.value;
+                if (e == null || e.type != 'guider.operation_complete' || e.payload['operation_id'] != id) return;
+                _dropLateStart();
+                if (_failureOf(e.payload) case final failed?) late.report(failed);
+              });
+              return;
+            }
+            await Future<void>.delayed(settleInterval);
+            await refresh(api);
+          }
+        } finally {
+          sub.close();
         }
-        await Future<void>.delayed(settleInterval);
-        await refresh(api);
-      }
-    } finally {
-      sub.close();
-    }
-  });
+      });
 
   /// Stop guiding by hand. Throws when the daemon refuses. A start still
   /// calibrating ends here, and its outcome is not a failure to report.
   Future<void> stopGuiding() => _guideAction((api) {
-    _dropLateStart();
-    return api.stopGuiding();
-  });
+        _dropLateStart();
+        return api.stopGuiding();
+      });
 
   // Unlike connect, keeps the current status on screen (no loading state):
   // the strip must not blank while a start settles.
@@ -275,8 +270,7 @@ class GuiderStatusNotifier extends AsyncNotifier<GuiderStatus?> {
 
 final guiderStatusProvider =
     AsyncNotifierProvider<GuiderStatusNotifier, GuiderStatus?>(
-      GuiderStatusNotifier.new,
-    );
+        GuiderStatusNotifier.new);
 
 /// #1756 — the last Guider start's failure that came after the start returned
 /// (the Guider had reached calibrating): null until one comes. Each failure is
@@ -292,5 +286,4 @@ class GuideStartLateFailureNotifier extends Notifier<GuideStartFailed?> {
 
 final guideStartLateFailureProvider =
     NotifierProvider<GuideStartLateFailureNotifier, GuideStartFailed?>(
-      GuideStartLateFailureNotifier.new,
-    );
+        GuideStartLateFailureNotifier.new);

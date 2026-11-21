@@ -53,9 +53,8 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
     // §2 offline planning — snapshot the list + active profile's gear sections
     // so a later offline session can plan with real settings. Fire-and-forget:
     // the cache is a convenience and must never delay or fail the live list.
-    unawaited(
-      captureProfileCache(ref.read(profileCacheServiceProvider), api, list),
-    );
+    unawaited(captureProfileCache(
+        ref.read(profileCacheServiceProvider), api, list));
     return list;
   }
 
@@ -64,8 +63,7 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   /// initial load already shows a spinner via build()'s pending state.
   Future<void> refresh() async {
     final api = _api;
-    if (api == null)
-      return; // no server (e.g. Retry from the error state) — no-op
+    if (api == null) return; // no server (e.g. Retry from the error state) — no-op
     state = await AsyncValue.guard(() => api.listProfiles());
   }
 
@@ -95,13 +93,8 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
         // which changes WHICH profile's gear sections should be snapshotted.
         final list = next.value;
         if (list != null) {
-          unawaited(
-            captureProfileCache(
-              ref.read(profileCacheServiceProvider),
-              api,
-              list,
-            ),
-          );
+          unawaited(captureProfileCache(
+              ref.read(profileCacheServiceProvider), api, list));
         }
       } finally {
         _busy = false;
@@ -118,22 +111,17 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
   }
 
   /// Rename [id], then refresh. Throws on transport failure.
-  Future<void> rename(String id, String name) =>
-      _mutate((api) => api.renameProfile(id, name));
+  Future<void> rename(String id, String name) => _mutate((api) => api.renameProfile(id, name));
 
   /// Delete [id] (and, with [deleteGuiderProfile], its OpenAstro Guider
   /// profile), then refresh. Returns what happened to the guider profile.
   /// Throws on transport failure.
-  Future<ProfileDeleteResult> delete(
-    String id, {
-    bool deleteGuiderProfile = false,
-  }) async {
+  Future<ProfileDeleteResult> delete(String id,
+      {bool deleteGuiderProfile = false}) async {
     var result = ProfileDeleteResult.kept;
     await _mutate((api) async {
-      result = await api.deleteProfile(
-        id,
-        deleteGuiderProfile: deleteGuiderProfile,
-      );
+      result = await api.deleteProfile(id,
+          deleteGuiderProfile: deleteGuiderProfile);
     });
     return result;
   }
@@ -154,5 +142,4 @@ class ProfileManagementNotifier extends AsyncNotifier<ProfileList> {
 
 final profileManagementProvider =
     AsyncNotifierProvider<ProfileManagementNotifier, ProfileList>(
-      ProfileManagementNotifier.new,
-    );
+        ProfileManagementNotifier.new);

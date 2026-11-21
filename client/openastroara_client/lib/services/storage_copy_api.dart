@@ -65,8 +65,8 @@ class StorageCopyStatus {
     return StorageCopyStatus(
       state: json['state'] as String? ?? 'idle',
       targetUuid: json['target_uuid'] as String?,
-      folders:
-          (json['folders'] as List?)?.whereType<String>().toList() ?? const [],
+      folders: (json['folders'] as List?)?.whereType<String>().toList() ??
+          const [],
       filesToCopy: n('files_to_copy'),
       filesCopied: n('files_copied'),
       filesSkipped: n('files_skipped'),
@@ -95,15 +95,12 @@ class StorageCopyRefused implements Exception {
 
 class StorageCopyApi {
   StorageCopyApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   final Dio _dio;
 
@@ -123,9 +120,7 @@ class StorageCopyApi {
       final body = e.response?.data;
       if (body is Map && body['title'] is String) {
         throw StorageCopyRefused(
-          body['title'] as String,
-          body['detail'] as String?,
-        );
+            body['title'] as String, body['detail'] as String?);
       }
       rethrow;
     }
@@ -151,43 +146,42 @@ class StorageCopyApi {
 
 /// The server's copy status, polled every second while a copy runs and once
 /// otherwise. Invalidate it after starting a copy to resume polling.
-final storageCopyStatusProvider = StreamProvider.autoDispose<StorageCopyStatus>(
-  (ref) {
-    final server = ref.watch(activeServerProvider);
-    if (server == null) {
-      return Stream.value(StorageCopyStatus.idle);
-    }
-    final api = StorageCopyApi(server);
-    final controller = StreamController<StorageCopyStatus>();
-    var disposed = false;
-    ref.onDispose(() {
-      disposed = true;
-      api.close();
-      controller.close();
-    });
-    Future<void> poll() async {
-      // A Wi-Fi blip must not freeze the progress for good: a few failures in a
-      // row are retried before the error is shown.
-      var failures = 0;
-      while (!disposed) {
-        try {
-          final status = await api.status();
-          if (disposed) return;
-          failures = 0;
-          controller.add(status);
-          if (!status.isRunning) return;
-        } catch (e, st) {
-          if (disposed) return;
-          if (++failures >= 5) {
-            controller.addError(e, st);
-            return;
-          }
+final storageCopyStatusProvider =
+    StreamProvider.autoDispose<StorageCopyStatus>((ref) {
+  final server = ref.watch(activeServerProvider);
+  if (server == null) {
+    return Stream.value(StorageCopyStatus.idle);
+  }
+  final api = StorageCopyApi(server);
+  final controller = StreamController<StorageCopyStatus>();
+  var disposed = false;
+  ref.onDispose(() {
+    disposed = true;
+    api.close();
+    controller.close();
+  });
+  Future<void> poll() async {
+    // A Wi-Fi blip must not freeze the progress for good: a few failures in a
+    // row are retried before the error is shown.
+    var failures = 0;
+    while (!disposed) {
+      try {
+        final status = await api.status();
+        if (disposed) return;
+        failures = 0;
+        controller.add(status);
+        if (!status.isRunning) return;
+      } catch (e, st) {
+        if (disposed) return;
+        if (++failures >= 5) {
+          controller.addError(e, st);
+          return;
         }
-        await Future<void>.delayed(const Duration(seconds: 1));
       }
+      await Future<void>.delayed(const Duration(seconds: 1));
     }
+  }
 
-    unawaited(poll());
-    return controller.stream;
-  },
-);
+  unawaited(poll());
+  return controller.stream;
+});

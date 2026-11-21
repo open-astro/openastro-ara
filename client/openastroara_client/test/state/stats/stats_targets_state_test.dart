@@ -39,8 +39,7 @@ class _FakeStatsExportClient implements StatsExportClient {
   Future<String> fetchCsv(String scope) async => 'header\n';
 
   @override
-  String astrobinExportUrl(String target) =>
-      'http://h:5555/api/v1/stats/export/astrobin?target=$target';
+  String astrobinExportUrl(String target) => 'http://h:5555/api/v1/stats/export/astrobin?target=$target';
 
   @override
   void close() {}
@@ -69,14 +68,10 @@ class _GatedStatsExportClient implements StatsExportClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 ProviderContainer _container(List<AraServer> servers, StatsExportClient api) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      statsExportApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    statsExportApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -105,17 +100,12 @@ void main() {
     });
 
     test('refresh re-reads from the server', () async {
-      final api = _FakeStatsExportClient(const [
-        StatsTarget(targetName: 'M31'),
-      ]);
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(statsTargetsProvider.future);
 
-      api.targets = const [
-        StatsTarget(targetName: 'M31'),
-        StatsTarget(targetName: 'M81'),
-      ];
+      api.targets = const [StatsTarget(targetName: 'M31'), StatsTarget(targetName: 'M81')];
       await c.read(statsTargetsProvider.notifier).refresh();
       expect(c.read(statsTargetsProvider).value!.length, 2);
       expect(api.fetches, 2);
@@ -125,61 +115,36 @@ void main() {
       final api = _FakeStatsExportClient(const [])..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(
-        c.read(statsTargetsProvider.future),
-        throwsA(isA<StateError>()),
-      );
+      await expectLater(c.read(statsTargetsProvider.future), throwsA(isA<StateError>()));
       expect(c.read(statsTargetsProvider).hasError, isTrue);
     });
 
-    test(
-      'a failed refresh keeps the prior list and rethrows (no blanking)',
-      () async {
-        final api = _FakeStatsExportClient(const [
-          StatsTarget(targetName: 'M31'),
-        ]);
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(statsTargetsProvider.future);
+    test('a failed refresh keeps the prior list and rethrows (no blanking)', () async {
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsTargetsProvider.future);
 
-        api.throwOnFetch = true;
-        await expectLater(
-          c.read(statsTargetsProvider.notifier).refresh(),
-          throwsA(isA<StateError>()),
-        );
-        expect(c.read(statsTargetsProvider).hasError, isFalse);
-        expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), [
-          'M31',
-        ]);
-      },
-    );
+      api.throwOnFetch = true;
+      await expectLater(
+          c.read(statsTargetsProvider.notifier).refresh(), throwsA(isA<StateError>()));
+      expect(c.read(statsTargetsProvider).hasError, isFalse);
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
+    });
 
-    test(
-      'a successful refresh swaps the new list in without a loading flash',
-      () async {
-        final api = _FakeStatsExportClient(const [
-          StatsTarget(targetName: 'M31'),
-        ]);
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(statsTargetsProvider.future);
+    test('a successful refresh swaps the new list in without a loading flash', () async {
+      final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(statsTargetsProvider.future);
 
-        api.targets = const [
-          StatsTarget(targetName: 'M81'),
-          StatsTarget(targetName: 'M82'),
-        ];
-        final future = c.read(statsTargetsProvider.notifier).refresh();
-        expect(c.read(statsTargetsProvider).isLoading, isFalse);
-        expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), [
-          'M31',
-        ]);
-        await future;
-        expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), [
-          'M81',
-          'M82',
-        ]);
-      },
-    );
+      api.targets = const [StatsTarget(targetName: 'M81'), StatsTarget(targetName: 'M82')];
+      final future = c.read(statsTargetsProvider.notifier).refresh();
+      expect(c.read(statsTargetsProvider).isLoading, isFalse);
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
+      await future;
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M81', 'M82']);
+    });
 
     test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedStatsExportClient();
@@ -190,17 +155,12 @@ void main() {
       await built;
 
       final notifier = c.read(statsTargetsProvider.notifier);
-      final refreshing = notifier
-          .refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
       notifier.markBuild(); // stand in for a server-switch build() re-run
-      api.calls[1].complete(const [
-        StatsTarget(targetName: 'STALE'),
-      ]); // now stale
+      api.calls[1].complete(const [StatsTarget(targetName: 'STALE')]); // now stale
       await refreshing;
 
-      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), [
-        'M31',
-      ]);
+      expect(c.read(statsTargetsProvider).value!.map((t) => t.targetName), ['M31']);
     });
   });
 }

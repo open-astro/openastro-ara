@@ -63,15 +63,13 @@ void main() {
   group('planOptionsAvailable', () {
     test('mono narrowband or broadband filters offer a choice', () {
       expect(
-        planOptionsAvailable(const [
-          PlanningFilter(name: 'Ha', kind: FilterKind.ha),
-        ]),
+        planOptionsAvailable(
+            const [PlanningFilter(name: 'Ha', kind: FilterKind.ha)]),
         isTrue,
       );
       expect(
-        planOptionsAvailable(const [
-          PlanningFilter(name: 'L', kind: FilterKind.l),
-        ]),
+        planOptionsAvailable(
+            const [PlanningFilter(name: 'L', kind: FilterKind.l)]),
         isTrue,
       );
     });
@@ -145,229 +143,117 @@ void main() {
       PlanningFilter(name: 'L', kind: FilterKind.l),
     ];
 
-    testWidgets('offers SHO, broadband, per-filter and Basic options', (
-      tester,
-    ) async {
-      await open(
-        tester,
-        filters: shoSet,
-        interact: (t) async {
-          expect(find.text('Narrowband · SHO'), findsOneWidget);
-          expect(find.textContaining('Broadband ·'), findsOneWidget);
-          expect(find.text('Ha only'), findsOneWidget);
-          expect(find.text('Basic'), findsOneWidget);
-          expect(find.text('Guide with OpenAstro Guider'), findsOneWidget);
-          await t.tap(find.text('Cancel'));
-        },
-      );
+    testWidgets('offers SHO, broadband, per-filter and Basic options',
+        (tester) async {
+      await open(tester, filters: shoSet, interact: (t) async {
+        expect(find.text('Narrowband · SHO'), findsOneWidget);
+        expect(find.textContaining('Broadband ·'), findsOneWidget);
+        expect(find.text('Ha only'), findsOneWidget);
+        expect(find.text('Basic'), findsOneWidget);
+        expect(find.text('Guide with OpenAstro Guider'), findsOneWidget);
+        await t.tap(find.text('Cancel'));
+      });
     });
 
-    testWidgets(
-      'on iOS it is an iOS alert and Create run, its default action, returns the plan',
-      (tester) async {
-        final choice = await open(
-          tester,
-          filters: shoSet,
-          interact: (t) async {
-            expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-            final create = find.widgetWithText(
-              CupertinoDialogAction,
-              'Create run',
-            );
-            expect(
-              t.widget<CupertinoDialogAction>(create).isDefaultAction,
-              isTrue,
-            );
-            await t.ensureVisible(create);
-            await t.pumpAndSettle();
-            await t.tap(create);
-          },
-        );
-        expect(choice, isNotNull);
-      },
-      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
-    );
+    testWidgets('on iOS it is an iOS alert and Create run, its default action, returns the plan', (tester) async {
+      final choice = await open(tester, filters: shoSet, interact: (t) async {
+        expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+        final create = find.widgetWithText(CupertinoDialogAction, 'Create run');
+        expect(t.widget<CupertinoDialogAction>(create).isDefaultAction, isTrue);
+        await t.ensureVisible(create);
+        await t.pumpAndSettle();
+        await t.tap(create);
+      });
+      expect(choice, isNotNull);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
 
     testWidgets('no guider on the rig: no toggle, no guiding', (tester) async {
-      final choice = await open(
-        tester,
-        filters: shoSet,
-        guider: false,
-        interact: (t) async {
-          expect(find.text('Guide with OpenAstro Guider'), findsNothing);
-          expect(find.textContaining('No guider on this rig'), findsOneWidget);
-          await t.tap(find.text('Create run'));
-        },
-      );
+      final choice = await open(tester, filters: shoSet, guider: false,
+          interact: (t) async {
+        expect(find.text('Guide with OpenAstro Guider'), findsNothing);
+        expect(find.textContaining('No guider on this rig'), findsOneWidget);
+        await t.tap(find.text('Create run'));
+      });
       expect(choice, isNotNull);
       expect(choice!.guide, isFalse);
     });
 
     testWidgets('SHO pick returns a 3-step plan with guiding', (tester) async {
-      final choice = await open(
-        tester,
-        filters: shoSet,
-        interact: (t) async {
-          await t.tap(find.text('Narrowband · SHO'));
-          await t.pump();
-          await t.tap(find.text('Create run'));
-        },
-      );
+      final choice = await open(tester, filters: shoSet, interact: (t) async {
+        await t.tap(find.text('Narrowband · SHO'));
+        await t.pump();
+        await t.tap(find.text('Create run'));
+      });
       expect(choice, isNotNull);
       expect(choice!.guide, isTrue); // the rig has a guider → guide by default
-      expect(choice.filterPlan!.map((s) => s.filterName), [
-        'Ha',
-        'OIII',
-        'SII',
-      ]);
+      expect(choice.filterPlan!.map((s) => s.filterName), ['Ha', 'OIII', 'SII']);
       for (final step in choice.filterPlan!) {
         expect(step.exposureSeconds, greaterThan(0));
         expect(step.frameCount, greaterThanOrEqualTo(12));
       }
     });
 
-    testWidgets(
-      '#1140 P2 a fitted sky-model k for Hα lengthens the Hα step\'s exposure only',
-      (tester) async {
-        // A configured rig; the plan clamps the Glover floor to [30 s, 10 min] and
-        // under the saturation ceiling, so pick the sky (Bortle) where the Hα floor
-        // itself sets the step — then halving the measured sky rate must move it.
-        List<Object> rig(int bortle) => <Object>[
-          opticsSettingsProvider.overrideWith(
-            () => _SeededOptics(
-              const OpticsSettings(
-                focalLengthMm: 447,
-                reducerFactor: 1.0,
-                sensorWidthPx: 6248,
-                sensorHeightPx: 4176,
-                pixelSizeUm: 3.76,
-                apertureMm: 91,
-              ),
-            ),
-          ),
-          cameraElectronicsProvider.overrideWith(
-            () => _SeededElectronics(
-              const CameraElectronics(
-                readNoiseE: 0.7,
-                fullWellE: 50000,
-                electronsPerAdu: 0.8,
-                quantumEfficiencyPeak: 0.8,
-              ),
-            ),
-          ),
-          siteSettingsProvider.overrideWith(
-            () => _SeededSite(SiteSettings(bortleClass: bortle)),
-          ),
-        ];
-        Future<Map<String, double>> exposures(
-          int bortle,
-          SkyModelCalibration? record,
-        ) async {
-          final choice = await open(
-            tester,
-            filters: shoSet,
-            overrides: [
-              ...rig(bortle),
-              skyModelCalibrationProvider.overrideWith(
-                () => _SeededSkyModel(record),
-              ),
-            ],
-            interact: (t) async {
-              await t.tap(find.text('Narrowband · SHO'));
-              await t.pump();
-              await t.tap(find.text('Create run'));
-            },
-          );
-          await tester.pumpWidget(const SizedBox());
-          return {
-            for (final s in choice!.filterPlan!)
-              s.filterName: s.exposureSeconds,
-          };
+    testWidgets('#1140 P2 a fitted sky-model k for Hα lengthens the Hα step\'s exposure only', (tester) async {
+      // A configured rig; the plan clamps the Glover floor to [30 s, 10 min] and
+      // under the saturation ceiling, so pick the sky (Bortle) where the Hα floor
+      // itself sets the step — then halving the measured sky rate must move it.
+      List<Object> rig(int bortle) => <Object>[
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+            focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
+            readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
+        siteSettingsProvider.overrideWith(() => _SeededSite(SiteSettings(bortleClass: bortle))),
+      ];
+      Future<Map<String, double>> exposures(int bortle, SkyModelCalibration? record) async {
+        final choice = await open(tester, filters: shoSet, overrides: [
+          ...rig(bortle),
+          skyModelCalibrationProvider.overrideWith(() => _SeededSkyModel(record)),
+        ], interact: (t) async {
+          await t.tap(find.text('Narrowband · SHO'));
+          await t.pump();
+          await t.tap(find.text('Create run'));
+        });
+        await tester.pumpWidget(const SizedBox());
+        return {for (final s in choice!.filterPlan!) s.filterName: s.exposureSeconds};
+      }
+      final halfHa = SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
+        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.5, frameCount: 9, passed: true)]);
+      Map<String, double>? spec;
+      Map<String, double>? fitted;
+      for (var bortle = 4; bortle <= 9 && spec == null; bortle++) {
+        final s = await exposures(bortle, null);
+        if (s['Ha']! > 30 && s['Ha']! < 600) {
+          spec = s;
+          fitted = await exposures(bortle, halfHa);
         }
+      }
+      expect(spec, isNotNull, reason: 'some sky puts the Hα floor inside the plan\'s clamp');
+      expect(fitted!['Ha']!, greaterThan(spec!['Ha']!), reason: 'half the measured sky rate moves the Hα floor out');
+      expect(fitted['OIII'], spec['OIII'], reason: 'OIII has no fitted k');
+    });
 
-        final halfHa = SkyModelCalibration(
-          fittedUtc: DateTime.utc(2026, 10, 13),
-          framesConsidered: 9,
-          filters: const [
-            SkyModelFilterCalibration(
-              kind: 'ha',
-              bin: 1,
-              k: 0.5,
-              frameCount: 9,
-              passed: true,
-            ),
-          ],
-        );
-        Map<String, double>? spec;
-        Map<String, double>? fitted;
-        for (var bortle = 4; bortle <= 9 && spec == null; bortle++) {
-          final s = await exposures(bortle, null);
-          if (s['Ha']! > 30 && s['Ha']! < 600) {
-            spec = s;
-            fitted = await exposures(bortle, halfHa);
-          }
-        }
-        expect(
-          spec,
-          isNotNull,
-          reason: 'some sky puts the Hα floor inside the plan\'s clamp',
-        );
-        expect(
-          fitted!['Ha']!,
-          greaterThan(spec!['Ha']!),
-          reason: 'half the measured sky rate moves the Hα floor out',
-        );
-        expect(fitted['OIII'], spec['OIII'], reason: 'OIII has no fitted k');
-      },
-    );
-
-    testWidgets(
-      'camera electronics not loaded: the plan reads unset electronics, never a saved value',
-      (tester) async {
-        Future<Map<String, double>> exposures(List<Object> electronics) async {
-          final choice = await open(
-            tester,
-            filters: shoSet,
-            overrides: [
-              opticsSettingsProvider.overrideWith(
-                () => _SeededOptics(
-                  const OpticsSettings(
-                    focalLengthMm: 447,
-                    reducerFactor: 1.0,
-                    sensorWidthPx: 6248,
-                    sensorHeightPx: 4176,
-                    pixelSizeUm: 3.76,
-                    apertureMm: 91,
-                  ),
-                ),
-              ),
-              siteSettingsProvider.overrideWith(
-                () => _SeededSite(const SiteSettings(bortleClass: 5)),
-              ),
-              ...electronics,
-            ],
-            interact: (t) async {
-              await t.tap(find.text('Narrowband · SHO'));
-              await t.pump();
-              await t.tap(find.text('Create run'));
-            },
-          );
-          await tester.pumpWidget(const SizedBox());
-          return {
-            for (final s in choice!.filterPlan!)
-              s.filterName: s.exposureSeconds,
-          };
-        }
-
-        final notLoaded = await exposures(const []);
-        final unset = await exposures([
-          cameraElectronicsProvider.overrideWith(
-            () => _SeededElectronics(const CameraElectronics()),
-          ),
-        ]);
-        expect(notLoaded, unset);
-      },
-    );
+    testWidgets('camera electronics not loaded: the plan reads unset electronics, never a saved value', (tester) async {
+      Future<Map<String, double>> exposures(List<Object> electronics) async {
+        final choice = await open(tester, filters: shoSet, overrides: [
+          opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
+          siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 5))),
+          ...electronics,
+        ], interact: (t) async {
+          await t.tap(find.text('Narrowband · SHO'));
+          await t.pump();
+          await t.tap(find.text('Create run'));
+        });
+        await tester.pumpWidget(const SizedBox());
+        return {for (final s in choice!.filterPlan!) s.filterName: s.exposureSeconds};
+      }
+      final notLoaded = await exposures(const []);
+      final unset = await exposures([
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics())),
+      ]);
+      expect(notLoaded, unset);
+    });
 
     testWidgets('filter set not loaded: only Basic is offered, and it returns '
         'no plan', (tester) async {
@@ -412,29 +298,21 @@ void main() {
       );
     });
 
-    testWidgets('Basic pick returns no plan; cancel returns null', (
-      tester,
-    ) async {
-      final choice = await open(
-        tester,
-        filters: shoSet,
-        interact: (t) async {
-          await t.ensureVisible(find.text('Basic'));
-          await t.pumpAndSettle();
-          await t.tap(find.text('Basic'));
-          await t.pump();
-          await t.tap(find.text('Create run'));
-        },
-      );
+    testWidgets('Basic pick returns no plan; cancel returns null',
+        (tester) async {
+      final choice = await open(tester, filters: shoSet, interact: (t) async {
+        await t.ensureVisible(find.text('Basic'));
+        await t.pumpAndSettle();
+        await t.tap(find.text('Basic'));
+        await t.pump();
+        await t.tap(find.text('Create run'));
+      });
       expect(choice!.filterPlan, isNull);
 
-      final cancelled = await open(
-        tester,
-        filters: shoSet,
-        interact: (t) async {
-          await t.tap(find.text('Cancel'));
-        },
-      );
+      final cancelled = await open(tester, filters: shoSet,
+          interact: (t) async {
+        await t.tap(find.text('Cancel'));
+      });
       expect(cancelled, isNull);
     });
   });

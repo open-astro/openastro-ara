@@ -61,12 +61,10 @@ String describeCalibrationActionError(Object? error) {
 class GuiderCalibrationSection extends ConsumerStatefulWidget {
   const GuiderCalibrationSection({super.key});
   @override
-  ConsumerState<GuiderCalibrationSection> createState() =>
-      _GuiderCalibrationSectionState();
+  ConsumerState<GuiderCalibrationSection> createState() => _GuiderCalibrationSectionState();
 }
 
-class _GuiderCalibrationSectionState
-    extends ConsumerState<GuiderCalibrationSection> {
+class _GuiderCalibrationSectionState extends ConsumerState<GuiderCalibrationSection> {
   // Starts locked: the section refreshes on mount (below), so a cached-data
   // re-open can't expose actionable buttons before the first refresh lands.
   bool _refreshingUi = true;
@@ -145,11 +143,7 @@ class _GuiderCalibrationSectionState
           child: TextButton(
             onPressed: locked ? null : _refresh,
             child: _refreshingUi
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: AdaptiveProgressIndicator(strokeWidth: 2),
-                  )
+                ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                 : const Text('Refresh'),
           ),
         ),
@@ -184,8 +178,7 @@ class _CalibrationBody extends StatelessWidget {
     final defectActivity = builds[CalibrationArtifact.defectMap];
     // One camera, one build at a time (the daemon's shared gate): while EITHER
     // artifact is building, both Build buttons stay disabled.
-    final anyBuilding =
-        darkActivity?.phase == CalibrationBuildPhase.building ||
+    final anyBuilding = darkActivity?.phase == CalibrationBuildPhase.building ||
         defectActivity?.phase == CalibrationBuildPhase.building;
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -205,13 +198,8 @@ class _CalibrationBody extends StatelessWidget {
           switchValue: status.darkLibraryExists && status.autoLoadDarks,
           onBuild: (locked || anyBuilding)
               ? null
-              : () => unawaited(
-                  _confirmCoverThenBuild(
-                    context,
-                    'dark library',
-                    () => notifier.buildDarkLibrary(),
-                  ),
-                ),
+              : () => unawaited(_confirmCoverThenBuild(
+                  context, 'dark library', () => notifier.buildDarkLibrary())),
           onToggle: (locked || !status.darkLibraryExists)
               ? null
               : (v) => unawaited(notifier.setDarkLibraryEnabled(v)),
@@ -219,13 +207,9 @@ class _CalibrationBody extends StatelessWidget {
           // daemon 422s a delete under an active capture anyway — don't invite it).
           onDelete: (locked || anyBuilding || !status.darkLibraryExists)
               ? null
-              : () => unawaited(
-                  _confirmThenDelete(
-                    context,
-                    'dark library',
-                    () => notifier.deleteCalibrationFiles(defectmap: false),
-                  ),
-                ),
+              : () => unawaited(_confirmThenDelete(
+                  context, 'dark library',
+                  () => notifier.deleteCalibrationFiles(defectmap: false))),
         ),
         const SizedBox(height: 12),
         _Artifact(
@@ -237,25 +221,16 @@ class _CalibrationBody extends StatelessWidget {
           switchValue: status.defectMapExists && status.autoLoadDefectMap,
           onBuild: (locked || anyBuilding)
               ? null
-              : () => unawaited(
-                  _confirmCoverThenBuild(
-                    context,
-                    'defect map',
-                    () => notifier.buildDefectMap(),
-                  ),
-                ),
+              : () => unawaited(_confirmCoverThenBuild(
+                  context, 'defect map', () => notifier.buildDefectMap())),
           onToggle: (locked || !status.defectMapExists)
               ? null
               : (v) => unawaited(notifier.setDefectMapEnabled(v)),
           onDelete: (locked || anyBuilding || !status.defectMapExists)
               ? null
-              : () => unawaited(
-                  _confirmThenDelete(
-                    context,
-                    'defect map',
-                    () => notifier.deleteCalibrationFiles(darks: false),
-                  ),
-                ),
+              : () => unawaited(_confirmThenDelete(
+                  context, 'defect map',
+                  () => notifier.deleteCalibrationFiles(darks: false))),
         ),
       ],
     );
@@ -264,10 +239,7 @@ class _CalibrationBody extends StatelessWidget {
   /// The §63.6 cover-the-scope gate: both builds capture DARK frames, so light
   /// on the sensor silently poisons the whole library. Confirm before the 202.
   static Future<void> _confirmCoverThenBuild(
-    BuildContext context,
-    String what,
-    Future<void> Function() build,
-  ) async {
+      BuildContext context, String what, Future<void> Function() build) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -278,10 +250,7 @@ class _CalibrationBody extends StatelessWidget {
           'silently corrupts every frame in the build.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text("It's covered — build"),
@@ -295,10 +264,7 @@ class _CalibrationBody extends StatelessWidget {
   /// §63.17 destructive-action gate: a dark library takes minutes of covered-
   /// scope capture to rebuild, so never delete on a single tap.
   static Future<void> _confirmThenDelete(
-    BuildContext context,
-    String what,
-    Future<void> Function() delete,
-  ) async {
+      BuildContext context, String what, Future<void> Function() delete) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -308,10 +274,7 @@ class _CalibrationBody extends StatelessWidget {
           'Rebuilding it needs a covered scope and several minutes of capture.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Delete'),
@@ -359,17 +322,15 @@ class _InvalidatedBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(
-            Icons.warning_amber_rounded,
-            size: 18,
-            color: scheme.onErrorContainer,
-          ),
+          Icon(Icons.warning_amber_rounded, size: 18, color: scheme.onErrorContainer),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               'Guide camera changed — the dark library may be stale. '
               'Rebuild recommended.',
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: scheme.onErrorContainer),
             ),
           ),
@@ -421,8 +382,8 @@ class _Artifact extends StatelessWidget {
     final state = !exists
         ? 'Not built'
         : loaded
-        ? 'Loaded'
-        : 'Built (not loaded)';
+            ? 'Loaded'
+            : 'Built (not loaded)';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -432,12 +393,8 @@ class _Artifact extends StatelessWidget {
             // switch rows (SettingsSwitchRow) line up the same way.
             SizedBox(
               width: 280,
-              child: Text(
-                label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
-              ),
+              child: Text(label,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary)),
             ),
             Semantics(
               label: '$label auto-load',
@@ -453,16 +410,11 @@ class _Artifact extends StatelessWidget {
           // with started/complete/failed events only — no percentage exists.
           const LinearProgressIndicator(),
           const SizedBox(height: 4),
-          Text(
-            'Building — keep the scope covered.',
-            style: theme.textTheme.bodySmall,
-          ),
+          Text('Building — keep the scope covered.', style: theme.textTheme.bodySmall),
         ] else if (activity?.phase == CalibrationBuildPhase.failed)
           Text(
             'Build failed${activity?.error is String ? ': ${activity!.error}' : ''}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.error,
-            ),
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
           ),
         // Wrap, not Row: two labeled buttons can exceed the 360-wide dialog —
         // let the Delete drop to a second line instead of overflowing.
@@ -474,14 +426,9 @@ class _Artifact extends StatelessWidget {
               onPressed: onBuild,
               icon: building
                   ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
+                      width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.build, size: 16),
-              label: Text(
-                building ? 'Building…' : (exists ? 'Rebuild' : 'Build'),
-              ),
+              label: Text(building ? 'Building…' : (exists ? 'Rebuild' : 'Build')),
             ),
             Semantics(
               label: 'Delete ${label.toLowerCase()}',

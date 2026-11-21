@@ -76,9 +76,8 @@ class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap>
         perDay[key] = mins;
       });
     }
-    final maxMins = perDay.values.isEmpty
-        ? 0
-        : perDay.values.reduce((a, b) => a > b ? a : b);
+    final maxMins =
+        perDay.values.isEmpty ? 0 : perDay.values.reduce((a, b) => a > b ? a : b);
 
     return ChartCard(
       title: 'Calendar Heatmap',
@@ -101,11 +100,7 @@ class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap>
             const Positioned(
               top: 12,
               right: 16,
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: AdaptiveProgressIndicator(strokeWidth: 2),
-              ),
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
         ],
       ),
@@ -146,46 +141,40 @@ class _CalendarHeatmapState extends ConsumerState<CalendarHeatmap>
                   _Cell(
                     date: start.add(Duration(days: i)),
                     minutes:
-                        perDay[CalendarStats.dayKey(
-                          start.add(Duration(days: i)),
-                        )] ??
-                        0,
+                        perDay[CalendarStats.dayKey(start.add(Duration(days: i)))] ?? 0,
                     maxMinutes: maxMins,
                   ),
               ],
             ),
           ),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              Text(
-                'Less',
-                style: Theme.of(context).textTheme.labelSmall
-                    ?.copyWith(color: AraColors.textDisabled),
-              ),
-              const SizedBox(width: 6),
-              for (final s in [0.15, 0.3, 0.6, 0.85, 1.0])
-                Container(
-                  margin: const EdgeInsets.only(right: 3),
-                  width: 12,
-                  height: 12,
-                  decoration: BoxDecoration(
-                    color: _shade(s),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
+          Row(children: [
+            Text('Less',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AraColors.textDisabled,
+                    )),
+            const SizedBox(width: 6),
+            for (final s in [0.15, 0.3, 0.6, 0.85, 1.0])
+              Container(
+                margin: const EdgeInsets.only(right: 3),
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: _shade(s),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              const SizedBox(width: 4),
-              Text(
-                'More',
-                style: Theme.of(context).textTheme.labelSmall
-                    ?.copyWith(color: AraColors.textDisabled),
               ),
-            ],
-          ),
+            const SizedBox(width: 4),
+            Text('More',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: AraColors.textDisabled,
+                    )),
+          ]),
         ],
       ),
     );
   }
+
 }
 
 // Cell shade scales with that day's integration vs the window peak.
@@ -241,8 +230,9 @@ class _Hint extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textDisabled),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
             ),
           ),
           if (onRetry != null)

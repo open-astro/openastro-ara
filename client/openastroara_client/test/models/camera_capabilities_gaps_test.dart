@@ -51,43 +51,19 @@ void main() {
       'device_id': 'cam',
       'name': 'Cam',
       'state': 'connected',
-      'runtime': {
-        'state': 'idle',
-        'cooler_on': true,
-        'heat_sink_temperature_c': 31.5,
-      },
+      'runtime': {'state': 'idle', 'cooler_on': true, 'heat_sink_temperature_c': 31.5},
     });
     expect(status.heatSinkTemperatureC, 31.5);
-    expect(
-      CameraStatus.fromJson({
-        'device_id': 'cam',
-        'name': 'Cam',
-        'state': 'connected',
-        'runtime': {'state': 'idle'},
-      }).heatSinkTemperatureC,
-      isNull,
-    );
+    expect(CameraStatus.fromJson({'device_id': 'cam', 'name': 'Cam', 'state': 'connected', 'runtime': {'state': 'idle'}}).heatSinkTemperatureC, isNull);
   });
 
   test('the new fields take part in equality', () {
-    final a = CameraCapabilities.fromJson({
-      ...base,
-      'gains': ['1', '2'],
-    });
-    final b = CameraCapabilities.fromJson({
-      ...base,
-      'gains': ['1', '2'],
-    });
-    final c = CameraCapabilities.fromJson({
-      ...base,
-      'gains': ['1', '3'],
-    });
+    final a = CameraCapabilities.fromJson({...base, 'gains': ['1', '2']});
+    final b = CameraCapabilities.fromJson({...base, 'gains': ['1', '2']});
+    final c = CameraCapabilities.fromJson({...base, 'gains': ['1', '3']});
     expect(a, equals(b));
     expect(a.hashCode, b.hashCode);
     expect(a, isNot(equals(c)));
-    expect(
-      CameraCapabilities.fromJson({...base, 'has_shutter': true}),
-      isNot(equals(a)),
-    );
+    expect(CameraCapabilities.fromJson({...base, 'has_shutter': true}), isNot(equals(a)));
   });
 }

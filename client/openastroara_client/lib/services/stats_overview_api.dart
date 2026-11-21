@@ -21,24 +21,19 @@ class StatsOverviewApi implements StatsOverviewClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   StatsOverviewApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<StatsOverview> fetch() async {
     final res = await _dio.get<dynamic>('/api/v1/stats/overview');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'stats/overview returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('stats/overview returned a non-object body (${data.runtimeType})');
     }
     return StatsOverview.fromJson(data);
   }

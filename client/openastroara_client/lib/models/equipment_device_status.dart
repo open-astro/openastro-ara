@@ -1,13 +1,7 @@
 /// Connection-state token mirroring the daemon's `EquipmentConnectionState`
 /// serialization (lowercased snake-case). `unknown` is a client-only fallback for
 /// an unrecognized token so schema drift never crashes a panel.
-enum EquipmentConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  error,
-  unknown,
-}
+enum EquipmentConnectionState { disconnected, connecting, connected, error, unknown }
 
 EquipmentConnectionState equipmentConnectionStateFromWire(String? token) {
   switch (token) {
@@ -36,8 +30,7 @@ abstract class EquipmentDeviceStatus {
   /// empty if the daemon didn't supply one.
   String get name;
 
-  bool get isConnecting =>
-      connectionState == EquipmentConnectionState.connecting;
+  bool get isConnecting => connectionState == EquipmentConnectionState.connecting;
   bool get isConnected => connectionState == EquipmentConnectionState.connected;
 
   /// The device service keeps the last device after a disconnect and reports it

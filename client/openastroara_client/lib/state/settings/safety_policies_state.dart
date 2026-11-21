@@ -10,11 +10,8 @@ import '../../services/profile_api.dart';
 /// (loaded_section.dart): the rig's copy, loaded before it is saved.
 
 enum UnsafeAction { pauseAndPark, parkOnly, abortAndPark, ignore }
-
 enum AltitudeLimitAction { skipTarget, pauseSequence, abortSequence }
-
 enum GuiderLostAction { pauseAndRetry, skipTarget, abortSequence }
-
 /// #1185 — `pause` suspends the running sequence (resumable once space is freed).
 enum DiskSpaceCriticalAction { warn, pause, abort }
 
@@ -255,78 +252,87 @@ class SafetyPolicies {
     double? skyFlatStopAtMinAdu,
     double? skyFlatSunAltitude,
     Map<String, Object?>? unmodeled,
-  }) => SafetyPolicies(
-    onUnsafe: onUnsafe ?? this.onUnsafe,
-    autoResumeWhenSafe: autoResumeWhenSafe ?? this.autoResumeWhenSafe,
-    resumeDelayMin: resumeDelayMin ?? this.resumeDelayMin,
-    meridianFlipAuto: meridianFlipAuto ?? this.meridianFlipAuto,
-    meridianPauseMin: meridianPauseMin ?? this.meridianPauseMin,
-    minutesAfterMeridian: minutesAfterMeridian ?? this.minutesAfterMeridian,
-    maxMinutesAfterMeridian:
-        maxMinutesAfterMeridian ?? this.maxMinutesAfterMeridian,
-    stopBeforeMeridianMin: stopBeforeMeridianMin ?? this.stopBeforeMeridianMin,
-    meridianRecenter: meridianRecenter ?? this.meridianRecenter,
-    meridianRecalGuider: meridianRecalGuider ?? this.meridianRecalGuider,
-    meridianRefocus: meridianRefocus ?? this.meridianRefocus,
-    meridianRefocusTempThresholdC:
-        meridianRefocusTempThresholdC ?? this.meridianRefocusTempThresholdC,
-    meridianGuiderRecal: meridianGuiderRecal ?? this.meridianGuiderRecal,
-    unattendedWindowStart: unattendedWindowStart ?? this.unattendedWindowStart,
-    unattendedWindowEnd: unattendedWindowEnd ?? this.unattendedWindowEnd,
-    onAltitudeLimit: onAltitudeLimit ?? this.onAltitudeLimit,
-    parkIfNoMoreTargets: parkIfNoMoreTargets ?? this.parkIfNoMoreTargets,
-    onGuiderLost: onGuiderLost ?? this.onGuiderLost,
-    guiderRetryTimeoutSec: guiderRetryTimeoutSec ?? this.guiderRetryTimeoutSec,
-    skipTargetIfRecoveryFails:
-        skipTargetIfRecoveryFails ?? this.skipTargetIfRecoveryFails,
-    onDiskSpaceCritical: onDiskSpaceCritical ?? this.onDiskSpaceCritical,
-    flipSafetyEnabled: flipSafetyEnabled ?? this.flipSafetyEnabled,
-    expectedFlipSlewSeconds:
-        expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
-    firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
-    firstFlipCompletedUtc: clearFirstFlipCompletedUtc
-        ? null
-        : firstFlipCompletedUtc ?? this.firstFlipCompletedUtc,
-    firstFlipPierSideChanged:
-        firstFlipPierSideChanged ?? this.firstFlipPierSideChanged,
-    unattendedEscalation: unattendedEscalation ?? this.unattendedEscalation,
-    unattendedShutdownEnabled:
-        unattendedShutdownEnabled ?? this.unattendedShutdownEnabled,
-    unattendedShutdownWaitMinutes:
-        unattendedShutdownWaitMinutes ?? this.unattendedShutdownWaitMinutes,
-    calibrationCaptureDefault:
-        calibrationCaptureDefault ?? this.calibrationCaptureDefault,
-    weatherTriggersEnabled:
-        weatherTriggersEnabled ?? this.weatherTriggersEnabled,
-    maxWindKmh: maxWindKmh ?? this.maxWindKmh,
-    maxHumidityPct: maxHumidityPct ?? this.maxHumidityPct,
-    minDewDeltaC: minDewDeltaC ?? this.minDewDeltaC,
-    flatTargetAdu: flatTargetAdu ?? this.flatTargetAdu,
-    flatTargetPercent: flatTargetPercent ?? this.flatTargetPercent,
-    flatTargetAduTolerancePct:
-        flatTargetAduTolerancePct ?? this.flatTargetAduTolerancePct,
-    flatFramesPerFilter: flatFramesPerFilter ?? this.flatFramesPerFilter,
-    postFlatParkMount: postFlatParkMount ?? this.postFlatParkMount,
-    skyFlatTargetAdu: skyFlatTargetAdu ?? this.skyFlatTargetAdu,
-    skyFlatFramesPerFilter:
-        skyFlatFramesPerFilter ?? this.skyFlatFramesPerFilter,
-    skyFlatTargetAzimuth: skyFlatTargetAzimuth ?? this.skyFlatTargetAzimuth,
-    skyFlatTargetAltitude: skyFlatTargetAltitude ?? this.skyFlatTargetAltitude,
-    skyFlatStopAtMaxAdu: skyFlatStopAtMaxAdu ?? this.skyFlatStopAtMaxAdu,
-    skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
-    skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
-    unmodeled: unmodeled ?? this.unmodeled,
-  );
+  }) =>
+      SafetyPolicies(
+        onUnsafe: onUnsafe ?? this.onUnsafe,
+        autoResumeWhenSafe: autoResumeWhenSafe ?? this.autoResumeWhenSafe,
+        resumeDelayMin: resumeDelayMin ?? this.resumeDelayMin,
+        meridianFlipAuto: meridianFlipAuto ?? this.meridianFlipAuto,
+        meridianPauseMin: meridianPauseMin ?? this.meridianPauseMin,
+        minutesAfterMeridian: minutesAfterMeridian ?? this.minutesAfterMeridian,
+        maxMinutesAfterMeridian:
+            maxMinutesAfterMeridian ?? this.maxMinutesAfterMeridian,
+        stopBeforeMeridianMin:
+            stopBeforeMeridianMin ?? this.stopBeforeMeridianMin,
+        meridianRecenter: meridianRecenter ?? this.meridianRecenter,
+        meridianRecalGuider: meridianRecalGuider ?? this.meridianRecalGuider,
+        meridianRefocus: meridianRefocus ?? this.meridianRefocus,
+        meridianRefocusTempThresholdC:
+            meridianRefocusTempThresholdC ?? this.meridianRefocusTempThresholdC,
+        meridianGuiderRecal: meridianGuiderRecal ?? this.meridianGuiderRecal,
+        unattendedWindowStart:
+            unattendedWindowStart ?? this.unattendedWindowStart,
+        unattendedWindowEnd: unattendedWindowEnd ?? this.unattendedWindowEnd,
+        onAltitudeLimit: onAltitudeLimit ?? this.onAltitudeLimit,
+        parkIfNoMoreTargets:
+            parkIfNoMoreTargets ?? this.parkIfNoMoreTargets,
+        onGuiderLost: onGuiderLost ?? this.onGuiderLost,
+        guiderRetryTimeoutSec:
+            guiderRetryTimeoutSec ?? this.guiderRetryTimeoutSec,
+        skipTargetIfRecoveryFails:
+            skipTargetIfRecoveryFails ?? this.skipTargetIfRecoveryFails,
+        onDiskSpaceCritical:
+            onDiskSpaceCritical ?? this.onDiskSpaceCritical,
+        flipSafetyEnabled: flipSafetyEnabled ?? this.flipSafetyEnabled,
+        expectedFlipSlewSeconds:
+            expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
+        firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
+        firstFlipCompletedUtc: clearFirstFlipCompletedUtc
+            ? null
+            : firstFlipCompletedUtc ?? this.firstFlipCompletedUtc,
+        firstFlipPierSideChanged:
+            firstFlipPierSideChanged ?? this.firstFlipPierSideChanged,
+        unattendedEscalation:
+            unattendedEscalation ?? this.unattendedEscalation,
+        unattendedShutdownEnabled:
+            unattendedShutdownEnabled ?? this.unattendedShutdownEnabled,
+        unattendedShutdownWaitMinutes:
+            unattendedShutdownWaitMinutes ?? this.unattendedShutdownWaitMinutes,
+        calibrationCaptureDefault:
+            calibrationCaptureDefault ?? this.calibrationCaptureDefault,
+        weatherTriggersEnabled:
+            weatherTriggersEnabled ?? this.weatherTriggersEnabled,
+        maxWindKmh: maxWindKmh ?? this.maxWindKmh,
+        maxHumidityPct: maxHumidityPct ?? this.maxHumidityPct,
+        minDewDeltaC: minDewDeltaC ?? this.minDewDeltaC,
+        flatTargetAdu: flatTargetAdu ?? this.flatTargetAdu,
+        flatTargetPercent: flatTargetPercent ?? this.flatTargetPercent,
+        flatTargetAduTolerancePct:
+            flatTargetAduTolerancePct ?? this.flatTargetAduTolerancePct,
+        flatFramesPerFilter: flatFramesPerFilter ?? this.flatFramesPerFilter,
+        postFlatParkMount: postFlatParkMount ?? this.postFlatParkMount,
+        skyFlatTargetAdu: skyFlatTargetAdu ?? this.skyFlatTargetAdu,
+        skyFlatFramesPerFilter:
+            skyFlatFramesPerFilter ?? this.skyFlatFramesPerFilter,
+        skyFlatTargetAzimuth:
+            skyFlatTargetAzimuth ?? this.skyFlatTargetAzimuth,
+        skyFlatTargetAltitude:
+            skyFlatTargetAltitude ?? this.skyFlatTargetAltitude,
+        skyFlatStopAtMaxAdu: skyFlatStopAtMaxAdu ?? this.skyFlatStopAtMaxAdu,
+        skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
+        skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
+        unmodeled: unmodeled ?? this.unmodeled,
+      );
 
   /// This state with the daemon-owned first-flip fields taken from [echoed]
   /// (the daemon's answer to a confirm or a re-arm); every other field keeps
   /// its local value, so unsaved panel edits survive.
   SafetyPolicies withFirstFlipFrom(SafetyPolicies echoed) => copyWith(
-    firstFlipConfirmed: echoed.firstFlipConfirmed,
-    firstFlipCompletedUtc: echoed.firstFlipCompletedUtc,
-    clearFirstFlipCompletedUtc: echoed.firstFlipCompletedUtc == null,
-    firstFlipPierSideChanged: echoed.firstFlipPierSideChanged,
-  );
+        firstFlipConfirmed: echoed.firstFlipConfirmed,
+        firstFlipCompletedUtc: echoed.firstFlipCompletedUtc,
+        clearFirstFlipCompletedUtc: echoed.firstFlipCompletedUtc == null,
+        firstFlipPierSideChanged: echoed.firstFlipPierSideChanged,
+      );
 }
 
 /// ADR 0015 — a value only once the rig has answered. Loads itself: Simple
@@ -384,12 +390,10 @@ class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
   /// The mode drives the legacy bool too, so an older daemon still sees
   /// "recalibrate" for anything but skip. Until the user picks one, a legacy
   /// profile's null mode (and its bool) are left exactly as stored.
-  void setMeridianGuiderRecal(GuiderRecalMode v) => edit(
-    (c) => c.copyWith(
-      meridianGuiderRecal: v,
-      meridianRecalGuider: v != GuiderRecalMode.skip,
-    ),
-  );
+  void setMeridianGuiderRecal(GuiderRecalMode v) => edit((c) => c.copyWith(
+        meridianGuiderRecal: v,
+        meridianRecalGuider: v != GuiderRecalMode.skip,
+      ));
 
   /// Blank clears (back to the sun-computed window); otherwise HH:mm only.
   void setUnattendedWindowStart(String v) {

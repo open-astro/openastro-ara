@@ -18,8 +18,7 @@ class PiPerformanceSection extends ConsumerStatefulWidget {
   const PiPerformanceSection({super.key});
 
   @override
-  ConsumerState<PiPerformanceSection> createState() =>
-      _PiPerformanceSectionState();
+  ConsumerState<PiPerformanceSection> createState() => _PiPerformanceSectionState();
 }
 
 class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
@@ -60,20 +59,13 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
         Row(
           children: [
             Expanded(
-              child: Text(
-                'Pi performance',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              child: Text('Pi performance', style: Theme.of(context).textTheme.titleMedium),
             ),
             // The page's pull down refreshes; this shows it running.
             if (spinning)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AdaptiveProgressIndicator(strokeWidth: 2),
-                ),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
               ),
           ],
         ),
@@ -81,41 +73,28 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
         if (_staleError && data != null)
           const Padding(
             padding: EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Could not refresh — showing the last reading.',
-              style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
-            ),
+            child: Text('Could not refresh — showing the last reading.',
+                style: TextStyle(color: AraColors.textSecondary, fontSize: 12)),
           ),
         _body(context, async, data),
       ],
     );
   }
 
-  Widget _body(
-    BuildContext context,
-    AsyncValue<ServerInternalState?> async,
-    ServerInternalState? data,
-  ) {
+  Widget _body(BuildContext context, AsyncValue<ServerInternalState?> async, ServerInternalState? data) {
     if (async.isLoading && data == null) {
       return const _Hint('Reading the server…');
     }
     if (async.hasError && data == null) {
       return Row(
         children: [
-          const Expanded(
-            child: _Hint('Could not read the server\'s performance figures.'),
-          ),
-          TextButton(
-            onPressed: () => unawaited(_refresh()),
-            child: const Text('Retry'),
-          ),
+          const Expanded(child: _Hint('Could not read the server\'s performance figures.')),
+          TextButton(onPressed: () => unawaited(_refresh()), child: const Text('Retry')),
         ],
       );
     }
     if (data == null) {
-      return const _Hint(
-        'Connect to a server to see how its computer is doing.',
-      );
+      return const _Hint('Connect to a server to see how its computer is doing.');
     }
     final cpu = data.cpuPercent;
     final load = data.loadAverage1Min;
@@ -124,11 +103,7 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
       children: [
         ResponsiveTileGrid(
           children: [
-            StatTile(
-              icon: Icons.timer_outlined,
-              value: formatUptime(data.uptimeSeconds),
-              label: 'Up for',
-            ),
+            StatTile(icon: Icons.timer_outlined, value: formatUptime(data.uptimeSeconds), label: 'Up for'),
             StatTile(
               icon: Icons.memory,
               value: formatBytes(data.workingSetBytes),
@@ -139,23 +114,19 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
               icon: Icons.speed,
               value: cpu == null ? '—' : '${cpu.toStringAsFixed(0)} %',
               label: 'CPU (one core = 100 %)',
-              subtitle: cpu == null
-                  ? 'Refresh for a reading'
-                  : '${data.processorCount} cores',
+              subtitle: cpu == null ? 'Refresh for a reading' : '${data.processorCount} cores',
             ),
             StatTile(
               icon: Icons.cleaning_services_outlined,
               value: '${data.gen2Collections}',
               label: 'Full garbage collections',
-              subtitle:
-                  'Paused ${(data.gcPauseTotalMs / 1000).toStringAsFixed(1)} s in total',
+              subtitle: 'Paused ${(data.gcPauseTotalMs / 1000).toStringAsFixed(1)} s in total',
             ),
             StatTile(
               icon: Icons.account_tree_outlined,
               value: '${data.threadCount}',
               label: 'Threads',
-              subtitle:
-                  '${data.threadPoolBusyWorkers} busy, ${data.threadPoolPendingWorkItems} queued',
+              subtitle: '${data.threadPoolBusyWorkers} busy, ${data.threadPoolPendingWorkItems} queued',
             ),
             StatTile(
               icon: Icons.devices_other,
@@ -167,9 +138,7 @@ class _PiPerformanceSectionState extends ConsumerState<PiPerformanceSection>
                 icon: Icons.show_chart,
                 value: load.toStringAsFixed(2),
                 label: 'Load (1 min)',
-                subtitle: load > data.processorCount
-                    ? 'Above the core count'
-                    : 'Within the core count',
+                subtitle: load > data.processorCount ? 'Above the core count' : 'Within the core count',
               ),
           ],
         ),

@@ -54,23 +54,21 @@ _Claim? _scanClaim(PlanningDso d, RegExp pattern) {
   return best;
 }
 
-int _compareClaims(_Claim a, _Claim b) => a.number != b.number
-    ? a.number.compareTo(b.number)
-    : a.suffix.compareTo(b.suffix);
+int _compareClaims(_Claim a, _Claim b) =>
+    a.number != b.number ? a.number.compareTo(b.number) : a.suffix.compareTo(b.suffix);
 
 /// The RCW number of [d]: the lowest `RCW n` among its id and aliases, null without one.
 int? rcwNumOf(PlanningDso d) => _claimOf(d, AlbumBook.rcw)?.number;
 
 /// [d]'s catalog number in [book], null when the Book does not claim it.
 int? bookNumberOf(PlanningDso d, AlbumBook book) => switch (book) {
-  AlbumBook.messier => d.messierNum,
-  AlbumBook.caldwell => d.caldwellNum,
-  _ => _claimOf(d, book)?.number,
-};
+      AlbumBook.messier => d.messierNum,
+      AlbumBook.caldwell => d.caldwellNum,
+      _ => _claimOf(d, book)?.number,
+    };
 
 /// The letter after [bookNumberOf] (`NGC 5194A`): "" for none and for the Books without suffixes.
-String bookSuffixOf(PlanningDso d, AlbumBook book) =>
-    _claims[book] == null ? '' : _claimOf(d, book)?.suffix ?? '';
+String bookSuffixOf(PlanningDso d, AlbumBook book) => _claims[book] == null ? '' : _claimOf(d, book)?.suffix ?? '';
 
 /// The Card label: `M 31`, `C 14`, `RCW 32`, `NGC 224`, `IC 434`, `Sh2-101`.
 String bookLabel(PlanningDso d, AlbumBook book) {
@@ -89,15 +87,11 @@ String bookLabel(PlanningDso d, AlbumBook book) {
 /// catalog-number order, whatever another Book also claims. The grid, the chips and
 /// the aggregates all read this, so their counts agree.
 List<PlanningDso> bookObjects(List<PlanningDso> catalog, AlbumBook book) =>
-    [
-      for (final d in catalog)
-        if (bookNumberOf(d, book) != null) d,
-    ]..sort((a, b) {
-      final n = bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!);
-      return n != 0
-          ? n
-          : bookSuffixOf(a, book).compareTo(bookSuffixOf(b, book));
-    });
+    [for (final d in catalog) if (bookNumberOf(d, book) != null) d]
+      ..sort((a, b) {
+        final n = bookNumberOf(a, book)!.compareTo(bookNumberOf(b, book)!);
+        return n != 0 ? n : bookSuffixOf(a, book).compareTo(bookSuffixOf(b, book));
+      });
 
 /// Whether [f] contains [o]: the object lies within the frame's inscribed
 /// circle, half the short side across. Rotation-free, so corners never count.
@@ -232,16 +226,12 @@ Map<String, CardStats> aggregateBook(
   late final named = _byTargetKey(book);
   final hits = <String, List<AlbumFrame>>{};
   for (final f in ordered) {
-    for (final i
-        in f.hasPosition
-            ? contained(f)
-            : named[_albumKey(f.targetName)] ?? const <int>[]) {
+    for (final i in f.hasPosition ? contained(f) : named[_albumKey(f.targetName)] ?? const <int>[]) {
       hits.putIfAbsent(book[i].id, () => []).add(f);
     }
   }
   return {
-    for (final MapEntry(key: id, value: fs) in hits.entries)
-      id: _stats(fs, siteLongitudeDeg),
+    for (final MapEntry(key: id, value: fs) in hits.entries) id: _stats(fs, siteLongitudeDeg),
   };
 }
 
@@ -258,19 +248,12 @@ List<int> Function(AlbumFrame) _containedIn(List<PlanningDso> book) {
   return (f) {
     final dec = f.decDeg!;
     if (!onSphere || dec.abs() > 90) {
-      return [
-        for (var i = 0; i < book.length; i++)
-          if (frameContains(f, book[i])) i,
-      ];
+      return [for (var i = 0; i < book.length; i++) if (frameContains(f, book[i])) i];
     }
     // 1e-6 deg: far above the rounding of the trigonometry and of the bounds.
     final band = _reachArcmin(f) / 60 + 1e-6;
     return [
-      for (
-        var j = lowerBound(decs, dec - band);
-        j < decs.length && decs[j] <= dec + band;
-        j++
-      )
+      for (var j = lowerBound(decs, dec - band); j < decs.length && decs[j] <= dec + band; j++)
         if (frameContains(f, book[byDec[j]])) byDec[j],
     ]..sort();
   };
@@ -283,9 +266,7 @@ Map<String, List<int>> _byTargetKey(List<PlanningDso> book) {
   for (var i = 0; i < book.length; i++) {
     final o = book[i];
     // Each key once per object: a frame credits it once, however many designations fold alike.
-    for (final k in {
-      for (final d in [o.id, o.name, ...o.aliases]) _albumKey(d),
-    }) {
+    for (final k in {for (final d in [o.id, o.name, ...o.aliases]) _albumKey(d)}) {
       // An empty key names nothing ([targetNames]).
       if (k.isNotEmpty) out.putIfAbsent(k, () => []).add(i);
     }
@@ -314,15 +295,10 @@ CardStats _stats(List<AlbumFrame> fs, double? siteLongitudeDeg) {
 /// UTC plus the solar offset, longitude / 15 h. The client has no zone database (the profile's
 /// IANA zone name cannot be turned into an offset here), so the longitude wins; without a site
 /// the device's local time stands in.
-List<AlbumNight> albumNights(
-  Iterable<AlbumFrame> frames, {
-  double? siteLongitudeDeg,
-}) {
+List<AlbumNight> albumNights(Iterable<AlbumFrame> frames, {double? siteLongitudeDeg}) {
   DateTime siteClock(DateTime utc) => siteLongitudeDeg == null
       ? utc.toLocal()
-      : utc
-            .add(Duration(minutes: (siteLongitudeDeg * 4).round()))
-            .copyWith(isUtc: false);
+      : utc.add(Duration(minutes: (siteLongitudeDeg * 4).round())).copyWith(isUtc: false);
   final byNight = <String, List<AlbumFrame>>{};
   for (final f in frames) {
     final t = f.capturedUtc;

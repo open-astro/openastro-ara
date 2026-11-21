@@ -7,13 +7,7 @@ import 'package:flutter/foundation.dart';
 
 /// Connection state token, lowercased to match the daemon's `EquipmentConnectionState`
 /// serialization. `unknown` is a client-only fallback for an unrecognized token.
-enum SwitchConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  error,
-  unknown,
-}
+enum SwitchConnectionState { disconnected, connecting, connected, error, unknown }
 
 SwitchConnectionState _connectionFromWire(String? token) {
   switch (token) {
@@ -72,9 +66,7 @@ class SwitchPort {
     final rawId = json['id'];
     assert(rawId is num, 'SwitchPort is missing its id — the port selector');
     if (rawId is! num) {
-      debugPrint(
-        '[switch] SwitchPort missing id — falling back to 0 (the port selector)',
-      );
+      debugPrint('[switch] SwitchPort missing id — falling back to 0 (the port selector)');
     }
     return SwitchPort(
       id: (rawId as num?)?.toInt() ?? 0,
@@ -125,9 +117,9 @@ class SwitchDevice {
     final rawPorts = json['ports'];
     final ports = rawPorts is List
         ? rawPorts
-              .whereType<Map<String, dynamic>>()
-              .map(SwitchPort.fromJson)
-              .toList(growable: false)
+            .whereType<Map<String, dynamic>>()
+            .map(SwitchPort.fromJson)
+            .toList(growable: false)
         : const <SwitchPort>[];
     // alpaca_device_number is the SOLE address key for the multi-switch feature —
     // a missing/garbled value would collide two devices on address 0. The daemon
@@ -135,15 +127,11 @@ class SwitchDevice {
     // drift surfaces immediately, while release still degrades to 0 rather than
     // crashing the list.
     final rawDeviceNumber = json['alpaca_device_number'];
-    assert(
-      rawDeviceNumber is num,
-      'SwitchDto is missing alpaca_device_number — the multi-switch address key',
-    );
+    assert(rawDeviceNumber is num,
+        'SwitchDto is missing alpaca_device_number — the multi-switch address key');
     if (rawDeviceNumber is! num) {
-      debugPrint(
-        '[switch] SwitchDto missing alpaca_device_number — falling back to '
-        '0 (distinct switches may collide on the same address)',
-      );
+      debugPrint('[switch] SwitchDto missing alpaca_device_number — falling back to '
+          '0 (distinct switches may collide on the same address)');
     }
     return SwitchDevice(
       deviceId: json['device_id'] as String? ?? '',
@@ -166,12 +154,12 @@ class SwitchDevice {
 
   @override
   int get hashCode => Object.hash(
-    deviceId,
-    alpacaDeviceNumber,
-    name,
-    connectionState,
-    Object.hashAll(ports),
-  );
+        deviceId,
+        alpacaDeviceNumber,
+        name,
+        connectionState,
+        Object.hashAll(ports),
+      );
 }
 
 /// The switch port the profile designates as the camera's cooling fan (#1700):
@@ -186,9 +174,9 @@ class CoolingFan {
   bool get isNone => deviceId == null;
 
   factory CoolingFan.fromJson(Map<String, dynamic> json) => CoolingFan(
-    deviceId: json['device_id'] as String?,
-    portId: (json['port_id'] as num?)?.toInt(),
-  );
+        deviceId: json['device_id'] as String?,
+        portId: (json['port_id'] as num?)?.toInt(),
+      );
 
   Map<String, dynamic> toJson() => {'device_id': deviceId, 'port_id': portId};
 
@@ -210,9 +198,7 @@ class CoolingFan {
 /// toggle (FanSwitchRow); the sync and the fan-off interlock themselves run
 /// in the daemon.
 ({SwitchDevice device, SwitchPort port})? findCoolingFanPort(
-  List<SwitchDevice> switches,
-  CoolingFan fan,
-) {
+    List<SwitchDevice> switches, CoolingFan fan) {
   for (final device in switches) {
     if (!device.isConnected) continue;
     for (final port in device.ports) {

@@ -26,11 +26,7 @@ void main() {
 
   test('a 1×1 grid is the target; 2×1 splits symmetrically with overlap', () {
     final one = mosaicPanelCentres(
-      raDeg: 307,
-      decDeg: 44.9,
-      fovArcmin: fov,
-      g: singleFrame,
-    );
+        raDeg: 307, decDeg: 44.9, fovArcmin: fov, g: singleFrame);
     expect(one, hasLength(1));
     expect(one.single.raDeg, closeTo(307, 1e-9));
 
@@ -46,11 +42,7 @@ void main() {
 
     // On the sky at Dec 44.9 the RA gap opens by ~1/cos(dec).
     final p = mosaicPanelCentres(
-      raDeg: 307,
-      decDeg: 44.9,
-      fovArcmin: fov,
-      g: two,
-    );
+        raDeg: 307, decDeg: 44.9, fovArcmin: fov, g: two);
     final dRa = (p[1].raDeg - p[0].raDeg) * math.cos(44.9 * math.pi / 180);
     expect(dRa, closeTo(168.3 / 60, 0.01));
     expect(p[0].decDeg, closeTo(p[1].decDeg, 1e-6));
@@ -68,17 +60,14 @@ void main() {
     }
   });
 
-  test(
-    'suggestMosaic picks the smallest square grid that covers the object',
-    () {
-      expect(suggestMosaic(60, fov), isNull); // fits one frame
-      expect(suggestMosaic(null, fov), isNull);
-      // 200' needs > 125' short side ×1.1 → 2×2 (short side 125 + 112.5).
-      expect(suggestMosaic(200, fov), (cols: 2, rows: 2, overlapPct: 10));
-      // 400' → 3×3 short side 125 + 2·112.5 = 350 < 440 → 4×4 (462.5).
-      expect(suggestMosaic(400, fov), (cols: 4, rows: 4, overlapPct: 10));
-      // Beyond 4×4 caps.
-      expect(suggestMosaic(3000, fov), (cols: 4, rows: 4, overlapPct: 10));
-    },
-  );
+  test('suggestMosaic picks the smallest square grid that covers the object', () {
+    expect(suggestMosaic(60, fov), isNull); // fits one frame
+    expect(suggestMosaic(null, fov), isNull);
+    // 200' needs > 125' short side ×1.1 → 2×2 (short side 125 + 112.5).
+    expect(suggestMosaic(200, fov), (cols: 2, rows: 2, overlapPct: 10));
+    // 400' → 3×3 short side 125 + 2·112.5 = 350 < 440 → 4×4 (462.5).
+    expect(suggestMosaic(400, fov), (cols: 4, rows: 4, overlapPct: 10));
+    // Beyond 4×4 caps.
+    expect(suggestMosaic(3000, fov), (cols: 4, rows: 4, overlapPct: 10));
+  });
 }

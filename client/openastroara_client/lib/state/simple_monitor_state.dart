@@ -232,28 +232,14 @@ class MonitorSafety {
   final DateTime? since;
 }
 
-enum MonitorWeatherCell {
-  cloud,
-  skyQuality,
-  air,
-  dewMargin,
-  humidity,
-  rain,
-  wind,
-}
+enum MonitorWeatherCell { cloud, skyQuality, air, dewMargin, humidity, rain, wind }
 
 class MonitorWeather {
-  const MonitorWeather({
-    required this.status,
-    required this.cells,
-    this.windDeg,
-    this.gustKmh,
-  });
+  const MonitorWeather({required this.status, required this.cells, this.windDeg, this.gustKmh});
   final MonitorStatus status;
 
   /// Only what the station reports, each with its limit when past it.
-  final List<({MonitorWeatherCell cell, double value, double? overLimit})>
-  cells;
+  final List<({MonitorWeatherCell cell, double value, double? overLimit})> cells;
   final double? windDeg;
   final double? gustKmh;
 }
@@ -353,14 +339,11 @@ class MonitorLastFrame {
   MonitorFrame? get last => frames.isEmpty ? null : frames.last;
 
   /// HFR up, stars down and sky background up against the session's start.
-  MonitorDeviation? get hfrDeviation =>
-      monitorDeviation([for (final f in frames) ?f.hfr], higherIsWorse: true);
-  MonitorDeviation? get starsDeviation => monitorDeviation([
-    for (final f in frames) ?f.stars?.toDouble(),
-  ], higherIsWorse: false);
-  MonitorDeviation? get backgroundDeviation => monitorDeviation([
-    for (final f in frames) ?f.background,
-  ], higherIsWorse: true);
+  MonitorDeviation? get hfrDeviation => monitorDeviation([for (final f in frames) ?f.hfr], higherIsWorse: true);
+  MonitorDeviation? get starsDeviation =>
+      monitorDeviation([for (final f in frames) ?f.stars?.toDouble()], higherIsWorse: false);
+  MonitorDeviation? get backgroundDeviation =>
+      monitorDeviation([for (final f in frames) ?f.background], higherIsWorse: true);
 }
 
 /// A reading against the session's own start: [start] is the median of its
@@ -368,11 +351,7 @@ class MonitorLastFrame {
 /// of the last ones from it, [flagged] when it went the wrong way by
 /// [kMonitorDeviationPct] or more.
 class MonitorDeviation {
-  const MonitorDeviation({
-    required this.start,
-    required this.pct,
-    required this.flagged,
-  });
+  const MonitorDeviation({required this.start, required this.pct, required this.flagged});
   final double start;
   final double pct;
   final bool flagged;
@@ -389,10 +368,7 @@ const kMonitorDeviationPct = 15.0;
 
 /// [values] oldest first, or null before [kMonitorDeviationMinFrames] values
 /// or with a start of zero.
-MonitorDeviation? monitorDeviation(
-  List<double> values, {
-  required bool higherIsWorse,
-}) {
+MonitorDeviation? monitorDeviation(List<double> values, {required bool higherIsWorse}) {
   if (values.length < kMonitorDeviationMinFrames) return null;
   double median(List<double> v) {
     final x = [...v]..sort();
@@ -413,18 +389,10 @@ MonitorDeviation? monitorDeviation(
 
 /// Tonight's timeline.
 class MonitorNight {
-  const MonitorNight({
-    this.darkStart,
-    this.darkEnd,
-    this.blocks = const [],
-    this.flipAt,
-    this.parkAt,
-    this.imagedSeconds = 0,
-  });
+  const MonitorNight({this.darkStart, this.darkEnd, this.blocks = const [], this.flipAt, this.parkAt, this.imagedSeconds = 0});
   final DateTime? darkStart;
   final DateTime? darkEnd;
-  final List<({String name, DateTime start, DateTime end, double? progress})>
-  blocks;
+  final List<({String name, DateTime start, DateTime end, double? progress})> blocks;
   final DateTime? flipAt;
   final DateTime? parkAt;
   final double imagedSeconds;
@@ -493,54 +461,42 @@ class MonitorShowing extends Notifier<bool> {
   }
 }
 
-final monitorShowingProvider = NotifierProvider<MonitorShowing, bool>(
-  MonitorShowing.new,
-);
+final monitorShowingProvider = NotifierProvider<MonitorShowing, bool>(MonitorShowing.new);
 
 /// Monitor's clock: one tick a second while Monitor shows.
 class MonitorClock extends Notifier<DateTime> {
   @override
   DateTime build() {
     final now = ref.watch(clockProvider);
-    final timer = Timer.periodic(
-      const Duration(seconds: 1),
-      (_) => state = now(),
-    );
+    final timer = Timer.periodic(const Duration(seconds: 1), (_) => state = now());
     ref.onDispose(timer.cancel);
     return now();
   }
 }
 
-final monitorClockProvider =
-    NotifierProvider.autoDispose<MonitorClock, DateTime>(MonitorClock.new);
+final monitorClockProvider = NotifierProvider.autoDispose<MonitorClock, DateTime>(MonitorClock.new);
 
 /// When the link to the rig went down; null while it is up.
 class MonitorLinkDown extends Notifier<DateTime?> {
   @override
-  DateTime? build() => ref.watch(serverLinkUpProvider)
-      ? null
-      : stateOrNull ?? ref.read(clockProvider)();
+  DateTime? build() =>
+      ref.watch(serverLinkUpProvider) ? null : stateOrNull ?? ref.read(clockProvider)();
 }
 
-final monitorLinkDownProvider = NotifierProvider<MonitorLinkDown, DateTime?>(
-  MonitorLinkDown.new,
-);
+final monitorLinkDownProvider = NotifierProvider<MonitorLinkDown, DateTime?>(MonitorLinkDown.new);
 
 /// The gear seen connected since Simple Mode opened: only these count as
 /// dropped when they disconnect. The shell keeps it alive.
 class MonitorSeenConnected extends Notifier<Set<MonitorDevice>> {
   @override
   Set<MonitorDevice> build() {
-    bool up(EquipmentDeviceStatus? d) =>
-        d?.connectionState == EquipmentConnectionState.connected;
+    bool up(EquipmentDeviceStatus? d) => d?.connectionState == EquipmentConnectionState.connected;
     final now = {
       if (up(ref.watch(mountProvider).value)) MonitorDevice.mount,
       if (up(ref.watch(cameraStatusProvider).value)) MonitorDevice.camera,
-      if (ref.watch(guiderStatusProvider).value?.isConnected ?? false)
-        MonitorDevice.guider,
+      if (ref.watch(guiderStatusProvider).value?.isConnected ?? false) MonitorDevice.guider,
       if (up(ref.watch(focuserProvider).value)) MonitorDevice.focuser,
-      if (up(ref.watch(safetyMonitorProvider).value))
-        MonitorDevice.safetyMonitor,
+      if (up(ref.watch(safetyMonitorProvider).value)) MonitorDevice.safetyMonitor,
       if (up(ref.watch(weatherProvider).value)) MonitorDevice.weather,
     };
     final before = stateOrNull ?? const {};
@@ -549,9 +505,7 @@ class MonitorSeenConnected extends Notifier<Set<MonitorDevice>> {
 }
 
 final monitorSeenConnectedProvider =
-    NotifierProvider<MonitorSeenConnected, Set<MonitorDevice>>(
-      MonitorSeenConnected.new,
-    );
+    NotifierProvider<MonitorSeenConnected, Set<MonitorDevice>>(MonitorSeenConnected.new);
 
 /// Since when, during a run, the sensor has been more than
 /// [kMonitorCoolerMarginC] from its target; null while it holds.
@@ -559,12 +513,9 @@ class MonitorCoolerOff extends Notifier<DateTime?> {
   @override
   DateTime? build() {
     final cam = ref.watch(cameraStatusProvider).value;
-    final active = ref.watch(
-      sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false),
-    );
+    final active = ref.watch(sequenceRunStateProvider.select((s) => s.value?.state?.isActive ?? false));
     final ccd = cam?.ccdTemperature, target = cam?.coolerSetpointC;
-    final off =
-        active &&
+    final off = active &&
         cam != null &&
         cam.coolerOn &&
         ccd != null &&
@@ -574,9 +525,7 @@ class MonitorCoolerOff extends Notifier<DateTime?> {
   }
 }
 
-final monitorCoolerOffProvider = NotifierProvider<MonitorCoolerOff, DateTime?>(
-  MonitorCoolerOff.new,
-);
+final monitorCoolerOffProvider = NotifierProvider<MonitorCoolerOff, DateTime?>(MonitorCoolerOff.new);
 
 /// The current run's saved frames and their quality, from when Simple Mode
 /// opens (so a Monitor opened mid-run takes its session start from there):
@@ -587,10 +536,7 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
 
   @override
   List<MonitorFrame> build() {
-    ref.listen(sequenceRunStateProvider.select((s) => s.value?.runId), (
-      _,
-      run,
-    ) {
+    ref.listen(sequenceRunStateProvider.select((s) => s.value?.runId), (_, run) {
       if (run != null && run.isNotEmpty && run != _runId) {
         _runId = run;
         state = const [];
@@ -598,13 +544,10 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
     });
     ref.listen(wsEventsProvider, (_, next) {
       final e = next.asData?.value;
-      if (e == null ||
-          (e.type != 'frame.complete' && e.type != 'frame.analyzed'))
-        return;
+      if (e == null || (e.type != 'frame.complete' && e.type != 'frame.analyzed')) return;
       final id = e.payload['frame_id'];
       // Only a run's frames: a shot or Live View is not the night's trend.
-      final active =
-          ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
+      final active = ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
       if (id is String && id.isNotEmpty && active) unawaited(_read(id));
     });
     return const [];
@@ -621,19 +564,16 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
       }
       final stars = h.stars, clipped = h.clippedStars;
       // The guiding series gains this frame's point (reused client, ADR 0013).
-      if (ref.mounted)
-        unawaited(ref.read(guidingRmsProvider.notifier).refresh());
-      add(
-        MonitorFrame(
-          id: id,
-          hfr: h.hfr,
-          stars: stars,
-          background: h.median,
-          clippedShare: monitorClippedShare(stars, clipped),
-          width: h.width,
-          height: h.height,
-        ),
-      );
+      if (ref.mounted) unawaited(ref.read(guidingRmsProvider.notifier).refresh());
+      add(MonitorFrame(
+        id: id,
+        hfr: h.hfr,
+        stars: stars,
+        background: h.median,
+        clippedShare: monitorClippedShare(stars, clipped),
+        width: h.width,
+        height: h.height,
+      ));
     } catch (_) {
       // A frame that can't be read leaves no point; the next one will.
     }
@@ -656,8 +596,7 @@ class MonitorTrends extends Notifier<List<MonitorFrame>> {
   }
 }
 
-final monitorTrendsProvider =
-    NotifierProvider<MonitorTrends, List<MonitorFrame>>(MonitorTrends.new);
+final monitorTrendsProvider = NotifierProvider<MonitorTrends, List<MonitorFrame>>(MonitorTrends.new);
 
 /// The share of a frame's stars that clipped (#1723): null when the daemon
 /// didn't count them, 0 with no stars at all.
@@ -685,20 +624,13 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       final since = last.frozenSince ?? down;
       // Messages are this device's own: a failed Stop still shows with the link
       // lost (re-audit 3).
-      final failed = ref
-          .watch(simpleMessagesProvider)
-          .where(monitorFailedSticky)
-          .firstOrNull;
+      final failed = ref.watch(simpleMessagesProvider).where(monitorFailedSticky).firstOrNull;
       return MonitorSnapshot(
         asOf: last.asOf,
         frozenSince: since,
         verdict: failed != null
             ? monitorMessageVerdict(failed)
-            : MonitorVerdict(
-                MonitorVerdictKind.linkLost,
-                MonitorStatus.fault,
-                at: since,
-              ),
+            : MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
         now: last.now,
         upNext: last.upNext,
         target: last.target,
@@ -737,11 +669,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final awaitingUser = info?.state == SequenceRunState.pausedAwaitingUser;
     final waitLeft = active ? info?.meridianWaitLeft : null;
     // The daemon says `flipping` for the whole flip trigger, the pass-meridian wait included; while that wait runs the mount stands still.
-    final flipping =
-        active && info?.meridianFlip?.state == 'flipping' && waitLeft == null;
-    final startAt = !active && run.startAt != null && run.startAt!.isAfter(now)
-        ? run.startAt
-        : null;
+    final flipping = active && info?.meridianFlip?.state == 'flipping' && waitLeft == null;
+    final startAt = !active && run.startAt != null && run.startAt!.isAfter(now) ? run.startAt : null;
     final ours = run.sequenceId != null && info?.sequenceId == run.sequenceId;
     final targets = ours || !run.started ? run.targets : const <SimpleTarget>[];
     final captured = info?.framesCaptured ?? 0;
@@ -751,31 +680,19 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final done = cur < 0 ? const <int>[] : progress[cur];
     final step = target == null ? -1 : _currentStep(target, done);
     double leftOn(int i) => [
-      for (var r = 0; r < targets[i].steps.length; r++)
-        (targets[i].steps[r].frameCount - progress[i][r]) *
-            targets[i].steps[r].exposureSeconds,
-    ].fold(0.0, (a, b) => a + b);
+          for (var r = 0; r < targets[i].steps.length; r++)
+            (targets[i].steps[r].frameCount - progress[i][r]) * targets[i].steps[r].exposureSeconds,
+        ].fold(0.0, (a, b) => a + b);
     double doneOn(int i) => [
-      for (var r = 0; r < targets[i].steps.length; r++)
-        progress[i][r] * targets[i].steps[r].exposureSeconds,
-    ].fold(0.0, (a, b) => a + b);
+          for (var r = 0; r < targets[i].steps.length; r++) progress[i][r] * targets[i].steps[r].exposureSeconds,
+        ].fold(0.0, (a, b) => a + b);
 
     // The frame in hand, from the camera's own progress (#1755).
-    final exposing =
-        active &&
-        !paused &&
-        !awaitingUser &&
-        cam != null &&
-        cam.runtimeState == 'exposing';
+    final exposing = active && !paused && !awaitingUser && cam != null && cam.runtimeState == 'exposing';
     final sub = step < 0 ? null : target!.steps[step].exposureSeconds;
     final pct = cam?.exposureProgressPct;
     final frameEndsAt = exposing && sub != null && pct != null
-        ? now.add(
-            Duration(
-              milliseconds: (sub * (1 - pct.clamp(0, 100) / 100) * 1000)
-                  .round(),
-            ),
-          )
+        ? now.add(Duration(milliseconds: (sub * (1 - pct.clamp(0, 100) / 100) * 1000).round()))
         : null;
 
     // Gear: a tile for what the profile has (the daemon reports a device
@@ -786,13 +703,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     bool dropped(MonitorDevice which, EquipmentDeviceStatus? d) =>
         d != null &&
         (d.connectionState == EquipmentConnectionState.error ||
-            (d.connectionState == EquipmentConnectionState.disconnected &&
-                seen.contains(which)));
-    final guiderDropped =
-        guider != null &&
+            (d.connectionState == EquipmentConnectionState.disconnected && seen.contains(which)));
+    final guiderDropped = guider != null &&
         (guider.connectionState == GuiderConnectionState.error ||
-            (guider.connectionState == GuiderConnectionState.disconnected &&
-                seen.contains(MonitorDevice.guider)));
+            (guider.connectionState == GuiderConnectionState.disconnected && seen.contains(MonitorDevice.guider)));
     final droppedDevice = dropped(MonitorDevice.mount, mount)
         ? MonitorDevice.mount
         : dropped(MonitorDevice.camera, cam)
@@ -807,18 +721,11 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? MonitorDevice.weather
         : null;
 
-    final breaches =
-        weatherSt != null &&
-            weatherSt.isConnected &&
-            policies != null &&
-            policies.weatherTriggersEnabled
+    final breaches = weatherSt != null && weatherSt.isConnected && policies != null && policies.weatherTriggersEnabled
         ? weatherBreaches(weatherSt, policies)
         : const <({WeatherBreach kind, double value, double limit})>[];
-    final unsafeMonitor =
-        safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
-    final question = messages
-        .where((m) => m.kind == SimpleMessageKind.question)
-        .firstOrNull;
+    final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
+    final question = messages.where((m) => m.kind == SimpleMessageKind.question).firstOrNull;
     // Newest first: the list is kept that way.
     // A failure that waits to be read (a stop that failed or never reached
     // the rig) leads; a stop that went through, or a passing error, waits
@@ -826,125 +733,62 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     // hide them (re-audit 3, 4).
     final failed = messages.where(monitorFailedSticky).firstOrNull;
     final error = messages
-        .where(
-          (m) =>
-              !monitorFailedSticky(m) &&
-              (m.sticky || m.kind == SimpleMessageKind.error),
-        )
+        .where((m) => !monitorFailedSticky(m) && (m.sticky || m.kind == SimpleMessageKind.error))
         .firstOrNull;
-    final starLost =
-        guider != null &&
-        guider.isConnected &&
-        guider.runtimeState == GuiderRuntimeState.starLost;
+    final starLost = guider != null && guider.isConnected && guider.runtimeState == GuiderRuntimeState.starLost;
 
     // Low disk: the Queue's frames left need more than the drive has free,
     // at two bytes a pixel of the last frame's size.
-    final lastDims = trends.lastWhere(
-      (f) => f.width != null && f.height != null,
-      orElse: () => const MonitorFrame(id: ''),
-    );
+    final lastDims = trends.lastWhere((f) => f.width != null && f.height != null, orElse: () => const MonitorFrame(id: ''));
     final framesLeft = [
       for (var i = 0; i < targets.length; i++)
-        for (var r = 0; r < targets[i].steps.length; r++)
-          targets[i].steps[r].frameCount - progress[i][r],
+        for (var r = 0; r < targets[i].steps.length; r++) targets[i].steps[r].frameCount - progress[i][r],
     ].fold(0, (a, b) => a + b);
     final free = storage?.freeBytes;
-    final lowDisk =
-        free != null &&
+    final lowDisk = free != null &&
         lastDims.width != null &&
         free < framesLeft * lastDims.width! * lastDims.height! * 2;
-    final cooler =
-        coolerOff != null && now.difference(coolerOff) >= kMonitorCoolerHold;
+    final cooler = coolerOff != null && now.difference(coolerOff) >= kMonitorCoolerHold;
 
     final verdict = failed != null
         ? monitorMessageVerdict(failed)
         : droppedDevice != null
-        ? MonitorVerdict(
-            MonitorVerdictKind.deviceDropped,
-            MonitorStatus.fault,
-            device: droppedDevice,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.deviceDropped, MonitorStatus.fault, device: droppedDevice)
         : unsafeMonitor || breaches.isNotEmpty
-        ? MonitorVerdict(
-            MonitorVerdictKind.unsafe,
-            MonitorStatus.warning,
-            breach: breaches.firstOrNull,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.unsafe, MonitorStatus.warning, breach: breaches.firstOrNull)
         : error != null
         ? monitorMessageVerdict(error)
         : question != null
-        ? MonitorVerdict(
-            MonitorVerdictKind.question,
-            MonitorStatus.warning,
-            question: question,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.question, MonitorStatus.warning, question: question)
         : starLost
-        ? const MonitorVerdict(
-            MonitorVerdictKind.starLost,
-            MonitorStatus.warning,
-          )
+        ? const MonitorVerdict(MonitorVerdictKind.starLost, MonitorStatus.warning)
         : lowDisk
-        ? MonitorVerdict(
-            MonitorVerdictKind.lowDisk,
-            MonitorStatus.warning,
-            freeBytes: free,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.lowDisk, MonitorStatus.warning, freeBytes: free)
         : cooler
-        ? MonitorVerdict(
-            MonitorVerdictKind.cooler,
-            MonitorStatus.warning,
-            coolerTargetC: cam?.coolerSetpointC,
-            coolerSensorC: cam?.ccdTemperature,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.cooler, MonitorStatus.warning,
+            coolerTargetC: cam?.coolerSetpointC, coolerSensorC: cam?.ccdTemperature)
         : flipping
-        ? MonitorVerdict(
-            MonitorVerdictKind.flipping,
-            MonitorStatus.normal,
-            text: info?.currentInstructionDescription,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.flipping, MonitorStatus.normal, text: info?.currentInstructionDescription)
         : waitLeft != null
-        ? MonitorVerdict(
-            MonitorVerdictKind.waitingForFlip,
-            MonitorStatus.changing,
-            at: now.add(Duration(seconds: waitLeft)),
-          )
+        ? MonitorVerdict(MonitorVerdictKind.waitingForFlip, MonitorStatus.changing,
+            at: now.add(Duration(seconds: waitLeft)))
         : paused
-        ? MonitorVerdict(
-            MonitorVerdictKind.paused,
-            MonitorStatus.changing,
-            text: info?.reasonText,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.paused, MonitorStatus.changing, text: info?.reasonText)
         : awaitingUser
-        ? MonitorVerdict(
-            MonitorVerdictKind.waitingForYou,
-            MonitorStatus.warning,
-            text: info?.reasonText,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.waitingForYou, MonitorStatus.warning, text: info?.reasonText)
         : startAt != null
-        ? MonitorVerdict(
-            MonitorVerdictKind.waitingForDark,
-            MonitorStatus.changing,
-            at: startAt,
-          )
+        ? MonitorVerdict(MonitorVerdictKind.waitingForDark, MonitorStatus.changing, at: startAt)
         : !active
         ? const MonitorVerdict(MonitorVerdictKind.noPlan, MonitorStatus.normal)
-        : MonitorVerdict(
-            MonitorVerdictKind.allGood,
-            MonitorStatus.normal,
-            target: target?.tag ?? target?.name ?? info?.currentTargetName,
-          );
+        : MonitorVerdict(MonitorVerdictKind.allGood, MonitorStatus.normal,
+            target: target?.tag ?? target?.name ?? info?.currentTargetName);
 
     // Now.
     final filters = target == null
         ? const <({String filter, int done, int total, bool inHand})>[]
         : [
             for (var r = 0; r < target.steps.length; r++)
-              (
-                filter: target.steps[r].filterName,
-                done: done[r],
-                total: target.steps[r].frameCount,
-                inHand: active && r == step,
-              ),
+              (filter: target.steps[r].filterName, done: done[r], total: target.steps[r].frameCount, inHand: active && r == step),
           ];
     final (word, nowStatus) = flipping
         ? (MonitorNowWord.flipping, MonitorStatus.working)
@@ -969,13 +813,9 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       subSeconds: sub,
       frameEndsAt: frameEndsAt,
       frameSeconds: frameEndsAt == null ? null : sub,
-      countdownTo: waitLeft != null
-          ? now.add(Duration(seconds: waitLeft))
-          : startAt,
+      countdownTo: waitLeft != null ? now.add(Duration(seconds: waitLeft)) : startAt,
       instruction: info?.currentInstructionDescription,
-      frame: target == null
-          ? null
-          : done.fold<int>(0, (a, b) => a + b) + (active ? 1 : 0),
+      frame: target == null ? null : done.fold<int>(0, (a, b) => a + b) + (active ? 1 : 0),
       frames: target == null ? null : simplePlanTotal(target.steps),
       targetSecondsLeft: cur < 0 ? null : leftOn(cur),
       filters: filters,
@@ -983,54 +823,32 @@ class MonitorState extends Notifier<MonitorSnapshot> {
 
     // Up next, and the times the timeline shares.
     final flipInfo = active ? info?.meridianFlip : null;
-    final flipAt = flipInfo?.state == 'due_at'
-        ? flipInfo?.expectedUtc?.toLocal()
-        : null;
+    final flipAt = flipInfo?.state == 'due_at' ? flipInfo?.expectedUtc?.toLocal() : null;
     final runLeft = info?.estimatedRemainingSeconds;
-    final parkAt = active && ours && runLeft != null
-        ? now.add(Duration(seconds: runLeft.round()))
-        : null;
+    final parkAt = active && ours && runLeft != null ? now.add(Duration(seconds: runLeft.round())) : null;
     final upNext = <MonitorUpNext>[];
     if (active && target != null) {
       final nextFrame = done.fold<int>(0, (a, b) => a + b) + 2;
       if (nextFrame <= simplePlanTotal(target.steps)) {
         final nextStep = _currentStep(target, [
-          for (var r = 0; r < done.length; r++)
-            r == step ? done[r] + 1 : done[r],
+          for (var r = 0; r < done.length; r++) r == step ? done[r] + 1 : done[r],
         ]);
         if (nextStep >= 0) {
-          upNext.add(
-            MonitorUpNext(
-              MonitorUpKind.nextFrame,
-              at: frameEndsAt,
-              frame: nextFrame,
-              name: _name(target.steps[nextStep].filterName),
-            ),
-          );
+          upNext.add(MonitorUpNext(MonitorUpKind.nextFrame,
+              at: frameEndsAt, frame: nextFrame, name: _name(target.steps[nextStep].filterName)));
         }
       }
-      if (flipAt != null)
-        upNext.add(MonitorUpNext(MonitorUpKind.meridianFlip, at: flipAt));
+      if (flipAt != null) upNext.add(MonitorUpNext(MonitorUpKind.meridianFlip, at: flipAt));
       if (cur + 1 < targets.length) {
         final next = targets[cur + 1];
-        upNext.add(
-          MonitorUpNext(
-            MonitorUpKind.nextTarget,
-            name: next.tag ?? next.name,
-            at: now.add(Duration(seconds: leftOn(cur).round())),
-          ),
-        );
+        upNext.add(MonitorUpNext(MonitorUpKind.nextTarget,
+            name: next.tag ?? next.name, at: now.add(Duration(seconds: leftOn(cur).round()))));
       }
       if (ours) upNext.add(MonitorUpNext(MonitorUpKind.park, at: parkAt));
       // Known times in order; a "then" row stays right after the row before it.
-      final timed = upNext.where((u) => u.at != null).toList()
-        ..sort((a, b) => a.at!.compareTo(b.at!));
+      final timed = upNext.where((u) => u.at != null).toList()..sort((a, b) => a.at!.compareTo(b.at!));
       for (var i = 0; i < upNext.length; i++) {
-        if (upNext[i].at == null)
-          timed.insert(
-            i == 0 ? 0 : timed.indexOf(upNext[i - 1]) + 1,
-            upNext[i],
-          );
+        if (upNext[i].at == null) timed.insert(i == 0 ? 0 : timed.indexOf(upNext[i - 1]) + 1, upNext[i]);
       }
       upNext
         ..clear()
@@ -1051,33 +869,19 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     MonitorTarget? targetTile;
     if (target != null) {
       // The curve changes only with the Target or the night.
-      final curveKey = (
-        target.raDeg,
-        target.decDeg,
-        site.latitudeDeg,
-        site.longitudeDeg,
-        darkStart,
-        darkEnd,
-      );
+      final curveKey = (target.raDeg, target.decDeg, site.latitudeDeg, site.longitudeDeg, darkStart, darkEnd);
       if (curveKey != _curveKey) {
         _curveKey = curveKey;
         final points = <double>[];
         double? top;
         DateTime? at;
-        if (darkStart != null &&
-            darkEnd != null &&
-            (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
+        if (darkStart != null && darkEnd != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
           const n = 48;
           final span = darkEnd.difference(darkStart);
           for (var i = 0; i <= n; i++) {
             final t = darkStart.add(span * (i / n));
-            final alt = altitudeDegAt(
-              target.raDeg,
-              target.decDeg,
-              latitudeDeg: site.latitudeDeg,
-              longitudeDeg: site.longitudeDeg,
-              utc: t.toUtc(),
-            );
+            final alt = altitudeDegAt(target.raDeg, target.decDeg,
+                latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, utc: t.toUtc());
             points.add(alt);
             if (top == null || alt > top) {
               top = alt;
@@ -1091,9 +895,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       final spent = doneOn(cur);
       targetTile = MonitorTarget(
         name: target.tag ?? target.name,
-        longName: target.tag == null || _sameName(target.tag!, target.name)
-            ? null
-            : target.name,
+        longName: target.tag == null || _sameName(target.tag!, target.name) ? null : target.name,
         status: mount?.parked ?? false
             ? MonitorStatus.off
             : active && (mount?.tracking ?? false)
@@ -1104,19 +906,13 @@ class MonitorState extends Notifier<MonitorSnapshot> {
             : active && (mount?.tracking ?? false)
             ? MonitorTargetWord.tracking
             : MonitorTargetWord.queued,
-        imagingTo: active
-            ? now.add(Duration(seconds: leftOn(cur).round()))
-            : null,
+        imagingTo: active ? now.add(Duration(seconds: leftOn(cur).round())) : null,
         maxAltitudeDeg: maxAlt,
         transit: transit,
         moonPct: (moonPhase(now.toUtc()).illuminatedFraction * 100).round(),
         curve: curve,
-        spanStart: active
-            ? now.subtract(Duration(seconds: spent.round()))
-            : null,
-        spanEnd: active
-            ? now.add(Duration(seconds: leftOn(cur).round()))
-            : null,
+        spanStart: active ? now.subtract(Duration(seconds: spent.round())) : null,
+        spanEnd: active ? now.add(Duration(seconds: leftOn(cur).round())) : null,
       );
     }
 
@@ -1125,9 +921,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? null
         : MonitorSafety(
             status: !safetyMon.isConnected
-                ? (dropped(MonitorDevice.safetyMonitor, safetyMon)
-                      ? MonitorStatus.fault
-                      : MonitorStatus.off)
+                ? (dropped(MonitorDevice.safetyMonitor, safetyMon) ? MonitorStatus.fault : MonitorStatus.off)
                 : safetyMon.safe
                 ? MonitorStatus.normal
                 : MonitorStatus.warning,
@@ -1136,58 +930,28 @@ class MonitorState extends Notifier<MonitorSnapshot> {
           );
     MonitorWeather? weather;
     if (weatherSt != null) {
-      double? over(WeatherBreach k) =>
-          breaches.where((b) => b.kind == k).firstOrNull?.limit;
+      double? over(WeatherBreach k) => breaches.where((b) => b.kind == k).firstOrNull?.limit;
       final w = weatherSt;
       final t = w.temperatureC, dew = w.dewPointC;
       final windKmh = w.windSpeedMs == null ? null : w.windSpeedMs! * 3.6;
       bool ok(double? v) => v != null && v.isFinite;
       weather = MonitorWeather(
         status: !w.isConnected
-            ? (dropped(MonitorDevice.weather, w)
-                  ? MonitorStatus.fault
-                  : MonitorStatus.off)
+            ? (dropped(MonitorDevice.weather, w) ? MonitorStatus.fault : MonitorStatus.off)
             : breaches.isNotEmpty
             ? MonitorStatus.warning
             : MonitorStatus.normal,
         cells: [
-          if (ok(w.cloudCoverPct))
-            (
-              cell: MonitorWeatherCell.cloud,
-              value: w.cloudCoverPct!,
-              overLimit: null,
-            ),
+          if (ok(w.cloudCoverPct)) (cell: MonitorWeatherCell.cloud, value: w.cloudCoverPct!, overLimit: null),
           if (ok(w.skyQualityMagArcsec2))
-            (
-              cell: MonitorWeatherCell.skyQuality,
-              value: w.skyQualityMagArcsec2!,
-              overLimit: null,
-            ),
+            (cell: MonitorWeatherCell.skyQuality, value: w.skyQualityMagArcsec2!, overLimit: null),
           if (ok(t)) (cell: MonitorWeatherCell.air, value: t!, overLimit: null),
           if (ok(t) && ok(dew))
-            (
-              cell: MonitorWeatherCell.dewMargin,
-              value: t! - dew!,
-              overLimit: over(WeatherBreach.dewMargin),
-            ),
+            (cell: MonitorWeatherCell.dewMargin, value: t! - dew!, overLimit: over(WeatherBreach.dewMargin)),
           if (ok(w.humidityPct))
-            (
-              cell: MonitorWeatherCell.humidity,
-              value: w.humidityPct!,
-              overLimit: over(WeatherBreach.humidity),
-            ),
-          if (ok(w.rainRate))
-            (
-              cell: MonitorWeatherCell.rain,
-              value: w.rainRate!,
-              overLimit: null,
-            ),
-          if (ok(windKmh))
-            (
-              cell: MonitorWeatherCell.wind,
-              value: windKmh!,
-              overLimit: over(WeatherBreach.wind),
-            ),
+            (cell: MonitorWeatherCell.humidity, value: w.humidityPct!, overLimit: over(WeatherBreach.humidity)),
+          if (ok(w.rainRate)) (cell: MonitorWeatherCell.rain, value: w.rainRate!, overLimit: null),
+          if (ok(windKmh)) (cell: MonitorWeatherCell.wind, value: windKmh!, overLimit: over(WeatherBreach.wind)),
         ],
         windDeg: w.windDirectionDeg,
         gustKmh: w.windGustMs == null ? null : w.windGustMs! * 3.6,
@@ -1215,17 +979,11 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ra: guider.isCorrecting ? guider.rmsRaArcsec : null,
         dec: guider.isCorrecting ? guider.rmsDecArcsec : null,
         trace: [
-          for (final s
-              in steps.length > 100 ? steps.sublist(steps.length - 100) : steps)
-            if (s.raArcsec != null && s.decArcsec != null)
-              (ra: s.raArcsec!, dec: s.decArcsec!),
+          for (final s in steps.length > 100 ? steps.sublist(steps.length - 100) : steps)
+            if (s.raArcsec != null && s.decArcsec != null) (ra: s.raArcsec!, dec: s.decArcsec!),
         ],
         rmsPerFrame: _rmsPerFrame(guidingRms, trends.length, info?.startedUtc),
-        lastDither: markers
-            .where((m) => m.kind == GuideMarkerKind.dithered)
-            .lastOrNull
-            ?.at
-            .toLocal(),
+        lastDither: markers.where((m) => m.kind == GuideMarkerKind.dithered).lastOrNull?.at.toLocal(),
       );
     }
 
@@ -1253,17 +1011,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         : MonitorConditions(weather: weather, rig: hasRig ? rig : null);
 
     // Tonight.
-    final blocks =
-        <({String name, DateTime start, DateTime end, double? progress})>[];
+    final blocks = <({String name, DateTime start, DateTime end, double? progress})>[];
     if (targets.isNotEmpty) {
       // Finished targets end where their time ran out; the rest follow on.
-      var t = now.subtract(
-        Duration(
-          seconds: [for (var i = 0; i <= math.max(cur, 0); i++) doneOn(i)]
-              .fold(0.0, (a, b) => a + b)
-              .round(),
-        ),
-      );
+      var t = now.subtract(Duration(seconds: [for (var i = 0; i <= math.max(cur, 0); i++) doneOn(i)].fold(0.0, (a, b) => a + b).round()));
       for (var i = 0; i < targets.length; i++) {
         final len = Duration(seconds: (doneOn(i) + leftOn(i)).round());
         final total = simplePlanTotal(targets[i].steps);
@@ -1271,9 +1022,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
           name: targets[i].tag ?? targets[i].name,
           start: t,
           end: t.add(len),
-          progress: i == cur && active && total > 0
-              ? progress[i].fold<int>(0, (a, b) => a + b) / total
-              : null,
+          progress: i == cur && active && total > 0 ? progress[i].fold<int>(0, (a, b) => a + b) / total : null,
         ));
         t = t.add(len);
       }
@@ -1284,8 +1033,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       blocks: blocks,
       flipAt: flipAt,
       parkAt: parkAt,
-      imagedSeconds: [for (var i = 0; i < targets.length; i++) doneOn(i)]
-          .fold(0.0, (a, b) => a + b),
+      imagedSeconds: [for (var i = 0; i < targets.length; i++) doneOn(i)].fold(0.0, (a, b) => a + b),
     );
 
     return MonitorSnapshot(
@@ -1295,13 +1043,9 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       upNext: upNext.take(5).toList(),
       target: targetTile,
       flip: MonitorFlip(
-        state: flipInfo?.state == 'flipping' && waitLeft != null
-            ? 'waiting_for_meridian'
-            : flipInfo?.state,
+        state: flipInfo?.state == 'flipping' && waitLeft != null ? 'waiting_for_meridian' : flipInfo?.state,
         // The wait counts down on its own; the daemon sends no expected time while it runs.
-        at: waitLeft != null && flipInfo?.state == 'flipping'
-            ? now.add(Duration(seconds: waitLeft))
-            : flipInfo?.expectedUtc?.toLocal(),
+        at: waitLeft != null && flipInfo?.state == 'flipping' ? now.add(Duration(seconds: waitLeft)) : flipInfo?.expectedUtc?.toLocal(),
         step: flipping ? info?.currentInstructionDescription : null,
       ),
       safety: safety,
@@ -1313,30 +1057,21 @@ class MonitorState extends Notifier<MonitorSnapshot> {
   }
 }
 
-final monitorProvider =
-    NotifierProvider.autoDispose<MonitorState, MonitorSnapshot>(
-      MonitorState.new,
-    );
+final monitorProvider = NotifierProvider.autoDispose<MonitorState, MonitorSnapshot>(MonitorState.new);
 
 /// A sticky failure: a stop that failed a rung or never reached the rig.
-bool monitorFailedSticky(SimpleMessage m) =>
-    m.sticky && m.kind == SimpleMessageKind.error;
+bool monitorFailedSticky(SimpleMessage m) => m.sticky && m.kind == SimpleMessageKind.error;
 
 /// A message on the top line: red for an error, amber otherwise.
-MonitorVerdict monitorMessageVerdict(SimpleMessage m) => MonitorVerdict(
-  MonitorVerdictKind.message,
-  m.kind == SimpleMessageKind.error
-      ? MonitorStatus.fault
-      : MonitorStatus.warning,
-  message: m,
-);
+MonitorVerdict monitorMessageVerdict(SimpleMessage m) => MonitorVerdict(MonitorVerdictKind.message,
+    m.kind == SimpleMessageKind.error ? MonitorStatus.fault : MonitorStatus.warning,
+    message: m);
 
 /// A filter name, or null for the camera with none (a plan row can hold '').
 String? _name(String s) => s.trim().isEmpty ? null : s;
 
 /// "NGC 1269" and "NGC1269" are one name.
-bool _sameName(String a, String b) =>
-    a.replaceAll(RegExp(r'\s'), '') == b.replaceAll(RegExp(r'\s'), '');
+bool _sameName(String a, String b) => a.replaceAll(RegExp(r'\s'), '') == b.replaceAll(RegExp(r'\s'), '');
 
 /// One point per saved frame: the last [frames] samples since the run
 /// [started], all of them when it is not known (both end at the newest frame;
@@ -1376,24 +1111,12 @@ int _currentStep(SimpleTarget t, List<int> done) {
 (DateTime?, DateTime?) monitorDarkSpan(SiteSettings site, DateTime nowUtc) {
   if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return (null, null);
   final line = twilightSunAltitudeDeg(site.twilightDefinition);
-  bool dark(DateTime t) =>
-      sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
-      line;
-  final now = DateTime.utc(
-    nowUtc.year,
-    nowUtc.month,
-    nowUtc.day,
-    nowUtc.hour,
-    nowUtc.minute,
-  );
+  bool dark(DateTime t) => sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg < line;
+  final now = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, nowUtc.hour, nowUtc.minute);
   DateTime? start;
   if (dark(now)) {
     start = now;
-    for (
-      var m = 1;
-      m <= 24 * 60 && dark(now.subtract(Duration(minutes: m)));
-      m++
-    ) {
+    for (var m = 1; m <= 24 * 60 && dark(now.subtract(Duration(minutes: m))); m++) {
       start = now.subtract(Duration(minutes: m));
     }
   } else {

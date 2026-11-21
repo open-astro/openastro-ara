@@ -7,24 +7,21 @@ import 'package:openastroara/widgets/imaging/fault_panel.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 FaultRow _row({String? actionTaken, DateTime? resolvedUtc}) => FaultRow(
-  id: 'f-1',
-  sessionId: null,
-  detectedUtc: DateTime.utc(2026, 10, 8, 23, 10),
-  equipmentType: 'telescope',
-  equipmentId: 'dev-1',
-  equipmentName: 'EQM-35 Pro',
-  faultType: 'disconnected',
-  details: null,
-  actionTaken: actionTaken,
-  resolvedUtc: resolvedUtc,
-);
+      id: 'f-1',
+      sessionId: null,
+      detectedUtc: DateTime.utc(2026, 10, 8, 23, 10),
+      equipmentType: 'telescope',
+      equipmentId: 'dev-1',
+      equipmentName: 'EQM-35 Pro',
+      faultType: 'disconnected',
+      details: null,
+      actionTaken: actionTaken,
+      resolvedUtc: resolvedUtc,
+    );
 
 Future<void> _pump(WidgetTester tester, FaultRow row) async {
-  await tester.pumpWidget(
-    MaterialApp(
-      home: Scaffold(body: FaultHistoryTile(row: row)),
-    ),
-  );
+  await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: FaultHistoryTile(row: row))));
   await tester.pumpAndSettle();
 }
 
@@ -33,24 +30,20 @@ void main() {
   // mid-recovery is not "recovered"; the tile says what happened.
   testWidgets('a released row reads as disconnected by hand', (tester) async {
     await _pump(
-      tester,
-      _row(
-        actionTaken: 'released:user_disconnect',
-        resolvedUtc: DateTime.utc(2026, 10, 8, 23, 13),
-      ),
-    );
+        tester,
+        _row(
+            actionTaken: 'released:user_disconnect',
+            resolvedUtc: DateTime.utc(2026, 10, 8, 23, 13)));
     expect(find.text('released — disconnected by hand'), findsOneWidget);
     expect(find.text('recovered'), findsNothing);
   });
 
   testWidgets('a recovered row still reads recovered', (tester) async {
     await _pump(
-      tester,
-      _row(
-        actionTaken: 'recovered',
-        resolvedUtc: DateTime.utc(2026, 10, 8, 23, 13),
-      ),
-    );
+        tester,
+        _row(
+            actionTaken: 'recovered',
+            resolvedUtc: DateTime.utc(2026, 10, 8, 23, 13)));
     expect(find.text('recovered'), findsOneWidget);
   });
 
@@ -271,51 +264,34 @@ void main() {
     },
   );
 
-  testWidgets(
-    'in the narrow iOS alert a long camera name still shows the whole fault type',
-    (tester) async {
-      // The test font's glyphs are square, about twice as wide as SF's: 400 px
-      // here is as tight as the 270 pt iOS alert on a phone.
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
+  testWidgets('in the narrow iOS alert a long camera name still shows the whole fault type', (tester) async {
+    // The test font's glyphs are square, about twice as wide as SF's: 400 px
+    // here is as tight as the 270 pt iOS alert on a phone.
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
             body: Center(
-              child: SizedBox(
-                width: 400,
-                child: FaultHistoryTile(
-                  row: FaultRow(
-                    id: 'f-2',
-                    sessionId: null,
-                    detectedUtc: DateTime.utc(2026, 10, 8, 23, 10),
-                    equipmentType: 'camera',
-                    equipmentId: 'dev-2',
-                    equipmentName: 'ZWO ASI2600MM Pro',
-                    faultType: 'cooler_power_saturated',
-                    details: null,
-                    actionTaken: null,
-                    resolvedUtc: null,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final title = find.text('ZWO ASI2600MM Pro — cooler power saturated');
-      final paragraph = tester.renderObject<RenderParagraph>(title);
-      expect(
-        paragraph.didExceedMaxLines,
-        isFalse,
-        reason: 'the fault type is not cut off',
-      );
-      expect(
-        tester.getSize(title).height,
-        greaterThan(paragraph.preferredLineHeight * 1.5),
-        reason: 'it wraps instead',
-      );
-    },
-  );
+                child: SizedBox(
+                    width: 400,
+                    child: FaultHistoryTile(
+                        row: FaultRow(
+                      id: 'f-2',
+                      sessionId: null,
+                      detectedUtc: DateTime.utc(2026, 10, 8, 23, 10),
+                      equipmentType: 'camera',
+                      equipmentId: 'dev-2',
+                      equipmentName: 'ZWO ASI2600MM Pro',
+                      faultType: 'cooler_power_saturated',
+                      details: null,
+                      actionTaken: null,
+                      resolvedUtc: null,
+                    )))))));
+    await tester.pumpAndSettle();
+    final title = find.text('ZWO ASI2600MM Pro — cooler power saturated');
+    final paragraph = tester.renderObject<RenderParagraph>(title);
+    expect(paragraph.didExceedMaxLines, isFalse, reason: 'the fault type is not cut off');
+    expect(tester.getSize(title).height, greaterThan(paragraph.preferredLineHeight * 1.5),
+        reason: 'it wraps instead');
+  });
 
   testWidgets(
     'in the narrow iOS alert a group shows the whole fault type, in line with a single row',

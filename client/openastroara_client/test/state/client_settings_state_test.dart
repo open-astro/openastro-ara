@@ -43,9 +43,8 @@ class _FakeClientSettingsClient implements ClientSettingsClient {
     lastReplaced = settings;
     stored = settings;
     return ClientSettings(
-      settings: Map<String, dynamic>.unmodifiable(settings),
-      updatedUtc: DateTime.utc(2026, 6, 14, 12),
-    );
+        settings: Map<String, dynamic>.unmodifiable(settings),
+        updatedUtc: DateTime.utc(2026, 6, 14, 12));
   }
 
   /// Like the daemon: only the given top-level keys change, null removes one,
@@ -74,18 +73,11 @@ class _FakeClientSettingsClient implements ClientSettingsClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-ProviderContainer _container(
-  List<AraServer> servers,
-  ClientSettingsClient api,
-) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      clientSettingsApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-  );
+ProviderContainer _container(List<AraServer> servers, ClientSettingsClient api) {
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    clientSettingsApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -115,10 +107,7 @@ void main() {
       await c.read(savedServersProvider.future);
       await c.read(clientSettingsProvider.future);
 
-      final saved = await c.read(clientSettingsProvider.notifier).save({
-        'theme': 'light',
-        'zoom': 2,
-      });
+      final saved = await c.read(clientSettingsProvider.notifier).save({'theme': 'light', 'zoom': 2});
       expect(saved!.settings['theme'], 'light');
       expect(api.lastReplaced, {'theme': 'light', 'zoom': 2});
       expect(c.read(clientSettingsProvider).value!.settings['zoom'], 2);
@@ -215,10 +204,7 @@ void main() {
       final c = _container(const [], api);
       await c.read(savedServersProvider.future);
       await c.read(clientSettingsProvider.future);
-      expect(
-        await c.read(clientSettingsProvider.notifier).merge({'a': 1}),
-        isNull,
-      );
+      expect(await c.read(clientSettingsProvider.notifier).merge({'a': 1}), isNull);
       expect(api.lastReplaced, isNull);
     });
 
@@ -227,26 +213,19 @@ void main() {
       final c = _container(const [], api);
       await c.read(savedServersProvider.future);
       await c.read(clientSettingsProvider.future);
-      expect(
-        await c.read(clientSettingsProvider.notifier).save({'a': 1}),
-        isNull,
-      );
+      expect(await c.read(clientSettingsProvider.notifier).save({'a': 1}), isNull);
     });
 
     test('a fetch failure lands in the provider error state', () async {
       final api = _FakeClientSettingsClient(const {})..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(
-        c.read(clientSettingsProvider.future),
-        throwsA(isA<StateError>()),
-      );
+      await expectLater(c.read(clientSettingsProvider.future), throwsA(isA<StateError>()));
       expect(c.read(clientSettingsProvider).hasError, isTrue);
     });
 
     test('a save failure propagates (and does not blank state)', () async {
-      final api = _FakeClientSettingsClient(const {'theme': 'dark'})
-        ..throwOnReplace = true;
+      final api = _FakeClientSettingsClient(const {'theme': 'dark'})..throwOnReplace = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(clientSettingsProvider.future);
@@ -255,11 +234,7 @@ void main() {
         c.read(clientSettingsProvider.notifier).save({'theme': 'light'}),
         throwsA(isA<StateError>()),
       );
-      expect(
-        c.read(clientSettingsProvider).value!.settings['theme'],
-        'dark',
-        reason: 'old state retained',
-      );
+      expect(c.read(clientSettingsProvider).value!.settings['theme'], 'dark', reason: 'old state retained');
     });
   });
 }

@@ -1,8 +1,6 @@
 import 'package:file_picker/file_picker.dart';
-
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,17 +35,8 @@ class LibraryBulkActionBar extends ConsumerWidget {
           .showSnackBar(SnackBar(content: Text(successMessage)));
     } on Exception catch (e) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            friendlyError(
-              context.l10n,
-              e,
-              action: context.l10n.actionApplyToFrames,
-            ),
-          ),
-        ),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionApplyToFrames))));
     }
   }
 
@@ -68,9 +57,7 @@ class LibraryBulkActionBar extends ConsumerWidget {
         color: AraColors.bgPanel,
         child: Container(
           decoration: const BoxDecoration(
-            border: Border(
-              top: BorderSide(color: AraColors.selectionBg, width: 2),
-            ),
+            border: Border(top: BorderSide(color: AraColors.selectionBg, width: 2)),
           ),
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(
@@ -89,180 +76,145 @@ class LibraryBulkActionBar extends ConsumerWidget {
               Expanded(
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _BulkAction(
-                        icon: Icons.star_border,
-                        label: 'Rate',
-                        onPressed: api == null
-                            ? null
-                            : () async {
-                                final rating = await showAdaptiveAlert<int>(
-                                  context: context,
-                                  builder: (_) => const _RatePickerDialog(),
-                                );
-                                if (rating == null || !context.mounted) return;
-                                await _apply(
+                  child: Row(children: [
+                    _BulkAction(
+                      icon: Icons.star_border,
+                      label: 'Rate',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              final rating = await showAdaptiveAlert<int>(
+                                context: context,
+                                builder: (_) => const _RatePickerDialog(),
+                              );
+                              if (rating == null || !context.mounted) return;
+                              await _apply(
                                   context,
                                   ref,
                                   () => api.bulkRate(ids, rating),
                                   rating == 0
                                       ? 'Cleared rating on ${ids.length} frame(s).'
-                                      : 'Rated ${ids.length} frame(s) $rating-star.',
-                                );
-                              },
-                      ),
-                      _BulkAction(
-                        icon: Icons.label_outline,
-                        label: 'Tag',
-                        onPressed: api == null
-                            ? null
-                            : () async {
-                                final tags = await showAdaptiveAlert<_TagEdit>(
-                                  context: context,
-                                  builder: (_) => const _TagDialog(),
-                                );
-                                if (tags == null || !context.mounted) return;
-                                await _apply(
+                                      : 'Rated ${ids.length} frame(s) $rating-star.');
+                            },
+                    ),
+                    _BulkAction(
+                      icon: Icons.label_outline,
+                      label: 'Tag',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              final tags = await showAdaptiveAlert<_TagEdit>(
+                                context: context,
+                                builder: (_) => const _TagDialog(),
+                              );
+                              if (tags == null || !context.mounted) return;
+                              await _apply(
                                   context,
                                   ref,
-                                  () => api.bulkTag(
-                                    ids,
-                                    addTags: tags.add,
-                                    removeTags: tags.remove,
-                                  ),
-                                  'Updated tags on ${ids.length} frame(s).',
-                                );
-                              },
-                      ),
-                      _BulkAction(
-                        icon: Icons.drive_file_move_outlined,
-                        label: 'Move to session',
-                        onPressed: api == null
-                            ? null
-                            : () async {
-                                final target = await showDialog<String>(
-                                  context: context,
-                                  builder: (_) => const _SessionPickerDialog(),
-                                );
-                                if (target == null || !context.mounted) return;
-                                await _apply(
+                                  () => api.bulkTag(ids,
+                                      addTags: tags.add,
+                                      removeTags: tags.remove),
+                                  'Updated tags on ${ids.length} frame(s).');
+                            },
+                    ),
+                    _BulkAction(
+                      icon: Icons.drive_file_move_outlined,
+                      label: 'Move to session',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              final target = await showDialog<String>(
+                                context: context,
+                                builder: (_) => const _SessionPickerDialog(),
+                              );
+                              if (target == null || !context.mounted) return;
+                              await _apply(
                                   context,
                                   ref,
                                   () => api.bulkMove(ids, target),
-                                  'Moved ${ids.length} frame(s).',
-                                );
-                              },
-                      ),
-                      _BulkAction(
-                        icon: Icons.file_download_outlined,
-                        label: 'Export',
-                        onPressed: api == null
-                            ? null
-                            : () async {
-                                // §39.10: tar of the selected FITS files via the
-                                // OS save dialog (the sequence-export idiom).
-                                final (
-                                  bytes,
-                                  fileName,
-                                  exportedCount,
-                                ) = await (() async {
-                                  try {
-                                    return await api.exportFrames(ids);
-                                  } on Exception catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                            SnackBar(
-                                              content: Text(
-                                                friendlyError(
-                                                  context.l10n,
-                                                  e,
-                                                  action: context
-                                                      .l10n
-                                                      .actionExportFrames,
-                                                ),
-                                              ),
-                                            ),
-                                          );
-                                    }
-                                    return (const <int>[], '', 0);
-                                  }
-                                })();
-                                if (bytes.isEmpty || !context.mounted) return;
-                                Uri? saved;
+                                  'Moved ${ids.length} frame(s).');
+                            },
+                    ),
+                    _BulkAction(
+                      icon: Icons.file_download_outlined,
+                      label: 'Export',
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              // §39.10: tar of the selected FITS files via the
+                              // OS save dialog (the sequence-export idiom).
+                              final (bytes, fileName, exportedCount) =
+                                  await (() async {
                                 try {
-                                  // Dio already yields Uint8List — don't copy a
-                                  // potentially multi-GB tar (the repo idiom).
-                                  saved = await frameExportSaver(
-                                    fileName,
-                                    bytes is Uint8List
-                                        ? bytes
-                                        : Uint8List.fromList(bytes),
-                                  );
+                                  return await api.exportFrames(ids);
                                 } on Exception catch (e) {
                                   if (context.mounted) {
                                     ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(
-                                        content: Text(
-                                          friendlyError(
-                                            context.l10n,
-                                            e,
-                                            action: context.l10n.actionSave,
-                                          ),
-                                        ),
-                                      ),
-                                    );
+                                        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionExportFrames))));
                                   }
-                                  return;
+                                  return (const <int>[], '', 0);
                                 }
-                                if (saved == null || !context.mounted) return;
-                                ref
-                                    .read(librarySelectionProvider.notifier)
-                                    .clear();
-                                // Honest partial-success reporting (r2): missing
-                                // files skip server-side by design.
-                                final summary = exportedCount == ids.length
-                                    ? 'Exported $exportedCount frame(s)'
-                                    : 'Exported $exportedCount of ${ids.length} frame(s) — the rest were missing on disk';
-                                final savedName = saved.pathSegments.isNotEmpty
-                                    ? saved.pathSegments.last
-                                    : saved.toString();
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('$summary → $savedName'),
-                                  ),
-                                );
-                              },
-                      ),
-                      _BulkAction(
-                        icon: Icons.delete_outline,
-                        label: 'Delete',
-                        destructive: true,
-                        onPressed: api == null
-                            ? null
-                            : () async {
-                                final confirmed = await showAdaptiveAlert<bool>(
-                                  context: context,
-                                  builder: (_) =>
-                                      _DeleteConfirmDialog(count: ids.length),
-                                );
-                                if (confirmed != true || !context.mounted)
-                                  return;
-                                // Always with the files: a catalog-only delete
-                                // came back on the daemon's next start, when its
-                                // scan re-imports every FITS file it finds.
-                                await _apply(
+                              })();
+                              if (bytes.isEmpty || !context.mounted) return;
+                              Uri? saved;
+                              try {
+                                // Dio already yields Uint8List — don't copy a
+                                // potentially multi-GB tar (the repo idiom).
+                                saved = await frameExportSaver(
+                                    fileName,
+                                    bytes is Uint8List
+                                        ? bytes
+                                        : Uint8List.fromList(bytes));
+                              } on Exception catch (e) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                          content:
+                                              Text(friendlyError(context.l10n, e, action: context.l10n.actionSave))));
+                                }
+                                return;
+                              }
+                              if (saved == null || !context.mounted) return;
+                              ref
+                                  .read(librarySelectionProvider.notifier)
+                                  .clear();
+                              // Honest partial-success reporting (r2): missing
+                              // files skip server-side by design.
+                              final summary = exportedCount == ids.length
+                                  ? 'Exported $exportedCount frame(s)'
+                                  : 'Exported $exportedCount of ${ids.length} frame(s) — the rest were missing on disk';
+                              final savedName = saved.pathSegments.isNotEmpty
+                                  ? saved.pathSegments.last
+                                  : saved.toString();
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text('$summary → $savedName')));
+                            },
+                    ),
+                    _BulkAction(
+                      icon: Icons.delete_outline,
+                      label: 'Delete',
+                      destructive: true,
+                      onPressed: api == null
+                          ? null
+                          : () async {
+                              final confirmed = await showAdaptiveAlert<bool>(
+                                context: context,
+                                builder: (_) =>
+                                    _DeleteConfirmDialog(count: ids.length),
+                              );
+                              if (confirmed != true || !context.mounted) return;
+                              // Always with the files: a catalog-only delete
+                              // came back on the daemon's next start, when its
+                              // scan re-imports every FITS file it finds.
+                              await _apply(
                                   context,
                                   ref,
-                                  () =>
-                                      api.bulkDelete(ids, deleteFromDisk: true),
-                                  'Deleted ${ids.length} frame(s) and their files.',
-                                );
-                              },
-                      ),
-                    ],
-                  ),
+                                  () => api.bulkDelete(ids,
+                                      deleteFromDisk: true),
+                                  'Deleted ${ids.length} frame(s) and their files.');
+                            },
+                    ),
+                  ]),
                 ),
               ),
             ],
@@ -306,10 +258,10 @@ class _BulkAction extends StatelessWidget {
 @visibleForTesting
 Future<Uri?> Function(String fileName, Uint8List bytes) frameExportSaver =
     (fileName, bytes) => FilePicker.saveFile(
-      dialogTitle: 'Export frames',
-      fileName: fileName,
-      bytes: bytes,
-    );
+          dialogTitle: 'Export frames',
+          fileName: fileName,
+          bytes: bytes,
+        );
 
 /// Pick the target session for a bulk move from the loaded session list.
 /// Pops null on cancel.
@@ -332,8 +284,7 @@ class _SessionPickerDialog extends ConsumerWidget {
             SimpleDialogOption(
               onPressed: () => Navigator.of(context).pop(s.id),
               child: Text(
-                '${s.sessionStartUtc.toLocal().toIso8601String().substring(0, 10)} — ${s.targetName}',
-              ),
+                  '${s.sessionStartUtc.toLocal().toIso8601String().substring(0, 10)} — ${s.targetName}'),
             ),
       ],
     );
@@ -477,12 +428,11 @@ class _DeleteConfirmDialog extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return adaptiveAlertDialog(
-      title: Text(
-        count == 1 ? 'Delete this frame?' : 'Delete these $count frames?',
-      ),
+      title: Text(count == 1
+          ? 'Delete this frame?'
+          : 'Delete these $count frames?'),
       content: const Text(
-        'The FITS files are deleted from the disk for good. This can\'t be undone.',
-      ),
+          'The FITS files are deleted from the disk for good. This can\'t be undone.'),
       actions: [
         adaptiveDialogAction(
           context,

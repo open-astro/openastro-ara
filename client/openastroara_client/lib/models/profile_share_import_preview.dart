@@ -30,8 +30,7 @@ class ProfileShareImportPreview {
       // than let an empty token 404 at commit with a misleading "couldn't import"
       // message; the import flow's FormatException catch surfaces this instead.
       throw const FormatException(
-        'Profile-share preview response is missing its import token.',
-      );
+          'Profile-share preview response is missing its import token.');
     }
     return ProfileShareImportPreview(
       importToken: token,

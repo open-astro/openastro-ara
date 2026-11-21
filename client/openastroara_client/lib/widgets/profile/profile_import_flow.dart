@@ -19,9 +19,9 @@ import '../adaptive_controls.dart';
 /// `frameExportSaver` (#1150).
 @visibleForTesting
 Future<PlatformFile?> Function() profileSharePicker = () => FilePicker.pickFile(
-  type: FileType.any,
-  dialogTitle: 'Choose a shared profile file',
-);
+      type: FileType.any,
+      dialogTitle: 'Choose a shared profile file',
+    );
 
 /// 1 MB ceiling — shares are a few KB of JSON, so anything large is a mis-pick
 /// and is refused rather than slurped into memory.
@@ -83,11 +83,8 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   final messenger = ScaffoldMessenger.of(context);
   final api = ref.read(profileApiProvider);
   if (api == null) {
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Connect to your rig first to import a profile.'),
-      ),
-    );
+    messenger.showSnackBar(const SnackBar(
+        content: Text('Connect to your rig first to import a profile.')));
     return;
   }
 
@@ -101,14 +98,10 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   try {
     picked = await profileSharePicker();
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          friendlyDaemonError(e, fallback: "Couldn't open the file picker"),
-        ),
-        backgroundColor: AraColors.accentError,
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content:
+            Text(friendlyDaemonError(e, fallback: "Couldn't open the file picker")),
+        backgroundColor: AraColors.accentError));
     return;
   }
   if (picked == null) return; // user cancelled
@@ -121,16 +114,12 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
       bytes = read;
     case ProfileShareUnreadable():
       messenger.showSnackBar(
-        const SnackBar(content: Text("Couldn't read the selected file.")),
-      );
+          const SnackBar(content: Text("Couldn't read the selected file.")));
       return;
     case ProfileShareTooLarge():
-      messenger.showSnackBar(
-        const SnackBar(
+      messenger.showSnackBar(const SnackBar(
           content: Text("That file is too large to be a profile share."),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+          backgroundColor: AraColors.accentError));
       return;
   }
 
@@ -139,26 +128,16 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   try {
     // Spinner over the preview RPC so a slow daemon doesn't look like a no-op.
     preview = await runWithBlockingSpinner(
-      context,
-      () => api.importPreview(parseShareManifest(bytes)),
-    );
+        context, () => api.importPreview(parseShareManifest(bytes)));
   } on FormatException catch (e) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(e.message),
-        backgroundColor: AraColors.accentError,
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content: Text(e.message), backgroundColor: AraColors.accentError));
     return;
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          friendlyDaemonError(e, fallback: "Couldn't read that share file"),
-        ),
-        backgroundColor: AraColors.accentError,
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content:
+            Text(friendlyDaemonError(e, fallback: "Couldn't read that share file")),
+        backgroundColor: AraColors.accentError));
     return;
   }
 
@@ -173,30 +152,19 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
   // try so a later list-refresh failure can't masquerade as "couldn't import".
   try {
     await runWithBlockingSpinner(
-      context,
-      () => api.importCommit(preview.importToken),
-    );
+        context, () => api.importCommit(preview.importToken));
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          friendlyDaemonError(e, fallback: "Couldn't import that profile"),
-        ),
-        backgroundColor: AraColors.accentError,
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content:
+            Text(friendlyDaemonError(e, fallback: "Couldn't import that profile")),
+        backgroundColor: AraColors.accentError));
     return;
   }
   // The profile now exists on the daemon — confirm success regardless of the
   // refresh outcome (messenger is pre-captured, so safe even if unmounted).
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text(
-        'Imported "${preview.profileName}" — make it active, '
-        'then set up your equipment in the wizard.',
-      ),
-    ),
-  );
+  messenger.showSnackBar(SnackBar(
+      content: Text('Imported "${preview.profileName}" — make it active, '
+          'then set up your equipment in the wizard.')));
   // Best-effort reconcile of the list; only if still mounted (the commit was
   // another async gap), and a refresh failure is non-critical here.
   if (context.mounted) {
@@ -212,9 +180,7 @@ Future<void> runProfileImportFlow(BuildContext context, WidgetRef ref) async {
 /// blocks the system-back button). Always removes the spinner, then rethrows so
 /// the caller handles success/failure.
 Future<T> runWithBlockingSpinner<T>(
-  BuildContext context,
-  Future<T> Function() op,
-) async {
+    BuildContext context, Future<T> Function() op) async {
   final navigator = Navigator.of(context, rootNavigator: false);
   // Push an explicit spinner route we hold a handle to, then remove exactly that
   // route when done. showDialog()'s push is deferred a frame, so a synchronously
@@ -243,9 +209,7 @@ Future<T> runWithBlockingSpinner<T>(
 }
 
 Future<bool> _confirmImport(
-  BuildContext context,
-  ProfileShareImportPreview preview,
-) async {
+    BuildContext context, ProfileShareImportPreview preview) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -264,43 +228,34 @@ Future<bool> _confirmImport(
               const SizedBox(height: 8),
             ],
             if (preview.droppedFields.isNotEmpty) ...[
-              const Text(
-                "You'll set these up yourself after importing:",
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
+              const Text("You'll set these up yourself after importing:",
+                  style: TextStyle(fontWeight: FontWeight.bold)),
               const SizedBox(height: 4),
               for (final d in preview.droppedFields)
                 Padding(
                   padding: const EdgeInsets.only(left: 8, top: 2),
-                  child: Text(
-                    '• $d',
-                    style: const TextStyle(color: AraColors.textSecondary),
-                  ),
+                  child: Text('• $d',
+                      style: const TextStyle(color: AraColors.textSecondary)),
                 ),
             ],
             if (shareExpiryNote(preview.expiresUtc) case final note?) ...[
               const SizedBox(height: 12),
-              Text(
-                note,
-                style: const TextStyle(
-                  color: AraColors.textSecondary,
-                  fontStyle: FontStyle.italic,
-                  fontSize: 12,
-                ),
-              ),
+              Text(note,
+                  style: const TextStyle(
+                      color: AraColors.textSecondary,
+                      fontStyle: FontStyle.italic,
+                      fontSize: 12)),
             ],
           ],
         ),
       ),
       actions: [
         TextButton(
-          onPressed: () => Navigator.of(ctx).pop(false),
-          child: const Text('Cancel'),
-        ),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel')),
         FilledButton(
-          onPressed: () => Navigator.of(ctx).pop(true),
-          child: const Text('Import'),
-        ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Import')),
       ],
     ),
   );
@@ -313,17 +268,10 @@ Future<bool> _confirmImport(
 /// CORS-masked network errors), delegate to [friendlyError] so a raw
 /// DioException/XHR dump never reaches the user — the fallback's
 /// `"Couldn't <action>"` wording becomes friendlyError's action.
-String friendlyDaemonError(
-  Object e, {
-  String fallback = 'Something went wrong',
-}) {
+String friendlyDaemonError(Object e, {String fallback = 'Something went wrong'}) {
   if (e is DioException) {
     // friendlyError gives the daemon's own words on a 400, 409 or 422 (#1699).
-    return friendlyError(
-      lookupAppLocalizations(const Locale('en')),
-      e,
-      action: _actionFromFallback(fallback),
-    );
+    return friendlyError(lookupAppLocalizations(const Locale('en')), e, action: _actionFromFallback(fallback));
   }
   if (e is StateError) return e.message;
   return fallback;

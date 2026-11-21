@@ -13,13 +13,7 @@ import 'pa_residual.dart';
 /// Link state of the guider device itself (mirrors the server
 /// `EquipmentConnectionState`). `unknown` is a client-only fallback for an
 /// unrecognised token so a new server value never throws.
-enum GuiderConnectionState {
-  disconnected,
-  connecting,
-  connected,
-  error,
-  unknown,
-}
+enum GuiderConnectionState { disconnected, connecting, connected, error, unknown }
 
 GuiderConnectionState _connectionFromWire(String? token) {
   switch (token) {
@@ -40,21 +34,17 @@ GuiderConnectionState _connectionFromWire(String? token) {
 /// link state: a guider can be `connected` while runtime is `stopped`.
 enum GuiderRuntimeState {
   stopped,
-
   /// #1364 — exposures looping with no star chosen (the guide camera is busy).
   looping,
-
   /// #1364 — looping with a star chosen, not guiding yet.
   starSelected,
   calibrating,
   guiding,
-
   /// #1364 — guiding, settling after a dither or a start.
   settling,
   paused,
   starLost,
   dithering,
-
   /// The Guiding Assistant is measuring drift or Dec backlash: PHD2 reports
   /// "Guiding" for the whole run, but nothing is being corrected.
   assistant,
@@ -63,8 +53,7 @@ enum GuiderRuntimeState {
 
 /// #1364 item 6 — the one wording of a guider phase, used by the guiding
 /// strip, the guider dialog and the Run tab alike.
-String guiderRuntimeText(AppLocalizations l, GuiderRuntimeState state) =>
-    switch (state) {
+String guiderRuntimeText(AppLocalizations l, GuiderRuntimeState state) => switch (state) {
       GuiderRuntimeState.stopped => l.guiderStateNotGuiding,
       GuiderRuntimeState.looping => l.guiderStateLooping,
       GuiderRuntimeState.starSelected => l.guiderStateStarSelected,
@@ -114,12 +103,10 @@ class GuiderStatus {
   final String name;
   final GuiderConnectionState connectionState;
   final GuiderRuntimeState runtimeState;
-
   /// Windowed RMS in guide-camera PIXELS (`rms_total` / `rms_ra` / `rms_dec`).
   final double? rmsTotal;
   final double? rmsRa;
   final double? rmsDec;
-
   /// The same window in arcsec (`rms_*_arcsec`), present once the guider has
   /// reported a pixel scale. Parsed for completeness: the Live tab's guiding
   /// strip computes its own figures from `guider.step`, not from these.
@@ -127,22 +114,18 @@ class GuiderStatus {
   final double? rmsRaArcsec;
   final double? rmsDecArcsec;
   final String? currentProfile;
-
   /// #1311 — the polar alignment residual from guiding (`runtime.pa_residual`),
   /// so a client that (re)connects mid-run shows it before the next WS event.
   final PaResidual? paResidual;
-
   /// While calibrating: the leg under way (`West`, `East`, `North`, `South`…),
   /// its step and the star's distance from the leg's start in guide pixels
   /// (`runtime.calibration_*`). Null otherwise.
   final String? calibrationDirection;
   final int? calibrationStep;
   final double? calibrationDistancePx;
-
   /// Why the guider does not hold the active profile's guider settings, and
   /// how to fix it; null when it does or that is not known yet (#1665).
   final String? outOfStepReason;
-
   /// The guider's profiles, id → name (`runtime.profiles`), for the Settings
   /// profile picker. Empty until a guider has connected.
   final Map<int, String> profiles;
@@ -172,11 +155,8 @@ class GuiderStatus {
     final dir = calibrationDirection;
     if (dir == null || dir.isEmpty) return null;
     final parts = [
-      calibrationStep == null
-          ? dir
-          : l.guiderStateCalibrationStep(dir, '$calibrationStep'),
-      if (calibrationDistancePx != null)
-        '${calibrationDistancePx!.toStringAsFixed(1)} px',
+      calibrationStep == null ? dir : l.guiderStateCalibrationStep(dir, '$calibrationStep'),
+      if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
     ];
     return parts.join(' · ');
   }
@@ -185,9 +165,7 @@ class GuiderStatus {
   String runtimeSummary(AppLocalizations l) {
     if (!isConnected) return l.guiderStateNotConnected;
     final base = guiderRuntimeText(l, runtimeState);
-    final leg = runtimeState == GuiderRuntimeState.calibrating
-        ? calibrationText(l)
-        : null;
+    final leg = runtimeState == GuiderRuntimeState.calibrating ? calibrationText(l) : null;
     return leg == null ? base : '$base · $leg';
   }
 
@@ -207,10 +185,7 @@ class GuiderStatus {
   /// guiding, the assistant): Simple Mode's shutter square stops it.
   bool get isBusy =>
       isConnected &&
-      !const {
-        GuiderRuntimeState.stopped,
-        GuiderRuntimeState.unknown,
-      }.contains(runtimeState);
+      !const {GuiderRuntimeState.stopped, GuiderRuntimeState.unknown}.contains(runtimeState);
 
   /// A phase a "Stop guiding" ends; in every other one (stopped, looping, a
   /// star picked or lost) the way forward is "Guide".
@@ -229,9 +204,7 @@ class GuiderStatus {
   /// rather than throwing, since the link state is the primary signal.
   factory GuiderStatus.fromJson(Map<String, dynamic> json) {
     final runtime = json['runtime'];
-    final runtimeMap = runtime is Map<String, dynamic>
-        ? runtime
-        : const <String, dynamic>{};
+    final runtimeMap = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return GuiderStatus(
       deviceId: _str(json['device_id']),
       // The guider daemon self-reports its upstream product name ("PHD2");
@@ -262,27 +235,25 @@ class GuiderStatus {
   static String? _str(dynamic v) => v is String ? v : null;
 
   static Map<int, String> _profiles(dynamic v) => {
-    if (v is List)
-      for (final p in v)
-        if (p is Map && p['id'] is num && p['name'] is String)
-          (p['id'] as num).toInt(): p['name'] as String,
-  };
+        if (v is List)
+          for (final p in v)
+            if (p is Map && p['id'] is num && p['name'] is String)
+              (p['id'] as num).toInt(): p['name'] as String,
+      };
 
   static String _brandName(String? raw) {
     if (raw == null || raw.isEmpty) return 'Guider';
     // Word-boundary so a fork name embedding "phd2" mid-token isn't spliced.
     return raw.replaceAll(
-      RegExp(r'\bphd2\b', caseSensitive: false),
-      'OpenAstro Guider',
-    );
+        RegExp(r'\bphd2\b', caseSensitive: false), 'OpenAstro Guider');
   }
 
   static double? _asDouble(dynamic v) {
     final d = v is num
         ? v.toDouble()
         : v is String
-        ? num.tryParse(v)?.toDouble()
-        : null;
+            ? num.tryParse(v)?.toDouble()
+            : null;
     // Filter NaN/Infinity (incl. from "NaN"/"Infinity" strings) — a non-finite
     // RMS is meaningless and would break value equality (NaN != NaN → churn).
     return (d != null && d.isFinite) ? d : null;
@@ -310,20 +281,7 @@ class GuiderStatus {
       mapEquals(other.profiles, profiles);
 
   @override
-  int get hashCode => Object.hash(
-    deviceId,
-    name,
-    connectionState,
-    runtimeState,
-    rmsTotal,
-    rmsRa,
-    rmsDec,
-    rmsTotalArcsec,
-    rmsRaArcsec,
-    rmsDecArcsec,
-    currentProfile,
-    paResidual,
-    outOfStepReason,
-    Object.hashAll(profiles.entries.map((e) => Object.hash(e.key, e.value))),
-  );
+  int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
+      rmsTotal, rmsRa, rmsDec, rmsTotalArcsec, rmsRaArcsec, rmsDecArcsec,
+      currentProfile, paResidual, outOfStepReason, Object.hashAll(profiles.entries.map((e) => Object.hash(e.key, e.value))));
 }

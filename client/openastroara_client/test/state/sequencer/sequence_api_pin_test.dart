@@ -20,41 +20,34 @@ class _Client implements SequenceClient {
 /// fails with "adapter was closed". createImagingRun pins the provider with a
 /// listen for the whole create; this pins the behaviour that fix relies on.
 void main() {
-  ProviderContainer build(_Client client) => ProviderContainer(
-    overrides: [
-      activeServerProvider.overrideWithValue(
-        const AraServer(hostname: 'rig.local', port: 5555),
-      ),
-      sequenceApiFactoryProvider.overrideWithValue((_) => client),
-    ],
-  );
+  ProviderContainer build(_Client client) => ProviderContainer(overrides: [
+        activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'rig.local', port: 5555)),
+        sequenceApiFactoryProvider.overrideWithValue((_) => client),
+      ]);
 
-  test(
-    'a bare read is disposed (and closed) once the event loop turns',
-    () async {
-      final client = _Client();
-      final container = build(client);
-      addTearDown(container.dispose);
-      expect(container.read(sequenceApiProvider), same(client));
-      await Future<void>.delayed(Duration.zero);
-      expect(client.closed, isTrue);
-    },
-  );
+  test('a bare read is disposed (and closed) once the event loop turns',
+      () async {
+    final client = _Client();
+    final container = build(client);
+    addTearDown(container.dispose);
+    expect(container.read(sequenceApiProvider), same(client));
+    await Future<void>.delayed(Duration.zero);
+    expect(client.closed, isTrue);
+  });
 
-  test(
-    'a listen keeps the client open across awaits until it is closed',
-    () async {
-      final client = _Client();
-      final container = build(client);
-      addTearDown(container.dispose);
-      final keep = container.listen(sequenceApiProvider, (_, _) {});
-      expect(container.read(sequenceApiProvider), same(client));
-      await Future<void>.delayed(Duration.zero);
-      await Future<void>.delayed(Duration.zero);
-      expect(client.closed, isFalse);
-      keep.close();
-      await Future<void>.delayed(Duration.zero);
-      expect(client.closed, isTrue);
-    },
-  );
+  test('a listen keeps the client open across awaits until it is closed',
+      () async {
+    final client = _Client();
+    final container = build(client);
+    addTearDown(container.dispose);
+    final keep = container.listen(sequenceApiProvider, (_, _) {});
+    expect(container.read(sequenceApiProvider), same(client));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(client.closed, isFalse);
+    keep.close();
+    await Future<void>.delayed(Duration.zero);
+    expect(client.closed, isTrue);
+  });
 }

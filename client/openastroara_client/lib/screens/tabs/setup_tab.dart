@@ -155,8 +155,9 @@ class _ChecklistRow extends ConsumerWidget {
       title: Text(title),
       subtitle: Text(
         subtitle,
-        style: Theme.of(context).textTheme.bodySmall
-            ?.copyWith(color: AraColors.textSecondary),
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
@@ -180,8 +181,7 @@ class _ChecklistRow extends ConsumerWidget {
     final live = ref.watch(autofocusLiveProvider);
     final run = live.run;
     return switch (ref.watch(setupFocusStateProvider)) {
-      SetupStepState.done
-          when run.isComplete && run.finalHfr != null && run.finalHfr! > 0 =>
+      SetupStepState.done when run.isComplete && run.finalHfr != null && run.finalHfr! > 0 =>
         'In focus — HFR ${run.finalHfr!.toStringAsFixed(2)} at ${run.finalPosition}',
       SetupStepState.done => 'In focus',
       SetupStepState.inProgress => 'Autofocus running…',
@@ -308,8 +308,7 @@ class _GuiderSection extends ConsumerStatefulWidget {
   /// Unconfigured = no guide camera picked. Guide optics alone don't count:
   /// a profile can carry a focal length and pixel size yet name no camera,
   /// and a fresh guider has none of its own, so nothing would ever connect.
-  static bool looksUnconfigured(Phd2Settings s) =>
-      s.guiderCamera.trim().isEmpty;
+  static bool looksUnconfigured(Phd2Settings s) => s.guiderCamera.trim().isEmpty;
 
   @override
   ConsumerState<_GuiderSection> createState() => _GuiderSectionState();
@@ -322,19 +321,21 @@ class _GuiderSectionState extends ConsumerState<_GuiderSection> {
     // they are in, the verdict waits rather than claim "not set up yet"
     // about a fully configured guider.
     final phd2 = ref.watch(phd2SettingsProvider).value;
-    final unconfigured = phd2 != null && _GuiderSection.looksUnconfigured(phd2);
+    final unconfigured =
+        phd2 != null && _GuiderSection.looksUnconfigured(phd2);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           unconfigured
               ? 'The guider hasn\'t been set up yet — polar alignment and '
-                    'guiding both need it. The wizard walks through camera, '
-                    'optics, mount and darks in a couple of minutes.'
+                  'guiding both need it. The wizard walks through camera, '
+                  'optics, mount and darks in a couple of minutes.'
               : 'Polar alignment also needs the guide camera (through the '
-                    'guider).',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+                  'guider).',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         ),
         const SizedBox(height: 4),
         Wrap(
@@ -404,8 +405,9 @@ class _DeviceRow extends StatelessWidget {
           Expanded(
             child: Text(
               text,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -481,8 +483,9 @@ class _PaneScaffold extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               subtitle,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
             ),
             const SizedBox(height: 20),
             child,

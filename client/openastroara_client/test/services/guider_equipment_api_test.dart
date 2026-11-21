@@ -25,8 +25,7 @@ void main() {
       'the runtime-safe push that keeps guiding running', () async {
     final (server, seen) = await _loopbackDaemon();
     final api = GuiderEquipmentApi(
-      AraServer(hostname: '127.0.0.1', port: server.port),
-    );
+        AraServer(hostname: '127.0.0.1', port: server.port));
     addTearDown(api.close);
 
     await api.pushProfile(tuningOnly: true);
@@ -41,8 +40,7 @@ void main() {
   test('pushProfile() (full push) sends no scope parameter', () async {
     final (server, seen) = await _loopbackDaemon();
     final api = GuiderEquipmentApi(
-      AraServer(hostname: '127.0.0.1', port: server.port),
-    );
+        AraServer(hostname: '127.0.0.1', port: server.port));
     addTearDown(api.close);
 
     await api.pushProfile();
@@ -51,10 +49,7 @@ void main() {
     final (method, uri) = seen.single;
     expect(method, 'POST');
     expect(uri.path, '/api/v1/equipment/guider/profile/push');
-    expect(
-      uri.queryParameters,
-      isEmpty,
-      reason: 'the full push must not ask for the tuning-only scope',
-    );
+    expect(uri.queryParameters, isEmpty,
+        reason: 'the full push must not ask for the tuning-only scope');
   });
 }

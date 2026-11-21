@@ -46,11 +46,10 @@ class CameraGeometry {
     final maxBinY = by is num ? by.toInt() : 0;
     final maxBin = maxBinX < maxBinY ? maxBinX : maxBinY;
     return CameraGeometry(
-      sensorWidthPx: w,
-      sensorHeightPx: h,
-      pixelSizeUm: px,
-      maxBin: maxBin < 1 ? 1 : maxBin,
-    );
+        sensorWidthPx: w,
+        sensorHeightPx: h,
+        pixelSizeUm: px,
+        maxBin: maxBin < 1 ? 1 : maxBin);
   }
 }
 
@@ -58,25 +57,19 @@ class CameraGeometryApi {
   final Dio _dio;
 
   CameraGeometryApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   /// The connected camera's sensor geometry, or null when none is connected /
   /// it reports no usable sensor. Throws `DioException` on transport failure.
   Future<CameraGeometry?> read() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/equipment/camera',
-      );
+      final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/camera');
       final data = res.data;
-      return data is Map<String, dynamic>
-          ? CameraGeometry.fromCameraJson(data)
-          : null;
+      return data is Map<String, dynamic> ? CameraGeometry.fromCameraJson(data) : null;
     } finally {
       // One-shot client: close the Dio so its HttpClient connection pool isn't leaked per button press.
       _dio.close();

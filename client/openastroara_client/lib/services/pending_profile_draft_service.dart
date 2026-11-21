@@ -66,9 +66,7 @@ class PendingProfileDraft {
           : DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       draft: profileDraftFromJson(Map<String, dynamic>.from(draft)),
       finalSave: json['final_save'] == true,
-      serverKey: json['server_key'] is String
-          ? json['server_key'] as String
-          : null,
+      serverKey: json['server_key'] is String ? json['server_key'] as String : null,
     );
   }
 }

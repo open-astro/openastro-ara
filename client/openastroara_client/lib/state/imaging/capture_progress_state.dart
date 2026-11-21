@@ -35,18 +35,15 @@ class CaptureProgress {
   final CapturePhase phase;
   final String? frameId;
   final Duration requestedExposure;
-
   /// 0..100 from the daemon's camera runtime while exposing (null = unknown).
   final double? exposureProgressPct;
   final DateTime? startedAt;
   final DateTime? exposureEndedAt;
   final String? error;
-
   /// Rolling average (ms) of how long post-exposure processing takes
   /// (download → FITS → catalog) — measured per capture and carried across
   /// captures so the "ready in" estimate is grounded in this rig's real speed.
   final int? rollingDownloadMs;
-
   /// Identity of the current capture cycle. Bumped on every `beginExposing`
   /// and `reset()`; `complete()`/`fail()` from a stale `_takeOne` poll loop
   /// (e.g. after a Cancel) no-op when their generation no longer matches, so
@@ -151,26 +148,25 @@ class CaptureProgress {
     String? error,
     int? rollingDownloadMs,
     int? generation,
-  }) => CaptureProgress(
-    phase: phase ?? this.phase,
-    frameId: frameId ?? this.frameId,
-    requestedExposure: requestedExposure ?? this.requestedExposure,
-    exposureProgressPct: clearProgressPct
-        ? null
-        : (exposureProgressPct ?? this.exposureProgressPct),
-    startedAt: startedAt ?? this.startedAt,
-    exposureEndedAt: exposureEndedAt ?? this.exposureEndedAt,
-    error: error ?? this.error,
-    rollingDownloadMs: rollingDownloadMs ?? this.rollingDownloadMs,
-    generation: generation ?? this.generation,
-  );
+  }) =>
+      CaptureProgress(
+        phase: phase ?? this.phase,
+        frameId: frameId ?? this.frameId,
+        requestedExposure: requestedExposure ?? this.requestedExposure,
+        exposureProgressPct:
+            clearProgressPct ? null : (exposureProgressPct ?? this.exposureProgressPct),
+        startedAt: startedAt ?? this.startedAt,
+        exposureEndedAt: exposureEndedAt ?? this.exposureEndedAt,
+        error: error ?? this.error,
+        rollingDownloadMs: rollingDownloadMs ?? this.rollingDownloadMs,
+        generation: generation ?? this.generation,
+      );
 }
 
 class CaptureProgressNotifier extends Notifier<CaptureProgress> {
   Timer? _exposeHold;
   Timer? _downloadHold;
   Timer? _resetTimer;
-
   /// Local exposing → downloading fallback: fires when the requested exposure
   /// (+ [kExposureClockPad]) has elapsed on the client clock. The daemon's
   /// `exposure_progress_pct` rides the 15 s equipment poll, so for any
@@ -351,9 +347,8 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
         clock.now().difference(ended) < kDownloadingMinVisible) {
       _downloadHold?.cancel();
       _downloadHold = Timer(
-        kDownloadingMinVisible - clock.now().difference(ended),
-        () => _finishComplete(frameId, generation),
-      );
+          kDownloadingMinVisible - clock.now().difference(ended),
+          () => _finishComplete(frameId, generation));
       return;
     }
     _finishComplete(frameId, generation);
@@ -368,7 +363,9 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
       final prev = state.rollingDownloadMs;
       // EMA-ish (α ≈ 0.25): the estimate tracks the rig's real speed without
       // bouncing wildly on one slow/fast capture.
-      updatedRolling = prev == null ? measured : ((prev * 3) + measured) ~/ 4;
+      updatedRolling = prev == null
+          ? measured
+          : ((prev * 3) + measured) ~/ 4;
     }
     state = state.copyWith(
       phase: CapturePhase.done,
@@ -417,5 +414,4 @@ class CaptureProgressNotifier extends Notifier<CaptureProgress> {
 
 final captureProgressProvider =
     NotifierProvider<CaptureProgressNotifier, CaptureProgress>(
-      CaptureProgressNotifier.new,
-    );
+        CaptureProgressNotifier.new);

@@ -122,15 +122,14 @@ class FaultFeedNotifier extends AsyncNotifier<List<FaultRow>?> {
 /// refetches — and the api provider's onDispose(close) actually fires.
 final faultFeedProvider =
     AsyncNotifierProvider.autoDispose<FaultFeedNotifier, List<FaultRow>?>(
-      FaultFeedNotifier.new,
-    );
+        FaultFeedNotifier.new);
 
 /// §42.6 — one session's fault timeline (newest-first). A single page is
 /// deliberate: a session with 50+ faults has bigger problems than pagination.
 final sessionFaultsProvider = FutureProvider.autoDispose
     .family<List<FaultRow>, String>((ref, sessionId) async {
-      final api = ref.watch(faultsApiProvider);
-      if (api == null) return const <FaultRow>[];
-      final page = await api.list(limit: 50, sessionId: sessionId);
-      return page.items;
-    });
+  final api = ref.watch(faultsApiProvider);
+  if (api == null) return const <FaultRow>[];
+  final page = await api.list(limit: 50, sessionId: sessionId);
+  return page.items;
+});

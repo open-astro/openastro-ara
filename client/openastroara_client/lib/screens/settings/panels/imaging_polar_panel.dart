@@ -36,9 +36,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     // On the rig's copy as it is when the edit lands (ADR 0015).
-    Future<void> save(
-      PolarAlignSettings Function(PolarAlignSettings) change,
-    ) async {
+    Future<void> save(PolarAlignSettings Function(PolarAlignSettings) change) async {
       try {
         await ref.read(polarAlignSettingsProvider.notifier).saveKnob(change);
       } catch (e) {
@@ -98,9 +96,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           helpKey: 'img.polar.polar_aligner_auto',
           value: s.polarAlignerAuto,
           onChanged: (v) => save((x) => x.copyWith(polarAlignerAuto: v)),
-          hint: s.polarAlignerAuto
-              ? l10n.polarKnobAlignerAutoOn
-              : l10n.polarKnobAlignerAutoOff,
+          hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
         ),
         // #2048 NINA's StopTrackingWhenDone: on by default.
         SettingsSwitchRow(
@@ -108,9 +104,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           helpKey: 'img.polar.stop_tracking_when_done',
           value: s.stopTrackingWhenDone,
           onChanged: (v) => save((x) => x.copyWith(stopTrackingWhenDone: v)),
-          hint: s.stopTrackingWhenDone
-              ? l10n.polarKnobStopTrackingOn
-              : l10n.polarKnobStopTrackingOff,
+          hint: s.stopTrackingWhenDone ? l10n.polarKnobStopTrackingOn : l10n.polarKnobStopTrackingOff,
         ),
         number(
           l10n.polarKnobTurn,
@@ -150,8 +144,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           },
           onChanged: (v) {
             final now = ref.read(polarAlignSettingsProvider).value ?? s;
-            if (v != null && v != now.camera)
-              save((x) => x.copyWith(camera: v));
+            if (v != null && v != now.camera) save((x) => x.copyWith(camera: v));
           },
         ),
         // #2082 frames averaged at each point: a whole number, 1 to 5.

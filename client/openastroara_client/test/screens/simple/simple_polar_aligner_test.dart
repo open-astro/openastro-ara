@@ -60,11 +60,7 @@ class _Aligner implements PolarAlignerClient {
       throw DioException(
         requestOptions: req,
         type: DioExceptionType.badResponse,
-        response: Response(
-          requestOptions: req,
-          statusCode: 409,
-          data: {'detail': detail},
-        ),
+        response: Response(requestOptions: req, statusCode: 409, data: {'detail': detail}),
       );
     }
   }
@@ -91,58 +87,38 @@ class _Live extends PolarAlignLiveNotifier {
   void set(PolarAlignLive next) => state = next;
 }
 
-const _base = PolarAligner(
-  present: true,
-  carrier: 'switch',
-  name: 'Polar base',
-  drivable: true,
-);
+const _base = PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true);
 
 /// The fine stage inside the 2′ tolerance: Verify and Done are on.
 PolarAlignLive _fine(PolarAlignerRun? run) => PolarAlignLive(
-  phase: PolarAlignStates.adjusting,
-  stage: PolarAlignStages.fine,
-  altErrorArcmin: -0.7,
-  azErrorArcmin: -1.3,
-  totalErrorArcmin: 1.5,
-  zone: 'green',
-  correction: run,
-);
+      phase: PolarAlignStates.adjusting,
+      stage: PolarAlignStages.fine,
+      altErrorArcmin: -0.7,
+      azErrorArcmin: -1.3,
+      totalErrorArcmin: 1.5,
+      zone: 'green',
+      correction: run,
+    );
 
 late _Live _liveNotifier;
 
-Future<_Aligner> _pump(
-  WidgetTester tester,
-  PolarAlignLive live, {
-  PolarAligner? device = _base,
-}) async {
+Future<_Aligner> _pump(WidgetTester tester, PolarAlignLive live, {PolarAligner? device = _base}) async {
   final aligner = _Aligner(device);
   _liveNotifier = _Live(live);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        polarAlignApiProvider.overrideWithValue(_Api()),
-        // The profile's section: the rig's copy, a 2′ tolerance (ADR 0015).
-        ...polarAlignSectionOverrides(
-          FakePolarAlignSection(
-            initial: rigPolarAlign.copyWith(targetToleranceArcmin: 2),
-            loaded: true,
-          ),
-        ),
-        polarAlignerApiProvider.overrideWithValue(aligner),
-        polarAlignLiveProvider.overrideWith(() => _liveNotifier),
-      ],
-      child: MaterialApp(
-        builder: (c, w) => MediaQuery(
-          data: MediaQuery.of(c).copyWith(disableAnimations: true),
-          child: w!,
-        ),
-        home: const Scaffold(
-          body: Center(child: SingleChildScrollView(child: SimplePolarPanel())),
-        ),
-      ),
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      polarAlignApiProvider.overrideWithValue(_Api()),
+      // The profile's section: the rig's copy, a 2′ tolerance (ADR 0015).
+      ...polarAlignSectionOverrides(
+          FakePolarAlignSection(initial: rigPolarAlign.copyWith(targetToleranceArcmin: 2), loaded: true)),
+      polarAlignerApiProvider.overrideWithValue(aligner),
+      polarAlignLiveProvider.overrideWith(() => _liveNotifier),
+    ],
+    child: MaterialApp(
+      builder: (c, w) => MediaQuery(data: MediaQuery.of(c).copyWith(disableAnimations: true), child: w!),
+      home: const Scaffold(body: Center(child: SingleChildScrollView(child: SimplePolarPanel()))),
     ),
-  );
+  ));
   await tester.pumpAndSettle();
   return aligner;
 }
@@ -151,208 +127,117 @@ Finder _key(String k) => find.byKey(Key(k));
 
 double _arrowOpacity(WidgetTester tester, String axis) {
   final opacity = find.ancestor(
-    of: find.descendant(
-      of: _key('simple-polar-turn-$axis'),
-      matching: find.byType(Icon),
-    ),
-    matching: find.byType(Opacity),
-  );
-  return opacity.evaluate().isEmpty
-      ? 1
-      : tester.widget<Opacity>(opacity).opacity;
+      of: find.descendant(of: _key('simple-polar-turn-$axis'), matching: find.byType(Icon)),
+      matching: find.byType(Opacity));
+  return opacity.evaluate().isEmpty ? 1 : tester.widget<Opacity>(opacity).opacity;
 }
 
 void main() {
-  testWidgets(
-    'the status card has a Polar Aligner line while the motors work, and Stopped after',
-    (tester) async {
-      _liveNotifier = _Live(
-        _fine(
-          const PolarAlignerRun(
-            state: 'moving',
-            axis: 'azimuth',
-            arcmin: 6.1,
-            moves: 3,
-          ),
-        ),
-      );
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            polarAlignApiProvider.overrideWithValue(_Api()),
-            polarAlignerApiProvider.overrideWithValue(_Aligner(_base)),
-            polarAlignLiveProvider.overrideWith(() => _liveNotifier),
-          ],
-          child: MaterialApp(
-            builder: (c, w) => MediaQuery(
-              data: MediaQuery.of(c).copyWith(disableAnimations: true),
-              child: w!,
-            ),
-            home: const Scaffold(
-              body: Align(
-                alignment: Alignment.topLeft,
-                child: SimpleStatusPill(),
-              ),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      expect(find.textContaining('Polar Aligner'), findsOneWidget);
-      expect(find.textContaining('Moving azimuth 6.1′ east'), findsOneWidget);
-
-      _liveNotifier.set(
-        _fine(
-          const PolarAlignerRun(state: 'stopped', cause: 'diverging', moves: 4),
-        ),
-      );
-      await tester.pump();
-      expect(find.textContaining('Moving azimuth'), findsNothing);
-      expect(find.textContaining('Stopped'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the Polar Aligner block has its own slot between Setup and Error',
-    (tester) async {
-      await _pump(tester, _fine(const PolarAlignerRun(state: 'measuring')));
-      final setup = tester.getRect(_key('simple-polar-setup'));
-      final block = tester.getRect(_key('polar-aligner-block'));
-      final error = tester.getRect(find.text('Error'));
-      expect(setup.bottom, lessThanOrEqualTo(block.top));
-      expect(block.bottom, lessThanOrEqualTo(error.top));
-    },
-  );
-
-  testWidgets(
-    'no Polar Aligner on the rig: no block, the arrows and Verify / Done as today',
-    (tester) async {
-      await _pump(tester, _fine(null), device: const PolarAligner());
-      expect(_key('polar-aligner-block'), findsNothing);
-      expect(_arrowOpacity(tester, 'alt'), 1);
-      expect(_key('simple-polar-done'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'the arrows dim while the motors run and brighten once they stop',
-    (tester) async {
-      await _pump(
-        tester,
-        _fine(
-          const PolarAlignerRun(state: 'moving', axis: 'azimuth', arcmin: 1.0),
-        ),
-      );
-      expect(_arrowOpacity(tester, 'alt'), 0.3);
-      expect(_arrowOpacity(tester, 'az'), 0.3);
-      _liveNotifier.set(
-        _fine(
-          const PolarAlignerRun(state: 'stopped', cause: 'stopped_by_user'),
-        ),
-      );
-      await tester.pumpAndSettle();
-      expect(_arrowOpacity(tester, 'az'), 1);
-    },
-  );
-
-  testWidgets(
-    'Verify and Done step aside while the motors work and come back when they converge or stop',
-    (tester) async {
-      await _pump(
-        tester,
-        _fine(const PolarAlignerRun(state: 'settling', seconds: 2)),
-      );
-      expect(_key('simple-polar-check'), findsNothing);
-      expect(_key('simple-polar-done'), findsNothing);
-      expect(_key('simple-polar-verify-caption'), findsNothing);
-      _liveNotifier.set(
-        _fine(const PolarAlignerRun(state: 'converged', moves: 4)),
-      );
-      await tester.pumpAndSettle();
-      expect(_key('simple-polar-check'), findsOneWidget);
-      expect(_key('simple-polar-done'), findsOneWidget);
-      _liveNotifier.set(
-        _fine(const PolarAlignerRun(state: 'stopped', cause: 'diverging')),
-      );
-      await tester.pumpAndSettle();
-      expect(_key('simple-polar-done'), findsOneWidget);
-    },
-  );
-
-  testWidgets("the rough stage's Done steps aside while the motors work", (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      const PolarAlignLive(
-        phase: PolarAlignStates.adjusting,
-        stage: PolarAlignStages.coarse,
-        altErrorArcmin: 0.5,
-        azErrorArcmin: 0.5,
-        totalErrorArcmin: 0.7,
-        correction: PolarAlignerRun(
-          state: 'probing',
-          axis: 'altitude',
-          arcmin: 2,
-        ),
+  testWidgets('the status card has a Polar Aligner line while the motors work, and Stopped after', (tester) async {
+    _liveNotifier = _Live(_fine(const PolarAlignerRun(state: 'moving', axis: 'azimuth', arcmin: 6.1, moves: 3)));
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        polarAlignApiProvider.overrideWithValue(_Api()),
+        polarAlignerApiProvider.overrideWithValue(_Aligner(_base)),
+        polarAlignLiveProvider.overrideWith(() => _liveNotifier),
+      ],
+      child: MaterialApp(
+        builder: (c, w) => MediaQuery(data: MediaQuery.of(c).copyWith(disableAnimations: true), child: w!),
+        home: const Scaffold(body: Align(alignment: Alignment.topLeft, child: SimpleStatusPill())),
       ),
-    );
-    expect(
-      _key('simple-polar-next-fine'),
-      findsNothing,
-      reason: 'one measurement per Start (#2082)',
-    );
-    expect(_key('simple-polar-done-rough'), findsNothing);
-    _liveNotifier.set(
-      const PolarAlignLive(
-        phase: PolarAlignStates.adjusting,
-        stage: PolarAlignStages.coarse,
-        altErrorArcmin: 0.5,
-        azErrorArcmin: 0.5,
-        totalErrorArcmin: 0.7,
-        correction: PolarAlignerRun(state: 'converged', moves: 2),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(
-      _key('simple-polar-done-rough'),
-      findsOneWidget,
-      reason: 'back once the motors rest',
-    );
+    ));
+    await tester.pump();
+    expect(find.textContaining('Polar Aligner'), findsOneWidget);
+    expect(find.textContaining('Moving azimuth 6.1′ east'), findsOneWidget);
+
+    _liveNotifier.set(_fine(const PolarAlignerRun(state: 'stopped', cause: 'diverging', moves: 4)));
+    await tester.pump();
+    expect(find.textContaining('Moving azimuth'), findsNothing);
+    expect(find.textContaining('Stopped'), findsOneWidget);
   });
 
-  testWidgets('Stop motors in the panel stops them in the routine', (
-    tester,
-  ) async {
-    final c = await _pump(
-      tester,
-      _fine(
-        const PolarAlignerRun(state: 'moving', axis: 'azimuth', arcmin: 1.0),
-      ),
-    );
+  testWidgets('the Polar Aligner block has its own slot between Setup and Error', (tester) async {
+    await _pump(tester, _fine(const PolarAlignerRun(state: 'measuring')));
+    final setup = tester.getRect(_key('simple-polar-setup'));
+    final block = tester.getRect(_key('polar-aligner-block'));
+    final error = tester.getRect(find.text('Error'));
+    expect(setup.bottom, lessThanOrEqualTo(block.top));
+    expect(block.bottom, lessThanOrEqualTo(error.top));
+  });
+
+  testWidgets('no Polar Aligner on the rig: no block, the arrows and Verify / Done as today', (tester) async {
+    await _pump(tester, _fine(null), device: const PolarAligner());
+    expect(_key('polar-aligner-block'), findsNothing);
+    expect(_arrowOpacity(tester, 'alt'), 1);
+    expect(_key('simple-polar-done'), findsOneWidget);
+  });
+
+  testWidgets('the arrows dim while the motors run and brighten once they stop', (tester) async {
+    await _pump(tester, _fine(const PolarAlignerRun(state: 'moving', axis: 'azimuth', arcmin: 1.0)));
+    expect(_arrowOpacity(tester, 'alt'), 0.3);
+    expect(_arrowOpacity(tester, 'az'), 0.3);
+    _liveNotifier.set(_fine(const PolarAlignerRun(state: 'stopped', cause: 'stopped_by_user')));
+    await tester.pumpAndSettle();
+    expect(_arrowOpacity(tester, 'az'), 1);
+  });
+
+  testWidgets('Verify and Done step aside while the motors work and come back when they converge or stop',
+      (tester) async {
+    await _pump(tester, _fine(const PolarAlignerRun(state: 'settling', seconds: 2)));
+    expect(_key('simple-polar-check'), findsNothing);
+    expect(_key('simple-polar-done'), findsNothing);
+    expect(_key('simple-polar-verify-caption'), findsNothing);
+    _liveNotifier.set(_fine(const PolarAlignerRun(state: 'converged', moves: 4)));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-check'), findsOneWidget);
+    expect(_key('simple-polar-done'), findsOneWidget);
+    _liveNotifier.set(_fine(const PolarAlignerRun(state: 'stopped', cause: 'diverging')));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-done'), findsOneWidget);
+  });
+
+  testWidgets("the rough stage's Done steps aside while the motors work", (tester) async {
+    await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          altErrorArcmin: 0.5,
+          azErrorArcmin: 0.5,
+          totalErrorArcmin: 0.7,
+          correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
+        ));
+    expect(_key('simple-polar-next-fine'), findsNothing, reason: 'one measurement per Start (#2082)');
+    expect(_key('simple-polar-done-rough'), findsNothing);
+    _liveNotifier.set(const PolarAlignLive(
+      phase: PolarAlignStates.adjusting,
+      stage: PolarAlignStages.coarse,
+      altErrorArcmin: 0.5,
+      azErrorArcmin: 0.5,
+      totalErrorArcmin: 0.7,
+      correction: PolarAlignerRun(state: 'converged', moves: 2),
+    ));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-done-rough'), findsOneWidget, reason: 'back once the motors rest');
+  });
+
+  testWidgets('Stop motors in the panel stops them in the routine', (tester) async {
+    final c = await _pump(tester, _fine(const PolarAlignerRun(state: 'moving', axis: 'azimuth', arcmin: 1.0)));
     await tester.ensureVisible(_key('polar-aligner-stop'));
     await tester.tap(_key('polar-aligner-stop'));
     await tester.pumpAndSettle();
     expect(c.calls, ['stopInRoutine']);
   });
 
-  testWidgets(
-    'a refused Resume shows the daemon\'s sentence where the panel says what failed',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _fine(
-          const PolarAlignerRun(state: 'stopped', cause: 'stopped_by_user'),
-        ),
-      );
-      c.refuse = 'the Polar Aligner is not stopped';
-      await tester.ensureVisible(_key('polar-aligner-resume'));
-      await tester.tap(_key('polar-aligner-resume'));
-      await tester.pumpAndSettle();
-      expect(c.calls, ['resumeInRoutine']);
-      expect(find.text('the Polar Aligner is not stopped'), findsOneWidget);
-    },
-  );
+  testWidgets('a refused Resume shows the daemon\'s sentence where the panel says what failed', (tester) async {
+    final c = await _pump(tester, _fine(const PolarAlignerRun(state: 'stopped', cause: 'stopped_by_user')));
+    c.refuse = 'the Polar Aligner is not stopped';
+    await tester.ensureVisible(_key('polar-aligner-resume'));
+    await tester.tap(_key('polar-aligner-resume'));
+    await tester.pumpAndSettle();
+    expect(c.calls, ['resumeInRoutine']);
+    expect(find.text('the Polar Aligner is not stopped'), findsOneWidget);
+  });
 
   testWidgets('a refused Home shows the daemon\'s sentence', (tester) async {
     final c = await _pump(tester, const PolarAlignLive());
@@ -363,18 +248,14 @@ void main() {
     expect(find.text('no Polar Aligner is connected'), findsOneWidget);
   });
 
-  testWidgets('Devices has no Polar Aligner row while the daemon finds none', (
-    tester,
-  ) async {
+  testWidgets('Devices has no Polar Aligner row while the daemon finds none', (tester) async {
     await _pumpDevices(tester, const PolarAligner());
     expect(find.byKey(const Key('simple-gear')), findsOneWidget);
     expect(find.textContaining('Polar Aligner'), findsNothing);
     expect(_key('simple-gear-polaraligner-turned-by'), findsNothing);
   });
 
-  testWidgets('Devices has a Polar Aligner row once the daemon finds one', (
-    tester,
-  ) async {
+  testWidgets('Devices has a Polar Aligner row once the daemon finds one', (tester) async {
     await _pumpDevices(tester, _base);
     expect(find.text('Polar Aligner · Polar base'), findsOneWidget);
   });

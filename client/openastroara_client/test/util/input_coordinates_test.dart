@@ -78,84 +78,59 @@ void main() {
     test('round-trips: H + M/60 + S/3600 reproduces the RA hours', () {
       const raDeg = 233.7361;
       final c = inputCoordinatesFromDeg(raDeg, 0);
-      final hours =
-          (c['RAHours'] as int) +
+      final hours = (c['RAHours'] as int) +
           (c['RAMinutes'] as int) / 60.0 +
           (c['RASeconds'] as double) / 3600.0;
       expect(hours * 15.0, closeTo(raDeg, 1e-6));
     });
 
-    test(
-      'round-trips: signed D + M/60 + S/3600 reproduces the Dec degrees',
-      () {
-        const decDeg = -27.8664;
-        final c = inputCoordinatesFromDeg(0, decDeg);
-        // The daemon's own rule: signed degrees, minutes/seconds subtracted
-        // when NegativeDec.
-        final dd = (c['DecDegrees'] as int).toDouble();
-        final frac =
-            (c['DecMinutes'] as int) / 60.0 +
-            (c['DecSeconds'] as double) / 3600.0;
-        final daemonDec = (c['NegativeDec'] as bool) ? dd - frac : dd + frac;
-        expect(daemonDec, closeTo(decDeg, 1e-6));
-      },
-    );
+    test('round-trips: signed D + M/60 + S/3600 reproduces the Dec degrees', () {
+      const decDeg = -27.8664;
+      final c = inputCoordinatesFromDeg(0, decDeg);
+      // The daemon's own rule: signed degrees, minutes/seconds subtracted
+      // when NegativeDec.
+      final dd = (c['DecDegrees'] as int).toDouble();
+      final frac = (c['DecMinutes'] as int) / 60.0 +
+          (c['DecSeconds'] as double) / 3600.0;
+      final daemonDec = (c['NegativeDec'] as bool) ? dd - frac : dd + frac;
+      expect(daemonDec, closeTo(decDeg, 1e-6));
+    });
 
-    test(
-      'a southern target just below the equator keeps -0°xx′ via the flag',
-      () {
-        final c = inputCoordinatesFromDeg(0, -0.5);
-        expect(c['NegativeDec'], true);
-        expect(c['DecDegrees'], 0);
-        expect(c['DecMinutes'], 30);
-      },
-    );
+    test('a southern target just below the equator keeps -0°xx′ via the flag', () {
+      final c = inputCoordinatesFromDeg(0, -0.5);
+      expect(c['NegativeDec'], true);
+      expect(c['DecDegrees'], 0);
+      expect(c['DecMinutes'], 30);
+    });
   });
 
   group('degFromInputCoordinates', () {
-    test(
-      'reads both the signed (NINA) and the legacy unsigned-plus-flag shapes',
-      () {
-        const signed = {
-          'RAHours': 5,
-          'RAMinutes': 30,
-          'RASeconds': 0.0,
-          'NegativeDec': true,
-          'DecDegrees': -5,
-          'DecMinutes': 24,
-          'DecSeconds': 0.0,
-        };
-        const legacy = {
-          'RAHours': 5,
-          'RAMinutes': 30,
-          'RASeconds': 0.0,
-          'NegativeDec': true,
-          'DecDegrees': 5,
-          'DecMinutes': 24,
-          'DecSeconds': 0.0,
-        };
-        expect(degFromInputCoordinates(signed)!.decDeg, closeTo(-5.4, 1e-9));
-        expect(degFromInputCoordinates(legacy)!.decDeg, closeTo(-5.4, 1e-9));
-        expect(degFromInputCoordinates(signed)!.raDeg, closeTo(82.5, 1e-9));
-      },
-    );
+    test('reads both the signed (NINA) and the legacy unsigned-plus-flag shapes', () {
+      const signed = {
+        'RAHours': 5, 'RAMinutes': 30, 'RASeconds': 0.0,
+        'NegativeDec': true, 'DecDegrees': -5, 'DecMinutes': 24, 'DecSeconds': 0.0,
+      };
+      const legacy = {
+        'RAHours': 5, 'RAMinutes': 30, 'RASeconds': 0.0,
+        'NegativeDec': true, 'DecDegrees': 5, 'DecMinutes': 24, 'DecSeconds': 0.0,
+      };
+      expect(degFromInputCoordinates(signed)!.decDeg, closeTo(-5.4, 1e-9));
+      expect(degFromInputCoordinates(legacy)!.decDeg, closeTo(-5.4, 1e-9));
+      expect(degFromInputCoordinates(signed)!.raDeg, closeTo(82.5, 1e-9));
+    });
 
     test('inverts inputCoordinatesFromDeg — RA back in DEGREES, not hours', () {
       // M42: the doubly-important case (negative dec + RA where an hours/degrees
       // mixup would be silent — 83.822° = 5.59 h, both "plausible" numbers).
       const raDeg = 83.822, decDeg = -5.391;
-      final pos = degFromInputCoordinates(
-        inputCoordinatesFromDeg(raDeg, decDeg),
-      );
+      final pos = degFromInputCoordinates(inputCoordinatesFromDeg(raDeg, decDeg));
       expect(pos, isNotNull);
       expect(pos!.raDeg, closeTo(raDeg, 1e-6));
       expect(pos.decDeg, closeTo(decDeg, 1e-6));
     });
 
     test('a positive-dec position round-trips too', () {
-      final pos = degFromInputCoordinates(
-        inputCoordinatesFromDeg(192.85948, 27.12825),
-      );
+      final pos = degFromInputCoordinates(inputCoordinatesFromDeg(192.85948, 27.12825));
       expect(pos!.raDeg, closeTo(192.85948, 1e-6));
       expect(pos.decDeg, closeTo(27.12825, 1e-6));
     });
@@ -163,11 +138,8 @@ void main() {
     test('non-map / missing-field shapes return null instead of throwing', () {
       expect(degFromInputCoordinates(null), isNull);
       expect(degFromInputCoordinates('not a map'), isNull);
-      expect(
-        degFromInputCoordinates(<String, dynamic>{'RAHours': 5}),
-        isNull,
-        reason: 'partial coordinate maps carry no trustworthy position',
-      );
+      expect(degFromInputCoordinates(<String, dynamic>{'RAHours': 5}), isNull,
+          reason: 'partial coordinate maps carry no trustworthy position');
     });
   });
 }

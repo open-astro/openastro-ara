@@ -61,11 +61,11 @@ class SessionPlanTarget {
 
   /// The J2000 centre the run should slew to: the object plus the offset.
   ({double raDeg, double decDeg}) get aim => tanToRaDec(
-    aimOffsetArcmin.$1 / 60,
-    aimOffsetArcmin.$2 / 60,
-    object.raDeg,
-    object.decDeg,
-  );
+        aimOffsetArcmin.$1 / 60,
+        aimOffsetArcmin.$2 / 60,
+        object.raDeg,
+        object.decDeg,
+      );
 
   /// Subs each panel gets when the slot is split evenly across the grid,
   /// charging one more per-target setup for every extra panel. Null when
@@ -77,24 +77,20 @@ class SessionPlanTarget {
     return overheads.subsIn(hours / mosaic.panelCount, subS);
   }
 
-  SessionPlanTarget _copy({
-    double? positionAngleDeg,
-    bool clearRotation = false,
-    MosaicGrid? mosaic,
-    (double, double)? aimOffsetArcmin,
-  }) => SessionPlanTarget(
-    object: object,
-    startUtc: startUtc,
-    endUtc: endUtc,
-    hours: hours,
-    subSeconds: subSeconds,
-    subCount: subCount,
-    positionAngleDeg: clearRotation
-        ? null
-        : (positionAngleDeg ?? this.positionAngleDeg),
-    mosaic: mosaic ?? this.mosaic,
-    aimOffsetArcmin: aimOffsetArcmin ?? this.aimOffsetArcmin,
-  );
+  SessionPlanTarget _copy({double? positionAngleDeg, bool clearRotation = false,
+          MosaicGrid? mosaic, (double, double)? aimOffsetArcmin}) =>
+      SessionPlanTarget(
+        object: object,
+        startUtc: startUtc,
+        endUtc: endUtc,
+        hours: hours,
+        subSeconds: subSeconds,
+        subCount: subCount,
+        positionAngleDeg:
+            clearRotation ? null : (positionAngleDeg ?? this.positionAngleDeg),
+        mosaic: mosaic ?? this.mosaic,
+        aimOffsetArcmin: aimOffsetArcmin ?? this.aimOffsetArcmin,
+      );
 
   SessionPlanTarget withRotation(double? deg) =>
       _copy(positionAngleDeg: deg, clearRotation: deg == null);
@@ -139,8 +135,7 @@ class SessionOverheads {
       budget -= (sliceHours / autofocusEveryHours).floor() * autofocusRunSec;
     }
     if (budget <= 0) return 0;
-    final perSub =
-        subSeconds +
+    final perSub = subSeconds +
         (ditherEnabled && ditherEveryNFrames > 0
             ? ditherSettleSec / ditherEveryNFrames
             : 0.0);
@@ -155,11 +150,8 @@ class SessionPlan {
   /// Why the plan came out this way (or empty), e.g. a second target being
   /// skipped because nothing else overlaps the window usefully.
   final List<String> notes;
-  const SessionPlan({
-    required this.targets,
-    required this.plannedHours,
-    this.notes = const [],
-  });
+  const SessionPlan(
+      {required this.targets, required this.plannedHours, this.notes = const []});
 }
 
 // Mirror of the ranker's hours term so an allocated slice is valued the same
@@ -195,12 +187,7 @@ double? _tierHoursToGo(TonightSkyObject o, Map<String, double> banked) {
 /// figure the tier budget and the banked hours are in. Falls back to the clock
 /// span when the object has no sub length yet. The ONE formula the value
 /// function and the tier note share.
-double integrationHoursOf(
-  TonightSkyObject o,
-  double hours,
-  SessionOverheads overheads, {
-  int panels = 1,
-}) {
+double integrationHoursOf(TonightSkyObject o, double hours, SessionOverheads overheads, {int panels = 1}) {
   final n = panels < 1 ? 1 : panels;
   final subS = o.optimalSubS;
   if (subS == null || subS <= 0) return hours / n;
@@ -215,15 +202,12 @@ double _valueOf(
 ]) {
   final base = o.hoursFreeScore ?? ((o.score ?? 0) * 0.75);
   final toGo = _tierHoursToGo(o, banked);
-  final hoursFactor = toGo != null && toGo <= 0
-      ? _tierCompleteHoursFactor
-      : 1.0;
+  final hoursFactor = toGo != null && toGo <= 0 ? _tierCompleteHoursFactor : 1.0;
   // Completion is judged on INTEGRATION, as the budget and the banked hours
   // are: a 2 h slice with 120 s subs and the night's overheads integrates
   // about 1.7 h, so it does not finish a tier 2 h short.
   final completion = toGo != null && toGo > 0
-      ? _tierCompletionBonus *
-            (integrationHoursOf(o, hours, overheads) / toGo).clamp(0.0, 1.0)
+      ? _tierCompletionBonus * (integrationHoursOf(o, hours, overheads) / toGo).clamp(0.0, 1.0)
       : 0.0;
   // CONCAVE hours value (sqrt, saturating at 6 h): integration has diminishing
   // returns, and concavity is what makes the greedy allocator split windows
@@ -234,31 +218,22 @@ double _valueOf(
       completion +
       hoursFactor *
           _hoursWeight *
-          math.sqrt(
-            hours.clamp(0, _hoursSaturationHours) / _hoursSaturationHours,
-          );
+          math.sqrt(hours.clamp(0, _hoursSaturationHours) /
+              _hoursSaturationHours);
 }
 
 /// The P5 notes for a planned slice, or null: the tier it completes tonight
 /// (per panel, when the slice is a mosaic), or the tier that was already
 /// complete before the night began.
-String? tierNoteFor(
-  SessionPlanTarget t,
-  Map<String, double> banked, [
-  SessionOverheads overheads = const SessionOverheads(),
-]) {
+String? tierNoteFor(SessionPlanTarget t, Map<String, double> banked,
+    [SessionOverheads overheads = const SessionOverheads()]) {
   final toGo = _tierHoursToGo(t.object, banked);
   if (toGo == null) return null;
   if (toGo <= 0) {
     return '${t.object.name}: full-structure tier already complete — '
         'diminishing returns; a new target would gain more from these hours.';
   }
-  final integration = integrationHoursOf(
-    t.object,
-    t.hours,
-    overheads,
-    panels: t.mosaic.panelCount,
-  );
+  final integration = integrationHoursOf(t.object, t.hours, overheads, panels: t.mosaic.panelCount);
   if (integration >= toGo - 1e-9) {
     return '${t.object.name}: this slice completes its full-structure tier.';
   }
@@ -271,10 +246,7 @@ bool _isTierNoteFor(String note, SessionPlanTarget t) =>
     note.startsWith('${t.object.name}: full-structure tier already complete');
 
 (DateTime, DateTime)? _usable(
-  TonightSkyObject o,
-  DateTime winStart,
-  DateTime winEnd,
-) {
+    TonightSkyObject o, DateTime winStart, DateTime winEnd) {
   final s = o.windowStartUtc;
   final e = o.windowEndUtc;
   if (s == null || e == null) return null;
@@ -287,12 +259,8 @@ bool _isTierNoteFor(String note, SessionPlanTarget t) =>
 double _hoursBetween(DateTime a, DateTime b) =>
     b.difference(a).inMinutes / 60.0;
 
-SessionPlanTarget _slice(
-  TonightSkyObject o,
-  DateTime s,
-  DateTime e,
-  SessionOverheads overheads,
-) {
+SessionPlanTarget _slice(TonightSkyObject o, DateTime s, DateTime e,
+    SessionOverheads overheads) {
   final hours = _hoursBetween(s, e);
   final subS = o.optimalSubS;
   return SessionPlanTarget(
@@ -301,7 +269,8 @@ SessionPlanTarget _slice(
     endUtc: e,
     hours: hours,
     subSeconds: subS,
-    subCount: subS != null && subS > 0 ? overheads.subsIn(hours, subS) : null,
+    subCount:
+        subS != null && subS > 0 ? overheads.subsIn(hours, subS) : null,
   );
 }
 
@@ -326,10 +295,7 @@ SessionPlan planImagingSession({
   final winEnd = windowEndUtc.toUtc();
   if (!winEnd.isAfter(winStart)) {
     return const SessionPlan(
-      targets: [],
-      plannedHours: 0,
-      notes: ['The window ends before it starts.'],
-    );
+        targets: [], plannedHours: 0, notes: ['The window ends before it starts.']);
   }
 
   // Candidates that overlap the window at all, with their usable interval.
@@ -339,14 +305,10 @@ SessionPlan planImagingSession({
         (o, u.$1, u.$2),
   ];
   if (candidates.isEmpty) {
-    return const SessionPlan(
-      targets: [],
-      plannedHours: 0,
-      notes: [
-        'Nothing on tonight\'s list is shootable inside that window — widen it '
-            'or check the list\'s dark windows.',
-      ],
-    );
+    return const SessionPlan(targets: [], plannedHours: 0, notes: [
+      'Nothing on tonight\'s list is shootable inside that window — widen it '
+          'or check the list\'s dark windows.'
+    ]);
   }
 
   // Best single target = max value over its full usable interval.
@@ -367,7 +329,7 @@ SessionPlan planImagingSession({
   }
 
   var slices = <SessionPlanTarget>[
-    _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads),
+    _slice(bestSingle!.$1, bestSingle.$2, bestSingle.$3, overheads)
   ];
   final notes = <String>[];
   final wanted = targetCount.clamp(1, 4);
@@ -377,28 +339,24 @@ SessionPlan planImagingSession({
   // (both orders, 15-min grid, each piece ≥ 45 min) and apply it. Stops with a
   // note when no split improves total value — the window is honestly too short
   // for another worthwhile target.
-  final usableOf = {for (final c in candidates) c.$1.id: (c.$2, c.$3)};
+  final usableOf = {
+    for (final c in candidates) c.$1.id: (c.$2, c.$3),
+  };
   while (slices.length < wanted) {
     final used = {for (final t in slices) t.object.id};
     List<SessionPlanTarget>? bestSlices;
     var bestGain = 0.0;
     for (var i = 0; i < slices.length; i++) {
       final s0 = slices[i];
-      final currentValue = _valueOf(
-        s0.object,
-        s0.hours,
-        bankedHours,
-        overheads,
-      );
+      final currentValue = _valueOf(s0.object, s0.hours, bankedHours, overheads);
       final own = usableOf[s0.object.id]!;
       // The region this split may occupy: the slice itself PLUS any
       // unallocated window on either side (up to the neighbouring slices) —
       // the initial best-single slice covers only ITS usable interval, and a
       // candidate that rises/sets outside it must be able to take the gap.
       final lowerBound = i == 0 ? winStart : slices[i - 1].endUtc;
-      final upperBound = i == slices.length - 1
-          ? winEnd
-          : slices[i + 1].startUtc;
+      final upperBound =
+          i == slices.length - 1 ? winEnd : slices[i + 1].startUtc;
       for (final c in candidates.take(12)) {
         if (used.contains(c.$1.id)) continue;
         for (final existingFirst in [true, false]) {
@@ -419,17 +377,15 @@ SessionPlan planImagingSession({
           final s2end = upperBound.isBefore(secondUsable.$2)
               ? upperBound
               : secondUsable.$2;
-          for (
-            var t = lo;
-            !t.isAfter(hiFirst);
-            t = t.add(const Duration(minutes: 15))
-          ) {
+          for (var t = lo;
+              !t.isAfter(hiFirst);
+              t = t.add(const Duration(minutes: 15))) {
             final h1 = _hoursBetween(lo, t);
-            final s2start = t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
+            final s2start =
+                t.isAfter(secondUsable.$1) ? t : secondUsable.$1;
             final h2 = _hoursBetween(s2start, s2end);
             if (h1 < _minSliceHours || h2 < _minSliceHours) continue;
-            final gain =
-                _valueOf(firstObj, h1, bankedHours, overheads) +
+            final gain = _valueOf(firstObj, h1, bankedHours, overheads) +
                 _valueOf(secondObj, h2, bankedHours, overheads) -
                 currentValue;
             if (gain > bestGain) {
@@ -446,20 +402,17 @@ SessionPlan planImagingSession({
       }
     }
     if (bestSlices == null) {
-      notes.add(
-        slices.length == 1
-            ? 'No second target fits ≥45 min in this window — planned one target.'
-            : 'The window supports ${slices.length} worthwhile targets — '
-                  'adding more would shortchange all of them.',
-      );
+      notes.add(slices.length == 1
+          ? 'No second target fits ≥45 min in this window — planned one target.'
+          : 'The window supports ${slices.length} worthwhile targets — '
+              'adding more would shortchange all of them.');
       break;
     }
     slices = bestSlices;
   }
   slices.sort((a, b) => a.startUtc.compareTo(b.startUtc));
   for (final t in slices) {
-    if (tierNoteFor(t, bankedHours, overheads) case final note?)
-      notes.add(note);
+    if (tierNoteFor(t, bankedHours, overheads) case final note?) notes.add(note);
   }
   return SessionPlan(
     targets: slices,
@@ -467,7 +420,6 @@ SessionPlan planImagingSession({
     notes: notes,
   );
 }
-
 /// Alternatives the user could swap into [slice]: every ranked object that is
 /// shootable for at least [minHours] of the slice's interval and isn't already
 /// in [plan]. Ranked order is preserved (best first).
@@ -481,8 +433,10 @@ List<TonightSkyObject> swapCandidates({
   return [
     for (final o in ranked)
       if (!used.contains(o.id))
-        if (_usable(o, slice.startUtc, slice.endUtc)
-            case final (DateTime, DateTime) u)
+        if (_usable(o, slice.startUtc, slice.endUtc) case final (
+              DateTime,
+              DateTime
+            ) u)
           if (_hoursBetween(u.$1, u.$2) >= minHours) o,
   ];
 }
@@ -515,8 +469,7 @@ SessionPlan swapPlanTarget(
       '${fresh.hours.toStringAsFixed(1)} h of that slot — trimmed to its dark window.',
     );
   }
-  if (tierNoteFor(fresh, bankedHours, overheads) case final note?)
-    notes.add(note);
+  if (tierNoteFor(fresh, bankedHours, overheads) case final note?) notes.add(note);
   final targets = [...plan.targets]..[index] = fresh;
   return SessionPlan(
     targets: targets,
@@ -531,13 +484,9 @@ SessionPlan swapPlanTarget(
 SessionPlan setPlanRotation(SessionPlan plan, int index, double? deg) {
   if (index < 0 || index >= plan.targets.length) return plan;
   final norm = deg == null ? null : ((deg.round() % 360) + 360) % 360.0;
-  final targets = [...plan.targets]
-    ..[index] = plan.targets[index].withRotation(norm);
+  final targets = [...plan.targets]..[index] = plan.targets[index].withRotation(norm);
   return SessionPlan(
-    targets: targets,
-    plannedHours: plan.plannedHours,
-    notes: plan.notes,
-  );
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }
 
 /// Set the mosaic grid on [plan]'s slice [index] (cols/rows clamped 1–8,
@@ -566,32 +515,20 @@ SessionPlan setPlanMosaic(
       if (!_isTierNoteFor(n, updated)) n,
     ?tierNoteFor(updated, bankedHours, overheads),
   ];
-  return SessionPlan(
-    targets: targets,
-    plannedHours: plan.plannedHours,
-    notes: notes,
-  );
+  return SessionPlan(targets: targets, plannedHours: plan.plannedHours, notes: notes);
 }
 
 /// Aim [plan]'s slice [index] at a tangent-plane offset (arcmin, +east/+north)
 /// from the catalogue centre; (0, 0) recentres on the object. Clamped to
 /// ±[maxArcmin] per axis so a runaway drag can't aim at another field.
-SessionPlan setPlanAim(
-  SessionPlan plan,
-  int index,
-  (double, double) offsetArcmin, {
-  double maxArcmin = 240,
-}) {
+SessionPlan setPlanAim(SessionPlan plan, int index, (double, double) offsetArcmin,
+    {double maxArcmin = 240}) {
   if (index < 0 || index >= plan.targets.length) return plan;
   final clamped = (
     offsetArcmin.$1.clamp(-maxArcmin, maxArcmin).toDouble(),
     offsetArcmin.$2.clamp(-maxArcmin, maxArcmin).toDouble(),
   );
-  final targets = [...plan.targets]
-    ..[index] = plan.targets[index].withAim(clamped);
+  final targets = [...plan.targets]..[index] = plan.targets[index].withAim(clamped);
   return SessionPlan(
-    targets: targets,
-    plannedHours: plan.plannedHours,
-    notes: plan.notes,
-  );
+      targets: targets, plannedHours: plan.plannedHours, notes: plan.notes);
 }

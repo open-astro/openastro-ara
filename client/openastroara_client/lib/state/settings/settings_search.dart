@@ -96,18 +96,7 @@ const Map<String, List<String>> _panelKeywords = {
     'smart focus',
     'hocus focus',
   ],
-  'eq.filterwheel': [
-    'filter',
-    'slot',
-    'L',
-    'R',
-    'G',
-    'B',
-    'Ha',
-    'OIII',
-    'SII',
-    'efw',
-  ],
+  'eq.filterwheel': ['filter', 'slot', 'L', 'R', 'G', 'B', 'Ha', 'OIII', 'SII', 'efw'],
   'eq.rotator': ['angle', 'rotate', 'reverse'],
   'eq.guider': [
     'phd2',
@@ -297,34 +286,13 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
     tabIndex: kPlanningTabIndex,
     label: 'Go to Planning',
     groupLabel: 'Navigate',
-    keywords: [
-      'planning',
-      'tonight',
-      'sky atlas',
-      'targets',
-      'framing',
-      'planetarium',
-      'what to shoot',
-    ],
+    keywords: ['planning', 'tonight', 'sky atlas', 'targets', 'framing', 'planetarium', 'what to shoot'],
   ),
   SettingsSearchEntry(
     tabIndex: kSetupTabIndex,
     label: 'Go to Checklist',
     groupLabel: 'Navigate',
-    keywords: [
-      'setup',
-      'tonight',
-      'checklist',
-      'polar align',
-      'polar alignment',
-      'connect equipment',
-      'calibration',
-      'focusing',
-      'focus',
-      'autofocus',
-      'v-curve',
-      'guide camera focus',
-    ],
+    keywords: ['setup', 'tonight', 'checklist', 'polar align', 'polar alignment', 'connect equipment', 'calibration', 'focusing', 'focus', 'autofocus', 'v-curve', 'guide camera focus'],
   ),
   SettingsSearchEntry(
     tabIndex: kRunTabIndex,
@@ -336,15 +304,7 @@ const List<SettingsSearchEntry> _navEntries = <SettingsSearchEntry>[
     tabIndex: kLiveTabIndex,
     label: 'Go to Live',
     groupLabel: 'Navigate',
-    keywords: [
-      'live',
-      'imaging',
-      'camera',
-      'live view',
-      'capture',
-      'exposure',
-      'preview',
-    ],
+    keywords: ['live', 'imaging', 'camera', 'live view', 'capture', 'exposure', 'preview'],
   ),
   SettingsSearchEntry(
     tabIndex: kOptionsTabIndex,
@@ -361,81 +321,38 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     actionId: 'action.library',
     label: 'Open Image Library',
     groupLabel: 'Actions',
-    keywords: [
-      'image library',
-      'library',
-      'photos',
-      'frames',
-      'gallery',
-      'fits',
-      'catalog',
-    ],
+    keywords: ['image library', 'library', 'photos', 'frames', 'gallery', 'fits', 'catalog'],
   ),
   SettingsSearchEntry(
     actionId: 'action.calibration',
     label: 'Open Calibration',
     groupLabel: 'Actions',
-    keywords: [
-      'calibration',
-      'darks',
-      'flats',
-      'matching flats',
-      'dark library',
-      'defect map',
-    ],
+    keywords: ['calibration', 'darks', 'flats', 'matching flats', 'dark library', 'defect map'],
   ),
   SettingsSearchEntry(
     actionId: 'action.stats',
     label: 'Open Stats',
     groupLabel: 'Actions',
-    keywords: [
-      'stats',
-      'statistics',
-      'dashboard',
-      'insights',
-      'best frames',
-      'achievements',
-      'streak',
-    ],
+    keywords: ['stats', 'statistics', 'dashboard', 'insights', 'best frames', 'achievements', 'streak'],
   ),
   SettingsSearchEntry(
     actionId: 'action.backup',
     label: 'Back up & restore…',
     groupLabel: 'Actions',
-    keywords: [
-      'backup',
-      'restore',
-      'snapshot',
-      'export profile',
-      'save settings',
-    ],
+    keywords: ['backup', 'restore', 'snapshot', 'export profile', 'save settings'],
   ),
   SettingsSearchEntry(
     actionId: 'action.notifications',
     label: 'Read your notifications',
     groupLabel: 'Actions',
-    keywords: [
-      'notifications',
-      'inbox',
-      'alerts',
-      'what happened',
-      'unread',
-      'messages',
-      'overnight',
-    ],
+    keywords: ['notifications', 'inbox', 'alerts', 'what happened', 'unread',
+        'messages', 'overnight'],
   ),
   SettingsSearchEntry(
     actionId: 'action.wizard',
     label: 'Run profile wizard',
     groupLabel: 'Actions',
-    keywords: [
-      'wizard',
-      'setup',
-      'walkthrough',
-      'new profile',
-      'first run',
-      'onboarding',
-    ],
+    keywords: ['wizard', 'setup', 'walkthrough', 'new profile', 'first run', 'onboarding'],
   ),
   // #1154 item 13 — the Run tab's shortcuts, discoverable from ⌘K. The labels
   // carry the key so the palette doubles as the cheat sheet.
@@ -444,32 +361,14 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     label: 'Run or resume the sequence (⌘R)',
     groupLabel: 'Actions',
     description: 'Starts the selected sequence, or resumes it when paused — the same pre-flight and resume choices as the Run button.',
-    keywords: [
-      'run',
-      'start',
-      'resume',
-      'go',
-      'begin',
-      'sequence',
-      'cmd r',
-      'ctrl r',
-      'shortcut',
-    ],
+    keywords: ['run', 'start', 'resume', 'go', 'begin', 'sequence', 'cmd r', 'ctrl r', 'shortcut'],
   ),
   SettingsSearchEntry(
     actionId: 'action.run.pause',
     label: 'Pause or resume the sequence (Space)',
     groupLabel: 'Actions',
     description: 'Pauses a running sequence (a frame or flat set in progress finishes first), or resumes a paused one.',
-    keywords: [
-      'pause',
-      'resume',
-      'hold',
-      'space',
-      'sequence',
-      'running',
-      'shortcut',
-    ],
+    keywords: ['pause', 'resume', 'hold', 'space', 'sequence', 'running', 'shortcut'],
   ),
   // #1154 item 11 — the session planner, from anywhere.
   SettingsSearchEntry(
@@ -477,15 +376,7 @@ const List<SettingsSearchEntry> _actionEntries = <SettingsSearchEntry>[
     label: 'Plan tonight…',
     groupLabel: 'Actions',
     description: 'Opens the session planner: tonight\'s best targets and times, ready to send to a run.',
-    keywords: [
-      'plan',
-      'planner',
-      'tonight',
-      'session',
-      'what to shoot',
-      'targets',
-      'schedule',
-    ],
+    keywords: ['plan', 'planner', 'tonight', 'session', 'what to shoot', 'targets', 'schedule'],
   ),
 ];
 
@@ -496,14 +387,7 @@ const List<SettingsSearchEntry> _equipmentActionEntries = <SettingsSearchEntry>[
     actionId: 'action.mount.park',
     label: 'Park the mount',
     groupLabel: 'Equipment',
-    keywords: [
-      'park',
-      'mount',
-      'telescope',
-      'stow',
-      'home position',
-      'end of night',
-    ],
+    keywords: ['park', 'mount', 'telescope', 'stow', 'home position', 'end of night'],
   ),
   SettingsSearchEntry(
     actionId: 'action.mount.unpark',
@@ -533,15 +417,7 @@ const List<SettingsSearchEntry> _equipmentActionEntries = <SettingsSearchEntry>[
     actionId: 'action.camera.cooler_off',
     label: 'Switch the camera cooler off',
     groupLabel: 'Equipment',
-    keywords: [
-      'cooler',
-      'warm',
-      'warm up',
-      'camera',
-      'tec',
-      'off',
-      'end of night',
-    ],
+    keywords: ['cooler', 'warm', 'warm up', 'camera', 'tec', 'off', 'end of night'],
   ),
 ];
 
@@ -561,24 +437,14 @@ List<SettingsSearchEntry> templateEntries(Iterable<String> templateNames) => [
 ];
 
 /// #1170 — "Go to `<target>`" for each Tonight's Sky row (id, name, type).
-List<SettingsSearchEntry> targetEntries(
-  Iterable<(String id, String name, String type)> targets,
-) => [
+List<SettingsSearchEntry> targetEntries(Iterable<(String id, String name, String type)> targets) => [
   for (final (id, name, type) in targets)
     SettingsSearchEntry(
       actionId: '$gotoActionPrefix$id',
       label: 'Go to $name',
       groupLabel: "Tonight's Sky",
       description: type,
-      keywords: [
-        'go to',
-        'target',
-        'frame',
-        'centre',
-        'center',
-        name.toLowerCase(),
-        type.toLowerCase(),
-      ],
+      keywords: ['go to', 'target', 'frame', 'centre', 'center', name.toLowerCase(), type.toLowerCase()],
     ),
 ];
 
@@ -618,46 +484,40 @@ List<SettingsSearchEntry> buildSearchIndex({
     for (final panel in group.panels) {
       // Companion Mode has no Experimental toggle to find.
       if (companion && panel.id == 'app.experimental') continue;
-      entries.add(
-        SettingsSearchEntry(
-          panelId: panel.id,
-          label: panel.label,
-          groupLabel: group.label,
-          keywords: _panelKeywords[panel.id] ?? const <String>[],
-        ),
-      );
+      entries.add(SettingsSearchEntry(
+        panelId: panel.id,
+        label: panel.label,
+        groupLabel: group.label,
+        keywords: _panelKeywords[panel.id] ?? const <String>[],
+      ));
     }
   }
   // 2. Index individual settings.
   for (final s in settingsRegistry) {
     // #2036 — Advanced Mode has no Advanced switch to find.
     if (!simple && s.id == 'app.settings.advanced') continue;
-    entries.add(
-      SettingsSearchEntry(
-        settingId: s.id,
-        label: s.label,
-        groupLabel: s.path.join(' › '),
-        keywords: s.keywords,
-        description: s.description,
-        relatedSettings: s.relatedSettings,
-        // Map setting to its parent panel if possible for jumping.
-        panelId: _mapSettingToPanel(s),
-      ),
-    );
+    entries.add(SettingsSearchEntry(
+      settingId: s.id,
+      label: s.label,
+      groupLabel: s.path.join(' › '),
+      keywords: s.keywords,
+      description: s.description,
+      relatedSettings: s.relatedSettings,
+      // Map setting to its parent panel if possible for jumping.
+      panelId: _mapSettingToPanel(s),
+    ));
   }
   // 3. §68.4 — index help entries as informational hits. The body doubles as
   // the description so a phrase from the help text itself still matches (the
   // lowest-score tier, same as setting descriptions).
   for (final h in helpRegistry.values) {
-    entries.add(
-      SettingsSearchEntry(
-        helpKey: h.key,
-        label: h.title,
-        groupLabel: 'Help',
-        keywords: h.keywords,
-        description: h.body,
-      ),
-    );
+    entries.add(SettingsSearchEntry(
+      helpKey: h.key,
+      label: h.title,
+      groupLabel: 'Help',
+      keywords: h.keywords,
+      description: h.body,
+    ));
   }
   return entries;
 }

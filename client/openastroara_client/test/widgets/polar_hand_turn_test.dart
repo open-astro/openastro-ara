@@ -11,7 +11,6 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 import 'package:openastroara/state/settings/polar_align_settings_state.dart';
-
 import '../support/polar_align_section.dart';
 
 /// #2083 — NINA parity on the polar-align screens: the hand-turn run's prompt,

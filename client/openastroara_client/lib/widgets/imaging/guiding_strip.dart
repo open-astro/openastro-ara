@@ -36,8 +36,7 @@ class GuidingStripExpandedNotifier extends Notifier<bool> {
 
 final guidingStripExpandedProvider =
     NotifierProvider<GuidingStripExpandedNotifier, bool>(
-      GuidingStripExpandedNotifier.new,
-    );
+        GuidingStripExpandedNotifier.new);
 
 /// §63.18 live guiding — the strip along the BOTTOM of the Live tab, built to
 /// behave like PHD2's graph window (the guider IS PHD2): a scrolling RA / Dec
@@ -87,10 +86,8 @@ class GuidingStrip extends ConsumerWidget {
     final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     // Client-side arcsec/px from the §63.5 guide train — the fallback when
     // the daemon has not reported the guider's own pixel scale yet.
-    final fallbackScale = guiderArcsecPerPixel(
-      phd2.guideFocalLength,
-      phd2.guidePixelSize,
-    );
+    final fallbackScale =
+        guiderArcsecPerPixel(phd2.guideFocalLength, phd2.guidePixelSize);
     final model = GuideGraphModel(
       steps: steps,
       markers: markers,
@@ -116,33 +113,27 @@ class GuidingStrip extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               child: Row(
                 children: [
-                  Icon(
-                    expanded ? Icons.expand_more : Icons.chevron_right,
-                    size: 18,
-                    color: AraColors.textSecondary,
-                  ),
+                  Icon(expanded ? Icons.expand_more : Icons.chevron_right,
+                      size: 18, color: AraColors.textSecondary),
                   const SizedBox(width: 4),
-                  const Icon(
-                    Icons.track_changes,
-                    size: 16,
-                    color: AraColors.textSecondary,
-                  ),
+                  const Icon(Icons.track_changes,
+                      size: 16, color: AraColors.textSecondary),
                   const SizedBox(width: 6),
-                  Text(
-                    'Guiding',
-                    style: Theme.of(context).textTheme.titleSmall,
-                  ),
+                  Text('Guiding',
+                      style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(width: 12),
                   Text(
                     stateLabel(context.l10n, status),
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: _stateColor(status)),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: _stateColor(status),
+                        ),
                   ),
                   const SizedBox(width: 12),
                   Text(
                     'RMS ${fmt(stats.rmsTotal, model.unitSuffix)}',
-                    style: Theme.of(context).textTheme.bodySmall
-                        ?.copyWith(color: AraColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
                   ),
                   if (paResidual != null && (status?.isConnected ?? false)) ...[
                     const SizedBox(width: 12),
@@ -156,10 +147,7 @@ class GuidingStrip extends ConsumerWidget {
                   if (expanded) ...[
                     const _LegendDot(color: AraColors.accentInfo, label: 'RA'),
                     const SizedBox(width: 10),
-                    const _LegendDot(
-                      color: AraColors.accentError,
-                      label: 'Dec',
-                    ),
+                    const _LegendDot(color: AraColors.accentError, label: 'Dec'),
                     const SizedBox(width: 8),
                   ],
                   if (status?.isConnected ?? false) ...[
@@ -169,21 +157,15 @@ class GuidingStrip extends ConsumerWidget {
                     key: const Key('guide-camera-button'),
                     tooltip: 'Guide camera…',
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.camera_outlined,
-                      size: 16,
-                      color: AraColors.textSecondary,
-                    ),
+                    icon: const Icon(Icons.camera_outlined,
+                        size: 16, color: AraColors.textSecondary),
                     onPressed: () => showGuideCameraDialog(context),
                   ),
                   IconButton(
                     tooltip: 'Tune guiding…',
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(
-                      Icons.tune,
-                      size: 16,
-                      color: AraColors.textSecondary,
-                    ),
+                    icon: const Icon(Icons.tune,
+                        size: 16, color: AraColors.textSecondary),
                     onPressed: () => showGuidingTuneDialog(context),
                   ),
                 ],
@@ -212,7 +194,10 @@ class GuidingStrip extends ConsumerWidget {
                     ),
                   ),
                   const VerticalDivider(width: 1, color: AraColors.border),
-                  SizedBox(width: 260, child: _StatsColumn(model: model)),
+                  SizedBox(
+                    width: 260,
+                    child: _StatsColumn(model: model),
+                  ),
                 ],
               ),
             ),
@@ -230,9 +215,7 @@ class GuidingStrip extends ConsumerWidget {
     // The leg and step while the guider calibrates — its own page only says
     // "guiding" for the same minutes (2026-10-16).
     final base = guiderRuntimeText(l, status.runtimeState).toLowerCase();
-    final leg = status.runtimeState == GuiderRuntimeState.calibrating
-        ? status.calibrationText(l)
-        : null;
+    final leg = status.runtimeState == GuiderRuntimeState.calibrating ? status.calibrationText(l) : null;
     return leg == null ? base : '$base · $leg';
   }
 
@@ -244,8 +227,7 @@ class GuidingStrip extends ConsumerWidget {
       case GuiderRuntimeState.guiding:
         return AraColors.accentConnected;
       case GuiderRuntimeState.starLost:
-        return AraColors
-            .accentBusy; // a warning: still looking (DESIGN.md status rule)
+        return AraColors.accentBusy; // a warning: still looking (DESIGN.md status rule)
       case GuiderRuntimeState.calibrating:
       case GuiderRuntimeState.dithering:
       case GuiderRuntimeState.settling:
@@ -276,9 +258,9 @@ class GuideGraphModel {
     required this.markers,
     required this.settings,
     required this.fallbackScale,
-  }) : visible = steps.length > settings.xRange
-           ? steps.sublist(steps.length - settings.xRange)
-           : steps {
+  })  : visible = steps.length > settings.xRange
+            ? steps.sublist(steps.length - settings.xRange)
+            : steps {
     scale = _reportedScale(steps) ?? fallbackScale;
     inArcsec = switch (settings.unit) {
       GuideGraphUnit.arcsec => true,
@@ -291,9 +273,7 @@ class GuideGraphModel {
     // otherwise one dither reads as 5″ RMS and pins the auto y range at ±16″
     // for the next 100 frames. Ara's choice: PHD2's own graph counts them.
     stats = GuideGraphStats.compute(
-      visible.where((s) => !isSettling(s.at)).toList(growable: false),
-      pick,
-    );
+        visible.where((s) => !isSettling(s.at)).toList(growable: false), pick);
     yHalfRange = settings.yHalfRange ?? _autoHalfRange();
   }
 
@@ -366,10 +346,8 @@ class GuideGraphModel {
   /// squash the trace forever.
   double _autoHalfRange() {
     final peak = math.max(stats.peakRa ?? 0, stats.peakDec ?? 0);
-    return GuideGraphSettings.yRanges.firstWhere(
-      (r) => r >= peak,
-      orElse: () => GuideGraphSettings.yRanges.last,
-    );
+    return GuideGraphSettings.yRanges.firstWhere((r) => r >= peak,
+        orElse: () => GuideGraphSettings.yRanges.last);
   }
 }
 
@@ -387,16 +365,14 @@ class _LegendDot extends StatelessWidget {
           width: 10,
           height: 3,
           decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
-          ),
+              color: color, borderRadius: BorderRadius.circular(2)),
         ),
         const SizedBox(width: 4),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: AraColors.textSecondary),
-        ),
+        Text(label,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: AraColors.textSecondary)),
       ],
     );
   }
@@ -412,7 +388,9 @@ class _ControlsRow extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final n = ref.read(guideGraphSettingsProvider.notifier);
-    final small = Theme.of(context).textTheme.labelSmall
+    final small = Theme.of(context)
+        .textTheme
+        .labelSmall
         ?.copyWith(color: AraColors.textSecondary);
     // Scrolls sideways rather than overflowing when the strip is narrow (a
     // phone in landscape, a split window) — PHD2's row simply clips.
@@ -421,94 +399,84 @@ class _ControlsRow extends ConsumerWidget {
       child: SingleChildScrollView(
         scrollDirection: Axis.horizontal,
         child: Row(
-          children: [
-            Text('x:', style: small),
-            const SizedBox(width: 2),
-            _Pick<int>(
-              value: settings.xRange,
-              items: [for (final x in GuideGraphSettings.xRanges) (x, '$x')],
-              onChanged: n.setXRange,
-            ),
-            const SizedBox(width: 10),
-            Text('y:', style: small),
-            const SizedBox(width: 2),
-            _Pick<double?>(
-              value: settings.yHalfRange,
-              items: [
-                (null, 'Auto'),
-                for (final y in GuideGraphSettings.yRanges)
-                  (
-                    y,
-                    '±${y == y.roundToDouble() ? y.toStringAsFixed(0) : y.toStringAsFixed(1)}',
-                  ),
+        children: [
+          Text('x:', style: small),
+          const SizedBox(width: 2),
+          _Pick<int>(
+            value: settings.xRange,
+            items: [
+              for (final x in GuideGraphSettings.xRanges) (x, '$x'),
+            ],
+            onChanged: n.setXRange,
+          ),
+          const SizedBox(width: 10),
+          Text('y:', style: small),
+          const SizedBox(width: 2),
+          _Pick<double?>(
+            value: settings.yHalfRange,
+            items: [
+              (null, 'Auto'),
+              for (final y in GuideGraphSettings.yRanges)
+                (y, '±${y == y.roundToDouble() ? y.toStringAsFixed(0) : y.toStringAsFixed(1)}'),
+            ],
+            onChanged: n.setYHalfRange,
+          ),
+          const SizedBox(width: 10),
+          _Pick<GuideGraphUnit>(
+            value: settings.unit,
+            items: const [
+              (GuideGraphUnit.auto, 'auto'),
+              (GuideGraphUnit.arcsec, 'arc-sec'),
+              (GuideGraphUnit.px, 'pixels'),
+            ],
+            onChanged: n.setUnit,
+          ),
+          const SizedBox(width: 10),
+          InkWell(
+            onTap: () => n.setShowCorrections(!settings.showCorrections),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  settings.showCorrections
+                      ? Icons.check_box
+                      : Icons.check_box_outline_blank,
+                  size: 14,
+                  color: AraColors.textSecondary,
+                ),
+                const SizedBox(width: 3),
+                Text('Corrections', style: small),
               ],
-              onChanged: n.setYHalfRange,
             ),
-            const SizedBox(width: 10),
-            _Pick<GuideGraphUnit>(
-              value: settings.unit,
-              items: const [
-                (GuideGraphUnit.auto, 'auto'),
-                (GuideGraphUnit.arcsec, 'arc-sec'),
-                (GuideGraphUnit.px, 'pixels'),
-              ],
-              onChanged: n.setUnit,
-            ),
-            const SizedBox(width: 10),
-            InkWell(
-              onTap: () => n.setShowCorrections(!settings.showCorrections),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    settings.showCorrections
-                        ? Icons.check_box
-                        : Icons.check_box_outline_blank,
-                    size: 14,
-                    color: AraColors.textSecondary,
-                  ),
-                  const SizedBox(width: 3),
-                  Text('Corrections', style: small),
-                ],
-              ),
-            ),
-            const SizedBox(width: 16),
-            Text(
-              model.scale == null
-                  ? 'no scale'
-                  : '${model.scale!.toStringAsFixed(2)}″/px',
-              style: small,
-            ),
+          ),
+          const SizedBox(width: 16),
+          Text(
+            model.scale == null
+                ? 'no scale'
+                : '${model.scale!.toStringAsFixed(2)}″/px',
+            style: small,
+          ),
+          const SizedBox(width: 12),
+          InkWell(
+            onTap: () {
+              // Also ends a log replay — Clear means "empty graph".
+              ref.read(guideReplayProvider.notifier).stop();
+              ref.read(guideStepsProvider.notifier).clear();
+              ref.read(guideMarkersProvider.notifier).clear();
+            },
+            child: Text('Clear', style: small?.copyWith(color: AraColors.accentInfo)),
+          ),
+          // PHD2's log viewer, in miniature: play a saved guide log through
+          // this graph to check it against a real night. Desktop only — a
+          // phone has no PHD2 log to open.
+          if (!kIsWeb && (Platform.isMacOS || Platform.isLinux || Platform.isWindows)) ...[
             const SizedBox(width: 12),
             InkWell(
-              onTap: () {
-                // Also ends a log replay — Clear means "empty graph".
-                ref.read(guideReplayProvider.notifier).stop();
-                ref.read(guideStepsProvider.notifier).clear();
-                ref.read(guideMarkersProvider.notifier).clear();
-              },
-              child: Text(
-                'Clear',
-                style: small?.copyWith(color: AraColors.accentInfo),
-              ),
+              onTap: () => _loadLog(context, ref),
+              child: Text('Load log…', style: small?.copyWith(color: AraColors.accentInfo)),
             ),
-            // PHD2's log viewer, in miniature: play a saved guide log through
-            // this graph to check it against a real night. Desktop only — a
-            // phone has no PHD2 log to open.
-            if (!kIsWeb &&
-                (Platform.isMacOS ||
-                    Platform.isLinux ||
-                    Platform.isWindows)) ...[
-              const SizedBox(width: 12),
-              InkWell(
-                onTap: () => _loadLog(context, ref),
-                child: Text(
-                  'Load log…',
-                  style: small?.copyWith(color: AraColors.accentInfo),
-                ),
-              ),
-            ],
           ],
+        ],
         ),
       ),
     );
@@ -529,17 +497,14 @@ Future<void> _loadLog(BuildContext context, WidgetRef ref) async {
   try {
     text = await File(path).readAsString();
   } catch (e) {
-    messenger.showSnackBar(
-      SnackBar(content: Text("Couldn't read that log: $e")),
-    );
+    messenger.showSnackBar(SnackBar(content: Text("Couldn't read that log: $e")));
     return;
   }
   final log = Phd2GuideLog.parse(text);
   final name = path.split(Platform.pathSeparator).last;
   if (!ref.read(guideReplayProvider.notifier).start(name, log)) {
     messenger.showSnackBar(
-      const SnackBar(content: Text('No guiding session in that log.')),
-    );
+        const SnackBar(content: Text('No guiding session in that log.')));
   }
 }
 
@@ -550,16 +515,15 @@ class _ReplayChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.labelSmall
+    final style = Theme.of(context)
+        .textTheme
+        .labelSmall
         ?.copyWith(color: AraColors.accentWarning);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          replay.playing ? Icons.play_arrow : Icons.stop,
-          size: 14,
-          color: AraColors.accentWarning,
-        ),
+        Icon(replay.playing ? Icons.play_arrow : Icons.stop,
+            size: 14, color: AraColors.accentWarning),
         const SizedBox(width: 4),
         Text(
           '${replay.playing ? 'Replaying' : 'Replayed'} ${replay.fileName} · ${replay.played} / ${replay.total}',
@@ -594,10 +558,7 @@ class PaResidualChip extends StatelessWidget {
       case PaResidualStatus.measuring:
         icon = Icons.timelapse;
         color = AraColors.textSecondary;
-        label = l.paResidualChipMeasuring(
-          paResidualClock(r.sampleSeconds),
-          paResidualClock(r.targetSeconds),
-        );
+        label = l.paResidualChipMeasuring(paResidualClock(r.sampleSeconds), paResidualClock(r.targetSeconds));
         tooltip = l.paResidualTipMeasuring(paResidualClock(r.targetSeconds));
       case PaResidualStatus.unavailable:
         icon = Icons.do_not_disturb_on_outlined;
@@ -609,14 +570,8 @@ class PaResidualChip extends StatelessWidget {
         final value = formatPoleOffset(error).$1;
         final rating = polarErrorRating(error);
         // #2072 a disagreement with Polar Align is said as one, never as a rating.
-        icon = r.aboveAlign
-            ? Icons.compare_arrows
-            : r.reliable
-            ? polarErrorRatingIcon(error)
-            : Icons.blur_on;
-        color = r.reliable && !r.aboveAlign
-            ? zoneColor(error)
-            : AraColors.textSecondary;
+        icon = r.aboveAlign ? Icons.compare_arrows : r.reliable ? polarErrorRatingIcon(error) : Icons.blur_on;
+        color = r.reliable && !r.aboveAlign ? zoneColor(error) : AraColors.textSecondary;
         label = r.aboveAlign
             ? l.paResidualChipDisagrees(value)
             : r.reliable
@@ -648,11 +603,7 @@ class PaResidualChip extends StatelessWidget {
 /// A compact dropdown — PHD2's small combo boxes — without the Material
 /// 48 px minimum height.
 class _Pick<T> extends StatelessWidget {
-  const _Pick({
-    required this.value,
-    required this.items,
-    required this.onChanged,
-  });
+  const _Pick({required this.value, required this.items, required this.onChanged});
   final T value;
   final List<(T, String)> items;
   final ValueChanged<T> onChanged;
@@ -666,11 +617,7 @@ class _Pick<T> extends StatelessWidget {
       onSelected: onChanged,
       itemBuilder: (_) => [
         for (final (v, label) in items)
-          PopupMenuItem<T>(
-            value: v,
-            height: 28,
-            child: Text(label, style: style),
-          ),
+          PopupMenuItem<T>(value: v, height: 28, child: Text(label, style: style)),
       ],
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -681,17 +628,9 @@ class _Pick<T> extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              items
-                  .firstWhere((e) => e.$1 == value, orElse: () => items.first)
-                  .$2,
-              style: style,
-            ),
-            const Icon(
-              Icons.arrow_drop_down,
-              size: 14,
-              color: AraColors.textSecondary,
-            ),
+            Text(items.firstWhere((e) => e.$1 == value, orElse: () => items.first).$2,
+                style: style),
+            const Icon(Icons.arrow_drop_down, size: 14, color: AraColors.textSecondary),
           ],
         ),
       ),
@@ -713,44 +652,27 @@ class _StatsColumn extends StatelessWidget {
     final label = theme.labelSmall?.copyWith(color: AraColors.textSecondary);
     final value = theme.bodySmall;
     Widget cell(String name, String v) => Expanded(
-      child: Row(
-        children: [
-          SizedBox(width: 56, child: Text(name, maxLines: 1, style: label)),
-          Expanded(
-            child: Text(
-              v,
-              maxLines: 1,
-              style: value,
-              textAlign: TextAlign.right,
-            ),
+          child: Row(
+            children: [
+              SizedBox(width: 56, child: Text(name, maxLines: 1, style: label)),
+              Expanded(
+                child: Text(v, maxLines: 1, style: value, textAlign: TextAlign.right),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+        );
     // Two columns of three (RMS beside peak) so the stats fit a short strip.
-    Widget row(Widget a, Widget b) =>
-        Row(children: [a, const SizedBox(width: 14), b]);
+    Widget row(Widget a, Widget b) => Row(children: [a, const SizedBox(width: 14), b]);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 2, 12, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          row(
-            cell('RMS RA', GuidingStrip.fmt(s.rmsRa, u)),
-            cell('Peak RA', GuidingStrip.fmt(s.peakRa, u)),
-          ),
-          row(
-            cell('RMS Dec', GuidingStrip.fmt(s.rmsDec, u)),
-            cell('Peak Dec', GuidingStrip.fmt(s.peakDec, u)),
-          ),
-          row(
-            cell('RMS Tot', GuidingStrip.fmt(s.rmsTotal, u)),
-            cell(
-              'RA Osc',
-              s.raOscIndex == null ? '—' : s.raOscIndex!.toStringAsFixed(2),
-            ),
-          ),
+          row(cell('RMS RA', GuidingStrip.fmt(s.rmsRa, u)), cell('Peak RA', GuidingStrip.fmt(s.peakRa, u))),
+          row(cell('RMS Dec', GuidingStrip.fmt(s.rmsDec, u)), cell('Peak Dec', GuidingStrip.fmt(s.peakDec, u))),
+          row(cell('RMS Tot', GuidingStrip.fmt(s.rmsTotal, u)),
+              cell('RA Osc', s.raOscIndex == null ? '—' : s.raOscIndex!.toStringAsFixed(2))),
           Text(
             '${s.samples} of ${model.steps.length} frames · ${model.unitLabel}',
             maxLines: 1,
@@ -786,11 +708,11 @@ class _GraphArea extends StatelessWidget {
         color: AraColors.bgPanelAlt,
         child: empty != null
             ? Center(
-                child: Text(
-                  empty,
-                  style: Theme.of(context).textTheme.labelSmall
-                      ?.copyWith(color: AraColors.textDisabled),
-                ),
+                child: Text(empty,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
+                        ?.copyWith(color: AraColors.textDisabled)),
               )
             : CustomPaint(
                 size: Size.infinite,
@@ -798,8 +720,7 @@ class _GraphArea extends StatelessWidget {
                   model,
                   // The theme's font, so the axis labels match the UI
                   // instead of the engine default.
-                  labelStyle:
-                      Theme.of(context).textTheme.labelSmall ??
+                  labelStyle: Theme.of(context).textTheme.labelSmall ??
                       const TextStyle(fontSize: 9),
                 ),
               ),
@@ -816,7 +737,7 @@ class _GraphArea extends StatelessWidget {
 /// on the zero line where the star was lost.
 class GuideGraphPainter extends CustomPainter {
   GuideGraphPainter(this.model, {TextStyle? labelStyle})
-    : labelStyle = labelStyle ?? const TextStyle(fontSize: 9);
+      : labelStyle = labelStyle ?? const TextStyle(fontSize: 9);
 
   final GuideGraphModel model;
   final TextStyle labelStyle;
@@ -827,12 +748,8 @@ class GuideGraphPainter extends CustomPainter {
     final half = model.yHalfRange;
     final unit = model.inArcsec ? '″' : 'px';
     const leftGutter = 34.0;
-    final plot = Rect.fromLTWH(
-      leftGutter,
-      4,
-      size.width - leftGutter - 4,
-      size.height - 8,
-    );
+    final plot = Rect.fromLTWH(leftGutter, 4, size.width - leftGutter - 4,
+        size.height - 8);
     final midY = plot.center.dy;
     double yOf(double v) =>
         (midY - (v / half) * (plot.height / 2)).clamp(plot.top, plot.bottom);
@@ -865,10 +782,7 @@ class GuideGraphPainter extends CustomPainter {
     if (model.settings.showCorrections) {
       var maxPulse = 100.0;
       for (final s in visible) {
-        maxPulse = math.max(
-          maxPulse,
-          math.max(s.raPulseMs.abs(), s.decPulseMs.abs()),
-        );
+        maxPulse = math.max(maxPulse, math.max(s.raPulseMs.abs(), s.decPulseMs.abs()));
       }
       final raPulse = Paint()
         ..color = AraColors.accentInfo.withValues(alpha: 0.35)
@@ -891,40 +805,19 @@ class GuideGraphPainter extends CustomPainter {
     }
 
     // Error traces. A null sample (lost star) breaks the line.
-    _trace(
-      canvas,
-      visible,
-      xOf,
-      yOf,
-      AraColors.accentInfo,
-      (s) => model.pick(s).$1,
-    );
-    _trace(
-      canvas,
-      visible,
-      xOf,
-      yOf,
-      AraColors.accentError,
-      (s) => model.pick(s).$2,
-    );
+    _trace(canvas, visible, xOf, yOf, AraColors.accentInfo, (s) => model.pick(s).$1);
+    _trace(canvas, visible, xOf, yOf, AraColors.accentError, (s) => model.pick(s).$2);
   }
 
   /// x of a marker: between the last frame at or before it and the next one;
   /// null when it predates the window (the caller still tracks its state —
   /// a settle that began before the first visible frame is still a settle).
-  double? _markerX(
-    GuideMarker m,
-    List<GuideStep> visible,
-    double Function(int) xOf,
-    double slot,
-  ) => _timeX(m.at, visible, xOf, slot);
+  double? _markerX(GuideMarker m, List<GuideStep> visible,
+          double Function(int) xOf, double slot) =>
+      _timeX(m.at, visible, xOf, slot);
 
-  double? _timeX(
-    DateTime at,
-    List<GuideStep> visible,
-    double Function(int) xOf,
-    double slot,
-  ) {
+  double? _timeX(DateTime at, List<GuideStep> visible,
+      double Function(int) xOf, double slot) {
     if (visible.isEmpty || at.isBefore(visible.first.at)) return null;
     var i = visible.length - 1;
     while (i > 0 && visible[i].at.isAfter(at)) {
@@ -933,13 +826,8 @@ class GuideGraphPainter extends CustomPainter {
     return xOf(i) + slot / 2;
   }
 
-  void _markers(
-    Canvas canvas,
-    Rect plot,
-    List<GuideStep> visible,
-    double Function(int) xOf,
-    double slot,
-  ) {
+  void _markers(Canvas canvas, Rect plot, List<GuideStep> visible,
+      double Function(int) xOf, double slot) {
     final dither = Paint()
       ..color = AraColors.accentWarning
       ..strokeWidth = 1;
@@ -958,9 +846,7 @@ class GuideGraphPainter extends CustomPainter {
       for (final (start, end) in model.settleWindows) {
         if (end != null && end.isBefore(visible.first.at)) continue;
         final x0 = _timeX(start, visible, xOf, slot) ?? plot.left;
-        final x1 = end == null
-            ? plot.right
-            : (_timeX(end, visible, xOf, slot) ?? plot.left);
+        final x1 = end == null ? plot.right : (_timeX(end, visible, xOf, slot) ?? plot.left);
         if (x1 > x0) {
           canvas.drawRect(Rect.fromLTRB(x0, plot.top, x1, plot.bottom), settle);
         }
@@ -972,12 +858,7 @@ class GuideGraphPainter extends CustomPainter {
         case GuideMarkerKind.dithered:
           if (x != null) {
             _dashedVertical(canvas, x, plot, dither);
-            _label(
-              canvas,
-              'Dither',
-              Offset(x + 2, plot.top),
-              color: AraColors.accentWarning,
-            );
+            _label(canvas, 'Dither', Offset(x + 2, plot.top), color: AraColors.accentWarning);
           }
         case GuideMarkerKind.settling:
         case GuideMarkerKind.settleDone:
@@ -991,14 +872,8 @@ class GuideGraphPainter extends CustomPainter {
         case GuideMarkerKind.guidingStarted:
         case GuideMarkerKind.resumed:
           if (x != null) {
-            _dashedVertical(
-              canvas,
-              x,
-              plot,
-              Paint()
-                ..color = AraColors.accentConnected
-                ..strokeWidth = 1,
-            );
+            _dashedVertical(canvas, x, plot,
+                Paint()..color = AraColors.accentConnected..strokeWidth = 1);
           }
         case GuideMarkerKind.calibrationStarted:
         case GuideMarkerKind.calibrationComplete:
@@ -1013,22 +888,12 @@ class GuideGraphPainter extends CustomPainter {
 
   void _dashedVertical(Canvas canvas, double x, Rect plot, Paint paint) {
     for (var y = plot.top; y < plot.bottom; y += 6) {
-      canvas.drawLine(
-        Offset(x, y),
-        Offset(x, math.min(y + 3, plot.bottom)),
-        paint,
-      );
+      canvas.drawLine(Offset(x, y), Offset(x, math.min(y + 3, plot.bottom)), paint);
     }
   }
 
-  void _trace(
-    Canvas canvas,
-    List<GuideStep> visible,
-    double Function(int) xOf,
-    double Function(double) yOf,
-    Color color,
-    double? Function(GuideStep) pick,
-  ) {
+  void _trace(Canvas canvas, List<GuideStep> visible, double Function(int) xOf,
+      double Function(double) yOf, Color color, double? Function(GuideStep) pick) {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.5
@@ -1060,9 +925,7 @@ class GuideGraphPainter extends CustomPainter {
       text: TextSpan(
         text: text,
         style: labelStyle.copyWith(
-          fontSize: 9,
-          color: color ?? AraColors.textSecondary,
-        ),
+            fontSize: 9, color: color ?? AraColors.textSecondary),
       ),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: 40);
@@ -1099,15 +962,10 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
       await (guiding ? notifier.stopGuiding() : notifier.startGuiding());
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(
-          content: Text(
-            e is GuideStartFailed
-                ? friendlyError(context.l10n, e)
-                : '${guiding ? 'Stop guiding' : 'Guide'} failed: ${failureReason(context.l10n, e)}',
-          ),
-        ),
-      );
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
+          content: Text(e is GuideStartFailed
+              ? friendlyError(context.l10n, e)
+              : '${guiding ? 'Stop guiding' : 'Guide'} failed: ${failureReason(context.l10n, e)}')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1118,9 +976,7 @@ class _GuideButtonState extends ConsumerState<_GuideButton> {
     // #1756 — a start that failed after calibration began: the snackbar a quick failure shows.
     ref.listen(guideStartLateFailureProvider, (_, failed) {
       if (failed == null) return;
-      ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, failed))),
-      );
+      ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, failed))));
     });
     final guiding = widget.status.stopEndsPhase;
     return TextButton.icon(

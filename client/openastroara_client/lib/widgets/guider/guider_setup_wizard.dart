@@ -21,12 +21,12 @@ export '../../state/guider/guider_choice_state.dart';
 
 /// Open the §63 guider setup wizard.
 Future<void> showGuiderSetupWizard(BuildContext context) => showDialog<void>(
-  context: context,
-  // Multi-step with in-flight daemon calls — an accidental outside tap
-  // shouldn't discard the walk-through.
-  barrierDismissible: false,
-  builder: (_) => const GuiderSetupWizard(),
-);
+      context: context,
+      // Multi-step with in-flight daemon calls — an accidental outside tap
+      // shouldn't discard the walk-through.
+      barrierDismissible: false,
+      builder: (_) => const GuiderSetupWizard(),
+    );
 
 /// Guider setup wizard — the OpenAstro Guider "new profile wizard" flow, redone for Ara
 /// (mirrors the original `profile_wizard.cpp` steps: connection → guide
@@ -76,9 +76,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   Future<void> _hydrate() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      setState(
-        () => _error = 'Not connected — connect to your rig to save this.',
-      );
+      setState(() => _error = 'Not connected — connect to your rig to save this.');
       return;
     }
     setState(() => _busy = true);
@@ -98,12 +96,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       await _refreshChoices();
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyDaemonError(
-            e,
-            fallback: "Couldn't load the guider settings",
-          ),
-        );
+        setState(() => _error =
+            friendlyDaemonError(e, fallback: "Couldn't load the guider settings"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -132,23 +126,16 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
   /// Label map for a picker slot: every option labeled with its real Alpaca
   /// device name when known.
   Map<String, String> _labelsFor(List<String> options, String alpacaType) => {
-    for (final o in options)
-      o: friendlyAlpacaChoiceLabel(o, alpacaType, _alpacaNames),
-  };
+        for (final o in options)
+          o: friendlyAlpacaChoiceLabel(o, alpacaType, _alpacaNames),
+      };
 
   /// See [mergedAlpacaOptions] — bound to this wizard's discovered names.
   List<String> _mergedOptions(
-    List<String> daemonChoices,
-    String alpacaType,
-    String slotWord, {
-    String? onlyEndpoint,
-  }) => mergedAlpacaOptions(
-    daemonChoices,
-    alpacaType,
-    slotWord,
-    _alpacaNames,
-    onlyEndpoint: onlyEndpoint,
-  );
+          List<String> daemonChoices, String alpacaType, String slotWord,
+          {String? onlyEndpoint}) =>
+      mergedAlpacaOptions(daemonChoices, alpacaType, slotWord, _alpacaNames,
+          onlyEndpoint: onlyEndpoint);
 
   /// The selected guide camera's Alpaca server ("host:port"), or null for
   /// non-Alpaca / unset camera selections.
@@ -170,25 +157,19 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       _error = null;
     });
     try {
-      final servers = await ref
-          .read(guiderAlpacaDevicesProvider.notifier)
-          .discover();
+      final servers =
+          await ref.read(guiderAlpacaDevicesProvider.notifier).discover();
       if (!mounted) return;
       final names = ref.read(guiderAlpacaDevicesProvider).names.keys;
       final found = names.any((k) => servers.any((sv) => k.startsWith('$sv|')));
       if (!found) {
-        setState(
-          () => _error = 'Discovery found no Alpaca devices — check the servers are running.',
-        );
+        setState(() => _error =
+            'Discovery found no Alpaca devices — check the servers are running.');
       }
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyDaemonError(
-            e,
-            fallback: "Couldn't discover Alpaca devices",
-          ),
-        );
+        setState(() =>
+            _error = friendlyDaemonError(e, fallback: "Couldn't discover Alpaca devices"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -218,12 +199,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       await _refreshChoices();
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyDaemonError(
-            e,
-            fallback: "Couldn't connect to the guider",
-          ),
-        );
+        setState(() =>
+            _error = friendlyDaemonError(e, fallback: "Couldn't connect to the guider"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -312,10 +289,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     final api = ref.read(guiderCalibrationApiProvider);
     if (api == null) return;
     if (_darkMinExpMs > _darkMaxExpMs) {
-      setState(
-        () =>
-            _error = 'Shortest exposure must not exceed the longest exposure.',
-      );
+      setState(() =>
+          _error = 'Shortest exposure must not exceed the longest exposure.');
       return;
     }
     setState(() {
@@ -331,12 +306,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       if (mounted) setState(() => _darksStarted = true);
     } catch (e) {
       if (mounted) {
-        setState(
-          () => _error = friendlyDaemonError(
-            e,
-            fallback: "Couldn't build the dark library",
-          ),
-        );
+        setState(() => _error =
+            friendlyDaemonError(e, fallback: "Couldn't build the dark library"));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -395,16 +366,13 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           const Icon(Icons.auto_fix_high, size: 20),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              'Guider setup — ${_stepTitles[_step]!}',
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Text(
-            '${_step.index + 1}/${_WizStep.values.length}',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
-          ),
+              child: Text('Guider setup — ${_stepTitles[_step]!}',
+                  overflow: TextOverflow.ellipsis)),
+          Text('${_step.index + 1}/${_WizStep.values.length}',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary)),
         ],
       ),
       content: SizedBox(
@@ -414,10 +382,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               ? Padding(
                   padding: const EdgeInsets.all(24),
                   child: _error != null
-                      ? Text(
-                          _error!,
-                          style: const TextStyle(color: AraColors.accentError),
-                        )
+                      ? Text(_error!,
+                          style:
+                              const TextStyle(color: AraColors.accentError))
                       : const Center(child: AdaptiveProgressIndicator()),
                 )
               : Column(
@@ -427,10 +394,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                     ..._stepBody(draft),
                     if (_error != null) ...[
                       const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: const TextStyle(color: AraColors.accentError),
-                      ),
+                      Text(_error!,
+                          style:
+                              const TextStyle(color: AraColors.accentError)),
                     ],
                   ],
                 ),
@@ -448,9 +414,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             status?.connectionState == GuiderConnectionState.connected;
         return [
           const Text(
-            'Where is the OpenAstro Guider server running? Ara connects to '
-            'it over the network; Ara owns the guide camera.',
-          ),
+              'Where is the OpenAstro Guider server running? Ara connects to '
+              'it over the network; Ara owns the guide camera.'),
           const SizedBox(height: 12),
           _textField(
             label: 'Host',
@@ -479,19 +444,16 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                     ? const SizedBox(
                         width: 14,
                         height: 14,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
+                        child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.link, size: 16),
                 label: const Text('Connect'),
               ),
               const SizedBox(width: 12),
-              Icon(
-                Icons.circle,
-                size: 10,
-                color: connected
-                    ? AraColors.accentConnected
-                    : AraColors.textDisabled,
-              ),
+              Icon(Icons.circle,
+                  size: 10,
+                  color: connected
+                      ? AraColors.accentConnected
+                      : AraColors.textDisabled),
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
@@ -505,18 +467,14 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           ),
         ];
       case _WizStep.camera:
-        final cameraOptions = _mergedOptions(
-          _choices?.cameras ?? const [],
-          'camera',
-          'Camera',
-        );
+        final cameraOptions =
+            _mergedOptions(_choices?.cameras ?? const [], 'camera', 'Camera');
         return [
           const Text(
-            'Pick the guide camera. The list covers every Alpaca server '
-            'found on the network, not just the one the guider server is '
-            'currently pointed at — use "Search network" if yours is '
-            'missing.',
-          ),
+              'Pick the guide camera. The list covers every Alpaca server '
+              'found on the network, not just the one the guider server is '
+              'currently pointed at — use "Search network" if yours is '
+              'missing.'),
           const SizedBox(height: 12),
           _choiceDropdown(
             label: 'Guide camera',
@@ -526,20 +484,18 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             onChanged: (v) {
               // One pick, one rule (ADR 0013 rule 4): a camera with an
               // endpoint also retargets the draft's Alpaca host and port.
-              final pick = ref
-                  .read(guiderAlpacaDevicesProvider.notifier)
-                  .pick(v);
+              final pick = ref.read(guiderAlpacaDevicesProvider.notifier).pick(v);
               _edit((d) => applyGuiderPick(d, pick));
               _autofillPixelSize(v);
             },
           ),
           if (draft.guiderCamera.trim().isEmpty)
-            Text(
-              kNoGuideCameraWarning,
-              key: const ValueKey('wiz-no-guide-camera'),
-              style: Theme.of(context).textTheme.bodySmall!
-                  .copyWith(color: Theme.of(context).colorScheme.error),
-            ),
+            Text(kNoGuideCameraWarning,
+                key: const ValueKey('wiz-no-guide-camera'),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall!
+                    .copyWith(color: Theme.of(context).colorScheme.error)),
           KeyedSubtree(
             // Rebuild with the driver-read value when the autofill lands
             // (TextFormField only honors initialValue on first build).
@@ -560,7 +516,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           if (_pixelSizeFromDriver)
             Text(
               'Read from the camera\'s Alpaca driver — edit if it looks wrong.',
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: AraColors.textSecondary),
             ),
           _refreshChoicesButton(),
@@ -569,9 +527,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         final isOag = draft.guiderSetupType == 'oag';
         return [
           const Text(
-            'How does the guide camera see the sky? Through its own guide '
-            'scope, or an off-axis guider (OAG) on the main scope?',
-          ),
+              'How does the guide camera see the sky? Through its own guide '
+              'scope, or an off-axis guider (OAG) on the main scope?'),
           const SizedBox(height: 12),
           _choiceDropdown(
             label: 'Setup type',
@@ -587,29 +544,20 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   draft.guiderSetupType == 'oag' && norm != 'oag';
               // §63.19 — only an OAG turns with the imaging rotator, so a
               // guide scope drops any rotator pick (the daemon clears it too).
-              _edit(
-                (d) => d.copyWith(
+              _edit((d) => d.copyWith(
                   guiderSetupType: norm,
                   guiderRotator:
                       Phd2SettingsNotifier.usesGuideCameraRotator(norm)
-                      ? d.guiderRotator
-                      : '',
-                ),
-              );
+                          ? d.guiderRotator
+                          : ''));
               if (norm == 'oag') {
                 // §63.19 — OAG derives the guide focal length from the main
                 // optics (focal length × reducer), same rule as the panel.
-                final optics =
-                    ref.read(opticsSettingsProvider).value ??
+                final optics = ref.read(opticsSettingsProvider).value ??
                     const OpticsSettings();
-                _edit(
-                  (d) => d.copyWith(
+                _edit((d) => d.copyWith(
                     guideFocalLength: derivedOagGuideFocalLength(
-                      optics.focalLengthMm,
-                      optics.reducerFactor,
-                    ),
-                  ),
-                );
+                        optics.focalLengthMm, optics.reducerFactor)));
               } else if (leavingOag) {
                 // The OAG's derived value is the main scope's, not this guide scope's (#1715).
                 _edit((d) => d.copyWith(guideFocalLength: 0));
@@ -622,16 +570,17 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               child: Text(
                 'Guide focal length: ${draft.guideFocalLength} mm — derived '
                 'from the main optics (Settings → Imaging → Optics).',
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: AraColors.textSecondary),
               ),
             )
           else
             _textField(
               label: 'Guide focal length (mm)',
-              value: draft.guideFocalLength == 0
-                  ? ''
-                  : '${draft.guideFocalLength}',
+              value:
+                  draft.guideFocalLength == 0 ? '' : '${draft.guideFocalLength}',
               hint: 'e.g. 240 for a 60mm f/4 guide scope',
               onChanged: (s) {
                 final v = int.tryParse(s.trim());
@@ -644,10 +593,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       case _WizStep.mount:
         return [
           const Text(
-            'Pick the mount Ara sends guide pulses to. An aux mount '
-            'is only needed when the guiding connection can\'t report '
-            'pointing (leave it on server default otherwise).',
-          ),
+              'Pick the mount Ara sends guide pulses to. An aux mount '
+              'is only needed when the guiding connection can\'t report '
+              'pointing (leave it on server default otherwise).'),
           const SizedBox(height: 12),
           // Mount/rotator synthesis is limited to the CAMERA's Alpaca server:
           // OpenAstro Guider has one Alpaca server per profile (derived from the camera on
@@ -655,21 +603,14 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           _choiceDropdown(
             label: 'Mount',
             value: draft.guiderMount,
-            options: _mergedOptions(
-              _choices?.mounts ?? const [],
-              'telescope',
-              'Mount',
-              onlyEndpoint: _cameraEndpoint,
-            ),
-            labels: _labelsFor(
-              _mergedOptions(
-                _choices?.mounts ?? const [],
-                'telescope',
+            options: _mergedOptions(_choices?.mounts ?? const [], 'telescope',
                 'Mount',
-                onlyEndpoint: _cameraEndpoint,
-              ),
-              'telescope',
-            ),
+                onlyEndpoint: _cameraEndpoint),
+            labels: _labelsFor(
+                _mergedOptions(_choices?.mounts ?? const [], 'telescope',
+                    'Mount',
+                    onlyEndpoint: _cameraEndpoint),
+                'telescope'),
             onChanged: (v) => _edit((d) => d.copyWith(guiderMount: v)),
           ),
           if (_isCrossServerPick(draft.guiderMount))
@@ -677,7 +618,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               'This mount lives on a different Alpaca server than the guide '
               'camera — Ara supports one server, so this selection '
               'won\'t take effect. Pick a mount on the camera\'s server.',
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: AraColors.accentBusy),
             ),
           _choiceDropdown(
@@ -694,26 +637,18 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
           // separate guide scope that never turns (2026-10-16: a 49°
           // Center-and-Rotate spiralled every dither).
           if (Phd2SettingsNotifier.usesGuideCameraRotator(
-            draft.guiderSetupType,
-          )) ...[
+              draft.guiderSetupType)) ...[
             _choiceDropdown(
               label: 'Rotator',
               value: draft.guiderRotator,
               options: _mergedOptions(
-                _choices?.rotators ?? const [],
-                'rotator',
-                'Rotator',
-                onlyEndpoint: _cameraEndpoint,
-              ),
+                  _choices?.rotators ?? const [], 'rotator', 'Rotator',
+                  onlyEndpoint: _cameraEndpoint),
               labels: _labelsFor(
-                _mergedOptions(
-                  _choices?.rotators ?? const [],
-                  'rotator',
-                  'Rotator',
-                  onlyEndpoint: _cameraEndpoint,
-                ),
-                'rotator',
-              ),
+                  _mergedOptions(_choices?.rotators ?? const [], 'rotator',
+                      'Rotator',
+                      onlyEndpoint: _cameraEndpoint),
+                  'rotator'),
               allowUnset: true,
               onChanged: (v) => _edit((d) => d.copyWith(guiderRotator: v)),
             ),
@@ -721,7 +656,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
               Text(
                 'This rotator lives on a different Alpaca server than the guide '
                 'camera — it won\'t take effect on Apply.',
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: AraColors.accentBusy),
               ),
           ] else
@@ -732,7 +669,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                 'Rotator: not used. A separate guide scope does not turn with '
                 'the camera rotator, so the guider is told "None". Go back to '
                 'Optics and pick Off-axis guider if your guide camera does turn.',
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: AraColors.textSecondary),
               ),
             ),
@@ -740,65 +679,46 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
         ];
       case _WizStep.apply:
         return [
-          const Text(
-            'These settings go to the guider — its '
-            'equipment reconnects with these selections.',
-          ),
+          const Text('These settings go to the guider — its '
+              'equipment reconnects with these selections.'),
           const SizedBox(height: 12),
           _summaryRow('Ara', '${draft.host}:${draft.port}'),
           _summaryRow(
-            'Guide camera',
-            draft.guiderCamera.isEmpty
-                ? '(use the guider\'s own setting)'
-                : friendlyAlpacaChoiceLabel(
-                    draft.guiderCamera,
-                    'camera',
-                    _alpacaNames,
-                  ),
-          ),
+              'Guide camera',
+              draft.guiderCamera.isEmpty
+                  ? '(use the guider\'s own setting)'
+                  : friendlyAlpacaChoiceLabel(
+                      draft.guiderCamera, 'camera', _alpacaNames)),
           _summaryRow(
-            'Pixel size',
-            draft.guidePixelSize == 0
-                ? '(unset)'
-                : '${draft.guidePixelSize} µm',
-          ),
+              'Pixel size',
+              draft.guidePixelSize == 0
+                  ? '(unset)'
+                  : '${draft.guidePixelSize} µm'),
           _summaryRow(
-            'Optics',
-            '${draft.guiderSetupType == 'oag' ? 'OAG' : 'Guide scope'}'
-                '${draft.guideFocalLength > 0 ? ' — ${draft.guideFocalLength} mm' : ''}',
-          ),
+              'Optics',
+              '${draft.guiderSetupType == 'oag' ? 'OAG' : 'Guide scope'}'
+              '${draft.guideFocalLength > 0 ? ' — ${draft.guideFocalLength} mm' : ''}'),
           _summaryRow(
-            'Mount',
-            draft.guiderMount.isEmpty
-                ? '(use the guider\'s own setting)'
-                : friendlyAlpacaChoiceLabel(
-                    draft.guiderMount,
-                    'telescope',
-                    _alpacaNames,
-                  ),
-          ),
+              'Mount',
+              draft.guiderMount.isEmpty
+                  ? '(use the guider\'s own setting)'
+                  : friendlyAlpacaChoiceLabel(
+                      draft.guiderMount, 'telescope', _alpacaNames)),
           _summaryRow(
-            'Aux mount',
-            draft.guiderAuxMount.isEmpty
-                ? '(use the guider\'s own setting)'
-                : friendlyAlpacaChoiceLabel(
-                    draft.guiderAuxMount,
-                    'telescope',
-                    _alpacaNames,
-                  ),
-          ),
+              'Aux mount',
+              draft.guiderAuxMount.isEmpty
+                  ? '(use the guider\'s own setting)'
+                  : friendlyAlpacaChoiceLabel(
+                      draft.guiderAuxMount, 'telescope', _alpacaNames)),
           _summaryRow(
-            'Rotator',
-            !Phd2SettingsNotifier.usesGuideCameraRotator(draft.guiderSetupType)
-                ? '(not used — separate guide scope)'
-                : draft.guiderRotator.isEmpty
-                ? '(use the guider\'s own setting)'
-                : friendlyAlpacaChoiceLabel(
-                    draft.guiderRotator,
-                    'rotator',
-                    _alpacaNames,
-                  ),
-          ),
+              'Rotator',
+              !Phd2SettingsNotifier.usesGuideCameraRotator(
+                      draft.guiderSetupType)
+                  ? '(not used — separate guide scope)'
+                  : draft.guiderRotator.isEmpty
+                      ? '(use the guider\'s own setting)'
+                      : friendlyAlpacaChoiceLabel(
+                          draft.guiderRotator, 'rotator', _alpacaNames)),
           // Belt for a stale draft: the mount step restricts new picks to the
           // camera's server, but a selection made before a camera change can
           // still be cross-server — say so rather than implying it will land.
@@ -810,23 +730,22 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                 'A mount/rotator selection is on a different Alpaca server '
                 'than the guide camera and will NOT take effect — Ara '
                 'supports one Alpaca server (the camera\'s). Go Back to fix it.',
-                style: Theme.of(context).textTheme.bodySmall
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
                     ?.copyWith(color: AraColors.accentBusy),
               ),
             ),
           const SizedBox(height: 12),
           if (_applied)
-            const Row(
-              children: [
-                Icon(
-                  Icons.check_circle,
-                  size: 16,
-                  color: AraColors.accentConnected,
-                ),
-                SizedBox(width: 6),
-                Expanded(child: Text('Applied — equipment reconnected.')),
-              ],
-            )
+            const Row(children: [
+              Icon(Icons.check_circle,
+                  size: 16, color: AraColors.accentConnected),
+              SizedBox(width: 6),
+              Expanded(
+                  child:
+                      Text('Applied — equipment reconnected.')),
+            ])
           else
             FilledButton.icon(
               onPressed: _busy ? null : _apply,
@@ -834,22 +753,19 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.send, size: 16),
               label: const Text('Apply to guider'),
             ),
         ];
       case _WizStep.darks:
-        final activity = ref.watch(
-          guiderBuildActivityProvider,
-        )[CalibrationArtifact.darkLibrary];
+        final activity = ref.watch(guiderBuildActivityProvider)[
+            CalibrationArtifact.darkLibrary];
         return [
           const Text(
-            'A dark library removes hot pixels from guide frames — worth '
-            'building once per camera/cooling setup. The server captures '
-            'frames at a range of exposures; cover the guide scope first.',
-          ),
+              'A dark library removes hot pixels from guide frames — worth '
+              'building once per camera/cooling setup. The server captures '
+              'frames at a range of exposures; cover the guide scope first.'),
           const SizedBox(height: 12),
           if (!_darksStarted) ...[
             _intDropdown(
@@ -880,20 +796,19 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
                   ? const SizedBox(
                       width: 14,
                       height: 14,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
+                      child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Icon(Icons.dark_mode_outlined, size: 16),
               label: const Text('Build dark library'),
             ),
           ] else
             _DarkBuildProgress(activity: activity),
           const SizedBox(height: 8),
-          Text(
-            'You can also build or rebuild it later from the Guider chip\'s '
-            'Calibration screen.',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
-          ),
+          Text('You can also build or rebuild it later from the Guider chip\'s '
+              'Calibration screen.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary)),
         ];
     }
   }
@@ -904,12 +819,10 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     // Apply gates the step after it: no skipping ahead with an unpushed draft.
     // The camera step holds Next until a camera is picked whenever the guider
     // offers any: a fresh guider has none of its own to fall back on.
-    final cameraMissing =
-        _step == _WizStep.camera &&
+    final cameraMissing = _step == _WizStep.camera &&
         (_draft?.guiderCamera.trim().isEmpty ?? true) &&
         (_choices?.cameras.isNotEmpty ?? false);
-    final canNext =
-        !_busy &&
+    final canNext = !_busy &&
         _draft != null &&
         (_step != _WizStep.apply || _applied) &&
         !cameraMissing &&
@@ -926,9 +839,9 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
       TextButton(
         onPressed: canBack
             ? () => setState(() {
-                _error = null;
-                _step = _WizStep.values[_step.index - 1];
-              })
+                  _error = null;
+                  _step = _WizStep.values[_step.index - 1];
+                })
             : null,
         child: const Text('Back'),
       ),
@@ -969,67 +882,69 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     required List<int> options,
     required String Function(int) labelOf,
     required ValueChanged<int> onChanged,
-  }) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: DropdownButtonFormField<int>(
-      key: ValueKey('wiz-$label'),
-      isExpanded: true,
-      initialValue: options.contains(value) ? value : options.first,
-      decoration: InputDecoration(
-        labelText: label,
-        isDense: true,
-        border: const OutlineInputBorder(),
-      ),
-      items: [
-        for (final o in options)
-          DropdownMenuItem(value: o, child: Text(labelOf(o))),
-      ],
-      onChanged: (v) {
-        if (v != null) onChanged(v);
-      },
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: DropdownButtonFormField<int>(
+          key: ValueKey('wiz-$label'),
+          isExpanded: true,
+          initialValue: options.contains(value) ? value : options.first,
+          decoration: InputDecoration(
+            labelText: label,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          items: [
+            for (final o in options)
+              DropdownMenuItem(value: o, child: Text(labelOf(o))),
+          ],
+          onChanged: (v) {
+            if (v != null) onChanged(v);
+          },
+        ),
+      );
 
   Widget _refreshChoicesButton() => Padding(
-    padding: const EdgeInsets.only(top: 4),
-    child: Wrap(
-      spacing: 8,
-      children: [
-        TextButton.icon(
-          onPressed: _busy ? null : _refreshChoices,
-          icon: const Icon(Icons.refresh, size: 16),
-          label: const Text('Refresh device list'),
+        padding: const EdgeInsets.only(top: 4),
+        child: Wrap(
+          spacing: 8,
+          children: [
+            TextButton.icon(
+              onPressed: _busy ? null : _refreshChoices,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('Refresh device list'),
+            ),
+            TextButton.icon(
+              onPressed: (_busy || ref.watch(guiderDiscoveryProvider).running)
+                  ? null
+                  : _discoverAlpacaServers,
+              icon: const Icon(Icons.wifi_find, size: 16),
+              label: const Text('Search network for Alpaca servers'),
+            ),
+          ],
         ),
-        TextButton.icon(
-          onPressed: (_busy || ref.watch(guiderDiscoveryProvider).running)
-              ? null
-              : _discoverAlpacaServers,
-          icon: const Icon(Icons.wifi_find, size: 16),
-          label: const Text('Search network for Alpaca servers'),
-        ),
-      ],
-    ),
-  );
+      );
 
   Widget _textField({
     required String label,
     required String value,
     required ValueChanged<String> onChanged,
     String? hint,
-  }) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: TextFormField(
-      key: ValueKey('wiz-$label'),
-      initialValue: value,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        isDense: true,
-        border: const OutlineInputBorder(),
-      ),
-      onChanged: onChanged,
-    ),
-  );
+  }) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: TextFormField(
+          key: ValueKey('wiz-$label'),
+          initialValue: value,
+          decoration: InputDecoration(
+            labelText: label,
+            hintText: hint,
+            isDense: true,
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: onChanged,
+        ),
+      );
 
   /// Dropdown over the daemon's choice strings. The current value is always
   /// representable even when the daemon doesn't list it (disconnected or a
@@ -1072,9 +987,7 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
             DropdownMenuItem(
               value: o,
               child: Text(
-                o.isEmpty
-                    ? '(use the guider\'s own setting)'
-                    : (labels?[o] ?? o),
+                o.isEmpty ? '(use the guider\'s own setting)' : (labels?[o] ?? o),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -1086,8 +999,8 @@ class _GuiderSetupWizardState extends ConsumerState<GuiderSetupWizard> {
     );
   }
 
-  Widget _summaryRow(String label, String value) =>
-      _WizSummaryRow(label: label, value: value);
+  Widget _summaryRow(String label, String value) => _WizSummaryRow(
+      label: label, value: value);
 }
 
 /// §63.8 live dark-library build progress — a real bar driven by the
@@ -1101,41 +1014,27 @@ class _DarkBuildProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     switch (activity?.phase) {
       case CalibrationBuildPhase.complete:
-        return const Row(
-          children: [
-            Icon(
-              Icons.check_circle,
-              size: 16,
-              color: AraColors.accentConnected,
-            ),
-            SizedBox(width: 6),
-            Expanded(child: Text('Dark library built and loaded.')),
-          ],
-        );
+        return const Row(children: [
+          Icon(Icons.check_circle, size: 16, color: AraColors.accentConnected),
+          SizedBox(width: 6),
+          Expanded(child: Text('Dark library built and loaded.')),
+        ]);
       case CalibrationBuildPhase.failed:
-        return Row(
-          children: [
-            const Icon(
-              Icons.error_outline,
-              size: 16,
-              color: AraColors.accentError,
-            ),
-            const SizedBox(width: 6),
-            Expanded(
-              child: Text(
-                'Build failed: ${activity?.error ?? 'unknown error'}',
-                style: const TextStyle(color: AraColors.accentError),
-              ),
-            ),
-          ],
-        );
+        return Row(children: [
+          const Icon(Icons.error_outline,
+              size: 16, color: AraColors.accentError),
+          const SizedBox(width: 6),
+          Expanded(
+              child: Text('Build failed: ${activity?.error ?? 'unknown error'}',
+                  style: const TextStyle(color: AraColors.accentError))),
+        ]);
       case CalibrationBuildPhase.building:
       case null: // started, first started/progress event not folded yet
         final a = activity;
         final detail = a?.exposureIndex != null && a?.exposureCount != null
             ? 'Exposure ${a!.exposureIndex}/${a.exposureCount}'
-                  '${a.exposureMs != null ? ' (${(a.exposureMs! / 1000).toStringAsFixed(1)} s)' : ''}'
-                  '${a.frame != null && a.frameCount != null ? ' — frame ${a.frame}/${a.frameCount}' : ''}'
+                '${a.exposureMs != null ? ' (${(a.exposureMs! / 1000).toStringAsFixed(1)} s)' : ''}'
+                '${a.frame != null && a.frameCount != null ? ' — frame ${a.frame}/${a.frameCount}' : ''}'
             : 'Capturing dark frames…';
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1156,20 +1055,19 @@ class _WizSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 120,
-          child: Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
-          ),
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+                width: 120,
+                child: Text(label,
+                    style: Theme.of(context)
+                        .textTheme
+                        .bodySmall
+                        ?.copyWith(color: AraColors.textSecondary))),
+            Expanded(child: Text(value)),
+          ],
         ),
-        Expanded(child: Text(value)),
-      ],
-    ),
-  );
+      );
 }

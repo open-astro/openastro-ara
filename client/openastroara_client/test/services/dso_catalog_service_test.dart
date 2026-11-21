@@ -23,17 +23,10 @@ class _CannedAdapter implements HttpClientAdapter {
   final Object? body;
 
   @override
-  Future<ResponseBody> fetch(
-    RequestOptions options,
-    Stream<Uint8List>? _,
-    Future<void>? cancelFuture,
-  ) async => ResponseBody.fromString(
-    jsonEncode(body ?? []),
-    status,
-    headers: {
-      Headers.contentTypeHeader: [Headers.jsonContentType],
-    },
-  );
+  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? _,
+          Future<void>? cancelFuture) async =>
+      ResponseBody.fromString(jsonEncode(body ?? []), status,
+          headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
 
   @override
   void close({bool force = false}) {}
@@ -67,16 +60,11 @@ void main() {
   const server = AraServer(hostname: 'test', port: 1);
 
   test('refreshFrom writes the mirror; loadCached round-trips it', () async {
-    final fetched = await svc.refreshFrom(
-      server,
-      dio: _cannedDio(
-        status: 200,
-        body: [
+    final fetched = await svc.refreshFrom(server,
+        dio: _cannedDio(status: 200, body: [
           _m31Row,
           {'name': 'garbled'}, // malformed row — skipped
-        ],
-      ),
-    );
+        ]));
     expect(fetched, hasLength(1));
     final cached = await svc.loadCached();
     expect(cached, hasLength(1));
@@ -85,95 +73,57 @@ void main() {
     expect(cached.single.surfaceBrightness, 22.2);
   });
 
-  test(
-    'a 404 (catalog not installed) leaves the existing mirror untouched',
-    () async {
-      await svc.refreshFrom(
-        server,
-        dio: _cannedDio(status: 200, body: [_m31Row]),
-      );
-      final result = await svc.refreshFrom(
-        server,
-        dio: _cannedDio(status: 404),
-      );
-      expect(result, isNull);
-      expect(await svc.loadCached(), hasLength(1));
-    },
-  );
+  test('a 404 (catalog not installed) leaves the existing mirror untouched',
+      () async {
+    await svc.refreshFrom(server,
+        dio: _cannedDio(status: 200, body: [_m31Row]));
+    final result =
+        await svc.refreshFrom(server, dio: _cannedDio(status: 404));
+    expect(result, isNull);
+    expect(await svc.loadCached(), hasLength(1));
+  });
 
   test('never fetched → empty mirror', () async {
     expect(await svc.loadCached(), isEmpty);
   });
 
-  test(
-    'ranker scores real framing + surface brightness from a mirrored row',
-    () {
-      final list = computeTonightSkyLocal(
-        site: const SiteSettings(
+  test('ranker scores real framing + surface brightness from a mirrored row',
+      () {
+    final list = computeTonightSkyLocal(
+      site: const SiteSettings(
           siteName: 't',
           latitudeDeg: 34,
           longitudeDeg: -84,
           bortleClass: 6,
           defaultHorizonAltitudeDeg: 20,
-          twilightDefinition: TwilightDefinition.astronomical,
-        ),
-        optics: const OpticsSettings(
+          twilightDefinition: TwilightDefinition.astronomical),
+      optics: const OpticsSettings(
           focalLengthMm: 250,
           reducerFactor: 1.0,
           sensorWidthPx: 6248,
           sensorHeightPx: 4176,
           pixelSizeUm: 3.76,
-          apertureMm: 51,
-        ),
-        atUtc: DateTime.utc(2026, 10, 15, 3), // autumn — M31 territory
-        catalog: [PlanningDso.fromJson(_m31Row)!],
-      );
-      // The curated imaging-regions layer appends standalone fields to every
-      // ranking — filter to the row under test.
-      final m31 = list.where((o) => o.id == 'M31').single;
-      expect(m31.sizeMajArcmin, 178.0);
-      final why = m31.scoreReasons!.join(' ');
-      expect(why, isNot(contains('size unknown')));
-      expect(why, contains('Bortle 6 sky'));
-    },
-  );
+          apertureMm: 51),
+      atUtc: DateTime.utc(2026, 10, 15, 3), // autumn — M31 territory
+      catalog: [PlanningDso.fromJson(_m31Row)!],
+    );
+    // The curated imaging-regions layer appends standalone fields to every
+    // ranking — filter to the row under test.
+    final m31 = list.where((o) => o.id == 'M31').single;
+    expect(m31.sizeMajArcmin, 178.0);
+    final why = m31.scoreReasons!.join(' ');
+    expect(why, isNot(contains('size unknown')));
+    expect(why, contains('Bortle 6 sky'));
+  });
 
-  test(
-    'PlanningDso aliases round-trip through the mirror JSON (#1267 item 4)',
-    () {
-      const d = PlanningDso(
-        id: 'NGC7000',
-        name: 'North America Nebula',
-        type: 'Neb',
-        magnitude: null,
-        raDeg: 314.8,
-        decDeg: 44.5,
-        aliases: ['Sh2-117', 'C 020'],
-      );
-      final back = PlanningDso.fromJson(d.toJson())!;
-      expect(back.aliases, ['Sh2-117', 'C 020']);
-      expect(
-        PlanningDso.fromJson({
-          ...d.toJson(),
-          'aliases': ['x', 1],
-        })!.aliases,
-        ['x'],
-      );
-      expect(
-        PlanningDso.fromJson({...d.toJson()}..remove('aliases'))!.aliases,
-        isEmpty,
-      );
-      expect(
-        const PlanningDso(
-          id: 'a',
-          name: 'a',
-          type: 'G',
-          magnitude: null,
-          raDeg: 1,
-          decDeg: 1,
-        ).toJson().containsKey('aliases'),
-        isFalse,
-      );
-    },
-  );
+  test('PlanningDso aliases round-trip through the mirror JSON (#1267 item 4)', () {
+    const d = PlanningDso(
+        id: 'NGC7000', name: 'North America Nebula', type: 'Neb', magnitude: null,
+        raDeg: 314.8, decDeg: 44.5, aliases: ['Sh2-117', 'C 020']);
+    final back = PlanningDso.fromJson(d.toJson())!;
+    expect(back.aliases, ['Sh2-117', 'C 020']);
+    expect(PlanningDso.fromJson({...d.toJson(), 'aliases': ['x', 1]})!.aliases, ['x']);
+    expect(PlanningDso.fromJson({...d.toJson()}..remove('aliases'))!.aliases, isEmpty);
+    expect(const PlanningDso(id: 'a', name: 'a', type: 'G', magnitude: null, raDeg: 1, decDeg: 1).toJson().containsKey('aliases'), isFalse);
+  });
 }

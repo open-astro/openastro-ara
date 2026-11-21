@@ -66,11 +66,7 @@ class _SessionsTab extends ConsumerWidget {
     return sessions.when(
       loading: () => const Center(child: AdaptiveProgressIndicator()),
       error: (e, _) => _ErrorRetry(
-        message: friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionLoadSessions,
-        ),
+        message: friendlyError(context.l10n, e, action: context.l10n.actionLoadSessions),
         onRetry: () => ref.read(calibrationSessionsProvider.notifier).refresh(),
       ),
       data: (list) {
@@ -142,8 +138,9 @@ class _SessionCard extends ConsumerWidget {
                 for (final f in session.filtersUsed)
                   '${f.filterName} ${f.lightFrameCount}×${_secondsLabel(f.meanExposureSeconds)}',
               ].join(' · '),
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
             const SizedBox(height: 6),
             for (final f in session.filtersUsed) _FilterFlatsLine(filter: f),
@@ -228,9 +225,7 @@ String flatsLineText(CalibrationFilterSummary f) {
   if (f.hasFlats) {
     final when = f.matchingFlatsNewestUtc;
     final from = when == null ? '' : ' from ${_shortDate(when)}';
-    final count = f.matchingFlatFrames == 1
-        ? '1 flat'
-        : '${f.matchingFlatFrames} flats';
+    final count = f.matchingFlatFrames == 1 ? '1 flat' : '${f.matchingFlatFrames} flats';
     return '${f.filterName} · $count$from';
   }
   return '${f.filterName} · ${f.flatsNote ?? 'needs flats'}';
@@ -313,8 +308,9 @@ class _CoverageBadge extends StatelessWidget {
           const SizedBox(width: 4),
           Text(
             covered ? '$label matched' : '$label needed',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: color),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: color),
           ),
         ],
       ),
@@ -345,9 +341,10 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   late final _frames = TextEditingController(
-    text: (ref.read(safetyPoliciesProvider).value ?? const SafetyPolicies())
-        .flatFramesPerFilter
-        .toString(),
+    text:
+        (ref.read(safetyPoliciesProvider).value ?? const SafetyPolicies())
+            .flatFramesPerFilter
+            .toString(),
   );
   final _coolTo = TextEditingController();
   bool _busy = false;
@@ -397,9 +394,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
   Future<void> _loadSetpoint() async {
     CalibrationSession? session;
     try {
-      session = await ref
-          .read(calibrationApiProvider)
-          ?.getSession(widget.sessionId);
+      session = await ref.read(calibrationApiProvider)?.getSession(widget.sessionId);
     } on Exception {
       // No coverage known: flats stay ticked and the user can still cool.
     }
@@ -491,8 +486,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (id == null) {
         setState(() {
           _busy = false;
-          _error =
-              result.totalFlatFrames == 0 &&
+          _error = result.totalFlatFrames == 0 &&
                   result.totalBiasFrames == 0 &&
                   result.totalDarkFrames == 0
               ? 'Nothing to shoot: the lights already have what\'s ticked.'
@@ -517,11 +511,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionGenerateCalibration,
-        );
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionGenerateCalibration);
       });
     }
   }
@@ -611,9 +601,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                 child: TextField(
                   controller: _frames,
                   keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Flats per filter',
-                  ),
+                  decoration: const InputDecoration(labelText: 'Flats per filter'),
                 ),
               ),
             _choice(
@@ -680,8 +668,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
                 title: _flats
                     ? 'Pause for the lens cap after the flats'
                     : 'Pause for the lens cap first',
-                subtitle:
-                    'Opens the flat panel\'s cover and waits while you put '
+                subtitle: 'Opens the flat panel\'s cover and waits while you put '
                     'the lens cap on, then press Resume to take the bias and '
                     'darks. A panel doesn\'t always keep out all the light.',
                 value: _lensCap,
@@ -689,8 +676,7 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
               ),
             _choice(
               title: 'Park the mount at the end',
-              subtitle:
-                  'Leave this off unless the mount has a clear path to park.',
+              subtitle: 'Leave this off unless the mount has a clear path to park.',
               value: _park,
               onChanged: (v) => _park = v,
             ),
@@ -698,8 +684,9 @@ class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
               const SizedBox(height: 8),
               Text(
                 _error!,
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: AraColors.accentError),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
               ),
             ],
           ],
@@ -736,11 +723,7 @@ class _DarkLibraryTab extends ConsumerWidget {
     return status.when(
       loading: () => const Center(child: AdaptiveProgressIndicator()),
       error: (e, _) => _ErrorRetry(
-        message: friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionLoadDarkLibrary,
-        ),
+        message: friendlyError(context.l10n, e, action: context.l10n.actionLoadDarkLibrary),
         onRetry: () => ref.read(darkLibraryStatusProvider.notifier).refresh(),
       ),
       data: (state) {
@@ -802,8 +785,9 @@ class _DarkStatusHeader extends ConsumerWidget {
           const SizedBox(width: 8),
           Text(
             progress,
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
           ),
         ],
         const Spacer(),
@@ -902,8 +886,7 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
   // profile's cooler target when the connected camera can regulate. A user
   // with an uncooled camera still gets an empty field (capture at ambient).
   String _defaultTemperatures() {
-    final sessions =
-        ref.read(calibrationSessionsProvider).asData?.value ?? const [];
+    final sessions = ref.read(calibrationSessionsProvider).asData?.value ?? const [];
     final setpoints = <double>{
       for (final s in sessions)
         if (s.coolerSetpointC != null) s.coolerSetpointC!,
@@ -911,8 +894,7 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
     if (setpoints.isNotEmpty) {
       return setpoints.map(_MatchingFlatsDialogState._degrees).join(', ');
     }
-    final canCool =
-        ref
+    final canCool = ref
             .read(cameraStatusProvider)
             .asData
             ?.value
@@ -1006,11 +988,7 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _error = friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionBuildCalibration,
-        );
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionBuildCalibration);
       });
     }
   }
@@ -1033,8 +1011,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
           'Generates a ready-to-run sequence covering every exposure × gain × '
           'temperature combination; it cools the camera to each temperature '
           'first. Leave temperatures empty to capture at ambient.',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         ),
         const SizedBox(height: 8),
         TextField(
@@ -1080,8 +1059,9 @@ class _DarkBuildFormState extends ConsumerState<DarkBuildForm> {
             padding: const EdgeInsets.only(bottom: 8),
             child: Text(
               _error!,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.accentError),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.accentError),
             ),
           ),
         FilledButton.icon(
@@ -1114,8 +1094,9 @@ class _EmptyNote extends StatelessWidget {
         child: Text(
           message,
           textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         ),
       ),
     );

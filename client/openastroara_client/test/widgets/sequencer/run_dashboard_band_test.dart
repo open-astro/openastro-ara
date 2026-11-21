@@ -43,12 +43,8 @@ class _FakeWheel extends FilterWheelNotifier {
   Future<FilterWheelStatus?> build() async => _v;
 }
 
-Future<void> _pump(
-  WidgetTester tester,
-  SequenceRunStateInfo? run, {
-  FilterWheelStatus? wheel,
-  TrackingProbeLive? probe,
-}) async {
+Future<void> _pump(WidgetTester tester, SequenceRunStateInfo? run,
+    {FilterWheelStatus? wheel, TrackingProbeLive? probe}) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -93,9 +89,7 @@ void main() {
     expect(find.text('5/6'), findsOneWidget);
   });
 
-  testWidgets('#1596 a meridian wait shows its reason on the run badge', (
-    tester,
-  ) async {
+  testWidgets('#1596 a meridian wait shows its reason on the run badge', (tester) async {
     await _pump(
       tester,
       const SequenceRunStateInfo(
@@ -188,166 +182,102 @@ void main() {
     expect(find.textContaining('The rig needs you'), findsOneWidget);
   });
 
-  testWidgets(
-    '#1298 a running run blocked on a manual filter swap asks for the filter',
-    (tester) async {
-      const run = SequenceRunStateInfo(
-        state: SequenceRunState.running,
-        instructionsCompleted: 3,
-        instructionsTotal: 12,
-        currentInstructionDescription: 'Switch Filter',
-      );
-      FilterWheelStatus wheel({int? pending}) => FilterWheelStatus(
-        deviceId: 'ara-manual-filter-wheel',
-        name: 'Manual filter wheel',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: pending == null ? 'idle' : 'awaiting_user',
-        currentSlot: 0,
-        pendingSlot: pending,
-        manual: true,
-        slots: const [
-          FilterSlot(position: 0, name: 'L', focusOffset: 0),
-          FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+  testWidgets('#1298 a running run blocked on a manual filter swap asks for the filter',
+      (tester) async {
+    const run = SequenceRunStateInfo(
+      state: SequenceRunState.running,
+      instructionsCompleted: 3,
+      instructionsTotal: 12,
+      currentInstructionDescription: 'Switch Filter',
+    );
+    FilterWheelStatus wheel({int? pending}) => FilterWheelStatus(
+          deviceId: 'ara-manual-filter-wheel',
+          name: 'Manual filter wheel',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: pending == null ? 'idle' : 'awaiting_user',
+          currentSlot: 0,
+          pendingSlot: pending,
+          manual: true,
+          slots: const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+          ],
+        );
+    await _pump(tester, run, wheel: wheel(pending: 1));
+    await tester.pump(); // the wheel's async read lands a frame after the run's
+    expect(find.text('The rig needs you — install the Ha filter'), findsOneWidget);
+
+    // Swap confirmed: back to the ordinary running line. A fresh tree — a
+    // ProviderScope keeps its first overrides across a re-pump.
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, run, wheel: wheel());
+    await tester.pump();
+    expect(find.textContaining('The rig needs you'), findsNothing);
+    expect(find.textContaining('Switch Filter'), findsOneWidget);
+  });
+
+  testWidgets('#1264 the tracking probe strip shows the ladder, then the ceiling', (tester) async {
+    const running = SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running);
+    await _pump(tester, running,
+        probe: const TrackingProbeLive(ladder: [10, 30, 60], priorSeconds: 45, rungs: [
+          TrackingProbeRung(exposureSeconds: 10, eccentricity: 0.2, fwhmPx: 2.0, stars: 120, usable: true, passed: true),
+        ]));
+    expect(find.text('Tracking probe · 1/3 rungs · prior 45 s'), findsOneWidget);
+    expect(find.text('Tracking probe 10 s · ecc 0.20 · FWHM 2.0 px · pass'), findsOneWidget);
+
+    // A fresh scope per case: a live ProviderScope keeps its first overrides.
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, running,
+        probe: const TrackingProbeLive(ladder: [10, 30], done: true, ceilingSeconds: 20, source: 'measured', rungs: [
+          TrackingProbeRung(exposureSeconds: 10, usable: true, passed: true),
+          TrackingProbeRung(exposureSeconds: 30, eccentricity: 0.7, usable: true, passed: false),
+        ]));
+    expect(find.text('Unguided ceiling 20 s (measured)'), findsOneWidget);
+    expect(find.text('Tracking probe 30 s · ecc 0.70 · trailed'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, running);
+    expect(find.textContaining('Tracking probe'), findsNothing, reason: 'guided rig: no strip');
+  });
+
+  testWidgets('#1363 the band survives being hidden and shown again in one session', (tester) async {
+    // Second run of a session: the band hid while no run was active (the
+    // StreamBuilder went away) and came back when the next run started, which
+    // subscribed to the band's one-second ticker a second time. A
+    // single-subscription ticker threw "Stream has already been listened to"
+    // and took the Run tab down; a broadcast one carries on.
+    SequenceRunStateInfo running(String id) => SequenceRunStateInfo(
+          sequenceId: id,
+          runId: 'r-$id',
+          state: SequenceRunState.running,
+          instructionsCompleted: 1,
+          instructionsTotal: 7,
+          currentInstructionDescription: 'Cooling camera to -10 °C',
+          startedUtc: DateTime.now().toUtc(),
+        );
+    final runs = _MutableRunNotifier(running('first'));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          sequenceRunStateProvider.overrideWith(() => runs),
+          filterWheelProvider.overrideWith(() => _FakeWheel(null)),
+          trackingProbeLiveProvider.overrideWith(() => _FixedProbe(null)),
         ],
-      );
-      await _pump(tester, run, wheel: wheel(pending: 1));
-      await tester
-          .pump(); // the wheel's async read lands a frame after the run's
-      expect(
-        find.text('The rig needs you — install the Ha filter'),
-        findsOneWidget,
-      );
+        child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
+      ),
+    );
+    await tester.pump();
+    expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
 
-      // Swap confirmed: back to the ordinary running line. A fresh tree — a
-      // ProviderScope keeps its first overrides across a re-pump.
-      await tester.pumpWidget(const SizedBox());
-      await _pump(tester, run, wheel: wheel());
-      await tester.pump();
-      expect(find.textContaining('The rig needs you'), findsNothing);
-      expect(find.textContaining('Switch Filter'), findsOneWidget);
-    },
-  );
+    runs.set(const SequenceRunStateInfo(state: SequenceRunState.completed));
+    await tester.pump();
+    expect(find.byKey(const Key('run-dashboard-band')), findsNothing, reason: 'no active run: the band hides');
 
-  testWidgets(
-    '#1264 the tracking probe strip shows the ladder, then the ceiling',
-    (tester) async {
-      const running = SequenceRunStateInfo(
-        runId: 'r1',
-        state: SequenceRunState.running,
-      );
-      await _pump(
-        tester,
-        running,
-        probe: const TrackingProbeLive(
-          ladder: [10, 30, 60],
-          priorSeconds: 45,
-          rungs: [
-            TrackingProbeRung(
-              exposureSeconds: 10,
-              eccentricity: 0.2,
-              fwhmPx: 2.0,
-              stars: 120,
-              usable: true,
-              passed: true,
-            ),
-          ],
-        ),
-      );
-      expect(
-        find.text('Tracking probe · 1/3 rungs · prior 45 s'),
-        findsOneWidget,
-      );
-      expect(
-        find.text('Tracking probe 10 s · ecc 0.20 · FWHM 2.0 px · pass'),
-        findsOneWidget,
-      );
-
-      // A fresh scope per case: a live ProviderScope keeps its first overrides.
-      await tester.pumpWidget(const SizedBox());
-      await _pump(
-        tester,
-        running,
-        probe: const TrackingProbeLive(
-          ladder: [10, 30],
-          done: true,
-          ceilingSeconds: 20,
-          source: 'measured',
-          rungs: [
-            TrackingProbeRung(exposureSeconds: 10, usable: true, passed: true),
-            TrackingProbeRung(
-              exposureSeconds: 30,
-              eccentricity: 0.7,
-              usable: true,
-              passed: false,
-            ),
-          ],
-        ),
-      );
-      expect(find.text('Unguided ceiling 20 s (measured)'), findsOneWidget);
-      expect(
-        find.text('Tracking probe 30 s · ecc 0.70 · trailed'),
-        findsOneWidget,
-      );
-
-      await tester.pumpWidget(const SizedBox());
-      await _pump(tester, running);
-      expect(
-        find.textContaining('Tracking probe'),
-        findsNothing,
-        reason: 'guided rig: no strip',
-      );
-    },
-  );
-
-  testWidgets(
-    '#1363 the band survives being hidden and shown again in one session',
-    (tester) async {
-      // Second run of a session: the band hid while no run was active (the
-      // StreamBuilder went away) and came back when the next run started, which
-      // subscribed to the band's one-second ticker a second time. A
-      // single-subscription ticker threw "Stream has already been listened to"
-      // and took the Run tab down; a broadcast one carries on.
-      SequenceRunStateInfo running(String id) => SequenceRunStateInfo(
-        sequenceId: id,
-        runId: 'r-$id',
-        state: SequenceRunState.running,
-        instructionsCompleted: 1,
-        instructionsTotal: 7,
-        currentInstructionDescription: 'Cooling camera to -10 °C',
-        startedUtc: DateTime.now().toUtc(),
-      );
-      final runs = _MutableRunNotifier(running('first'));
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [
-            sequenceRunStateProvider.overrideWith(() => runs),
-            filterWheelProvider.overrideWith(() => _FakeWheel(null)),
-            trackingProbeLiveProvider.overrideWith(() => _FixedProbe(null)),
-          ],
-          child: const MaterialApp(home: Scaffold(body: RunDashboardBand())),
-        ),
-      );
-      await tester.pump();
-      expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
-
-      runs.set(const SequenceRunStateInfo(state: SequenceRunState.completed));
-      await tester.pump();
-      expect(
-        find.byKey(const Key('run-dashboard-band')),
-        findsNothing,
-        reason: 'no active run: the band hides',
-      );
-
-      runs.set(running('second'));
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: 'the ticker is subscribed a second time',
-      );
-      expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
-      expect(find.textContaining('Cooling camera to -10 °C'), findsWidgets);
-    },
-  );
+    runs.set(running('second'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(tester.takeException(), isNull, reason: 'the ticker is subscribed a second time');
+    expect(find.byKey(const Key('run-dashboard-band')), findsOneWidget);
+    expect(find.textContaining('Cooling camera to -10 °C'), findsWidgets);
+  });
 }

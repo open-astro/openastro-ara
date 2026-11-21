@@ -13,7 +13,6 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
-
 import '../../support/imaging_sections.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
@@ -38,12 +37,11 @@ class _MemDraftService extends DraftSequenceService {
 /// Daemon client whose create() throws a configurable error.
 class _ThrowingClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) => throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -55,12 +53,9 @@ class _ThrowingClient implements SequenceClient {
   final Object error;
 
   @override
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? description,
-    String? idempotencyKey,
-  }) async => throw error;
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description, String? idempotencyKey}) async =>
+      throw error;
 
   @override
   void noSuchMethod(Invocation invocation) =>
@@ -70,9 +65,8 @@ class _ThrowingClient implements SequenceClient {
 class _GuiderPhd2 extends Phd2SettingsNotifier {
   @override
   LoadedSection<Phd2Settings> build() => LoadedSection(
-    value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
-    source: SectionSource.rig,
-  );
+      value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      source: SectionSource.rig);
 }
 
 void main() {
@@ -92,46 +86,36 @@ void main() {
     ProviderContainer? container,
   }) async {
     final owned = container == null;
-    container ??= ProviderContainer(
-      overrides: [
-        draftSequenceServiceProvider.overrideWithValue(drafts),
-        ...imagingSectionsFromRig(),
-        sequenceApiProvider.overrideWith((ref) => api),
-      ],
-    );
+    container ??= ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => api),
+    ]);
     if (owned) addTearDown(container.dispose);
     Future<({ImagingRunResult? result, Object? error})>? pending;
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Consumer(
-            builder: (context, ref, _) => ElevatedButton(
-              onPressed: () => pending =
-                  createImagingRun(
-                    ref,
-                    raDeg: 10.7,
-                    decDeg: 41.3,
-                    targetName: 'M 31',
-                  ).then<({ImagingRunResult? result, Object? error})>(
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Consumer(
+          builder: (context, ref, _) => ElevatedButton(
+            onPressed: () => pending = createImagingRun(ref,
+                    raDeg: 10.7, decDeg: 41.3, targetName: 'M 31')
+                .then<({ImagingRunResult? result, Object? error})>(
                     (r) => (result: r, error: null),
-                    onError: (Object e) => (result: null, error: e),
-                  ),
-              child: const Text('go'),
-            ),
+                    onError: (Object e) => (result: null, error: e)),
+            child: const Text('go'),
           ),
         ),
       ),
-    );
+    ));
     await tester.tap(find.text('go'));
     await tester.pump();
     final outcome = await tester.runAsync(() => pending!);
     return outcome!;
   }
 
-  testWidgets('no server: saves a local draft and reports draft:true', (
-    tester,
-  ) async {
+  testWidgets('no server: saves a local draft and reports draft:true',
+      (tester) async {
     final outcome = await run(tester, api: null);
     final result = outcome.result;
     expect(outcome.error, isNull);
@@ -144,56 +128,42 @@ void main() {
     expect(drafts.store.values.single.body, isNotEmpty);
   });
 
-  testWidgets(
-    'no server: the draft is cooked from the rig the settings describe',
-    (tester) async {
-      // Offline there is no daemon to ask, so a guider counts when the profile
-      // names its camera: with one, Start Guiding rides into the draft; without,
-      // it does not (the night of 2026-10-02 a rig with a guider got none).
-      final plain = ProviderContainer(
-        overrides: [
-          draftSequenceServiceProvider.overrideWithValue(drafts),
-          ...imagingSectionsFromRig(),
-          sequenceApiProvider.overrideWith((ref) => null),
-        ],
-      );
-      addTearDown(plain.dispose);
-      await run(tester, api: null, container: plain);
-      expect(
-        drafts.store.values.single.body.toString(),
-        isNot(contains(startGuidingType)),
-      );
-      drafts.store.clear();
+  testWidgets('no server: the draft is cooked from the rig the settings describe',
+      (tester) async {
+    // Offline there is no daemon to ask, so a guider counts when the profile
+    // names its camera: with one, Start Guiding rides into the draft; without,
+    // it does not (the night of 2026-10-02 a rig with a guider got none).
+    final plain = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
+    addTearDown(plain.dispose);
+    await run(tester, api: null, container: plain);
+    expect(drafts.store.values.single.body.toString(),
+        isNot(contains(startGuidingType)));
+    drafts.store.clear();
 
-      final guided = ProviderContainer(
-        overrides: [
-          draftSequenceServiceProvider.overrideWithValue(drafts),
-          ...imagingSectionsFromRig(),
-          sequenceApiProvider.overrideWith((ref) => null),
-          phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
-        ],
-      );
-      addTearDown(guided.dispose);
-      await run(tester, api: null, container: guided);
-      expect(
-        drafts.store.values.single.body.toString(),
-        contains(startGuidingType),
-      );
-      // Drain the feedback SnackBar's timer before the tree goes away.
-      await tester.pump(const Duration(seconds: 5));
-    },
-  );
+    final guided = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => null),
+      phd2SettingsProvider.overrideWith(_GuiderPhd2.new),
+    ]);
+    addTearDown(guided.dispose);
+    await run(tester, api: null, container: guided);
+    expect(drafts.store.values.single.body.toString(),
+        contains(startGuidingType));
+    // Drain the feedback SnackBar's timer before the tree goes away.
+    await tester.pump(const Duration(seconds: 5));
+  });
 
-  testWidgets('no server: a second add APPENDS to the open draft', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [
-        draftSequenceServiceProvider.overrideWithValue(drafts),
-        ...imagingSectionsFromRig(),
-        sequenceApiProvider.overrideWith((ref) => null),
-      ],
-    );
+  testWidgets('no server: a second add APPENDS to the open draft', (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
     addTearDown(container.dispose);
     final first = await run(tester, api: null, container: container);
     final draftId = first.result!.sequenceId;
@@ -211,22 +181,17 @@ void main() {
     expect(drafts.store, hasLength(1), reason: 'no second draft');
     final after = drafts.store[draftId]!.body.toString();
     expect(after.length, greaterThan(before.length));
-    expect(
-      'M 31'.allMatches(after).length,
-      greaterThan('M 31'.allMatches(before).length),
-    );
+    expect('M 31'.allMatches(after).length,
+        greaterThan('M 31'.allMatches(before).length));
   });
 
-  testWidgets('offline append starts from the editor\'s UNSAVED working copy', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [
-        draftSequenceServiceProvider.overrideWithValue(drafts),
-        ...imagingSectionsFromRig(),
-        sequenceApiProvider.overrideWith((ref) => null),
-      ],
-    );
+  testWidgets('offline append starts from the editor\'s UNSAVED working copy',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      draftSequenceServiceProvider.overrideWithValue(drafts),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => null),
+    ]);
     addTearDown(container.dispose);
     final first = await run(tester, api: null, container: container);
     final draftId = first.result!.sequenceId;
@@ -235,114 +200,84 @@ void main() {
     final stored = drafts.store[draftId]!;
     final edited = Map<String, dynamic>.from(stored.body)
       ..['Name'] = 'EDITED-BUT-UNSAVED';
-    container
-        .read(sequenceEditorProvider.notifier)
-        .load(SequenceDetail(id: draftId, name: stored.name, body: edited));
+    container.read(sequenceEditorProvider.notifier).load(
+        SequenceDetail(id: draftId, name: stored.name, body: edited));
 
     final second = await run(tester, api: null, container: container);
     expect(second.result!.appended, isTrue);
     // The edit survived: the saved draft is the editor's copy + the target.
     expect(drafts.store[draftId]!.body['Name'], 'EDITED-BUT-UNSAVED');
-    expect(
-      container.read(sequenceEditorProvider)!.body['Name'],
-      'EDITED-BUT-UNSAVED',
-    );
+    expect(container.read(sequenceEditorProvider)!.body['Name'],
+        'EDITED-BUT-UNSAVED');
+  });
+
+  testWidgets('feedback copy: an appended draft says added, a new one says saved',
+      (tester) async {
+    late ScaffoldMessengerState messenger;
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: Builder(builder: (context) {
+          messenger = ScaffoldMessenger.of(context);
+          return const SizedBox();
+        }),
+      ),
+    ));
+    showImagingRunFeedback(messenger,
+        targetName: 'M 42',
+        result: const ImagingRunResult('draft:x', appended: true, draft: true));
+    await tester.pump();
+    expect(find.text('Added "M 42" to the offline draft.'), findsOneWidget);
+    messenger.hideCurrentSnackBar();
+    await tester.pumpAndSettle();
+    showImagingRunFeedback(messenger,
+        targetName: 'M 31',
+        result: const ImagingRunResult('draft:y', appended: false, draft: true));
+    await tester.pump();
+    expect(find.textContaining('Saved "M 31" as an offline draft'), findsOneWidget);
   });
 
   testWidgets(
-    'feedback copy: an appended draft says added, a new one says saved',
-    (tester) async {
-      late ScaffoldMessengerState messenger;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) {
-                messenger = ScaffoldMessenger.of(context);
-                return const SizedBox();
-              },
-            ),
-          ),
-        ),
-      );
-      showImagingRunFeedback(
-        messenger,
-        targetName: 'M 42',
-        result: const ImagingRunResult('draft:x', appended: true, draft: true),
-      );
-      await tester.pump();
-      expect(find.text('Added "M 42" to the offline draft.'), findsOneWidget);
-      messenger.hideCurrentSnackBar();
-      await tester.pumpAndSettle();
-      showImagingRunFeedback(
-        messenger,
-        targetName: 'M 31',
-        result: const ImagingRunResult('draft:y', appended: false, draft: true),
-      );
-      await tester.pump();
-      expect(
-        find.textContaining('Saved "M 31" as an offline draft'),
-        findsOneWidget,
-      );
-    },
-  );
+      'unreachable daemon (DioException without response) degrades to a draft',
+      (tester) async {
+    final api = _ThrowingClient(DioException(
+      requestOptions: RequestOptions(path: '/api/v1/sequences'),
+      type: DioExceptionType.connectionError,
+    ));
+    final outcome = await run(tester, api: api);
+    expect(outcome.error, isNull);
+    expect(outcome.result?.draft, isTrue);
+    expect(drafts.store, hasLength(1));
+  });
 
   testWidgets(
-    'unreachable daemon (DioException without response) degrades to a draft',
-    (tester) async {
-      final api = _ThrowingClient(
-        DioException(
+      'daemon rejection (DioException WITH a response) rethrows — no silent draft',
+      (tester) async {
+    final api = _ThrowingClient(DioException(
+      requestOptions: RequestOptions(path: '/api/v1/sequences'),
+      response: Response(
           requestOptions: RequestOptions(path: '/api/v1/sequences'),
-          type: DioExceptionType.connectionError,
-        ),
-      );
-      final outcome = await run(tester, api: api);
-      expect(outcome.error, isNull);
-      expect(outcome.result?.draft, isTrue);
-      expect(drafts.store, hasLength(1));
-    },
-  );
+          statusCode: 422),
+      type: DioExceptionType.badResponse,
+    ));
+    final outcome = await run(tester, api: api);
+    expect(outcome.result, isNull);
+    expect(outcome.error, isA<DioException>());
+    expect((outcome.error as DioException).response?.statusCode, 422);
+    expect(drafts.store, isEmpty);
+  });
 
-  testWidgets(
-    'daemon rejection (DioException WITH a response) rethrows — no silent draft',
-    (tester) async {
-      final api = _ThrowingClient(
-        DioException(
-          requestOptions: RequestOptions(path: '/api/v1/sequences'),
-          response: Response(
-            requestOptions: RequestOptions(path: '/api/v1/sequences'),
-            statusCode: 422,
-          ),
-          type: DioExceptionType.badResponse,
-        ),
-      );
-      final outcome = await run(tester, api: api);
-      expect(outcome.result, isNull);
-      expect(outcome.error, isA<DioException>());
-      expect((outcome.error as DioException).response?.statusCode, 422);
-      expect(drafts.store, isEmpty);
-    },
-  );
-
-  testWidgets('a degraded create stamps its idempotency key into the draft', (
-    tester,
-  ) async {
-    final api = _ThrowingClient(
-      DioException(
-        requestOptions: RequestOptions(path: '/api/v1/sequences'),
-        type: DioExceptionType.connectionError,
-      ),
-    );
+  testWidgets('a degraded create stamps its idempotency key into the draft',
+      (tester) async {
+    final api = _ThrowingClient(DioException(
+      requestOptions: RequestOptions(path: '/api/v1/sequences'),
+      type: DioExceptionType.connectionError,
+    ));
     final outcome = await run(tester, api: api);
     expect(outcome.result?.draft, isTrue);
     final draft = drafts.store.values.single;
-    expect(
-      draft.pushKey,
-      isNotNull,
-      reason:
-          'the eventual push must reuse the original create key so the '
-          'daemon dedupes if the "failed" create actually landed',
-    );
+    expect(draft.pushKey, isNotNull,
+        reason: 'the eventual push must reuse the original create key so the '
+            'daemon dedupes if the "failed" create actually landed');
     expect(draft.pushKey, startsWith('run-'));
   });
 }

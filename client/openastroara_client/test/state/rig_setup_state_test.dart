@@ -42,11 +42,15 @@ class _Profile extends ProfileApi {
   final OpticsSettings? optics;
   final Phd2Settings phd2;
   @override
-  Future<({SiteSettings value, String? etag})> getSiteSection() async =>
-      (value: site ?? (throw Exception('connection refused')), etag: '"v1"');
+  Future<({SiteSettings value, String? etag})> getSiteSection() async => (
+    value: site ?? (throw Exception('connection refused')),
+    etag: '"v1"',
+  );
   @override
-  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: optics ?? (throw Exception('connection refused')), etag: '"v1"');
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async => (
+    value: optics ?? (throw Exception('connection refused')),
+    etag: '"v1"',
+  );
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
       (value: phd2, etag: '"v1"');
@@ -337,11 +341,7 @@ void main() {
       final c = await _trust(_Profile());
       expect(c.read(rigSetupFactsProvider), isNotNull);
       c.read(opticsSettingsProvider.notifier).reset();
-      expect(
-        c.read(rigSetupFactsProvider),
-        isNull,
-        reason: 'no client default stands in for the rig\'s optics',
-      );
+      expect(c.read(rigSetupFactsProvider), isNull, reason: 'no client default stands in for the rig\'s optics');
       expect(c.read(rigSetupGapsProvider), isEmpty);
     });
 
@@ -349,11 +349,7 @@ void main() {
       final c = await _trust(_Profile());
       expect(c.read(rigSetupFactsProvider), isNotNull);
       c.read(siteSettingsProvider.notifier).reset();
-      expect(
-        c.read(rigSetupFactsProvider),
-        isNull,
-        reason: 'no "Backyard" at 0/0 stands in for the rig\'s site',
-      );
+      expect(c.read(rigSetupFactsProvider), isNull, reason: 'no "Backyard" at 0/0 stands in for the rig\'s site');
       expect(c.read(rigSetupGapsProvider), isEmpty);
     });
 

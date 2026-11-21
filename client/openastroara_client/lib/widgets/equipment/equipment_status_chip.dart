@@ -35,7 +35,8 @@ StatusLevel equipmentStatusLevel(EquipmentDeviceStatus? status) {
     EquipmentConnectionState.connecting => StatusLevel.info,
     EquipmentConnectionState.error => StatusLevel.error,
     EquipmentConnectionState.disconnected ||
-    EquipmentConnectionState.unknown => StatusLevel.disconnected,
+    EquipmentConnectionState.unknown =>
+      StatusLevel.disconnected,
   };
 }
 
@@ -44,12 +45,12 @@ StatusLevel equipmentStatusLevel(EquipmentDeviceStatus? status) {
 /// resolved → [equipmentStatusLevel]. Generic so each call site can hand it the
 /// device's own `AsyncValue<XStatus?>` without an unsafe cast.
 StatusLevel equipmentChipLevel<T extends EquipmentDeviceStatus>(
-  AsyncValue<T?> async,
-) => async.when(
-  data: (s) => equipmentStatusLevel(s),
-  loading: () => StatusLevel.info,
-  error: (_, _) => StatusLevel.error,
-);
+        AsyncValue<T?> async) =>
+    async.when(
+      data: (s) => equipmentStatusLevel(s),
+      loading: () => StatusLevel.info,
+      error: (_, _) => StatusLevel.error,
+    );
 
 /// The §25.3 top-bar equipment chips, the most used first (Camera, Mount,
 /// Guider, Focuser), then the rest in device-type order: each shows live
@@ -74,85 +75,70 @@ class TopEquipmentChips extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         EquipmentStatusChip(
-          icon: Icons.camera_alt,
-          label: simple ? context.l10n.deviceCamera : 'Camera',
-          panelId: 'eq.camera',
-          faultTypes: const {'camera'},
-          watchLevel: (ref) =>
-              equipmentChipLevel(ref.watch(cameraStatusProvider)),
-        ),
+            icon: Icons.camera_alt,
+            label: simple ? context.l10n.deviceCamera : 'Camera',
+            panelId: 'eq.camera',
+            faultTypes: const {'camera'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(cameraStatusProvider))),
         EquipmentStatusChip(
-          icon: Icons.public,
-          glyph: const EquipmentGlyph.telescope(color: AraColors.textPrimary),
-          label: 'Mount',
-          panelId: 'eq.mount',
-          faultTypes: const {'telescope'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider)),
-        ),
+            icon: Icons.public,
+            glyph: const EquipmentGlyph.telescope(color: AraColors.textPrimary),
+            label: 'Mount',
+            panelId: 'eq.mount',
+            faultTypes: const {'telescope'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(mountProvider))),
         const GuiderChip(),
         EquipmentStatusChip(
-          icon: simple ? Icons.center_focus_strong : Icons.adjust,
-          label: 'Focuser',
-          panelId: 'eq.focuser',
-          faultTypes: const {'focuser'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(focuserProvider)),
-        ),
+            icon: simple ? Icons.center_focus_strong : Icons.adjust,
+            label: 'Focuser',
+            panelId: 'eq.focuser',
+            faultTypes: const {'focuser'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(focuserProvider))),
         EquipmentStatusChip(
-          icon: Icons.filter_alt,
-          glyph: const EquipmentGlyph.filterWheel(color: AraColors.textPrimary),
-          label: 'Filter Wheel',
-          panelId: 'eq.filterwheel',
-          faultTypes: const {'filterwheel'},
-          watchLevel: (ref) =>
-              equipmentChipLevel(ref.watch(filterWheelProvider)),
-        ),
+            icon: Icons.filter_alt,
+            glyph: const EquipmentGlyph.filterWheel(color: AraColors.textPrimary),
+            label: 'Filter Wheel',
+            panelId: 'eq.filterwheel',
+            faultTypes: const {'filterwheel'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(filterWheelProvider))),
         EquipmentStatusChip(
-          icon: Icons.rotate_right,
-          label: 'Rotator',
-          panelId: 'eq.rotator',
-          faultTypes: const {'rotator'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider)),
-        ),
+            icon: Icons.rotate_right,
+            label: 'Rotator',
+            panelId: 'eq.rotator',
+            faultTypes: const {'rotator'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(rotatorProvider))),
         EquipmentStatusChip(
-          icon: Icons.wb_sunny,
-          glyph: simple
-              ? const EquipmentGlyph.flatPanel(color: AraColors.textPrimary)
-              : null,
-          label: 'Flat Panel',
-          panelId: 'eq.flat',
-          // One physical device under two wire tokens (the reconnector
-          // grouping) — the chip listens on both.
-          faultTypes: const {'covercalibrator', 'flatdevice'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(flatPanelProvider)),
-        ),
+            icon: Icons.wb_sunny,
+            glyph: simple ? const EquipmentGlyph.flatPanel(color: AraColors.textPrimary) : null,
+            label: 'Flat Panel',
+            panelId: 'eq.flat',
+            // One physical device under two wire tokens (the reconnector
+            // grouping) — the chip listens on both.
+            faultTypes: const {'covercalibrator', 'flatdevice'},
+            watchLevel: (ref) =>
+                equipmentChipLevel(ref.watch(flatPanelProvider))),
         simple
             ? const SwitchStatusChip(icon: Icons.toggle_on, label: 'Switches')
             : const SwitchStatusChip(icon: Icons.power, label: 'Switch'),
         EquipmentStatusChip(
-          icon: Icons.cloud_outlined,
-          label: 'Weather',
-          panelId: 'eq.weather',
-          faultTypes: const {'observingconditions'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider)),
-        ),
+            icon: Icons.cloud_outlined,
+            label: 'Weather',
+            panelId: 'eq.weather',
+            faultTypes: const {'observingconditions'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(weatherProvider))),
         EquipmentStatusChip(
-          icon: simple ? Icons.verified_user : Icons.shield_outlined,
-          label: 'Safety',
-          panelId: 'eq.safety',
-          faultTypes: const {'safetymonitor'},
-          watchLevel: (ref) =>
-              equipmentChipLevel(ref.watch(safetyMonitorProvider)),
-        ),
+            icon: simple ? Icons.verified_user : Icons.shield_outlined,
+            label: 'Safety',
+            panelId: 'eq.safety',
+            faultTypes: const {'safetymonitor'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(safetyMonitorProvider))),
         EquipmentStatusChip(
-          icon: Icons.home_outlined,
-          glyph: simple
-              ? const EquipmentGlyph.dome(color: AraColors.textPrimary)
-              : null,
-          label: 'Dome',
-          panelId: 'eq.dome',
-          faultTypes: const {'dome'},
-          watchLevel: (ref) => equipmentChipLevel(ref.watch(domeProvider)),
-        ),
+            icon: Icons.home_outlined,
+            glyph: simple ? const EquipmentGlyph.dome(color: AraColors.textPrimary) : null,
+            label: 'Dome',
+            panelId: 'eq.dome',
+            faultTypes: const {'dome'},
+            watchLevel: (ref) => equipmentChipLevel(ref.watch(domeProvider))),
       ],
     );
   }
@@ -191,10 +177,8 @@ class EquipmentStatusChip extends ConsumerWidget {
     // Stale-guard: while the server link is down the last device status can't be
     // trusted — show the dot grey (disconnected) instead of a false green.
     final level = ref.watch(serverLinkUpProvider)
-        ? blendFaultLevel(
-            watchLevel(ref),
-            ref.watch(activeFaultsProvider).worstFor(faultTypes),
-          )
+        ? blendFaultLevel(watchLevel(ref),
+            ref.watch(activeFaultsProvider).worstFor(faultTypes))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,
@@ -214,20 +198,19 @@ class EquipmentStatusChip extends ConsumerWidget {
 /// single-instance chips surface a device error, so SW turns red alongside them
 /// instead of reading a misleading grey), else disconnected; loading → info,
 /// list-fetch error → error. Pure → unit-testable.
-StatusLevel switchChipLevel(
-  AsyncValue<List<SwitchDevice>> async, {
-  bool acting = false,
-}) => async.when(
-  data: (list) => acting
-      ? StatusLevel.changing
-      : list.any((s) => s.isConnected)
-      ? StatusLevel.connected
-      : list.any((s) => s.connectionState == SwitchConnectionState.error)
-      ? StatusLevel.error
-      : StatusLevel.disconnected,
-  loading: () => StatusLevel.info,
-  error: (_, _) => StatusLevel.error,
-);
+StatusLevel switchChipLevel(AsyncValue<List<SwitchDevice>> async,
+        {bool acting = false}) =>
+    async.when(
+      data: (list) => acting
+          ? StatusLevel.changing
+          : list.any((s) => s.isConnected)
+              ? StatusLevel.connected
+              : list.any((s) => s.connectionState == SwitchConnectionState.error)
+                  ? StatusLevel.error
+                  : StatusLevel.disconnected,
+      loading: () => StatusLevel.info,
+      error: (_, _) => StatusLevel.error,
+    );
 
 /// The Switch top-bar chip. Switch is multi-instance (a list of devices, each
 /// with its own connection), so it shows connected when *any* switch is connected.
@@ -240,12 +223,9 @@ class SwitchStatusChip extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final level = ref.watch(serverLinkUpProvider)
         ? blendFaultLevel(
-            switchChipLevel(
-              ref.watch(switchListProvider),
-              acting: ref.watch(switchActingProvider),
-            ),
-            ref.watch(activeFaultsProvider).worstFor(const {'switch'}),
-          )
+            switchChipLevel(ref.watch(switchListProvider),
+                acting: ref.watch(switchActingProvider)),
+            ref.watch(activeFaultsProvider).worstFor(const {'switch'}))
         : StatusLevel.disconnected;
     return EquipmentChip(
       icon: icon,

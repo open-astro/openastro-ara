@@ -5,10 +5,7 @@ import 'package:openastroara/services/stats_export_api.dart';
 
 void main() {
   group('StatsExportApi.astrobinExportUrl', () {
-    final api = StatsExportApi(
-      const AraServer(hostname: 'pi', port: 5555),
-      dio: Dio(),
-    );
+    final api = StatsExportApi(const AraServer(hostname: 'pi', port: 5555), dio: Dio());
 
     test('builds an absolute export URL against the server base', () {
       final url = api.astrobinExportUrl('M31');

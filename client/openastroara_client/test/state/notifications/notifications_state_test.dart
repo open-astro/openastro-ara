@@ -20,21 +20,20 @@ class _FakeSavedServerService implements SavedServerService {
   Future<void> add(AraServer server) async => _stored.add(server);
 }
 
-AraNotification _n(
-  String id, {
-  bool read = false,
-  bool dismissed = false,
-  NotificationSeverity severity = NotificationSeverity.info,
-}) => AraNotification(
-  id: id,
-  postedUtc: DateTime.utc(2026, 8, 2, 3),
-  severity: severity,
-  category: NotificationCategory.equipment,
-  title: 'Guider gave up',
-  message: 'It could not find a star after three tries.',
-  read: read,
-  dismissed: dismissed,
-);
+AraNotification _n(String id,
+        {bool read = false,
+        bool dismissed = false,
+        NotificationSeverity severity = NotificationSeverity.info}) =>
+    AraNotification(
+      id: id,
+      postedUtc: DateTime.utc(2026, 8, 2, 3),
+      severity: severity,
+      category: NotificationCategory.equipment,
+      title: 'Guider gave up',
+      message: 'It could not find a star after three tries.',
+      read: read,
+      dismissed: dismissed,
+    );
 
 class _FakeClient implements NotificationsClient {
   _FakeClient(this.items);
@@ -43,7 +42,6 @@ class _FakeClient implements NotificationsClient {
   final List<String> markedRead = <String>[];
   final List<String> dismissed = <String>[];
   bool failMutations = false;
-
   /// When true, serves [items] in pages of [limit] like the real server.
   bool paginate = false;
 
@@ -85,14 +83,11 @@ class _FakeClient implements NotificationsClient {
 }
 
 ProviderContainer _container(_FakeClient client) {
-  final container = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
-      ),
-      notificationsApiFactoryProvider.overrideWithValue((_) => client),
-    ],
-  );
+  final container = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
+    notificationsApiFactoryProvider.overrideWithValue((_) => client),
+  ]);
   addTearDown(container.dispose);
   return container;
 }
@@ -146,10 +141,9 @@ void main() {
     await container.read(savedServersProvider.future);
     await container.read(notificationInboxProvider.future);
     await container.read(notificationInboxProvider.notifier).dismiss('a');
-    expect(container.read(notificationInboxProvider).value!.map((n) => n.id), [
-      'a',
-      'b',
-    ], reason: 'the server refused, so the inbox is unchanged');
+    expect(container.read(notificationInboxProvider).value!.map((n) => n.id),
+        ['a', 'b'],
+        reason: 'the server refused, so the inbox is unchanged');
   });
 
   test('mark all read clears the badge', () async {
@@ -159,11 +153,7 @@ void main() {
     await container.read(notificationInboxProvider.future);
     // The server keeps serving the original page, so a real refresh would
     // undo this; the fake mirrors what a real server returns after the calls.
-    client.items = [
-      _n('a', read: true),
-      _n('b', read: true),
-      _n('c', read: true),
-    ];
+    client.items = [_n('a', read: true), _n('b', read: true), _n('c', read: true)];
     await container.read(notificationInboxProvider.notifier).markAllRead();
     expect(client.markedRead, containsAll(<String>['a', 'b']));
     expect(client.markedRead, isNot(contains('c')));
@@ -173,17 +163,15 @@ void main() {
   // The rig had 57 waiting the first time this ran. One page of 50 would have
   // shown 50 and told the user "50 unread" — wrong by seven.
   test('more than one page still counts every unread', () async {
-    final client = _FakeClient(List.generate(57, (i) => _n('n$i')))
+    final client = _FakeClient(
+        List.generate(57, (i) => _n('n$i')))
       ..paginate = true;
     final container = _container(client);
     await container.read(savedServersProvider.future);
     final items = await container.read(notificationInboxProvider.future);
     expect(items, hasLength(57));
     expect(container.read(unreadNotificationCountProvider), 57);
-    expect(
-      container.read(notificationInboxProvider.notifier).truncated,
-      isFalse,
-    );
+    expect(container.read(notificationInboxProvider.notifier).truncated, isFalse);
   });
 
   test('an absurd backlog stops at a limit and admits it', () async {
@@ -193,10 +181,7 @@ void main() {
     await container.read(savedServersProvider.future);
     final items = await container.read(notificationInboxProvider.future);
     expect(items, hasLength(500), reason: '10 pages of 50, then it stops');
-    expect(
-      container.read(notificationInboxProvider.notifier).truncated,
-      isTrue,
-    );
+    expect(container.read(notificationInboxProvider.notifier).truncated, isTrue);
   });
 
   test('severity and category survive the wire', () {

@@ -49,20 +49,21 @@ class PlateSolveSettings {
     bool? syncToCoordinates,
     int? maxIterations,
     double? convergenceToleranceArcsec,
-  }) => PlateSolveSettings(
-    engine: engine ?? this.engine,
-    pathOrEndpoint: pathOrEndpoint ?? this.pathOrEndpoint,
-    indexDownloadPath: indexDownloadPath ?? this.indexDownloadPath,
-    searchRadiusDeg: searchRadiusDeg ?? this.searchRadiusDeg,
-    downsampleFactor: downsampleFactor ?? this.downsampleFactor,
-    timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
-    useBlindFallback: useBlindFallback ?? this.useBlindFallback,
-    centerAfterSlew: centerAfterSlew ?? this.centerAfterSlew,
-    syncToCoordinates: syncToCoordinates ?? this.syncToCoordinates,
-    maxIterations: maxIterations ?? this.maxIterations,
-    convergenceToleranceArcsec:
-        convergenceToleranceArcsec ?? this.convergenceToleranceArcsec,
-  );
+  }) =>
+      PlateSolveSettings(
+        engine: engine ?? this.engine,
+        pathOrEndpoint: pathOrEndpoint ?? this.pathOrEndpoint,
+        indexDownloadPath: indexDownloadPath ?? this.indexDownloadPath,
+        searchRadiusDeg: searchRadiusDeg ?? this.searchRadiusDeg,
+        downsampleFactor: downsampleFactor ?? this.downsampleFactor,
+        timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
+        useBlindFallback: useBlindFallback ?? this.useBlindFallback,
+        centerAfterSlew: centerAfterSlew ?? this.centerAfterSlew,
+        syncToCoordinates: syncToCoordinates ?? this.syncToCoordinates,
+        maxIterations: maxIterations ?? this.maxIterations,
+        convergenceToleranceArcsec:
+            convergenceToleranceArcsec ?? this.convergenceToleranceArcsec,
+      );
 }
 
 class PlateSolveSettingsNotifier extends SectionNotifier<PlateSolveSettings> {

@@ -75,8 +75,9 @@ class _FilterSetPanelState extends ConsumerState<FilterSetPanel>
     if (gate != null) return gate;
     final set = ref.watch(filterSetProvider).value!;
     final n = ref.read(filterSetProvider.notifier);
-    final dim = Theme.of(context).textTheme.bodyMedium
-        ?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(
+      context,
+    ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary);
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [

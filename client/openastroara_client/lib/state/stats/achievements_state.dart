@@ -9,8 +9,8 @@ import 'stats_refresh_mixin.dart';
 /// Builds an [AchievementsClient] for a server. Overridable in tests.
 final achievementsApiFactoryProvider =
     Provider<AchievementsClient Function(AraServer)>(
-      (ref) => AchievementsApi.new,
-    );
+  (ref) => AchievementsApi.new,
+);
 
 /// [AchievementsClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -43,12 +43,11 @@ class AchievementsNotifier extends AsyncNotifier<StatsAchievements?>
   /// error. A server switch mid-refresh discards the result — success or
   /// failure — via the generation guard. See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-    final api = ref.read(achievementsApiProvider);
-    return api?.fetch();
-  });
+        final api = ref.read(achievementsApiProvider);
+        return api?.fetch();
+      });
 }
 
 final achievementsProvider =
     AsyncNotifierProvider<AchievementsNotifier, StatsAchievements?>(
-      AchievementsNotifier.new,
-    );
+        AchievementsNotifier.new);

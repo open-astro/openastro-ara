@@ -79,12 +79,7 @@ void main() {
       findsNWidgets(2),
       reason: 'one per filter loop',
     );
-    expect(
-      find.text(
-        'AF every 23 · dither every 1 · meridian flip if Auto flip is on',
-      ),
-      findsNWidgets(2),
-    );
+    expect(find.text('AF every 23 · dither every 1 · meridian flip if Auto flip is on'), findsNWidgets(2));
     expect(
       find.text('while above horizon'),
       findsOneWidget,

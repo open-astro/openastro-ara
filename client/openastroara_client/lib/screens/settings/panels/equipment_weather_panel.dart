@@ -183,8 +183,9 @@ class _WeatherBody extends ConsumerWidget {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Updated: ${formatUtcMinute(status.capturedAt!)}',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
             ),
           ),
       ],

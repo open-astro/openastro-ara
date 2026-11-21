@@ -99,11 +99,7 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
             const Positioned(
               top: 12,
               right: 16,
-              child: SizedBox(
-                width: 16,
-                height: 16,
-                child: AdaptiveProgressIndicator(strokeWidth: 2),
-              ),
+              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
             ),
         ],
       ),
@@ -136,8 +132,7 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
     }
     if (series.isEmpty) {
       return const _Hint(
-        'No frames with a focuser position yet — this chart fills in as positioned frames are captured.',
-      );
+          'No frames with a focuser position yet — this chart fills in as positioned frames are captured.');
     }
 
     final spots = [
@@ -157,8 +152,7 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
     // and spots, which would otherwise throw UnsupportedError on an empty list.
     if (spots.isEmpty) {
       return const _Hint(
-        'No frames with a focuser position yet — this chart fills in as positioned frames are captured.',
-      );
+          'No frames with a focuser position yet — this chart fills in as positioned frames are captured.');
     }
 
     return Padding(
@@ -177,10 +171,14 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
           gridData: FlGridData(
             show: true,
             drawVerticalLine: true,
-            getDrawingHorizontalLine: (_) =>
-                const FlLine(color: AraColors.border, strokeWidth: 0.5),
-            getDrawingVerticalLine: (_) =>
-                const FlLine(color: AraColors.border, strokeWidth: 0.5),
+            getDrawingHorizontalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
+            getDrawingVerticalLine: (_) => const FlLine(
+              color: AraColors.border,
+              strokeWidth: 0.5,
+            ),
           ),
           titlesData: FlTitlesData(
             leftTitles: const AxisTitles(
@@ -199,14 +197,10 @@ class _FocusTempScatterChartState extends ConsumerState<FocusTempScatterChart>
     );
   }
 
-  double _minX(List<ScatterSpot> p) =>
-      p.map((s) => s.x).reduce((a, b) => a < b ? a : b);
-  double _maxX(List<ScatterSpot> p) =>
-      p.map((s) => s.x).reduce((a, b) => a > b ? a : b);
-  double _minY(List<ScatterSpot> p) =>
-      p.map((s) => s.y).reduce((a, b) => a < b ? a : b);
-  double _maxY(List<ScatterSpot> p) =>
-      p.map((s) => s.y).reduce((a, b) => a > b ? a : b);
+  double _minX(List<ScatterSpot> p) => p.map((s) => s.x).reduce((a, b) => a < b ? a : b);
+  double _maxX(List<ScatterSpot> p) => p.map((s) => s.x).reduce((a, b) => a > b ? a : b);
+  double _minY(List<ScatterSpot> p) => p.map((s) => s.y).reduce((a, b) => a < b ? a : b);
+  double _maxY(List<ScatterSpot> p) => p.map((s) => s.y).reduce((a, b) => a > b ? a : b);
 }
 
 class _Hint extends StatelessWidget {
@@ -226,8 +220,9 @@ class _Hint extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textDisabled),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
             ),
           ),
           if (onRetry != null)

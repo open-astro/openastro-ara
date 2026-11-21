@@ -19,7 +19,7 @@ class PlanetariumPrefsService {
   /// [supportDir] overrides the app-support directory lookup (tests use a temp
   /// dir; production uses path_provider).
   PlanetariumPrefsService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _fileName = 'planetarium_display.json';
@@ -64,13 +64,10 @@ class PlanetariumPrefsService {
   Future<void> save(Map<String, bool> prefs) {
     final task = _chain.then((_) async {
       try {
-        final merged = await load()
-          ..addAll(prefs);
+        final merged = await load()..addAll(prefs);
         final f = await _file();
         await f.writeAsString(jsonEncode(merged), flush: true);
-      } catch (_) {
-        /* best effort — non-critical UI prefs */
-      }
+      } catch (_) {/* best effort — non-critical UI prefs */}
     });
     _chain = task;
     return task;

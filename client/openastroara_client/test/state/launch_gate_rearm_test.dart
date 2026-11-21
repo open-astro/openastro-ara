@@ -10,9 +10,7 @@ class _ServerSwitch extends Notifier<AraServer?> {
   AraServer? build() => const AraServer(hostname: 'a', port: 1);
 }
 
-final _serverSwitch = NotifierProvider<_ServerSwitch, AraServer?>(
-  _ServerSwitch.new,
-);
+final _serverSwitch = NotifierProvider<_ServerSwitch, AraServer?>(_ServerSwitch.new);
 
 /// Riverpod 3 rebuilds derived providers on the next microtask.
 Future<void> settle() => Future<void>.delayed(Duration.zero);
@@ -102,35 +100,18 @@ void main() {
     container.read(profileGatePassedProvider.notifier).pass();
     expect(container.read(profileGatePassedProvider), isTrue);
 
-    container.read(_serverSwitch.notifier).state = const AraServer(
-      hostname: 'a',
-      port: 1,
-    );
+    container.read(_serverSwitch.notifier).state = const AraServer(hostname: 'a', port: 1);
     await settle();
-    expect(
-      container.read(profileGatePassedProvider),
-      isTrue,
-      reason: 'same server re-saved',
-    );
+    expect(container.read(profileGatePassedProvider), isTrue, reason: 'same server re-saved');
 
-    container.read(_serverSwitch.notifier).state = const AraServer(
-      hostname: 'b',
-      port: 1,
-    );
+    container.read(_serverSwitch.notifier).state = const AraServer(hostname: 'b', port: 1);
     await settle();
-    expect(
-      container.read(profileGatePassedProvider),
-      isFalse,
-      reason: 'a different rig re-arms the gate',
-    );
+    expect(container.read(profileGatePassedProvider), isFalse, reason: 'a different rig re-arms the gate');
 
     // Offline planning keeps the shell whatever the server list does.
     container.read(profileGatePassedProvider.notifier).pass();
     container.read(offlineModeProvider.notifier).enter();
-    container.read(_serverSwitch.notifier).state = const AraServer(
-      hostname: 'c',
-      port: 1,
-    );
+    container.read(_serverSwitch.notifier).state = const AraServer(hostname: 'c', port: 1);
     await settle();
     expect(container.read(profileGatePassedProvider), isTrue);
   });

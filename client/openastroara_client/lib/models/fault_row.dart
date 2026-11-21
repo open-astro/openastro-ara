@@ -41,22 +41,22 @@ class FaultRow {
   bool get resolved => resolvedUtc != null;
 
   factory FaultRow.fromJson(Map<String, dynamic> json) => FaultRow(
-    id: (json['id'] as String?) ?? '',
-    sessionId: _string(json['session_id']),
-    detectedUtc:
-        DateTime.tryParse((json['detected_utc'] as String?) ?? '') ??
-        DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-    equipmentType: (json['equipment_type'] as String?) ?? 'unknown',
-    equipmentId: _string(json['equipment_id']),
-    equipmentName: _string(json['equipment_name']),
-    faultType: (json['fault_type'] as String?) ?? 'unknown',
-    details: _string(json['details']),
-    actionTaken: _string(json['action_taken']),
-    resolvedUtc: DateTime.tryParse((json['resolved_utc'] as String?) ?? ''),
-    affectedFrames: (json['affected_frames'] as List? ?? const [])
-        .whereType<String>()
-        .toList(growable: false),
-  );
+        id: (json['id'] as String?) ?? '',
+        sessionId: _string(json['session_id']),
+        detectedUtc:
+            DateTime.tryParse((json['detected_utc'] as String?) ?? '') ??
+                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+        equipmentType: (json['equipment_type'] as String?) ?? 'unknown',
+        equipmentId: _string(json['equipment_id']),
+        equipmentName: _string(json['equipment_name']),
+        faultType: (json['fault_type'] as String?) ?? 'unknown',
+        details: _string(json['details']),
+        actionTaken: _string(json['action_taken']),
+        resolvedUtc: DateTime.tryParse((json['resolved_utc'] as String?) ?? ''),
+        affectedFrames: (json['affected_frames'] as List? ?? const [])
+            .whereType<String>()
+            .toList(growable: false),
+      );
 
   static String? _string(dynamic value) =>
       value is String && value.isNotEmpty ? value : null;

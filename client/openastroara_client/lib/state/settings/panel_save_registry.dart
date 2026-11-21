@@ -11,8 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 /// equipment panels that apply instantly).
 final panelSaveActionProvider =
     NotifierProvider<PanelSaveActionNotifier, Future<void> Function()?>(
-      PanelSaveActionNotifier.new,
-    );
+        PanelSaveActionNotifier.new);
 
 class PanelSaveActionNotifier extends Notifier<Future<void> Function()?> {
   @override

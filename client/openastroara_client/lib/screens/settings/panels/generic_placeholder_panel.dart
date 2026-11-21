@@ -37,15 +37,17 @@ class GenericPlaceholderPanel extends StatelessWidget {
               const SizedBox(height: 4),
               Text(
                 panelId,
-                style: Theme.of(context).textTheme.labelSmall
-                    ?.copyWith(color: AraColors.textDisabled),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelSmall?.copyWith(color: AraColors.textDisabled),
               ),
               const SizedBox(height: 16),
               Text(
                 note,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: AraColors.textSecondary),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: AraColors.textSecondary,
+                ),
               ),
             ],
           ),

@@ -64,8 +64,7 @@ class PlanetariumSelection {
           ? null
           : DateTime.fromMillisecondsSinceEpoch(riseMs.round()),
       designations: [
-        if (json['designations'] case final List list)
-          ...list.whereType<String>(),
+        if (json['designations'] case final List list) ...list.whereType<String>(),
       ],
     );
   }

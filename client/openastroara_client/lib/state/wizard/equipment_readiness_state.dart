@@ -15,18 +15,15 @@ import '../app_locale_state.dart';
 /// through this factory, so fakes drop in without touching the notifier.
 final deviceFactsSourceFactoryProvider =
     Provider<DeviceFactsSource Function(AraServer)>(
-      (_) => AraDeviceFactsSource.new,
-    );
+        (_) => AraDeviceFactsSource.new);
 
 /// §76.3 — the Wizard 2.0 "Your equipment" readiness map: per assigned
 /// fact-bearing device, connect + read + classify, all device types in
 /// parallel (entering the screen fires one [readAll]; a card's Recheck fires
 /// [recheck] for just that type).
-final wizardEquipmentReadinessProvider =
-    NotifierProvider.autoDispose<
-      WizardEquipmentReadiness,
-      Map<EquipmentDeviceType, DeviceReadiness>
-    >(WizardEquipmentReadiness.new);
+final wizardEquipmentReadinessProvider = NotifierProvider.autoDispose<
+    WizardEquipmentReadiness,
+    Map<EquipmentDeviceType, DeviceReadiness>>(WizardEquipmentReadiness.new);
 
 class WizardEquipmentReadiness
     extends Notifier<Map<EquipmentDeviceType, DeviceReadiness>> {
@@ -67,26 +64,21 @@ class WizardEquipmentReadiness
     state = {
       for (final t in assigned.keys)
         t: DeviceReadiness(
-          type: t,
-          label: _genericLabel(t),
-          state: ReadinessState.reading,
-        ),
+            type: t, label: _genericLabel(t), state: ReadinessState.reading),
     };
     if (assigned.isEmpty) return;
     final source = ref.read(deviceFactsSourceFactoryProvider)(server);
     try {
-      await Future.wait(
-        assigned.entries.map((e) async {
-          final result = await _readOne(source, e.key, e.value);
-          // A recheck started after this readAll owns the card now (it holds a
-          // _typeRun entry) — defer to it. ref.mounted: an autoDispose teardown
-          // during the (up to ~15 s) connect+read makes writing state throw
-          // (review r3; same idiom as live_library_state).
-          if (ref.mounted && _run == run && !_typeRun.containsKey(e.key)) {
-            state = {...state, e.key: result};
-          }
-        }),
-      );
+      await Future.wait(assigned.entries.map((e) async {
+        final result = await _readOne(source, e.key, e.value);
+        // A recheck started after this readAll owns the card now (it holds a
+        // _typeRun entry) — defer to it. ref.mounted: an autoDispose teardown
+        // during the (up to ~15 s) connect+read makes writing state throw
+        // (review r3; same idiom as live_library_state).
+        if (ref.mounted && _run == run && !_typeRun.containsKey(e.key)) {
+          state = {...state, e.key: result};
+        }
+      }));
     } finally {
       source.close();
     }
@@ -94,23 +86,18 @@ class WizardEquipmentReadiness
 
   /// Re-run one device (the card's Recheck button after an AlpacaBridge fix).
   Future<void> recheck(
-    AraServer server,
-    EquipmentDeviceType type,
-    String assignedId,
-  ) async {
+      AraServer server, EquipmentDeviceType type, String assignedId) async {
     final run = _run; // a full readAll supersedes any in-flight recheck
     final typeRun = (_typeRun[type] ?? 0) + 1; // newer recheck wins the card
     _typeRun[type] = typeRun;
     state = {
       ...state,
-      type:
-          (state[type] ??
-                  DeviceReadiness(
-                    type: type,
-                    label: _genericLabel(type),
-                    state: ReadinessState.reading,
-                  ))
-              .copyWith(state: ReadinessState.reading),
+      type: (state[type] ??
+              DeviceReadiness(
+                  type: type,
+                  label: _genericLabel(type),
+                  state: ReadinessState.reading))
+          .copyWith(state: ReadinessState.reading),
     };
     final source = ref.read(deviceFactsSourceFactoryProvider)(server);
     try {
@@ -123,11 +110,8 @@ class WizardEquipmentReadiness
     }
   }
 
-  Future<DeviceReadiness> _readOne(
-    DeviceFactsSource source,
-    EquipmentDeviceType type,
-    String assignedId,
-  ) async {
+  Future<DeviceReadiness> _readOne(DeviceFactsSource source,
+      EquipmentDeviceType type, String assignedId) async {
     try {
       final device = await source.resolve(type, assignedId);
       if (device == null) {
@@ -136,11 +120,8 @@ class WizardEquipmentReadiness
           label: _genericLabel(type),
           state: ReadinessState.unreachable,
           gaps: const [
-            DeviceGap(
-              'Device',
-              FactNeed.required,
-              'The assigned device is not on the bridge right now. Check power + USB, then Recheck.',
-            ),
+            DeviceGap('Device', FactNeed.required,
+                'The assigned device is not on the bridge right now. Check power + USB, then Recheck.'),
           ],
         );
       }
@@ -153,63 +134,41 @@ class WizardEquipmentReadiness
           state: ReadinessState.unreachable,
           setupUri: setupUri,
           gaps: const [
-            DeviceGap(
-              'Connection',
-              FactNeed.required,
-              'The device never finished connecting. Check it in AlpacaBridge, then Recheck.',
-            ),
+            DeviceGap('Connection', FactNeed.required,
+                'The device never finished connecting. Check it in AlpacaBridge, then Recheck.'),
           ],
         );
       }
       switch (type) {
         case EquipmentDeviceType.camera:
           return ReadinessRules.camera(
-            label,
-            setupUri,
-            await source.cameraGeometry(),
-          );
+              label, setupUri, await source.cameraGeometry());
         case EquipmentDeviceType.mount:
           // Both reads hit the same status endpoint — overlap them (r3 nit).
           final optics = source.telescopeOptics();
           final props = source.mountProps();
           // #1264 — best-effort: the ceiling is a fact about the rig, not the
           // mount endpoint, and its absence or failure must not gap the mount.
-          final tracking = source.trackingCalibration().catchError(
-            (Object _) => null,
-          );
+          final tracking = source
+              .trackingCalibration()
+              .catchError((Object _) => null);
           return ReadinessRules.mount(
-            label,
-            setupUri,
-            await optics,
-            await props,
-            tracking: await tracking,
-          );
+              label, setupUri, await optics, await props,
+              tracking: await tracking);
         case EquipmentDeviceType.filterWheel:
           return ReadinessRules.filterWheel(
-            label,
-            setupUri,
-            await source.filterWheelSlots(),
-          );
+              label, setupUri, await source.filterWheelSlots());
         case EquipmentDeviceType.focuser:
           return ReadinessRules.focuser(
-            label,
-            setupUri,
-            await source.focuserProps(),
-          );
+              label, setupUri, await source.focuserProps());
         case EquipmentDeviceType.rotator:
           return ReadinessRules.rotator(
-            label,
-            setupUri,
-            await source.rotatorProps(),
-          );
+              label, setupUri, await source.rotatorProps());
         // Fact-free types never enter the readiness map (readAll only seeds
         // the five above).
         default:
           return DeviceReadiness(
-            type: type,
-            label: label,
-            state: ReadinessState.ready,
-          );
+              type: type, label: label, state: ReadinessState.ready);
       }
       // Deliberately broad (review r2): an Error escaping a fact read would
       // otherwise reject out of readAll's Future.wait after the other cards
@@ -222,12 +181,9 @@ class WizardEquipmentReadiness
         label: _genericLabel(type),
         state: ReadinessState.unreachable,
         gaps: [
-          DeviceGap(
-            'Connection',
-            FactNeed.required,
-            'Reading the device failed: '
-                '${failureReason(l10nFor(ref.read(appLocaleProvider)), e)} Recheck to retry.',
-          ),
+          DeviceGap('Connection', FactNeed.required,
+              'Reading the device failed: '
+              '${failureReason(l10nFor(ref.read(appLocaleProvider)), e)} Recheck to retry.'),
         ],
       );
     }
@@ -260,3 +216,4 @@ class WizardEquipmentReadiness
     }
   }
 }
+

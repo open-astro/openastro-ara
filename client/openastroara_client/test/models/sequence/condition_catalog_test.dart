@@ -53,23 +53,16 @@ void main() {
         expect(node.containsKey('ErrorBehavior'), isFalse, reason: def.label);
         expect(node.containsKey('Attempts'), isFalse, reason: def.label);
         for (final f in def.fields) {
-          expect(
-            node.containsKey(f.key),
-            isTrue,
-            reason: '${def.label}.${f.key}',
-          );
+          expect(node.containsKey(f.key), isTrue, reason: '${def.label}.${f.key}');
         }
       }
     });
 
-    test(
-      'LoopCondition defaults to 2 iterations with a zeroed runtime counter',
-      () {
-        final node = conditionForType(_loop)!.build();
-        expect(node['Iterations'], 2);
-        expect(node['CompletedIterations'], 0);
-      },
-    );
+    test('LoopCondition defaults to 2 iterations with a zeroed runtime counter', () {
+      final node = conditionForType(_loop)!.build();
+      expect(node['Iterations'], 2);
+      expect(node['CompletedIterations'], 0);
+    });
 
     test('TimeSpanCondition defaults to a 1-minute span', () {
       final node = conditionForType(_timeSpan)!.build();
@@ -91,16 +84,15 @@ void main() {
     });
 
     test('LoopCondition iterations are bounded to >= 1', () {
-      final iter = conditionForType(_loop)!.fields
-          .firstWhere((f) => f.key == 'Iterations');
+      final iter =
+          conditionForType(_loop)!.fields.firstWhere((f) => f.key == 'Iterations');
       expect(iter.min, 1);
       expect(iter.max, isNull);
     });
 
     test('TimeCondition builds a null provider (custom clock time) + clamped H/M/S', () {
       final def = conditionForType(
-        'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
-      )!;
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
       final node = def.build();
       expect(node.containsKey('SelectedProvider'), isTrue);
       expect(node['SelectedProvider'], isNull); // Custom time by default
@@ -113,22 +105,13 @@ void main() {
 
     test('TimeCondition H/M/S grey out under a sky-event provider (enabledWhen)', () {
       final def = conditionForType(
-        'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
-      )!;
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
       final provider = timeProviderValue('Civil Dusk'); // a recognised provider
       for (final key in ['Hours', 'Minutes', 'Seconds']) {
         final f = def.fields.firstWhere((f) => f.key == key);
         expect(f.enabledWhen, isNotNull, reason: key);
-        expect(
-          f.enabledWhen!(const {'SelectedProvider': null}),
-          isTrue,
-          reason: key,
-        );
-        expect(
-          f.enabledWhen!({'SelectedProvider': provider}),
-          isFalse,
-          reason: key,
-        );
+        expect(f.enabledWhen!(const {'SelectedProvider': null}), isTrue, reason: key);
+        expect(f.enabledWhen!({'SelectedProvider': provider}), isFalse, reason: key);
       }
       // MinutesOffset is the inverse: enabled ONLY under a provider (the daemon
       // applies it to the computed event time; it's inert for custom clock time).
@@ -138,30 +121,19 @@ void main() {
       expect(offset.enabledWhen!({'SelectedProvider': provider}), isTrue);
     });
 
-    test(
-      'an unrecognised SelectedProvider reads as Custom time consistently',
-      () {
-        // The dropdown falls back to 'Custom time' for an unknown $type; the H/M/S
-        // relevance must agree (enabled) rather than greying under that label.
-        final def = conditionForType(
-          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
-        )!;
-        const unknown = {
-          'SelectedProvider': {r'$type': 'Nope.NotAProvider'},
-        };
-        expect(timeProviderLabel(unknown['SelectedProvider']), 'Custom time');
-        expect(
-          def.fields.firstWhere((f) => f.key == 'Hours').enabledWhen!(unknown),
-          isTrue,
-        );
-        expect(
-          def.fields.firstWhere((f) => f.key == 'MinutesOffset').enabledWhen!(
-            unknown,
-          ),
-          isFalse,
-        );
-      },
-    );
+    test('an unrecognised SelectedProvider reads as Custom time consistently', () {
+      // The dropdown falls back to 'Custom time' for an unknown $type; the H/M/S
+      // relevance must agree (enabled) rather than greying under that label.
+      final def = conditionForType(
+          'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!;
+      const unknown = {'SelectedProvider': {r'$type': 'Nope.NotAProvider'}};
+      expect(timeProviderLabel(unknown['SelectedProvider']), 'Custom time');
+      expect(def.fields.firstWhere((f) => f.key == 'Hours').enabledWhen!(unknown), isTrue);
+      expect(
+        def.fields.firstWhere((f) => f.key == 'MinutesOffset').enabledWhen!(unknown),
+        isFalse,
+      );
+    });
 
     test('timeProvider helpers round-trip a provider \$type', () {
       expect(timeProviderValue('Custom time'), isNull);
@@ -179,27 +151,18 @@ void main() {
       expect(b['Iterations'], 2); // unaffected
     });
 
-    test(
-      'AltitudeCondition builds Data (WaitLoopData) + hidden HasDsoParent',
-      () {
-        final def = conditionForType(_altitude)!;
-        final node = def.build();
-        expect(node['HasDsoParent'], false);
-        final data = node['Data'] as Map;
-        expect(data[r'$type'], waitLoopDataType);
-        expect(data['Offset'], 30.0);
-        expect(data['Comparator'], 1); // LessThan
-        expect(
-          (data['Coordinates'] as Map)[r'$type'],
-          contains('InputCoordinates'),
-        );
-        // HasDsoParent is a runtime-recomputed field — present but not user-editable.
-        expect(
-          def.fields.firstWhere((f) => f.key == 'HasDsoParent').editable,
-          isFalse,
-        );
-      },
-    );
+    test('AltitudeCondition builds Data (WaitLoopData) + hidden HasDsoParent', () {
+      final def = conditionForType(_altitude)!;
+      final node = def.build();
+      expect(node['HasDsoParent'], false);
+      final data = node['Data'] as Map;
+      expect(data[r'$type'], waitLoopDataType);
+      expect(data['Offset'], 30.0);
+      expect(data['Comparator'], 1); // LessThan
+      expect((data['Coordinates'] as Map)[r'$type'], contains('InputCoordinates'));
+      // HasDsoParent is a runtime-recomputed field — present but not user-editable.
+      expect(def.fields.firstWhere((f) => f.key == 'HasDsoParent').editable, isFalse);
+    });
 
     test('AboveHorizonCondition builds Data with offset 0 / GreaterThan', () {
       final node = conditionForType(_aboveHorizon)!.build();
@@ -212,17 +175,14 @@ void main() {
       expect(altitudeComparators.keys, [1, 3]);
     });
 
-    test(
-      'an altitude build deep-clones the nested WaitLoopData / Coordinates',
-      () {
-        final a = conditionForType(_altitude)!.build();
-        final b = conditionForType(_altitude)!.build();
-        (a['Data'] as Map)['Offset'] = 99.0;
-        ((a['Data'] as Map)['Coordinates'] as Map)['RAHours'] = 12;
-        expect((b['Data'] as Map)['Offset'], 30.0); // unaffected
-        expect(((b['Data'] as Map)['Coordinates'] as Map)['RAHours'], 0);
-      },
-    );
+    test('an altitude build deep-clones the nested WaitLoopData / Coordinates', () {
+      final a = conditionForType(_altitude)!.build();
+      final b = conditionForType(_altitude)!.build();
+      (a['Data'] as Map)['Offset'] = 99.0;
+      ((a['Data'] as Map)['Coordinates'] as Map)['RAHours'] = 12;
+      expect((b['Data'] as Map)['Offset'], 30.0); // unaffected
+      expect(((b['Data'] as Map)['Coordinates'] as Map)['RAHours'], 0);
+    });
 
     test('build() throws if a field key collides with a reserved base key', () {
       const bad = ConditionDef(
@@ -230,12 +190,7 @@ void main() {
         label: 'bad',
         icon: Icons.error,
         fields: [
-          InstructionField(
-            'Parent',
-            'oops',
-            InstructionFieldType.text,
-            defaultValue: '',
-          ),
+          InstructionField('Parent', 'oops', InstructionFieldType.text, defaultValue: ''),
         ],
       );
       expect(() => bad.build(), throwsStateError);
@@ -247,46 +202,29 @@ void main() {
         label: 'dup',
         icon: Icons.error,
         fields: [
-          InstructionField(
-            'K',
-            'a',
-            InstructionFieldType.integer,
-            defaultValue: 1,
-          ),
-          InstructionField(
-            'K',
-            'b',
-            InstructionFieldType.integer,
-            defaultValue: 2,
-          ),
+          InstructionField('K', 'a', InstructionFieldType.integer, defaultValue: 1),
+          InstructionField('K', 'b', InstructionFieldType.integer, defaultValue: 2),
         ],
       );
       expect(() => dup.build(), throwsStateError);
     });
 
-    test(
-      'build() deep-clones an object-valued default (no shared mutable state)',
-      () {
-        // Conditions are all scalar today, but build() clones unconditionally
-        // (like InstructionDef) so a future object-valued default is safe.
-        const def = ConditionDef(
-          type: 'X.Obj, X',
-          label: 'obj',
-          icon: Icons.error,
-          fields: [
-            InstructionField(
-              'Data',
-              'data',
-              InstructionFieldType.binning,
-              defaultValue: {'X': 1},
-            ),
-          ],
-        );
-        final a = def.build();
-        final b = def.build();
-        (a['Data'] as Map)['X'] = 99;
-        expect((b['Data'] as Map)['X'], 1); // second build unaffected
-      },
-    );
+    test('build() deep-clones an object-valued default (no shared mutable state)', () {
+      // Conditions are all scalar today, but build() clones unconditionally
+      // (like InstructionDef) so a future object-valued default is safe.
+      const def = ConditionDef(
+        type: 'X.Obj, X',
+        label: 'obj',
+        icon: Icons.error,
+        fields: [
+          InstructionField('Data', 'data', InstructionFieldType.binning,
+              defaultValue: {'X': 1}),
+        ],
+      );
+      final a = def.build();
+      final b = def.build();
+      (a['Data'] as Map)['X'] = 99;
+      expect((b['Data'] as Map)['X'], 1); // second build unaffected
+    });
   });
 }

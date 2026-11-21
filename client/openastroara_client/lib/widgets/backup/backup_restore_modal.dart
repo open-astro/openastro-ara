@@ -55,9 +55,7 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
     try {
       // §43-2: the notifier POSTs (fast 202) then polls create-status to the worker's
       // terminal — the spinner now genuinely tracks the daemon-side packaging.
-      await ref
-          .read(backupSnapshotsProvider.notifier)
-          .createBackup(
+      await ref.read(backupSnapshotsProvider.notifier).createBackup(
             interval: widget.createPollInterval,
             timeout: widget.createPollTimeout,
             isCancelled: () => !mounted,
@@ -96,15 +94,9 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8),
               child: TextButton.icon(
-                onPressed: (_creating || snapshots == null)
-                    ? null
-                    : () => unawaited(_createBackup()),
+                onPressed: (_creating || snapshots == null) ? null : () => unawaited(_createBackup()),
                 icon: _creating
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
+                    ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.add),
                 label: const Text('Create backup'),
               ),
@@ -116,30 +108,21 @@ class _BackupRestoreModalState extends ConsumerState<BackupRestoreModal> {
     );
   }
 
-  Widget _body(
-    BuildContext context,
-    AsyncValue<List<BackupSnapshot>?> asyncValue,
-    List<BackupSnapshot>? snapshots,
-  ) {
+  Widget _body(BuildContext context, AsyncValue<List<BackupSnapshot>?> asyncValue, List<BackupSnapshot>? snapshots) {
     if (asyncValue.isLoading && snapshots == null) {
       return const Center(child: AdaptiveProgressIndicator());
     }
     if (asyncValue.hasError) {
       return _Centered(
         message: 'Could not load backups.',
-        onRetry: () =>
-            unawaited(ref.read(backupSnapshotsProvider.notifier).refresh()),
+        onRetry: () => unawaited(ref.read(backupSnapshotsProvider.notifier).refresh()),
       );
     }
     if (snapshots == null) {
-      return const _Centered(
-        message: 'Connect to a server to back up and restore your profile.',
-      );
+      return const _Centered(message: 'Connect to a server to back up and restore your profile.');
     }
     if (snapshots.isEmpty) {
-      return const _Centered(
-        message: 'No backups yet. Use “Create backup” to make one.',
-      );
+      return const _Centered(message: 'No backups yet. Use “Create backup” to make one.');
     }
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -188,11 +171,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     if (_downloading) return;
     final api = ref.read(backupApiProvider);
     if (api == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connect to your rig to restore a backup.'),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your rig to restore a backup.')));
       return;
     }
     setState(() => _downloading = true);
@@ -211,9 +190,7 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
         }
       }
       if (!ok && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open the download.')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Could not open the download.')));
       }
     } finally {
       if (mounted) setState(() => _downloading = false);
@@ -225,22 +202,16 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     // Refuse if the snapshot has no area this client can restore — empty, OR only tokens
     // we don't recognise (e.g. a future daemon area). Otherwise the dialog would open with
     // no checkboxes and a permanently-disabled Restore button the user can't act on.
-    final hasRestorable =
-        snapshot.includedAreas.contains(BackupAreas.profiles) ||
+    final hasRestorable = snapshot.includedAreas.contains(BackupAreas.profiles) ||
         snapshot.includedAreas.contains(BackupAreas.sequences) ||
         snapshot.includedAreas.contains(BackupAreas.framesMetadata);
     if (!hasRestorable) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('This snapshot has no restorable areas.')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('This snapshot has no restorable areas.')));
       return;
     }
     if (ref.read(backupApiProvider) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connect to your rig to restore a backup.'),
-        ),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Connect to your rig to restore a backup.')));
       return;
     }
     final choice = await showDialog<_RestoreChoice>(
@@ -252,11 +223,11 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
     try {
       final notifier = ref.read(backupSnapshotsProvider.notifier);
       await notifier.restore(
-        snapshot,
-        profiles: choice.profiles,
-        sequences: choice.sequences,
-        frameMetadata: choice.frameMetadata,
-      );
+            snapshot,
+            profiles: choice.profiles,
+            sequences: choice.sequences,
+            frameMetadata: choice.frameMetadata,
+          );
       // §43-2b: the restore runs on a background worker, so the 202 doesn't mean
       // it's done — poll clone-status to the real outcome (a worker-side failure
       // wouldn't surface from the POST otherwise). Cancel the poll if this modal
@@ -269,35 +240,20 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
       if (!mounted || status == null) return;
       if (status.isFailed) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              'Restore failed: ${status.message ?? 'unknown error'}',
-            ),
-          ),
-        );
+            SnackBar(content: Text('Restore failed: ${status.message ?? 'unknown error'}')));
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Restore complete. Reconnect equipment if needed.'),
-          ),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Restore complete. Reconnect equipment if needed.')));
       }
     } on TimeoutException {
       // The restore may still be running on the daemon — don't imply it failed.
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Restore is taking longer than expected — check the server.',
-            ),
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Restore is taking longer than expected — check the server.')));
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Restore failed: ${_message(e)}')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Restore failed: ${_message(e)}')));
       }
     } finally {
       if (mounted) setState(() => _restoring = false);
@@ -315,11 +271,9 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
           children: [
             const SizedBox(height: 4),
             Text(
-              '${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}'
-              '${snapshot.framesMetadataRows is int ? ' · ${snapshot.framesMetadataRows} frame records' : ''}',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
-            ),
+                '${_formatBytes(snapshot.sizeBytes)} · ${snapshot.includedAreas.join(', ')}'
+                '${snapshot.framesMetadataRows is int ? ' · ${snapshot.framesMetadataRows} frame records' : ''}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary)),
           ],
         ),
         trailing: Row(
@@ -328,20 +282,12 @@ class _SnapshotRowState extends ConsumerState<_SnapshotRow> {
             IconButton(
               tooltip: 'Download',
               icon: const Icon(Icons.download),
-              onPressed: (_restoring || _downloading)
-                  ? null
-                  : () => unawaited(_download()),
+              onPressed: (_restoring || _downloading) ? null : () => unawaited(_download()),
             ),
             TextButton(
-              onPressed: (_restoring || _downloading)
-                  ? null
-                  : () => unawaited(_restore()),
+              onPressed: (_restoring || _downloading) ? null : () => unawaited(_restore()),
               child: _restoring
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
+                  ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
                   : const Text('Restore'),
             ),
           ],
@@ -380,12 +326,9 @@ class _RestoreDialogState extends State<_RestoreDialog> {
   // per §43.8) — an opt-in surprise, not a default one.
   bool _frameMetadata = false;
 
-  bool get _hasProfiles =>
-      widget.snapshot.includedAreas.contains(BackupAreas.profiles);
-  bool get _hasSequences =>
-      widget.snapshot.includedAreas.contains(BackupAreas.sequences);
-  bool get _hasFrameMetadata =>
-      widget.snapshot.includedAreas.contains(BackupAreas.framesMetadata);
+  bool get _hasProfiles => widget.snapshot.includedAreas.contains(BackupAreas.profiles);
+  bool get _hasSequences => widget.snapshot.includedAreas.contains(BackupAreas.sequences);
+  bool get _hasFrameMetadata => widget.snapshot.includedAreas.contains(BackupAreas.framesMetadata);
 
   @override
   Widget build(BuildContext context) {
@@ -395,9 +338,7 @@ class _RestoreDialogState extends State<_RestoreDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'This overwrites the selected areas of your live profile. This cannot be undone.',
-          ),
+          const Text('This overwrites the selected areas of your live profile. This cannot be undone.'),
           const SizedBox(height: 8),
           if (_hasProfiles)
             CheckboxListTile(
@@ -418,29 +359,20 @@ class _RestoreDialogState extends State<_RestoreDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Frame catalog (metadata)'),
               subtitle: const Text(
-                'Rolls the image library\'s records back to the snapshot. '
-                'FITS files on disk are not touched.',
-              ),
+                  'Rolls the image library\'s records back to the snapshot. '
+                  'FITS files on disk are not touched.'),
               value: _frameMetadata,
               onChanged: (v) => setState(() => _frameMetadata = v ?? false),
             ),
         ],
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
         FilledButton(
           // Disabled until at least one area is selected — an empty restore is a 422.
           onPressed: (_profiles || _sequences || _frameMetadata)
-              ? () => Navigator.of(context).pop(
-                  _RestoreChoice(
-                    profiles: _profiles,
-                    sequences: _sequences,
-                    frameMetadata: _frameMetadata,
-                  ),
-                )
+              ? () => Navigator.of(context).pop(_RestoreChoice(
+                  profiles: _profiles, sequences: _sequences, frameMetadata: _frameMetadata))
               : null,
           child: const Text('Restore'),
         ),
@@ -460,11 +392,7 @@ class _Centered extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
+          Text(message, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
           if (onRetry != null) ...[
             const SizedBox(height: 12),
             FilledButton(onPressed: onRetry, child: const Text('Retry')),

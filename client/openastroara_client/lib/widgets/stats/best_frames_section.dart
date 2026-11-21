@@ -61,20 +61,14 @@ class _BestFramesSectionState extends ConsumerState<BestFramesSection>
         Row(
           children: [
             Expanded(
-              child: Text(
-                'Best Frames',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              child: Text('Best Frames',
+                  style: Theme.of(context).textTheme.titleMedium),
             ),
             // The page's pull down refreshes; this shows it running.
             if (spinning)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AdaptiveProgressIndicator(strokeWidth: 2),
-                ),
+                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
               ),
           ],
         ),
@@ -85,7 +79,10 @@ class _BestFramesSectionState extends ConsumerState<BestFramesSection>
     );
   }
 
-  Widget _body(AsyncValue<List<BestFrame>?> async, List<BestFrame>? frames) {
+  Widget _body(
+    AsyncValue<List<BestFrame>?> async,
+    List<BestFrame>? frames,
+  ) {
     if (async.isLoading && frames == null) {
       return const _Hint('Loading best frames…');
     }
@@ -104,9 +101,7 @@ class _BestFramesSectionState extends ConsumerState<BestFramesSection>
       return const _Hint('Connect to a server to see your best frames.');
     }
     if (frames.isEmpty) {
-      return const _Hint(
-        'No scored frames yet — your best frames appear here once captures are quality-scored.',
-      );
+      return const _Hint('No scored frames yet — your best frames appear here once captures are quality-scored.');
     }
     return Column(
       children: [
@@ -131,8 +126,9 @@ class _StaleBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Couldn’t refresh — showing the last loaded frames.',
-            style: Theme.of(context).textTheme.labelSmall
-                ?.copyWith(color: AraColors.accentBusy),
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: AraColors.accentBusy,
+                ),
           ),
         ],
       ),
@@ -179,10 +175,8 @@ class _Hint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(
-        message,
-        style: const TextStyle(color: AraColors.textSecondary),
-      ),
+      child: Text(message,
+          style: const TextStyle(color: AraColors.textSecondary)),
     );
   }
 }

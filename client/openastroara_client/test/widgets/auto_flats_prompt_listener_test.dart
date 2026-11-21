@@ -18,12 +18,11 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 /// Records the §48 decision call; every other member is unused by the dialog.
 class _RecordingClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) => throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -37,11 +36,8 @@ class _RecordingClient implements SequenceClient {
   int calls = 0;
 
   @override
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  }) async {
+  Future<String> decideAutoFlats(String id,
+      {required String choice, required bool remember}) async {
     calls++;
     lastId = id;
     lastChoice = choice;
@@ -129,86 +125,68 @@ void main() {
     return (conn, client);
   }
 
-  void emitPrompt(
-    _FakeConnector conn, {
-    String sequenceId = 'seq-1',
-    int seq = 1,
-  }) {
-    conn.legs.first.incoming.add(
-      jsonEncode({
-        'type': 'sequence.auto_flats_prompt',
-        'ts': '2026-01-01T00:00:00Z',
-        'seq': seq,
-        'payload': {'sequence_id': sequenceId, 'run_id': 'run-1'},
-      }),
-    );
+  void emitPrompt(_FakeConnector conn, {String sequenceId = 'seq-1', int seq = 1}) {
+    conn.legs.first.incoming.add(jsonEncode({
+      'type': 'sequence.auto_flats_prompt',
+      'ts': '2026-01-01T00:00:00Z',
+      'seq': seq,
+      'payload': {'sequence_id': sequenceId, 'run_id': 'run-1'},
+    }));
   }
 
   group('AutoFlatsPromptListener (§48)', () {
     testWidgets(
-      'the prompt event shows the dialog; a remembered panel choice posts the decision',
-      (tester) async {
-        final (conn, client) = await pumpListener(tester);
+        'the prompt event shows the dialog; a remembered panel choice posts the decision',
+        (tester) async {
+      final (conn, client) = await pumpListener(tester);
 
-        emitPrompt(conn);
-        await tester.pump();
-        await tester.pump();
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
 
-        expect(
-          find.text('Capture calibration frames tonight?'),
-          findsOneWidget,
-        );
-        expect(
-          ProviderScope.containerOf(
-            tester.element(find.byType(AutoFlatsPromptListener)),
-          ).read(simpleMessagesProvider),
-          isEmpty,
-          reason: 'the full UI asks; it has no pill to show',
-        );
+      expect(find.text('Capture calibration frames tonight?'), findsOneWidget);
+      expect(
+        ProviderScope.containerOf(tester.element(find.byType(AutoFlatsPromptListener))).read(simpleMessagesProvider),
+        isEmpty,
+        reason: 'the full UI asks; it has no pill to show',
+      );
 
-        await tester.tap(find.text('Remember my choice (stop asking)'));
-        await tester.pump();
-        await tester.tap(find.text('Panel flats at end'));
-        await tester.pump();
+      await tester.tap(find.text('Remember my choice (stop asking)'));
+      await tester.pump();
+      await tester.tap(find.text('Panel flats at end'));
+      await tester.pump();
 
-        expect(find.text('Capture calibration frames tonight?'), findsNothing);
-        expect(client.lastId, 'seq-1');
-        expect(client.lastChoice, 'panel_at_end');
-        expect(client.lastRemember, isTrue);
-      },
-    );
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.lastId, 'seq-1');
+      expect(client.lastChoice, 'panel_at_end');
+      expect(client.lastRemember, isTrue);
+    });
 
     // Falsified by: auto_flats_prompt_listener.dart build, drop the companionModeProvider term.
-    testWidgets(
-      '#1774 Companion Mode with both prefs off says not tonight, with no popup',
-      (tester) async {
-        final (conn, client) = await pumpListener(tester, companion: true);
-        await tester.pump();
+    testWidgets('#1774 Companion Mode with both prefs off says not tonight, with no popup', (tester) async {
+      final (conn, client) = await pumpListener(tester, companion: true);
+      await tester.pump();
 
-        emitPrompt(conn);
-        await tester.pump();
-        await tester.pump();
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
 
-        expect(find.text('Capture calibration frames tonight?'), findsNothing);
-        expect(client.lastId, 'seq-1');
-        expect(client.lastChoice, 'later');
-        expect(client.lastRemember, isFalse);
-      },
-    );
+      expect(find.text('Capture calibration frames tonight?'), findsNothing);
+      expect(client.lastId, 'seq-1');
+      expect(client.lastChoice, 'later');
+      expect(client.lastRemember, isFalse);
+    });
 
-    testWidgets(
-      "Simple Mode says not tonight: its flats are per target, in the queue (#1757)",
-      (tester) async {
-        final (conn, client) = await pumpListener(tester, simple: true);
-        await tester.pump();
+    testWidgets("Simple Mode says not tonight: its flats are per target, in the queue (#1757)", (tester) async {
+      final (conn, client) = await pumpListener(tester, simple: true);
+      await tester.pump();
 
-        emitPrompt(conn);
-        await tester.pump();
-        await tester.pump();
+      emitPrompt(conn);
+      await tester.pump();
+      await tester.pump();
 
-        expect(client.lastChoice, 'later');
-      },
-    );
+      expect(client.lastChoice, 'later');
+    });
 
     testWidgets('"Not tonight" posts later without remember', (tester) async {
       final (conn, client) = await pumpListener(tester);
@@ -224,9 +202,8 @@ void main() {
       expect(client.lastRemember, isFalse);
     });
 
-    testWidgets('a newer run\'s prompt replaces a stale unanswered dialog', (
-      tester,
-    ) async {
+    testWidgets('a newer run\'s prompt replaces a stale unanswered dialog',
+        (tester) async {
       final (conn, client) = await pumpListener(tester);
 
       emitPrompt(conn, sequenceId: 'seq-old', seq: 1);
@@ -243,11 +220,8 @@ void main() {
       await tester.pump();
 
       expect(client.calls, 1);
-      expect(
-        client.lastId,
-        'seq-new',
-        reason: 'the answer must bind to the run that is actually asking',
-      );
+      expect(client.lastId, 'seq-new',
+          reason: 'the answer must bind to the run that is actually asking');
       expect(client.lastChoice, 'sky_at_twilight');
     });
   });

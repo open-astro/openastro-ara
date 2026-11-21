@@ -4,25 +4,25 @@ import 'package:openastroara/models/sequence/nina_dom.dart';
 // A template-shaped body: a root container wrapping two children in the
 // ObservableCollection `$values` wrapper the daemon uses.
 Map<String, dynamic> sampleBody() => {
-  'schemaVersion': 'openastroara-sequence-v1',
-  r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-  'Name': 'root',
-  'Items': {
-    r'$type': itemsWrapperType,
-    r'$values': [
-      {r'$type': 'X.SwitchFilter', 'Filter': 'L'},
-      {
-        r'$type': 'X.SequentialContainer',
-        'Items': {
-          r'$type': itemsWrapperType,
-          r'$values': [
-            {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
-          ],
-        },
+      'schemaVersion': 'openastroara-sequence-v1',
+      r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+      'Name': 'root',
+      'Items': {
+        r'$type': itemsWrapperType,
+        r'$values': [
+          {r'$type': 'X.SwitchFilter', 'Filter': 'L'},
+          {
+            r'$type': 'X.SequentialContainer',
+            'Items': {
+              r'$type': itemsWrapperType,
+              r'$values': [
+                {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
+              ],
+            },
+          },
+        ],
       },
-    ],
-  },
-};
+    };
 
 void main() {
   group('childrenOf', () {
@@ -39,8 +39,8 @@ void main() {
     test('tolerates a plain-array Items', () {
       final kids = childrenOf({
         'Items': [
-          {r'$type': 'X.A'},
-        ],
+          {r'$type': 'X.A'}
+        ]
       });
       expect(kids, hasLength(1));
     });
@@ -51,7 +51,7 @@ void main() {
           'Items': {
             r'$type': itemsWrapperType,
             r'$values': [
-              {r'$ref': '5'},
+              {r'$ref': '5'}
             ],
           },
         }),
@@ -65,24 +65,20 @@ void main() {
       const ninaWrapper =
           'System.Collections.ObjectModel.ObservableCollection`1[[NINA.Sequencer.SequenceItem.ISequenceItem, NINA.Sequencer]], System.ObjectModel';
       final node = <String, dynamic>{
-        r'$type':
-            'NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer',
+        r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer',
         'Items': {r'$type': ninaWrapper, r'$values': []},
       };
       final out = withChildren(node, [
-        {r'$type': 'X.Wait'},
+        {r'$type': 'X.Wait'}
       ]);
       expect((out['Items'] as Map)[r'$type'], ninaWrapper);
       expect(childrenOf(out).single[r'$type'], 'X.Wait');
     });
 
     test('falls back to itemsWrapperType when the node has no wrapper', () {
-      final out = withChildren(
-        {r'$type': 'X.SequentialContainer'},
-        [
-          {r'$type': 'X.Wait'},
-        ],
-      );
+      final out = withChildren({r'$type': 'X.SequentialContainer'}, [
+        {r'$type': 'X.Wait'}
+      ]);
       expect((out['Items'] as Map)[r'$type'], itemsWrapperType);
     });
 
@@ -91,7 +87,7 @@ void main() {
         'Items': {r'$type': itemsWrapperType, r'$id': '7', r'$values': []},
       };
       final out = withChildren(node, [
-        {r'$type': 'X.Wait'},
+        {r'$type': 'X.Wait'}
       ]);
       expect((out['Items'] as Map)[r'$id'], '7'); // reference handle survives
       expect((out['Items'] as Map)[r'$type'], itemsWrapperType);
@@ -101,30 +97,21 @@ void main() {
   group('isContainer', () {
     test('true for a node with an Items collection', () {
       expect(isContainer(sampleBody()), isTrue);
-      expect(
-        isContainer(nodeAt(sampleBody(), [1])!),
-        isTrue,
-      ); // nested container
+      expect(isContainer(nodeAt(sampleBody(), [1])!), isTrue); // nested container
     });
 
     test('true for a .Container. \$type even without Items', () {
       expect(
-        isContainer({
-          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-        }),
-        isTrue,
-      );
+          isContainer({
+            r'$type':
+                'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer'
+          }),
+          isTrue);
     });
 
     test('false for a leaf instruction', () {
-      expect(
-        isContainer(nodeAt(sampleBody(), [0])!),
-        isFalse,
-      ); // SwitchFilter leaf
-      expect(
-        isContainer({r'$type': 'X.TakeExposure', 'ExposureTime': 1.0}),
-        isFalse,
-      );
+      expect(isContainer(nodeAt(sampleBody(), [0])!), isFalse); // SwitchFilter leaf
+      expect(isContainer({r'$type': 'X.TakeExposure', 'ExposureTime': 1.0}), isFalse);
     });
   });
 
@@ -160,11 +147,8 @@ void main() {
     test('insertChild adds at the index (clamped)', () {
       final out = insertChild(sampleBody(), [], 1, {r'$type': 'X.Dither'});
       final kids = childrenOf(out);
-      expect(kids.map((n) => n[r'$type']), [
-        'X.SwitchFilter',
-        'X.Dither',
-        'X.SequentialContainer',
-      ]);
+      expect(kids.map((n) => n[r'$type']),
+          ['X.SwitchFilter', 'X.Dither', 'X.SequentialContainer']);
     });
 
     test('insertChild into a nested container', () {
@@ -176,30 +160,25 @@ void main() {
       final big = insertChild(sampleBody(), [], 99, {r'$type': 'X.End'});
       expect(childrenOf(big).last[r'$type'], 'X.End'); // clamped to the end
       final neg = insertChild(sampleBody(), [], -5, {r'$type': 'X.Start'});
-      expect(
-        childrenOf(neg).first[r'$type'],
-        'X.Start',
-      ); // clamped to the front
+      expect(childrenOf(neg).first[r'$type'], 'X.Start'); // clamped to the front
     });
 
-    test(
-      'editing a plain-array Items node promotes it to ObservableCollection',
-      () {
-        // childrenOf tolerates a plain-array Items; once edited, withChildren
-        // emits the canonical wrapper shape the daemon's templates use.
-        final body = {
-          'Items': [
-            {r'$type': 'X.A', 'v': 1},
-          ],
-        };
-        final out = setField(body, [0], 'v', 2);
-        expect(nodeAt(out, [0])!['v'], 2); // edit landed
-        final items = out['Items'];
-        expect(items, isA<Map>()); // promoted from List → wrapper Map
-        expect((items as Map)[r'$type'], itemsWrapperType);
-        expect(items[r'$values'], isA<List>());
-      },
-    );
+    test('editing a plain-array Items node promotes it to ObservableCollection',
+        () {
+      // childrenOf tolerates a plain-array Items; once edited, withChildren
+      // emits the canonical wrapper shape the daemon's templates use.
+      final body = {
+        'Items': [
+          {r'$type': 'X.A', 'v': 1},
+        ],
+      };
+      final out = setField(body, [0], 'v', 2);
+      expect(nodeAt(out, [0])!['v'], 2); // edit landed
+      final items = out['Items'];
+      expect(items, isA<Map>()); // promoted from List → wrapper Map
+      expect((items as Map)[r'$type'], itemsWrapperType);
+      expect(items[r'$values'], isA<List>());
+    });
 
     test('removeAt drops the addressed node', () {
       final out = removeAt(sampleBody(), [0]);
@@ -213,10 +192,7 @@ void main() {
       final out = removeAt(sampleBody(), [1, 0]);
       expect(childrenOf(nodeAt(out, [1])!), isEmpty); // leaf gone
       expect(childrenOf(out), hasLength(2)); // siblings intact
-      expect(
-        nodeAt(sampleBody(), [1, 0])!['ExposureTime'],
-        60.0,
-      ); // source untouched
+      expect(nodeAt(sampleBody(), [1, 0])!['ExposureTime'], 60.0); // source untouched
     });
 
     test('removeAt rejects the root', () {
@@ -234,18 +210,14 @@ void main() {
     test('reorderChild moves a sibling (Flutter onReorder convention)', () {
       // Drag child 0 to the end of a 2-item list: Flutter delivers newIndex=2.
       final out = reorderChild(sampleBody(), [], 0, 2);
-      expect(childrenOf(out).map((n) => n[r'$type']), [
-        'X.SequentialContainer',
-        'X.SwitchFilter',
-      ]);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
     });
 
     test('reorderChild with oldIndex == newIndex is a no-op', () {
       final out = reorderChild(sampleBody(), [], 1, 1);
-      expect(childrenOf(out).map((n) => n[r'$type']), [
-        'X.SwitchFilter',
-        'X.SequentialContainer',
-      ]);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SwitchFilter', 'X.SequentialContainer']);
     });
 
     test('reorderChild absorbs Flutter\'s pre-removal newIndex', () {
@@ -271,11 +243,11 @@ void main() {
     test('_rebuild handles deep nesting after the sublist→index refactor', () {
       // Build a 4-deep chain and edit the leaf to exercise multi-level recursion.
       Map<String, dynamic> wrap(Map<String, dynamic> child) => {
-        'Items': {
-          r'$type': itemsWrapperType,
-          r'$values': [child],
-        },
-      };
+            'Items': {
+              r'$type': itemsWrapperType,
+              r'$values': [child],
+            },
+          };
       final deep = wrap(wrap(wrap({r'$type': 'Leaf', 'v': 1})));
       final out = setField(deep, [0, 0, 0], 'v', 2);
       expect(nodeAt(out, [0, 0, 0])!['v'], 2);
@@ -287,94 +259,77 @@ void main() {
     });
   });
 
-  group(
-    'conditions (conditionsOf / withConditions / add / remove / setField)',
-    () {
-      Map<String, dynamic> loop(int iterations) => {
-        r'$type': 'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
-        'Iterations': iterations,
-        'Parent': null,
-      };
-
-      test('conditionsOf reads the wrapped \$values, empty when absent', () {
-        expect(
-          conditionsOf(sampleBody()),
-          isEmpty,
-        ); // no Conditions on the sample
-        final withOne = <String, dynamic>{
-          'Conditions': {
-            r'$type': conditionsWrapperType,
-            r'$values': [loop(5)],
-          },
+  group('conditions (conditionsOf / withConditions / add / remove / setField)', () {
+    Map<String, dynamic> loop(int iterations) => {
+          r'$type': 'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
+          'Iterations': iterations,
+          'Parent': null,
         };
-        expect(conditionsOf(withOne), hasLength(1));
-        expect(conditionsOf(withOne).single['Iterations'], 5);
-      });
 
-      test(
-        'addCondition appends in the wrapper shape without mutating the source',
-        () {
-          final root = sampleBody();
-          final out = addCondition(root, const [], loop(3));
-          expect(conditionsOf(out), hasLength(1));
-          final wrapper = out['Conditions'] as Map<String, dynamic>;
-          expect(wrapper[r'$type'], conditionsWrapperType);
-          expect(conditionsOf(root), isEmpty); // source untouched
-          // Items are untouched by a Conditions edit.
-          expect(childrenOf(out), hasLength(childrenOf(root).length));
+    test('conditionsOf reads the wrapped \$values, empty when absent', () {
+      expect(conditionsOf(sampleBody()), isEmpty); // no Conditions on the sample
+      final withOne = <String, dynamic>{
+        'Conditions': {
+          r'$type': conditionsWrapperType,
+          r'$values': [loop(5)],
         },
-      );
+      };
+      expect(conditionsOf(withOne), hasLength(1));
+      expect(conditionsOf(withOne).single['Iterations'], 5);
+    });
 
-      test('addCondition targets a nested container by path', () {
-        final root = sampleBody();
-        final out = addCondition(root, const [
-          1,
-        ], loop(7)); // the nested container
-        expect(conditionsOf(nodeAt(out, [1])!).single['Iterations'], 7);
-        expect(conditionsOf(nodeAt(out, [])!), isEmpty); // root unaffected
-      });
+    test('addCondition appends in the wrapper shape without mutating the source', () {
+      final root = sampleBody();
+      final out = addCondition(root, const [], loop(3));
+      expect(conditionsOf(out), hasLength(1));
+      final wrapper = out['Conditions'] as Map<String, dynamic>;
+      expect(wrapper[r'$type'], conditionsWrapperType);
+      expect(conditionsOf(root), isEmpty); // source untouched
+      // Items are untouched by a Conditions edit.
+      expect(childrenOf(out), hasLength(childrenOf(root).length));
+    });
 
-      test('removeConditionAt drops one and bounds-checks', () {
-        var root = addCondition(sampleBody(), const [], loop(1));
-        root = addCondition(root, const [], loop(2));
-        final out = removeConditionAt(root, const [], 0);
-        expect(conditionsOf(out).single['Iterations'], 2);
-        expect(() => removeConditionAt(out, const [], 5), throwsRangeError);
-      });
+    test('addCondition targets a nested container by path', () {
+      final root = sampleBody();
+      final out = addCondition(root, const [1], loop(7)); // the nested container
+      expect(conditionsOf(nodeAt(out, [1])!).single['Iterations'], 7);
+      expect(conditionsOf(nodeAt(out, [])!), isEmpty); // root unaffected
+    });
 
-      test('setConditionField edits one condition in place', () {
-        final root = addCondition(sampleBody(), const [], loop(2));
-        final out = setConditionField(root, const [], 0, 'Iterations', 20);
-        expect(conditionsOf(out).single['Iterations'], 20);
-        expect(conditionsOf(root).single['Iterations'], 2); // source untouched
-        expect(
-          () => setConditionField(out, const [], 9, 'Iterations', 1),
-          throwsRangeError,
-        );
-      });
+    test('removeConditionAt drops one and bounds-checks', () {
+      var root = addCondition(sampleBody(), const [], loop(1));
+      root = addCondition(root, const [], loop(2));
+      final out = removeConditionAt(root, const [], 0);
+      expect(conditionsOf(out).single['Iterations'], 2);
+      expect(() => removeConditionAt(out, const [], 5), throwsRangeError);
+    });
 
-      test('withConditions preserves an existing wrapper \$type / \$id', () {
-        final node = <String, dynamic>{
-          'Conditions': {
-            r'$type': 'Custom.Wrapper',
-            r'$id': '5',
-            r'$values': [],
-          },
-        };
-        final out = withConditions(node, [loop(1)]);
-        final wrapper = out['Conditions'] as Map<String, dynamic>;
-        expect(wrapper[r'$type'], 'Custom.Wrapper'); // kept, not overwritten
-        expect(wrapper[r'$id'], '5');
-        expect((wrapper[r'$values'] as List), hasLength(1));
-      });
-    },
-  );
+    test('setConditionField edits one condition in place', () {
+      final root = addCondition(sampleBody(), const [], loop(2));
+      final out = setConditionField(root, const [], 0, 'Iterations', 20);
+      expect(conditionsOf(out).single['Iterations'], 20);
+      expect(conditionsOf(root).single['Iterations'], 2); // source untouched
+      expect(() => setConditionField(out, const [], 9, 'Iterations', 1), throwsRangeError);
+    });
+
+    test('withConditions preserves an existing wrapper \$type / \$id', () {
+      final node = <String, dynamic>{
+        'Conditions': {r'$type': 'Custom.Wrapper', r'$id': '5', r'$values': []},
+      };
+      final out = withConditions(node, [loop(1)]);
+      final wrapper = out['Conditions'] as Map<String, dynamic>;
+      expect(wrapper[r'$type'], 'Custom.Wrapper'); // kept, not overwritten
+      expect(wrapper[r'$id'], '5');
+      expect((wrapper[r'$values'] as List), hasLength(1));
+    });
+  });
 
   group('triggers (triggersOf / withTriggers / add / remove / setField)', () {
     Map<String, dynamic> flip() => {
-      r'$type': 'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
-      'Parent': null,
-    };
+          r'$type':
+              'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
+          'Parent': null,
+        };
 
     test('triggersOf reads the wrapped \$values, empty when absent', () {
       expect(triggersOf(sampleBody()), isEmpty);
@@ -385,29 +340,17 @@ void main() {
         },
       };
       expect(triggersOf(withOne), hasLength(1));
-      expect(
-        triggersOf(withOne).single[r'$type'],
-        contains('MeridianFlipTrigger'),
-      );
+      expect(triggersOf(withOne).single[r'$type'], contains('MeridianFlipTrigger'));
     });
 
-    test(
-      'addTrigger appends in the wrapper shape without mutating the source',
-      () {
-        final root = sampleBody();
-        final out = addTrigger(root, const [], flip());
-        expect(triggersOf(out), hasLength(1));
-        expect(
-          (out['Triggers'] as Map<String, dynamic>)[r'$type'],
-          triggersWrapperType,
-        );
-        expect(triggersOf(root), isEmpty); // source untouched
-        expect(
-          childrenOf(out),
-          hasLength(childrenOf(root).length),
-        ); // Items untouched
-      },
-    );
+    test('addTrigger appends in the wrapper shape without mutating the source', () {
+      final root = sampleBody();
+      final out = addTrigger(root, const [], flip());
+      expect(triggersOf(out), hasLength(1));
+      expect((out['Triggers'] as Map<String, dynamic>)[r'$type'], triggersWrapperType);
+      expect(triggersOf(root), isEmpty); // source untouched
+      expect(childrenOf(out), hasLength(childrenOf(root).length)); // Items untouched
+    });
 
     test('addTrigger targets a nested container by path', () {
       final out = addTrigger(sampleBody(), const [1], flip());
@@ -428,10 +371,7 @@ void main() {
       final out = setTriggerField(root, const [], 0, 'Parent', 'x');
       expect(triggersOf(out).single['Parent'], 'x');
       expect(triggersOf(root).single['Parent'], isNull); // source untouched
-      expect(
-        () => setTriggerField(out, const [], 9, 'Parent', 1),
-        throwsRangeError,
-      );
+      expect(() => setTriggerField(out, const [], 9, 'Parent', 1), throwsRangeError);
     });
 
     test('withTriggers preserves an existing wrapper \$type / \$id', () {
@@ -448,17 +388,11 @@ void main() {
 
   group('isAncestorOrSelf', () {
     test('prefix relationships', () {
-      expect(
-        isAncestorOrSelf(const [], const [0, 1]),
-        isTrue,
-      ); // root ancestors all
+      expect(isAncestorOrSelf(const [], const [0, 1]), isTrue); // root ancestors all
       expect(isAncestorOrSelf(const [1], const [1, 0]), isTrue);
       expect(isAncestorOrSelf(const [1], const [1]), isTrue); // self
       expect(isAncestorOrSelf(const [1], const [0]), isFalse);
-      expect(
-        isAncestorOrSelf(const [1, 0], const [1]),
-        isFalse,
-      ); // longer ≠ ancestor
+      expect(isAncestorOrSelf(const [1, 0], const [1]), isFalse); // longer ≠ ancestor
     });
   });
 
@@ -467,10 +401,7 @@ void main() {
       // Move the SwitchFilter [0] into the nested container [1]. Removing [0]
       // shifts the container from [1] to [0], which the op must compensate for.
       final out = moveSubtree(sampleBody(), const [0], const [1], 0);
-      expect(
-        childrenOf(out),
-        hasLength(1),
-      ); // root now holds just the container
+      expect(childrenOf(out), hasLength(1)); // root now holds just the container
       final container = nodeAt(out, [0])!;
       expect(childrenOf(container), hasLength(2));
       expect(childrenOf(container)[0][r'$type'], contains('SwitchFilter'));
@@ -489,10 +420,8 @@ void main() {
       // root list is [container]; inserting at post-removal index 1 puts the
       // SwitchFilter last → [container, SwitchFilter].
       final out = moveSubtree(sampleBody(), const [0], const [], 1);
-      expect(childrenOf(out).map((n) => n[r'$type']), [
-        'X.SequentialContainer',
-        'X.SwitchFilter',
-      ]);
+      expect(childrenOf(out).map((n) => n[r'$type']),
+          ['X.SequentialContainer', 'X.SwitchFilter']);
     });
 
     test('does not mutate the source body', () {
@@ -503,18 +432,12 @@ void main() {
     });
 
     test('rejects moving the root, into self, or into a descendant', () {
-      expect(
-        () => moveSubtree(sampleBody(), const [], const [1], 0),
-        throwsArgumentError,
-      ); // root
-      expect(
-        () => moveSubtree(sampleBody(), const [1], const [1], 0),
-        throwsArgumentError,
-      ); // into self
-      expect(
-        () => moveSubtree(sampleBody(), const [1], const [1, 0], 0),
-        throwsArgumentError,
-      ); // into descendant
+      expect(() => moveSubtree(sampleBody(), const [], const [1], 0),
+          throwsArgumentError); // root
+      expect(() => moveSubtree(sampleBody(), const [1], const [1], 0),
+          throwsArgumentError); // into self
+      expect(() => moveSubtree(sampleBody(), const [1], const [1, 0], 0),
+          throwsArgumentError); // into descendant
     });
   });
 
@@ -522,11 +445,7 @@ void main() {
     // A daemon-generated body keeps plain-array collections; an edit that
     // wrapped them with \$values first failed on the rig with "Unexpected
     // token when deserializing object: String. Path 'Items.\$type'".
-    final node = <String, dynamic>{
-      'Items': <dynamic>[],
-      'Conditions': <dynamic>[],
-      'Triggers': <dynamic>[],
-    };
+    final node = <String, dynamic>{'Items': <dynamic>[], 'Conditions': <dynamic>[], 'Triggers': <dynamic>[]};
     expect(withChildren(node, const [])['Items'].keys.first, r'$type');
     expect(withConditions(node, const [])['Conditions'].keys.first, r'$type');
     expect(withTriggers(node, const [])['Triggers'].keys.first, r'$type');

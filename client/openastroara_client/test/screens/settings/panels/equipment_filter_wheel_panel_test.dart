@@ -37,7 +37,6 @@ class _FakeFwApi implements EquipmentDeviceClient<FilterWheelStatus> {
   Future<void> forget() async {
     calls.add('forget');
   }
-
   _FakeFwApi(this.status);
   FilterWheelStatus? status;
   final List<String> calls = [];
@@ -55,8 +54,7 @@ class _FakeFwApi implements EquipmentDeviceClient<FilterWheelStatus> {
   void close() {}
 }
 
-FilterWheelStatus _manual({int? currentSlot, int? pendingSlot}) =>
-    FilterWheelStatus(
+FilterWheelStatus _manual({int? currentSlot, int? pendingSlot}) => FilterWheelStatus(
       deviceId: 'ara-manual-filter-wheel',
       name: 'Manual filter wheel',
       connectionState: EquipmentConnectionState.connected,
@@ -74,17 +72,18 @@ FilterWheelStatus _status({
   EquipmentConnectionState state = EquipmentConnectionState.connected,
   int? currentSlot = 0,
   String runtimeState = 'idle',
-}) => FilterWheelStatus(
-  deviceId: 'fw-0',
-  name: 'EFW',
-  connectionState: state,
-  runtimeState: runtimeState,
-  currentSlot: currentSlot,
-  slots: const [
-    FilterSlot(position: 0, name: 'L', focusOffset: 0),
-    FilterSlot(position: 1, name: 'Hα', focusOffset: 12),
-  ],
-);
+}) =>
+    FilterWheelStatus(
+      deviceId: 'fw-0',
+      name: 'EFW',
+      connectionState: state,
+      runtimeState: runtimeState,
+      currentSlot: currentSlot,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'Hα', focusOffset: 12),
+      ],
+    );
 
 Future<void> _wideSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1200));
@@ -101,8 +100,7 @@ class _Offsets extends FilterOffsetCalibrationNotifier {
   @override
   Future<void> refresh() async {}
   @override
-  Future<void> start(List<int> positions) async =>
-      calls.add('start $positions');
+  Future<void> start(List<int> positions) async => calls.add('start $positions');
   @override
   Future<void> save() async => calls.add('save');
   @override
@@ -151,9 +149,7 @@ Future<_FakeFwApi> _pump(
 }
 
 void main() {
-  testWidgets('renders the device slots with the active one marked', (
-    tester,
-  ) async {
+  testWidgets('renders the device slots with the active one marked', (tester) async {
     await _pump(tester, _status(currentSlot: 0));
     expect(find.text('EFW'), findsOneWidget);
     expect(find.text('L'), findsWidgets);
@@ -171,23 +167,20 @@ void main() {
     expect(find.text('1'), findsOneWidget);
   });
 
-  testWidgets('hides the focus-offset column when every slot is 0', (
-    tester,
-  ) async {
+  testWidgets('hides the focus-offset column when every slot is 0', (tester) async {
     await _pump(
-      tester,
-      FilterWheelStatus(
-        deviceId: 'fw-0',
-        name: 'EFW',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: 0,
-        slots: const [
-          FilterSlot(position: 0, name: 'L', focusOffset: 0),
-          FilterSlot(position: 1, name: 'R', focusOffset: 0),
-        ],
-      ),
-    );
+        tester,
+        FilterWheelStatus(
+          deviceId: 'fw-0',
+          name: 'EFW',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: 0,
+          slots: const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: 'R', focusOffset: 0),
+          ],
+        ));
     // The slot column's "focus offset N", not the Focus offsets section's button.
     expect(find.textContaining(RegExp(r'^focus offset')), findsNothing);
   });
@@ -219,146 +212,66 @@ void main() {
     await tester.pump(const Duration(seconds: 20));
   });
 
-  testWidgets(
-    'the full UI calibrates focus offsets: every named filter, from the reference (#1675, ADR 0009 rule 1)',
-    (tester) async {
-      final offsets = _Offsets();
-      await _pump(tester, _status(), offsets: offsets);
-      expect(
-        find.text('Offsets are measured from L, the reference.'),
-        findsOneWidget,
-      );
-      final start = find.byKey(const Key('settings-offsets-start'));
-      await tester.ensureVisible(start);
-      await tester.tap(start);
-      await tester.pump();
-      expect(offsets.calls, ['start [0, 1]']);
-    },
-  );
+  testWidgets('the full UI calibrates focus offsets: every named filter, from the reference (#1675, ADR 0009 rule 1)',
+      (tester) async {
+    final offsets = _Offsets();
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('Offsets are measured from L, the reference.'), findsOneWidget);
+    final start = find.byKey(const Key('settings-offsets-start'));
+    await tester.ensureVisible(start);
+    await tester.tap(start);
+    await tester.pump();
+    expect(offsets.calls, ['start [0, 1]']);
+  });
 
-  testWidgets(
-    'a finished offset calibration lists each filter and offers Save and Discard',
-    (tester) async {
-      final offsets = _Offsets(
-        FilterOffsetLive(
-          calibration: FilterOffsetCalibration.fromJson(const {
-            'state': 'complete',
-            'reference_position': 0,
-            'reference_name': 'L',
-            'run_index': 3,
-            'run_count': 3,
-            'filters': [
-              {
-                'position': 0,
-                'name': 'L',
-                'status': 'measured',
-                'offset': 0,
-                'r_squared': 0.98,
-                'previous_offset': 0,
-              },
-              {
-                'position': 1,
-                'name': 'Hα',
-                'status': 'measured',
-                'offset': 41,
-                'r_squared': 0.93,
-                'previous_offset': 12,
-              },
-            ],
-          }),
-        ),
-      );
-      await _pump(tester, _status(), offsets: offsets);
-      expect(find.text('+41 · Fit R² 0.93 · Before +12'), findsOneWidget);
-      final save = find.byKey(const Key('settings-offsets-save'));
-      await tester.ensureVisible(save);
-      await tester.tap(save);
-      await tester.pump();
-      expect(offsets.calls, ['save']);
-      expect(find.byKey(const Key('settings-offsets-discard')), findsOneWidget);
-    },
-  );
+  testWidgets('a finished offset calibration lists each filter and offers Save and Discard', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 3, 'run_count': 3,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 1, 'name': 'Hα', 'status': 'measured', 'offset': 41, 'r_squared': 0.93, 'previous_offset': 12},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('+41 · Fit R² 0.93 · Before +12'), findsOneWidget);
+    final save = find.byKey(const Key('settings-offsets-save'));
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pump();
+    expect(offsets.calls, ['save']);
+    expect(find.byKey(const Key('settings-offsets-discard')), findsOneWidget);
+  });
 
-  testWidgets(
-    'an unnamed slot and a focus drift warning read from the catalogue, the warning with its icon',
-    (tester) async {
-      final offsets = _Offsets(
-        FilterOffsetLive(
-          calibration: FilterOffsetCalibration.fromJson(const {
-            'state': 'complete',
-            'reference_position': 0,
-            'reference_name': 'L',
-            'run_index': 2,
-            'run_count': 2,
-            'drift_warning': true,
-            'reference_first_position': 100,
-            'reference_second_position': 140,
-            'cfz_steps': 20,
-            'filters': [
-              {
-                'position': 0,
-                'name': 'L',
-                'status': 'measured',
-                'offset': 0,
-                'r_squared': 0.98,
-                'previous_offset': 0,
-              },
-              {
-                'position': 3,
-                'name': '',
-                'status': 'measured',
-                'offset': 5,
-                'r_squared': 0.9,
-                'previous_offset': 1,
-              },
-            ],
-          }),
-        ),
-      );
-      await _pump(tester, _status(), offsets: offsets);
-      expect(find.text('Slot 3'), findsOneWidget);
-      final warning = find.byIcon(Icons.warning_amber_rounded);
-      await tester.ensureVisible(warning);
-      expect(warning, findsOneWidget);
-    },
-  );
+  testWidgets('an unnamed slot and a focus drift warning read from the catalogue, the warning with its icon', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 2, 'run_count': 2,
+      'drift_warning': true, 'reference_first_position': 100, 'reference_second_position': 140, 'cfz_steps': 20,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 3, 'name': '', 'status': 'measured', 'offset': 5, 'r_squared': 0.9, 'previous_offset': 1},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('Slot 3'), findsOneWidget);
+    final warning = find.byIcon(Icons.warning_amber_rounded);
+    await tester.ensureVisible(warning);
+    expect(warning, findsOneWidget);
+  });
 
-  testWidgets(
-    'a negative focus offset reads with the real minus sign, both now and before',
-    (tester) async {
-      final offsets = _Offsets(
-        FilterOffsetLive(
-          calibration: FilterOffsetCalibration.fromJson(const {
-            'state': 'complete',
-            'reference_position': 0,
-            'reference_name': 'L',
-            'run_index': 2,
-            'run_count': 2,
-            'filters': [
-              {
-                'position': 0,
-                'name': 'L',
-                'status': 'measured',
-                'offset': 0,
-                'r_squared': 0.98,
-                'previous_offset': 0,
-              },
-              {
-                'position': 1,
-                'name': 'Hα',
-                'status': 'measured',
-                'offset': -41,
-                'r_squared': 0.93,
-                'previous_offset': -12,
-              },
-            ],
-          }),
-        ),
-      );
-      await _pump(tester, _status(), offsets: offsets);
-      expect(find.text('−41 · Fit R² 0.93 · Before −12'), findsOneWidget);
-    },
-  );
+  testWidgets('a negative focus offset reads with the real minus sign, both now and before', (tester) async {
+    final offsets = _Offsets(FilterOffsetLive(
+        calibration: FilterOffsetCalibration.fromJson(const {
+      'state': 'complete', 'reference_position': 0, 'reference_name': 'L', 'run_index': 2, 'run_count': 2,
+      'filters': [
+        {'position': 0, 'name': 'L', 'status': 'measured', 'offset': 0, 'r_squared': 0.98, 'previous_offset': 0},
+        {'position': 1, 'name': 'Hα', 'status': 'measured', 'offset': -41, 'r_squared': 0.93, 'previous_offset': -12},
+      ],
+    })));
+    await _pump(tester, _status(), offsets: offsets);
+    expect(find.text('−41 · Fit R² 0.93 · Before −12'), findsOneWidget);
+  });
 
   testWidgets(
     'the first-connect home policy toggle is shown and flips the setting (#1075)',
@@ -476,16 +389,14 @@ void main() {
     expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);
   });
 
-  testWidgets('hides the Slot labels section while a wheel is connected', (
-    tester,
-  ) async {
+  testWidgets('hides the Slot labels section while a wheel is connected',
+      (tester) async {
     await _pump(tester, _status(currentSlot: 0));
     expect(find.text('Slot labels (for sequences)'), findsNothing);
   });
 
-  testWidgets('shows the Slot labels section when no wheel is connected', (
-    tester,
-  ) async {
+  testWidgets('shows the Slot labels section when no wheel is connected',
+      (tester) async {
     await _pump(tester, null);
     expect(find.text('Slot labels (for sequences)'), findsOneWidget);
   });
@@ -501,108 +412,78 @@ void main() {
     await tester.pump();
   });
 
-  testWidgets('selecting shows an instant spinner on the pending row', (
-    tester,
-  ) async {
+  testWidgets('selecting shows an instant spinner on the pending row',
+      (tester) async {
     final api = await _pump(tester, _status(currentSlot: 0));
     await tester.tap(find.text('Hα'));
     await tester.pump(); // one frame — before any poll reports the move
-    expect(
-      find.byType(CircularProgressIndicator),
-      findsWidgets,
-      reason: 'instant busy feedback, not waiting for the live poll',
-    );
+    expect(find.byType(CircularProgressIndicator), findsWidgets,
+        reason: 'instant busy feedback, not waiting for the live poll');
     expect(api.calls, contains('command:change:1'));
     await tester.pump(const Duration(seconds: 11)); // stall backstop clears
     await tester.pump();
   });
 
-  testWidgets('a stalled command clears the busy UI (spinner + re-enable)', (
-    tester,
-  ) async {
+  testWidgets('a stalled command clears the busy UI (spinner + re-enable)',
+      (tester) async {
     final api = await _pump(tester, _status(currentSlot: 0));
     await tester.tap(find.text('Hα'));
     await tester.pump(const Duration(milliseconds: 50));
-    expect(
-      find.byType(CircularProgressIndicator),
-      findsWidgets,
-      reason: 'busy spinner while the command is in flight',
-    );
+    expect(find.byType(CircularProgressIndicator), findsWidgets,
+        reason: 'busy spinner while the command is in flight');
 
     // The fake never reports the wheel moving or landing — the 10 s stall
     // fires, takes one fresh look, then clears AND rebuilds.
     await tester.pump(const Duration(seconds: 10));
     await tester.pump();
-    expect(
-      find.byType(CircularProgressIndicator),
-      findsNothing,
-      reason: 'the spinner must clear after a stalled command',
-    );
+    expect(find.byType(CircularProgressIndicator), findsNothing,
+        reason: 'the spinner must clear after a stalled command');
     expect(api.calls, contains('command:change:1'));
 
     // The list is re-enabled: tapping again issues a fresh command.
     await tester.tap(find.text('Hα'));
     await tester.pump(const Duration(milliseconds: 50));
-    expect(
-      api.calls.where((c) => c.startsWith('command:change')).length,
-      2,
-      reason: 'rows re-enable after the stall clears',
-    );
+    expect(api.calls.where((c) => c.startsWith('command:change')).length, 2,
+        reason: 'rows re-enable after the stall clears');
     await tester.pump(const Duration(seconds: 11));
     await tester.pump();
   });
 
   testWidgets('a moving wheel is not selectable', (tester) async {
     final api = await _pump(
-      tester,
-      _status(currentSlot: null, runtimeState: 'moving'),
-      settle: false,
-    );
+        tester, _status(currentSlot: null, runtimeState: 'moving'),
+        settle: false);
     // Let the async status read land, then render the slot rows.
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 100));
-    expect(
-      find.text('Hα'),
-      findsOneWidget,
-      reason: 'slots render while moving',
-    );
+    expect(find.text('Hα'), findsOneWidget, reason: 'slots render while moving');
     await tester.tap(find.text('Hα'));
     await tester.pump();
-    expect(
-      api.calls.where((c) => c.startsWith('command:change')),
-      isEmpty,
-      reason: 'rows are disabled while the wheel is moving',
-    );
+    expect(api.calls.where((c) => c.startsWith('command:change')), isEmpty,
+        reason: 'rows are disabled while the wheel is moving');
     await tester.pump(const Duration(seconds: 11));
     await tester.pump();
   });
 
-  testWidgets('no device connected shows the empty state + Connect…', (
-    tester,
-  ) async {
+  testWidgets('no device connected shows the empty state + Connect…',
+      (tester) async {
     await _pump(tester, null);
     expect(find.text('No filter wheel connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
   });
 
   group('#1298 manual filter wheel', () {
-    testWidgets(
-      'asks which filter is in, keeps the filter editor, drops the park toggle',
-      (tester) async {
-        await _pump(tester, _manual());
-        expect(find.text('Unknown'), findsOneWidget);
-        expect(
-          find.text('Tap the filter that is in the train now.'),
-          findsOneWidget,
-        );
-        expect(find.text('Filters (manual filter wheel)'), findsOneWidget);
-        expect(find.text('Park on slot 0 on first connect'), findsNothing);
-      },
-    );
+    testWidgets('asks which filter is in, keeps the filter editor, drops the park toggle',
+        (tester) async {
+      await _pump(tester, _manual());
+      expect(find.text('Unknown'), findsOneWidget);
+      expect(find.text('Tap the filter that is in the train now.'), findsOneWidget);
+      expect(find.text('Filters (manual filter wheel)'), findsOneWidget);
+      expect(find.text('Park on slot 0 on first connect'), findsNothing);
+    });
 
-    testWidgets('tapping a filter reports it installed (no change command)', (
-      tester,
-    ) async {
+    testWidgets('tapping a filter reports it installed (no change command)',
+        (tester) async {
       final api = await _pump(tester, _manual(currentSlot: 0));
       await tester.tap(find.byKey(const ValueKey('manual-slot-1')));
       await tester.pump();
@@ -610,9 +491,8 @@ void main() {
       expect(api.calls.where((c) => c.startsWith('command:change')), isEmpty);
     });
 
-    testWidgets('a pending swap shows the call to action; confirm and cancel', (
-      tester,
-    ) async {
+    testWidgets('a pending swap shows the call to action; confirm and cancel',
+        (tester) async {
       final api = await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1));
       // The card on the panel (the app-wide dialog lives in the shell).
       expect(find.text('Install the Hα filter'), findsOneWidget);

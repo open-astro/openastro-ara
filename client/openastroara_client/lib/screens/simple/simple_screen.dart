@@ -25,8 +25,8 @@ abstract class SimpleScreen {
     SimpleModeScreen.calibration => const SimpleCalibrationScreen(),
     SimpleModeScreen.plan => const SimpleQueueScreen(),
     // Preflight before its first step shows Preview.
-    SimpleModeScreen.preview ||
-    SimpleModeScreen.preflight => const SimplePreviewScreen(),
+    SimpleModeScreen.preview || SimpleModeScreen.preflight =>
+      const SimplePreviewScreen(),
   };
 
   /// Which Screen this is.

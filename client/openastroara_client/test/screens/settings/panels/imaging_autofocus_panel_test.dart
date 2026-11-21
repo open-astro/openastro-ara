@@ -280,9 +280,9 @@ void main() {
         findsOneWidget,
         reason: 'the reset is not the profile section',
       );
-      final panel = tester.state(
-        find.byType(ImagingAutofocusPanel),
-      ) as PanelSaveRegistration;
+      final panel =
+          tester.state(find.byType(ImagingAutofocusPanel))
+              as PanelSaveRegistration;
       await panel.panelSave();
       await tester.pump();
       expect(_af.puts, isEmpty);
@@ -293,19 +293,18 @@ void main() {
     },
   );
 
-  testWidgets(
-    'Autofocus: Save sends the edit made on the rig copy (ADR 0015)',
-    (tester) async {
-      await _pump(tester);
-      await tester.tap(_autoSwitch());
-      await tester.pump();
-      final panel = tester.state(
-        find.byType(ImagingAutofocusPanel),
-      ) as PanelSaveRegistration;
-      await panel.panelSave();
-      await tester.pump();
-      expect(_af.puts.single.stepSizeAuto, isFalse);
-      expect(find.text('Saved.'), findsOneWidget);
-    },
-  );
+  testWidgets('Autofocus: Save sends the edit made on the rig copy (ADR 0015)', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(_autoSwitch());
+    await tester.pump();
+    final panel =
+        tester.state(find.byType(ImagingAutofocusPanel))
+            as PanelSaveRegistration;
+    await panel.panelSave();
+    await tester.pump();
+    expect(_af.puts.single.stepSizeAuto, isFalse);
+    expect(find.text('Saved.'), findsOneWidget);
+  });
 }

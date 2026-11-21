@@ -20,18 +20,16 @@ class _MemPrefs extends NightModePrefsService {
 
 void main() {
   Future<ProviderContainer> pump(WidgetTester tester) async {
-    final container = ProviderContainer(
-      overrides: [nightModePrefsProvider.overrideWithValue(_MemPrefs())],
-    );
+    final container = ProviderContainer(overrides: [
+      nightModePrefsProvider.overrideWithValue(_MemPrefs()),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
-          home: NightHotkey(child: Scaffold(body: Text('root'))),
-        ),
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(
+        home: NightHotkey(child: Scaffold(body: Text('root'))),
       ),
-    );
+    ));
     await container.read(nightModeProvider.future);
     await tester.pump();
     return container;

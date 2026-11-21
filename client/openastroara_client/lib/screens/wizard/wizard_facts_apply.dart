@@ -44,22 +44,17 @@ void applyFactsToDraft(ProfileDraft draft, DeviceReadiness r) {
       }
       break;
     case EquipmentDeviceType.filterWheel:
-      final named =
-          p.filterWheelSlots?.slots
+      final named = p.filterWheelSlots?.slots
               .where((s) => s.name.trim().isNotEmpty)
               .toList() ??
           const [];
       if (named.isNotEmpty) {
         draft.filterWheel.filters
           ..clear()
-          ..addAll(
-            named.map(
-              (s) => FilterDef()
-                ..name = s.name.trim()
-                ..type = inferFilterType(s.name)
-                ..focusOffsetSteps = s.focusOffset,
-            ),
-          );
+          ..addAll(named.map((s) => FilterDef()
+            ..name = s.name.trim()
+            ..type = inferFilterType(s.name)
+            ..focusOffsetSteps = s.focusOffset));
       }
       break;
     case EquipmentDeviceType.focuser:
@@ -94,8 +89,7 @@ FilterType inferFilterType(String rawName) {
   // Word-boundary matching so "Chroma" isn't a Hα and "Astronomik" isn't an
   // "nm" — narrowband tokens must stand alone within the name.
   final narrowband = RegExp(
-    r'(^|[^a-zα-ω])(ha|hα|halpha|h-alpha|oiii|o3|sii|s2|nb)([^a-zα-ω]|$)',
-  );
+      r'(^|[^a-zα-ω])(ha|hα|halpha|h-alpha|oiii|o3|sii|s2|nb)([^a-zα-ω]|$)');
   if (narrowband.hasMatch(n) || RegExp(r'\d+\s*nm(\W|$)').hasMatch(n)) {
     return FilterType.narrowband;
   }

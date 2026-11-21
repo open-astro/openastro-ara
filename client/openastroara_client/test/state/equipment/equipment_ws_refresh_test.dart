@@ -210,39 +210,32 @@ void main() {
       expect(api.statusReads, 3, reason: 'the held push re-reads at once');
     });
 
-    test(
-      'a push held across a manual read and an action survives both',
-      () async {
-        // A poll read is in flight when the user connects; the details-ready
-        // push lands while both reads are. The poll read ending first must not
-        // spend the held push on a refresh() that the action's guard drops.
-        await prime();
-        api.gateSecondRead = Completer<void>();
-        api.gateThirdRead = Completer<void>();
-        final notifier = container.read(mountProvider.notifier);
-        final manual = notifier.refresh();
-        await pumpEventQueue();
-        final action = notifier.reconnect();
-        await pumpEventQueue();
-        expect(
-          api.statusReads,
-          3,
-          reason: 'manual read and action re-read held',
-        );
+    test('a push held across a manual read and an action survives both', () async {
+      // A poll read is in flight when the user connects; the details-ready
+      // push lands while both reads are. The poll read ending first must not
+      // spend the held push on a refresh() that the action's guard drops.
+      await prime();
+      api.gateSecondRead = Completer<void>();
+      api.gateThirdRead = Completer<void>();
+      final notifier = container.read(mountProvider.notifier);
+      final manual = notifier.refresh();
+      await pumpEventQueue();
+      final action = notifier.reconnect();
+      await pumpEventQueue();
+      expect(api.statusReads, 3, reason: 'manual read and action re-read held');
 
-        events.add(_stateChanged('telescope'));
-        await pumpEventQueue();
-        api.gateSecondRead!.complete();
-        await manual;
-        await pumpEventQueue();
-        expect(api.statusReads, 3, reason: 'still held while the action reads');
+      events.add(_stateChanged('telescope'));
+      await pumpEventQueue();
+      api.gateSecondRead!.complete();
+      await manual;
+      await pumpEventQueue();
+      expect(api.statusReads, 3, reason: 'still held while the action reads');
 
-        api.gateThirdRead!.complete();
-        await action;
-        await pumpEventQueue();
-        expect(api.statusReads, 4, reason: 'replayed once the action ends');
-      },
-    );
+      api.gateThirdRead!.complete();
+      await action;
+      await pumpEventQueue();
+      expect(api.statusReads, 4, reason: 'replayed once the action ends');
+    });
 
     test(
       'an unknown device_type token from a newer daemon is ignored',

@@ -62,9 +62,7 @@ void main() {
     });
 
     test('coerces an integer hours value to double', () {
-      final a = StatsAchievements.fromJson(const {
-        'total_integration_hours': 10,
-      });
+      final a = StatsAchievements.fromJson(const {'total_integration_hours': 10});
       expect(a.totalIntegrationHours, 10.0);
     });
   });
@@ -72,34 +70,16 @@ void main() {
   group('StatsMilestone.progress', () {
     test('clamps to [0, 1]', () {
       const under = StatsMilestone(
-        id: 'a',
-        title: '',
-        description: '',
-        achieved: false,
-        threshold: 100,
-        current: 25,
-      );
+          id: 'a', title: '', description: '', achieved: false, threshold: 100, current: 25);
       const over = StatsMilestone(
-        id: 'b',
-        title: '',
-        description: '',
-        achieved: true,
-        threshold: 10,
-        current: 42,
-      );
+          id: 'b', title: '', description: '', achieved: true, threshold: 10, current: 42);
       expect(under.progress, 0.25);
       expect(over.progress, 1.0);
     });
 
     test('a non-positive threshold reads as complete (no divide-by-zero)', () {
       const m = StatsMilestone(
-        id: 'c',
-        title: '',
-        description: '',
-        achieved: false,
-        threshold: 0,
-        current: 0,
-      );
+          id: 'c', title: '', description: '', achieved: false, threshold: 0, current: 0);
       expect(m.progress, 1.0);
     });
   });

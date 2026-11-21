@@ -48,5 +48,4 @@ class RunSpotlightNotifier extends Notifier<RunSpotlight?> {
 
 final runSpotlightProvider =
     NotifierProvider<RunSpotlightNotifier, RunSpotlight?>(
-      RunSpotlightNotifier.new,
-    );
+        RunSpotlightNotifier.new);

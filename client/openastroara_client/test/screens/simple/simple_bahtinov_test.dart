@@ -24,8 +24,7 @@ class _Bahtinov extends BahtinovFocusNotifier {
   @override
   BahtinovFocusLive build() => live0;
   @override
-  Future<void> start({double? exposureSec}) async =>
-      calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec}) async => calls.add('start $exposureSec');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -35,17 +34,11 @@ class _Bahtinov extends BahtinovFocusNotifier {
   }
 }
 
-BahtinovSample _sample(int seq, double offset) => BahtinovSample(
-  seq: seq,
-  detected: true,
-  offsetPx: offset,
-  withinZone: offset.abs() <= 0.3,
-);
+BahtinovSample _sample(int seq, double offset) =>
+    BahtinovSample(seq: seq, detected: true, offsetPx: offset, withinZone: offset.abs() <= 0.3);
 
 BahtinovFocusStatus _running(List<double> offsets, {bool active = true}) {
-  final recent = [
-    for (var i = 0; i < offsets.length; i++) _sample(i + 1, offsets[i]),
-  ];
+  final recent = [for (var i = 0; i < offsets.length; i++) _sample(i + 1, offsets[i])];
   return BahtinovFocusStatus(
     active: active,
     state: active ? BahtinovFocusStates.running : BahtinovFocusStates.stopped,
@@ -61,188 +54,117 @@ BahtinovFocusStatus _running(List<double> offsets, {bool active = true}) {
 
 late _Bahtinov _b;
 
-Future<void> _pump(
-  WidgetTester tester,
-  BahtinovFocusLive live, {
-  Widget child = const SimpleFocusPanel(),
-}) async {
+Future<void> _pump(WidgetTester tester, BahtinovFocusLive live, {Widget child = const SimpleFocusPanel()}) async {
   _b = _Bahtinov(live);
   // Room for the Back row over the readout: the shell scrolls the panel, this harness does not.
   tester.view.physicalSize = const Size(800, 1000);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
-  await tester.pumpWidget(
-    ProviderScope(
-      overrides: [
-        mainFocusMethodProvider.overrideWith(_Pick.new),
-        focuserProvider.overrideWith(_NoFocuser.new),
-        bahtinovFocusProvider.overrideWith(() => _b),
-      ],
-      child: MaterialApp(
-        home: Scaffold(body: Center(child: child)),
-      ),
-    ),
-  );
+  await tester.pumpWidget(ProviderScope(
+    overrides: [
+      mainFocusMethodProvider.overrideWith(_Pick.new),
+      focuserProvider.overrideWith(_NoFocuser.new),
+      bahtinovFocusProvider.overrideWith(() => _b),
+    ],
+    child: MaterialApp(home: Scaffold(body: Center(child: child))),
+  ));
   await tester.pump();
 }
 
 void main() {
-  testWidgets('Manual before a start: fit the mask, what to do, the exposure', (
-    tester,
-  ) async {
+  testWidgets('Manual before a start: fit the mask, what to do, the exposure', (tester) async {
     await _pump(tester, BahtinovFocusLive.idle);
     expect(find.text('Fit the mask, then Start'), findsOneWidget);
-    expect(
-      find.textContaining('Put the Bahtinov mask over the front'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Put the Bahtinov mask over the front'), findsOneWidget);
     expect(find.byKey(const Key('simple-bahtinov-exposure-2')), findsOneWidget);
   });
 
-  testWidgets(
-    'Manual keeps one height from before a start through a reading (#1717)',
-    (tester) async {
-      await _pump(tester, BahtinovFocusLive.idle);
-      double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
-      final start = height();
-      _b.state = BahtinovFocusLive(
-        status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0]),
-      );
-      await tester.pump();
-      expect(height(), start);
-    },
-  );
+  testWidgets('Manual keeps one height from before a start through a reading (#1717)', (tester) async {
+    await _pump(tester, BahtinovFocusLive.idle);
+    double height() => tester.getSize(find.byType(SimpleFocusPanel)).height;
+    final start = height();
+    _b.state = BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0]));
+    await tester.pump();
+    expect(height(), start);
+  });
 
-  testWidgets(
-    'Finish, hidden for its room before a measurement, takes no tap and is not read out',
-    (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pump(tester, BahtinovFocusLive.idle);
-      await tester.tapAt(
-        tester.getCenter(find.byKey(const Key('simple-bahtinov-finish'))),
-      );
-      await tester.pump();
-      expect(find.text('Take the Bahtinov mask off'), findsNothing);
-      expect(find.bySemanticsLabel('Finish'), findsNothing);
-      handle.dispose();
-    },
-  );
+  testWidgets('Finish, hidden for its room before a measurement, takes no tap and is not read out', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, BahtinovFocusLive.idle);
+    await tester.tapAt(tester.getCenter(find.byKey(const Key('simple-bahtinov-finish'))));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsNothing);
+    expect(find.bySemanticsLabel('Finish'), findsNothing);
+    handle.dispose();
+  });
 
-  testWidgets(
-    'the Exposure row, hidden for its room after a finish, is not read out',
-    (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pump(
-        tester,
-        BahtinovFocusLive(status: _running([0.1, 0.1, 0.1]), finished: true),
-      );
-      expect(find.bySemanticsLabel('Exposure'), findsNothing);
-      handle.dispose();
-    },
-  );
+  testWidgets('the Exposure row, hidden for its room after a finish, is not read out', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1]), finished: true));
+    expect(find.bySemanticsLabel('Exposure'), findsNothing);
+    handle.dispose();
+  });
 
-  testWidgets(
-    'while it reads: the offset big, in px from focus, and which way to turn',
-    (tester) async {
-      await _pump(
-        tester,
-        BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0])),
-      );
-      expect(find.text('2.00'), findsOneWidget);
-      expect(find.text('px from focus'), findsOneWidget);
-      expect(find.text('Keep going'), findsOneWidget);
-      expect(
-        find.text('Same way — about twice your last move again.'),
-        findsOneWidget,
-      );
-    },
-  );
+  testWidgets('while it reads: the offset big, in px from focus, and which way to turn', (tester) async {
+    await _pump(tester, BahtinovFocusLive(status: _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0])));
+    expect(find.text('2.00'), findsOneWidget);
+    expect(find.text('px from focus'), findsOneWidget);
+    expect(find.text('Keep going'), findsOneWidget);
+    expect(find.text('Same way — about twice your last move again.'), findsOneWidget);
+  });
 
-  testWidgets(
-    'in focus: Finish asks for the mask to come off in the panel, then finishes',
-    (tester) async {
-      await _pump(tester, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1])));
-      await tester.tap(find.byKey(const Key('simple-bahtinov-finish')));
-      await tester.pump();
-      expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
-      expect(_b.calls, isEmpty, reason: 'nothing until the answer');
-      await tester.tap(find.text('Not yet'));
-      await tester.pump();
-      expect(find.text('Take the Bahtinov mask off'), findsNothing);
-      await tester.tap(find.byKey(const Key('simple-bahtinov-finish')));
-      await tester.pump();
-      await tester.tap(find.text('Mask removed'));
-      await tester.pump();
-      expect(_b.calls, ['finish']);
-      expect(find.text('In focus · mask off'), findsOneWidget);
-    },
-  );
+  testWidgets('in focus: Finish asks for the mask to come off in the panel, then finishes', (tester) async {
+    await _pump(tester, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1])));
+    await tester.tap(find.byKey(const Key('simple-bahtinov-finish')));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
+    expect(_b.calls, isEmpty, reason: 'nothing until the answer');
+    await tester.tap(find.text('Not yet'));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-bahtinov-finish')));
+    await tester.pump();
+    await tester.tap(find.text('Mask removed'));
+    await tester.pump();
+    expect(_b.calls, ['finish']);
+    expect(find.text('In focus · mask off'), findsOneWidget);
+  });
 
-  testWidgets("Manual's shutter starts the readout at the picked exposure", (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      BahtinovFocusLive.idle,
-      child: const SimpleFocusShutter(),
-    );
+  testWidgets("Manual's shutter starts the readout at the picked exposure", (tester) async {
+    await _pump(tester, BahtinovFocusLive.idle, child: const SimpleFocusShutter());
     await tester.tap(find.byType(SimpleFocusShutter));
     await tester.pump();
     expect(_b.calls, ['start null']);
   });
 
-  testWidgets("while it reads, Manual's shutter is a square that stops it", (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      BahtinovFocusLive(status: _running([2.0])),
-      child: const SimpleFocusShutter(),
-    );
+  testWidgets("while it reads, Manual's shutter is a square that stops it", (tester) async {
+    await _pump(tester, BahtinovFocusLive(status: _running([2.0])), child: const SimpleFocusShutter());
     await tester.tap(find.byType(SimpleFocusShutter));
     await tester.pump();
     expect(_b.calls, ['stop']);
   });
 
-  testWidgets(
-    'switching to Guide before Finish asks for the mask first too, then switches (ALP-4982)',
-    (tester) async {
-      // #1486 review: only the switch to Auto asked.
-      await _pump(
-        tester,
-        BahtinovFocusLive(status: _running([1.0], active: false)),
-      );
-      final c = ProviderScope.containerOf(
-        tester.element(find.byType(SimpleFocusPanel)),
-      );
-      await tester.tap(find.byKey(const Key('simple-focus-scope-guide')));
-      await tester.pump();
-      expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
-      expect(
-        c.read(simpleFocusScopeProvider),
-        SimpleFocusScope.main,
-        reason: 'not before the answer',
-      );
-      await tester.tap(find.text('Mask removed'));
-      await tester.pumpAndSettle();
-      expect(_b.calls, ['finish']);
-      expect(c.read(simpleFocusScopeProvider), SimpleFocusScope.guide);
-    },
-  );
+  testWidgets('switching to Guide before Finish asks for the mask first too, then switches (ALP-4982)', (tester) async {
+    // #1486 review: only the switch to Auto asked.
+    await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
+    final c = ProviderScope.containerOf(tester.element(find.byType(SimpleFocusPanel)));
+    await tester.tap(find.byKey(const Key('simple-focus-scope-guide')));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
+    expect(c.read(simpleFocusScopeProvider), SimpleFocusScope.main, reason: 'not before the answer');
+    await tester.tap(find.text('Mask removed'));
+    await tester.pumpAndSettle();
+    expect(_b.calls, ['finish']);
+    expect(c.read(simpleFocusScopeProvider), SimpleFocusScope.guide);
+  });
 
-  testWidgets(
-    'leaving Manual before Finish asks for the mask first, then switches',
-    (tester) async {
-      await _pump(
-        tester,
-        BahtinovFocusLive(status: _running([1.0], active: false)),
-      );
-      await tester.tap(find.byKey(const Key('simple-focus-back')));
-      await tester.pump();
-      expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
-      await tester.tap(find.text('Mask removed'));
-      await tester.pumpAndSettle();
-      expect(_b.calls, ['finish']);
-    },
-  );
+  testWidgets('leaving Manual before Finish asks for the mask first, then switches', (tester) async {
+    await _pump(tester, BahtinovFocusLive(status: _running([1.0], active: false)));
+    await tester.tap(find.byKey(const Key('simple-focus-back')));
+    await tester.pump();
+    expect(find.text('Take the Bahtinov mask off'), findsOneWidget);
+    await tester.tap(find.text('Mask removed'));
+    await tester.pumpAndSettle();
+    expect(_b.calls, ['finish']);
+  });
 }

@@ -255,18 +255,11 @@ void main() {
   });
 
   group('Simple Mode', () {
-    List<SimpleMessage> pills(WidgetTester tester) => ProviderScope.containerOf(
-      tester.element(find.byType(ConnectionPolicyListener)),
-    ).read(simpleMessagesProvider);
+    List<SimpleMessage> pills(WidgetTester tester) =>
+        ProviderScope.containerOf(tester.element(find.byType(ConnectionPolicyListener))).read(simpleMessagesProvider);
 
-    testWidgets('the session-transferred pill is in Brazilian Portuguese', (
-      tester,
-    ) async {
-      final (conn, _) = await pumpListener(
-        tester,
-        simple: true,
-        locale: const Locale('pt', 'BR'),
-      );
+    testWidgets('the session-transferred pill is in Brazilian Portuguese', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
       conn.legs.first.closeCode = 4004;
       await conn.legs.first.incoming.close();
       await tester.pump();
@@ -277,69 +270,36 @@ void main() {
     });
 
     testWidgets('a takeover pill is in Brazilian Portuguese', (tester) async {
-      final (conn, _) = await pumpListener(
-        tester,
-        simple: true,
-        locale: const Locale('pt', 'BR'),
-      );
-      conn.legs.first.incoming.add(
-        jsonEncode({
-          'type': 'connection.request',
-          'from': 'ipad.local',
-          'request_id': 'req-9',
-        }),
-      );
+      final (conn, _) = await pumpListener(tester, simple: true, locale: const Locale('pt', 'BR'));
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));
       await tester.pump();
       await tester.pump();
       final pill = pills(tester).single;
       expect(pill.title, 'ipad.local quer se conectar');
-      expect(pill.actions.map((a) => a.label), [
-        'Manter conectado',
-        'Permitir',
-      ]);
+      expect(pill.actions.map((a) => a.label), ['Manter conectado', 'Permitir']);
       await tester.pump(const Duration(seconds: 30)); // the request's timer
     });
 
-    testWidgets(
-      'a takeover request is a question pill and Allow answers allow',
-      (tester) async {
-        final (conn, _) = await pumpListener(tester, simple: true);
-        conn.legs.first.incoming.add(
-          jsonEncode({
-            'type': 'connection.request',
-            'from': 'ipad.local',
-            'request_id': 'req-9',
-          }),
-        );
-        await tester.pump();
-        await tester.pump();
-        expect(find.byType(AlertDialog), findsNothing);
-        final pill = pills(tester).single;
-        expect(pill.kind, SimpleMessageKind.question);
-        expect(pill.title, 'ipad.local wants to connect');
-        expect(pill.actions.map((a) => a.label), [
-          'Keep me connected',
-          'Allow',
-        ]);
-        pill.actions.last.onPressed();
-        await tester.pump();
-        expect(conn.legs.first.sent.join(), contains('req-9'));
-        expect(conn.legs.first.sent.join(), contains('"action":"allow"'));
-        await tester.pump(const Duration(seconds: 30)); // the request's timer
-      },
-    );
-
-    testWidgets('an unanswered takeover pill goes when the rig stops asking', (
-      tester,
-    ) async {
+    testWidgets('a takeover request is a question pill and Allow answers allow', (tester) async {
       final (conn, _) = await pumpListener(tester, simple: true);
-      conn.legs.first.incoming.add(
-        jsonEncode({
-          'type': 'connection.request',
-          'from': 'ipad.local',
-          'request_id': 'req-1',
-        }),
-      );
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-9'}));
+      await tester.pump();
+      await tester.pump();
+      expect(find.byType(AlertDialog), findsNothing);
+      final pill = pills(tester).single;
+      expect(pill.kind, SimpleMessageKind.question);
+      expect(pill.title, 'ipad.local wants to connect');
+      expect(pill.actions.map((a) => a.label), ['Keep me connected', 'Allow']);
+      pill.actions.last.onPressed();
+      await tester.pump();
+      expect(conn.legs.first.sent.join(), contains('req-9'));
+      expect(conn.legs.first.sent.join(), contains('"action":"allow"'));
+      await tester.pump(const Duration(seconds: 30)); // the request's timer
+    });
+
+    testWidgets('an unanswered takeover pill goes when the rig stops asking', (tester) async {
+      final (conn, _) = await pumpListener(tester, simple: true);
+      conn.legs.first.incoming.add(jsonEncode({'type': 'connection.request', 'from': 'ipad.local', 'request_id': 'req-1'}));
       await tester.pump();
       await tester.pump();
       expect(pills(tester), hasLength(1));
@@ -347,9 +307,7 @@ void main() {
       expect(pills(tester), isEmpty);
     });
 
-    testWidgets('a lost session is a question pill and Reconnect dials again', (
-      tester,
-    ) async {
+    testWidgets('a lost session is a question pill and Reconnect dials again', (tester) async {
       final (conn, _) = await pumpListener(tester, simple: true);
       conn.legs.first.closeCode = 4004;
       await conn.legs.first.incoming.close();

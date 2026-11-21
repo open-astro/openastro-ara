@@ -57,12 +57,10 @@ Future<void> exportSequence(
   } catch (e, st) {
     debugPrint('[sequencer] export load failed: $e\n$st');
     if (context.mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't load the sequence to export."),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(
+        content: Text("Couldn't load the sequence to export."),
+        backgroundColor: AraColors.accentError,
+      ));
     }
     return;
   }
@@ -78,12 +76,10 @@ Future<void> exportSequence(
   } catch (e, st) {
     debugPrint('[sequencer] export save failed: $e\n$st');
     if (context.mounted) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text("Couldn't save the file."),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(
+        content: Text("Couldn't save the file."),
+        backgroundColor: AraColors.accentError,
+      ));
     }
     return;
   }
@@ -91,13 +87,10 @@ Future<void> exportSequence(
 
   // Confirm with the saved filename (the user chose the folder, so the basename
   // is enough and avoids a very long path overflowing the SnackBar).
-  final fileName = saved.pathSegments.isNotEmpty
-      ? saved.pathSegments.last
-      : saved.toString();
-  messenger.showSnackBar(
-    SnackBar(
-      content: Text('Exported "$exportName" → $fileName'),
-      duration: const Duration(seconds: 4),
-    ),
-  );
+  final fileName =
+      saved.pathSegments.isNotEmpty ? saved.pathSegments.last : saved.toString();
+  messenger.showSnackBar(SnackBar(
+    content: Text('Exported "$exportName" → $fileName'),
+    duration: const Duration(seconds: 4),
+  ));
 }

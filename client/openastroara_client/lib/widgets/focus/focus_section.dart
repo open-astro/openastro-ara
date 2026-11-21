@@ -18,7 +18,6 @@ class FocusSection extends StatelessWidget {
   final String? subhead;
   final Widget action;
   final Widget? secondaryAction;
-
   /// Drawn at the right end of the title row (the main telescope's method
   /// picker).
   final Widget? titleTrailing;
@@ -57,27 +56,27 @@ class FocusSection extends StatelessWidget {
           SizedBox(
             width: double.infinity,
             child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              runSpacing: 8,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title.toUpperCase(),
-                      style: theme.textTheme.labelSmall?.copyWith(
-                        color: AraColors.textSecondary,
-                        letterSpacing: 1.1,
-                      ),
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            runSpacing: 8,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title.toUpperCase(),
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: AraColors.textSecondary,
+                      letterSpacing: 1.1,
                     ),
-                    const SizedBox(width: 2),
-                    HelpIcon(helpKey: helpKey),
-                  ],
-                ),
-                ?titleTrailing,
-              ],
-            ),
+                  ),
+                  const SizedBox(width: 2),
+                  HelpIcon(helpKey: helpKey),
+                ],
+              ),
+              ?titleTrailing,
+            ],
+          ),
           ),
           const SizedBox(height: 6),
           LayoutBuilder(
@@ -88,14 +87,10 @@ class FocusSection extends StatelessWidget {
                 children: [
                   Text(
                     headline,
-                    style:
-                        (short
-                                ? theme.textTheme.titleLarge
-                                : theme.textTheme.headlineSmall)
-                            ?.copyWith(
-                              color: headlineColor ?? AraColors.textPrimary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                    style: (short ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)?.copyWith(
+                      color: headlineColor ?? AraColors.textPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   if (subhead != null) ...[
                     const SizedBox(height: 2),
@@ -190,15 +185,11 @@ class StatTile extends StatelessWidget {
                   value,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      (short
-                              ? theme.textTheme.titleLarge
-                              : theme.textTheme.headlineSmall)
-                          ?.copyWith(
-                            color: color ?? AraColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                            fontFeatures: const [FontFeature.tabularFigures()],
-                          ),
+                  style: (short ? theme.textTheme.titleLarge : theme.textTheme.headlineSmall)?.copyWith(
+                    color: color ?? AraColors.textPrimary,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
                 ),
               ),
               if (unit != null && value != '—') ...[

@@ -9,8 +9,8 @@ import 'stats_refresh_mixin.dart';
 /// Builds a [StatsExportClient] for a server. Overridable in tests.
 final statsExportApiFactoryProvider =
     Provider<StatsExportClient Function(AraServer)>(
-      (ref) => StatsExportApi.new,
-    );
+  (ref) => StatsExportApi.new,
+);
 
 /// [StatsExportClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -37,12 +37,11 @@ class StatsTargetsNotifier extends AsyncNotifier<List<StatsTarget>?>
   /// Re-reads the targets, keeping the previous list on screen if the read
   /// fails (the section shows a stale banner). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-    final api = ref.read(statsExportApiProvider);
-    return api?.fetchTargets();
-  });
+        final api = ref.read(statsExportApiProvider);
+        return api?.fetchTargets();
+      });
 }
 
 final statsTargetsProvider =
     AsyncNotifierProvider<StatsTargetsNotifier, List<StatsTarget>?>(
-      StatsTargetsNotifier.new,
-    );
+        StatsTargetsNotifier.new);

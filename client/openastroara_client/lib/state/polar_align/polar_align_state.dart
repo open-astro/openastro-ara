@@ -93,7 +93,6 @@ class PolarAlignLive {
   /// #2082 a point of the measurement stayed scattered over 3″ after its
   /// retake (from each progress event and the status).
   final bool measurementNoisy;
-
   /// #2083 the run turns RA by hand: Ara moves nothing.
   final bool handTurn;
 
@@ -176,51 +175,44 @@ class PolarAlignLive {
     PolarAlignHandTurn? handTurnWait,
     bool clearHandTurnWait = false,
     double? initialErrorArcmin,
-  }) => PolarAlignLive(
-    phase: phase ?? this.phase,
-    iteration: iteration ?? this.iteration,
-    altErrorArcmin: clearReadout ? null : altErrorArcmin ?? this.altErrorArcmin,
-    azErrorArcmin: clearReadout ? null : azErrorArcmin ?? this.azErrorArcmin,
-    totalErrorArcmin: clearReadout
-        ? null
-        : totalErrorArcmin ?? this.totalErrorArcmin,
-    zone: clearReadout ? null : zone ?? this.zone,
-    consecutiveSolveFailures:
-        consecutiveSolveFailures ?? this.consecutiveSolveFailures,
-    errorReason: errorReason ?? this.errorReason,
-    errorMessage: errorMessage ?? this.errorMessage,
-    errorStoppedBy: clearErrorStoppedBy
-        ? null
-        : errorStoppedBy ?? this.errorStoppedBy,
-    errorStopUnconfirmed: errorStopUnconfirmed ?? this.errorStopUnconfirmed,
-    frameStartedAt: clearFrameInProgress
-        ? null
-        : frameStartedAt ?? this.frameStartedAt,
-    frameExposureSeconds: clearFrameInProgress
-        ? null
-        : frameExposureSeconds ?? this.frameExposureSeconds,
-    lastFrame: lastFrame ?? this.lastFrame,
-    stage: stage ?? this.stage,
-    waitingForHome: waitingForHome ?? this.waitingForHome,
-    checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
-    checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
-    checkResult: checkResult ?? this.checkResult,
-    correction: clearCorrection ? null : correction ?? this.correction,
-    // The readout's own caution goes with it.
-    readoutCaution: clearReadout || clearReadoutCaution
-        ? null
-        : readoutCaution ?? this.readoutCaution,
-    camera: camera,
-    measurementNoisy: clearReadout
-        ? false
-        : measurementNoisy ?? this.measurementNoisy,
-    handTurn: handTurn ?? this.handTurn,
-    handTurnWait: clearHandTurnWait ? null : handTurnWait ?? this.handTurnWait,
-    // A new stage's readout starts afresh: so does its first readout.
-    initialErrorArcmin: clearReadout
-        ? null
-        : initialErrorArcmin ?? this.initialErrorArcmin,
-  );
+  }) =>
+      PolarAlignLive(
+        phase: phase ?? this.phase,
+        iteration: iteration ?? this.iteration,
+        altErrorArcmin: clearReadout ? null : altErrorArcmin ?? this.altErrorArcmin,
+        azErrorArcmin: clearReadout ? null : azErrorArcmin ?? this.azErrorArcmin,
+        totalErrorArcmin: clearReadout ? null : totalErrorArcmin ?? this.totalErrorArcmin,
+        zone: clearReadout ? null : zone ?? this.zone,
+        consecutiveSolveFailures:
+            consecutiveSolveFailures ?? this.consecutiveSolveFailures,
+        errorReason: errorReason ?? this.errorReason,
+        errorMessage: errorMessage ?? this.errorMessage,
+        errorStoppedBy: clearErrorStoppedBy
+            ? null
+            : errorStoppedBy ?? this.errorStoppedBy,
+        errorStopUnconfirmed: errorStopUnconfirmed ?? this.errorStopUnconfirmed,
+        frameStartedAt: clearFrameInProgress
+            ? null
+            : frameStartedAt ?? this.frameStartedAt,
+        frameExposureSeconds: clearFrameInProgress
+            ? null
+            : frameExposureSeconds ?? this.frameExposureSeconds,
+        lastFrame: lastFrame ?? this.lastFrame,
+        stage: stage ?? this.stage,
+        waitingForHome: waitingForHome ?? this.waitingForHome,
+        checkSolvesDone: checkSolvesDone ?? this.checkSolvesDone,
+        checkSolvesTotal: checkSolvesTotal ?? this.checkSolvesTotal,
+        checkResult: checkResult ?? this.checkResult,
+        correction: clearCorrection ? null : correction ?? this.correction,
+        // The readout's own caution goes with it.
+        readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
+        camera: camera,
+        measurementNoisy: clearReadout ? false : measurementNoisy ?? this.measurementNoisy,
+        handTurn: handTurn ?? this.handTurn,
+        handTurnWait: clearHandTurnWait ? null : handTurnWait ?? this.handTurnWait,
+        // A new stage's readout starts afresh: so does its first readout.
+        initialErrorArcmin: clearReadout ? null : initialErrorArcmin ?? this.initialErrorArcmin,
+      );
 }
 
 double? _num(Map<String, dynamic> payload, String key) =>
@@ -232,11 +224,8 @@ String? _str(Map<String, dynamic> payload, String key) =>
 /// Pure fold of one WS event into the live routine view. Returns null when the
 /// event is not a `polar_align.*` event (no state write). [now] stamps a
 /// `frame_started` (injectable for tests). Exposed for unit tests.
-PolarAlignLive? foldPolarAlignEvent(
-  PolarAlignLive current,
-  WsEvent event, {
-  DateTime Function() now = DateTime.now,
-}) {
+PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
+    {DateTime Function() now = DateTime.now}) {
   switch (event.type) {
     case PolarAlignWsEvents.started:
       // A fresh routine: drop everything from the previous run.
@@ -253,12 +242,11 @@ PolarAlignLive? foldPolarAlignEvent(
     case PolarAlignWsEvents.stopped:
       // The run's end clears the correction without an event of its own.
       return current.copyWith(
-        phase: PolarAlignStates.stopped,
-        clearFrameInProgress: true,
-        waitingForHome: false,
-        clearCorrection: true,
-        clearHandTurnWait: true,
-      );
+          phase: PolarAlignStates.stopped,
+          clearFrameInProgress: true,
+          waitingForHome: false,
+          clearCorrection: true,
+          clearHandTurnWait: true);
     case PolarAlignWsEvents.paused:
       return current.copyWith(phase: PolarAlignStates.paused);
     case PolarAlignWsEvents.stage:
@@ -273,8 +261,7 @@ PolarAlignLive? foldPolarAlignEvent(
         checkSolvesDone:
             (event.payload['check_solves_done'] as num?)?.toInt() ?? 0,
         checkSolvesTotal:
-            (event.payload['check_solves_total'] as num?)?.toInt() ??
-            current.checkSolvesTotal,
+            (event.payload['check_solves_total'] as num?)?.toInt() ?? current.checkSolvesTotal,
         waitingForHome: false,
         clearFrameInProgress: true,
         // A new stage measures afresh: the previous stage's readout (and its
@@ -284,9 +271,7 @@ PolarAlignLive? foldPolarAlignEvent(
       );
     case PolarAlignWsEvents.needsHome:
       return current.copyWith(
-        phase: PolarAlignStates.homing,
-        waitingForHome: true,
-      );
+          phase: PolarAlignStates.homing, waitingForHome: true);
     case PolarAlignWsEvents.checked:
       return current.copyWith(
         phase: PolarAlignStates.checked,
@@ -304,9 +289,7 @@ PolarAlignLive? foldPolarAlignEvent(
         phase: PolarAlignStates.adjusting,
         clearHandTurnWait: true,
         // Iteration 0 is the seed's readout: the error the stage started from.
-        initialErrorArcmin: iteration == 0
-            ? _num(event.payload, 'total_error_arcmin')
-            : null,
+        initialErrorArcmin: iteration == 0 ? _num(event.payload, 'total_error_arcmin') : null,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
             : current.stage,
@@ -315,9 +298,7 @@ PolarAlignLive? foldPolarAlignEvent(
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
-        zone: event.payload['zone'] is String
-            ? event.payload['zone'] as String
-            : current.zone,
+        zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
         // Every progress event says the readout's caution afresh (absent = sound).
         readoutCaution: _str(event.payload, 'readout_caution'),
@@ -428,35 +409,34 @@ class PolarAlignLiveNotifier extends Notifier<PolarAlignLive> {
 /// streak, iteration) must reset rather than survive from a previous run.
 /// Pure — unit-tested.
 PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
-  phase: status.state,
-  altErrorArcmin: status.altitudeAdjustmentArcmin,
-  azErrorArcmin: status.azimuthAdjustmentArcmin,
-  totalErrorArcmin: status.currentErrorArcmin,
-  zone: polarAlignZone(status.currentErrorArcmin),
-  lastFrame: status.lastFrame,
-  stage: status.stage,
-  waitingForHome: status.waitingForHome,
-  checkSolvesDone: status.checkSolvesDone,
-  checkResult: status.checkResult,
-  correction: status.correction,
-  readoutCaution: status.readoutCaution,
-  camera: status.camera,
-  measurementNoisy: status.measurementNoisy,
-  handTurn: status.handTurn,
-  handTurnWait: status.handTurnWait,
-);
+      phase: status.state,
+      altErrorArcmin: status.altitudeAdjustmentArcmin,
+      azErrorArcmin: status.azimuthAdjustmentArcmin,
+      totalErrorArcmin: status.currentErrorArcmin,
+      zone: polarAlignZone(status.currentErrorArcmin),
+      lastFrame: status.lastFrame,
+      stage: status.stage,
+      waitingForHome: status.waitingForHome,
+      checkSolvesDone: status.checkSolvesDone,
+      checkResult: status.checkResult,
+      correction: status.correction,
+      readoutCaution: status.readoutCaution,
+      camera: status.camera,
+      measurementNoisy: status.measurementNoisy,
+      handTurn: status.handTurn,
+      handTurnWait: status.handTurnWait,
+    );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService
 /// PublishProgressAsync) — the REST snapshot carries the error but not the zone.
 String? polarAlignZone(double? totalArcmin) => totalArcmin == null
     ? null
     : totalArcmin < 10.0
-    ? 'green'
-    : totalArcmin < 60.0
-    ? 'yellow'
-    : 'red';
+        ? 'green'
+        : totalArcmin < 60.0
+            ? 'yellow'
+            : 'red';
 
 final polarAlignLiveProvider =
     NotifierProvider<PolarAlignLiveNotifier, PolarAlignLive>(
-      PolarAlignLiveNotifier.new,
-    );
+        PolarAlignLiveNotifier.new);

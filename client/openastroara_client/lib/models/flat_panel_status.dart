@@ -56,15 +56,12 @@ class FlatPanelStatus extends EquipmentDeviceStatus {
 
   factory FlatPanelStatus.fromJson(Map<String, dynamic> json) {
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic>
-        ? runtime
-        : const <String, dynamic>{};
+    final r =
+        runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return FlatPanelStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(
-        json['state'] as String?,
-      ),
+      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
       runtimeState: r['state'] as String? ?? '',
       coverOpen: r['cover_open'] as bool? ?? false,
       lightOn: r['light_on'] as bool? ?? false,
@@ -94,17 +91,7 @@ class FlatPanelStatus extends EquipmentDeviceStatus {
           other.lightWarming == lightWarming);
 
   @override
-  int get hashCode => Object.hash(
-    deviceId,
-    name,
-    connectionState,
-    runtimeState,
-    coverOpen,
-    lightOn,
-    brightness,
-    maxBrightness,
-    hasCover,
-    hasCalibrator,
-    lightWarming,
-  );
+  int get hashCode => Object.hash(deviceId, name, connectionState, runtimeState,
+      coverOpen, lightOn, brightness, maxBrightness, hasCover, hasCalibrator,
+      lightWarming);
 }

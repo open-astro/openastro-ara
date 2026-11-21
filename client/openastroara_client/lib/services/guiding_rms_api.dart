@@ -21,24 +21,19 @@ class GuidingRmsApi implements GuidingRmsClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   GuidingRmsApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ),
-          );
+            ));
 
   @override
   Future<GuidingRmsSeries> fetch() async {
     final res = await _dio.get<dynamic>('/api/v1/stats/guiding');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException(
-        'stats/guiding returned a non-object body (${data.runtimeType})',
-      );
+      throw FormatException('stats/guiding returned a non-object body (${data.runtimeType})');
     }
     return GuidingRmsSeries.fromJson(data);
   }

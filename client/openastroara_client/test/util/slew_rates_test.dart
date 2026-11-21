@@ -34,22 +34,17 @@ void main() {
       // "min" takes their place as the slowest chip.
       final options = buildSlewRateOptions(const [2.0, 6.0]);
       expect(options.map((o) => o.rateDegPerSec).toList(), [2.0, 3.0, 6.0]);
-      expect(options.map((o) => o.label).toList(), [
-        'min · 2°/s',
-        '50% · 3°/s',
-        '100% · 6°/s',
-      ]);
+      expect(options.map((o) => o.label).toList(),
+          ['min · 2°/s', '50% · 3°/s', '100% · 6°/s']);
     });
 
-    test(
-      'a preset landing exactly on the minimum keeps its percentage label',
-      () {
-        final options = buildSlewRateOptions(const [1.0, 4.0]);
-        expect(options.map((o) => o.rateDegPerSec).toList(), [1.0, 2.0, 4.0]);
-        expect(options.first.label, '25% · 1°/s');
-        expect(options.any((o) => o.label.startsWith('min')), isFalse);
-      },
-    );
+    test('a preset landing exactly on the minimum keeps its percentage label',
+        () {
+      final options = buildSlewRateOptions(const [1.0, 4.0]);
+      expect(options.map((o) => o.rateDegPerSec).toList(), [1.0, 2.0, 4.0]);
+      expect(options.first.label, '25% · 1°/s');
+      expect(options.any((o) => o.label.startsWith('min')), isFalse);
+    });
 
     test('a preset within rounding of the minimum counts as landing on it', () {
       // 0.1 * max rounds a ulp away from min when min == max / 10 (either
@@ -78,11 +73,8 @@ void main() {
       ]) {
         final options = buildSlewRateOptions(band);
         expect(options, isNotEmpty);
-        expect(
-          options.first.rateDegPerSec,
-          band.first,
-          reason: '$band: the slowest chip is the reported minimum',
-        );
+        expect(options.first.rateDegPerSec, band.first,
+            reason: '$band: the slowest chip is the reported minimum');
         for (final o in options) {
           expect(o.rateDegPerSec, greaterThanOrEqualTo(band.first));
           expect(o.rateDegPerSec, lessThanOrEqualTo(band.last));
@@ -99,15 +91,11 @@ void main() {
       const [10.0, 0.0, -3.0],
     ]) {
       final options = buildSlewRateOptions(mountRates);
-      final maxRate = mountRates
-          .where((r) => r > 0)
-          .reduce((a, b) => a > b ? a : b);
+      final maxRate =
+          mountRates.where((r) => r > 0).reduce((a, b) => a > b ? a : b);
       for (final o in options) {
-        expect(
-          o.rateDegPerSec,
-          lessThanOrEqualTo(maxRate),
-          reason: '$o must not exceed max $maxRate',
-        );
+        expect(o.rateDegPerSec, lessThanOrEqualTo(maxRate),
+            reason: '$o must not exceed max $maxRate');
       }
     }
   });
@@ -157,20 +145,12 @@ void main() {
       expect(insideABand(def, bands), isTrue);
     });
 
-    test(
-      'a (2, 6) band drops presets under the floor and offers the floor',
-      () {
-        final options = buildSlewRateOptionsFromBands(const [
-          SlewRateBand(2.0, 6.0),
-        ]);
-        expect(options.map((o) => o.label).toList(), [
-          'min · 2°/s',
-          '50% · 3°/s',
-          '100% · 6°/s',
-        ]);
-        expect(defaultSlewRate(options), 3.0);
-      },
-    );
+    test('a (2, 6) band drops presets under the floor and offers the floor', () {
+      final options = buildSlewRateOptionsFromBands(const [SlewRateBand(2.0, 6.0)]);
+      expect(options.map((o) => o.label).toList(),
+          ['min · 2°/s', '50% · 3°/s', '100% · 6°/s']);
+      expect(defaultSlewRate(options), 3.0);
+    });
 
     test('two discrete rates are two chips, not a band between them', () {
       // The legacy list [0.004, 2.0] read as one band; the wire now says
@@ -182,32 +162,25 @@ void main() {
       expect(insideABand(defaultSlewRate(options)!, bands), isTrue);
     });
 
-    test(
-      'a normal multi-band mount keeps its ladder and defaults inside a band',
-      () {
-        // Three discrete steps and a slew band: the endpoint ladder as before.
-        const bands = [
-          SlewRateBand(0.002, 0.002),
-          SlewRateBand(0.008, 0.008),
-          SlewRateBand(0.033, 0.033),
-          SlewRateBand(1.0, 4.0),
-        ];
-        final options = buildSlewRateOptionsFromBands(bands);
-        expect(options.map((o) => o.rateDegPerSec).toList(), [
-          0.002,
-          0.008,
-          0.033,
-          1.0,
-          4.0,
-        ]);
-        final def = defaultSlewRate(options)!;
-        expect(def, 0.033);
-        expect(insideABand(def, bands), isTrue);
-        for (final o in options) {
-          expect(insideABand(o.rateDegPerSec, bands), isTrue, reason: '$o');
-        }
-      },
-    );
+    test('a normal multi-band mount keeps its ladder and defaults inside a band',
+        () {
+      // Three discrete steps and a slew band: the endpoint ladder as before.
+      const bands = [
+        SlewRateBand(0.002, 0.002),
+        SlewRateBand(0.008, 0.008),
+        SlewRateBand(0.033, 0.033),
+        SlewRateBand(1.0, 4.0),
+      ];
+      final options = buildSlewRateOptionsFromBands(bands);
+      expect(options.map((o) => o.rateDegPerSec).toList(),
+          [0.002, 0.008, 0.033, 1.0, 4.0]);
+      final def = defaultSlewRate(options)!;
+      expect(def, 0.033);
+      expect(insideABand(def, bands), isTrue);
+      for (final o in options) {
+        expect(insideABand(o.rateDegPerSec, bands), isTrue, reason: '$o');
+      }
+    });
 
     test('bands arrive unsorted or degenerate and are sanitised', () {
       final options = buildSlewRateOptionsFromBands(const [
@@ -225,12 +198,10 @@ void main() {
       // An older daemon sends only endpoints: one rate is "up to max", two are
       // one band, three or more are discrete steps — exactly what the list
       // reader assumed before the bands existed.
-      expect(slewRateBandsFromLegacyRates(const [6.0]), [
-        const SlewRateBand(0.0, 6.0),
-      ]);
-      expect(slewRateBandsFromLegacyRates(const [2.0, 6.0]), [
-        const SlewRateBand(2.0, 6.0),
-      ]);
+      expect(slewRateBandsFromLegacyRates(const [6.0]),
+          [const SlewRateBand(0.0, 6.0)]);
+      expect(slewRateBandsFromLegacyRates(const [2.0, 6.0]),
+          [const SlewRateBand(2.0, 6.0)]);
       expect(slewRateBandsFromLegacyRates(const [6.0, 1.0, 4.0]), [
         const SlewRateBand(1.0, 1.0),
         const SlewRateBand(4.0, 4.0),

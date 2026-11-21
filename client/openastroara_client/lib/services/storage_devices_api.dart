@@ -1,5 +1,4 @@
 import '../l10n/app_localizations.dart';
-
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -79,18 +78,18 @@ class StorageDevice {
   }
 
   factory StorageDevice.fromJson(Map<String, dynamic> json) => StorageDevice(
-    path: json['path'] as String? ?? '',
-    uuid: json['uuid'] as String?,
-    label: json['label'] as String?,
-    model: json['model'] as String?,
-    fileSystem: json['file_system'] as String?,
-    sizeBytes: (json['size_bytes'] as num?)?.toInt(),
-    mountPoint: json['mount_point'] as String?,
-    removable: json['removable'] as bool? ?? false,
-    transport: json['transport'] as String?,
-    isSystemDisk: json['is_system_disk'] as bool? ?? false,
-    isAraStore: json['is_ara_store'] as bool? ?? false,
-  );
+        path: json['path'] as String? ?? '',
+        uuid: json['uuid'] as String?,
+        label: json['label'] as String?,
+        model: json['model'] as String?,
+        fileSystem: json['file_system'] as String?,
+        sizeBytes: (json['size_bytes'] as num?)?.toInt(),
+        mountPoint: json['mount_point'] as String?,
+        removable: json['removable'] as bool? ?? false,
+        transport: json['transport'] as String?,
+        isSystemDisk: json['is_system_disk'] as bool? ?? false,
+        isAraStore: json['is_ara_store'] as bool? ?? false,
+      );
 }
 
 /// What erasing a drive would lose (`GET /storage/contents`). Only a mounted
@@ -116,9 +115,8 @@ class StorageContents {
       StorageContents(
         readable: json['readable'] as bool? ?? false,
         frames: (json['frames'] as num?)?.toInt() ?? 0,
-        newestFrameUtc: DateTime.tryParse(
-          json['newest_frame_utc'] as String? ?? '',
-        ),
+        newestFrameUtc:
+            DateTime.tryParse(json['newest_frame_utc'] as String? ?? ''),
         framesNotCopied: (json['frames_not_copied'] as num?)?.toInt() ?? 0,
       );
 }
@@ -186,16 +184,13 @@ class StorageRescanOutcome {
 
 class StorageDevicesApi {
   StorageDevicesApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               // mkfs on a large drive is not instant.
               receiveTimeout: const Duration(minutes: 5),
-            ),
-          );
+            ));
 
   final Dio _dio;
 
@@ -209,10 +204,8 @@ class StorageDevicesApi {
   }
 
   Future<StorageContents> contents(String uuid) async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/storage/contents',
-      queryParameters: {'uuid': uuid},
-    );
+    final res = await _dio.get<Map<String, dynamic>>('/api/v1/storage/contents',
+        queryParameters: {'uuid': uuid});
     return StorageContents.fromJson(res.data ?? const {});
   }
 
@@ -338,24 +331,23 @@ class StorageDevicesApi {
 /// Builds the storage client; tests fake the rig through this.
 final storageDevicesApiFactoryProvider =
     Provider<StorageDevicesApi Function(AraServer)>(
-      (ref) => StorageDevicesApi.new,
-    );
+  (ref) => StorageDevicesApi.new,
+);
 
 /// What is on the drive [uuid], read before the chooser lets it be erased.
 final storageContentsProvider = FutureProvider.autoDispose
     .family<StorageContents, String>((ref, uuid) async {
-      final server = ref.watch(activeServerProvider);
-      if (server == null) {
-        return StorageContents.unknown;
-      }
-      final api = ref.watch(storageDevicesApiFactoryProvider)(server);
-      ref.onDispose(api.close);
-      return api.contents(uuid);
-    });
+  final server = ref.watch(activeServerProvider);
+  if (server == null) {
+    return StorageContents.unknown;
+  }
+  final api = ref.watch(storageDevicesApiFactoryProvider)(server);
+  ref.onDispose(api.close);
+  return api.contents(uuid);
+});
 
-final storageDevicesProvider = FutureProvider.autoDispose<List<StorageDevice>>((
-  ref,
-) async {
+final storageDevicesProvider =
+    FutureProvider.autoDispose<List<StorageDevice>>((ref) async {
   final server = ref.watch(activeServerProvider);
   if (server == null) {
     return const [];

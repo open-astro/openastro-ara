@@ -49,11 +49,7 @@ void main() {
     final mono = CameraStatus.fromJson(const {
       'state': 'connected',
       'capabilities': {'sensor_width': 9576, 'sensor_height': 6388},
-      'runtime': {
-        'state': 'idle',
-        'ccd_temperature': -10.0,
-        'cooler_on': false,
-      },
+      'runtime': {'state': 'idle', 'ccd_temperature': -10.0, 'cooler_on': false},
     });
     expect(mono.capabilities!.isColor, isFalse);
     expect(mono.coolerOn, isFalse);
@@ -65,19 +61,19 @@ void main() {
 
   test('equality includes coolerSetpointC and readoutMode', () {
     CameraStatus st(double? setpoint, String? mode) => CameraStatus.fromJson({
-      'device_id': 'cam-0',
-      'name': 'ASI2600',
-      'state': 'connected',
-      'capabilities': null,
-      'runtime': {
-        'state': 'idle',
-        'ccd_temperature': 20.0,
-        'cooler_power_pct': null,
-        'cooler_on': setpoint != null,
-        'cooler_setpoint_c': setpoint,
-        'readout_mode': mode,
-      },
-    });
+          'device_id': 'cam-0',
+          'name': 'ASI2600',
+          'state': 'connected',
+          'capabilities': null,
+          'runtime': {
+            'state': 'idle',
+            'ccd_temperature': 20.0,
+            'cooler_power_pct': null,
+            'cooler_on': setpoint != null,
+            'cooler_setpoint_c': setpoint,
+            'readout_mode': mode,
+          },
+        });
     final a = st(-10, 'HCG');
     final b = st(-10, 'HCG');
     final diffSetpoint = st(-5, 'HCG');
@@ -134,21 +130,14 @@ void main() {
 
   test('cooler_not_responding parses, defaults to false and counts in equality (#2076)', () {
     Map<String, dynamic> wire(Map<String, dynamic> runtime) => {
-      'state': 'connected',
-      'runtime': {'state': 'idle', 'cooler_on': false, ...runtime},
-    };
+          'state': 'connected',
+          'runtime': {'state': 'idle', 'cooler_on': false, ...runtime},
+        };
     final dead = CameraStatus.fromJson(wire({'cooler_not_responding': true}));
     final older = CameraStatus.fromJson(wire({}));
     expect(dead.coolerNotResponding, isTrue);
-    expect(
-      older.coolerNotResponding,
-      isFalse,
-      reason: 'an older daemon omits it',
-    );
+    expect(older.coolerNotResponding, isFalse, reason: 'an older daemon omits it');
     expect(dead == older, isFalse);
-    expect(
-      CameraStatus.fromJson(wire({'cooler_not_responding': false})),
-      older,
-    );
+    expect(CameraStatus.fromJson(wire({'cooler_not_responding': false})), older);
   });
 }

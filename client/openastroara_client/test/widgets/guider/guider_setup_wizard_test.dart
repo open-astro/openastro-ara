@@ -54,7 +54,6 @@ class _FakeProfileApi extends ProfileApi {
       stored = const Phd2Settings(host: 'rc91.lan', port: 4400);
   Phd2Settings? lastPut;
   String? lastIfMatch;
-
   /// The rig's tag for its copy; [savedElsewhere] moves it on.
   int version = 1;
   void savedElsewhere() => version++;
@@ -87,10 +86,9 @@ class _FakeGuiderApi implements GuiderClient {
   @override
   Future<GuiderStatus?> getStatus() async => status;
   @override
-  Future<void> connect({
-    String host = kDefaultGuiderHost,
-    int port = kDefaultGuiderPort,
-  }) async {
+  Future<void> connect(
+      {String host = kDefaultGuiderHost,
+      int port = kDefaultGuiderPort}) async {
     calls.add('connect:$host:$port');
     status = const GuiderStatus(
       name: 'OpenAstro Guider',
@@ -106,7 +104,6 @@ class _FakeGuiderApi implements GuiderClient {
     calls.add('startGuiding');
     return null;
   }
-
   @override
   Future<void> stopGuiding() async => calls.add('stopGuiding');
   @override
@@ -119,29 +116,20 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
   Future<GuiderEquipmentChoicesResponse> getChoices() async {
     calls.add('choices');
     return const GuiderEquipmentChoicesResponse(
-      connected: true,
-      choices: _choices,
-    );
+        connected: true, choices: _choices);
   }
-
   @override
-  Future<List<String>> discoverAlpaca({
-    int? numQueries,
-    int? timeoutSeconds,
-  }) async {
+  Future<List<String>> discoverAlpaca(
+          {int? numQueries, int? timeoutSeconds}) async {
     calls.add('discover');
     return const ['bridge.local:11111'];
   }
-
   @override
   Future<void> pushProfile({bool tuningOnly = false}) async =>
       calls.add(tuningOnly ? 'push-tuning' : 'push');
   @override
-  Future<double?> getAlpacaCameraPixelSize({
-    String? host,
-    int? port,
-    int? device,
-  }) async {
+  Future<double?> getAlpacaCameraPixelSize(
+      {String? host, int? port, int? device}) async {
     calls.add('pixelsize:$host:$port:$device');
     return 2.9;
   }
@@ -153,10 +141,7 @@ class _FakeEquipmentApi implements GuiderEquipmentClient {
 class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
   final calls = <String>[];
   @override
-  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(
-    String host,
-    int port,
-  ) async {
+  Future<Map<String, AlpacaDeviceInfo>> fetchDevices(String host, int port) async {
     calls.add('$host:$port');
     if (host == 'bridge.local') {
       // The AlpacaBridge server — only reachable once discovery names it.
@@ -166,10 +151,7 @@ class _FakeAlpacaNames extends AlpacaDeviceNamesClient {
       };
     }
     return const {
-      'camera/0': AlpacaDeviceInfo(
-        name: 'ZWO ASI290MM Mini',
-        uniqueId: 'ZWO_SN_290',
-      ),
+      'camera/0': AlpacaDeviceInfo(name: 'ZWO ASI290MM Mini', uniqueId: 'ZWO_SN_290'),
       'telescope/0': AlpacaDeviceInfo(name: 'iOptron HAE29C EQ'),
       'rotator/0': AlpacaDeviceInfo(name: 'CAA'),
     };
@@ -192,7 +174,8 @@ class _FakeCalibrationApi implements GuiderCalibrationClient {
     bool clearExisting = false,
     String? notes,
     bool loadAfter = true,
-  }) async => calls.add('darks:$frameCount:$minExposureMs:$maxExposureMs');
+  }) async =>
+      calls.add('darks:$frameCount:$minExposureMs:$maxExposureMs');
   @override
   Future<void> buildDefectMap({
     int exposureMs = 3000,
@@ -205,10 +188,9 @@ class _FakeCalibrationApi implements GuiderCalibrationClient {
   @override
   Future<void> setDefectMapEnabled(bool enabled) async {}
   @override
-  Future<CalibrationStatusResponse> deleteCalibrationFiles({
-    bool darks = false,
-    bool defectmap = false,
-  }) async => const CalibrationStatusResponse(connected: true);
+  Future<CalibrationStatusResponse> deleteCalibrationFiles(
+          {bool darks = false, bool defectmap = false}) async =>
+      const CalibrationStatusResponse(connected: true);
   @override
   void close() {}
 }
@@ -221,11 +203,8 @@ typedef _Harness = ({
   _FakeCalibrationApi calibration,
 });
 
-Future<_Harness> _pump(
-  WidgetTester tester, {
-  bool connected = true,
-  Phd2Settings? stored,
-}) async {
+Future<_Harness> _pump(WidgetTester tester,
+    {bool connected = true, Phd2Settings? stored}) async {
   final profile = _FakeProfileApi();
   if (stored != null) profile.stored = stored;
   final guider = _FakeGuiderApi();
@@ -239,26 +218,23 @@ Future<_Harness> _pump(
   final equipment = _FakeEquipmentApi();
   final calibration = _FakeCalibrationApi();
   final names = _FakeAlpacaNames();
-  final container = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-      profileApiProvider.overrideWithValue(profile),
-      guiderApiFactoryProvider.overrideWithValue((_) => guider),
-      guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipment),
-      guiderCalibrationApiFactoryProvider.overrideWithValue((_) => calibration),
-      alpacaDeviceNamesApiProvider.overrideWithValue(names),
-      // The darks step watches the build-activity fold, which would otherwise
-      // open a real WS connection (leaking reconnect timers into the test).
-      wsEventStreamProvider.overrideWithValue(null),
-    ],
-  );
+  final container = ProviderContainer(overrides: [
+    savedServerServiceProvider
+        .overrideWithValue(_FakeSavedServerService()),
+    profileApiProvider.overrideWithValue(profile),
+    guiderApiFactoryProvider.overrideWithValue((_) => guider),
+    guiderEquipmentApiFactoryProvider.overrideWithValue((_) => equipment),
+    guiderCalibrationApiFactoryProvider.overrideWithValue((_) => calibration),
+    alpacaDeviceNamesApiProvider.overrideWithValue(names),
+    // The darks step watches the build-activity fold, which would otherwise
+    // open a real WS connection (leaking reconnect timers into the test).
+    wsEventStreamProvider.overrideWithValue(null),
+  ]);
   addTearDown(container.dispose);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: GuiderSetupWizard())),
-    ),
-  );
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: container,
+    child: const MaterialApp(home: Scaffold(body: GuiderSetupWizard())),
+  ));
   await tester.pumpAndSettle();
   return (
     container: container,
@@ -282,9 +258,8 @@ void main() {
     expect(find.widgetWithText(TextFormField, 'rc91.lan'), findsOneWidget);
   });
 
-  testWidgets('walks camera → optics → mount with live choices', (
-    tester,
-  ) async {
+  testWidgets('walks camera → optics → mount with live choices',
+      (tester) async {
     await _pump(tester);
     await _next(tester); // camera
     expect(find.text('Guider setup — Guide camera'), findsOneWidget);
@@ -292,7 +267,8 @@ void main() {
     // still representable (panel rule) but the real device is pickable.
     await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester
+        .tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
     await tester.pumpAndSettle();
     await _next(tester); // optics
     expect(find.text('Guider setup — Guide optics'), findsOneWidget);
@@ -300,55 +276,46 @@ void main() {
     expect(find.text('Guider setup — Mount'), findsOneWidget);
   });
 
-  testWidgets('Apply PUTs the merged draft and pushes the profile', (
-    tester,
-  ) async {
+  testWidgets('Apply PUTs the merged draft and pushes the profile',
+      (tester) async {
     final h = await _pump(tester);
     await _next(tester); // camera
     await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester
+        .tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
     await tester.pumpAndSettle();
     await _next(tester); // optics
     await _next(tester); // mount
     await _next(tester); // apply
     // The shared provider is untouched until Apply (draft pattern).
-    expect(
-      h.container.read(phd2SettingsProvider).value!.guiderCamera,
-      'Old Camera',
-    );
+    expect(h.container.read(phd2SettingsProvider).value!.guiderCamera, 'Old Camera');
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
-    expect(h.profile.lastPut?.guiderCamera, 'Alpaca Camera [rc91.lan:6800/0]');
-    expect(
-      h.profile.lastPut?.guiderCameraAlpacaUniqueId,
-      'ZWO_SN_290',
-      reason: '#1308 — the pick is pinned by UniqueID too',
-    );
+    expect(h.profile.lastPut?.guiderCamera,
+        'Alpaca Camera [rc91.lan:6800/0]');
+    expect(h.profile.lastPut?.guiderCameraAlpacaUniqueId, 'ZWO_SN_290',
+        reason: '#1308 — the pick is pinned by UniqueID too');
     // Untouched fields ride the server copy, not client defaults.
     expect(h.profile.lastPut?.host, 'rc91.lan');
     expect(h.equipment.calls, contains('push'));
     // Applied fields are reflected into the shared provider.
-    expect(
-      h.container.read(phd2SettingsProvider).value!.guiderCamera,
-      'Alpaca Camera [rc91.lan:6800/0]',
-    );
+    expect(h.container.read(phd2SettingsProvider).value!.guiderCamera,
+        'Alpaca Camera [rc91.lan:6800/0]');
   });
 
-  testWidgets(
-    'Guider wizard: Apply sends the tag of the rig\'s copy it loaded (ADR 0015)',
-    (tester) async {
-      final h = await _pump(tester);
-      await _next(tester); // camera
-      await _next(tester); // optics
-      await _next(tester); // mount
-      await _next(tester); // apply
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastIfMatch, '"v1"');
-      expect(h.equipment.calls, contains('push'));
-    },
-  );
+  testWidgets('Guider wizard: Apply sends the tag of the rig\'s copy it loaded (ADR 0015)',
+      (tester) async {
+    final h = await _pump(tester);
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await _next(tester); // mount
+    await _next(tester); // apply
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastIfMatch, '"v1"');
+    expect(h.equipment.calls, contains('push'));
+  });
 
   testWidgets('Guider wizard: Apply over a copy another device saved since is '
       'refused, nothing written or pushed (ADR 0015)', (tester) async {
@@ -365,15 +332,15 @@ void main() {
     expect(find.textContaining('changed on the rig'), findsOneWidget);
   });
 
-  testWidgets('Next past Review is gated until Apply succeeds', (tester) async {
+  testWidgets('Next past Review is gated until Apply succeeds',
+      (tester) async {
     await _pump(tester);
     await _next(tester); // camera
     await _next(tester); // optics
     await _next(tester); // mount
     await _next(tester); // apply
     final next = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Next'),
-    );
+        find.widgetWithText(FilledButton, 'Next'));
     expect(next.onPressed, isNull);
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
@@ -400,12 +367,11 @@ void main() {
     expect(find.textContaining('Capturing dark frames'), findsOneWidget);
   });
 
-  testWidgets('Cancel discards the draft — provider untouched', (tester) async {
+  testWidgets('Cancel discards the draft — provider untouched',
+      (tester) async {
     final h = await _pump(tester);
     await tester.enterText(
-      find.byKey(const ValueKey('wiz-Host')),
-      'edited.local',
-    );
+        find.byKey(const ValueKey('wiz-Host')), 'edited.local');
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(h.container.read(phd2SettingsProvider).value!.host, 'rc91.lan');
@@ -413,24 +379,17 @@ void main() {
   });
 
   test('parseAlpacaChoiceEndpoint parses the [host:port/N] suffix', () {
-    expect(parseAlpacaChoiceEndpoint('Alpaca Camera [rc91.lan:6800/1]'), (
-      host: 'rc91.lan',
-      port: 6800,
-      device: 1,
-    ));
-    expect(parseAlpacaChoiceEndpoint('Alpaca Camera [rc91.lan:6800/0]  '), (
-      host: 'rc91.lan',
-      port: 6800,
-      device: 0,
-    ));
+    expect(parseAlpacaChoiceEndpoint('Alpaca Camera [rc91.lan:6800/1]'),
+        (host: 'rc91.lan', port: 6800, device: 1));
+    expect(parseAlpacaChoiceEndpoint('Alpaca Camera [rc91.lan:6800/0]  '),
+        (host: 'rc91.lan', port: 6800, device: 0));
     expect(parseAlpacaChoiceEndpoint('None'), isNull);
     expect(parseAlpacaChoiceEndpoint('ZWO ASI290MM Mini'), isNull);
     expect(parseAlpacaChoiceEndpoint('Weird [rc91.lan:0/0]'), isNull);
   });
 
-  testWidgets('picking an Alpaca camera autofills pixel size from the driver', (
-    tester,
-  ) async {
+  testWidgets('picking an Alpaca camera autofills pixel size from the driver',
+      (tester) async {
     final h = await _pump(tester);
     await _next(tester); // camera
     await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
@@ -443,9 +402,8 @@ void main() {
     expect(find.textContaining('Read from the camera'), findsOneWidget);
   });
 
-  testWidgets('mount step offers a rotator picker on an off-axis guider', (
-    tester,
-  ) async {
+  testWidgets('mount step offers a rotator picker on an off-axis guider',
+      (tester) async {
     // Tall surface so the whole mount step (rotator included) is hittable.
     tester.view.physicalSize = const Size(1400, 1800);
     tester.view.devicePixelRatio = 1.0;
@@ -472,123 +430,96 @@ void main() {
   });
 
   testWidgets(
-    'a separate guide scope hides the rotator picker and applies none',
-    (tester) async {
-      // The guider rotates its calibration by every move of the rotator it is
-      // given; on a guide scope the guide camera never turns, so no rotator may
-      // reach it — not even one stored before the rule (night of 2026-10-16).
-      tester.view.physicalSize = const Size(1400, 1800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-      final h = await _pump(
-        tester,
+      'a separate guide scope hides the rotator picker and applies none',
+      (tester) async {
+    // The guider rotates its calibration by every move of the rotator it is
+    // given; on a guide scope the guide camera never turns, so no rotator may
+    // reach it — not even one stored before the rule (night of 2026-10-16).
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final h = await _pump(tester,
         stored: const Phd2Settings(
           host: 'rc91.lan',
           port: 4400,
           guiderCamera: 'Old Camera',
           guiderRotator: 'Simulator',
           guiderSetupType: 'oag',
-        ),
-      );
-      await _next(tester); // camera
-      await _next(tester); // optics
-      await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Guide scope').last);
-      await tester.pumpAndSettle();
-      await _next(tester); // mount
-      expect(find.byKey(const ValueKey('wiz-Rotator')), findsNothing);
-      expect(
-        find.byKey(const ValueKey('wiz-rotator-not-used')),
-        findsOneWidget,
-      );
-      await _next(tester); // apply
-      expect(
-        find.textContaining('not used — separate guide scope'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
-      expect(h.profile.lastPut?.guiderRotator, '');
-    },
-  );
+        ));
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guide scope').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // mount
+    expect(find.byKey(const ValueKey('wiz-Rotator')), findsNothing);
+    expect(find.byKey(const ValueKey('wiz-rotator-not-used')), findsOneWidget);
+    await _next(tester); // apply
+    expect(find.textContaining('not used — separate guide scope'),
+        findsOneWidget);
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
+    expect(h.profile.lastPut?.guiderRotator, '');
+  });
 
-  testWidgets(
-    '#1715 switching from an off-axis guider to a guide scope drops the derived focal length',
-    (tester) async {
-      tester.view.physicalSize = const Size(1400, 1800);
-      tester.view.devicePixelRatio = 1.0;
-      addTearDown(tester.view.reset);
-      final h = await _pump(
-        tester,
+  testWidgets('#1715 switching from an off-axis guider to a guide scope drops the derived focal length',
+      (tester) async {
+    tester.view.physicalSize = const Size(1400, 1800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    final h = await _pump(tester,
         stored: const Phd2Settings(
           host: 'rc91.lan',
           port: 4400,
           guiderCamera: 'Old Camera',
           guiderSetupType: 'oag',
           guideFocalLength: 375,
-        ),
-      );
-      await _next(tester); // camera
-      await _next(tester); // optics
-      await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Guide scope').last);
-      await tester.pumpAndSettle();
-      await _next(tester); // mount
-      await _next(tester); // apply
-      await tester.tap(find.text('Apply to guider'));
-      await tester.pumpAndSettle();
-      expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
-      expect(h.profile.lastPut?.guideFocalLength, 0);
-    },
-  );
+        ));
+    await _next(tester); // camera
+    await _next(tester); // optics
+    await tester.tap(find.byKey(const ValueKey('wiz-Setup type')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Guide scope').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // mount
+    await _next(tester); // apply
+    await tester.tap(find.text('Apply to guider'));
+    await tester.pumpAndSettle();
+    expect(h.profile.lastPut?.guiderSetupType, 'guide_scope');
+    expect(h.profile.lastPut?.guideFocalLength, 0);
+  });
 
-  testWidgets('entering a picker step re-fetches the device lists', (
-    tester,
-  ) async {
+  testWidgets('entering a picker step re-fetches the device lists',
+      (tester) async {
     final h = await _pump(tester);
-    final before = h.equipment.calls.where((c) => c == 'choices').length;
+    final before =
+        h.equipment.calls.where((c) => c == 'choices').length;
     await _next(tester); // camera
     await _next(tester); // optics
     await _next(tester); // mount
     final after = h.equipment.calls.where((c) => c == 'choices').length;
-    expect(
-      after,
-      greaterThanOrEqualTo(before + 2),
-      reason: 'camera and mount steps each refresh the choices',
-    );
+    expect(after, greaterThanOrEqualTo(before + 2),
+        reason: 'camera and mount steps each refresh the choices');
   });
 
-  test(
-    'friendlyAlpacaChoiceLabel overlays real names, falls back verbatim',
-    () {
-      const names = {'rc91.lan:6800|camera/1': 'ZWO ASI290MM Mini'};
-      expect(
+  test('friendlyAlpacaChoiceLabel overlays real names, falls back verbatim', () {
+    const names = {'rc91.lan:6800|camera/1': 'ZWO ASI290MM Mini'};
+    expect(
         friendlyAlpacaChoiceLabel(
-          'Alpaca Camera [rc91.lan:6800/1]',
-          'camera',
-          names,
-        ),
-        'ZWO ASI290MM Mini (rc91.lan:6800/1)',
-      );
-      // Unknown endpoint / non-Alpaca choices stay verbatim.
-      expect(
+            'Alpaca Camera [rc91.lan:6800/1]', 'camera', names),
+        'ZWO ASI290MM Mini (rc91.lan:6800/1)');
+    // Unknown endpoint / non-Alpaca choices stay verbatim.
+    expect(
         friendlyAlpacaChoiceLabel(
-          'Alpaca Camera [rc91.lan:6800/0]',
-          'camera',
-          names,
-        ),
-        'Alpaca Camera [rc91.lan:6800/0]',
-      );
-      expect(friendlyAlpacaChoiceLabel('None', 'camera', names), 'None');
-    },
-  );
+            'Alpaca Camera [rc91.lan:6800/0]', 'camera', names),
+        'Alpaca Camera [rc91.lan:6800/0]');
+    expect(friendlyAlpacaChoiceLabel('None', 'camera', names), 'None');
+  });
 
-  testWidgets('pickers show real Alpaca device names from the management API', (
-    tester,
-  ) async {
+  testWidgets('pickers show real Alpaca device names from the management API',
+      (tester) async {
     await _pump(tester);
     await _next(tester); // camera
     await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
@@ -598,7 +529,8 @@ void main() {
     expect(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)'), findsWidgets);
   });
 
-  testWidgets('network discovery surfaces cameras on other Alpaca servers '
+  testWidgets(
+      'network discovery surfaces cameras on other Alpaca servers '
       'and picking one retargets the profile host', (tester) async {
     final h = await _pump(tester);
     await _next(tester); // camera
@@ -616,42 +548,26 @@ void main() {
     await _next(tester); // apply
     await tester.tap(find.text('Apply to guider'));
     await tester.pumpAndSettle();
-    expect(
-      h.profile.lastPut?.guiderCamera,
-      'Alpaca Camera [bridge.local:11111/2]',
-    );
+    expect(h.profile.lastPut?.guiderCamera,
+        'Alpaca Camera [bridge.local:11111/2]');
     // Picking a camera on another server retargets the daemon's Alpaca config.
     expect(h.profile.lastPut?.guiderAlpacaHost, 'bridge.local');
     expect(h.profile.lastPut?.guiderAlpacaPort, 11111);
   });
 
-  testWidgets('#1861 a sweep another surface runs disables Search', (
-    tester,
-  ) async {
+  testWidgets('#1861 a sweep another surface runs disables Search', (tester) async {
     await _pump(tester);
     await _next(tester); // camera
-    final container = ProviderScope.containerOf(
-      tester.element(find.byType(GuiderSetupWizard)),
-    );
-    container.read(guiderDiscoveryProvider.notifier).state = (
-      running: true,
-      servers: null,
-    );
+    final container = ProviderScope.containerOf(tester.element(find.byType(GuiderSetupWizard)));
+    container.read(guiderDiscoveryProvider.notifier).state = (running: true, servers: null);
     await tester.pump();
     final button = find.ancestor(
-      of: find.text('Search network for Alpaca servers'),
-      matching: find.byWidgetPredicate((w) => w is TextButton),
-    );
-    expect(
-      tester.widget<TextButton>(button).onPressed,
-      isNull,
-      reason: 'a sweep the module runs disables Search',
-    );
+        of: find.text('Search network for Alpaca servers'), matching: find.byWidgetPredicate((w) => w is TextButton));
+    expect(tester.widget<TextButton>(button).onPressed, isNull, reason: 'a sweep the module runs disables Search');
   });
 
-  testWidgets('final step offers a filled Finish, not a dead Next', (
-    tester,
-  ) async {
+  testWidgets('final step offers a filled Finish, not a dead Next',
+      (tester) async {
     await _pump(tester);
     await _next(tester); // camera
     await _next(tester); // optics
@@ -662,9 +578,8 @@ void main() {
     await _next(tester); // darks (last)
     expect(find.text('Next'), findsNothing);
     expect(find.text('Cancel'), findsNothing);
-    final finish = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Finish'),
-    );
+    final finish =
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Finish'));
     expect(finish.onPressed, isNotNull);
     await tester.tap(find.text('Finish'));
     await tester.pumpAndSettle();
@@ -672,89 +587,76 @@ void main() {
   });
 
   testWidgets(
-    'mount picker only offers devices on the camera\'s Alpaca server',
-    (tester) async {
-      await _pump(tester);
-      await _next(tester); // camera
-      await tester.tap(find.text('Search network for Alpaca servers'));
-      await tester.pumpAndSettle();
-      // Camera stays on rc91 (the daemon's server) — pick it explicitly.
-      await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
-      await tester.pumpAndSettle();
-      await _next(tester); // optics
-      await _next(tester); // mount
-      await tester.tap(find.byKey(const ValueKey('wiz-Mount')));
-      await tester.pumpAndSettle();
-      // The bridge's mount must NOT be offered: OpenAstro Guider has one Alpaca server
-      // (the camera's), so a cross-server mount would be silently dropped.
-      expect(find.textContaining('Bridge Mount'), findsNothing);
-      expect(find.textContaining('iOptron HAE29C EQ'), findsWidgets);
-    },
-  );
+      'mount picker only offers devices on the camera\'s Alpaca server',
+      (tester) async {
+    await _pump(tester);
+    await _next(tester); // camera
+    await tester.tap(find.text('Search network for Alpaca servers'));
+    await tester.pumpAndSettle();
+    // Camera stays on rc91 (the daemon's server) — pick it explicitly.
+    await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester.pumpAndSettle();
+    await _next(tester); // optics
+    await _next(tester); // mount
+    await tester.tap(find.byKey(const ValueKey('wiz-Mount')));
+    await tester.pumpAndSettle();
+    // The bridge's mount must NOT be offered: OpenAstro Guider has one Alpaca server
+    // (the camera's), so a cross-server mount would be silently dropped.
+    expect(find.textContaining('Bridge Mount'), findsNothing);
+    expect(find.textContaining('iOptron HAE29C EQ'), findsWidgets);
+  });
 
   testWidgets(
-    'unconfigured guider shows a placeholder, never a phantom selection',
-    (tester) async {
-      final profile = _FakeProfileApi()..makeUnconfigured();
-      final guider = _FakeGuiderApi()
-        ..status = const GuiderStatus(
-          name: 'OpenAstro Guider',
-          connectionState: GuiderConnectionState.connected,
-          runtimeState: GuiderRuntimeState.stopped,
-        );
-      final container = ProviderContainer(
-        overrides: [
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(),
-          ),
-          profileApiProvider.overrideWithValue(profile),
-          guiderApiFactoryProvider.overrideWithValue((_) => guider),
-          guiderEquipmentApiFactoryProvider.overrideWithValue(
-            (_) => _FakeEquipmentApi(),
-          ),
-          guiderCalibrationApiFactoryProvider.overrideWithValue(
-            (_) => _FakeCalibrationApi(),
-          ),
-          alpacaDeviceNamesApiProvider.overrideWithValue(_FakeAlpacaNames()),
-          wsEventStreamProvider.overrideWithValue(null),
-        ],
+      'unconfigured guider shows a placeholder, never a phantom selection',
+      (tester) async {
+    final profile = _FakeProfileApi()..makeUnconfigured();
+    final guider = _FakeGuiderApi()
+      ..status = const GuiderStatus(
+        name: 'OpenAstro Guider',
+        connectionState: GuiderConnectionState.connected,
+        runtimeState: GuiderRuntimeState.stopped,
       );
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: GuiderSetupWizard())),
-        ),
-      );
-      await tester.pumpAndSettle();
-      await _next(tester); // camera
-      // The draft holds no camera — the field must SAY so, not display the
-      // first discovered device as if it were picked (review r2).
-      expect(find.text('Select a device…'), findsWidgets);
-      expect(
+    final container = ProviderContainer(overrides: [
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      profileApiProvider.overrideWithValue(profile),
+      guiderApiFactoryProvider.overrideWithValue((_) => guider),
+      guiderEquipmentApiFactoryProvider
+          .overrideWithValue((_) => _FakeEquipmentApi()),
+      guiderCalibrationApiFactoryProvider
+          .overrideWithValue((_) => _FakeCalibrationApi()),
+      alpacaDeviceNamesApiProvider.overrideWithValue(_FakeAlpacaNames()),
+      wsEventStreamProvider.overrideWithValue(null),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: GuiderSetupWizard())),
+    ));
+    await tester.pumpAndSettle();
+    await _next(tester); // camera
+    // The draft holds no camera — the field must SAY so, not display the
+    // first discovered device as if it were picked (review r2).
+    expect(find.text('Select a device…'), findsWidgets);
+    expect(
         find.descendant(
-          of: find.byKey(const ValueKey('wiz-Guide camera')),
-          matching: find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)'),
-        ),
-        findsNothing,
-      );
-      // A fresh guider has no camera to fall back on: Next waits for a pick.
-      expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsOneWidget);
-      expect(
+            of: find.byKey(const ValueKey('wiz-Guide camera')),
+            matching: find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)')),
+        findsNothing);
+    // A fresh guider has no camera to fall back on: Next waits for a pick.
+    expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsOneWidget);
+    expect(
         tester
             .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
             .onPressed,
-        isNull,
-      );
-      await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
-      await tester.pumpAndSettle();
-      expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsNothing);
-      await _next(tester); // optics
-      expect(find.text('Guider setup — Guide optics'), findsOneWidget);
-    },
-  );
+        isNull);
+    await tester.tap(find.byKey(const ValueKey('wiz-Guide camera')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('ZWO ASI290MM Mini (rc91.lan:6800/0)').last);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('wiz-no-guide-camera')), findsNothing);
+    await _next(tester); // optics
+    expect(find.text('Guider setup — Guide optics'), findsOneWidget);
+  });
 }

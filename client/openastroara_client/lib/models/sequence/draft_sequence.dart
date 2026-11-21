@@ -30,12 +30,12 @@ class DraftSequence {
   });
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'name': name,
-    'updated_utc': updatedUtc.toIso8601String(),
-    'body': body,
-    'push_key': ?pushKey,
-  };
+        'id': id,
+        'name': name,
+        'updated_utc': updatedUtc.toIso8601String(),
+        'body': body,
+        'push_key': ?pushKey,
+      };
 
   /// Null on any malformed record — a corrupt draft file is skipped, never a
   /// crash (drafts are best-effort local state).
@@ -49,7 +49,7 @@ class DraftSequence {
       name: json['name'] is String ? json['name'] as String : '',
       updatedUtc:
           DateTime.tryParse(json['updated_utc']?.toString() ?? '')?.toUtc() ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       body: Map<String, dynamic>.from(body),
       pushKey: json['push_key'] is String ? json['push_key'] as String : null,
     );
@@ -61,5 +61,4 @@ class DraftSequence {
 /// run-state / lifecycle endpoints by accident.
 const String draftIdPrefix = 'draft:';
 
-bool isDraftSequenceId(String? id) =>
-    id != null && id.startsWith(draftIdPrefix);
+bool isDraftSequenceId(String? id) => id != null && id.startsWith(draftIdPrefix);

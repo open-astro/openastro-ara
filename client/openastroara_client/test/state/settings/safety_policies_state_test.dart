@@ -31,51 +31,30 @@ void main() {
       expect(d.unattendedWindowStart, '');
 
       n.setMeridianGuiderRecal(GuiderRecalMode.skip);
-      expect(
-        c.read(safetyPoliciesProvider).value!.meridianRecalGuider,
-        isFalse,
-        reason: 'the legacy bool follows the mode',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.meridianRecalGuider, isFalse,
+          reason: 'the legacy bool follows the mode');
       n.setMeridianGuiderRecal(GuiderRecalMode.full);
       expect(c.read(safetyPoliciesProvider).value!.meridianRecalGuider, isTrue);
 
       n.setMeridianRefocusTempThresholdC(0);
-      expect(
-        c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC,
-        2.0,
-        reason: 'non-positive rejected',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC, 2.0,
+          reason: 'non-positive rejected');
       n.setMeridianRefocusTempThresholdC(50);
-      expect(
-        c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC,
-        10.0,
-        reason: 'clamped to the registry range',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC, 10.0,
+          reason: 'clamped to the registry range');
       n.setMeridianRefocusTempThresholdC(0.1);
-      expect(
-        c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC,
-        0.5,
-      );
+      expect(c.read(safetyPoliciesProvider).value!.meridianRefocusTempThresholdC, 0.5);
 
       n.setUnattendedWindowStart('22:00');
       n.setUnattendedWindowEnd('6:00');
-      expect(
-        c.read(safetyPoliciesProvider).value!.unattendedWindowStart,
-        '22:00',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.unattendedWindowStart, '22:00');
       expect(c.read(safetyPoliciesProvider).value!.unattendedWindowEnd, '6:00');
       n.setUnattendedWindowEnd('ten pm');
-      expect(
-        c.read(safetyPoliciesProvider).value!.unattendedWindowEnd,
-        '6:00',
-        reason: 'malformed clock text rejected',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.unattendedWindowEnd, '6:00',
+          reason: 'malformed clock text rejected');
       n.setUnattendedWindowEnd('');
-      expect(
-        c.read(safetyPoliciesProvider).value!.unattendedWindowEnd,
-        '',
-        reason: 'blank clears back to the sun',
-      );
+      expect(c.read(safetyPoliciesProvider).value!.unattendedWindowEnd, '',
+          reason: 'blank clears back to the sun');
       expect(isClockText('24:00'), isFalse);
       expect(isClockText('23:59'), isTrue);
     });
@@ -143,34 +122,20 @@ void main() {
 
     test('§29 on-disk-space-critical defaults to warn + sets', () {
       final n = container.read(safetyPoliciesProvider.notifier);
-      expect(
-        container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical,
-        DiskSpaceCriticalAction.warn,
-      );
+      expect(container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical,
+          DiskSpaceCriticalAction.warn);
       n.setOnDiskSpaceCritical(DiskSpaceCriticalAction.pause);
-      expect(
-        container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical,
-        DiskSpaceCriticalAction.pause,
-        reason: "#1185",
-      );
+      expect(container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical, DiskSpaceCriticalAction.pause, reason: "#1185");
       n.setOnDiskSpaceCritical(DiskSpaceCriticalAction.abort);
-      expect(
-        container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical,
-        DiskSpaceCriticalAction.abort,
-      );
+      expect(container.read(safetyPoliciesProvider).value!.onDiskSpaceCritical,
+          DiskSpaceCriticalAction.abort);
     });
 
     test('§58.10 unattended escalation defaults on + toggles', () {
       final n = container.read(safetyPoliciesProvider.notifier);
-      expect(
-        container.read(safetyPoliciesProvider).value!.unattendedEscalation,
-        isTrue,
-      );
+      expect(container.read(safetyPoliciesProvider).value!.unattendedEscalation, isTrue);
       n.setUnattendedEscalation(false);
-      expect(
-        container.read(safetyPoliciesProvider).value!.unattendedEscalation,
-        isFalse,
-      );
+      expect(container.read(safetyPoliciesProvider).value!.unattendedEscalation, isFalse);
     });
 
     test('§58.12 unattended shutdown defaults on/30min; wait rejects < 1', () {
@@ -190,10 +155,7 @@ void main() {
       n.setUnattendedShutdownWaitMinutes(0);
       n.setUnattendedShutdownWaitMinutes(-5);
       expect(
-        container
-            .read(safetyPoliciesProvider)
-            .value!
-            .unattendedShutdownWaitMinutes,
+        container.read(safetyPoliciesProvider).value!.unattendedShutdownWaitMinutes,
         45,
       );
     });
@@ -206,30 +168,19 @@ void main() {
       // a stale panel Save can neither clear nor set a confirmation.
       const confirmed = SafetyPolicies(firstFlipConfirmed: true);
       expect(confirmed.firstFlipConfirmed, isTrue);
-      expect(
-        confirmed.copyWith(firstFlipConfirmed: false).firstFlipConfirmed,
-        isFalse,
-      );
-      expect(
-        container.read(safetyPoliciesProvider).value!.firstFlipConfirmed,
-        isFalse,
-        reason: 'fresh state mirrors the daemon default — announce armed',
-      );
+      expect(confirmed.copyWith(firstFlipConfirmed: false).firstFlipConfirmed,
+          isFalse);
+      expect(container.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isFalse,
+          reason: 'fresh state mirrors the daemon default — announce armed');
 
       // The re-arm patch shape: only the flag moves; staged panel edits on the
       // other fields survive (rearmFirstFlip patches via copyWith rather than
       // replacing state with the daemon's persisted echo).
-      const staged = SafetyPolicies(
-        resumeDelayMin: 42,
-        firstFlipConfirmed: true,
-      );
+      const staged = SafetyPolicies(resumeDelayMin: 42, firstFlipConfirmed: true);
       final patched = staged.copyWith(firstFlipConfirmed: false);
       expect(patched.firstFlipConfirmed, isFalse);
-      expect(
-        patched.resumeDelayMin,
-        42,
-        reason: 'unsaved edits must not be clobbered by the re-arm echo',
-      );
+      expect(patched.resumeDelayMin, 42,
+          reason: 'unsaved edits must not be clobbered by the re-arm echo');
     });
   });
 
@@ -244,20 +195,23 @@ void main() {
     'switch_value_tolerance_pct': 12.5,
   };
 
-  test("safety: a Save keeps the rig's fault policies the client has no field for (ADR 0015)", () async {
-    final rig = FakeSectionRig({
-      'safety': {...rigDefaults['safety']!, ...faultPolicies},
-    });
-    final c = ProviderContainer();
-    addTearDown(c.dispose);
-    final n = c.read(safetyPoliciesProvider.notifier);
-    expect(await n.load(rig.api()), isTrue);
-    n.setMeridianPauseMin(7);
-    await n.save(rig.api());
-    final body = rig.puts.single.body as Map;
-    expect(body['meridian_pause_min'], 7);
-    for (final e in faultPolicies.entries) {
-      expect(body[e.key], e.value, reason: e.key);
-    }
-  });
+  test(
+    "safety: a Save keeps the rig's fault policies the client has no field for (ADR 0015)",
+    () async {
+      final rig = FakeSectionRig({
+        'safety': {...rigDefaults['safety']!, ...faultPolicies},
+      });
+      final c = ProviderContainer();
+      addTearDown(c.dispose);
+      final n = c.read(safetyPoliciesProvider.notifier);
+      expect(await n.load(rig.api()), isTrue);
+      n.setMeridianPauseMin(7);
+      await n.save(rig.api());
+      final body = rig.puts.single.body as Map;
+      expect(body['meridian_pause_min'], 7);
+      for (final e in faultPolicies.entries) {
+        expect(body[e.key], e.value, reason: e.key);
+      }
+    },
+  );
 }

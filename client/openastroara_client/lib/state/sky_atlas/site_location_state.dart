@@ -43,18 +43,15 @@ class SiteLocation {
 
 /// The active server's site location, or null when no server is connected / the
 /// site can't be read. The planetarium listens and re-points the observer.
-final siteLocationProvider = FutureProvider.autoDispose<SiteLocation?>((
-  ref,
-) async {
+final siteLocationProvider =
+    FutureProvider.autoDispose<SiteLocation?>((ref) async {
   final server = await ref.watch(activeServerFutureProvider.future);
   if (server == null) return null;
-  final dio = Dio(
-    BaseOptions(
-      baseUrl: server.baseUrl,
-      connectTimeout: const Duration(seconds: 3),
-      receiveTimeout: const Duration(seconds: 5),
-    ),
-  );
+  final dio = Dio(BaseOptions(
+    baseUrl: server.baseUrl,
+    connectTimeout: const Duration(seconds: 3),
+    receiveTimeout: const Duration(seconds: 5),
+  ));
   ref.onDispose(() => dio.close(force: true));
   // A transport/network failure (DioException) must NOT collapse to null: null is
   // reserved for "server present but no site configured" (non-map / 404-shaped

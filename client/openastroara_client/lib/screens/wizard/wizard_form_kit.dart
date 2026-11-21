@@ -35,11 +35,8 @@ class WizardScreenScaffold extends ConsumerWidget {
     final info = ProfileWizard.steps[step]!;
     // Watch only the skipped-set membership so the banner appears/clears when
     // the user toggles Skip, without rebuilding on unrelated draft edits.
-    final wasSkipped = ref.watch(
-      wizardControllerProvider.select(
-        (s) => s.draft.skippedScreens.contains(step),
-      ),
-    );
+    final wasSkipped = ref.watch(wizardControllerProvider
+        .select((s) => s.draft.skippedScreens.contains(step)));
 
     return Align(
       alignment: Alignment.topCenter,
@@ -54,21 +51,20 @@ class WizardScreenScaffold extends ConsumerWidget {
                 Text(
                   context.l10n.wizardKitStage(info.stage, info.stageLabel),
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: AraColors.textSecondary,
-                    letterSpacing: 0.6,
-                  ),
+                        color: AraColors.textSecondary,
+                        letterSpacing: 0.6,
+                      ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  info.title,
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
+                Text(info.title,
+                    style: Theme.of(context).textTheme.headlineSmall),
                 if (intro != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     intro!,
-                    style: Theme.of(context).textTheme.bodyMedium
-                        ?.copyWith(color: AraColors.textSecondary),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: AraColors.textSecondary,
+                        ),
                   ),
                 ],
                 if (wasSkipped) ...[
@@ -102,7 +98,9 @@ class _SkippedBanner extends StatelessWidget {
       ),
       child: Text(
         context.l10n.wizardKitSkipped,
-        style: Theme.of(context).textTheme.bodySmall
+        style: Theme.of(context)
+            .textTheme
+            .bodySmall
             ?.copyWith(color: AraColors.accentBusy),
       ),
     );
@@ -240,7 +238,9 @@ class WizardDropdown<T> extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               helperText!,
-              style: Theme.of(context).textTheme.bodySmall
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
                   ?.copyWith(color: AraColors.textSecondary),
             ),
           ],
@@ -256,11 +256,7 @@ class WizardDerivedValue extends StatelessWidget {
   final String label;
   final String value;
 
-  const WizardDerivedValue({
-    super.key,
-    required this.label,
-    required this.value,
-  });
+  const WizardDerivedValue({super.key, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -276,21 +272,21 @@ class WizardDerivedValue extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium
-                  ?.copyWith(color: AraColors.textSecondary),
-            ),
+            Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: AraColors.textSecondary)),
             const SizedBox(width: 12),
             // Long derived strings (e.g. "1.49 arcsec/pixel — wide-field DSO")
             // must wrap instead of overflowing the row.
             Expanded(
-              child: Text(
-                value,
-                textAlign: TextAlign.right,
-                style: Theme.of(context).textTheme.bodyMedium
-                    ?.copyWith(color: AraColors.textPrimary),
-              ),
+              child: Text(value,
+                  textAlign: TextAlign.right,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: AraColors.textPrimary)),
             ),
           ],
         ),
@@ -311,9 +307,9 @@ class WizardSectionHeader extends StatelessWidget {
       child: Text(
         text,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-          color: AraColors.textPrimary,
-          fontWeight: FontWeight.w600,
-        ),
+              color: AraColors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
       ),
     );
   }

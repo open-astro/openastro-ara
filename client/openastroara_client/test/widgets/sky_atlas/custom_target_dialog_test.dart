@@ -10,7 +10,6 @@ import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/util/apparent_place.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/widgets/sky_atlas/custom_target_dialog.dart';
-
 import '../../support/imaging_sections.dart';
 
 /// In-memory recents: real file IO never completes under the widget test
@@ -27,20 +26,14 @@ class _MemoryTargets extends CustomTargetsService {
   Future<List<CustomTarget>> load({String? scope}) async => List.of(items);
 
   @override
-  Future<List<CustomTarget>> remember(
-    CustomTarget target, {
-    String? scope,
-  }) async {
+  Future<List<CustomTarget>> remember(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     items.insert(0, target);
     return List.of(items);
   }
 
   @override
-  Future<List<CustomTarget>> forget(
-    CustomTarget target, {
-    String? scope,
-  }) async {
+  Future<List<CustomTarget>> forget(CustomTarget target, {String? scope}) async {
     items.removeWhere((t) => t.name == target.name);
     return List.of(items);
   }
@@ -53,12 +46,8 @@ class _RecordingClient implements SequenceClient {
   Map<String, dynamic>? createdBody;
 
   @override
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? description,
-    String? idempotencyKey,
-  }) async {
+  Future<String> create(String name, Map<String, dynamic> body,
+      {String? description, String? idempotencyKey}) async {
     createdName = name;
     createdBody = body;
     return 'seq-1';
@@ -79,8 +68,7 @@ class _RecordingClient implements SequenceClient {
     final type = node[r'$type'];
     if (type is String && type.contains('SlewScopeToRaDec')) {
       return degFromInputCoordinates(
-        (node['Coordinates'] as Map).cast<String, dynamic>(),
-      );
+          (node['Coordinates'] as Map).cast<String, dynamic>());
     }
     for (final v in node.values) {
       final hit = _slewTarget(v);
@@ -103,84 +91,70 @@ void main() {
   setUp(() {
     client = _RecordingClient();
     targets = _MemoryTargets();
-    container = ProviderContainer(
-      overrides: [
-        ...imagingSectionsFromRig(),
-        sequenceApiProvider.overrideWith((ref) => client),
-        customTargetsServiceProvider.overrideWithValue(targets),
-      ],
-    );
+    container = ProviderContainer(overrides: [
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => client),
+      customTargetsServiceProvider.overrideWithValue(targets),
+    ]);
   });
   tearDown(() => container.dispose());
 
   Future<void> pump(WidgetTester tester, {String? initialText}) async {
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () =>
-                    showCustomTargetDialog(context, initialText: initialText),
-                child: const Text('open'),
-              ),
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () =>
+                  showCustomTargetDialog(context, initialText: initialText),
+              child: const Text('open'),
             ),
           ),
         ),
       ),
-    );
+    ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
 
-  testWidgets(
-    'a SIMBAD line adds a run whose slew carries the J2000 position',
-    (tester) async {
-      await pump(tester);
-      await tester.enterText(
-        find.byKey(const Key('custom-target-ra')),
-        '02 37 31.5 +71 18 16',
-      );
-      await tester.pumpAndSettle();
-      // The pasted pair split across both fields.
-      expect(find.text('02 37 31.5'), findsOneWidget);
-      expect(find.text('+71 18 16'), findsOneWidget);
-      expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
+  testWidgets('a SIMBAD line adds a run whose slew carries the J2000 position',
+      (tester) async {
+    await pump(tester);
+    await tester.enterText(find.byKey(const Key('custom-target-ra')),
+        '02 37 31.5 +71 18 16');
+    await tester.pumpAndSettle();
+    // The pasted pair split across both fields.
+    expect(find.text('02 37 31.5'), findsOneWidget);
+    expect(find.text('+71 18 16'), findsOneWidget);
+    expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
 
-      await tester.enterText(find.widgetWithText(TextField, 'Name'), 'AB Cas');
-      await tester.tap(find.text('Add to plan'));
-      await tester.pump();
-      await tester.pump();
-      expect(
-        find.textContaining('Created an imaging run for "AB Cas"'),
-        findsOneWidget,
-      );
-      await tester.pump(const Duration(seconds: 7));
+    await tester.enterText(
+        find.widgetWithText(TextField, 'Name'), 'AB Cas');
+    await tester.tap(find.text('Add to plan'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.textContaining('Created an imaging run for "AB Cas"'),
+        findsOneWidget);
+    await tester.pump(const Duration(seconds: 7));
 
-      expect(client.createdName, 'AB Cas');
-      final slew = _slewTarget(client.createdBody)!;
-      expect(slew.raDeg, closeTo((2 + 37 / 60 + 31.5 / 3600) * 15, 1e-3));
-      expect(slew.decDeg, closeTo(71 + 18 / 60 + 16 / 3600, 1e-3));
-      // Dialog closed, target remembered for next time.
-      expect(find.text('Target by coordinates'), findsNothing);
-      expect(targets.items.single.name, 'AB Cas');
-      expect(targets.items.single.typedAsJNow, isFalse);
-    },
-  );
+    expect(client.createdName, 'AB Cas');
+    final slew = _slewTarget(client.createdBody)!;
+    expect(slew.raDeg, closeTo((2 + 37 / 60 + 31.5 / 3600) * 15, 1e-3));
+    expect(slew.decDeg, closeTo(71 + 18 / 60 + 16 / 3600, 1e-3));
+    // Dialog closed, target remembered for next time.
+    expect(find.text('Target by coordinates'), findsNothing);
+    expect(targets.items.single.name, 'AB Cas');
+    expect(targets.items.single.typedAsJNow, isFalse);
+  });
 
-  testWidgets('JNow input is converted to J2000 before it enters the run', (
-    tester,
-  ) async {
+  testWidgets('JNow input is converted to J2000 before it enters the run',
+      (tester) async {
     await pump(tester);
     await tester.enterText(
-      find.byKey(const Key('custom-target-ra')),
-      '83.82208',
-    );
+        find.byKey(const Key('custom-target-ra')), '83.82208');
     await tester.enterText(
-      find.byKey(const Key('custom-target-dec')),
-      '-5.39111',
-    );
+        find.byKey(const Key('custom-target-dec')), '-5.39111');
     await tester.tap(find.text('JNow'));
     await tester.pumpAndSettle();
     expect(find.textContaining('from JNow'), findsOneWidget);
@@ -191,11 +165,8 @@ void main() {
     await tester.pump(const Duration(seconds: 7));
 
     final slew = _slewTarget(client.createdBody)!;
-    final want = apparentToJ2000(
-      83.82208,
-      -5.39111,
-      atUtc: DateTime.now().toUtc(),
-    );
+    final want =
+        apparentToJ2000(83.82208, -5.39111, atUtc: DateTime.now().toUtc());
     expect(slew.raDeg, closeTo(want.raDeg, 1e-3));
     expect(slew.decDeg, closeTo(want.decDeg, 1e-3));
     // JNow differs from J2000 by ~20′ in 2026 — the conversion really ran.
@@ -224,9 +195,8 @@ void main() {
     expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
   });
 
-  testWidgets('an ambiguous decimal RA offers the hours/degrees choice', (
-    tester,
-  ) async {
+  testWidgets('an ambiguous decimal RA offers the hours/degrees choice',
+      (tester) async {
     await pump(tester);
     await tester.enterText(find.byKey(const Key('custom-target-ra')), '5.5');
     await tester.enterText(find.byKey(const Key('custom-target-dec')), '10');
@@ -241,28 +211,23 @@ void main() {
     expect(find.text('RA in h'), findsNothing);
   });
 
-  testWidgets('unreadable input disables the actions and says why', (
-    tester,
-  ) async {
+  testWidgets('unreadable input disables the actions and says why',
+      (tester) async {
     await pump(tester);
     await tester.enterText(
-      find.byKey(const Key('custom-target-ra')),
-      '25 00 00',
-    );
+        find.byKey(const Key('custom-target-ra')), '25 00 00');
     await tester.enterText(find.byKey(const Key('custom-target-dec')), '95');
     await tester.pumpAndSettle();
     expect(find.text("Can't read this RA"), findsOneWidget);
     expect(find.text("Can't read this Dec"), findsOneWidget);
     final add = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Add to plan'),
-    );
+        find.widgetWithText(FilledButton, 'Add to plan'));
     expect(add.onPressed, isNull);
     expect(client.createdBody, isNull);
   });
 
-  testWidgets('Show on sky frames the position on the planetarium', (
-    tester,
-  ) async {
+  testWidgets('Show on sky frames the position on the planetarium',
+      (tester) async {
     await pump(tester, initialText: '83.822 -5.391');
     Map<String, Object?>? cmd;
     container.listen(planetariumCommandProvider, (_, next) => cmd = next);
@@ -276,15 +241,13 @@ void main() {
   });
 
   testWidgets('a recent target refills the fields on tap', (tester) async {
-    targets.items.add(
-      CustomTarget(
-        name: 'Saved field',
-        raDeg: 150,
-        decDeg: -20,
-        typedAsJNow: false,
-        savedUtc: DateTime.utc(2026),
-      ),
-    );
+    targets.items.add(CustomTarget(
+      name: 'Saved field',
+      raDeg: 150,
+      decDeg: -20,
+      typedAsJNow: false,
+      savedUtc: DateTime.utc(2026),
+    ));
     await pump(tester);
     expect(find.text('Recent'), findsOneWidget);
     await tester.tap(find.text('Saved field'));
@@ -294,111 +257,90 @@ void main() {
     expect(find.byKey(const Key('custom-target-preview')), findsOneWidget);
   });
 
-  testWidgets('a resolved name opens filled in with its provenance (#1267)', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Scaffold(
-            body: Builder(
-              builder: (context) => TextButton(
-                onPressed: () => showCustomTargetDialog(
-                  context,
-                  resolved: const TargetResolution(
-                    status: 'resolved',
-                    source: 'simbad',
-                    mainId: 'V* AB Cas',
-                    aliases: ['HIP 12235', 'TYC 4320-505-1'],
-                    raDeg: 39.38129905,
-                    decDeg: 71.30452027,
-                    objectType: 'EB*',
-                    magnitude: 10.32,
-                  ),
+  testWidgets('a resolved name opens filled in with its provenance (#1267)',
+      (tester) async {
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCustomTargetDialog(
+                context,
+                resolved: const TargetResolution(
+                  status: 'resolved',
+                  source: 'simbad',
+                  mainId: 'V* AB Cas',
+                  aliases: ['HIP 12235', 'TYC 4320-505-1'],
+                  raDeg: 39.38129905,
+                  decDeg: 71.30452027,
+                  objectType: 'EB*',
+                  magnitude: 10.32,
                 ),
-                child: const Text('open'),
               ),
+              child: const Text('open'),
             ),
           ),
         ),
       ),
-    );
+    ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     expect(find.text('Resolved target'), findsOneWidget);
-    final name = tester.widget<TextField>(
-      find.byWidgetPredicate(
-        (w) => w is TextField && w.decoration?.labelText == 'Name',
-      ),
-    );
+    final name = tester.widget<TextField>(find.byWidgetPredicate(
+        (w) => w is TextField && w.decoration?.labelText == 'Name'));
     expect(name.controller!.text, 'V* AB Cas');
-    final ra = tester.widget<TextField>(
-      find.byKey(const Key('custom-target-ra')),
-    );
+    final ra = tester.widget<TextField>(find.byKey(const Key('custom-target-ra')));
     expect(ra.controller!.text, '39.38130');
-    final dec = tester.widget<TextField>(
-      find.byKey(const Key('custom-target-dec')),
-    );
+    final dec = tester.widget<TextField>(find.byKey(const Key('custom-target-dec')));
     expect(dec.controller!.text, '71.30452');
     expect(
-      tester
-          .widget<Text>(find.byKey(const Key('custom-target-provenance')))
-          .data,
+      tester.widget<Text>(find.byKey(const Key('custom-target-provenance'))).data,
       'Simbad · EB* · mag 10.3 · also HIP 12235, TYC 4320-505-1',
     );
   });
 
-  testWidgets(
-    'a resolved target is remembered with its aliases and source; a recent shows them (#1267 item 5)',
-    (tester) async {
-      targets.items.add(
-        CustomTarget(
-          name: 'Wolf 359',
-          raDeg: 164.12,
-          decDeg: 7.01,
-          typedAsJNow: false,
-          savedUtc: DateTime.utc(2026, 10, 18),
-          aliases: const ['CN Leo', 'GJ 406', 'LHS 36'],
-          source: 'simbad',
-        ),
-      );
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => TextButton(
-                  onPressed: () => showCustomTargetDialog(
-                    context,
-                    resolved: const TargetResolution(
-                      status: 'resolved',
-                      source: 'index',
-                      mainId: 'AB Cas',
-                      aliases: ['HIP 12235'],
-                      raDeg: 39.38,
-                      decDeg: 71.30,
-                    ),
-                  ),
-                  child: const Text('open'),
+  testWidgets('a resolved target is remembered with its aliases and source; a recent shows them (#1267 item 5)',
+      (tester) async {
+    targets.items.add(CustomTarget(
+      name: 'Wolf 359',
+      raDeg: 164.12,
+      decDeg: 7.01,
+      typedAsJNow: false,
+      savedUtc: DateTime.utc(2026, 10, 18),
+      aliases: const ['CN Leo', 'GJ 406', 'LHS 36'],
+      source: 'simbad',
+    ));
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showCustomTargetDialog(
+                context,
+                resolved: const TargetResolution(
+                  status: 'resolved',
+                  source: 'index',
+                  mainId: 'AB Cas',
+                  aliases: ['HIP 12235'],
+                  raDeg: 39.38,
+                  decDeg: 71.30,
                 ),
               ),
+              child: const Text('open'),
             ),
           ),
         ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      expect(
-        find.textContaining('Simbad · also CN Leo, GJ 406, …'),
-        findsOneWidget,
-      );
-      await tester.tap(find.text('Show on sky'));
-      await tester.pumpAndSettle();
-      final saved = targets.items.firstWhere((t) => t.name == 'AB Cas');
-      expect(saved.aliases, ['HIP 12235']);
-      expect(saved.source, 'index');
-    },
-  );
+      ),
+    ));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Simbad · also CN Leo, GJ 406, …'), findsOneWidget);
+    await tester.tap(find.text('Show on sky'));
+    await tester.pumpAndSettle();
+    final saved = targets.items.firstWhere((t) => t.name == 'AB Cas');
+    expect(saved.aliases, ['HIP 12235']);
+    expect(saved.source, 'index');
+  });
 }

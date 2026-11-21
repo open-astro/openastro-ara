@@ -19,7 +19,7 @@ class DraftSequenceService {
   /// [supportDir] overrides the app-support directory lookup (tests use a temp
   /// dir; production uses path_provider).
   DraftSequenceService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _dirName = 'sequence_drafts';
@@ -50,12 +50,9 @@ class DraftSequenceService {
         if (entry is! File || !entry.path.endsWith('.json')) continue;
         try {
           final draft = DraftSequence.fromJson(
-            jsonDecode(await entry.readAsString()),
-          );
+              jsonDecode(await entry.readAsString()));
           if (draft != null) drafts.add(draft);
-        } catch (_) {
-          /* skip a corrupt draft file, keep the rest */
-        }
+        } catch (_) {/* skip a corrupt draft file, keep the rest */}
       }
       drafts.sort((a, b) => b.updatedUtc.compareTo(a.updatedUtc));
       return drafts;
@@ -68,10 +65,8 @@ class DraftSequenceService {
   /// surface it (a draft that silently failed to persist is a lost night plan).
   Future<void> save(DraftSequence draft) async {
     final dir = await _dir();
-    await _fileFor(
-      dir,
-      draft.id,
-    ).writeAsString(jsonEncode(draft.toJson()), flush: true);
+    await _fileFor(dir, draft.id)
+        .writeAsString(jsonEncode(draft.toJson()), flush: true);
   }
 
   /// Remove a draft (after a successful push, or a user delete). Missing file
@@ -81,8 +76,6 @@ class DraftSequenceService {
       final dir = await _dir();
       final f = _fileFor(dir, id);
       if (await f.exists()) await f.delete();
-    } catch (_) {
-      /* best effort */
-    }
+    } catch (_) {/* best effort */}
   }
 }

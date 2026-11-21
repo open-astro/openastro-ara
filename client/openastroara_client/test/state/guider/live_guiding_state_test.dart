@@ -26,10 +26,8 @@ class _FakeGuiderApi implements GuiderClient {
   @override
   void close() {}
   @override
-  Future<void> connect({
-    String host = kDefaultGuiderHost,
-    int port = kDefaultGuiderPort,
-  }) async {}
+  Future<void> connect(
+      {String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {}
   @override
   Future<void> disconnect() async {}
   @override
@@ -85,7 +83,8 @@ void main() {
     });
 
     test('hard-caps the sample count regardless of window', () {
-      final b = RmsRingBuffer(window: const Duration(days: 1), maxSamples: 3);
+      final b = RmsRingBuffer(
+          window: const Duration(days: 1), maxSamples: 3);
       for (var i = 0; i < 5; i++) {
         b.add(_s(i, i.toDouble()));
       }
@@ -99,11 +98,8 @@ void main() {
       b.add(_s(0, 0.5));
       b.add(_s(2, 0.5));
       b.add(_s(4, 0.5));
-      expect(
-        b.samples.length,
-        3,
-        reason: 'steady guiding must not freeze the trace',
-      );
+      expect(b.samples.length, 3,
+          reason: 'steady guiding must not freeze the trace');
       // ...and eviction still slides the window as those samples age.
       b.add(_s(15, 0.5));
       expect(b.samples, [_s(15, 0.5)]);
@@ -133,14 +129,11 @@ void main() {
     const server = AraServer(hostname: 'h', port: 5555);
 
     ProviderContainer container(GuiderClient api) {
-      final c = ProviderContainer(
-        overrides: [
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [server]),
-          ),
-          guiderApiFactoryProvider.overrideWithValue((_) => api),
-        ],
-      );
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider
+            .overrideWithValue(_FakeSavedServerService(const [server])),
+        guiderApiFactoryProvider.overrideWithValue((_) => api),
+      ]);
       addTearDown(c.dispose);
       return c;
     }
@@ -154,11 +147,8 @@ void main() {
       // Keep the autoDispose provider alive like a mounted panel would.
       final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
       addTearDown(sub.close);
-      expect(
-        sub.read().length,
-        1,
-        reason: 'seeds from the already-loaded status',
-      );
+      expect(sub.read().length, 1,
+          reason: 'seeds from the already-loaded status');
       expect(sub.read().single.total, 0.5);
       expect(sub.read().single.ra, 0.3);
       expect(sub.read().single.dec, 0.4);
@@ -176,29 +166,24 @@ void main() {
       expect(sub.read().last.total, 0.7);
     });
 
-    test(
-      'an UNCHANGED RMS still appends a fresh point on every poll tick',
-      () async {
-        // GuiderStatus has value equality, so a listener-driven fold would see
-        // nothing during steady guiding — the poll tick must append regardless.
-        final api = _FakeGuiderApi()..status = _guiding;
-        final c = container(api);
-        await c.read(savedServersProvider.future);
-        await c.read(guiderStatusProvider.future);
-        final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
-        addTearDown(sub.close);
-        expect(sub.read().length, 1);
+    test('an UNCHANGED RMS still appends a fresh point on every poll tick',
+        () async {
+      // GuiderStatus has value equality, so a listener-driven fold would see
+      // nothing during steady guiding — the poll tick must append regardless.
+      final api = _FakeGuiderApi()..status = _guiding;
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read().length, 1);
 
-        await c.read(liveGuidingRmsProvider.notifier).pollTick();
-        await c.read(liveGuidingRmsProvider.notifier).pollTick();
-        expect(
-          sub.read().length,
-          3,
-          reason: 'constant-RMS guiding must keep the trace sliding',
-        );
-        expect(sub.read().map((s) => s.total), everyElement(0.5));
-      },
-    );
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
+      await c.read(liveGuidingRmsProvider.notifier).pollTick();
+      expect(sub.read().length, 3,
+          reason: 'constant-RMS guiding must keep the trace sliding');
+      expect(sub.read().map((s) => s.total), everyElement(0.5));
+    });
 
     test('non-guiding statuses (stopped, star lost) are not folded', () async {
       final api = _FakeGuiderApi()
@@ -224,34 +209,30 @@ void main() {
         rmsTotal: 2.5,
       );
       await c.read(liveGuidingRmsProvider.notifier).pollTick();
-      expect(
-        sub.read(),
-        isEmpty,
-        reason: 'star-lost RMS is stale — it must not pollute the trace',
-      );
+      expect(sub.read(), isEmpty,
+          reason: 'star-lost RMS is stale — it must not pollute the trace');
     });
 
-    test(
-      'dithering statuses ARE folded (guiding continues through a dither)',
-      () async {
-        final api = _FakeGuiderApi()
-          ..status = const GuiderStatus(
-            deviceId: 'phd2',
-            name: 'OpenAstro Guider',
-            connectionState: GuiderConnectionState.connected,
-            runtimeState: GuiderRuntimeState.dithering,
-            rmsTotal: 0.9,
-          );
-        final c = container(api);
-        await c.read(savedServersProvider.future);
-        await c.read(guiderStatusProvider.future);
-        final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
-        addTearDown(sub.close);
-        expect(sub.read().single.total, 0.9);
-      },
-    );
+    test('dithering statuses ARE folded (guiding continues through a dither)',
+        () async {
+      final api = _FakeGuiderApi()
+        ..status = const GuiderStatus(
+          deviceId: 'phd2',
+          name: 'OpenAstro Guider',
+          connectionState: GuiderConnectionState.connected,
+          runtimeState: GuiderRuntimeState.dithering,
+          rmsTotal: 0.9,
+        );
+      final c = container(api);
+      await c.read(savedServersProvider.future);
+      await c.read(guiderStatusProvider.future);
+      final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
+      addTearDown(sub.close);
+      expect(sub.read().single.total, 0.9);
+    });
 
-    test('settling statuses ARE folded (#1364: the daemon reports settling while it guides)', () async {
+    test('settling statuses ARE folded (#1364: the daemon reports settling while it guides)',
+        () async {
       final api = _FakeGuiderApi()
         ..status = const GuiderStatus(
           deviceId: 'phd2',
@@ -265,12 +246,8 @@ void main() {
       await c.read(guiderStatusProvider.future);
       final sub = c.listen(liveGuidingRmsProvider, (_, _) {});
       addTearDown(sub.close);
-      expect(
-        sub.read().single.total,
-        1.1,
-        reason:
-            'a post-dither settle is still guiding — the trend keeps sampling',
-      );
+      expect(sub.read().single.total, 1.1,
+          reason: 'a post-dither settle is still guiding — the trend keeps sampling');
     });
 
     test('calibrating statuses are not folded (the mount is being measured, not corrected)', () async {

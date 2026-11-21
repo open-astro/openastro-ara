@@ -37,28 +37,25 @@ void main() {
     expect(m.isBusy, isTrue); // slewing
   });
 
-  test(
-    'reads an unverified position and its reason; absent means trusted (#2070)',
-    () {
-      final m = MountStatus.fromJson(const {
-        'state': 'connected',
-        'runtime': {
-          'state': 'idle',
-          'at_home': true,
-          'position_unverified': true,
-          'position_unverified_reason': 'at_home_on_connect',
-        },
-      });
-      expect(m.positionUnverified, isTrue);
-      expect(m.positionUnverifiedReason, 'at_home_on_connect');
-      final older = MountStatus.fromJson(const {
-        'state': 'connected',
-        'runtime': {'state': 'idle'},
-      });
-      expect(older.positionUnverified, isFalse, reason: 'an older daemon');
-      expect(older == m, isFalse);
-    },
-  );
+  test('reads an unverified position and its reason; absent means trusted (#2070)', () {
+    final m = MountStatus.fromJson(const {
+      'state': 'connected',
+      'runtime': {
+        'state': 'idle',
+        'at_home': true,
+        'position_unverified': true,
+        'position_unverified_reason': 'at_home_on_connect',
+      },
+    });
+    expect(m.positionUnverified, isTrue);
+    expect(m.positionUnverifiedReason, 'at_home_on_connect');
+    final older = MountStatus.fromJson(const {
+      'state': 'connected',
+      'runtime': {'state': 'idle'},
+    });
+    expect(older.positionUnverified, isFalse, reason: 'an older daemon');
+    expect(older == m, isFalse);
+  });
 
   test('absent caps parse null; parked runtime is not busy', () {
     final parked = MountStatus.fromJson(const {
@@ -74,7 +71,8 @@ void main() {
     expect(preConnect.capabilities, isNull);
   });
 
-  test('reads the MoveAxis rate bands beside the legacy endpoint list (#1126)', () {
+  test('reads the MoveAxis rate bands beside the legacy endpoint list (#1126)',
+      () {
     final m = MountStatus.fromJson(const {
       'state': 'connected',
       'capabilities': {

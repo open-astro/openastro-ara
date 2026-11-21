@@ -75,10 +75,7 @@ void main() {
       ws.connect();
       // ws_version rides in the query string too: browser WebSockets can't set
       // request headers, and the server accepts either (header wins).
-      expect(
-        conn.lastUrl,
-        Uri.parse('ws://host-a:5555/api/v1/ws?ws_version=1'),
-      );
+      expect(conn.lastUrl, Uri.parse('ws://host-a:5555/api/v1/ws?ws_version=1'));
       expect(conn.lastHeaders, {'X-Ara-WS-Version': '1'});
       await ws.dispose();
     });
@@ -199,9 +196,13 @@ void main() {
       await pumpEventQueue(); // let the zero-delay reconnect timer fire
 
       expect(conn.legs, hasLength(2), reason: 'reconnected with a fresh leg');
-      expect(conn.legs[1].sent, [
-        jsonEncode({'resume_token': '42'}),
-      ], reason: 'first frame on reconnect resumes from the last-seen seq');
+      expect(
+        conn.legs[1].sent,
+        [
+          jsonEncode({'resume_token': '42'}),
+        ],
+        reason: 'first frame on reconnect resumes from the last-seen seq',
+      );
       expect(
         conn.legs.first.closed,
         isTrue,
@@ -321,61 +322,73 @@ void main() {
       },
     );
 
-    test('backoff caps at the last slot — repeated drops never index out of bounds', () async {
-      final conn = _FakeConnector();
-      final ws = WsEventStream(
-        server,
-        connect: conn.connect,
-        backoff: const [Duration.zero, Duration.zero],
-      );
-      ws.events.listen((_) {});
-      ws.connect();
-      // Drop more times than the backoff list length; the saturated counter must
-      // reuse the last slot, not walk past the end.
-      for (var i = 0; i < 4; i++) {
-        await conn.legs.last.drop();
-        await pumpEventQueue();
-      }
-      expect(
-        conn.legs.length,
-        greaterThanOrEqualTo(5),
-        reason: 'kept reconnecting through the cap without error',
-      );
-      await ws.dispose();
-    });
+    test(
+      'backoff caps at the last slot — repeated drops never index out of bounds',
+      () async {
+        final conn = _FakeConnector();
+        final ws = WsEventStream(
+          server,
+          connect: conn.connect,
+          backoff: const [Duration.zero, Duration.zero],
+        );
+        ws.events.listen((_) {});
+        ws.connect();
+        // Drop more times than the backoff list length; the saturated counter must
+        // reuse the last slot, not walk past the end.
+        for (var i = 0; i < 4; i++) {
+          await conn.legs.last.drop();
+          await pumpEventQueue();
+        }
+        expect(
+          conn.legs.length,
+          greaterThanOrEqualTo(5),
+          reason: 'kept reconnecting through the cap without error',
+        );
+        await ws.dispose();
+      },
+    );
 
     test('dispose is idempotent — a second call does not throw', () async {
       final conn = _FakeConnector();
       final ws = WsEventStream(server, connect: conn.connect);
       ws.connect();
       await ws.dispose();
-      await ws.dispose(); // must be a no-op, not StateError on the closed controller
+      await ws
+          .dispose(); // must be a no-op, not StateError on the closed controller
     });
 
-    test('resume token survives a failed reconnect (no frame before the next drop)', () async {
-      final conn = _FakeConnector();
-      final ws = WsEventStream(
-        server,
-        connect: conn.connect,
-        backoff: const [Duration.zero],
-      );
-      ws.events.listen((_) {});
-      ws.connect();
-      conn.legs.first.incoming.add(_envelope('e', 42));
-      await pumpEventQueue();
+    test(
+      'resume token survives a failed reconnect (no frame before the next drop)',
+      () async {
+        final conn = _FakeConnector();
+        final ws = WsEventStream(
+          server,
+          connect: conn.connect,
+          backoff: const [Duration.zero],
+        );
+        ws.events.listen((_) {});
+        ws.connect();
+        conn.legs.first.incoming.add(_envelope('e', 42));
+        await pumpEventQueue();
 
-      await conn.legs[0].drop(); // leg 0 → reconnect (leg 1 carries the token)
-      await pumpEventQueue();
-      await conn.legs[1]
-          .drop(); // leg 1 drops before delivering any frame → reconnect again
-      await pumpEventQueue();
+        await conn.legs[0]
+            .drop(); // leg 0 → reconnect (leg 1 carries the token)
+        await pumpEventQueue();
+        await conn.legs[1]
+            .drop(); // leg 1 drops before delivering any frame → reconnect again
+        await pumpEventQueue();
 
-      expect(conn.legs, hasLength(3));
-      expect(conn.legs[2].sent, [
-        jsonEncode({'resume_token': '42'}),
-      ], reason: '_lastSeq is retained across a failed-handshake reconnect');
-      await ws.dispose();
-    });
+        expect(conn.legs, hasLength(3));
+        expect(
+          conn.legs[2].sent,
+          [
+            jsonEncode({'resume_token': '42'}),
+          ],
+          reason: '_lastSeq is retained across a failed-handshake reconnect',
+        );
+        await ws.dispose();
+      },
+    );
 
     // ── liveness watchdog ──
     //
@@ -416,11 +429,8 @@ void main() {
     test('a heartbeat every 30s keeps the link up indefinitely', () {
       fakeAsync((async) {
         final conn = _FakeConnector();
-        final ws = WsEventStream(
-          server,
-          connect: conn.connect,
-          claimSession: () async => 'sess-1',
-        );
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => 'sess-1');
         ws.connect();
         async.flushMicrotasks();
         for (var i = 1; i <= 10; i++) {
@@ -437,64 +447,51 @@ void main() {
       });
     });
 
-    test(
-      'an unbound socket is never watchdogged (the daemon never pings it)',
-      () {
-        fakeAsync((async) {
-          final conn = _FakeConnector();
-          // A denied §27 claim (another client holds the control slot) connects
-          // unbound, and WebSocketEndpoints only pings BOUND sockets — so
-          // silence here means "nothing happened", not "link died".
-          final ws = WsEventStream(
-            server,
-            connect: conn.connect,
-            claimSession: () async => null,
-          );
-          ws.connect();
-          async.flushMicrotasks();
-          conn.legs.first.incoming.add(_envelope('e', 1));
-          async.flushMicrotasks();
-          expect(ws.connectionState, WsConnectionState.connected);
+    test('an unbound socket is never watchdogged (the daemon never pings it)',
+        () {
+      fakeAsync((async) {
+        final conn = _FakeConnector();
+        // A denied §27 claim (another client holds the control slot) connects
+        // unbound, and WebSocketEndpoints only pings BOUND sockets — so
+        // silence here means "nothing happened", not "link died".
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => null);
+        ws.connect();
+        async.flushMicrotasks();
+        conn.legs.first.incoming.add(_envelope('e', 1));
+        async.flushMicrotasks();
+        expect(ws.connectionState, WsConnectionState.connected);
 
-          async.elapse(const Duration(minutes: 5));
-          async.flushMicrotasks();
-          expect(
-            conn.legs.first.closed,
-            isFalse,
-            reason: 'a healthy unbound socket must not be closed',
-          );
-          expect(ws.connectionState, WsConnectionState.connected);
-          expect(conn.legs, hasLength(1), reason: 'no reconnect flapping');
+        async.elapse(const Duration(minutes: 5));
+        async.flushMicrotasks();
+        expect(conn.legs.first.closed, isFalse,
+            reason: 'a healthy unbound socket must not be closed');
+        expect(ws.connectionState, WsConnectionState.connected);
+        expect(conn.legs, hasLength(1), reason: 'no reconnect flapping');
 
-          unawaited(ws.dispose());
-          async.flushTimers();
-        });
-      },
-    );
+        unawaited(ws.dispose());
+        async.flushTimers();
+      });
+    });
 
-    test(
-      'the watchdog stops with the stream — no timer outlives dispose()',
-      () {
-        fakeAsync((async) {
-          final conn = _FakeConnector();
-          final ws = WsEventStream(
-            server,
-            connect: conn.connect,
-            claimSession: () async => 'sess-1',
-          );
-          ws.connect();
-          async.flushMicrotasks();
-          conn.legs.first.incoming.add(_envelope('e', 1));
-          async.flushMicrotasks();
+    test('the watchdog stops with the stream — no timer outlives dispose()',
+        () {
+      fakeAsync((async) {
+        final conn = _FakeConnector();
+        final ws = WsEventStream(server, connect: conn.connect,
+            claimSession: () async => 'sess-1');
+        ws.connect();
+        async.flushMicrotasks();
+        conn.legs.first.incoming.add(_envelope('e', 1));
+        async.flushMicrotasks();
 
-          unawaited(ws.dispose());
-          async.flushMicrotasks();
-          // A leaked periodic watchdog is what broke every widget test that
-          // mounts a connected stream.
-          expect(async.periodicTimerCount, 0);
-        });
-      },
-    );
+        unawaited(ws.dispose());
+        async.flushMicrotasks();
+        // A leaked periodic watchdog is what broke every widget test that
+        // mounts a connected stream.
+        expect(async.periodicTimerCount, 0);
+      });
+    });
 
     // ── connection-state signal (slice 2a) ──
 

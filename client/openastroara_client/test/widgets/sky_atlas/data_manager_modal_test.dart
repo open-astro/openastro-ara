@@ -35,14 +35,10 @@ class _FakeDataManagerClient implements DataManagerClient {
   Future<List<DataPackage>> listPackages() async => packages;
 
   @override
-  Future<SolverRecommendation> solverRecommendation(
-    SolverRecommendationRequest request,
-  ) async => const SolverRecommendation();
+  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request) async =>
+      const SolverRecommendation();
   @override
-  Future<String> download(
-    String packageId, {
-    bool forceReinstall = false,
-  }) async {
+  Future<String> download(String packageId, {bool forceReinstall = false}) async {
     downloaded.add(packageId);
     return 'dl-$packageId';
   }
@@ -56,11 +52,8 @@ class _FakeDataManagerClient implements DataManagerClient {
   }
 
   @override
-  Future<List<CatalogObject>?> getCatalog(
-    String packageId, {
-    double? maxMag,
-    int? limit,
-  }) async => const <CatalogObject>[];
+  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async =>
+      const <CatalogObject>[];
 
   @override
   void close() {}
@@ -79,185 +72,87 @@ const _server = AraServer(hostname: 'h', port: 5555);
 Widget _host(
   _FakeDataManagerClient api, {
   Map<String, DownloadProgress> downloads = const {},
-}) => ProviderScope(
-  overrides: [
-    savedServerServiceProvider.overrideWithValue(
-      _FakeSavedServerService(const [_server]),
-    ),
-    dataManagerApiFactoryProvider.overrideWithValue((_) => api),
-    dataManagerDownloadsProvider.overrideWith(() => _FakeDownloads(downloads)),
-  ],
-  child: const MaterialApp(home: DataManagerModal()),
-);
+}) =>
+    ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [_server])),
+        dataManagerApiFactoryProvider.overrideWithValue((_) => api),
+        dataManagerDownloadsProvider.overrideWith(() => _FakeDownloads(downloads)),
+      ],
+      child: const MaterialApp(home: DataManagerModal()),
+    );
 
 void main() {
-  testWidgets('lists catalog packages grouped, with installed total', (
-    tester,
-  ) async {
+  testWidgets('lists catalog packages grouped, with installed total', (tester) async {
     final api = _FakeDataManagerClient(const [
-      DataPackage(
-        id: 'tycho-2',
-        name: 'Tycho-2',
-        category: 'catalog',
-        sizeBytes: 2 * 1024 * 1024,
-        isInstalled: true,
-      ),
-      DataPackage(
-        id: 'horizon-default',
-        name: 'Default horizon',
-        category: 'horizon',
-        sizeBytes: 4096,
-      ),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', sizeBytes: 2 * 1024 * 1024, isInstalled: true),
+      DataPackage(id: 'horizon-default', name: 'Default horizon', category: 'horizon', sizeBytes: 4096),
       // #1136 — the ASTAP databases the rig server plate-solves against.
-      DataPackage(
-        id: 'astap-d80',
-        name: 'ASTAP D80 star database',
-        category: 'solver',
-        sizeBytes: 1332217055,
-        recommended: true,
-      ),
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80 star database', category: 'solver', sizeBytes: 1332217055, recommended: true),
     ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
     expect(find.text('Tycho-2'), findsOneWidget);
     expect(find.text('Default horizon'), findsOneWidget);
-    expect(
-      find.text('Star catalogs'),
-      findsOneWidget,
-      reason: 'category headers render',
-    );
+    expect(find.text('Star catalogs'), findsOneWidget, reason: 'category headers render');
     expect(find.text('Horizon profiles'), findsOneWidget);
-    expect(
-      find.text('Plate-solver star databases'),
-      findsOneWidget,
-      reason: 'the solver category has its own header',
-    );
-    expect(
-      find.text('1.2 GB'),
-      findsOneWidget,
-      reason: 'D80 shows its on-disk size',
-    );
-    expect(
-      find.text('Recommended'),
-      findsOneWidget,
-      reason: 'a recommended, not-installed package says so (the installed Tycho-2 does not)',
-    );
-    expect(
-      find.text('2.0 MB installed'),
-      findsOneWidget,
-      reason: 'header sums installed sizes',
-    );
+    expect(find.text('Plate-solver star databases'), findsOneWidget, reason: 'the solver category has its own header');
+    expect(find.text('1.2 GB'), findsOneWidget, reason: 'D80 shows its on-disk size');
+    expect(find.text('Recommended'), findsOneWidget, reason: 'a recommended, not-installed package says so (the installed Tycho-2 does not)');
+    expect(find.text('2.0 MB installed'), findsOneWidget, reason: 'header sums installed sizes');
   });
 
-  testWidgets('an installed solver database shows where it sits', (
-    tester,
-  ) async {
+  testWidgets('an installed solver database shows where it sits', (tester) async {
     final api = _FakeDataManagerClient(const [
-      DataPackage(
-        id: 'astap-d80',
-        name: 'ASTAP D80',
-        category: 'solver',
-        isInstalled: true,
-        installPath: '/media/old/astap/astap-d80',
-      ),
-      DataPackage(
-        id: 'tycho-2',
-        name: 'Tycho-2',
-        category: 'catalog',
-        isInstalled: true,
-        installPath: '/var/lib/openastroara/sky-data/tycho-2',
-      ),
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80', category: 'solver', isInstalled: true, installPath: '/media/old/astap/astap-d80'),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true, installPath: '/var/lib/openastroara/sky-data/tycho-2'),
     ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
-    expect(
-      find.text('Installed in /media/old/astap/astap-d80'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('sky-data/tycho-2'),
-      findsNothing,
-      reason: 'catalogs do not show a path',
-    );
+    expect(find.text('Installed in /media/old/astap/astap-d80'), findsOneWidget);
+    expect(find.textContaining('sky-data/tycho-2'), findsNothing, reason: 'catalogs do not show a path');
   });
 
   testWidgets('not-installed → Download, installed → Remove', (tester) async {
     final api = _FakeDataManagerClient(const [
-      DataPackage(
-        id: 'tycho-2',
-        name: 'Tycho-2',
-        category: 'catalog',
-        isInstalled: true,
-      ),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true),
       DataPackage(id: 'gaia-edr3-bright', name: 'Gaia', category: 'catalog'),
     ]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
-    expect(
-      find.widgetWithText(TextButton, 'Remove'),
-      findsOneWidget,
-      reason: 'installed package',
-    );
-    expect(
-      find.widgetWithText(FilledButton, 'Download'),
-      findsOneWidget,
-      reason: 'not-installed package',
-    );
+    expect(find.widgetWithText(TextButton, 'Remove'), findsOneWidget, reason: 'installed package');
+    expect(find.widgetWithText(FilledButton, 'Download'), findsOneWidget, reason: 'not-installed package');
   });
 
-  testWidgets(
-    'removing a solver database warns that solves stop, a catalog that planning degrades',
-    (tester) async {
-      // #1136 — the two Remove confirmations say different things.
-      final api = _FakeDataManagerClient(const [
-        DataPackage(
-          id: 'astap-d80',
-          name: 'ASTAP D80',
-          category: 'solver',
-          isInstalled: true,
-        ),
-        DataPackage(
-          id: 'tycho-2',
-          name: 'Tycho-2',
-          category: 'catalog',
-          isInstalled: true,
-        ),
-      ]);
-      await tester.pumpWidget(_host(api));
-      await tester.pumpAndSettle();
+  testWidgets('removing a solver database warns that solves stop, a catalog that planning degrades', (tester) async {
+    // #1136 — the two Remove confirmations say different things.
+    final api = _FakeDataManagerClient(const [
+      DataPackage(id: 'astap-d80', name: 'ASTAP D80', category: 'solver', isInstalled: true),
+      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog', isInstalled: true),
+    ]);
+    await tester.pumpWidget(_host(api));
+    await tester.pumpAndSettle();
 
-      // Categories sort alphabetically: the catalog row comes first, the solver row last.
-      await tester.tap(find.widgetWithText(TextButton, 'Remove').last);
-      await tester.pumpAndSettle();
-      expect(find.text('Remove ASTAP D80?'), findsOneWidget);
-      expect(
-        find.textContaining(
-          'centering, polar alignment and position checks fail',
-        ),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining("Tonight's Sky"),
-        findsNothing,
-        reason: 'the catalog wording is not shown for a solver database',
-      );
-      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-      await tester.pumpAndSettle();
-      expect(api.deleted, isEmpty);
+    // Categories sort alphabetically: the catalog row comes first, the solver row last.
+    await tester.tap(find.widgetWithText(TextButton, 'Remove').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove ASTAP D80?'), findsOneWidget);
+    expect(find.textContaining('centering, polar alignment and position checks fail'), findsOneWidget);
+    expect(find.textContaining("Tonight's Sky"), findsNothing, reason: 'the catalog wording is not shown for a solver database');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, isEmpty);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Remove').first);
-      await tester.pumpAndSettle();
-      expect(find.text('Remove Tycho-2?'), findsOneWidget);
-      expect(find.textContaining("Tonight's Sky"), findsOneWidget);
-    },
-  );
+    await tester.tap(find.widgetWithText(TextButton, 'Remove').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Remove Tycho-2?'), findsOneWidget);
+    expect(find.textContaining("Tonight's Sky"), findsOneWidget);
+  });
 
   testWidgets('tapping Download calls the client', (tester) async {
-    final api = _FakeDataManagerClient(const [
-      DataPackage(id: 'gaia-edr3-bright', name: 'Gaia', category: 'catalog'),
-    ]);
+    final api = _FakeDataManagerClient(const [DataPackage(id: 'gaia-edr3-bright', name: 'Gaia', category: 'catalog')]);
     await tester.pumpWidget(_host(api));
     await tester.pumpAndSettle();
 
@@ -266,26 +161,12 @@ void main() {
     expect(api.downloaded, ['gaia-edr3-bright']);
   });
 
-  testWidgets('an active download shows a progress bar + Cancel', (
-    tester,
-  ) async {
-    final api = _FakeDataManagerClient(const [
-      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog'),
-    ]);
-    await tester.pumpWidget(
-      _host(
-        api,
-        downloads: const {
-          'tycho-2': DownloadProgress(
-            downloadId: 'd1',
-            packageId: 'tycho-2',
-            downloadedBytes: 512,
-            totalBytes: 1024,
-            percentComplete: 50,
-          ),
-        },
-      ),
-    );
+  testWidgets('an active download shows a progress bar + Cancel', (tester) async {
+    final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog')]);
+    await tester.pumpWidget(_host(api, downloads: const {
+      'tycho-2': DownloadProgress(
+          downloadId: 'd1', packageId: 'tycho-2', downloadedBytes: 512, totalBytes: 1024, percentComplete: 50),
+    }));
     await tester.pumpAndSettle();
 
     expect(find.byType(LinearProgressIndicator), findsOneWidget);
@@ -297,22 +178,11 @@ void main() {
   });
 
   testWidgets('a failed download shows the error', (tester) async {
-    final api = _FakeDataManagerClient(const [
-      DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog'),
-    ]);
-    await tester.pumpWidget(
-      _host(
-        api,
-        downloads: const {
-          'tycho-2': DownloadProgress(
-            downloadId: 'd1',
-            packageId: 'tycho-2',
-            phase: DownloadPhase.failed,
-            error: 'stalled',
-          ),
-        },
-      ),
-    );
+    final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2', name: 'Tycho-2', category: 'catalog')]);
+    await tester.pumpWidget(_host(api, downloads: const {
+      'tycho-2': DownloadProgress(
+          downloadId: 'd1', packageId: 'tycho-2', phase: DownloadPhase.failed, error: 'stalled'),
+    }));
     await tester.pumpAndSettle();
 
     expect(find.text('Download stalled'), findsOneWidget);
@@ -322,10 +192,6 @@ void main() {
     expect(formatBytes(0), '0 B');
     expect(formatBytes(512), '512 B');
     expect(formatBytes(2 * 1024 * 1024), '2.0 MB');
-    expect(
-      formatBytes(187654321),
-      '179 MB',
-      reason: 'values >= 100 drop the decimal',
-    );
+    expect(formatBytes(187654321), '179 MB', reason: 'values >= 100 drop the decimal');
   });
 }

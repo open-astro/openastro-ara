@@ -16,8 +16,7 @@ class AstrobinExportDialog extends ConsumerStatefulWidget {
   const AstrobinExportDialog({super.key});
 
   @override
-  ConsumerState<AstrobinExportDialog> createState() =>
-      _AstrobinExportDialogState();
+  ConsumerState<AstrobinExportDialog> createState() => _AstrobinExportDialogState();
 }
 
 class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
@@ -80,9 +79,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
   ) {
     if (async.isLoading && targets == null) {
       return const SizedBox(
-        height: 120,
-        child: Center(child: AdaptiveProgressIndicator()),
-      );
+          height: 120, child: Center(child: AdaptiveProgressIndicator()));
     }
     if (async.hasError && targets == null) {
       return _hintWithRetry('Could not load targets.');
@@ -119,11 +116,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
     return ListTile(
       dense: true,
       contentPadding: EdgeInsets.zero,
-      leading: const Icon(
-        Icons.gps_fixed,
-        color: AraColors.textSecondary,
-        size: 18,
-      ),
+      leading: const Icon(Icons.gps_fixed, color: AraColors.textSecondary, size: 18),
       title: Text(t.targetName),
       subtitle: Text(
         '${t.frameCount} frame${t.frameCount == 1 ? '' : 's'} · '
@@ -131,10 +124,7 @@ class _AstrobinExportDialogState extends ConsumerState<AstrobinExportDialog> {
       ),
       trailing: busy
           ? const SizedBox(
-              width: 16,
-              height: 16,
-              child: AdaptiveProgressIndicator(strokeWidth: 2),
-            )
+              width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
           : const Icon(Icons.file_download, size: 18),
       enabled: _launching == null,
       onTap: () => unawaited(_export(t.targetName)),
@@ -164,10 +154,7 @@ class _Hint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 12),
-      child: Text(
-        message,
-        style: const TextStyle(color: AraColors.textSecondary),
-      ),
+      child: Text(message, style: const TextStyle(color: AraColors.textSecondary)),
     );
   }
 }

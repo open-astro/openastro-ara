@@ -21,20 +21,22 @@ class RunStateBadge extends StatelessWidget {
   /// new SequenceRunState forces a compile error rather than silently
   /// defaulting — matching SequenceRunState.isActive.
   static Color colorFor(SequenceRunState s) => switch (s) {
-    // DESIGN.md status rule: running is working (green), starting is on
-    // its way (blue).
-    SequenceRunState.running => AraColors.accentConnected,
-    SequenceRunState.starting => AraColors.accentInfo,
-    SequenceRunState.paused => AraColors.accentInfo,
-    // DESIGN.md status rule: awaiting the user needs a look, nothing has
-    // failed (the run resumes): amber, as Simple Mode's plan pill.
-    SequenceRunState.pausedAwaitingUser => AraColors.accentBusy,
-    SequenceRunState.failed ||
-    SequenceRunState.aborting => AraColors.accentError,
-    SequenceRunState.stopped ||
-    SequenceRunState.completed => AraColors.textSecondary,
-    SequenceRunState.idle => AraColors.textSecondary,
-  };
+        // DESIGN.md status rule: running is working (green), starting is on
+        // its way (blue).
+        SequenceRunState.running => AraColors.accentConnected,
+        SequenceRunState.starting => AraColors.accentInfo,
+        SequenceRunState.paused => AraColors.accentInfo,
+        // DESIGN.md status rule: awaiting the user needs a look, nothing has
+        // failed (the run resumes): amber, as Simple Mode's plan pill.
+        SequenceRunState.pausedAwaitingUser => AraColors.accentBusy,
+        SequenceRunState.failed ||
+        SequenceRunState.aborting =>
+          AraColors.accentError,
+        SequenceRunState.stopped ||
+        SequenceRunState.completed =>
+          AraColors.textSecondary,
+        SequenceRunState.idle => AraColors.textSecondary,
+      };
 
   /// Human label — the §58.12 multi-word state needs product copy
   /// ("pausedAwaitingUser" is not UI).
@@ -54,16 +56,10 @@ class RunStateBadge extends StatelessWidget {
         border: Border.all(color: color),
       ),
       child: Text(
-        reason == null || reason!.isEmpty
-            ? labelFor(s)
-            : '${labelFor(s)} · $reason',
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
+          reason == null || reason!.isEmpty ? labelFor(s) : '${labelFor(s)} · $reason',
+          overflow: TextOverflow.ellipsis,
+          style:
+              TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w600)),
     );
   }
 }

@@ -24,9 +24,7 @@ class MainFocusMethodNotifier extends Notifier<MainFocusMethod?> {
 }
 
 final mainFocusMethodProvider =
-    NotifierProvider<MainFocusMethodNotifier, MainFocusMethod?>(
-      MainFocusMethodNotifier.new,
-    );
+    NotifierProvider<MainFocusMethodNotifier, MainFocusMethod?>(MainFocusMethodNotifier.new);
 
 /// What the Bahtinov card renders: the readout's status, the latest frame, a
 /// start/stop in flight, the last request error, and whether the user has
@@ -35,7 +33,6 @@ class BahtinovFocusLive {
   final BahtinovFocusStatus status;
   final Uint8List? frame;
   final int frameSeq;
-
   /// The fitted lines for [frame] — the overlay of the sample the frame
   /// belongs to, null when it is a whole frame (nothing measured).
   final BahtinovOverlay? overlay;
@@ -65,22 +62,21 @@ class BahtinovFocusLive {
     bool? finished,
     bool clearError = false,
     bool clearFrame = false,
-  }) => BahtinovFocusLive(
-    status: status ?? this.status,
-    frame: clearFrame ? null : (frame ?? this.frame),
-    frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
-    overlay: clearFrame ? null : (overlay ?? this.overlay),
-    busy: busy ?? this.busy,
-    error: clearError ? null : (error ?? this.error),
-    finished: finished ?? this.finished,
-  );
+  }) =>
+      BahtinovFocusLive(
+        status: status ?? this.status,
+        frame: clearFrame ? null : (frame ?? this.frame),
+        frameSeq: clearFrame ? 0 : (frameSeq ?? this.frameSeq),
+        overlay: clearFrame ? null : (overlay ?? this.overlay),
+        busy: busy ?? this.busy,
+        error: clearError ? null : (error ?? this.error),
+        finished: finished ?? this.finished,
+      );
 }
 
 /// Builds a [BahtinovFocusClient] for a server. Overridable in tests.
 final bahtinovFocusApiFactoryProvider =
-    Provider<BahtinovFocusClient Function(AraServer)>(
-      (ref) => BahtinovFocusApi.new,
-    );
+    Provider<BahtinovFocusClient Function(AraServer)>((ref) => BahtinovFocusApi.new);
 
 /// Client bound to the active server, or null when none.
 final bahtinovFocusApiProvider = Provider<BahtinovFocusClient?>((ref) {
@@ -139,9 +135,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
             status: state.status,
             frame: frame.bytes,
             frameSeq: frame.seq,
-            overlay: latest != null && latest.seq == frame.seq
-                ? latest.overlay
-                : null,
+            overlay: latest != null && latest.seq == frame.seq ? latest.overlay : null,
             busy: state.busy,
             error: state.error,
             finished: state.finished,
@@ -161,11 +155,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     final base = state.status.active ? _pollInterval : _idlePollInterval;
     final delay = _consecutiveErrors == 0
         ? base
-        : Duration(
-            milliseconds:
-                (base.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 4)))
-                    .clamp(500, 5000),
-          );
+        : Duration(milliseconds: (base.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 4))).clamp(500, 5000));
     _timer = Timer(delay, () => unawaited(refresh()));
   }
 
@@ -177,12 +167,7 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
     // result (and the mask-off confirmation) stays in view even with a
     // focuser connected, where the card would otherwise default to autofocus.
     ref.read(mainFocusMethodProvider.notifier).pick(MainFocusMethod.bahtinov);
-    state = state.copyWith(
-      busy: true,
-      finished: false,
-      clearError: true,
-      clearFrame: true,
-    );
+    state = state.copyWith(busy: true, finished: false, clearError: true, clearFrame: true);
     try {
       await api.start(exposureSec: exposureSec);
       if (!ref.mounted) return;
@@ -264,23 +249,15 @@ class BahtinovFocusNotifier extends Notifier<BahtinovFocusLive> {
 }
 
 final bahtinovFocusProvider =
-    NotifierProvider<BahtinovFocusNotifier, BahtinovFocusLive>(
-      BahtinovFocusNotifier.new,
-    );
+    NotifierProvider<BahtinovFocusNotifier, BahtinovFocusLive>(BahtinovFocusNotifier.new);
 
 /// The method both presentations show for the main telescope: a readout
 /// already running shows itself (another client, a reconnect), else the
 /// user's pick, else autofocus with a focuser to drive and the mask without.
 final effectiveFocusMethodProvider = Provider<MainFocusMethod>((ref) {
-  if (ref.watch(bahtinovFocusProvider.select((s) => s.status.active)))
-    return MainFocusMethod.bahtinov;
+  if (ref.watch(bahtinovFocusProvider.select((s) => s.status.active))) return MainFocusMethod.bahtinov;
   final connected = ref.watch(
-    focuserProvider.select(
-      (f) =>
-          f.asData?.value?.connectionState ==
-          EquipmentConnectionState.connected,
-    ),
+    focuserProvider.select((f) => f.asData?.value?.connectionState == EquipmentConnectionState.connected),
   );
-  return ref.watch(mainFocusMethodProvider) ??
-      (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
+  return ref.watch(mainFocusMethodProvider) ?? (connected ? MainFocusMethod.autofocus : MainFocusMethod.bahtinov);
 });

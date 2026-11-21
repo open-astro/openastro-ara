@@ -39,9 +39,7 @@ Map<String, dynamic> buildSlewTargetBody({
 
   final containerDef = instructionForType(sequentialContainerType);
   if (containerDef == null) {
-    throw StateError(
-      'SequentialContainer missing from the instruction catalog',
-    );
+    throw StateError('SequentialContainer missing from the instruction catalog');
   }
   var root = containerDef.build();
   final name = targetName?.trim();

@@ -38,13 +38,9 @@ class CloneStatus {
   bool get isRunning => state == runningState;
 
   factory CloneStatus.fromJson(Map<String, dynamic> json) => CloneStatus(
-    state: json['state'] is String ? json['state'] as String : idleState,
-    progressPct: json['progress_pct'] is num
-        ? (json['progress_pct'] as num).toDouble()
-        : null,
-    currentArea: json['current_area'] is String
-        ? json['current_area'] as String
-        : null,
-    message: json['message'] is String ? json['message'] as String : null,
-  );
+        state: json['state'] is String ? json['state'] as String : idleState,
+        progressPct: json['progress_pct'] is num ? (json['progress_pct'] as num).toDouble() : null,
+        currentArea: json['current_area'] is String ? json['current_area'] as String : null,
+        message: json['message'] is String ? json['message'] as String : null,
+      );
 }

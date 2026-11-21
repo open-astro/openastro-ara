@@ -233,10 +233,7 @@ SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
         return idle(l.calibrationChipReady, l.calibrationNothingMissing);
       }
       if (!camera) {
-        return idle(
-          l.calibrationChipMissing(missing),
-          l.calibrationConnectCamera,
-        );
+        return idle(l.calibrationChipMissing(missing), l.calibrationConnectCamera);
       }
       return (
         chip: l.calibrationChipMissing(missing),
@@ -304,9 +301,7 @@ SimpleCalibrationJob simpleCalibrationJob(BuildContext context, WidgetRef ref) {
       if (darks && defects) {
         return idle(l.calibrationChipReady, l.calibrationNothingMissing);
       }
-      final chip = l.calibrationChipMissing(
-        (darks ? 0 : 1) + (defects ? 0 : 1),
-      );
+      final chip = l.calibrationChipMissing((darks ? 0 : 1) + (defects ? 0 : 1));
       if (guider.isBusy) return idle(chip, l.calibrationGuideStopFirst);
       final notifier = ref.read(guiderCalibrationProvider.notifier);
       return (
@@ -428,10 +423,7 @@ class SimpleCalibrationPanel extends ConsumerWidget {
                 style: kSimpleText,
               ),
               LinearProgressIndicator(
-                semanticsLabel: l.calibrationTaking(
-                  progress.done,
-                  progress.total,
-                ),
+                semanticsLabel: l.calibrationTaking(progress.done, progress.total),
                 value: progress.total == 0
                     ? null
                     : progress.done / progress.total,
@@ -613,8 +605,9 @@ class _FlatsTab extends ConsumerWidget {
               f.flatsNote ??
                   switch (f.matchingFlatsNewestUtc) {
                     final at? => l.calibrationFlatsFrom(
-                      MaterialLocalizations.of(context)
-                          .formatShortMonthDay(at.toLocal()),
+                      MaterialLocalizations.of(
+                        context,
+                      ).formatShortMonthDay(at.toLocal()),
                     ),
                     // The Missing pill says it; "No flats" beside it repeats it.
                     null => null,
@@ -653,11 +646,13 @@ class _FlatsTab extends ConsumerWidget {
             key: const Key('simple-calibration-shoot-flats'),
             label: l.calibrationReshootAll,
             onTap: _canShoot(ref)
-                ? () => ref.read(simpleCalibrationProvider.notifier).shoot(
-                    session,
-                    (flats: true, darks: false, bias: false),
-                    reshoot: true,
-                  )
+                ? () => ref
+                      .read(simpleCalibrationProvider.notifier)
+                      .shoot(session, (
+                        flats: true,
+                        darks: false,
+                        bias: false,
+                      ), reshoot: true)
                 : null,
           ),
           Text(l.calibrationReshootAllNote, style: _dim),
@@ -744,30 +739,26 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
         '${gain ?? ''}-${t?.toStringAsFixed(0) ?? ''}';
     // Longest exposure first in each group, as the list was.
     final groups = <String, List<DarkLibraryEntry>>{};
-    for (final d in [
-      ...darks,
-    ]..sort((a, b) => b.exposureSeconds.compareTo(a.exposureSeconds))) {
+    for (final d in [...darks]
+      ..sort((a, b) => b.exposureSeconds.compareTo(a.exposureSeconds))) {
       (groups[pair(d.gain, d.temperatureC)] ??= []).add(d);
     }
     final needed = need == null ? null : pair(need.gain, temp);
     bool isOpen(String id) => _folds[id] ?? id == needed;
-    Widget darkRow(
-      String id,
-      DarkLibraryEntry d, {
-      required bool withSettings,
-    }) => _setRow(
-      [
-        _secs(d.exposureSeconds),
-        if (withSettings) settings(d.gain, d.temperatureC),
-      ].where((s) => s.isNotEmpty).join(' · '),
-      [
-        l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
-        if (d.camera == null) l.calibrationLibraryNoCamera,
-      ].join(' · '),
-      covered: !old.contains(d),
-      tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
-      key: Key('simple-calibration-dark-$id-${d.exposureSeconds.round()}'),
-    );
+    Widget darkRow(String id, DarkLibraryEntry d, {required bool withSettings}) =>
+        _setRow(
+          [
+            _secs(d.exposureSeconds),
+            if (withSettings) settings(d.gain, d.temperatureC),
+          ].where((s) => s.isNotEmpty).join(' · '),
+          [
+            l.calibrationLibraryAge(_age(l, d.capturedUtc), d.frameCount),
+            if (d.camera == null) l.calibrationLibraryNoCamera,
+          ].join(' · '),
+          covered: !old.contains(d),
+          tag: old.contains(d) ? l.calibrationOld : l.calibrationOnFileTag,
+          key: Key('simple-calibration-dark-$id-${d.exposureSeconds.round()}'),
+        );
     final (String head, String? detail, bool? ok) = switch (cover) {
       null => (l.calibrationLibraryNoPlan, null, null),
       _ when darks.isEmpty && bias.isEmpty => (
@@ -821,9 +812,7 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
       spacing: AraSpace.s8,
       children: [
         _section(
-          l.calibrationLibraryCamera(
-            lib?.camera ?? camera?.name ?? l.calibrationTabDarks,
-          ),
+          l.calibrationLibraryCamera(lib?.camera ?? camera?.name ?? l.calibrationTabDarks),
           key: const Key('simple-calibration-library-camera'),
         ),
         Container(
@@ -886,12 +875,7 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                             [
                               l.calibrationDarkGroupCount(sets.length),
                               '${_secs(sets.last.exposureSeconds)}–${_secs(sets.first.exposureSeconds)}',
-                              _age(
-                                l,
-                                sets
-                                    .map((d) => d.capturedUtc)
-                                    .reduce((a, b) => a.isAfter(b) ? a : b),
-                              ),
+                              _age(l, sets.map((d) => d.capturedUtc).reduce((a, b) => a.isAfter(b) ? a : b)),
                             ].join(' · '),
                             covered: !sets.any(old.contains),
                             tag: sets.any(old.contains)
@@ -971,9 +955,7 @@ class _DarksTabState extends ConsumerState<_DarksTab> {
                   onTap: !_canShoot(ref) || !canBuild
                       ? null
                       : !byHand
-                      ? (job.run == null
-                            ? null
-                            : () => _runJob(context, ref, job))
+                      ? (job.run == null ? null : () => _runJob(context, ref, job))
                       : () => ref
                             .read(simpleCalibrationProvider.notifier)
                             .buildLibrary(
@@ -1071,64 +1053,53 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
         ? l.calibrationGuideCovers(_secs(min), _secs(max))
         : l.calibrationGuideReady;
     // Building covers the guide scope and shoots with it: never under guiding.
-    VoidCallback? build(Future<void> Function() action) =>
-        busy || guiding || unknown
+    VoidCallback? build(Future<void> Function() action) => busy || guiding || unknown
         ? null
         : () => _askGuideCover(context, ref, action);
     // A rebuild takes minutes of frames with the scope covered: Delete asks
     // first, in the block (no popups in Simple Mode).
-    Widget pair(
-      String id,
-      String rebuild,
-      VoidCallback? onBuild, {
-      required bool exists,
-      required bool darksFile,
-    }) => Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      spacing: AraSpace.s8,
-      children: [
-        Row(
+    Widget pair(String id, String rebuild, VoidCallback? onBuild, {required bool exists, required bool darksFile}) =>
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           spacing: AraSpace.s8,
           children: [
-            Expanded(
-              child: SimpleWindowButton(
-                key: Key('simple-calibration-guide-build-$id'),
-                label: rebuild,
-                onTap: onBuild,
-              ),
-            ),
-            if (exists)
-              Expanded(
-                child: SimpleWindowButton(
-                  key: Key('simple-calibration-guide-delete-$id'),
-                  outlined: true,
-                  label: l.calibrationGuideDelete,
-                  onTap: busy ? null : () => setState(() => _deleteAsk = id),
+            Row(
+              spacing: AraSpace.s8,
+              children: [
+                Expanded(
+                  child: SimpleWindowButton(
+                    key: Key('simple-calibration-guide-build-$id'),
+                    label: rebuild,
+                    onTap: onBuild,
+                  ),
                 ),
+                if (exists)
+                  Expanded(
+                    child: SimpleWindowButton(
+                      key: Key('simple-calibration-guide-delete-$id'),
+                      outlined: true,
+                      label: l.calibrationGuideDelete,
+                      onTap: busy ? null : () => setState(() => _deleteAsk = id),
+                    ),
+                  ),
+              ],
+            ),
+            if (exists && _deleteAsk == id)
+              InlineConfirm(
+                id: 'simple-calibration-guide-delete-$id-ask',
+                title: darksFile ? l.calibrationGuideDeleteDarksTitle : l.calibrationGuideDeleteDefectsTitle,
+                body: Text(l.calibrationGuideDeleteBody),
+                confirmLabel: l.calibrationGuideDelete,
+                cancelLabel: l.planCancel,
+                style: kSimpleText,
+                onConfirm: () {
+                  setState(() => _deleteAsk = null);
+                  notifier.deleteCalibrationFiles(darks: darksFile, defectmap: !darksFile);
+                },
+                onCancel: () => setState(() => _deleteAsk = null),
               ),
           ],
-        ),
-        if (exists && _deleteAsk == id)
-          InlineConfirm(
-            id: 'simple-calibration-guide-delete-$id-ask',
-            title: darksFile
-                ? l.calibrationGuideDeleteDarksTitle
-                : l.calibrationGuideDeleteDefectsTitle,
-            body: Text(l.calibrationGuideDeleteBody),
-            confirmLabel: l.calibrationGuideDelete,
-            cancelLabel: l.planCancel,
-            style: kSimpleText,
-            onConfirm: () {
-              setState(() => _deleteAsk = null);
-              notifier.deleteCalibrationFiles(
-                darks: darksFile,
-                defectmap: !darksFile,
-              );
-            },
-            onCancel: () => setState(() => _deleteAsk = null),
-          ),
-      ],
-    );
+        );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
@@ -1166,11 +1137,7 @@ class _GuideCameraTabState extends ConsumerState<_GuideCameraTab> {
         _section(l.calibrationGuideDarks),
         _rows([
           _setRow(
-            darks
-                ? covers
-                : unknown
-                ? '—'
-                : l.calibrationGuideNotBuilt,
+            darks ? covers : unknown ? '—' : l.calibrationGuideNotBuilt,
             null,
             covered: darks,
             tag: darks ? l.calibrationOnFileTag : null,

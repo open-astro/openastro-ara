@@ -30,32 +30,23 @@ void main() {
     });
 
     test('parses a failed status', () {
-      final s = CloneStatus.fromJson(const {
-        'state': 'failed',
-        'message': 'disk gone',
-      });
+      final s = CloneStatus.fromJson(const {'state': 'failed', 'message': 'disk gone'});
       expect(s.isFailed, isTrue);
       expect(s.isTerminal, isTrue);
       expect(s.message, 'disk gone');
     });
 
-    test(
-      'defaults a missing/odd state to idle and tolerates missing fields',
-      () {
-        final s = CloneStatus.fromJson(const {});
-        expect(s.state, 'idle');
-        expect(s.isTerminal, isFalse);
-        expect(s.progressPct, isNull);
-        expect(s.currentArea, isNull);
-        expect(s.message, isNull);
-      },
-    );
+    test('defaults a missing/odd state to idle and tolerates missing fields', () {
+      final s = CloneStatus.fromJson(const {});
+      expect(s.state, 'idle');
+      expect(s.isTerminal, isFalse);
+      expect(s.progressPct, isNull);
+      expect(s.currentArea, isNull);
+      expect(s.message, isNull);
+    });
 
     test('ignores a non-numeric progress_pct', () {
-      final s = CloneStatus.fromJson(const {
-        'state': 'running',
-        'progress_pct': 'oops',
-      });
+      final s = CloneStatus.fromJson(const {'state': 'running', 'progress_pct': 'oops'});
       expect(s.progressPct, isNull);
     });
   });

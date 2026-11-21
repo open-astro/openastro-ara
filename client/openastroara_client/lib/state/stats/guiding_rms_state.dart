@@ -8,7 +8,9 @@ import 'stats_refresh_mixin.dart';
 
 /// Builds a [GuidingRmsClient] for a server. Overridable in tests.
 final guidingRmsApiFactoryProvider =
-    Provider<GuidingRmsClient Function(AraServer)>((ref) => GuidingRmsApi.new);
+    Provider<GuidingRmsClient Function(AraServer)>(
+  (ref) => GuidingRmsApi.new,
+);
 
 /// [GuidingRmsClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -35,12 +37,11 @@ class GuidingRmsNotifier extends AsyncNotifier<GuidingRmsSeries?>
   /// Re-reads the guiding trend, keeping the previous series on screen if the
   /// read fails (the chart shows a stale chip). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-    final api = ref.read(guidingRmsApiProvider);
-    return api?.fetch();
-  });
+        final api = ref.read(guidingRmsApiProvider);
+        return api?.fetch();
+      });
 }
 
 final guidingRmsProvider =
     AsyncNotifierProvider<GuidingRmsNotifier, GuidingRmsSeries?>(
-      GuidingRmsNotifier.new,
-    );
+        GuidingRmsNotifier.new);

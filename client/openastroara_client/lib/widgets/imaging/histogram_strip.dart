@@ -14,24 +14,24 @@ import '../../theme/ara_colors.dart';
 /// look exposed; these numbers are where exposure judgment actually lives.
 /// Bar heights are sqrt-scaled — an astro histogram is a sky-background
 /// spike plus a long faint tail, invisible on a linear axis.
-final frameHistogramProvider = FutureProvider.autoDispose
-    .family<FrameHistogram, String>((ref, id) async {
-      final server = ref.read(activeServerProvider);
-      if (server == null) {
-        throw StateError('Not connected to a server.');
-      }
-      // Star analysis runs AFTER capture (§59.5) — when its frame.analyzed
-      // event lands for this frame, re-fetch so #Stars/HFR fill in instead of
-      // showing "—" for the rest of the session.
-      ref.listen(wsEventsProvider, (prev, next) {
-        final event = next.asData?.value;
-        if (event == null || event.type != 'frame.analyzed') return;
-        if (event.payload['frame_id'] == id) {
-          ref.invalidateSelf();
-        }
-      });
-      return FramesApi(server).histogram(id);
-    });
+final frameHistogramProvider =
+    FutureProvider.autoDispose.family<FrameHistogram, String>((ref, id) async {
+  final server = ref.read(activeServerProvider);
+  if (server == null) {
+    throw StateError('Not connected to a server.');
+  }
+  // Star analysis runs AFTER capture (§59.5) — when its frame.analyzed
+  // event lands for this frame, re-fetch so #Stars/HFR fill in instead of
+  // showing "—" for the rest of the session.
+  ref.listen(wsEventsProvider, (prev, next) {
+    final event = next.asData?.value;
+    if (event == null || event.type != 'frame.analyzed') return;
+    if (event.payload['frame_id'] == id) {
+      ref.invalidateSelf();
+    }
+  });
+  return FramesApi(server).histogram(id);
+});
 
 class HistogramStrip extends ConsumerWidget {
   const HistogramStrip({super.key});
@@ -39,7 +39,8 @@ class HistogramStrip extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final id = ref.watch(lastCapturedFrameIdProvider);
-    final histogram = id == null ? null : ref.watch(frameHistogramProvider(id));
+    final histogram =
+        id == null ? null : ref.watch(frameHistogramProvider(id));
     return Container(
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: AraColors.border)),
@@ -90,39 +91,30 @@ class _StatisticsPanel extends StatelessWidget {
     final lowClip = h.lowClipFraction >= _clipWarnFraction;
     final highClip = h.highClipFraction >= _clipWarnFraction;
     String fmt(double v) => v.toStringAsFixed(2);
-    final labelStyle = theme.textTheme.labelSmall?.copyWith(
-      color: AraColors.textSecondary,
-      fontSize: 11,
-    );
+    final labelStyle = theme.textTheme.labelSmall
+        ?.copyWith(color: AraColors.textSecondary, fontSize: 11);
     final valueStyle = theme.textTheme.labelSmall?.copyWith(
-      fontFamily: 'monospace',
-      fontSize: 11,
-    );
+        fontFamily: 'monospace', fontSize: 11);
     final warnStyle = valueStyle?.copyWith(color: AraColors.accentBusy);
 
     Widget stat(String label, String value, {bool warn = false}) => Row(
-      children: [
-        SizedBox(width: 64, child: Text(label, style: labelStyle)),
-        Expanded(
-          child: Text(
-            value,
-            style: warn ? warnStyle : valueStyle,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
+          children: [
+            SizedBox(width: 64, child: Text(label, style: labelStyle)),
+            Expanded(
+                child: Text(value,
+                    style: warn ? warnStyle : valueStyle,
+                    overflow: TextOverflow.ellipsis)),
+          ],
+        );
 
     Widget pair(Widget left, Widget right) => Padding(
-      padding: const EdgeInsets.only(bottom: 3),
-      child: Row(
-        children: [
-          Expanded(child: left),
-          const SizedBox(width: 8),
-          Expanded(child: right),
-        ],
-      ),
-    );
+          padding: const EdgeInsets.only(bottom: 3),
+          child: Row(children: [
+            Expanded(child: left),
+            const SizedBox(width: 8),
+            Expanded(child: right),
+          ]),
+        );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

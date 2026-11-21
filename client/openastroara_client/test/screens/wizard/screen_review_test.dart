@@ -72,33 +72,28 @@ void main() {
       void Function(ProfileDraft)? seed,
       FakeDataManagerClient? dataManager,
     }) async {
-      final container = ProviderContainer(
-        overrides: [dataManagerApiProvider.overrideWithValue(dataManager)],
-      );
+      final container = ProviderContainer(overrides: [
+        dataManagerApiProvider.overrideWithValue(dataManager),
+      ]);
       addTearDown(container.dispose);
       // Intentional: mutate the live (mutable) ProfileDraft in place before the
       // first pump so seeded values appear on the initial build. ProfileDraft is
       // a mutable bag by design (see profile_draft.dart) — if it ever becomes
       // immutable this seeding must switch to overriding the controller.
       seed?.call(container.read(wizardControllerProvider).draft);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: ScreenReview())),
-        ),
-      );
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ScreenReview())),
+      ));
       return container;
     }
 
     testWidgets('renders section titles and seeded values', (tester) async {
-      await pump(
-        tester,
-        seed: (d) {
-          d.profileName = 'Backyard Texas';
-          d.telescope.focalLengthMm = 714;
-          d.telescope.apertureMm = 102;
-        },
-      );
+      await pump(tester, seed: (d) {
+        d.profileName = 'Backyard Texas';
+        d.telescope.focalLengthMm = 714;
+        d.telescope.apertureMm = 102;
+      });
       await tester.pumpAndSettle();
       expect(find.text('Profile basics'), findsOneWidget);
       expect(find.text('Telescope'), findsOneWidget);
@@ -117,15 +112,11 @@ void main() {
       expect(container.read(wizardControllerProvider).step, 1);
     });
 
-    testWidgets('AlpacaBridge Edit jumps to step 2, not the assign step', (
-      tester,
-    ) async {
-      final container = await pump(
-        tester,
-        seed: (d) {
-          d.alpacaBridgeAddress = '192.168.1.50:11111';
-        },
-      );
+    testWidgets('AlpacaBridge Edit jumps to step 2, not the assign step',
+        (tester) async {
+      final container = await pump(tester, seed: (d) {
+        d.alpacaBridgeAddress = '192.168.1.50:11111';
+      });
       await tester.pumpAndSettle();
       // Section order: Profile basics(1), Connection(2), Equipment(3)… — the
       // Connection section owns the AlpacaBridge row and must edit step 2.
@@ -136,12 +127,9 @@ void main() {
     });
 
     testWidgets('a half-set rotator range reads as "Not set"', (tester) async {
-      await pump(
-        tester,
-        seed: (d) {
-          d.rotator.minAngleDeg = 0; // max left unset
-        },
-      );
+      await pump(tester, seed: (d) {
+        d.rotator.minAngleDeg = 0; // max left unset
+      });
       await tester.pumpAndSettle();
       // Range needs both ends — a partial entry must not render "Not set – …".
       expect(find.textContaining('–'), findsNothing);
@@ -162,23 +150,8 @@ void main() {
       narrowestFovDeg: 0.8,
       band: 'sub-degree',
       packages: [
-        SolverDatabasePick(
-          role: 'camera',
-          fovDeg: 1.9,
-          band: 'general',
-          packageId: 'astap-d05',
-          packageName: 'ASTAP D05',
-          sizeBytes: 108830225,
-        ),
-        SolverDatabasePick(
-          role: 'guide camera',
-          fovDeg: 0.8,
-          band: 'sub-degree',
-          packageId: 'astap-d50',
-          packageName: 'ASTAP D50',
-          sizeBytes: 951326950,
-          isInstalled: true,
-        ),
+        SolverDatabasePick(role: 'camera', fovDeg: 1.9, band: 'general', packageId: 'astap-d05', packageName: 'ASTAP D05', sizeBytes: 108830225),
+        SolverDatabasePick(role: 'guide camera', fovDeg: 0.8, band: 'sub-degree', packageId: 'astap-d50', packageName: 'ASTAP D50', sizeBytes: 951326950, isInstalled: true),
       ],
     );
 
@@ -206,13 +179,10 @@ void main() {
       void Function(ProfileDraft)? seed,
       ThemeData? theme,
     }) async {
-      final api = FakeDataManagerClient(
-        recommendation: rec,
-        throwOnRecommend: throwOnRecommend,
-      );
-      final container = ProviderContainer(
-        overrides: [dataManagerApiProvider.overrideWithValue(api)],
-      );
+      final api = FakeDataManagerClient(recommendation: rec, throwOnRecommend: throwOnRecommend);
+      final container = ProviderContainer(overrides: [
+        dataManagerApiProvider.overrideWithValue(api),
+      ]);
       addTearDown(container.dispose);
       seed?.call(container.read(wizardControllerProvider).draft);
       await tester.pumpWidget(
@@ -228,94 +198,54 @@ void main() {
       return (container, api);
     }
 
-    testWidgets(
-      'sends the draft optics (reducer, sensor, guide setup) and lists one row per camera',
-      (tester) async {
-        final (container, api) = await pump(
-          tester,
-          seed: (d) {
-            d.telescope.focalLengthMm = 800;
-            d.telescope.reducerFactor = 0.63;
-            d.camera.pixelSizeMicrons = 3.76;
-            d.camera.sensorWidthPx = 6248;
-            d.camera.sensorHeightPx = 4176;
-            d.guider.setupType = 'oag';
-            d.guider.guidePixelSizeUm = 2.9;
-          },
-        );
-        final req = api.lastRequest!;
-        expect(req.focalLengthMm, 800);
-        expect(req.reducerFactor, 0.63);
-        expect(req.sensorHeightPx, 4176);
-        expect(req.pixelSizeUm, 3.76);
-        expect(req.guideSetupType, 'oag');
-        expect(req.guidePixelSizeUm, 2.9);
-        expect(req.toJson()['guide_setup_type'], 'oag');
+    testWidgets('sends the draft optics (reducer, sensor, guide setup) and lists one row per camera',
+        (tester) async {
+      final (container, api) = await pump(tester, seed: (d) {
+        d.telescope.focalLengthMm = 800;
+        d.telescope.reducerFactor = 0.63;
+        d.camera.pixelSizeMicrons = 3.76;
+        d.camera.sensorWidthPx = 6248;
+        d.camera.sensorHeightPx = 4176;
+        d.guider.setupType = 'oag';
+        d.guider.guidePixelSizeUm = 2.9;
+      });
+      final req = api.lastRequest!;
+      expect(req.focalLengthMm, 800);
+      expect(req.reducerFactor, 0.63);
+      expect(req.sensorHeightPx, 4176);
+      expect(req.pixelSizeUm, 3.76);
+      expect(req.guideSetupType, 'oag');
+      expect(req.guidePixelSizeUm, 2.9);
+      expect(req.toJson()['guide_setup_type'], 'oag');
 
-        expect(find.text('Plate-solver star database'), findsOneWidget);
-        expect(
-          find.textContaining(
-            'Camera: 1.90° field (general) → ASTAP D05 (103.8 MB)',
-          ),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining(
-            'Guide camera: 0.80° field (sub-degree) → ASTAP D50 (already on the rig)',
-          ),
-          findsOneWidget,
-        );
-        // Only the missing one is queued; the installed guide database is not.
-        final draft = container.read(wizardControllerProvider).draft;
-        expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
-        expect(draft.plateSolve.downloadSolverDatabase, isTrue);
-        expect(
-          find.byKey(const ValueKey('review-solver-db-download')),
-          findsOneWidget,
-        );
-        expect(
-          find.textContaining('Download after setup (103.8 MB'),
-          findsOneWidget,
-        );
-      },
-    );
+      expect(find.text('Plate-solver star database'), findsOneWidget);
+      expect(find.textContaining('Camera: 1.90° field (general) → ASTAP D05 (103.8 MB)'), findsOneWidget);
+      expect(find.textContaining('Guide camera: 0.80° field (sub-degree) → ASTAP D50 (already on the rig)'),
+          findsOneWidget);
+      // Only the missing one is queued; the installed guide database is not.
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
+      expect(draft.plateSolve.downloadSolverDatabase, isTrue);
+      expect(find.byKey(const ValueKey('review-solver-db-download')), findsOneWidget);
+      expect(find.textContaining('Download after setup (103.8 MB'), findsOneWidget);
+    });
 
-    testWidgets(
-      'unticking the download keeps the ids but clears the flag Save reads',
-      (tester) async {
-        final (container, _) = await pump(tester);
-        await tester.ensureVisible(
-          find.byKey(const ValueKey('review-solver-db-download')),
-        );
-        await tester.tap(
-          find.byKey(const ValueKey('review-solver-db-download')),
-        );
-        await tester.pump();
-        final draft = container.read(wizardControllerProvider).draft;
-        expect(draft.plateSolve.downloadSolverDatabase, isFalse);
-        expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
-      },
-    );
+    testWidgets('unticking the download keeps the ids but clears the flag Save reads', (tester) async {
+      final (container, _) = await pump(tester);
+      await tester.ensureVisible(find.byKey(const ValueKey('review-solver-db-download')));
+      await tester.tap(find.byKey(const ValueKey('review-solver-db-download')));
+      await tester.pump();
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.plateSolve.downloadSolverDatabase, isFalse);
+      expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
+    });
 
-    testWidgets(
-      'a field below the solver floor warns instead of offering a download',
-      (tester) async {
-        final (container, _) = await pump(tester, rec: tooNarrow);
-        expect(find.textContaining('cannot plate-solve'), findsOneWidget);
-        expect(
-          find.byKey(const ValueKey('review-solver-db-download')),
-          findsNothing,
-        );
-        expect(
-          container
-              .read(wizardControllerProvider)
-              .draft
-              .plateSolve
-              .solverDatabasePackageIds,
-          isEmpty,
-        );
-      },
-    );
+    testWidgets('a field below the solver floor warns instead of offering a download', (tester) async {
+      final (container, _) = await pump(tester, rec: tooNarrow);
+      expect(find.textContaining('cannot plate-solve'), findsOneWidget);
+      expect(find.byKey(const ValueKey('review-solver-db-download')), findsNothing);
+      expect(container.read(wizardControllerProvider).draft.plateSolve.solverDatabasePackageIds, isEmpty);
+    });
 
     testWidgets('the solver too-narrow warning icon stays Fault Red', (
       tester,
@@ -331,83 +261,49 @@ void main() {
       );
     });
 
-    testWidgets(
-      'an unreachable rig reads as an error, never a crash, and queues nothing',
-      (tester) async {
-        final (container, _) = await pump(tester, throwOnRecommend: true);
-        expect(
-          find.text('rig unreachable'),
-          findsOneWidget,
-          reason: 'the error reads in the section, not a crash',
-        );
-        expect(
-          find.byKey(const ValueKey('review-solver-db-download')),
-          findsNothing,
-        );
-        expect(
-          container
-              .read(wizardControllerProvider)
-              .draft
-              .plateSolve
-              .solverDatabasePackageIds,
-          isEmpty,
-        );
-      },
-    );
+    testWidgets('an unreachable rig reads as an error, never a crash, and queues nothing', (tester) async {
+      final (container, _) = await pump(tester, throwOnRecommend: true);
+      expect(find.text('rig unreachable'), findsOneWidget, reason: 'the error reads in the section, not a crash');
+      expect(find.byKey(const ValueKey('review-solver-db-download')), findsNothing);
+      expect(container.read(wizardControllerProvider).draft.plateSolve.solverDatabasePackageIds, isEmpty);
+    });
 
-    testWidgets(
-      'a failed recheck drops the ids of an earlier visit so Save queues nothing stale',
-      (tester) async {
-        final (container, api) = await pump(tester);
-        final draft = container.read(wizardControllerProvider).draft;
-        expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
-        api.throwOnRecommend = true;
-        await tester.ensureVisible(find.text('Recheck'));
-        await tester.tap(find.text('Recheck'));
-        await tester.pumpAndSettle();
-        expect(draft.plateSolve.solverDatabasePackageIds, isEmpty);
-        expect(find.text('rig unreachable'), findsOneWidget);
-      },
-    );
+    testWidgets('a failed recheck drops the ids of an earlier visit so Save queues nothing stale', (tester) async {
+      final (container, api) = await pump(tester);
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.plateSolve.solverDatabasePackageIds, ['astap-d05']);
+      api.throwOnRecommend = true;
+      await tester.ensureVisible(find.text('Recheck'));
+      await tester.tap(find.text('Recheck'));
+      await tester.pumpAndSettle();
+      expect(draft.plateSolve.solverDatabasePackageIds, isEmpty);
+      expect(find.text('rig unreachable'), findsOneWidget);
+    });
 
-    testWidgets(
-      'an untouched reducer with no rig reads as the profile\'s value, never 1×',
-      (tester) async {
-        await pump(tester);
-        expect(find.text("Profile's value (not set here)"), findsOneWidget);
-      },
-    );
+    testWidgets('an untouched reducer with no rig reads as the profile\'s value, never 1×', (tester) async {
+      await pump(tester);
+      expect(find.text("Profile's value (not set here)"), findsOneWidget);
+    });
 
-    testWidgets(
-      'no data manager (offline draft) explains the choice waits for a rig',
-      (tester) async {
-        final container = ProviderContainer(
-          overrides: [dataManagerApiProvider.overrideWithValue(null)],
-        );
-        addTearDown(container.dispose);
-        await tester.pumpWidget(
-          UncontrolledProviderScope(
-            container: container,
-            child: const MaterialApp(home: Scaffold(body: ScreenReview())),
-          ),
-        );
-        await tester.pumpAndSettle();
-        expect(find.textContaining('No rig in reach'), findsOneWidget);
-      },
-    );
+    testWidgets('no data manager (offline draft) explains the choice waits for a rig', (tester) async {
+      final container = ProviderContainer(overrides: [
+        dataManagerApiProvider.overrideWithValue(null),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ScreenReview())),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('No rig in reach'), findsOneWidget);
+    });
 
-    testWidgets(
-      'the Telescope section shows the reducer and effective focal length',
-      (tester) async {
-        await pump(
-          tester,
-          seed: (d) {
-            d.telescope.focalLengthMm = 800;
-            d.telescope.reducerFactor = 0.63;
-          },
-        );
-        expect(find.text('0.63× → 504 mm'), findsOneWidget);
-      },
-    );
+    testWidgets('the Telescope section shows the reducer and effective focal length', (tester) async {
+      await pump(tester, seed: (d) {
+        d.telescope.focalLengthMm = 800;
+        d.telescope.reducerFactor = 0.63;
+      });
+      expect(find.text('0.63× → 504 mm'), findsOneWidget);
+    });
   });
 }

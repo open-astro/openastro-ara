@@ -42,11 +42,7 @@ class TimeSyncSection extends ConsumerWidget {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                friendlyError(
-                  context.l10n,
-                  e,
-                  action: context.l10n.actionReadClock,
-                ),
+                friendlyError(context.l10n, e, action: context.l10n.actionReadClock),
                 style: TextStyle(color: theme.colorScheme.error),
               ),
             ),
@@ -154,13 +150,7 @@ class TimeSyncSection extends ConsumerWidget {
       );
     } catch (e) {
       if (!context.mounted) return;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            friendlyError(context.l10n, e, action: context.l10n.actionPushTime),
-          ),
-        ),
-      );
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionPushTime))));
     }
     ref.invalidate(timeSyncStatusProvider);
   }
@@ -201,7 +191,9 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
   void initState() {
     super.initState();
     final now = DateTime.now().toUtc();
-    _time = TextEditingController(text: now.toIso8601String().substring(0, 19));
+    _time = TextEditingController(
+      text: now.toIso8601String().substring(0, 19),
+    );
   }
 
   @override
@@ -233,8 +225,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
     final lngGiven = _lng.text.trim().isNotEmpty;
     if (latGiven != lngGiven) {
       setState(
-        () => _error =
-            'Latitude and longitude go together — fill both '
+        () => _error = 'Latitude and longitude go together — fill both '
             'or leave both empty.',
       );
       return;
@@ -280,11 +271,7 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
       if (!mounted) return;
       setState(() {
         _applying = false;
-        _error = friendlyError(
-          context.l10n,
-          e,
-          action: context.l10n.actionPushTime,
-        );
+        _error = friendlyError(context.l10n, e, action: context.l10n.actionPushTime);
       });
     }
   }
@@ -353,7 +340,10 @@ class _TimeSyncManualDialogState extends State<_TimeSyncManualDialog> {
             ),
             if (_error != null) ...[
               const SizedBox(height: 8),
-              Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+              Text(
+                _error!,
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
             ],
           ],
         ),
@@ -392,8 +382,8 @@ class _ClientGpsBlock extends ConsumerWidget {
     final fixText = fix == null
         ? (status.busy ? 'reading…' : 'no fix yet')
         : '${fix.latitudeDeg?.toStringAsFixed(4) ?? '?'}°, ${fix.longitudeDeg?.toStringAsFixed(4) ?? '?'}°'
-              '${fix.altitudeM == null ? '' : ', ${fix.altitudeM!.toStringAsFixed(0)} m'}'
-              ' at ${fix.timeUtc?.toIso8601String().substring(11, 19) ?? '?'} UTC';
+            '${fix.altitudeM == null ? '' : ', ${fix.altitudeM!.toStringAsFixed(0)} m'}'
+            ' at ${fix.timeUtc?.toIso8601String().substring(11, 19) ?? '?'} UTC';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -416,18 +406,11 @@ class _ClientGpsBlock extends ConsumerWidget {
                     // The saved port stays selected even when unplugged — its item is labelled
                     // "(not present)" below — so the user sees what the loop is trying to read.
                     initialValue: selected,
-                    decoration: const InputDecoration(
-                      labelText: 'Serial port',
-                      isDense: true,
-                    ),
+                    decoration: const InputDecoration(labelText: 'Serial port', isDense: true),
                     items: [
-                      for (final p in ports)
-                        DropdownMenuItem(value: p, child: Text(p)),
+                      for (final p in ports) DropdownMenuItem(value: p, child: Text(p)),
                       if (selected != null && !ports.contains(selected))
-                        DropdownMenuItem(
-                          value: selected,
-                          child: Text('$selected (not present)'),
-                        ),
+                        DropdownMenuItem(value: selected, child: Text('$selected (not present)')),
                     ],
                     onChanged: (p) => notifier.setPort(p),
                   ),
@@ -448,11 +431,7 @@ class _ClientGpsBlock extends ConsumerWidget {
               ],
             ),
           ),
-          SettingsRow(
-            label: 'Dongle fix',
-            value: fixText,
-            helpKey: 'timesync.client_gps.port',
-          ),
+          SettingsRow(label: 'Dongle fix', value: fixText, helpKey: 'timesync.client_gps.port'),
           if (status.lastPushAt != null)
             SettingsRow(
               label: 'Last push (UTC)',
@@ -463,9 +442,7 @@ class _ClientGpsBlock extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Text(
                 status.lastError!,
-                style: theme.textTheme.bodySmall!.copyWith(
-                  color: theme.colorScheme.error,
-                ),
+                style: theme.textTheme.bodySmall!.copyWith(color: theme.colorScheme.error),
               ),
             ),
           if (ports.isEmpty)

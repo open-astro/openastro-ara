@@ -78,18 +78,7 @@ class DataPackage {
 
   @override
   int get hashCode => Object.hash(
-    id,
-    name,
-    description,
-    category,
-    sizeBytes,
-    version,
-    isInstalled,
-    installedUtc,
-    sourceUrl,
-    recommended,
-    installPath,
-  );
+      id, name, description, category, sizeBytes, version, isInstalled, installedUtc, sourceUrl, recommended, installPath);
 }
 
 /// Where a tracked download is in its lifecycle (from the WS event subtype).
@@ -131,10 +120,7 @@ class DownloadProgress {
   /// Parse a `data_manager.download.*` WS payload into progress for the given
   /// [phase] (derived from the event subtype). Returns null if the payload has
   /// no usable package/download id.
-  static DownloadProgress? fromPayload(
-    Map<String, dynamic> payload,
-    DownloadPhase phase,
-  ) {
+  static DownloadProgress? fromPayload(Map<String, dynamic> payload, DownloadPhase phase) {
     final downloadId = _str(payload['download_id']);
     final packageId = _str(payload['package_id']);
     if (downloadId == null || packageId == null) {
@@ -147,10 +133,7 @@ class DownloadProgress {
       totalBytes: _int(payload['total_bytes']) ?? -1,
       // Clamp to [0,100]: a malformed server value (e.g. 150 / -1) would otherwise
       // flow into the slice-2 progress bar, which asserts on a fraction outside [0,1].
-      percentComplete: (_double(payload['percent_complete']) ?? 0).clamp(
-        0.0,
-        100.0,
-      ),
+      percentComplete: (_double(payload['percent_complete']) ?? 0).clamp(0.0, 100.0),
       phase: phase,
       error: _str(payload['error']),
     );
@@ -168,13 +151,6 @@ class DownloadProgress {
       other.error == error;
 
   @override
-  int get hashCode => Object.hash(
-    downloadId,
-    packageId,
-    downloadedBytes,
-    totalBytes,
-    percentComplete,
-    phase,
-    error,
-  );
+  int get hashCode =>
+      Object.hash(downloadId, packageId, downloadedBytes, totalBytes, percentComplete, phase, error);
 }

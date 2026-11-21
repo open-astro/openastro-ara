@@ -31,12 +31,7 @@ import '../../state/simple_messages_state.dart';
 import '../../state/guider/guider_build_activity_state.dart';
 import 'simple_calibration.dart' show simpleCalibrationProgress;
 import '../../state/simple_preflight_state.dart'
-    show
-        SimpleModeScreen,
-        SimplePreflightStep,
-        SimplePreflightStepLabel,
-        simplePreflightProvider,
-        simpleShowingProvider;
+    show SimpleModeScreen, SimplePreflightStep, SimplePreflightStepLabel, simplePreflightProvider, simpleShowingProvider;
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/stats/server_internal_state_state.dart';
 import '../../theme/ara_colors.dart';
@@ -68,8 +63,7 @@ import '../../state/settings/safety_policies_state.dart';
 import '../../state/equipment/switch_state.dart';
 import '../../widgets/imaging/exposure_controls_panel.dart' show FilterDropdown;
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
-import '../../widgets/imaging/polar_aligner_block.dart'
-    show polarAlignerStatusLine;
+import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerStatusLine;
 import '../../state/settings/site_settings_state.dart';
 import '../imaging_actions.dart';
 import 'simple_guide_panel.dart'
@@ -160,18 +154,14 @@ class SimplePreviewGuideShutter extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final focusLoop = ref.watch(
-      guideFocusProvider.select((g) => g.status.active),
-    );
+    final focusLoop = ref.watch(guideFocusProvider.select((g) => g.status.active));
     final looping = simpleGuideLooping(ref.watch(guiderStatusProvider).value);
     final busy = ref.watch(guiderLiveProvider.select((s) => s.busy));
     final live = ref.read(guiderLiveProvider.notifier);
     return SimpleShutterButton(
       start: true,
       running: focusLoop || looping,
-      label: focusLoop || looping
-          ? l10n.previewGuideLoopStop
-          : l10n.previewGuideLoopStart,
+      label: focusLoop || looping ? l10n.previewGuideLoopStop : l10n.previewGuideLoopStart,
       onPressed: busy
           ? null
           : focusLoop
@@ -205,10 +195,7 @@ String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
     // The guider's own exposure: the one Preview › Guide's loop runs at.
     final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
-    final exposure = simpleGuiderExposureText(
-      context.l10n,
-      phd2.guideExposureMs,
-    );
+    final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
     return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
   final p = ref.watch(exposureControllerProvider);
@@ -320,9 +307,7 @@ class SimpleInfoShown extends Notifier<bool> {
   void toggle() => state = !state;
 }
 
-final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(
-  SimpleInfoShown.new,
-);
+final simpleInfoShownProvider = NotifierProvider<SimpleInfoShown, bool>(SimpleInfoShown.new);
 
 /// Info On / Off, a row in Preview's and Focus's panels.
 class SimpleInfoToggle extends ConsumerWidget {
@@ -343,18 +328,8 @@ class SimpleInfoToggle extends ConsumerWidget {
       onPick: ref.read(simpleInfoShownProvider.notifier).set,
     );
     return stack
-        ? Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            spacing: AraSpace.s4,
-            children: [label, segments],
-          )
-        : Row(
-            spacing: AraSpace.s8,
-            children: [
-              Expanded(child: label),
-              segments,
-            ],
-          );
+        ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, spacing: AraSpace.s4, children: [label, segments])
+        : Row(spacing: AraSpace.s8, children: [Expanded(child: label), segments]);
   }
 }
 
@@ -1701,8 +1676,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     if (!known || coolerOn || ccd == null) {
       _warmQuiet?.cancel();
       _warmPeak = null;
-    } else if (_coolerWasOn ||
-        (_warmPeak != null && ccd - _warmPeak! >= _kWarmRise)) {
+    } else if (_coolerWasOn || (_warmPeak != null && ccd - _warmPeak! >= _kWarmRise)) {
       _warmPeak = ccd;
       _warmQuiet?.cancel();
       _warmQuiet = Timer(_kWarmQuiet, () {
@@ -1832,11 +1806,9 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final warming = _syncWarming(known, known && cam.coolerOn, ccd);
     // The main camera's own exposure (#1755): its progress fills a plan
     // frame's bar, and an exposure nothing here explains gets its own pill.
-    final camExposing =
-        cam != null && cam.isConnected && cam.runtimeState == 'exposing';
+    final camExposing = cam != null && cam.isConnected && cam.runtimeState == 'exposing';
     final camPct = cam?.exposureProgressPct;
-    final camUnexplained =
-        cam != null &&
+    final camUnexplained = cam != null &&
         cam.isConnected &&
         cam.isExposing &&
         !ref.watch(mainCameraExplainedProvider);
@@ -1902,13 +1874,11 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final assistant = _syncAssistant(
       guider?.runtimeState == GuiderRuntimeState.assistant,
     );
-    final assistantRunning =
-        assistant != null &&
+    final assistantRunning = assistant != null &&
         (assistant.isRunning ||
             guider?.runtimeState == GuiderRuntimeState.assistant);
     final planActive = run?.state?.isActive ?? false;
-    final planCalibrating =
-        planActive &&
+    final planCalibrating = planActive &&
         guider != null &&
         guider.runtimeState == GuiderRuntimeState.calibrating;
     final polar = ref.watch(polarAlignLiveProvider);
@@ -1928,8 +1898,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final builds = ref.watch(guiderBuildActivityProvider);
     final building = [
       for (final a in CalibrationArtifact.values)
-        if (builds[a] case final b?
-            when b.phase == CalibrationBuildPhase.building)
+        if (builds[a] case final b? when b.phase == CalibrationBuildPhase.building)
           (a, b),
     ].firstOrNull;
     // One pill per thing happening, stacked in this order (user, 2026-11-04:
@@ -1998,9 +1967,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
                 l10n.deviceExposing,
                 AraColors.accentConnected,
                 working: true,
-                shotProgress: camPct == null
-                    ? null
-                    : (camPct / 100).clamp(0.0, 1.0),
+                shotProgress: camPct == null ? null : (camPct / 100).clamp(0.0, 1.0),
                 spoken: l10n.deviceCamera,
               )
             : _PillData(
@@ -2328,12 +2295,8 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           ring: true,
         ),
       // #1971 the Polar Aligner's motors, their own line under the routine's.
-      if (polarAlignerStatusLine(
-            l10n,
-            polar,
-            southern:
-                (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0,
-          )
+      if (polarAlignerStatusLine(l10n, polar,
+              southern: (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0)
           case final c?)
         _PillData(
           SimpleStatusOrigin.polarAligner,

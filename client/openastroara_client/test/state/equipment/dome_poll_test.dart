@@ -38,27 +38,32 @@ class _DomeApi implements EquipmentDeviceClient<DomeStatus> {
 }
 
 void main() {
-  test('a dome is read every 1.5 s through a long move, so its end is seen at once', () {
-    // A 90 s shutter outlasts the ~60 s settle cap other devices get; on
-    // the 15 s liveness poll its end showed late and the Dome window
-    // learned a shutter time up to 15 s too long (#1662).
-    fakeAsync((async) {
-      final api = _DomeApi();
-      final container = ProviderContainer(
-        overrides: [
-          domeApiProvider.overrideWithValue(api),
-          wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
-        ],
-      );
-      container.listen(domeProvider, (_, _) {});
-      async.flushMicrotasks();
-      async.elapse(const Duration(seconds: 75));
-      final before = api.reads;
-      async.elapse(EquipmentDeviceNotifier.settleInterval * 4);
-      expect(api.reads - before, 4, reason: 'still the fast poll at 75 s');
-      container.dispose();
-    });
-  });
+  test(
+    'a dome is read every 1.5 s through a long move, so its end is seen at once',
+    () {
+      // A 90 s shutter outlasts the ~60 s settle cap other devices get; on
+      // the 15 s liveness poll its end showed late and the Dome window
+      // learned a shutter time up to 15 s too long (#1662).
+      fakeAsync((async) {
+        final api = _DomeApi();
+        final container = ProviderContainer(
+          overrides: [
+            domeApiProvider.overrideWithValue(api),
+            wsEventsProvider.overrideWith(
+              (ref) => const Stream<WsEvent>.empty(),
+            ),
+          ],
+        );
+        container.listen(domeProvider, (_, _) {});
+        async.flushMicrotasks();
+        async.elapse(const Duration(seconds: 75));
+        final before = api.reads;
+        async.elapse(EquipmentDeviceNotifier.settleInterval * 4);
+        expect(api.reads - before, 4, reason: 'still the fast poll at 75 s');
+        container.dispose();
+      });
+    },
+  );
 
   test('a dome stuck moving drops to the liveness poll after 5 min', () {
     fakeAsync((async) {

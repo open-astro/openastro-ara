@@ -12,11 +12,8 @@ class RotatorProps {
   final bool canReverse;
   final bool reverse;
 
-  const RotatorProps({
-    this.stepDeg,
-    required this.canReverse,
-    required this.reverse,
-  });
+  const RotatorProps(
+      {this.stepDeg, required this.canReverse, required this.reverse});
 
   /// Parse a `GET /api/v1/equipment/rotator` body, or null when no rotator is
   /// connected.
@@ -39,21 +36,18 @@ class RotatorPropsApi {
   final Dio _dio;
 
   RotatorPropsApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   /// The connected rotator's props, or null when none is connected. Throws
   /// `DioException` on transport failure.
   Future<RotatorProps?> read() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/equipment/rotator',
-      );
+      final res =
+          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/rotator');
       final data = res.data;
       return data is Map<String, dynamic>
           ? RotatorProps.fromRotatorJson(data)

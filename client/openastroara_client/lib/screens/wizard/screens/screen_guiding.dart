@@ -147,9 +147,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   Future<void> _sweepAlpaca() async {
     final devices = ref.read(guiderAlpacaDevicesProvider.notifier);
     await devices.resolve(
-      choiceEndpoints(ref.read(guiderEquipmentProvider).value?.choices),
-      fresh: true,
-    );
+        choiceEndpoints(ref.read(guiderEquipmentProvider).value?.choices),
+        fresh: true);
     try {
       await devices.discover();
     } catch (_) {
@@ -184,11 +183,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   }
 
   bool get _cameraPickNeeded => guideCameraPickNeeded(
-    baseLoaded: _baseLoaded,
-    baseCamera: _baseGuiderCamera,
-    draftCamera: _g.guiderCamera,
-    cameraChoices: ref.read(guiderEquipmentProvider).value?.choices?.cameras,
-  );
+        baseLoaded: _baseLoaded,
+        baseCamera: _baseGuiderCamera,
+        draftCamera: _g.guiderCamera,
+        cameraChoices: ref.read(guiderEquipmentProvider).value?.choices?.cameras,
+      );
 
   /// The effective Guide Camera (the pick, else the base profile's) is the
   /// Main Camera the user assigned: the daemon refuses that at Save.
@@ -206,13 +205,10 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   /// exposure range, a missing guide camera or a Guide Camera that is the
   /// Main Camera all hold Next.
   void _publishValid() {
-    ref
-        .read(wizardStepValidProvider.notifier)
-        .setValid(
-          _g.darkMinExposureMs <= _g.darkMaxExposureMs &&
-              !_cameraPickNeeded &&
-              !_guideIsMainCamera,
-        );
+    ref.read(wizardStepValidProvider.notifier).setValid(
+        _g.darkMinExposureMs <= _g.darkMaxExposureMs &&
+            !_cameraPickNeeded &&
+            !_guideIsMainCamera);
   }
 
   /// Shared picker over daemon choice strings + synthesized Alpaca devices,
@@ -245,11 +241,10 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       entries: [
         for (final v in values)
           DropdownMenuEntry(
-            value: v,
-            label: v.isEmpty
-                ? blankLabel
-                : friendlyAlpacaChoiceLabel(v, alpacaType, _alpacaNames),
-          ),
+              value: v,
+              label: v.isEmpty
+                  ? blankLabel
+                  : friendlyAlpacaChoiceLabel(v, alpacaType, _alpacaNames)),
       ],
       onChanged: (v) {
         if (v != null) onPick(v);
@@ -267,9 +262,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
       setState(() {
         _baseSetupType = phd2.guiderSetupType;
         _baseReducerFactor = optics.reducerFactor;
-        _baseGuiderCamera = phd2.guiderCamera.isEmpty
-            ? null
-            : phd2.guiderCamera;
+        _baseGuiderCamera =
+            phd2.guiderCamera.isEmpty ? null : phd2.guiderCamera;
         _baseLoaded = true;
       });
       _publishValid();
@@ -309,9 +303,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
   Future<void> _testConnection() async {
     final api = ref.read(guiderApiProvider);
     if (api == null) {
-      setState(
-        () => _testStatus = 'Not connected to a server — the server is what talks to OpenAstro Guider.',
-      );
+      setState(() => _testStatus =
+          'Not connected to a server — the server is what talks to OpenAstro Guider.');
       return;
     }
     // Same parser as the save mapper (applyDraftToPhd2) so the tested target
@@ -340,20 +333,14 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         }
       }
       if (!mounted) return;
-      setState(
-        () => _testStatus =
-            'No OpenAstro Guider answered at $host:$port within 10 s. Check that OpenAstro Guider is '
-            'running on that machine and its server is enabled '
-            '(Tools → Enable Server).',
-      );
+      setState(() => _testStatus =
+          'No OpenAstro Guider answered at $host:$port within 10 s. Check that OpenAstro Guider is '
+          'running on that machine and its server is enabled '
+          '(Tools → Enable Server).');
     } catch (e) {
       if (!mounted) return;
-      setState(
-        () => _testStatus = friendlyDaemonError(
-          e,
-          fallback: "Couldn't reach OpenAstro Guider at $host:$port",
-        ),
-      );
+      setState(() => _testStatus =
+          friendlyDaemonError(e, fallback: "Couldn't reach OpenAstro Guider at $host:$port"));
     } finally {
       if (mounted) setState(() => _testing = false);
     }
@@ -377,8 +364,7 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
     final rangeInvalid = _g.darkMinExposureMs > _g.darkMaxExposureMs;
     return WizardScreenScaffold(
       step: 4,
-      intro:
-          'Three decisions: how you guide, your exposure range, and '
+      intro: 'Three decisions: how you guide, your exposure range, and '
           'whether to shoot the dark library now (the scope is covered '
           'anyway — perfect darks weather). Everything else is defaulted '
           'under Advanced.',
@@ -399,10 +385,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                 onPressed: _testing ? null : () => unawaited(_testConnection()),
                 icon: _testing
                     ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
+                        width: 16, height: 16,
+                        child: AdaptiveProgressIndicator(strokeWidth: 2))
                     : const Icon(Icons.network_check, size: 18),
                 label: const Text('Test connection'),
               ),
@@ -424,128 +408,107 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         // §63.17 — guide-camera pick from the daemon's own choice strings,
         // with the §76.1 pixel-size read on every pick. The current draft
         // value stays representable even when the guider is disconnected.
-        Builder(
-          builder: (context) {
-            final equipment = ref.watch(guiderEquipmentProvider);
-            final choices = equipment.value?.choices;
-            final base = _baseGuiderCamera;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _choicePicker(
-                  label: 'Guide camera',
-                  current: _g.guiderCamera,
-                  options: mergedAlpacaOptions(
-                    choices?.cameras ?? const [],
-                    'camera',
-                    'Camera',
+        Builder(builder: (context) {
+          final equipment = ref.watch(guiderEquipmentProvider);
+          final choices = equipment.value?.choices;
+          final base = _baseGuiderCamera;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _choicePicker(
+                label: 'Guide camera',
+                current: _g.guiderCamera,
+                options: mergedAlpacaOptions(
+                    choices?.cameras ?? const [], 'camera', 'Camera',
+                    _alpacaNames),
+                alpacaType: 'camera',
+                blankLabel: base == null
+                    ? 'Pick a guide camera'
+                    : '(keep ${friendlyAlpacaChoiceLabel(base, 'camera', _alpacaNames)})',
+                helperText: _guideIsMainCamera
+                    ? context.l10n.wizardGuideCameraIsMainCamera
+                    : _cameraPickNeeded
+                        ? kNoGuideCameraWarning
+                        : null,
+                onPick: (v) {
+                  // Camera has no ''-vs-null distinction: blank = untouched.
+                  final sel = v.isEmpty ? null : v;
+                  setState(() {
+                    // #1308 / #1861 — one pick: camera, UniqueID and server.
+                    _g.guiderPick = sel == null
+                        ? null
+                        : ref
+                            .read(guiderAlpacaDevicesProvider.notifier)
+                            .pick(sel);
+                    _pixelSizeFromDriver = false;
+                  });
+                  _publishValid();
+                  if (sel != null) unawaited(_autofillPixelSize(sel));
+                },
+              ),
+              _choicePicker(
+                label: 'Guide mount (pulse target)',
+                current: _g.guiderMount,
+                options: mergedAlpacaOptions(
+                    choices?.mounts ?? const [], 'telescope', 'Mount',
                     _alpacaNames,
-                  ),
-                  alpacaType: 'camera',
-                  blankLabel: base == null
-                      ? 'Pick a guide camera'
-                      : '(keep ${friendlyAlpacaChoiceLabel(base, 'camera', _alpacaNames)})',
-                  helperText: _guideIsMainCamera
-                      ? context.l10n.wizardGuideCameraIsMainCamera
-                      : _cameraPickNeeded
-                      ? kNoGuideCameraWarning
-                      : null,
-                  onPick: (v) {
-                    // Camera has no ''-vs-null distinction: blank = untouched.
-                    final sel = v.isEmpty ? null : v;
-                    setState(() {
-                      // #1308 / #1861 — one pick: camera, UniqueID and server.
-                      _g.guiderPick = sel == null
-                          ? null
-                          : ref
-                                .read(guiderAlpacaDevicesProvider.notifier)
-                                .pick(sel);
-                      _pixelSizeFromDriver = false;
-                    });
-                    _publishValid();
-                    if (sel != null) unawaited(_autofillPixelSize(sel));
-                  },
-                ),
-                _choicePicker(
-                  label: 'Guide mount (pulse target)',
-                  current: _g.guiderMount,
-                  options: mergedAlpacaOptions(
-                    choices?.mounts ?? const [],
-                    'telescope',
-                    'Mount',
+                    onlyEndpoint: _cameraEndpoint),
+                alpacaType: 'telescope',
+                onPick: (v) => setState(() => _g.guiderMount = v),
+              ),
+              _choicePicker(
+                label: 'Aux mount (optional)',
+                current: _g.guiderAuxMount,
+                options: choices?.auxMounts ?? const [],
+                alpacaType: 'telescope',
+                onPick: (v) => setState(() => _g.guiderAuxMount = v),
+              ),
+              _choicePicker(
+                label: 'Rotator (optional)',
+                current: _g.guiderRotator,
+                options: mergedAlpacaOptions(
+                    choices?.rotators ?? const [], 'rotator', 'Rotator',
                     _alpacaNames,
-                    onlyEndpoint: _cameraEndpoint,
+                    onlyEndpoint: _cameraEndpoint),
+                alpacaType: 'rotator',
+                onPick: (v) => setState(() => _g.guiderRotator = v),
+              ),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(children: [
+                  OutlinedButton.icon(
+                    onPressed: equipment.isLoading || _sweeping
+                        ? null
+                        : () => unawaited(_refreshAll()),
+                    icon: _sweeping
+                        ? const SizedBox(
+                            width: 16, height: 16,
+                            child: AdaptiveProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh, size: 18),
+                    label: const Text('Refresh choices'),
                   ),
-                  alpacaType: 'telescope',
-                  onPick: (v) => setState(() => _g.guiderMount = v),
-                ),
-                _choicePicker(
-                  label: 'Aux mount (optional)',
-                  current: _g.guiderAuxMount,
-                  options: choices?.auxMounts ?? const [],
-                  alpacaType: 'telescope',
-                  onPick: (v) => setState(() => _g.guiderAuxMount = v),
-                ),
-                _choicePicker(
-                  label: 'Rotator (optional)',
-                  current: _g.guiderRotator,
-                  options: mergedAlpacaOptions(
-                    choices?.rotators ?? const [],
-                    'rotator',
-                    'Rotator',
-                    _alpacaNames,
-                    onlyEndpoint: _cameraEndpoint,
-                  ),
-                  alpacaType: 'rotator',
-                  onPick: (v) => setState(() => _g.guiderRotator = v),
-                ),
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: Row(
-                    children: [
-                      OutlinedButton.icon(
-                        onPressed: equipment.isLoading || _sweeping
-                            ? null
-                            : () => unawaited(_refreshAll()),
-                        icon: _sweeping
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: AdaptiveProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.refresh, size: 18),
-                        label: const Text('Refresh choices'),
+                  if (_pixelSizeFromDriver) ...[
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Pixel size: ${_g.guidePixelSizeUm} µm — read from '
+                        'the camera driver.',
+                        style: const TextStyle(
+                            fontSize: 12, color: AraColors.accentConnected),
                       ),
-                      if (_pixelSizeFromDriver) ...[
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Pixel size: ${_g.guidePixelSizeUm} µm — read from '
-                            'the camera driver.',
-                            style: const TextStyle(
-                              fontSize: 12,
-                              color: AraColors.accentConnected,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+                    ),
+                  ],
+                ]),
+              ),
+            ],
+          );
+        }),
         // §63.19 — guide scope vs OAG (OAG derives the focal length from the
         // main optics; the wizard already read those from Alpaca).
         WizardDropdown<String>(
           label: 'Guide setup',
           value: resolveGuiderSetupType(
-            _g.setupType,
-            _baseSetupType ?? 'guide_scope',
-          ),
+              _g.setupType, _baseSetupType ?? 'guide_scope'),
           entries: const [
             DropdownMenuEntry(value: 'guide_scope', label: 'Guide scope'),
             DropdownMenuEntry(value: 'oag', label: 'Off-axis guider (OAG)'),
@@ -553,39 +516,31 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
           onChanged: (v) => setState(() => _g.setupType = v),
         ),
         if (resolveGuiderSetupType(
-              _g.setupType,
-              _baseSetupType ?? 'guide_scope',
-            ) ==
+                _g.setupType, _baseSetupType ?? 'guide_scope') ==
             'oag')
-          Builder(
-            builder: (context) {
-              final mainFl = _draftOf(ref).telescope.focalLengthMm ?? 0;
-              // Same reducer rule as applyDraftToPhd2 (the draft's reducer when
-              // set, else the base profile's), so the previewed number is the
-              // persisted number.
-              final derived = derivedOagGuideFocalLength(
+          Builder(builder: (context) {
+            final mainFl = _draftOf(ref).telescope.focalLengthMm ?? 0;
+            // Same reducer rule as applyDraftToPhd2 (the draft's reducer when
+            // set, else the base profile's), so the previewed number is the
+            // persisted number.
+            final derived = derivedOagGuideFocalLength(
                 mainFl,
                 effectiveOagReducerFactor(
-                  _draftOf(ref).telescope.reducerFactor ?? _baseReducerFactor,
-                ),
-              );
-              return Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Text(
-                  derived == 0
-                      ? 'Guide focal length: derived from the main optics — '
-                            'fix the telescope focal length on the equipment '
-                            'screen first.'
-                      : 'Guide focal length: $derived mm '
-                            '(derived from the main optics).',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: AraColors.textSecondary,
-                  ),
-                ),
-              );
-            },
-          )
+                    _draftOf(ref).telescope.reducerFactor ?? _baseReducerFactor));
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                derived == 0
+                    ? 'Guide focal length: derived from the main optics — '
+                        'fix the telescope focal length on the equipment '
+                        'screen first.'
+                    : 'Guide focal length: $derived mm '
+                        '(derived from the main optics).',
+                style: const TextStyle(
+                    fontSize: 12, color: AraColors.textSecondary),
+              ),
+            );
+          })
         else
           WizardTextField(
             label: 'Guide scope focal length (mm)',
@@ -597,43 +552,35 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         const WizardSectionHeader('Guide exposure range'),
         Padding(
           padding: const EdgeInsets.only(bottom: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: WizardDropdown<int>(
-                  label: 'Shortest',
-                  value: kGuideExposuresMs.contains(_g.darkMinExposureMs)
-                      ? _g.darkMinExposureMs
-                      : 1000,
-                  entries: [
-                    for (final ms in kGuideExposuresMs)
-                      DropdownMenuEntry(
-                        value: ms,
-                        label: guideExposureLabel(ms),
-                      ),
-                  ],
-                  onChanged: (v) => _setRange(minMs: v),
-                ),
+          child: Row(children: [
+            Expanded(
+              child: WizardDropdown<int>(
+                label: 'Shortest',
+                value: kGuideExposuresMs.contains(_g.darkMinExposureMs)
+                    ? _g.darkMinExposureMs
+                    : 1000,
+                entries: [
+                  for (final ms in kGuideExposuresMs)
+                    DropdownMenuEntry(value: ms, label: guideExposureLabel(ms)),
+                ],
+                onChanged: (v) => _setRange(minMs: v),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: WizardDropdown<int>(
-                  label: 'Longest',
-                  value: kGuideExposuresMs.contains(_g.darkMaxExposureMs)
-                      ? _g.darkMaxExposureMs
-                      : 6000,
-                  entries: [
-                    for (final ms in kGuideExposuresMs)
-                      DropdownMenuEntry(
-                        value: ms,
-                        label: guideExposureLabel(ms),
-                      ),
-                  ],
-                  onChanged: (v) => _setRange(maxMs: v),
-                ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: WizardDropdown<int>(
+                label: 'Longest',
+                value: kGuideExposuresMs.contains(_g.darkMaxExposureMs)
+                    ? _g.darkMaxExposureMs
+                    : 6000,
+                entries: [
+                  for (final ms in kGuideExposuresMs)
+                    DropdownMenuEntry(value: ms, label: guideExposureLabel(ms)),
+                ],
+                onChanged: (v) => _setRange(maxMs: v),
               ),
-            ],
-          ),
+            ),
+          ]),
         ),
         Padding(
           padding: const EdgeInsets.only(bottom: 12),
@@ -641,9 +588,9 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             rangeInvalid
                 ? 'Shortest exposure must not exceed the longest.'
                 : 'One choice, two consumers: the dark library covers exactly '
-                      'this range, and guiding stays within it — they can never '
-                      'disagree. Fast mounts (iOptron-class) often guide best '
-                      'short (0.5–2 s); slower mounts may want 2–4 s.',
+                    'this range, and guiding stays within it — they can never '
+                    'disagree. Fast mounts (iOptron-class) often guide best '
+                    'short (0.5–2 s); slower mounts may want 2–4 s.',
             style: TextStyle(
               fontSize: 12,
               color: rangeInvalid
@@ -658,11 +605,11 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             contentPadding: EdgeInsets.zero,
             title: const Text('Build dark library now'),
             subtitle: const Text(
-              'Cover the guide scope first. Runs in the background after '
-              'Save — you can walk away.',
-            ),
+                'Cover the guide scope first. Runs in the background after '
+                'Save — you can walk away.'),
             value: _g.buildDarksOnFinish,
-            onChanged: (v) => setState(() => _g.buildDarksOnFinish = v),
+            onChanged: (v) =>
+                setState(() => _g.buildDarksOnFinish = v),
           ),
         ),
         // Advanced: tunables with good defaults — a disclosure, not a step
@@ -670,22 +617,20 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
         ExpansionTile(
           tilePadding: EdgeInsets.zero,
           childrenPadding: const EdgeInsets.only(top: 8),
-          title: Text(
-            'Advanced',
-            style: Theme.of(context).textTheme.bodySmall
-                ?.copyWith(color: AraColors.textSecondary),
-          ),
+          title: Text('Advanced',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: AraColors.textSecondary)),
           children: [
             if (!_pixelSizeFromDriver)
               WizardTextField(
                 label: 'Guide pixel size (µm)',
                 initialValue: _g.guidePixelSizeUm?.toString(),
-                helperText:
-                    'Normally read from the camera driver — only '
+                helperText: 'Normally read from the camera driver — only '
                     'needed for a non-Alpaca guide camera.',
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: WizardInput.unsignedDecimal,
                 onChanged: (v) =>
                     _assignDouble(v, (d) => _g.guidePixelSizeUm = d),
@@ -697,14 +642,14 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
                 for (var n = 1; n <= 20; n++)
                   DropdownMenuEntry(value: n, label: '$n'),
               ],
-              onChanged: (v) => setState(() => _g.darkFrameCount = v ?? 5),
+              onChanged: (v) =>
+                  setState(() => _g.darkFrameCount = v ?? 5),
             ),
             WizardTextField(
               label: 'Dither (pixels)',
               initialValue: _g.ditherPixels.toString(),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: WizardInput.unsignedDecimal,
               onChanged: (v) => _assignDouble(v, (d) {
                 if (d != null) _g.ditherPixels = d;
@@ -713,9 +658,8 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
             WizardTextField(
               label: 'Settle threshold (px)',
               initialValue: _g.settleThresholdPx.toString(),
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               inputFormatters: WizardInput.unsignedDecimal,
               onChanged: (v) => _assignDouble(v, (d) {
                 if (d != null) _g.settleThresholdPx = d;
@@ -736,22 +680,17 @@ class _ScreenGuiderState extends ConsumerState<ScreenGuider> {
               value: _g.calibrationCadence,
               entries: const [
                 DropdownMenuEntry(
-                  value: CalibrationCadence.eachSession,
-                  label: 'Each session',
-                ),
+                    value: CalibrationCadence.eachSession,
+                    label: 'Each session'),
                 DropdownMenuEntry(
-                  value: CalibrationCadence.onceReuse,
-                  label: 'Once, then reuse',
-                ),
+                    value: CalibrationCadence.onceReuse,
+                    label: 'Once, then reuse'),
                 DropdownMenuEntry(
-                  value: CalibrationCadence.neverRecalibrate,
-                  label: 'Never recalibrate',
-                ),
+                    value: CalibrationCadence.neverRecalibrate,
+                    label: 'Never recalibrate'),
               ],
-              onChanged: (v) => setState(
-                () =>
-                    _g.calibrationCadence = v ?? CalibrationCadence.eachSession,
-              ),
+              onChanged: (v) => setState(() =>
+                  _g.calibrationCadence = v ?? CalibrationCadence.eachSession),
             ),
           ],
         ),

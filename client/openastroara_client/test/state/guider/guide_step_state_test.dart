@@ -36,21 +36,18 @@ void main() {
 
     test('a lost-star frame with no offsets is dropped', () {
       expect(
-        GuideStep.fromPayload(<String, dynamic>{
-          'frame': 1,
-          'ra_raw_px': null,
-          'dec_raw_px': null,
-          'ra_duration_ms': 0,
-        }, t),
-        isNull,
-      );
+          GuideStep.fromPayload(<String, dynamic>{
+            'frame': 1,
+            'ra_raw_px': null,
+            'dec_raw_px': null,
+            'ra_duration_ms': 0,
+          }, t),
+          isNull);
     });
 
     test('missing arcsec falls back to the client scale, else null', () {
-      final s = GuideStep.fromPayload(<String, dynamic>{
-        'ra_raw_px': 0.5,
-        'dec_raw_px': -0.5,
-      }, t)!;
+      final s = GuideStep.fromPayload(
+          <String, dynamic>{'ra_raw_px': 0.5, 'dec_raw_px': -0.5}, t)!;
       expect(s.raArcsecWith(2.0), 1.0);
       expect(s.decArcsecWith(2.0), -1.0);
       expect(s.raArcsecWith(null), isNull);
@@ -80,49 +77,27 @@ void main() {
 
   group('GuideMarker.fromPayload', () {
     test('maps every wire kind and the dither / status / error details', () {
-      final d = GuideMarker.fromPayload(<String, dynamic>{
-        'kind': 'dithered',
-        'dx_px': 2.5,
-        'dy_px': -1,
-      }, t)!;
+      final d = GuideMarker.fromPayload(
+          <String, dynamic>{'kind': 'dithered', 'dx_px': 2.5, 'dy_px': -1}, t)!;
       expect(d.kind, GuideMarkerKind.dithered);
       expect(d.dxPx, 2.5);
       expect(d.dyPx, -1);
-      final done = GuideMarker.fromPayload(<String, dynamic>{
-        'kind': 'settle_done',
-        'status': 0,
-      }, t)!;
+      final done = GuideMarker.fromPayload(
+          <String, dynamic>{'kind': 'settle_done', 'status': 0}, t)!;
       expect(done.kind, GuideMarkerKind.settleDone);
       expect(done.status, 0);
       expect(done.error, isNull);
-      final lost = GuideMarker.fromPayload(<String, dynamic>{
-        'kind': 'star_lost',
-        'error': 'low SNR',
-        'status': 2,
-      }, t)!;
+      final lost = GuideMarker.fromPayload(
+          <String, dynamic>{'kind': 'star_lost', 'error': 'low SNR', 'status': 2}, t)!;
       expect(lost.kind, GuideMarkerKind.starLost);
       expect(lost.error, 'low SNR');
       for (final k in [
-        'settling',
-        'calibration_started',
-        'calibration_complete',
-        'calibration_failed',
-        'guiding_started',
-        'guiding_stopped',
-        'paused',
-        'resumed',
-        'lock_position_lost',
+        'settling', 'calibration_started', 'calibration_complete', 'calibration_failed',
+        'guiding_started', 'guiding_stopped', 'paused', 'resumed', 'lock_position_lost',
       ]) {
-        expect(
-          GuideMarker.fromPayload(<String, dynamic>{'kind': k}, t),
-          isNotNull,
-          reason: k,
-        );
+        expect(GuideMarker.fromPayload(<String, dynamic>{'kind': k}, t), isNotNull, reason: k);
       }
-      expect(
-        GuideMarker.fromPayload(<String, dynamic>{'kind': 'nope'}, t),
-        isNull,
-      );
+      expect(GuideMarker.fromPayload(<String, dynamic>{'kind': 'nope'}, t), isNull);
       expect(GuideMarker.fromPayload(const <String, dynamic>{}, t), isNull);
     });
   });
@@ -130,55 +105,24 @@ void main() {
   group('guideMarkersProvider', () {
     test('appends guider.event markers and caps the history', () async {
       final ws = StreamController<WsEvent>.broadcast();
-      final container = ProviderContainer(
-        overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)],
-      );
+      final container = ProviderContainer(overrides: [
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+      ]);
       addTearDown(() => unawaited(ws.close()));
       addTearDown(container.dispose);
       final sub = container.listen(guideMarkersProvider, (_, _) {});
       addTearDown(sub.close);
-      ws.add(
-        WsEvent(
-          type: 'guider.event',
-          ts: t,
-          seq: 1,
-          payload: const {'kind': 'dithered'},
-        ),
-      );
-      ws.add(
-        WsEvent(
-          type: 'guider.step',
-          ts: t,
-          seq: 2,
-          payload: const {'ra_raw_px': 0.1},
-        ),
-      );
+      ws.add(WsEvent(type: 'guider.event', ts: t, seq: 1, payload: const {'kind': 'dithered'}));
+      ws.add(WsEvent(type: 'guider.step', ts: t, seq: 2, payload: const {'ra_raw_px': 0.1}));
       await Future<void>.delayed(Duration.zero);
-      expect(
-        container.read(guideMarkersProvider).single.kind,
-        GuideMarkerKind.dithered,
-      );
+      expect(container.read(guideMarkersProvider).single.kind, GuideMarkerKind.dithered);
       // A lost star breaks the live trace: the marker also drops a step with
       // no offset into the step history, as a replayed log's lost row does.
-      ws.add(
-        WsEvent(
-          type: 'guider.event',
-          ts: t,
-          seq: 3,
-          payload: const {'kind': 'star_lost'},
-        ),
-      );
+      ws.add(WsEvent(type: 'guider.event', ts: t, seq: 3, payload: const {'kind': 'star_lost'}));
       await Future<void>.delayed(Duration.zero);
-      expect(
-        container.read(guideMarkersProvider).last.kind,
-        GuideMarkerKind.starLost,
-      );
+      expect(container.read(guideMarkersProvider).last.kind, GuideMarkerKind.starLost);
       final lost = container.read(guideStepsProvider).last;
-      expect(
-        (lost.raPx, lost.decPx),
-        (null, null),
-        reason: 'the trace breaks at the ×',
-      );
+      expect((lost.raPx, lost.decPx), (null, null), reason: 'the trace breaks at the ×');
       final n = container.read(guideMarkersProvider.notifier);
       for (var i = 0; i < kGuideMarkerHistory + 5; i++) {
         n.add(GuideMarker(at: t, kind: GuideMarkerKind.starLost));
@@ -194,9 +138,9 @@ void main() {
       // Broadcast: close() then completes with no listener left, so the
       // teardown cannot hang on an undelivered done event.
       final ws = StreamController<WsEvent>.broadcast();
-      final container = ProviderContainer(
-        overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)],
-      );
+      final container = ProviderContainer(overrides: [
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+      ]);
       // LIFO: the container (and with it the stream subscription) goes first,
       // then the controller closes with nobody left to deliver done to.
       addTearDown(() => unawaited(ws.close()));
@@ -205,14 +149,10 @@ void main() {
       addTearDown(sub.close);
 
       ws.add(WsEvent(type: 'frame.complete', ts: t, seq: 1, payload: const {}));
-      ws.add(
-        WsEvent(
-          type: 'guider.step',
-          ts: t,
-          seq: 2,
-          payload: const {'ra_raw_px': 0.1, 'dec_raw_px': 0.2},
-        ),
-      );
+      ws.add(WsEvent(type: 'guider.step', ts: t, seq: 2, payload: const {
+        'ra_raw_px': 0.1,
+        'dec_raw_px': 0.2,
+      }));
       await Future<void>.delayed(Duration.zero);
       final steps = container.read(guideStepsProvider);
       expect(steps.length, 1);
@@ -220,20 +160,13 @@ void main() {
     });
 
     test('keeps only the newest kGuideStepHistory steps', () {
-      final container = ProviderContainer(
-        overrides: [
-          wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
-        ],
-      );
+      final container = ProviderContainer(overrides: [
+        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
+      ]);
       addTearDown(container.dispose);
       final n = container.read(guideStepsProvider.notifier);
       for (var i = 0; i < kGuideStepHistory + 25; i++) {
-        n.add(
-          GuideStep(
-            at: t.add(Duration(seconds: i)),
-            raPx: i.toDouble(),
-          ),
-        );
+        n.add(GuideStep(at: t.add(Duration(seconds: i)), raPx: i.toDouble()));
       }
       final steps = container.read(guideStepsProvider);
       expect(steps.length, kGuideStepHistory);

@@ -210,9 +210,7 @@ PlanetariumSelection simplePickDso(
     ref.read(tonightSkyProvider).value ?? const [],
     latitudeDeg: site.latitudeDeg,
     // 0, 0 is the unset site (as tonight_sky_state reads it): no altitude from a made-up position.
-    longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0
-        ? null
-        : site.longitudeDeg,
+    longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0 ? null : site.longitudeDeg,
     utc: ref.read(clockProvider)().toUtc(),
     designation: designation,
   );
@@ -232,13 +230,10 @@ PlanetariumSelection simpleSelectionOfDso(
   DateTime? utc,
   String? designation,
 }) {
-  final keys = {
-    for (final n in [d.id, ...d.aliases]) designationKey(n),
-  };
+  final keys = {for (final n in [d.id, ...d.aliases]) designationKey(n)};
   final row = ranked
       .where(
-        (o) =>
-            [o.id, ...o.aliases].any((n) => keys.contains(designationKey(n))),
+        (o) => [o.id, ...o.aliases].any((n) => keys.contains(designationKey(n))),
       )
       .firstOrNull;
   if (row != null) return simpleSelectionOf(row, designation: designation);
@@ -494,74 +489,75 @@ class _PlanSquare extends StatelessWidget {
       label: context.l10n.planSquareLabel(label ?? name),
       child: simpleFrost(
         Material(
-          color: AraColors.overlayScrim,
-          shape: RoundedRectangleBorder(
-            side: BorderSide(color: color),
-            borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: onTap,
-            // Grows with the text past 1.3x, as the rails do.
-            child: SizedBox(
-              width: kSimpleRailWidth * simpleRailScale(context),
-              height: kSimplePlanSquareHeight * simpleRailScale(context),
-              child: Stack(
-                children: [
-                  // A long name or time shrinks to fit, clear of the border; so
-                  // does the whole column when its lines outgrow the square's
-                  // height (five lines past 1.1x text), all by the same amount.
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 6),
-                    child: Center(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: SizedBox(
-                          width:
-                              kSimpleRailWidth * simpleRailScale(context) - 12,
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            spacing: 2,
-                            children: [
-                              for (final (text, style) in [
-                                (
-                                  name,
-                                  kSimpleText.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                  ),
+        color: AraColors.overlayScrim,
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: color),
+          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          // Grows with the text past 1.3x, as the rails do.
+          child: SizedBox(
+            width: kSimpleRailWidth * simpleRailScale(context),
+            height: kSimplePlanSquareHeight * simpleRailScale(context),
+            child: Stack(
+              children: [
+                // A long name or time shrinks to fit, clear of the border; so
+                // does the whole column when its lines outgrow the square's
+                // height (five lines past 1.1x text), all by the same amount.
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 6),
+                  child: Center(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: SizedBox(
+                        width: kSimpleRailWidth * simpleRailScale(context) - 12,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          spacing: 2,
+                          children: [
+                            for (final (text, style) in [
+                              (
+                                name,
+                                kSimpleText.copyWith(
+                                  fontWeight: FontWeight.w600,
                                 ),
-                                (frames, kSimpleText),
-                                if (sub != null) (sub!, small),
-                                (
-                                  last,
-                                  paused ? small.copyWith(color: color) : small,
-                                ),
-                                // One short word: the square has 60 px for it.
-                                if (foot != null) (foot!, small),
-                              ])
-                                FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(text, style: style, maxLines: 1),
-                                ),
-                            ],
-                          ),
+                              ),
+                              (frames, kSimpleText),
+                              if (sub != null) (sub!, small),
+                              (
+                                last,
+                                paused
+                                    ? small.copyWith(color: color)
+                                    : small,
+                              ),
+                              // One short word: the square has 60 px for it.
+                              if (foot != null) (foot!, small),
+                            ])
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(text, style: style, maxLines: 1),
+                              ),
+                          ],
                         ),
                       ),
                     ),
                   ),
-                  if (fraction != null)
-                    Align(
-                      alignment: Alignment.bottomLeft,
-                      child: FractionallySizedBox(
-                        widthFactor: fraction,
-                        child: Container(height: 3, color: color),
-                      ),
+                ),
+                if (fraction != null)
+                  Align(
+                    alignment: Alignment.bottomLeft,
+                    child: FractionallySizedBox(
+                      widthFactor: fraction,
+                      child: Container(height: 3, color: color),
                     ),
-                ],
-              ),
+                  ),
+              ],
             ),
           ),
         ),
+      ),
       ),
     );
   }
@@ -728,6 +724,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
 
 TextStyle get _dim => kSimpleText.copyWith(color: AraColors.textSecondary);
 
+
 TextStyle get _head =>
     kSimpleText.copyWith(fontSize: 16, fontWeight: FontWeight.w600);
 
@@ -867,7 +864,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
         child: simpleRunPhase(run, info) == SimpleRunPhase.done
             ? SizedBox(
                 width: 400,
-                child: _NightDone(run: run, info: info!),
+                child: _NightDone(
+                  run: run,
+                  info: info!,
+                ),
               )
             : _plan(run),
       ),
@@ -917,10 +917,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 decDeg: sel.decJ2000Deg,
                 defaultExposure:
                     (ref.watch(imagingDefaultsProvider).value ??
-                            const ImagingDefaults())
-                        .defaultExposure
-                        .inMilliseconds /
-                    1000,
+                                const ImagingDefaults())
+                            .defaultExposure
+                            .inMilliseconds /
+                        1000,
                 skyCalibrationK: k,
               ),
     ];
@@ -953,8 +953,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
     final off = sel == null || sel.belowHorizon || run.busy || imaging;
     // Preflight's plan step only queues; its green button moves on (or, with
     // focus and polar alignment done, starts imaging).
-    final inPreflight =
-        ref.watch(simplePreflightProvider) == SimplePreflightStep.plan;
+    final inPreflight = ref.watch(simplePreflightProvider) == SimplePreflightStep.plan;
     final preflightNext = inPreflight
         ? simplePreflightNext(ref, after: SimplePreflightStep.plan)
         : null;
@@ -979,10 +978,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
       for (final (i, r) in recent.indexed)
         switch (recentRows[i]) {
           final row?
-              when ![
-                row.id,
-                ...row.aliases,
-              ].any((d) => designationKey(d) == designationKey(r.name)) =>
+              when ![row.id, ...row.aliases].any((d) => designationKey(d) == designationKey(r.name)) =>
             bestCatalogDesignation([row.id, ...row.aliases]) ?? row.id,
           _ => r.name,
         },
@@ -1062,10 +1058,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
               _ListTile(
                 key: Key('simple-run-recent-$i'),
                 width: tileWidth,
-                title: designationWithName(
-                  recentLeads[i],
-                  recentRows[i]?.name ?? '',
-                ),
+                title: designationWithName(recentLeads[i], recentRows[i]?.name ?? ''),
                 line: [
                   MaterialLocalizations.of(context)
                       .formatShortDate(r.when.toLocal()),
@@ -1481,12 +1474,10 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                   child: Text(
                     inPreflight
                         ? switch (preflightNext) {
-                            SimplePreflightStep.focus =>
-                              context.l10n.preflightNextFocus,
+                            SimplePreflightStep.focus => context.l10n.preflightNextFocus,
                             SimplePreflightStep.polarAlign =>
                               context.l10n.preflightNextPolarAlign,
-                            SimplePreflightStep.guide =>
-                              context.l10n.preflightNextGuide,
+                            SimplePreflightStep.guide => context.l10n.preflightNextGuide,
                             _ => context.l10n.preflightStartImaging,
                           }
                         : run.busy
@@ -1971,7 +1962,10 @@ class _RunError extends ConsumerWidget {
 }
 
 class _NightDone extends ConsumerWidget {
-  const _NightDone({required this.run, required this.info});
+  const _NightDone({
+    required this.run,
+    required this.info,
+  });
 
   final SimpleRun run;
   final SequenceRunStateInfo info;
@@ -2004,7 +1998,10 @@ class _NightDone extends ConsumerWidget {
     final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final dawn = start == null || run.dawnStop == null
         ? null
-        : nightEnd(site, darkStart(site, start.toUtc()) ?? start.toUtc());
+        : nightEnd(
+            site,
+            darkStart(site, start.toUtc()) ?? start.toUtc(),
+          );
     final longestSub = run.steps.fold(
       0.0,
       (s, p) => math.max(s, p.exposureSeconds),

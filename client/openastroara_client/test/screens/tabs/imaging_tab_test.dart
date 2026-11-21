@@ -129,9 +129,7 @@ Future<void> _takeOneUntilSettled(
 }
 
 void main() {
-  testWidgets('the guiding strip is sized from the Live tab height', (
-    tester,
-  ) async {
+  testWidgets('the guiding strip is sized from the Live tab height', (tester) async {
     final rig = await _pumpTab(tester);
     final tab = tester.getSize(find.byType(ImagingTab)).height;
     final strip = tester.widget<GuidingStrip>(find.byType(GuidingStrip));
@@ -255,18 +253,13 @@ void main() {
       hits.add('${req.method} ${req.uri.path}');
       req.response
         ..statusCode = HttpStatus.conflict
-        ..headers.contentType = ContentType(
-          'application',
-          'problem+json',
-          charset: 'utf-8',
-        )
-        ..write(
-          jsonEncode({
-            'title': 'store_unavailable',
-            'status': 409,
-            'detail': _noDisk,
-          }),
-        );
+        ..headers.contentType =
+            ContentType('application', 'problem+json', charset: 'utf-8')
+        ..write(jsonEncode({
+          'title': 'store_unavailable',
+          'status': 409,
+          'detail': _noDisk,
+        }));
       await req.response.close();
     });
     final rig = await _pumpTab(
@@ -293,25 +286,21 @@ void main() {
       if (req.method == 'POST' && req.uri.path == _exposurePath) {
         // The store went away between the 202 and the capture: the daemon's
         // pre-capture check fails the frame before this reply goes out.
-        rig.ws.add(
-          WsEvent(
-            type: 'camera.exposure_failed',
-            ts: DateTime.utc(2026, 10, 27),
-            seq: 2,
-            payload: {'frame_id': 'f-1', 'kind': 'light', 'reason': _noDisk},
-          ),
-        );
+        rig.ws.add(WsEvent(
+          type: 'camera.exposure_failed',
+          ts: DateTime.utc(2026, 10, 27),
+          seq: 2,
+          payload: {'frame_id': 'f-1', 'kind': 'light', 'reason': _noDisk},
+        ));
         await Future<void>.delayed(const Duration(milliseconds: 50));
         req.response
           ..statusCode = HttpStatus.accepted
           ..headers.contentType = ContentType.json
-          ..write(
-            jsonEncode({
-              'frame_id': 'f-1',
-              'exposure_sec': 30,
-              'captured_at': '2026-10-27T21:00:00Z',
-            }),
-          );
+          ..write(jsonEncode({
+            'frame_id': 'f-1',
+            'exposure_sec': 30,
+            'captured_at': '2026-10-27T21:00:00Z',
+          }));
       } else {
         polls.add(req.uri.path);
         req.response.statusCode = HttpStatus.notFound;
@@ -326,17 +315,10 @@ void main() {
     await _takeOneUntilSettled(tester, rig);
 
     final progress = rig.container.read(captureProgressProvider);
-    expect(
-      progress.phase,
-      CapturePhase.failed,
-      reason: 'ended by the failed event, not the exposure + 20 s timeout',
-    );
+    expect(progress.phase, CapturePhase.failed,
+        reason: 'ended by the failed event, not the exposure + 20 s timeout');
     expect(progress.error, _noDisk);
-    expect(
-      polls,
-      isEmpty,
-      reason: 'the failure was known before the first poll',
-    );
+    expect(polls, isEmpty, reason: 'the failure was known before the first poll');
 
     await _teardown(tester, rig);
   });

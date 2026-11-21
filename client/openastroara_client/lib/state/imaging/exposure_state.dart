@@ -35,19 +35,21 @@ class ExposureParams {
     int? bin,
     String? filterSlot,
     FrameKind? frameKind,
-  }) => ExposureParams(
-    exposure: exposure ?? this.exposure,
-    gain: gain ?? this.gain,
-    offset: offset ?? this.offset,
-    bin: bin ?? this.bin,
-    filterSlot: filterSlot ?? this.filterSlot,
-    frameKind: frameKind ?? this.frameKind,
-  );
+  }) =>
+      ExposureParams(
+        exposure: exposure ?? this.exposure,
+        gain: gain ?? this.gain,
+        offset: offset ?? this.offset,
+        bin: bin ?? this.bin,
+        filterSlot: filterSlot ?? this.filterSlot,
+        frameKind: frameKind ?? this.frameKind,
+      );
 }
 
 enum FrameKind { light, dark, bias, flat }
 
 class ExposureController extends Notifier<ExposureParams> {
+
   /// The physical wheel slot whose name [state.filterSlot] last followed.
   /// Kept on the notifier so a manual picker choice survives until the wheel
   /// actually lands on a different slot. Cleared on disconnect/device change
@@ -178,5 +180,4 @@ class ExposureController extends Notifier<ExposureParams> {
 
 final exposureControllerProvider =
     NotifierProvider<ExposureController, ExposureParams>(
-      ExposureController.new,
-    );
+        ExposureController.new);

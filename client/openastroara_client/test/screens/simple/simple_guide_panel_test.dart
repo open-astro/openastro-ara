@@ -12,50 +12,37 @@ import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
-import 'package:openastroara/services/guider_api.dart'
-    show GuiderClient, GuideStartFailed;
+import 'package:openastroara/services/guider_api.dart' show GuiderClient, GuideStartFailed;
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
 import 'package:openastroara/state/guider/guider_live_state.dart';
 import 'package:openastroara/models/guider_calibration_view.dart';
 import 'package:openastroara/models/guider_live.dart';
-import 'package:openastroara/services/guider_live_api.dart'
-    show GuiderLiveClient;
-import 'package:openastroara/screens/simple/simple_shell.dart'
-    show SimpleSegments;
+import 'package:openastroara/services/guider_live_api.dart' show GuiderLiveClient;
+import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegments;
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/state/imaging/capture_progress_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
-import 'package:openastroara/services/guider_equipment_api.dart'
-    show GuiderEquipmentClient;
+import 'package:openastroara/services/guider_equipment_api.dart' show GuiderEquipmentClient;
 import 'package:openastroara/services/profile_api.dart' show ProfileApi;
 
 import '../../support/phd2_section.dart';
-
-import 'package:openastroara/state/guider/guider_equipment_state.dart'
-    show guiderEquipmentApiProvider;
-import 'package:openastroara/state/profile_management_state.dart'
-    show profileApiProvider;
-import 'package:openastroara/screens/simple/simple_device_windows.dart'
-    show SimpleGuideGainSlider;
-import 'package:openastroara/screens/simple/simple_preview_panel.dart'
-    show SimplePresetTile;
+import 'package:openastroara/state/guider/guider_equipment_state.dart' show guiderEquipmentApiProvider;
+import 'package:openastroara/state/profile_management_state.dart' show profileApiProvider;
+import 'package:openastroara/screens/simple/simple_device_windows.dart' show SimpleGuideGainSlider;
+import 'package:openastroara/screens/simple/simple_preview_panel.dart' show SimplePresetTile;
 import 'package:openastroara/state/simple_messages_state.dart';
-import 'package:openastroara/state/simple_mode_state.dart'
-    show simpleModeActiveProvider;
-import 'package:openastroara/widgets/equipment/guider_chip.dart'
-    show guiderStatusLevel;
+import 'package:openastroara/state/simple_mode_state.dart' show simpleModeActiveProvider;
+import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
-import 'package:openastroara/widgets/status_indicator.dart'
-    show StatusBlink, StatusDot, StatusLevel;
+import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
 
 /// The Queue's run state, as the rig last said it.
 class _Run extends SequenceRunStateNotifier {
   _Run(this.run);
   final SequenceRunState run;
   @override
-  Future<SequenceRunStateInfo?> build() async =>
-      SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
+  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
 }
 
 /// The mount and the guider's asks, in the order they came.
@@ -76,8 +63,7 @@ class _Mount extends MountNotifier {
   static bool refuse = false;
   static Map<String, dynamic>? wire;
   @override
-  Future<MountStatus?> build() async =>
-      wire == null ? null : MountStatus.fromJson(wire!);
+  Future<MountStatus?> build() async => wire == null ? null : MountStatus.fromJson(wire!);
   @override
   Future<bool> setTracking(bool enabled) async {
     _order.add('tracking:$enabled');
@@ -109,48 +95,28 @@ class _Guider extends GuiderStatusNotifier {
     _order.add('startGuiding');
     if (startError != null) throw startError!;
     if (lag) return;
-    state = AsyncData(
-      GuiderStatus.fromJson({
-        ...json,
-        'runtime': <String, dynamic>{
-          ...json['runtime'] as Map<String, dynamic>,
-          'state': 'looping',
-        },
-      }),
-    );
+    state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'looping'}}));
   }
-
   @override
   Future<void> stopGuiding() async {
     calls.add('stop');
     if (lag) return;
-    state = AsyncData(
-      GuiderStatus.fromJson({
-        ...json,
-        'runtime': <String, dynamic>{
-          ...json['runtime'] as Map<String, dynamic>,
-          'state': 'stopped',
-        },
-      }),
-    );
+    state = AsyncData(GuiderStatus.fromJson({...json, 'runtime': <String, dynamic>{...json['runtime'] as Map<String, dynamic>, 'state': 'stopped'}}));
   }
 }
 
-Map<String, dynamic> _wire({
-  String state = 'connected',
-  String runtime = 'guiding',
-}) => {
-  'device_id': 'g',
-  'name': 'PHD2',
-  'state': state,
-  'runtime': {
-    'state': runtime,
-    'rms_total': 0.9,
-    'rms_total_arcsec': 0.62,
-    'rms_ra_arcsec': 0.41,
-    'rms_dec_arcsec': 0.47,
-  },
-};
+Map<String, dynamic> _wire({String state = 'connected', String runtime = 'guiding'}) => {
+      'device_id': 'g',
+      'name': 'PHD2',
+      'state': state,
+      'runtime': {
+        'state': runtime,
+        'rms_total': 0.9,
+        'rms_total_arcsec': 0.62,
+        'rms_ra_arcsec': 0.41,
+        'rms_dec_arcsec': 0.47,
+      },
+    };
 
 late _Guider _g;
 
@@ -161,96 +127,69 @@ class _Profile implements ProfileApi {
   Phd2Settings? phd2;
   final puts = <Phd2Settings>[];
   @override
-  Future<({Phd2Settings value, String? etag})> getPhd2Section() async => (
-    value: phd2 ?? (throw StateError('rig unreachable')),
-    etag: '"v${puts.length + 1}"',
-  );
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: phd2 ?? (throw StateError('rig unreachable')), etag: '"v${puts.length + 1}"');
   @override
-  Future<({Phd2Settings value, String? etag})> putPhd2Section(
-    Phd2Settings s, {
-    String? ifMatch,
-  }) async {
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(Phd2Settings s, {String? ifMatch}) async {
     puts.add(s);
     return (value: s, etag: '"v${puts.length + 1}"');
   }
-
   @override
-  dynamic noSuchMethod(Invocation i) =>
-      throw UnimplementedError('${i.memberName}');
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
 /// The guider's equipment API: records every tuning push.
 class _GuiderEquipment implements GuiderEquipmentClient {
   final pushes = <bool>[];
   @override
-  Future<void> pushProfile({bool tuningOnly = false}) async =>
-      pushes.add(tuningOnly);
+  Future<void> pushProfile({bool tuningOnly = false}) async => pushes.add(tuningOnly);
   @override
-  dynamic noSuchMethod(Invocation i) =>
-      throw UnimplementedError('${i.memberName}');
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
-Future<ProviderContainer> _pump(
-  WidgetTester tester,
-  Map<String, dynamic> wire, {
-  Widget child = const SimpleGuidePanel(),
-  bool lag = false,
-  List<Override> rig = const [],
-  Locale? locale,
-  bool guiderFromRig = true,
-}) async {
+Future<ProviderContainer> _pump(WidgetTester tester, Map<String, dynamic> wire,
+    {Widget child = const SimpleGuidePanel(), bool lag = false, List<Override> rig = const [], Locale? locale,
+    bool guiderFromRig = true}) async {
   // Tall enough that the whole panel is on screen, so nothing needs scrolling.
   tester.view.physicalSize = const Size(2400, 3600);
   addTearDown(tester.view.resetPhysicalSize);
   _g = _Guider(wire, lag: lag);
   _order.clear();
-  final c = ProviderContainer(
-    overrides: [
-      guiderStatusProvider.overrideWith(() => _g),
-      mountProvider.overrideWith(_Mount.new),
-      // The guider settings as the rig's copy (ADR 0015: rows save over it).
-      if (guiderFromRig) phd2FromRig(),
-      ...rig,
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    guiderStatusProvider.overrideWith(() => _g),
+    mountProvider.overrideWith(_Mount.new),
+    // The guider settings as the rig's copy (ADR 0015: rows save over it).
+    if (guiderFromRig) phd2FromRig(),
+    ...rig,
+  ]);
   addTearDown(c.dispose);
-  await tester.pumpWidget(
-    UncontrolledProviderScope(
-      container: c,
-      child: MaterialApp(
-        locale: locale,
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: Scaffold(body: Center(child: child)),
-      ),
+  await tester.pumpWidget(UncontrolledProviderScope(
+    container: c,
+    child: MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: Center(child: child)),
     ),
-  );
+  ));
   await tester.pump();
   return c;
 }
 
 GuiderLiveState _calibratedAt(double dec) => GuiderLiveState(
-  calibration: GuiderCalibrationView.fromJson({
-    'connected': true,
-    'data': {'calibrated': true, 'declination_deg': dec},
-  }),
-);
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'data': {'calibrated': true, 'declination_deg': dec},
+      }),
+    );
 
-GuiderLiveState _liveState({
-  String app = 'Stopped',
-  bool lock = false,
-  bool calibrated = true,
-}) => GuiderLiveState(
-  live: GuiderLive(
-    appState: app,
-    lockX: lock ? 1 : null,
-    lockY: lock ? 1 : null,
-  ),
-  calibration: GuiderCalibrationView.fromJson({
-    'connected': true,
-    'data': {'calibrated': calibrated},
-  }),
-);
+GuiderLiveState _liveState({String app = 'Stopped', bool lock = false, bool calibrated = true}) => GuiderLiveState(
+      live: GuiderLive(appState: app, lockX: lock ? 1 : null, lockY: lock ? 1 : null),
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'data': {'calibrated': calibrated},
+      }),
+    );
 
 class _Live extends GuiderLiveNotifier {
   _Live([this.initial]);
@@ -283,15 +222,13 @@ class _RefusingLive implements GuiderLiveClient {
   @override
   Future<GuiderLive> getLive() async => GuiderLive.disconnected;
   @override
-  Future<GuiderCalibrationView> getCalibration() async =>
-      GuiderCalibrationView.disconnected;
+  Future<GuiderCalibrationView> getCalibration() async => GuiderCalibrationView.disconnected;
   @override
   Future<void> clearCalibration() async => throw Exception('refused');
   @override
   void close() {}
   @override
-  dynamic noSuchMethod(Invocation i) =>
-      throw UnimplementedError('${i.memberName}');
+  dynamic noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
 class _Assistant extends GuidingAssistantNotifier {
@@ -300,13 +237,9 @@ class _Assistant extends GuidingAssistantNotifier {
   final started = <bool>[];
   final applied = <List<String>>[];
   @override
-  GuidingAssistantState build() =>
-      GuidingAssistantState(status: status, loaded: true);
+  GuidingAssistantState build() => GuidingAssistantState(status: status, loaded: true);
   @override
-  Future<void> start({
-    double? durationSec,
-    required bool measureBacklash,
-  }) async {
+  Future<void> start({double? durationSec, required bool measureBacklash}) async {
     expect(durationSec, isNull, reason: 'no options: the guider picks');
     started.add(measureBacklash);
   }
@@ -315,16 +248,11 @@ class _Assistant extends GuidingAssistantNotifier {
   Future<void> apply(List<String> which) async => applied.add(which);
 
   void fail(String error) => state = state.copyWith(error: StateError(error));
-  void report(GuidingAssistantStatus status) =>
-      state = state.copyWith(status: status);
+  void report(GuidingAssistantStatus status) => state = state.copyWith(status: status);
 }
 
 GuidingAssistantStatus _assistant(String state, {Map<String, dynamic>? recs}) =>
-    GuidingAssistantStatus.fromJson({
-      'connected': true,
-      'state': state,
-      'recommendations': ?recs,
-    });
+    GuidingAssistantStatus.fromJson({'connected': true, 'state': state, 'recommendations': ?recs});
 
 final _idleAssistant = _assistant('idle');
 
@@ -347,283 +275,149 @@ void main() {
     _Mount.wire = _mountWire();
   });
 
-  testWidgets(
-    'while the guider calibrates, its steps are drawn where RMS and Exposure were (#1875 slice 3)',
-    (tester) async {
-      final live = GuiderLiveState(
-        calibration: GuiderCalibrationView.fromJson({
-          'connected': true,
-          'run_state': 'running',
-          'steps': [
-            {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
-            {'direction': 'West', 'step': 2, 'dx': 4.0, 'dy': 1.8, 'dist': 4.4},
-          ],
-        }),
-      );
-      await _pump(
-        tester,
-        _wire(runtime: 'calibrating'),
-        rig: [
-          simpleModeActiveProvider.overrideWithValue(true),
-          guiderLiveProvider.overrideWith(() => _Live(live)),
-          guidingAssistantProvider.overrideWith(
-            () => _Assistant(_idleAssistant),
-          ),
+  testWidgets('while the guider calibrates, its steps are drawn where RMS and Exposure were (#1875 slice 3)',
+      (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
+          {'direction': 'West', 'step': 2, 'dx': 4.0, 'dy': 1.8, 'dist': 4.4},
         ],
-      );
-      expect(
-        find.byKey(const Key('simple-guider-calibration-plot')),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('simple-guide-exposure')).hitTestable(),
-        findsNothing,
-      );
-      expect(find.text('RMS').hitTestable(), findsNothing);
-      // The key to its colours and a screen reader label (#1884 audit).
-      expect(find.text('RA (W/E)'), findsOneWidget);
-      expect(find.text('Dec (N/S)'), findsOneWidget);
-      expect(
-        find.bySemanticsLabel('Calibration plot, 2 steps'),
-        findsOneWidget,
-      );
-      // Tall enough to read each leg's steps on an iPad (#1884 re-audit).
-      expect(
-        tester
-            .getSize(find.byKey(const Key('simple-guider-calibration-steps')))
-            .height,
-        greaterThanOrEqualTo(160),
-      );
-    },
-  );
+      }),
+    );
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.byKey(const Key('simple-guider-calibration-plot')), findsOneWidget);
+    expect(find.byKey(const Key('simple-guide-exposure')).hitTestable(), findsNothing);
+    expect(find.text('RMS').hitTestable(), findsNothing);
+    // The key to its colours and a screen reader label (#1884 audit).
+    expect(find.text('RA (W/E)'), findsOneWidget);
+    expect(find.text('Dec (N/S)'), findsOneWidget);
+    expect(find.bySemanticsLabel('Calibration plot, 2 steps'), findsOneWidget);
+    // Tall enough to read each leg's steps on an iPad (#1884 re-audit).
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height,
+        greaterThanOrEqualTo(160));
+  });
 
-  testWidgets(
-    'the calibration plot keeps 160 pt above its key at 2x text (#1884 third audit)',
-    (tester) async {
-      final live = GuiderLiveState(
-        calibration: GuiderCalibrationView.fromJson({
-          'connected': true,
-          'run_state': 'running',
-          'steps': [
-            {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
-          ],
-        }),
-      );
-      tester.platformDispatcher.textScaleFactorTestValue = 2;
-      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      await _pump(
-        tester,
-        _wire(runtime: 'calibrating'),
-        rig: [
-          simpleModeActiveProvider.overrideWithValue(true),
-          guiderLiveProvider.overrideWith(() => _Live(live)),
-          guidingAssistantProvider.overrideWith(
-            () => _Assistant(_idleAssistant),
-          ),
+  testWidgets('the calibration plot keeps 160 pt above its key at 2x text (#1884 third audit)', (tester) async {
+    final live = GuiderLiveState(
+      calibration: GuiderCalibrationView.fromJson({
+        'connected': true,
+        'run_state': 'running',
+        'steps': [
+          {'direction': 'West', 'step': 1, 'dx': 1.0, 'dy': 0.5, 'dist': 1.1},
         ],
-      );
-      expect(
-        tester
-            .getSize(find.byKey(const Key('simple-guider-calibration-steps')))
-            .height,
-        greaterThanOrEqualTo(160),
-      );
-      expect(
-        tester.takeException(),
-        isNull,
-        reason: 'no overflow with the larger key',
-      );
-    },
-  );
+      }),
+    );
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(live)),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(tester.getSize(find.byKey(const Key('simple-guider-calibration-steps'))).height, greaterThanOrEqualTo(160));
+    expect(tester.takeException(), isNull, reason: 'no overflow with the larger key');
+  });
 
-  testWidgets(
-    'before the first calibration step the plot says it waits (#1884 audit)',
-    (tester) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'calibrating'),
-        rig: [
-          simpleModeActiveProvider.overrideWithValue(true),
-          guiderLiveProvider.overrideWith(() => _Live(const GuiderLiveState())),
-          guidingAssistantProvider.overrideWith(
-            () => _Assistant(_idleAssistant),
-          ),
-        ],
-      );
-      expect(find.text('Waiting for the first step…'), findsOneWidget);
-    },
-  );
+  testWidgets('before the first calibration step the plot says it waits (#1884 audit)', (tester) async {
+    await _pump(tester, _wire(runtime: 'calibrating'), rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      guiderLiveProvider.overrideWith(() => _Live(const GuiderLiveState())),
+      guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+    ]);
+    expect(find.text('Waiting for the first step…'), findsOneWidget);
+  });
 
   group('the Guider tabs (#1722)', () {
-    List<Override> rig(
-      _GuiderEquipment e, {
-      _Assistant? assistant,
-      SequenceRunState? run,
-      GuiderLiveState? live,
-    }) => [
-      simpleModeActiveProvider.overrideWithValue(true),
-      profileApiProvider.overrideWithValue(_Profile()),
-      guiderEquipmentApiProvider.overrideWithValue(e),
-      guiderLiveProvider.overrideWith(() => _Live(live)),
-      guidingAssistantProvider.overrideWith(
-        () => assistant ?? _Assistant(_idleAssistant),
-      ),
-      if (run != null) sequenceRunStateProvider.overrideWith(() => _Run(run)),
-    ];
-    OutlinedButton button(WidgetTester t, String key) =>
-        t.widget<OutlinedButton>(find.byKey(Key(key)));
+    List<Override> rig(_GuiderEquipment e, {_Assistant? assistant, SequenceRunState? run, GuiderLiveState? live}) => [
+          simpleModeActiveProvider.overrideWithValue(true),
+          profileApiProvider.overrideWithValue(_Profile()),
+          guiderEquipmentApiProvider.overrideWithValue(e),
+          guiderLiveProvider.overrideWith(() => _Live(live)),
+          guidingAssistantProvider.overrideWith(() => assistant ?? _Assistant(_idleAssistant)),
+          if (run != null) sequenceRunStateProvider.overrideWith(() => _Run(run)),
+        ];
+    OutlinedButton button(WidgetTester t, String key) => t.widget<OutlinedButton>(find.byKey(Key(key)));
     // The status dot of a tool's line: its colour and whether it is a ring (blue, changing).
-    StatusDot dot(WidgetTester t, String key) => t.widget<StatusDot>(
-      find.descendant(
-        of: find.byKey(Key(key)),
-        matching: find.byType(StatusDot),
-      ),
-    );
+    StatusDot dot(WidgetTester t, String key) =>
+        t.widget<StatusDot>(find.descendant(of: find.byKey(Key(key)), matching: find.byType(StatusDot)));
     const calStatus = 'simple-guider-calibration-status';
     const gaStatus = 'simple-guider-assistant-status';
 
-    testWidgets(
-      'Tuning and Tools hold the new controls; the Guide tab opens first',
-      (tester) async {
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment()),
-        );
-        expect(find.byKey(const Key('simple-guide-exposure')), findsOneWidget);
-        expect(
-          find.byKey(const Key('simple-window-row-RA minimum move')),
-          findsNothing,
-        );
-        await _tab(tester, 'tuning');
-        expect(
-          find.byKey(const Key('simple-window-row-RA minimum move')),
-          findsOneWidget,
-        );
-        await _tab(tester, 'tools');
-        expect(
-          find.byKey(const Key('simple-guider-recalibrate')),
-          findsOneWidget,
-        );
-        expect(
-          find.byKey(const Key('simple-guider-assistant')),
-          findsOneWidget,
-        );
-        expect(find.text('Build dark library'), findsNothing);
-      },
-    );
+    testWidgets('Tuning and Tools hold the new controls; the Guide tab opens first', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      expect(find.byKey(const Key('simple-guide-exposure')), findsOneWidget);
+      expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsNothing);
+      await _tab(tester, 'tuning');
+      expect(find.byKey(const Key('simple-window-row-RA minimum move')), findsOneWidget);
+      await _tab(tester, 'tools');
+      expect(find.byKey(const Key('simple-guider-recalibrate')), findsOneWidget);
+      expect(find.byKey(const Key('simple-guider-assistant')), findsOneWidget);
+      expect(find.text('Build dark library'), findsNothing);
+    });
 
-    testWidgets(
-      'calibrated: one row per tool, the Dec in green, quiet 44 pt buttons',
-      (tester) async {
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), live: _calibratedAt(12.4)),
-        );
-        await _tab(tester, 'tools');
-        expect(find.text('Calibration'), findsOneWidget);
-        expect(find.text('Guiding Assistant'), findsOneWidget);
-        expect(find.text('Calibrated at Dec +12°'), findsOneWidget);
-        expect(dot(tester, calStatus).color, AraColors.accentConnected);
-        expect(dot(tester, calStatus).ring, isFalse);
-        expect(find.text('Not run yet'), findsOneWidget);
-        expect(dot(tester, gaStatus).color, AraColors.accentInfo);
-        expect(
-          find.byKey(const Key('simple-guider-tools-refusal')),
-          findsNothing,
-        );
-        for (final k in [
-          'simple-guider-recalibrate',
-          'simple-guider-assistant',
-        ]) {
-          expect(
-            tester.getSize(find.byKey(Key(k))).height,
-            greaterThanOrEqualTo(44),
-          );
-        }
-        expect(find.text('Recalibrate'), findsOneWidget);
-        expect(find.text('Run'), findsOneWidget);
-        expect(
-          find.byType(FilledButton),
-          findsNothing,
-          reason: 'no filled control: the tab keeps one blue',
-        );
-      },
-    );
+    testWidgets('calibrated: one row per tool, the Dec in green, quiet 44 pt buttons', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(12.4)));
+      await _tab(tester, 'tools');
+      expect(find.text('Calibration'), findsOneWidget);
+      expect(find.text('Guiding Assistant'), findsOneWidget);
+      expect(find.text('Calibrated at Dec +12°'), findsOneWidget);
+      expect(dot(tester, calStatus).color, AraColors.accentConnected);
+      expect(dot(tester, calStatus).ring, isFalse);
+      expect(find.text('Not run yet'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentInfo);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
+      for (final k in ['simple-guider-recalibrate', 'simple-guider-assistant']) {
+        expect(tester.getSize(find.byKey(Key(k))).height, greaterThanOrEqualTo(44));
+      }
+      expect(find.text('Recalibrate'), findsOneWidget);
+      expect(find.text('Run'), findsOneWidget);
+      expect(find.byType(FilledButton), findsNothing, reason: 'no filled control: the tab keeps one blue');
+    });
 
     testWidgets('a southern Dec reads with its sign', (tester) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), live: _calibratedAt(-33.8)),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(-33.8)));
       await _tab(tester, 'tools');
       expect(find.text('Calibrated at Dec -34°'), findsOneWidget);
     });
 
     testWidgets('a Dec that rounds to 0 reads with no sign', (tester) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), live: _calibratedAt(-0.4)),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(-0.4)));
       await _tab(tester, 'tools');
       expect(find.text('Calibrated at Dec 0°'), findsOneWidget);
     });
 
     testWidgets('calibrated with no Dec reads just Calibrated', (tester) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), live: _liveState()),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _liveState()));
       await _tab(tester, 'tools');
       expect(find.text('Calibrated'), findsOneWidget);
     });
 
     testWidgets('each button is read as its whole action', (tester) async {
       final semantics = tester.ensureSemantics();
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment()),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tools');
       expect(find.bySemanticsLabel('Recalibrate now'), findsOneWidget);
       expect(find.bySemanticsLabel('Run Guiding Assistant'), findsOneWidget);
       semantics.dispose();
     });
 
-    testWidgets(
-      'each row is read once: its name, what it does and where it stands',
-      (tester) async {
-        final semantics = tester.ensureSemantics();
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), live: _calibratedAt(12)),
-        );
-        await _tab(tester, 'tools');
-        expect(
-          find.bySemanticsLabel(
-            RegExp(
-              r'^Calibration\. Measures again .* Calibrated at Dec \+12°$',
-            ),
-          ),
-          findsOneWidget,
-        );
-        expect(
-          find.bySemanticsLabel(
-            RegExp(r'^Guiding Assistant\. .* Not run yet$'),
-          ),
-          findsOneWidget,
-        );
-        // the drawn words are not a second reading of the same row
-        expect(find.bySemanticsLabel('Not run yet'), findsNothing);
-        semantics.dispose();
-      },
-    );
+    testWidgets('each row is read once: its name, what it does and where it stands', (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), live: _calibratedAt(12)));
+      await _tab(tester, 'tools');
+      expect(find.bySemanticsLabel(RegExp(r'^Calibration\. Measures again .* Calibrated at Dec \+12°$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Guiding Assistant\. .* Not run yet$')), findsOneWidget);
+      // the drawn words are not a second reading of the same row
+      expect(find.bySemanticsLabel('Not run yet'), findsNothing);
+      semantics.dispose();
+    });
 
     testWidgets('a minimum move goes to the Guider live', (tester) async {
       final e = _GuiderEquipment();
@@ -633,82 +427,52 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-guider-min-move-ra-up')));
       await tester.pump();
       await tester.pump();
-      expect(
-        c.read(phd2SettingsProvider).value!.minimumMove,
-        closeTo(before + 0.05, 1e-9),
-      );
+      expect(c.read(phd2SettingsProvider).value!.minimumMove, closeTo(before + 0.05, 1e-9));
       expect(e.pushes, [true]);
     });
 
-    testWidgets(
-      'a settle change is saved for the next dither, with no live push',
-      (tester) async {
-        final e = _GuiderEquipment();
-        final c = await _pump(tester, _wire(), rig: rig(e));
-        await _tab(tester, 'tuning');
-        await tester.tap(find.byKey(const Key('simple-guider-settle-time-up')));
-        await tester.pump();
-        await tester.pump();
-        expect(c.read(phd2SettingsProvider).value!.settleTimeSec, 11);
-        expect(e.pushes, isEmpty);
-      },
-    );
+    testWidgets('a settle change is saved for the next dither, with no live push', (tester) async {
+      final e = _GuiderEquipment();
+      final c = await _pump(tester, _wire(), rig: rig(e));
+      await _tab(tester, 'tuning');
+      await tester.tap(find.byKey(const Key('simple-guider-settle-time-up')));
+      await tester.pump();
+      await tester.pump();
+      expect(c.read(phd2SettingsProvider).value!.settleTimeSec, 11);
+      expect(e.pushes, isEmpty);
+    });
 
-    testWidgets(
-      'Recalibrate now forgets the calibration, then starts the routine',
-      (tester) async {
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment()),
-        );
-        await _tab(tester, 'tools');
-        await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 600));
-        expect(_g.calls, ['clear', 'start']);
-      },
-    );
+    testWidgets('Recalibrate now forgets the calibration, then starts the routine', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      await _tab(tester, 'tools');
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(_g.calls, ['clear', 'start']);
+    });
 
-    testWidgets(
-      'a running plan refuses Recalibrate now and the Guiding Assistant',
-      (tester) async {
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), run: SequenceRunState.running),
-        );
-        await _tab(tester, 'tools');
-        await tester.pump(); // the run state's first read
-        expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
-        expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
-        expect(find.text('Stop the plan to use these.'), findsOneWidget);
-      },
-    );
+    testWidgets('a running plan refuses Recalibrate now and the Guiding Assistant', (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), run: SequenceRunState.running));
+      await _tab(tester, 'tools');
+      await tester.pump(); // the run state's first read
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      expect(find.text('Stop the plan to use these.'), findsOneWidget);
+    });
 
-    testWidgets('guiding refuses Recalibrate now and says to stop first', (
-      tester,
-    ) async {
+    testWidgets('guiding refuses Recalibrate now and says to stop first', (tester) async {
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(find.text('Stop guiding to use these.'), findsOneWidget);
       // One line for both tools, above the rows.
-      final refusal = tester
-          .getTopLeft(find.byKey(const Key('simple-guider-tools-refusal')))
-          .dy;
+      final refusal = tester.getTopLeft(find.byKey(const Key('simple-guider-tools-refusal'))).dy;
       expect(refusal, lessThan(tester.getTopLeft(find.text('Calibration')).dy));
     });
 
-    testWidgets('the Guiding Assistant is one action with no options', (
-      tester,
-    ) async {
+    testWidgets('the Guiding Assistant is one action with no options', (tester) async {
       final a = _Assistant(_idleAssistant);
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       await tester.tap(find.byKey(const Key('simple-guider-assistant')));
       await tester.pump();
@@ -719,71 +483,39 @@ void main() {
     testWidgets('the tabs are the house segments, 44 pt tall', (tester) async {
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
       expect(find.byType(SimpleSegments<int>), findsOneWidget);
-      expect(
-        tester.getSize(find.byKey(const Key('simple-guider-tab-tools'))).height,
-        greaterThanOrEqualTo(44),
-      );
+      expect(tester.getSize(find.byKey(const Key('simple-guider-tab-tools'))).height, greaterThanOrEqualTo(44));
     });
 
-    testWidgets('a clear the rig refuses says so and does not start guiding', (
-      tester,
-    ) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: [
-          simpleModeActiveProvider.overrideWithValue(true),
-          guiderLiveApiProvider.overrideWithValue(_RefusingLive()),
-          guidingAssistantProvider.overrideWith(
-            () => _Assistant(_idleAssistant),
-          ),
-        ],
-      );
+    testWidgets('a clear the rig refuses says so and does not start guiding', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: [
+        simpleModeActiveProvider.overrideWithValue(true),
+        guiderLiveApiProvider.overrideWithValue(_RefusingLive()),
+        guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+      ]);
       await _tab(tester, 'tools');
       await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 100));
       expect(_g.calls, isEmpty);
       expect(c.read(simpleMessagesProvider), hasLength(1));
-      await _tab(
-        tester,
-        'guide',
-      ); // Tools watches the Guider's live state: leaving it stops that poll
+      await _tab(tester, 'guide'); // Tools watches the Guider's live state: leaving it stops that poll
       await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('a main camera frame refuses both tools', (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment()),
-      );
-      c
-          .read(captureProgressProvider.notifier)
-          .beginExposing(const Duration(seconds: 30));
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
       expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
-      expect(
-        find.text('The main camera is busy: wait for its frame, or stop it.'),
-        findsOneWidget,
-      );
-      expect(
-        find.byKey(const Key('simple-guider-tools-refusal')),
-        findsOneWidget,
-      );
+      expect(find.text('The main camera is busy: wait for its frame, or stop it.'), findsOneWidget);
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsOneWidget);
       c.read(captureProgressProvider.notifier).reset();
       await tester.pump(const Duration(seconds: 11));
     });
 
-    testWidgets('a start already asked for refuses Recalibrate now', (
-      tester,
-    ) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment()),
-      );
+    testWidgets('a start already asked for refuses Recalibrate now', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
       c.read(simpleGuiderPendingProvider.notifier).set(true);
       await _tab(tester, 'tools');
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
@@ -795,54 +527,24 @@ void main() {
       expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
     });
 
-    testWidgets(
-      'with no calibration the Guiding Assistant is off and its row says to calibrate first',
-      (tester) async {
-        final a = _Assistant(_idleAssistant);
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(
-            _GuiderEquipment(),
-            assistant: a,
-            live: _liveState(calibrated: false),
-          ),
-        );
-        await _tab(tester, 'tools');
-        expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
-        expect(find.textContaining('Calibrate first'), findsOneWidget);
-        expect(dot(tester, gaStatus).color, AraColors.accentWarning);
-        expect(
-          find.text('Not calibrated. The next start calibrates first.'),
-          findsOneWidget,
-        );
-        expect(dot(tester, calStatus).color, AraColors.accentInfo);
-        expect(
-          dot(tester, calStatus).ring,
-          isTrue,
-          reason: 'blue is a ring, readable by shape in Night mode',
-        );
-        expect(
-          button(tester, 'simple-guider-recalibrate').onPressed,
-          isNotNull,
-          reason: 'Recalibrate is how to fix it',
-        );
-      },
-    );
-
-    testWidgets('a star already picked goes straight to measuring', (
-      tester,
-    ) async {
+    testWidgets('with no calibration the Guiding Assistant is off and its row says to calibrate first', (tester) async {
       final a = _Assistant(_idleAssistant);
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(
-          _GuiderEquipment(),
-          assistant: a,
-          live: _liveState(app: 'Selected', lock: true),
-        ),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a, live: _liveState(calibrated: false)));
+      await _tab(tester, 'tools');
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNull);
+      expect(find.textContaining('Calibrate first'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentWarning);
+      expect(find.text('Not calibrated. The next start calibrates first.'), findsOneWidget);
+      expect(dot(tester, calStatus).color, AraColors.accentInfo);
+      expect(dot(tester, calStatus).ring, isTrue, reason: 'blue is a ring, readable by shape in Night mode');
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNotNull, reason: 'Recalibrate is how to fix it');
+    });
+
+    testWidgets('a star already picked goes straight to measuring', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a, live: _liveState(app: 'Selected', lock: true)));
       await _tab(tester, 'tools');
       await tester.tap(find.byKey(const Key('simple-guider-assistant')));
       await tester.pump();
@@ -850,561 +552,240 @@ void main() {
       expect(a.started, [true]);
     });
 
-    testWidgets('a Guiding Assistant error shows as a pill, not a caption', (
-      tester,
-    ) async {
+    testWidgets('a Guiding Assistant error shows as a pill, not a caption', (tester) async {
       final a = _Assistant(_idleAssistant);
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       a.fail('No star selected');
       await tester.pump();
-      expect(
-        c.read(simpleMessagesProvider).single.title,
-        contains('No star selected'),
-      );
+      expect(c.read(simpleMessagesProvider).single.title, contains('No star selected'));
       expect(find.text('No star selected'), findsNothing);
     });
 
-    testWidgets(
-      'a second tap while the calibration is being forgotten does nothing',
-      (tester) async {
-        final live = _SlowLive();
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: [
-            simpleModeActiveProvider.overrideWithValue(true),
-            guiderLiveProvider.overrideWith(() => live),
-            guidingAssistantProvider.overrideWith(
-              () => _Assistant(_idleAssistant),
-            ),
-          ],
-        );
-        await _tab(tester, 'tools');
-        await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
-        await tester.pump();
-        await tester.tap(
-          find.byKey(const Key('simple-guider-recalibrate')),
-          warnIfMissed: false,
-        );
-        await tester.pump();
-        expect(live.clears, 1);
-        expect(
-          _g.calls,
-          isEmpty,
-          reason: 'nothing starts on the old calibration',
-        );
-        live.clear.complete();
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 600));
-        expect(_g.calls, ['start']);
-      },
-    );
-
-    testWidgets(
-      'an old Guiding Assistant failure is not a new pill; a run that fails now is',
-      (tester) async {
-        final a = _Assistant(_idleAssistant);
-        final c = await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        a.report(
-          GuidingAssistantStatus.fromJson({
-            'connected': true,
-            'state': 'failed',
-            'error': 'from last night',
-          }),
-        );
-        await tester.pump();
-        expect(
-          c.read(simpleMessagesProvider),
-          isEmpty,
-          reason: 'the first read found an old result',
-        );
-        a.report(
-          GuidingAssistantStatus.fromJson({
-            'connected': true,
-            'state': 'measuring',
-          }),
-        );
-        await tester.pump();
-        a.report(
-          GuidingAssistantStatus.fromJson({
-            'connected': true,
-            'state': 'failed',
-            'error': 'star lost',
-          }),
-        );
-        await tester.pump();
-        expect(
-          c.read(simpleMessagesProvider).single.title,
-          contains('star lost'),
-        );
-      },
-    );
-
-    testWidgets('a failed run says why on Tools, whenever Tools opens', (
-      tester,
-    ) async {
-      final a = _Assistant(
-        GuidingAssistantStatus.fromJson({
-          'connected': true,
-          'state': 'failed',
-          'error': 'star lost',
-        }),
-      );
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+    testWidgets('a second tap while the calibration is being forgotten does nothing', (tester) async {
+      final live = _SlowLive();
+      await _pump(tester, _wire(runtime: 'stopped'), rig: [
+        simpleModeActiveProvider.overrideWithValue(true),
+        guiderLiveProvider.overrideWith(() => live),
+        guidingAssistantProvider.overrideWith(() => _Assistant(_idleAssistant)),
+      ]);
       await _tab(tester, 'tools');
-      expect(
-        find.byKey(const Key('simple-guider-assistant-failed')),
-        findsOneWidget,
-      );
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')));
+      await tester.pump();
+      await tester.tap(find.byKey(const Key('simple-guider-recalibrate')), warnIfMissed: false);
+      await tester.pump();
+      expect(live.clears, 1);
+      expect(_g.calls, isEmpty, reason: 'nothing starts on the old calibration');
+      live.clear.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(_g.calls, ['start']);
+    });
+
+    testWidgets('an old Guiding Assistant failure is not a new pill; a run that fails now is', (tester) async {
+      final a = _Assistant(_idleAssistant);
+      final c = await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'from last night'}));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider), isEmpty, reason: 'the first read found an old result');
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'measuring'}));
+      await tester.pump();
+      a.report(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost'}));
+      await tester.pump();
+      expect(c.read(simpleMessagesProvider).single.title, contains('star lost'));
+    });
+
+    testWidgets('a failed run says why on Tools, whenever Tools opens', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost'}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.byKey(const Key('simple-guider-assistant-failed')), findsOneWidget);
       expect(find.textContaining('Last run failed: star lost'), findsOneWidget);
       expect(dot(tester, gaStatus).color, AraColors.accentWarning);
       expect(find.text('Run again'), findsOneWidget);
-      expect(
-        find.byKey(const Key('simple-guider-tools-refusal')),
-        findsNothing,
-        reason: 'a one-tool state is not a shared refusal',
-      );
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing, reason: 'a one-tool state is not a shared refusal');
     });
 
-    testWidgets(
-      'while the Assistant measures: Stop, a blinking green line, and Recalibrate off',
-      (tester) async {
-        final a = _Assistant(_assistant('measuring'));
-        // A real run reports the guider runtime as `assistant`, which counts as busy.
-        await _pump(
-          tester,
-          _wire(runtime: 'assistant'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        expect(find.text('Stop'), findsOneWidget);
-        expect(find.text('Measuring drift…'), findsOneWidget);
-        expect(
-          find.text('Stop the guide loop to recalibrate.'),
-          findsNothing,
-          reason: 'stopping it would end the run',
-        );
-        expect(dot(tester, gaStatus).color, AraColors.accentConnected);
-        expect(
-          tester
-              .widget<StatusBlink>(
-                find.descendant(
-                  of: find.byKey(const Key(gaStatus)),
-                  matching: find.byType(StatusBlink),
-                ),
-              )
-              .on,
-          isTrue,
-        );
-        expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
-        expect(
-          button(tester, 'simple-guider-assistant').onPressed,
-          isNotNull,
-          reason: 'Stop takes the tap',
-        );
-      },
-    );
+    testWidgets('while the Assistant measures: Stop, a blinking green line, and Recalibrate off', (tester) async {
+      final a = _Assistant(_assistant('measuring'));
+      // A real run reports the guider runtime as `assistant`, which counts as busy.
+      await _pump(tester, _wire(runtime: 'assistant'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('Stop'), findsOneWidget);
+      expect(find.text('Measuring drift…'), findsOneWidget);
+      expect(find.text('Stop the guide loop to recalibrate.'), findsNothing, reason: 'stopping it would end the run');
+      expect(dot(tester, gaStatus).color, AraColors.accentConnected);
+      expect(
+          tester.widget<StatusBlink>(find.descendant(of: find.byKey(const Key(gaStatus)), matching: find.byType(StatusBlink))).on,
+          isTrue);
+      expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
+      expect(button(tester, 'simple-guider-assistant').onPressed, isNotNull, reason: 'Stop takes the tap');
+    });
 
-    testWidgets(
-      'a finished Assistant says how many suggestions wait, in green, with Run again',
-      (tester) async {
-        final a = _Assistant(
-          _assistant(
-            'done',
-            recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3},
-          ),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        expect(find.text('Done. 2 suggestions to apply.'), findsOneWidget);
-        expect(dot(tester, gaStatus).color, AraColors.accentConnected);
-        expect(find.text('Run again'), findsOneWidget);
-        expect(
-          find.widgetWithText(FilledButton, 'Apply 2 suggestions'),
-          findsOneWidget,
-          reason: 'the only filled control',
-        );
-      },
-    );
+    testWidgets('a finished Assistant says how many suggestions wait, in green, with Run again', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('Done. 2 suggestions to apply.'), findsOneWidget);
+      expect(dot(tester, gaStatus).color, AraColors.accentConnected);
+      expect(find.text('Run again'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Apply 2 suggestions'), findsOneWidget, reason: 'the only filled control');
+    });
 
-    testWidgets('a loop stops Recalibrate only, and says so on its row', (
-      tester,
-    ) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'looping'),
-        rig: rig(_GuiderEquipment()),
-      );
+    testWidgets('a loop stops Recalibrate only, and says so on its row', (tester) async {
+      await _pump(tester, _wire(runtime: 'looping'), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tools');
       expect(find.text('Stop the guide loop to recalibrate.'), findsOneWidget);
       expect(button(tester, 'simple-guider-recalibrate').onPressed, isNull);
-      expect(
-        find.byKey(const Key('simple-guider-tools-refusal')),
-        findsNothing,
-      );
+      expect(find.byKey(const Key('simple-guider-tools-refusal')), findsNothing);
     });
 
-    testWidgets(
-      'the panel takes the height of the tab it shows: Tools does not scroll inside (#1875 slice 3)',
-      (tester) async {
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment()),
-        );
-        final panel = find.byKey(const Key('simple-guide-panel'));
-        final guide = tester.getSize(panel).height;
-        await _tab(tester, 'tools');
-        expect(
-          find.descendant(of: panel, matching: find.byType(Scrollable)),
-          findsNothing,
-          reason: 'the shell scrolls the panel past the space it has, not the panel itself',
-        );
-        await _tab(tester, 'tuning');
-        expect(
-          tester.getSize(panel).height,
-          isNot(guide),
-          reason: 'Tuning is its own height',
-        );
-      },
-    );
+    testWidgets('the panel takes the height of the tab it shows: Tools does not scroll inside (#1875 slice 3)',
+        (tester) async {
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment()));
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      final guide = tester.getSize(panel).height;
+      await _tab(tester, 'tools');
+      expect(find.descendant(of: panel, matching: find.byType(Scrollable)), findsNothing,
+          reason: 'the shell scrolls the panel past the space it has, not the panel itself');
+      await _tab(tester, 'tuning');
+      expect(tester.getSize(panel).height, isNot(guide), reason: 'Tuning is its own height');
+    });
 
-    testWidgets(
-      'a long failure reason keeps to two lines, so Tools keeps the Guide height',
-      (tester) async {
-        final a = _Assistant(
-          GuidingAssistantStatus.fromJson({
-            'connected': true,
-            'state': 'failed',
-            'error': 'star lost ' * 40,
-          }),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        final reason = tester.widget<Text>(
-          find.descendant(
-            of: find.byKey(const Key('simple-guider-assistant-failed')),
-            matching: find.byType(Text),
-          ),
-        );
-        expect(reason.maxLines, 2);
-        expect(reason.overflow, TextOverflow.ellipsis);
-      },
-    );
+    testWidgets('a long failure reason keeps to two lines, so Tools keeps the Guide height', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost ' * 40}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      final reason = tester.widget<Text>(
+          find.descendant(of: find.byKey(const Key('simple-guider-assistant-failed')), matching: find.byType(Text)));
+      expect(reason.maxLines, 2);
+      expect(reason.overflow, TextOverflow.ellipsis);
+    });
 
-    testWidgets('tapping a cut-off failure reason shows it whole, in place', (
-      tester,
-    ) async {
-      final a = _Assistant(
-        GuidingAssistantStatus.fromJson({
-          'connected': true,
-          'state': 'failed',
-          'error': 'star lost ' * 40,
-        }),
-      );
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+    testWidgets('tapping a cut-off failure reason shows it whole, in place', (tester) async {
+      final a = _Assistant(GuidingAssistantStatus.fromJson({'connected': true, 'state': 'failed', 'error': 'star lost ' * 40}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       final row = find.byKey(const Key('simple-guider-assistant-failed'));
       await _tapTools(tester, row);
-      expect(
-        tester
-            .widget<Text>(find.descendant(of: row, matching: find.byType(Text)))
-            .maxLines,
-        isNull,
-      );
+      expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, isNull);
       await _tapTools(tester, row);
-      expect(
-        tester
-            .widget<Text>(find.descendant(of: row, matching: find.byType(Text)))
-            .maxLines,
-        2,
-      );
+      expect(tester.widget<Text>(find.descendant(of: row, matching: find.byType(Text))).maxLines, 2);
     });
 
-    testWidgets('each Tuning stepper is read with its full name', (
-      tester,
-    ) async {
+    testWidgets('each Tuning stepper is read with its full name', (tester) async {
       final semantics = tester.ensureSemantics();
       await _pump(tester, _wire(), rig: rig(_GuiderEquipment()));
       await _tab(tester, 'tuning');
-      expect(
-        find.bySemanticsLabel(RegExp(r'^Minimum move, RA$')),
-        findsOneWidget,
-      );
-      expect(
-        find.bySemanticsLabel(RegExp(r'^Settle after each dither, For$')),
-        findsOneWidget,
-      );
-      expect(
-        find.bySemanticsLabel('Settle after each dither, For, More'),
-        findsOneWidget,
-        reason: 'a button reached on its own still says what it changes',
-      );
+      expect(find.bySemanticsLabel(RegExp(r'^Minimum move, RA$')), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp(r'^Settle after each dither, For$')), findsOneWidget);
+      expect(find.bySemanticsLabel('Settle after each dither, For, More'), findsOneWidget,
+          reason: 'a button reached on its own still says what it changes');
       semantics.dispose();
     });
 
-    testWidgets(
-      'a finished Guiding Assistant applies every suggestion in one tap',
-      (tester) async {
-        final a = _Assistant(
-          _assistant(
-            'done',
-            recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3},
-          ),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        await _tapTools(tester, find.text('Apply 2 suggestions'));
-        expect(a.applied, [
-          ['min_move_ra', 'min_move_dec'],
-        ]);
-      },
-    );
+    testWidgets('a finished Guiding Assistant applies every suggestion in one tap', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await _tapTools(tester, find.text('Apply 2 suggestions'));
+      expect(a.applied, [['min_move_ra', 'min_move_dec']]);
+    });
 
-    testWidgets(
-      'a finished run lists each waiting suggestion inline: its name and value, ticked',
-      (tester) async {
-        final a = _Assistant(
-          _assistant(
-            'done',
-            recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140},
-          ),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        expect(find.text('RA minimum move'), findsOneWidget);
-        expect(find.text('0.20 px'), findsOneWidget);
-        expect(find.text('Dec backlash compensation'), findsOneWidget);
-        expect(find.text('140 ms'), findsOneWidget);
-        for (final k in ['min_move_ra', 'dec_backlash']) {
-          expect(
-            tester
-                .widget<CheckboxListTile>(find.byKey(Key('ga-suggest-$k')))
-                .value,
-            isTrue,
-            reason: k,
-          );
-        }
-      },
-    );
+    testWidgets('a finished run lists each waiting suggestion inline: its name and value, ticked', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      expect(find.text('RA minimum move'), findsOneWidget);
+      expect(find.text('0.20 px'), findsOneWidget);
+      expect(find.text('Dec backlash compensation'), findsOneWidget);
+      expect(find.text('140 ms'), findsOneWidget);
+      for (final k in ['min_move_ra', 'dec_backlash']) {
+        expect(tester.widget<CheckboxListTile>(find.byKey(Key('ga-suggest-$k'))).value, isTrue, reason: k);
+      }
+    });
 
-    testWidgets(
-      'unticking a suggestion counts it out of Apply, and Apply sends only the ticked ones',
-      (tester) async {
-        final a = _Assistant(
-          _assistant(
-            'done',
-            recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3},
-          ),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-        );
-        await _tab(tester, 'tools');
-        await _tapTools(
-          tester,
-          find.byKey(const Key('ga-suggest-min_move_ra')),
-        );
-        expect(
-          find.text('Done. 2 suggestions to apply.'),
-          findsOneWidget,
-          reason: 'the line still counts what waits',
-        );
-        await _tapTools(tester, find.text('Apply 1 suggestion'));
-        expect(a.applied, [
-          ['min_move_dec'],
-        ]);
-      },
-    );
+    testWidgets('unticking a suggestion counts it out of Apply, and Apply sends only the ticked ones', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
+      await _tab(tester, 'tools');
+      await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
+      expect(find.text('Done. 2 suggestions to apply.'), findsOneWidget, reason: 'the line still counts what waits');
+      await _tapTools(tester, find.text('Apply 1 suggestion'));
+      expect(a.applied, [['min_move_dec']]);
+    });
 
     testWidgets('with nothing ticked, Apply is off', (tester) async {
-      final a = _Assistant(
-        _assistant(
-          'done',
-          recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3},
-        ),
-      );
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3}));
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
       await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_dec')));
-      expect(
-        tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
-        isNull,
-      );
+      expect(tester.widget<FilledButton>(find.byType(FilledButton)).onPressed, isNull);
     });
 
     testWidgets('a new run ticks every suggestion again', (tester) async {
       final recs = {'min_move_ra_px': 0.2, 'min_move_dec_px': 0.3};
       final a = _Assistant(_assistant('done', recs: recs));
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        rig: rig(_GuiderEquipment(), assistant: a),
-      );
+      await _pump(tester, _wire(runtime: 'stopped'), rig: rig(_GuiderEquipment(), assistant: a));
       await _tab(tester, 'tools');
       await _tapTools(tester, find.byKey(const Key('ga-suggest-min_move_ra')));
       a.report(_assistant('running'));
       await tester.pump();
       a.report(_assistant('done', recs: recs));
       await tester.pump();
-      expect(
-        tester
-            .widget<CheckboxListTile>(
-              find.byKey(const Key('ga-suggest-min_move_ra')),
-            )
-            .value,
-        isTrue,
-      );
+      expect(tester.widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-min_move_ra'))).value, isTrue);
       expect(find.text('Apply 2 suggestions'), findsOneWidget);
     });
 
-    testWidgets(
-      'in Brazilian Portuguese the suggestions are named in Portuguese',
-      (tester) async {
-        final a = _Assistant(
-          _assistant(
-            'done',
-            recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140},
-          ),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-          locale: const Locale('pt', 'BR'),
-        );
-        await _tab(tester, 'tools');
-        expect(find.text('Movimento mínimo em AR'), findsOneWidget);
-        expect(find.text('Compensação de folga em Dec'), findsOneWidget);
-        expect(find.text('Aplicar 2 sugestões'), findsOneWidget);
-      },
-    );
+    testWidgets('in Brazilian Portuguese the suggestions are named in Portuguese', (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'min_move_ra_px': 0.2, 'dec_backlash_ms': 140}));
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a), locale: const Locale('pt', 'BR'));
+      await _tab(tester, 'tools');
+      expect(find.text('Movimento mínimo em AR'), findsOneWidget);
+      expect(find.text('Compensação de folga em Dec'), findsOneWidget);
+      expect(find.text('Aplicar 2 sugestões'), findsOneWidget);
+    });
 
-    testWidgets(
-      'in Brazilian Portuguese a suggested Dec guide mode reads in Portuguese, an unknown one as sent',
-      (tester) async {
-        final a = _Assistant(
-          _assistant('done', recs: {'dec_guide_mode': 'North'}),
-        );
-        await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          rig: rig(_GuiderEquipment(), assistant: a),
-          locale: const Locale('pt', 'BR'),
-        );
-        await _tab(tester, 'tools');
-        final row = find.byKey(const Key('ga-suggest-dec_guide_mode'));
-        expect(
-          find.descendant(of: row, matching: find.text('Norte')),
-          findsOneWidget,
-        );
-        a.report(_assistant('done', recs: {'dec_guide_mode': 'Sideways'}));
-        await tester.pump();
-        expect(
-          find.descendant(of: row, matching: find.text('Sideways')),
-          findsOneWidget,
-        );
-      },
-    );
+    testWidgets('in Brazilian Portuguese a suggested Dec guide mode reads in Portuguese, an unknown one as sent',
+        (tester) async {
+      final a = _Assistant(_assistant('done', recs: {'dec_guide_mode': 'North'}));
+      await _pump(tester, _wire(runtime: 'stopped'),
+          rig: rig(_GuiderEquipment(), assistant: a), locale: const Locale('pt', 'BR'));
+      await _tab(tester, 'tools');
+      final row = find.byKey(const Key('ga-suggest-dec_guide_mode'));
+      expect(find.descendant(of: row, matching: find.text('Norte')), findsOneWidget);
+      a.report(_assistant('done', recs: {'dec_guide_mode': 'Sideways'}));
+      await tester.pump();
+      expect(find.descendant(of: row, matching: find.text('Sideways')), findsOneWidget);
+    });
   });
 
   test('the guider follows the DESIGN.md status rule: green good (blinking while guiding), blue changing, '
       'amber warning, red error, grey off', () {
-    GuiderStatus at(String state, String runtime) => GuiderStatus.fromJson({
-      'device_id': 'g',
-      'name': 'PHD2',
-      'state': state,
-      'runtime': {'state': runtime},
-    });
-    expect(
-      guiderStatusLevel(at('connected', 'stopped')),
-      StatusLevel.connected,
-      reason: 'idle: good',
-    );
-    expect(
-      guiderStatusLevel(at('connected', 'guiding')),
-      StatusLevel.active,
-      reason: 'working: blinking green',
-    );
+    GuiderStatus at(String state, String runtime) =>
+        GuiderStatus.fromJson({'device_id': 'g', 'name': 'PHD2', 'state': state, 'runtime': {'state': runtime}});
+    expect(guiderStatusLevel(at('connected', 'stopped')), StatusLevel.connected, reason: 'idle: good');
+    expect(guiderStatusLevel(at('connected', 'guiding')), StatusLevel.active, reason: 'working: blinking green');
     for (final r in ['looping', 'calibrating', 'settling', 'paused']) {
-      expect(
-        guiderStatusLevel(at('connected', r)),
-        StatusLevel.changing,
-        reason: r,
-      );
+      expect(guiderStatusLevel(at('connected', r)), StatusLevel.changing, reason: r);
     }
-    expect(
-      guiderStatusLevel(at('connected', 'star_lost')),
-      StatusLevel.busy,
-      reason: 'a warning',
-    );
+    expect(guiderStatusLevel(at('connected', 'star_lost')), StatusLevel.busy, reason: 'a warning');
     expect(guiderStatusLevel(at('error', 'stopped')), StatusLevel.error);
-    expect(
-      guiderStatusLevel(at('disconnected', 'stopped')),
-      StatusLevel.disconnected,
-    );
+    expect(guiderStatusLevel(at('disconnected', 'stopped')), StatusLevel.disconnected);
     expect(StatusLevel.changing.color, AraColors.accentInfo);
     expect(StatusLevel.busy.color, AraColors.accentWarning);
   });
 
-  testWidgets(
-    'idle and out of step: the reason replaces how to start, before Start is pressed (#1665)',
-    (tester) async {
-      final wire = _wire(runtime: 'stopped');
-      (wire['runtime'] as Map<String, dynamic>)['out_of_step_reason'] =
-          'The Guider does not have this profile.';
-      await _pump(tester, wire);
-      expect(
-        find.text('The Guider does not have this profile.'),
-        findsOneWidget,
-      );
-      expect(
-        find.textContaining('Tap the shutter to start guiding'),
-        findsNothing,
-      );
-    },
-  );
+  testWidgets('idle and out of step: the reason replaces how to start, before Start is pressed (#1665)', (tester) async {
+    final wire = _wire(runtime: 'stopped');
+    (wire['runtime'] as Map<String, dynamic>)['out_of_step_reason'] = 'The Guider does not have this profile.';
+    await _pump(tester, wire);
+    expect(find.text('The Guider does not have this profile.'), findsOneWidget);
+    expect(find.textContaining('Tap the shutter to start guiding'), findsNothing);
+  });
 
   testWidgets('the Guide panel: its RMS, in arcseconds', (tester) async {
     await _pump(tester, _wire());
@@ -1416,53 +797,29 @@ void main() {
   for (final (name, wire, status) in [
     ('guiding', _wire(), 'Guiding'),
     ('idle', _wire(runtime: 'stopped'), 'Idle'),
-    (
-      'not connected',
-      _wire(state: 'disconnected', runtime: 'stopped'),
-      'Guider not connected',
-    ),
+    ('not connected', _wire(state: 'disconnected', runtime: 'stopped'), 'Guider not connected'),
   ]) {
-    testWidgets(
-      '$name: the Guide panel has no status line of its own, the pill shows it (#1898)',
-      (tester) async {
-        await _pump(tester, wire);
-        final panel = find.byKey(const Key('simple-guide-panel'));
-        expect(
-          find.descendant(of: panel, matching: find.text(status)),
-          findsNothing,
-        );
-        expect(
-          find.descendant(of: panel, matching: find.byType(StatusDot)),
-          findsNothing,
-          reason: "the status line's dot",
-        );
-      },
-    );
+    testWidgets('$name: the Guide panel has no status line of its own, the pill shows it (#1898)', (tester) async {
+      await _pump(tester, wire);
+      final panel = find.byKey(const Key('simple-guide-panel'));
+      expect(find.descendant(of: panel, matching: find.text(status)), findsNothing);
+      expect(find.descendant(of: panel, matching: find.byType(StatusDot)), findsNothing, reason: "the status line's dot");
+    });
   }
 
   testWidgets('idle: how to start, and no RMS', (tester) async {
     await _pump(tester, _wire(runtime: 'stopped'));
-    expect(
-      find.textContaining('Tap the shutter to start guiding'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Tap the shutter to start guiding'), findsOneWidget);
     expect(find.text('—'), findsOneWidget, reason: 'no RMS while idle');
   });
 
   testWidgets('no guider: says to connect it', (tester) async {
     await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'));
-    expect(
-      find.text('Connect Camera (Guide) in Settings › Devices.'),
-      findsOneWidget,
-    );
+    expect(find.text('Connect Camera (Guide) in Settings › Devices.'), findsOneWidget);
   });
 
   testWidgets("Guide's shutter starts the guider's routine", (tester) async {
-    await _pump(
-      tester,
-      _wire(runtime: 'stopped'),
-      child: const SimpleGuideShutter(),
-    );
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
     expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
@@ -1470,85 +827,51 @@ void main() {
   });
 
   // Falsified by: simple_guide_panel.dart simpleGuideRun, call startGuiding instead of startGuidingTracked.
-  testWidgets('Guide shutter turns tracking on before it starts the guider', (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      _wire(runtime: 'stopped'),
-      child: const SimpleGuideShutter(),
-    );
+  testWidgets('Guide shutter turns tracking on before it starts the guider', (tester) async {
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
     expect(_order, ['tracking:true', 'startGuiding']);
   });
 
   // Falsified by: mount_state.dart ensureTracking, return true after the last refused try.
-  testWidgets(
-    'a mount that refuses tracking: the shutter starts no guiding and says why',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-        rig: [simpleModeActiveProvider.overrideWithValue(true)],
-      );
-      _Mount.refuse = true;
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      for (var i = 0; i < 6; i++) {
-        await tester.pump(const Duration(seconds: 1));
-      }
-      expect(_order.where((a) => a == 'tracking:true').length, 5);
-      expect(_order, isNot(contains('startGuiding')));
-      expect(c.read(simpleMessagesProvider), isNotEmpty);
-    },
-  );
+  testWidgets('a mount that refuses tracking: the shutter starts no guiding and says why', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter(), rig: [simpleModeActiveProvider.overrideWithValue(true)]);
+    _Mount.refuse = true;
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(seconds: 1));
+    }
+    expect(_order.where((a) => a == 'tracking:true').length, 5);
+    expect(_order, isNot(contains('startGuiding')));
+    expect(c.read(simpleMessagesProvider), isNotEmpty);
+  });
 
   // Falsified by: mount_state.dart ensureTracking, drop the canSetTracking == false guard.
-  testWidgets(
-    'a mount that cannot set tracking: the shutter starts guiding without asking',
-    (tester) async {
-      _Mount.wire = _mountWire(canSetTracking: false);
-      _Mount.refuse = true;
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-      );
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(_order, ['startGuiding']);
-    },
-  );
+  testWidgets('a mount that cannot set tracking: the shutter starts guiding without asking', (tester) async {
+    _Mount.wire = _mountWire(canSetTracking: false);
+    _Mount.refuse = true;
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_order, ['startGuiding']);
+  });
 
   // Falsified by: mount_state.dart ensureTracking, drop the no-connected-mount guard.
-  testWidgets(
-    'no mount connected (ST-4 guiding): the shutter starts guiding without asking',
-    (tester) async {
-      _Mount.wire = null;
-      _Mount.refuse = true;
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-      );
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(_order, ['startGuiding']);
-    },
-  );
+  testWidgets('no mount connected (ST-4 guiding): the shutter starts guiding without asking', (tester) async {
+    _Mount.wire = null;
+    _Mount.refuse = true;
+    await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_order, ['startGuiding']);
+  });
 
   // One pump per test: a second container leaves the first's autoDispose
   // run-state read pending as a timer.
-  testWidgets("while the guider's routine runs, the square stops it", (
-    tester,
-  ) async {
-    await _pump(
-      tester,
-      _wire(runtime: 'calibrating'),
-      child: const SimpleGuideShutter(),
-    );
+  testWidgets("while the guider's routine runs, the square stops it", (tester) async {
+    await _pump(tester, _wire(runtime: 'calibrating'), child: const SimpleGuideShutter());
     expect(find.bySemanticsLabel('Stop guiding'), findsOneWidget);
     await tester.tap(find.byType(SimpleGuideShutter));
     await tester.pump();
@@ -1558,230 +881,117 @@ void main() {
   test('a lost star is the same colour in the pill as in the top bar: amber, a warning', () {
     final g = GuiderStatus.fromJson(_wire(runtime: 'star_lost'));
     expect(simpleGuiderColour(g), guiderStatusLevel(g).color);
-    expect(
-      simpleGuiderColour(g),
-      StatusLevel.busy.color,
-      reason: 'DESIGN.md status rule: a lost star still searching is a warning',
-    );
+    expect(simpleGuiderColour(g), StatusLevel.busy.color, reason: 'DESIGN.md status rule: a lost star still searching is a warning');
   });
 
-  testWidgets(
-    'a tap says Starting… at once, before the guider answers (iPad, 2026-11-04: feedback was slow)',
-    (tester) async {
-      await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        lag: true,
-        child: const Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [SimpleGuidePanel(), SimpleGuideShutter()],
-        ),
-      );
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(find.bySemanticsLabel('Starting…'), findsOneWidget);
-      expect(
-        find.bySemanticsLabel('Stop guiding'),
-        findsNothing,
-        reason: 'no second tap while the ask is out',
-      );
-      await tester.pump(
-        const Duration(seconds: 11),
-      ); // the guider never answered: back to what it says
-      expect(find.bySemanticsLabel('Starting…'), findsNothing);
-      expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
-    },
-  );
+  testWidgets('a tap says Starting… at once, before the guider answers (iPad, 2026-11-04: feedback was slow)',
+      (tester) async {
+    await _pump(tester, _wire(runtime: 'stopped'), lag: true,
+        child: const Column(mainAxisSize: MainAxisSize.min, children: [SimpleGuidePanel(), SimpleGuideShutter()]));
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(find.bySemanticsLabel('Starting…'), findsOneWidget);
+    expect(find.bySemanticsLabel('Stop guiding'), findsNothing, reason: 'no second tap while the ask is out');
+    await tester.pump(const Duration(seconds: 11)); // the guider never answered: back to what it says
+    expect(find.bySemanticsLabel('Starting…'), findsNothing);
+    expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
+  });
 
-  testWidgets(
-    'a mode change mid-ask: the shutter leaves, and Starting… still clears (review, #1490)',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        lag: true,
-        child: const SimpleGuideShutter(),
-      );
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(c.read(simpleGuiderPendingProvider), isTrue);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: c,
-          child: const MaterialApp(home: Scaffold(body: SizedBox())),
-        ),
-      );
-      await tester.pump(const Duration(seconds: 11));
-      expect(
-        c.read(simpleGuiderPendingProvider),
-        isNull,
-        reason: 'else the shutter stays greyed on Starting…',
-      );
-    },
-  );
+  testWidgets('a mode change mid-ask: the shutter leaves, and Starting… still clears (review, #1490)',
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), lag: true, child: const SimpleGuideShutter());
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(c.read(simpleGuiderPendingProvider), isTrue);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: SizedBox())),
+    ));
+    await tester.pump(const Duration(seconds: 11));
+    expect(c.read(simpleGuiderPendingProvider), isNull, reason: 'else the shutter stays greyed on Starting…');
+  });
 
-  testWidgets(
-    "the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(),
-        rig: [profileApiProvider.overrideWithValue(_Profile())],
-      );
-      c.read(phd2SettingsProvider.notifier).setGuideExposureMs(2000);
-      await tester.pump();
-      final tile = find.byKey(const Key('simple-guide-exposure'));
-      expect(
-        find.descendant(of: tile, matching: find.text('2 s')),
-        findsOneWidget,
-      );
-      final slider = tester.widget<Slider>(
-        find.byKey(const Key('simple-guider-gain')),
-      );
-      expect(
-        (slider.min, slider.max),
-        (0.0, 100.0),
-        reason: "the Camera (Guide) window's slider, one value",
-      );
-      slider.onChangeEnd!(70);
-      await tester.pump();
-      await tester.pump();
-      expect(c.read(phd2SettingsProvider).value!.guideCameraGain, 70);
-    },
-  );
+  testWidgets("the guide camera's exposure, a tile like Preview's, and its gain slider (user, 2026-11-04)",
+      (tester) async {
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
+    c.read(phd2SettingsProvider.notifier).setGuideExposureMs(2000);
+    await tester.pump();
+    final tile = find.byKey(const Key('simple-guide-exposure'));
+    expect(find.descendant(of: tile, matching: find.text('2 s')), findsOneWidget);
+    final slider = tester.widget<Slider>(find.byKey(const Key('simple-guider-gain')));
+    expect((slider.min, slider.max), (0.0, 100.0), reason: "the Camera (Guide) window's slider, one value");
+    slider.onChangeEnd!(70);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.guideCameraGain, 70);
+  });
 
   testWidgets("a guide exposure pick and a gain change reach the guider live (tuning only, so guiding goes on); "
       "not with the guider disconnected (review, #1490)", (tester) async {
     final eq = _GuiderEquipment();
-    final rig = [
-      profileApiProvider.overrideWithValue(_Profile()),
-      guiderEquipmentApiProvider.overrideWithValue(eq),
-    ];
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
     await _pump(tester, _wire(), rig: rig);
-    tester
-        .widget<SimplePresetTile<int>>(
-          find.byKey(const Key('simple-guide-exposure')),
-        )
-        .onSelected!(2000);
+    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected!(2000);
     await tester.pump();
     await tester.pump();
     expect(eq.pushes, [true], reason: 'the exposure, tuning only');
-    tester
-        .widget<Slider>(find.byKey(const Key('simple-guider-gain')))
-        .onChangeEnd!(70);
+    tester.widget<Slider>(find.byKey(const Key('simple-guider-gain'))).onChangeEnd!(70);
     await tester.pump();
     await tester.pump();
     expect(eq.pushes, [true, true], reason: 'the gain too');
     final off = _GuiderEquipment();
-    await _pump(
-      tester,
-      _wire(state: 'disconnected', runtime: 'stopped'),
-      child: const SimpleGuideGainSlider(),
-      rig: [
-        profileApiProvider.overrideWithValue(_Profile()),
-        guiderEquipmentApiProvider.overrideWithValue(off),
-      ],
-    );
-    tester
-        .widget<Slider>(find.byKey(const Key('simple-guider-gain')))
-        .onChangeEnd!(50);
+    await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'), child: const SimpleGuideGainSlider(),
+        rig: [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(off)]);
+    tester.widget<Slider>(find.byKey(const Key('simple-guider-gain'))).onChangeEnd!(50);
     await tester.pump();
     await tester.pump();
-    expect(
-      off.pushes,
-      isEmpty,
-      reason: 'saved to the profile only: nothing to push to',
-    );
+    expect(off.pushes, isEmpty, reason: 'saved to the profile only: nothing to push to');
   });
 
-  testWidgets(
-    "a Stop the guider doesn't act on says so in a pill, not a silent flip back (ALP-5018)",
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'paused'),
-        lag: true,
-        child: const SimpleGuideShutter(),
-        rig: [simpleModeActiveProvider.overrideWithValue(true)],
-      );
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(_g.calls, ['stop']);
-      await tester.pump(
-        const Duration(seconds: 11),
-      ); // still paused after 10 s of reads
-      expect(
-        c.read(simpleMessagesProvider).single.title,
-        "The guider didn't stop: it is still paused. Try Stop again.",
-      );
-    },
-  );
+  testWidgets("a Stop the guider doesn't act on says so in a pill, not a silent flip back (ALP-5018)",
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'paused'), lag: true, child: const SimpleGuideShutter(),
+        rig: [simpleModeActiveProvider.overrideWithValue(true)]);
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_g.calls, ['stop']);
+    await tester.pump(const Duration(seconds: 11)); // still paused after 10 s of reads
+    expect(c.read(simpleMessagesProvider).single.title, "The guider didn't stop: it is still paused. Try Stop again.");
+  });
 
-  testWidgets(
-    "a start the guider gives up on says why in a pill, and the shutter is Start again (#1664)",
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        lag: true,
-        child: const SimpleGuideShutter(),
-        rig: [simpleModeActiveProvider.overrideWithValue(true)],
-      );
-      _g.startError = const GuideStartFailed('Stopped capturing');
-      await tester.tap(find.byType(SimpleGuideShutter));
-      await tester.pump();
-      expect(_g.calls, ['start']);
-      expect(
-        c.read(simpleMessagesProvider).single.title,
-        "Guiding didn't start: Stopped capturing.",
-      );
-      expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
-    },
-  );
+  testWidgets("a start the guider gives up on says why in a pill, and the shutter is Start again (#1664)",
+      (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), lag: true, child: const SimpleGuideShutter(),
+        rig: [simpleModeActiveProvider.overrideWithValue(true)]);
+    _g.startError = const GuideStartFailed('Stopped capturing');
+    await tester.tap(find.byType(SimpleGuideShutter));
+    await tester.pump();
+    expect(_g.calls, ['start']);
+    expect(c.read(simpleMessagesProvider).single.title, "Guiding didn't start: Stopped capturing.");
+    expect(find.bySemanticsLabel('Start guiding'), findsOneWidget);
+  });
 
-  testWidgets(
-    'no guider: the greyed shutter says why when tapped (user, 2026-11-04)',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(state: 'disconnected', runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-      );
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pump();
-      expect(_g.calls, isEmpty);
-      expect(
-        c.read(simpleMessagesProvider).single.title,
-        'Connect Camera (Guide) in Settings › Devices.',
-      );
-      await tester.pump(const Duration(seconds: 11));
-    },
-  );
+  testWidgets('no guider: the greyed shutter says why when tapped (user, 2026-11-04)', (tester) async {
+    final c = await _pump(tester, _wire(state: 'disconnected', runtime: 'stopped'), child: const SimpleGuideShutter());
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty);
+    expect(c.read(simpleMessagesProvider).single.title, 'Connect Camera (Guide) in Settings › Devices.');
+    await tester.pump(const Duration(seconds: 11));
+  });
 
-  testWidgets(
-    'the main camera busy: Start is off and a tap says why (user, 2026-11-04: '
-    'calibration turns the mount under the frame)',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-      );
-      c
-          .read(captureProgressProvider.notifier)
-          .beginExposing(const Duration(seconds: 30));
-      await tester.pump();
-      await tester.tap(find.byKey(const Key('simple-shutter')));
-      await tester.pump();
-      expect(_g.calls, isEmpty, reason: 'no start under a frame');
-      expect(
-        c.read(simpleMessagesProvider).single.title,
-        'The main camera is busy: wait for its frame, or stop it.',
-      );
-      c.read(captureProgressProvider.notifier).reset();
-      await tester.pump(const Duration(seconds: 11));
-    },
-  );
+  testWidgets('the main camera busy: Start is off and a tap says why (user, 2026-11-04: '
+      'calibration turns the mount under the frame)', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'), child: const SimpleGuideShutter());
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty, reason: 'no start under a frame');
+    expect(c.read(simpleMessagesProvider).single.title, 'The main camera is busy: wait for its frame, or stop it.');
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 11));
+  });
 
   for (final (run, locked) in [
     (SequenceRunState.paused, false),
@@ -1789,64 +999,35 @@ void main() {
     (SequenceRunState.running, true),
     (SequenceRunState.aborting, true),
   ]) {
-    testWidgets(
-      'a $run Queue ${locked ? 'locks' : 'does not lock'} Start (#1725)',
-      (tester) async {
-        final c = await _pump(
-          tester,
-          _wire(runtime: 'stopped'),
-          child: const SimpleGuideShutter(),
-          rig: [sequenceRunStateProvider.overrideWith(() => _Run(run))],
-        );
-        await tester.pump();
-        await tester.tap(find.byKey(const Key('simple-shutter')));
-        await tester.pump();
-        expect(_g.calls, locked ? isEmpty : ['start']);
-        expect(
-          c.read(simpleMessagesProvider).map((m) => m.title),
-          locked
-              ? ['The main camera is busy: wait for its frame, or stop it.']
-              : isEmpty,
-        );
-        await tester.pump(const Duration(seconds: 11));
-      },
-    );
-  }
-
-  testWidgets(
-    'a paused Queue with a frame in progress still locks Start (#1725)',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(runtime: 'stopped'),
-        child: const SimpleGuideShutter(),
-        rig: [
-          sequenceRunStateProvider.overrideWith(
-            () => _Run(SequenceRunState.paused),
-          ),
-        ],
-      );
-      c
-          .read(captureProgressProvider.notifier)
-          .beginExposing(const Duration(seconds: 30));
+    testWidgets('a $run Queue ${locked ? 'locks' : 'does not lock'} Start (#1725)', (tester) async {
+      final c = await _pump(tester, _wire(runtime: 'stopped'),
+          child: const SimpleGuideShutter(), rig: [sequenceRunStateProvider.overrideWith(() => _Run(run))]);
       await tester.pump();
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
-      expect(_g.calls, isEmpty);
-      c.read(captureProgressProvider.notifier).reset();
+      expect(_g.calls, locked ? isEmpty : ['start']);
+      expect(c.read(simpleMessagesProvider).map((m) => m.title),
+          locked ? ['The main camera is busy: wait for its frame, or stop it.'] : isEmpty);
       await tester.pump(const Duration(seconds: 11));
-    },
-  );
+    });
+  }
+
+  testWidgets('a paused Queue with a frame in progress still locks Start (#1725)', (tester) async {
+    final c = await _pump(tester, _wire(runtime: 'stopped'),
+        child: const SimpleGuideShutter(),
+        rig: [sequenceRunStateProvider.overrideWith(() => _Run(SequenceRunState.paused))]);
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-shutter')));
+    await tester.pump();
+    expect(_g.calls, isEmpty);
+    c.read(captureProgressProvider.notifier).reset();
+    await tester.pump(const Duration(seconds: 11));
+  });
 
   testWidgets('the main camera busy: Stop still works', (tester) async {
-    final c = await _pump(
-      tester,
-      _wire(runtime: 'guiding'),
-      child: const SimpleGuideShutter(),
-    );
-    c
-        .read(captureProgressProvider.notifier)
-        .beginExposing(const Duration(seconds: 30));
+    final c = await _pump(tester, _wire(runtime: 'guiding'), child: const SimpleGuideShutter());
+    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
     await tester.pump();
     await tester.tap(find.byKey(const Key('simple-shutter')));
     await tester.pump();
@@ -1859,58 +1040,35 @@ void main() {
       'says why (ADR 0015)', (tester) async {
     final eq = _GuiderEquipment();
     final profile = _Profile(null);
-    final c = await _pump(
-      tester,
-      _wire(),
-      guiderFromRig: false,
-      rig: [
-        simpleModeActiveProvider.overrideWithValue(true),
-        profileApiProvider.overrideWithValue(profile),
-        guiderEquipmentApiProvider.overrideWithValue(eq),
-      ],
-    );
-    tester
-        .widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra')))
-        .onChangeEnd!(0.55);
+    final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+      simpleModeActiveProvider.overrideWithValue(true),
+      profileApiProvider.overrideWithValue(profile),
+      guiderEquipmentApiProvider.overrideWithValue(eq),
+    ]);
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra'))).onChangeEnd!(0.55);
     for (var i = 0; i < 5; i++) {
       await tester.pump(); // the load tried once more first, and failed
     }
     expect(profile.puts, isEmpty);
     expect(eq.pushes, isEmpty, reason: 'nothing saved, nothing pushed');
-    expect(
-      c.read(simpleMessagesProvider).single.detail,
-      contains('not loaded from the rig'),
-    );
+    expect(c.read(simpleMessagesProvider).single.detail, contains('not loaded from the rig'));
   });
 
-  testWidgets(
-    'Guider: a Simple Mode change the rig fails to save goes back to the rig\'s value (ADR 0015)',
-    (tester) async {
-      final eq = _GuiderEquipment();
-      final c = await _pump(
-        tester,
-        _wire(),
-        guiderFromRig: false,
-        rig: [
-          phd2SettingsProvider.overrideWith(
-            () => FakePhd2Section()..refuse = StateError('rig error'),
-          ),
-          profileApiProvider.overrideWithValue(_Profile()),
-          guiderEquipmentApiProvider.overrideWithValue(eq),
-        ],
-      );
-      await tester.pump();
-      tester
-          .widget<Slider>(
-            find.byKey(const Key('simple-guide-aggressiveness-ra')),
-          )
-          .onChangeEnd!(0.55);
-      await tester.pump();
-      await tester.pump();
-      expect(c.read(phd2SettingsProvider).value!.raAggressiveness, 0.7);
-      expect(eq.pushes, isEmpty);
-    },
-  );
+  testWidgets('Guider: a Simple Mode change the rig fails to save goes back to the rig\'s value (ADR 0015)',
+      (tester) async {
+    final eq = _GuiderEquipment();
+    final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+      phd2SettingsProvider.overrideWith(() => FakePhd2Section()..refuse = StateError('rig error')),
+      profileApiProvider.overrideWithValue(_Profile()),
+      guiderEquipmentApiProvider.overrideWithValue(eq),
+    ]);
+    await tester.pump();
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra'))).onChangeEnd!(0.55);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.raAggressiveness, 0.7);
+    expect(eq.pushes, isEmpty);
+  });
 
   testWidgets('Guider: a Simple Mode step taken while the class values show steps from the rig\'s copy the load '
       'brings in, never from the shown value (ADR 0015)', (tester) async {
@@ -1923,36 +1081,20 @@ void main() {
       minimumMove: 0.4,
       decMinimumMove: 0.5,
     );
-    for (final (tab, key, saved)
-        in <(String?, String, Object Function(Phd2Settings))>[
-          (null, 'simple-guider-dither-up', (p) => p.ditherEveryNFrames),
-          ('tuning', 'simple-guider-min-move-ra-up', (p) => p.minimumMove),
-          (
-            'tuning',
-            'simple-guider-min-move-dec-down',
-            (p) => p.decMinimumMove,
-          ),
-          ('tuning', 'simple-guider-dither-px-up', (p) => p.ditherPixels),
-          ('tuning', 'simple-guider-settle-px-up', (p) => p.settlePixels),
-          ('tuning', 'simple-guider-settle-time-up', (p) => p.settleTimeSec),
-          (
-            'tuning',
-            'simple-guider-settle-timeout-down',
-            (p) => p.settleTimeoutSec,
-          ),
-        ]) {
-      final profile = _Profile(
-        null,
-      ); // the first load fails: the class values show
-      final c = await _pump(
-        tester,
-        _wire(),
-        guiderFromRig: false,
-        rig: [
-          profileApiProvider.overrideWithValue(profile),
-          guiderEquipmentApiProvider.overrideWithValue(_GuiderEquipment()),
-        ],
-      );
+    for (final (tab, key, saved) in <(String?, String, Object Function(Phd2Settings))>[
+      (null, 'simple-guider-dither-up', (p) => p.ditherEveryNFrames),
+      ('tuning', 'simple-guider-min-move-ra-up', (p) => p.minimumMove),
+      ('tuning', 'simple-guider-min-move-dec-down', (p) => p.decMinimumMove),
+      ('tuning', 'simple-guider-dither-px-up', (p) => p.ditherPixels),
+      ('tuning', 'simple-guider-settle-px-up', (p) => p.settlePixels),
+      ('tuning', 'simple-guider-settle-time-up', (p) => p.settleTimeSec),
+      ('tuning', 'simple-guider-settle-timeout-down', (p) => p.settleTimeoutSec),
+    ]) {
+      final profile = _Profile(null); // the first load fails: the class values show
+      final c = await _pump(tester, _wire(), guiderFromRig: false, rig: [
+        profileApiProvider.overrideWithValue(profile),
+        guiderEquipmentApiProvider.overrideWithValue(_GuiderEquipment()),
+      ]);
       for (var i = 0; i < 5; i++) {
         await tester.pump();
       }
@@ -1962,238 +1104,134 @@ void main() {
       for (var i = 0; i < 5; i++) {
         await tester.pump();
       }
-      expect(
-        saved(profile.puts.single),
-        {
-          'simple-guider-dither-up': 5,
-          'simple-guider-min-move-ra-up': 0.45,
-          'simple-guider-min-move-dec-down': 0.45,
-          'simple-guider-dither-px-up': 13.0,
-          'simple-guider-settle-px-up': 3.1,
-          'simple-guider-settle-time-up': 31,
-          'simple-guider-settle-timeout-down': 115,
-        }[key],
-        reason: key,
-      );
+      expect(saved(profile.puts.single), {
+        'simple-guider-dither-up': 5,
+        'simple-guider-min-move-ra-up': 0.45,
+        'simple-guider-min-move-dec-down': 0.45,
+        'simple-guider-dither-px-up': 13.0,
+        'simple-guider-settle-px-up': 3.1,
+        'simple-guider-settle-time-up': 31,
+        'simple-guider-settle-timeout-down': 115,
+      }[key], reason: key);
       // Gone before the next one's screen size lands on it.
       await tester.pumpWidget(const SizedBox());
       c.dispose();
     }
   });
 
-  testWidgets(
-    'RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
-    (tester) async {
-      final eq = _GuiderEquipment();
-      final rig = [
-        profileApiProvider.overrideWithValue(_Profile()),
-        guiderEquipmentApiProvider.overrideWithValue(eq),
-      ];
-      final c = await _pump(tester, _wire(), rig: rig);
-      final ra = tester.widget<Slider>(
-        find.byKey(const Key('simple-guide-aggressiveness-ra')),
-      );
-      expect((ra.min, ra.max, ra.divisions), (0.0, 1.0, 20));
-      final slider = find.byKey(const Key('simple-guide-aggressiveness-ra'));
-      expect(
-        tester.getCenter(find.text('RA')).dy,
-        moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1),
-        reason: 'one line',
-      );
-      expect(
-        tester.getCenter(find.text('70 %').first).dy,
-        moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1),
-      );
-      ra.onChangeEnd!(0.55);
-      await tester.pump();
-      await tester.pump();
-      expect(
-        c.read(phd2SettingsProvider).value!.raAggressiveness,
-        closeTo(0.55, 1e-9),
-      );
-      expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
-      tester
-          .widget<Slider>(
-            find.byKey(const Key('simple-guide-aggressiveness-dec')),
-          )
-          .onChangeEnd!(0.4);
-      await tester.pump();
-      await tester.pump();
-      expect(
-        c.read(phd2SettingsProvider).value!.decAggressiveness,
-        closeTo(0.4, 1e-9),
-      );
-      expect(eq.pushes, [true, true]);
-    },
-  );
+  testWidgets('RA and Dec aggressiveness are sliders, 0-100 % in 5s, kept in the profile and sent to the guider live',
+      (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    final ra = tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra')));
+    expect((ra.min, ra.max, ra.divisions), (0.0, 1.0, 20));
+    final slider = find.byKey(const Key('simple-guide-aggressiveness-ra'));
+    expect(tester.getCenter(find.text('RA')).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1), reason: 'one line');
+    expect(tester.getCenter(find.text('70 %').first).dy, moreOrLessEquals(tester.getCenter(slider).dy, epsilon: 1));
+    ra.onChangeEnd!(0.55);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.raAggressiveness, closeTo(0.55, 1e-9));
+    expect(eq.pushes, [true], reason: 'tuning only, so guiding goes on');
+    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-dec'))).onChangeEnd!(0.4);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.decAggressiveness, closeTo(0.4, 1e-9));
+    expect(eq.pushes, [true, true]);
+  });
 
-  testWidgets(
-    'Dec guide mode is picked in the Guider panel and sent to the guider live',
-    (tester) async {
-      final eq = _GuiderEquipment();
-      final rig = [
-        profileApiProvider.overrideWithValue(_Profile()),
-        guiderEquipmentApiProvider.overrideWithValue(eq),
-      ];
-      final c = await _pump(tester, _wire(), rig: rig);
-      for (final (id, name) in const [
-        ('auto', 'Auto'),
-        ('north', 'North'),
-        ('south', 'South'),
-        ('off', 'Off'),
-      ]) {
-        expect(
-          find.descendant(
-            of: find.byKey(Key('simple-guide-dec-mode-$id')),
-            matching: find.text(name),
-          ),
-          findsOneWidget,
-          reason: 'four segments, no list to open',
-        );
-      }
-      await tester.tap(find.byKey(const Key('simple-guide-dec-mode-north')));
-      await tester.pump();
-      await tester.pump();
-      expect(c.read(phd2SettingsProvider).value!.decGuideMode, 'north');
-      expect(eq.pushes, [true]);
-    },
-  );
+  testWidgets('Dec guide mode is picked in the Guider panel and sent to the guider live', (tester) async {
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    for (final (id, name) in const [('auto', 'Auto'), ('north', 'North'), ('south', 'South'), ('off', 'Off')]) {
+      expect(find.descendant(of: find.byKey(Key('simple-guide-dec-mode-$id')), matching: find.text(name)), findsOneWidget,
+          reason: 'four segments, no list to open');
+    }
+    await tester.tap(find.byKey(const Key('simple-guide-dec-mode-north')));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.decGuideMode, 'north');
+    expect(eq.pushes, [true]);
+  });
 
-  testWidgets(
-    'the Gain slider is named on the node VoiceOver adjusts, and an increase still saves it',
-    (tester) async {
-      final handle = tester.ensureSemantics();
-      final eq = _GuiderEquipment();
-      final rig = [
-        profileApiProvider.overrideWithValue(_Profile()),
-        guiderEquipmentApiProvider.overrideWithValue(eq),
-      ];
-      final c = await _pump(tester, _wire(), rig: rig);
-      await tester.pump();
-      final gain = tester.getSemantics(
-        find.byKey(const Key('simple-guider-gain')),
-      );
-      expect(
-        gain.getSemanticsData().hasAction(SemanticsAction.increase),
-        isTrue,
-        reason: 'the adjustable node',
-      );
-      expect(gain.getSemanticsData().label, contains('Gain'));
-      final before = c.read(phd2SettingsProvider).value!.guideCameraGain;
-      gain.owner!.performAction(gain.id, SemanticsAction.increase);
-      await tester.pump();
-      await tester.pump();
-      expect(
-        c.read(phd2SettingsProvider).value!.guideCameraGain,
-        greaterThan(before),
-      );
-      expect(eq.pushes, [true]);
-      handle.dispose();
-    },
-  );
+  testWidgets('the Gain slider is named on the node VoiceOver adjusts, and an increase still saves it', (tester) async {
+    final handle = tester.ensureSemantics();
+    final eq = _GuiderEquipment();
+    final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
+    final c = await _pump(tester, _wire(), rig: rig);
+    await tester.pump();
+    final gain = tester.getSemantics(find.byKey(const Key('simple-guider-gain')));
+    expect(gain.getSemanticsData().hasAction(SemanticsAction.increase), isTrue, reason: 'the adjustable node');
+    expect(gain.getSemanticsData().label, contains('Gain'));
+    final before = c.read(phd2SettingsProvider).value!.guideCameraGain;
+    gain.owner!.performAction(gain.id, SemanticsAction.increase);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.guideCameraGain, greaterThan(before));
+    expect(eq.pushes, [true]);
+    handle.dispose();
+  });
 
-  testWidgets(
-    'RA and Dec aggressiveness are named on the nodes VoiceOver adjusts',
-    (tester) async {
-      final handle = tester.ensureSemantics();
-      await _pump(tester, _wire());
-      await tester.pump();
-      for (final (key, name) in [
-        ('ra', 'RA aggressiveness'),
-        ('dec', 'Dec aggressiveness'),
-      ]) {
-        final node = tester
-            .getSemantics(find.byKey(Key('simple-guide-aggressiveness-$key')))
-            .getSemanticsData();
-        expect(
-          node.hasAction(SemanticsAction.increase),
-          isTrue,
-          reason: '$key: the adjustable node',
-        );
-        expect(node.label, contains(name));
-      }
-      // One stop per slider: the row's own label and value would read it twice.
-      for (final label in ['RA', 'Dec']) {
-        expect(
-          find.bySemanticsLabel(RegExp('^$label\$')),
-          findsNothing,
-          reason: label,
-        );
-      }
-      handle.dispose();
-    },
-  );
+  testWidgets('RA and Dec aggressiveness are named on the nodes VoiceOver adjusts', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _wire());
+    await tester.pump();
+    for (final (key, name) in [('ra', 'RA aggressiveness'), ('dec', 'Dec aggressiveness')]) {
+      final node = tester.getSemantics(find.byKey(Key('simple-guide-aggressiveness-$key'))).getSemanticsData();
+      expect(node.hasAction(SemanticsAction.increase), isTrue, reason: '$key: the adjustable node');
+      expect(node.label, contains(name));
+    }
+    // One stop per slider: the row's own label and value would read it twice.
+    for (final label in ['RA', 'Dec']) {
+      expect(find.bySemanticsLabel(RegExp('^$label\$')), findsNothing, reason: label);
+    }
+    handle.dispose();
+  });
 
-  testWidgets(
-    'the guiding settings sit after Gain and before Dither (user, 2026-11-09)',
-    (tester) async {
-      await _pump(tester, _wire());
-      final tops = [
-        for (final k in [
-          'simple-guider-gain',
-          'simple-guide-aggressiveness-ra',
-          'simple-guide-aggressiveness-dec',
-          'simple-guide-dec-mode',
-          'simple-window-row-Dither',
-        ])
-          tester.getTopLeft(find.byKey(Key(k))).dy,
-      ];
-      expect(tops, orderedEquals([...tops]..sort()));
-    },
-  );
+  testWidgets('the guiding settings sit after Gain and before Dither (user, 2026-11-09)', (tester) async {
+    await _pump(tester, _wire());
+    final tops = [
+      for (final k in [
+        'simple-guider-gain',
+        'simple-guide-aggressiveness-ra',
+        'simple-guide-aggressiveness-dec',
+        'simple-guide-dec-mode',
+        'simple-window-row-Dither',
+      ])
+        tester.getTopLeft(find.byKey(Key(k))).dy,
+    ];
+    expect(tops, orderedEquals([...tops]..sort()));
+  });
 
-  testWidgets(
-    'Dither every: frames up and down, Off below 1, kept in the profile',
-    (tester) async {
-      final c = await _pump(
-        tester,
-        _wire(),
-        rig: [profileApiProvider.overrideWithValue(_Profile())],
-      );
-      c.read(phd2SettingsProvider.notifier)
-        ..setDitherEnabled(true)
-        ..setDitherEveryNFrames(2);
-      await tester.pump();
-      expect(find.text('2 frames'), findsOneWidget);
-      await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
-      await tester.pump();
-      await tester.pump();
-      expect(c.read(phd2SettingsProvider).value!.ditherEveryNFrames, 3);
-      for (var i = 0; i < 3; i++) {
-        await tester.tap(find.byKey(const Key('simple-guider-dither-down')));
-        await tester.pump();
-        await tester.pump();
-      }
-      expect(c.read(phd2SettingsProvider).value!.ditherEnabled, isFalse);
-      expect(
-        find.descendant(
-          of: find.byKey(const Key('simple-window-row-Dither')),
-          matching: find.text('Off'),
-        ),
-        findsOneWidget,
-      );
-      await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
+  testWidgets('Dither every: frames up and down, Off below 1, kept in the profile', (tester) async {
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
+    c.read(phd2SettingsProvider.notifier)
+      ..setDitherEnabled(true)
+      ..setDitherEveryNFrames(2);
+    await tester.pump();
+    expect(find.text('2 frames'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(phd2SettingsProvider).value!.ditherEveryNFrames, 3);
+    for (var i = 0; i < 3; i++) {
+      await tester.tap(find.byKey(const Key('simple-guider-dither-down')));
       await tester.pump();
       await tester.pump();
-      expect(
-        (
-          c.read(phd2SettingsProvider).value!.ditherEnabled,
-          c.read(phd2SettingsProvider).value!.ditherEveryNFrames,
-        ),
-        (true, 1),
-      );
-      expect(find.text('Every frame'), findsOneWidget);
-    },
-  );
+    }
+    expect(c.read(phd2SettingsProvider).value!.ditherEnabled, isFalse);
+    expect(find.descendant(of: find.byKey(const Key('simple-window-row-Dither')), matching: find.text('Off')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
+    await tester.pump();
+    await tester.pump();
+    expect((c.read(phd2SettingsProvider).value!.ditherEnabled, c.read(phd2SettingsProvider).value!.ditherEveryNFrames), (true, 1));
+    expect(find.text('Every frame'), findsOneWidget);
+  });
 
-  testWidgets('dither distance in pixels, only while dithering', (
-    tester,
-  ) async {
-    final c = await _pump(
-      tester,
-      _wire(),
-      rig: [profileApiProvider.overrideWithValue(_Profile())],
-    );
+  testWidgets('dither distance in pixels, only while dithering', (tester) async {
+    final c = await _pump(tester, _wire(), rig: [profileApiProvider.overrideWithValue(_Profile())]);
     c.read(phd2SettingsProvider.notifier)
       ..setDitherEnabled(true)
       ..setDitherPixels(5);

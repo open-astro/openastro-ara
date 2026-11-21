@@ -14,21 +14,14 @@ final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   test("a start the guider gave up on reads as its reason, or points at the Guider log (#1664)", () {
-    expect(
-      friendlyError(
-        _en,
-        const GuideStartFailed('Stopped capturing'),
-        action: 'start guiding',
-      ),
-      "Guiding didn't start: Stopped capturing.",
-    );
-    expect(
-      friendlyError(_en, const GuideStartFailed(null), action: 'start guiding'),
-      "Guiding didn't start. See the Guider log for why.",
-    );
+    expect(friendlyError(_en, const GuideStartFailed('Stopped capturing'), action: 'start guiding'),
+        "Guiding didn't start: Stopped capturing.");
+    expect(friendlyError(_en, const GuideStartFailed(null), action: 'start guiding'),
+        "Guiding didn't start. See the Guider log for why.");
   });
 
-  test('connection timeout reads as an actionable sentence, not raw Dio text', () {
+  test('connection timeout reads as an actionable sentence, not raw Dio text',
+      () {
     final e = DioException(
       requestOptions: RequestOptions(path: '/api/v1/equipment/camera'),
       type: DioExceptionType.connectionTimeout,
@@ -55,49 +48,30 @@ void main() {
     expect(msg, contains('took too long'));
   });
 
-  test(
-    "the server's problem detail is surfaced verbatim (it's already human)",
-    () {
-      final e = DioException(
+  test("the server's problem detail is surfaced verbatim (it's already human)",
+      () {
+    final e = DioException(
+      requestOptions: RequestOptions(path: '/api/v1/equipment/camera/cooler'),
+      response: Response(
         requestOptions: RequestOptions(path: '/api/v1/equipment/camera/cooler'),
-        response: Response(
-          requestOptions: RequestOptions(
-            path: '/api/v1/equipment/camera/cooler',
-          ),
-          statusCode: 409,
-          data: {'detail': 'this camera does not support cooling'},
-        ),
-      );
-      expect(
-        friendlyError(_en, e, action: 'set the cooler'),
-        'this camera does not support cooling',
-      );
-    },
-  );
+        statusCode: 409,
+        data: {'detail': 'this camera does not support cooling'},
+      ),
+    );
+    expect(friendlyError(_en, e, action: 'set the cooler'),
+        'this camera does not support cooling');
+  });
 
   DioException bad(int code, [Object? data]) => DioException(
-    requestOptions: RequestOptions(path: '/x'),
-    type: DioExceptionType.badResponse,
-    response: Response(
-      requestOptions: RequestOptions(path: '/x'),
-      statusCode: code,
-      data: data,
-    ),
-  );
+        requestOptions: RequestOptions(path: '/x'),
+        type: DioExceptionType.badResponse,
+        response: Response(requestOptions: RequestOptions(path: '/x'), statusCode: code, data: data),
+      );
 
   test("a 404 with the daemon's sentence reads as that sentence (#1764)", () {
-    expect(
-      friendlyError(
-        _en,
-        bad(404, {'detail': 'No guide camera is known.'}),
-        action: 'start guiding',
-      ),
-      'No guide camera is known.',
-    );
-    expect(
-      failureReason(_en, bad(404, {'detail': 'No switch \'box\' is known.'})),
-      "No switch 'box' is known.",
-    );
+    expect(friendlyError(_en, bad(404, {'detail': 'No guide camera is known.'}), action: 'start guiding'),
+        'No guide camera is known.');
+    expect(failureReason(_en, bad(404, {'detail': 'No switch \'box\' is known.'})), "No switch 'box' is known.");
   });
 
   test('a 404 with no detail still reads as the generic not-found sentence (#1764)', () {
@@ -108,16 +82,9 @@ void main() {
 
   test('the 400, 409, 422 and 507 details are unchanged, and a 500 detail is not shown (#1764)', () {
     for (final code in [400, 409, 422, 507]) {
-      expect(
-        friendlyError(_en, bad(code, {'detail': 'the rig said why'})),
-        'the rig said why',
-        reason: '$code',
-      );
+      expect(friendlyError(_en, bad(code, {'detail': 'the rig said why'})), 'the rig said why', reason: '$code');
     }
-    expect(
-      friendlyError(_en, bad(500, {'detail': 'NullReferenceException at Foo'})),
-      isNot(contains('NullReference')),
-    );
+    expect(friendlyError(_en, bad(500, {'detail': 'NullReferenceException at Foo'})), isNot(contains('NullReference')));
   });
 
   test('badResponse 500 maps to a check-the-logs sentence', () {

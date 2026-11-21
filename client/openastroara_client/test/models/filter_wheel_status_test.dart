@@ -43,11 +43,7 @@ void main() {
       'name': 'Manual filter wheel',
       'state': 'connected',
       'manual': true,
-      'runtime': {
-        'state': 'awaiting_user',
-        'current_slot': 0,
-        'pending_slot': 1,
-      },
+      'runtime': {'state': 'awaiting_user', 'current_slot': 0, 'pending_slot': 1},
       'slots': [
         {'position': 0, 'name': 'L', 'focus_offset': 0},
         {'position': 1, 'name': 'Ha', 'focus_offset': 0},

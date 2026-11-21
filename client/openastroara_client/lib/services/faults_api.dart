@@ -30,16 +30,13 @@ class FaultsApi implements FaultsClient {
   final Dio _dio;
 
   FaultsApi(AraServer server, {Dio? dio})
-    : _dio =
-          dio ??
-          Dio(
-            BaseOptions(
+      : _dio = dio ??
+            Dio(BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
-            ),
-          );
+            ));
 
   @override
   Future<CursorPage<FaultRow>> list({
@@ -68,8 +65,7 @@ class FaultsApi implements FaultsClient {
     // shape means the wire contract changed — throw so the notifier surfaces it.
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
-        'faults list returned an unexpected body (${data.runtimeType})',
-      );
+          'faults list returned an unexpected body (${data.runtimeType})');
     }
     final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
@@ -91,8 +87,7 @@ class FaultsApi implements FaultsClient {
       final data = res.data;
       if (data is! Map<String, dynamic>) {
         throw FormatException(
-          'fault $id returned an unexpected body (${data.runtimeType})',
-        );
+            'fault $id returned an unexpected body (${data.runtimeType})');
       }
       return FaultRow.fromJson(data);
     } on DioException catch (e) {

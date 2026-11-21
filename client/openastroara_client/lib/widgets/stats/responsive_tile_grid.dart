@@ -31,14 +31,10 @@ class ResponsiveTileGrid extends StatelessWidget {
       // even one minimum tile: one column floored at the minimum so the tile
       // content lays out sanely — below-min panes overflow the row edge
       // (visually clipped) rather than squeezing the tile toward zero width.
-      return available.isFinite
-          ? math.max(available, minTileWidth)
-          : minTileWidth;
+      return available.isFinite ? math.max(available, minTileWidth) : minTileWidth;
     }
-    final columns = math.max(
-      1,
-      (available + spacing) ~/ (minTileWidth + spacing),
-    );
+    final columns =
+        math.max(1, (available + spacing) ~/ (minTileWidth + spacing));
     final width = (available - (columns - 1) * spacing) / columns;
     return math.min(width, maxTileWidth);
   }

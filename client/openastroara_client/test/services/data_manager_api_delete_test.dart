@@ -39,7 +39,8 @@ void main() {
     expect(await _api(404).delete('hyg-stars'), isFalse);
   });
 
-  test('409 → PackageDeleteBlockedException (files still on disk, retry)', () async {
+  test('409 → PackageDeleteBlockedException (files still on disk, retry)',
+      () async {
     // The daemon's Blocked outcome must never read as "removed": neither true
     // nor false — a typed throw whose message is fit for the modal's SnackBar.
     await expectLater(

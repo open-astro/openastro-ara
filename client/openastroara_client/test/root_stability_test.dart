@@ -32,11 +32,7 @@ class _FakeGps extends ClientGpsNotifier {
 
   void emit({required bool busy}) {
     state = AsyncData(
-      ClientGpsStatus(
-        prefs: const ClientGpsPrefs(),
-        supported: false,
-        busy: busy,
-      ),
+      ClientGpsStatus(prefs: const ClientGpsPrefs(), supported: false, busy: busy),
     );
   }
 }
@@ -45,58 +41,41 @@ void main() {
   late ProviderContainer container;
 
   Future<void> pump(WidgetTester tester) async {
-    container = ProviderContainer(
-      overrides: [
-        nightModePrefsProvider.overrideWithValue(_MemPrefs()),
-        clientGpsProvider.overrideWith(_FakeGps.new),
-      ],
-    );
+    container = ProviderContainer(overrides: [
+      nightModePrefsProvider.overrideWithValue(_MemPrefs()),
+      clientGpsProvider.overrideWith(_FakeGps.new),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: OpenAstroAraApp(
-          home: Scaffold(
-            body: Column(
-              children: [
-                const Text('root'),
-                Builder(
-                  builder: (c) =>
-                      Text(c.l10n.shellSimpleMode, key: const Key('localized')),
-                ),
-              ],
-            ),
-          ),
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: OpenAstroAraApp(
+        home: Scaffold(
+          body: Column(children: [
+            const Text('root'),
+            Builder(builder: (c) => Text(c.l10n.shellSimpleMode, key: const Key('localized'))),
+          ]),
         ),
       ),
-    );
+    ));
     await container.read(nightModeProvider.future);
     await container.read(clientGpsProvider.future);
     await tester.pump();
   }
 
-  ({
-    MaterialApp app,
-    NavigatorState nav,
-    ThemeData theme,
-    Element hotkeyFocus,
-    RenderNightFilter filter,
-  })
-  snapshot(WidgetTester tester) {
+  ({MaterialApp app, NavigatorState nav, ThemeData theme, Element hotkeyFocus,
+    RenderNightFilter filter}) snapshot(WidgetTester tester) {
     final rootContext = tester.element(find.text('root'));
     return (
       app: tester.widget<MaterialApp>(find.byType(MaterialApp)),
       nav: Navigator.of(rootContext),
       theme: Theme.of(rootContext),
-      hotkeyFocus: tester.element(
-        find
-            .descendant(
-              of: find.byType(NightHotkey),
-              matching: find.byType(Focus),
-            )
-            .first,
+      hotkeyFocus: tester.element(find.descendant(
+        of: find.byType(NightHotkey),
+        matching: find.byType(Focus),
+      ).first),
+      filter: tester.renderObject<RenderNightFilter>(
+        find.byType(NightFilter),
       ),
-      filter: tester.renderObject<RenderNightFilter>(find.byType(NightFilter)),
     );
   }
 
@@ -125,73 +104,51 @@ void main() {
     expect(after.hotkeyFocus, same(before.hotkeyFocus));
   });
 
-  testWidgets(
-    'a language pick translates the app without moving the Navigator',
-    (tester) async {
-      await pump(tester);
-      final before = snapshot(tester);
-      String shown() =>
-          tester.widget<Text>(find.byKey(const Key('localized'))).data!;
-      expect(
-        shown(),
-        'Simple Mode',
-        reason: 'the system language (English in tests)',
-      );
+  testWidgets('a language pick translates the app without moving the Navigator', (tester) async {
+    await pump(tester);
+    final before = snapshot(tester);
+    String shown() => tester.widget<Text>(find.byKey(const Key('localized'))).data!;
+    expect(shown(), 'Simple Mode', reason: 'the system language (English in tests)');
 
-      container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
-      await tester.pump();
-      expect(
-        shown(),
-        lookupAppLocalizations(const Locale('pt', 'BR')).shellSimpleMode,
-      );
-      final after = snapshot(tester);
-      expect(after.nav, same(before.nav), reason: 'Navigator state replaced');
-      expect(after.app, same(before.app), reason: 'MaterialApp widget rebuilt');
+    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+    await tester.pump();
+    expect(shown(), lookupAppLocalizations(const Locale('pt', 'BR')).shellSimpleMode);
+    final after = snapshot(tester);
+    expect(after.nav, same(before.nav), reason: 'Navigator state replaced');
+    expect(after.app, same(before.app), reason: 'MaterialApp widget rebuilt');
 
-      container.read(appLocaleProvider.notifier).set(null);
-      await tester.pump();
-      expect(
-        shown(),
-        'Simple Mode',
-        reason: 'System: back to the device language',
-      );
-      expect(snapshot(tester).nav, same(before.nav));
-    },
-  );
+    container.read(appLocaleProvider.notifier).set(null);
+    await tester.pump();
+    expect(shown(), 'Simple Mode', reason: 'System: back to the device language');
+    expect(snapshot(tester).nav, same(before.nav));
+  });
 
-  testWidgets(
-    'a night-mode toggle flips the filter without moving the Navigator',
-    (tester) async {
-      await pump(tester);
-      final before = snapshot(tester);
-      expect(before.filter.enabled, isFalse);
+  testWidgets('a night-mode toggle flips the filter without moving the Navigator',
+      (tester) async {
+    await pump(tester);
+    final before = snapshot(tester);
+    expect(before.filter.enabled, isFalse);
 
-      await container.read(nightModeProvider.notifier).toggle();
-      await tester.pump();
+    await container.read(nightModeProvider.notifier).toggle();
+    await tester.pump();
 
-      final on = snapshot(tester);
-      expect(on.filter, same(before.filter), reason: 'render object replaced');
-      expect(on.filter.enabled, isTrue);
-      expect(on.nav, same(before.nav), reason: 'Navigator state replaced');
-      expect(
-        on.hotkeyFocus,
-        same(before.hotkeyFocus),
-        reason: 'hotkey Focus remounted',
-      );
-      expect(on.app, same(before.app));
-      expect(find.text('root'), findsOneWidget);
+    final on = snapshot(tester);
+    expect(on.filter, same(before.filter), reason: 'render object replaced');
+    expect(on.filter.enabled, isTrue);
+    expect(on.nav, same(before.nav), reason: 'Navigator state replaced');
+    expect(on.hotkeyFocus, same(before.hotkeyFocus), reason: 'hotkey Focus remounted');
+    expect(on.app, same(before.app));
+    expect(find.text('root'), findsOneWidget);
 
-      await container.read(nightModeProvider.notifier).toggle();
-      await tester.pump();
-      final off = snapshot(tester);
-      expect(off.filter.enabled, isFalse);
-      expect(off.nav, same(before.nav));
-    },
-  );
+    await container.read(nightModeProvider.notifier).toggle();
+    await tester.pump();
+    final off = snapshot(tester);
+    expect(off.filter.enabled, isFalse);
+    expect(off.nav, same(before.nav));
+  });
 
-  testWidgets('the night filter paints (on and off) without throwing', (
-    tester,
-  ) async {
+  testWidgets('the night filter paints (on and off) without throwing',
+      (tester) async {
     await pump(tester);
     await container.read(nightModeProvider.notifier).set(true);
     await tester.pump();

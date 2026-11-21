@@ -36,20 +36,13 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
 
   /// #1542 — the nudge and Stop, so the readout can be watched while focusing.
   final Widget? manualFocus;
-  const BahtinovFocusCard({
-    super.key,
-    required this.methodSelector,
-    this.manualFocus,
-  });
+  const BahtinovFocusCard({super.key, required this.methodSelector, this.manualFocus});
 
   @override
   ConsumerState<BahtinovFocusCard> createState() => _BahtinovFocusCardState();
 
   /// The card's headline and its colour. Pure — unit-tested.
-  static (String, Color) headlineFor(
-    AppLocalizations l,
-    BahtinovFocusLive live,
-  ) {
+  static (String, Color) headlineFor(AppLocalizations l, BahtinovFocusLive live) {
     final status = live.status;
     final latest = status.steady;
     if (live.finished) {
@@ -61,26 +54,18 @@ class BahtinovFocusCard extends ConsumerStatefulWidget {
       return (l.bahtinovCameraError, AraColors.accentError);
     }
     if (status.active) {
-      if (latest == null)
-        return (l.bahtinovWaitingFirst, AraColors.textPrimary);
-      if (!latest.detected)
-        return (bahtinovHint(l, status).title, AraColors.accentWarning);
+      if (latest == null) return (l.bahtinovWaitingFirst, AraColors.textPrimary);
+      if (!latest.detected) return (bahtinovHint(l, status).title, AraColors.accentWarning);
       final px = formatOffset(latest.offsetPx!.abs());
-      if (latest.withinZone)
-        return (l.bahtinovInFocusPx(px), AraColors.accentConnected);
+      if (latest.withinZone) return (l.bahtinovInFocusPx(px), AraColors.accentConnected);
       final hint = bahtinovHint(l, status);
       return (
         l.bahtinovHintPx(hint.title, px),
-        hint.advice == TurnAdvice.turnBack
-            ? AraColors.accentWarning
-            : AraColors.textPrimary,
+        hint.advice == TurnAdvice.turnBack ? AraColors.accentWarning : AraColors.textPrimary,
       );
     }
     if (status.lastSteady case final last?) {
-      return (
-        l.bahtinovStoppedLast(formatOffset(last.offsetPx!.abs())),
-        AraColors.textPrimary,
-      );
+      return (l.bahtinovStoppedLast(formatOffset(last.offsetPx!.abs())), AraColors.textPrimary);
     }
     return (l.bahtinovFitMask, AraColors.textPrimary);
   }
@@ -102,11 +87,8 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
   Widget build(BuildContext context) {
     final live = ref.watch(bahtinovFocusProvider);
     final focuser = ref.watch(focuserProvider).asData?.value;
-    final focuserConnected =
-        focuser?.connectionState == EquipmentConnectionState.connected;
-    final autofocusRunning = ref.watch(
-      autofocusLiveProvider.select((s) => s.run.isRunning),
-    );
+    final focuserConnected = focuser?.connectionState == EquipmentConnectionState.connected;
+    final autofocusRunning = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
     final status = live.status;
     final active = status.active;
     // The steadied (median) reading drives the headline, the hero and the
@@ -114,55 +96,31 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final latest = status.steady;
     final hasData = live.frame != null || latest != null;
     final measured = status.hasMeasurement;
-    final (headline, headlineColor) = BahtinovFocusCard.headlineFor(
-      context.l10n,
-      live,
-    );
+    final (headline, headlineColor) = BahtinovFocusCard.headlineFor(context.l10n, live);
 
     // Null until the profile's copy is in from the rig: the line leaves it out.
     final exposure = active && status.exposureSec > 0
         ? status.exposureSec
-        : _exposureSec ??
-              ref
-                  .watch(
-                    autofocusSettingsProvider.select(
-                      (s) => s.value?.exposureSeconds,
-                    ),
-                  )
-                  ?.toDouble();
+        : _exposureSec ?? ref.watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds))?.toDouble();
     final subhead = [
-      if (focuserConnected && focuser != null)
-        'Focuser at ${focuser.position ?? '—'} · ${focuser.name}'
-      else
-        'Manual focuser',
+      if (focuserConnected && focuser != null) 'Focuser at ${focuser.position ?? '—'} · ${focuser.name}' else 'Manual focuser',
       'Bahtinov mask',
       if (exposure != null) '${_seconds(exposure)} frames',
     ].join(' · ');
 
     final busySpinner = const SizedBox(
-      width: 14,
-      height: 14,
-      child: AdaptiveProgressIndicator(strokeWidth: 2),
-    );
+        width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2));
     final startStop = active
         ? FilledButton.tonalIcon(
-            onPressed: live.busy
-                ? null
-                : () => ref.read(bahtinovFocusProvider.notifier).stop(),
-            icon: live.busy
-                ? busySpinner
-                : const Icon(Icons.stop_rounded, size: 18),
+            onPressed: live.busy ? null : () => ref.read(bahtinovFocusProvider.notifier).stop(),
+            icon: live.busy ? busySpinner : const Icon(Icons.stop_rounded, size: 18),
             label: const Text('Stop'),
           )
         : FilledButton.icon(
             onPressed: live.busy || autofocusRunning
                 ? null
-                : () => ref
-                      .read(bahtinovFocusProvider.notifier)
-                      .start(exposureSec: _exposureSec),
-            icon: live.busy
-                ? busySpinner
-                : const Icon(Icons.play_arrow_rounded, size: 18),
+                : () => ref.read(bahtinovFocusProvider.notifier).start(exposureSec: _exposureSec),
+            icon: live.busy ? busySpinner : const Icon(Icons.play_arrow_rounded, size: 18),
             label: Text(hasData ? 'Start again' : 'Start'),
           );
     final canFinish = measured && !live.finished;
@@ -170,20 +128,20 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
     final finish = !canFinish
         ? null
         : within
-        ? FilledButton.icon(
-            onPressed: live.busy ? null : () => _finish(context),
-            style: FilledButton.styleFrom(
-              backgroundColor: AraColors.accentConnected,
-              foregroundColor: AraColors.onBrightFill,
-            ),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('Finish'),
-          )
-        : OutlinedButton.icon(
-            onPressed: live.busy ? null : () => _finish(context),
-            icon: const Icon(Icons.check_rounded, size: 18),
-            label: const Text('Finish'),
-          );
+            ? FilledButton.icon(
+                onPressed: live.busy ? null : () => _finish(context),
+                style: FilledButton.styleFrom(
+                  backgroundColor: AraColors.accentConnected,
+                  foregroundColor: AraColors.onBrightFill,
+                ),
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Finish'),
+              )
+            : OutlinedButton.icon(
+                onPressed: live.busy ? null : () => _finish(context),
+                icon: const Icon(Icons.check_rounded, size: 18),
+                label: const Text('Finish'),
+              );
 
     return FocusSection(
       title: 'Main telescope',
@@ -192,20 +150,21 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
       headline: headline,
       headlineColor: headlineColor,
       subhead: subhead,
-      action: Wrap(spacing: 8, runSpacing: 8, children: [?finish, startStop]),
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [?finish, startStop],
+      ),
       secondaryAction: SegmentedButton<double>(
         segments: [
-          for (final e in _exposures)
-            ButtonSegment(value: e, label: Text(_seconds(e))),
+          for (final e in _exposures) ButtonSegment(value: e, label: Text(_seconds(e))),
         ],
         selected: {?_exposureSec},
         emptySelectionAllowed: true,
         showSelectedIcon: false,
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
         // Tapping the picked segment again goes back to the autofocus exposure.
-        onSelectionChanged: active
-            ? null
-            : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
+        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
       ),
       child: FitColumn(
         children: [
@@ -215,160 +174,119 @@ class _BahtinovFocusCardState extends ConsumerState<BahtinovFocusCard> {
           ],
           if (live.error != null || status.error != null) ...[
             InlineNotice.error(
-              live.error == null
-                  ? status.error!
-                  : failureReason(context.l10n, live.error!),
-            ),
+                live.error == null ? status.error! : failureReason(context.l10n, live.error!)),
             const SizedBox(height: 16),
           ],
           if (autofocusRunning && !active) ...[
-            const InlineNotice.info(
-              'An autofocus run has the camera. Wait for it to finish, or cancel it on the Autofocus side.',
-            ),
+            const InlineNotice.info('An autofocus run has the camera. Wait for it to finish, or cancel it on the Autofocus side.'),
             const SizedBox(height: 16),
           ],
           if (live.finished) ...[
-            InlineNotice.info(
-              status.lastSteady?.withinZone == true
-                  ? 'Focused with the Bahtinov mask, and the mask is off. Lock the focuser.'
-                  : 'The mask is off. The readout never reached the focus zone — start again to check focus.',
-            ),
+            InlineNotice.info(status.lastSteady?.withinZone == true
+                ? 'Focused with the Bahtinov mask, and the mask is off. Lock the focuser.'
+                : 'The mask is off. The readout never reached the focus zone — start again to check focus.'),
             const SizedBox(height: 16),
           ] else if (measured && !status.zoneFromOptics) ...[
             InlineNotice.info(
-              // One line on a laptop screen, so the readout keeps its height.
-              'Until the optics are set (Settings → Imaging → Optics), in focus means within ${formatOffset(status.zonePx)} px.',
-            ),
+                // One line on a laptop screen, so the readout keeps its height.
+                'Until the optics are set (Settings → Imaging → Optics), in focus means within ${formatOffset(status.zonePx)} px.'),
             const SizedBox(height: 16),
           ],
           if (!hasData)
-            const FitFill(
-              child: EmptyState(
-                icon: Icons.flare,
-                title: 'Fit the mask, then Start',
-                message:
-                    'Put the Bahtinov mask over the front of the telescope and point at a bright star. '
-                    'Ara uses the brightest star in the frame and shows how far the middle spike sits from the centre of the X.',
-              ),
-            )
+            const FitFill(child: EmptyState(
+              icon: Icons.flare,
+              title: 'Fit the mask, then Start',
+              message: 'Put the Bahtinov mask over the front of the telescope and point at a bright star. '
+                  'Ara uses the brightest star in the frame and shows how far the middle spike sits from the centre of the X.',
+            ))
           else ...[
-            FitFill(
-              child: FitBand(
-                builder: (context, width, height) {
-                  // The trend keeps a fixed strip; the picture and the readout
-                  // take the rest of the height the window leaves.
-                  final short = AraBreakpoints.isShort(context);
-                  final trendHeight = short
-                      ? 100.0
-                      : (width * 0.11).clamp(140.0, 200.0);
-                  final trend = SizedBox(
-                    height: trendHeight,
-                    child: BahtinovTrendChart(status: status),
-                  );
-                  Widget frame(double h) => BahtinovFrameView(
-                    frame: live.frame,
-                    overlay: live.overlay,
-                    offsetPx: status.latest?.offsetPx,
-                    live: active,
-                    frameWidth: status.frameWidth,
-                    frameHeight: status.frameHeight,
-                    crop: status.frameCrop,
-                    picked: status.hasPick,
-                    onPick: active
-                        ? (x, y) => unawaited(
-                            ref.read(bahtinovFocusProvider.notifier).pick(x, y),
-                          )
-                        : null,
-                    onClearPick: active && status.hasPick
-                        ? () => unawaited(
-                            ref
-                                .read(bahtinovFocusProvider.notifier)
-                                .clearPick(),
-                          )
-                        : null,
-                    zoom: _zoom,
-                    onZoom: (z) => setState(() => _zoom = z),
-                    caption: latest == null
-                        ? null
-                        : [
-                            'frame ${latest.seq}',
-                            if (latest.peakAdu > 0)
-                              'peak ${(latest.peakAdu / 1000).toStringAsFixed(1)}k',
-                          ].join(' · '),
-                    height: h,
-                  );
-                  final hero = _Hero(status: status);
-                  if (short && width >= AraBreakpoints.sideBySide(context)) {
-                    // A laptop screen: the readout takes the full height on the
-                    // right so its hint and facts stay in view; the picture and
-                    // the trend share the left column.
-                    final total = math.max(height, 240.0);
-                    return SizedBox(
-                      height: total,
+            FitFill(child: FitBand(builder: (context, width, height) {
+              // The trend keeps a fixed strip; the picture and the readout
+              // take the rest of the height the window leaves.
+              final short = AraBreakpoints.isShort(context);
+              final trendHeight = short ? 100.0 : (width * 0.11).clamp(140.0, 200.0);
+              final trend = SizedBox(height: trendHeight, child: BahtinovTrendChart(status: status));
+              Widget frame(double h) => BahtinovFrameView(
+                frame: live.frame,
+                overlay: live.overlay,
+                offsetPx: status.latest?.offsetPx,
+                live: active,
+                frameWidth: status.frameWidth,
+                frameHeight: status.frameHeight,
+                crop: status.frameCrop,
+                picked: status.hasPick,
+                onPick: active ? (x, y) => unawaited(ref.read(bahtinovFocusProvider.notifier).pick(x, y)) : null,
+                onClearPick: active && status.hasPick ? () => unawaited(ref.read(bahtinovFocusProvider.notifier).clearPick()) : null,
+                zoom: _zoom,
+                onZoom: (z) => setState(() => _zoom = z),
+                caption: latest == null
+                    ? null
+                    : [
+                        'frame ${latest.seq}',
+                        if (latest.peakAdu > 0) 'peak ${(latest.peakAdu / 1000).toStringAsFixed(1)}k',
+                      ].join(' · '),
+                height: h,
+              );
+              final hero = _Hero(status: status);
+              if (short && width >= AraBreakpoints.sideBySide(context)) {
+                // A laptop screen: the readout takes the full height on the
+                // right so its hint and facts stay in view; the picture and
+                // the trend share the left column.
+                final total = math.max(height, 240.0);
+                return SizedBox(
+                  height: total,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      SizedBox(
+                        width: (width - 16) * 5 / 8,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [frame(total - trendHeight - 12), const SizedBox(height: 12), trend],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(child: hero),
+                    ],
+                  ),
+                );
+              }
+              if (width >= AraBreakpoints.sideBySide(context)) {
+                // The frame stays 4:3 and takes up to 5/8 of the width; the
+                // readout gets the rest. Past that the band stops growing.
+                final band = math.max(height - trendHeight - 16, short ? 136.0 : 200.0);
+                final frameWidth = math.min(band * 4 / 3, (width - 16) * 5 / 8);
+                final h = math.min(band, frameWidth * 0.75);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      height: h,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SizedBox(
-                            width: (width - 16) * 5 / 8,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                frame(total - trendHeight - 12),
-                                const SizedBox(height: 12),
-                                trend,
-                              ],
-                            ),
-                          ),
+                          SizedBox(width: frameWidth, child: frame(h)),
                           const SizedBox(width: 16),
                           Expanded(child: hero),
                         ],
                       ),
-                    );
-                  }
-                  if (width >= AraBreakpoints.sideBySide(context)) {
-                    // The frame stays 4:3 and takes up to 5/8 of the width; the
-                    // readout gets the rest. Past that the band stops growing.
-                    final band = math.max(
-                      height - trendHeight - 16,
-                      short ? 136.0 : 200.0,
-                    );
-                    final frameWidth = math.min(
-                      band * 4 / 3,
-                      (width - 16) * 5 / 8,
-                    );
-                    final h = math.min(band, frameWidth * 0.75);
-                    return Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: h,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              SizedBox(width: frameWidth, child: frame(h)),
-                              const SizedBox(width: 16),
-                              Expanded(child: hero),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        trend,
-                      ],
-                    );
-                  }
-                  return Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      frame((width * 0.75).clamp(220.0, 480.0)),
-                      const SizedBox(height: 12),
-                      hero,
-                      const SizedBox(height: 16),
-                      trend,
-                    ],
-                  );
-                },
-              ),
-            ),
+                    ),
+                    const SizedBox(height: 16),
+                    trend,
+                  ],
+                );
+              }
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  frame((width * 0.75).clamp(220.0, 480.0)),
+                  const SizedBox(height: 12),
+                  hero,
+                  const SizedBox(height: 16),
+                  trend,
+                ],
+              );
+            })),
           ],
         ],
       ),
@@ -391,9 +309,8 @@ Future<bool> confirmMaskRemoved(BuildContext context) async {
       icon: const Icon(Icons.flare, color: AraColors.accentWarning),
       title: const Text('Remove the Bahtinov mask'),
       content: const Text(
-        'Take the mask off the front of the telescope before you image. '
-        'Left on, it puts spikes on every star and costs light.',
-      ),
+          'Take the mask off the front of the telescope before you image. '
+          'Left on, it puts spikes on every star and costs light.'),
       actions: [
         adaptiveDialogAction(
           context,
@@ -422,23 +339,15 @@ class MainFocusMethodSelector extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final autofocusRunning = ref.watch(
-      autofocusLiveProvider.select((s) => s.run.isRunning),
-    );
+    final autofocusRunning = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
     final bahtinov = ref.watch(bahtinovFocusProvider);
     final locked = autofocusRunning || bahtinov.status.active || bahtinov.busy;
     return Tooltip(
       message: locked ? 'Stop the running focus first' : '',
       child: SegmentedButton<MainFocusMethod>(
         segments: const [
-          ButtonSegment(
-            value: MainFocusMethod.autofocus,
-            label: Text('Autofocus'),
-          ),
-          ButtonSegment(
-            value: MainFocusMethod.bahtinov,
-            label: Text('Bahtinov mask'),
-          ),
+          ButtonSegment(value: MainFocusMethod.autofocus, label: Text('Autofocus')),
+          ButtonSegment(value: MainFocusMethod.bahtinov, label: Text('Bahtinov mask')),
         ],
         selected: {method},
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
@@ -488,57 +397,30 @@ String _seconds(double s) => s == s.roundToDouble() ? '${s.round()} s' : '$s s';
 /// noise allowance. Comparing with a fixed number of frames back instead
 /// forgot the move after a couple of seconds of fast frames and said
 /// "Holding" while the user was still deciding where to turn next.
-GuideFocusHint bahtinovHint(
-  AppLocalizations l,
-  BahtinovFocusStatus status, {
-  int lookback = 3,
-}) {
+GuideFocusHint bahtinovHint(AppLocalizations l, BahtinovFocusStatus status, {int lookback = 3}) {
   final latest = status.latest;
   if (latest == null) {
-    return GuideFocusHint(
-      TurnAdvice.wait,
-      l.bahtinovWaiting,
-      l.bahtinovWaitingDetail,
-    );
+    return GuideFocusHint(TurnAdvice.wait, l.bahtinovWaiting, l.bahtinovWaitingDetail);
   }
   if (!latest.detected) {
     return switch (latest.problem) {
-      BahtinovProblems.noStar => GuideFocusHint(
-        TurnAdvice.noStars,
-        l.bahtinovNoStar,
-        l.bahtinovNoStarDetail,
-      ),
-      BahtinovProblems.nearEdge => GuideFocusHint(
-        TurnAdvice.noStars,
-        l.bahtinovNearEdge,
-        l.bahtinovNearEdgeDetail,
-      ),
-      _ => GuideFocusHint(
-        TurnAdvice.noStars,
-        l.bahtinovNoSpikes,
-        l.bahtinovNoSpikesDetail,
-      ),
+      BahtinovProblems.noStar => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNoStar, l.bahtinovNoStarDetail),
+      BahtinovProblems.nearEdge => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNearEdge, l.bahtinovNearEdgeDetail),
+      _ => GuideFocusHint(TurnAdvice.noStars, l.bahtinovNoSpikes, l.bahtinovNoSpikesDetail),
     };
   }
   final zone = status.zonePx;
   if (latest.withinZone) {
-    return GuideFocusHint(
-      TurnAdvice.atBest,
-      l.bahtinovInFocus,
-      status.zoneUm != null
-          ? l.bahtinovInFocusZoneDetail(status.zoneUm!.toStringAsFixed(0))
-          : l.bahtinovInFocusDetail,
-    );
+    return GuideFocusHint(TurnAdvice.atBest, l.bahtinovInFocus,
+        status.zoneUm != null
+            ? l.bahtinovInFocusZoneDetail(status.zoneUm!.toStringAsFixed(0))
+            : l.bahtinovInFocusDetail);
   }
   final offsets = [
     for (final s in status.recent)
       if (s.detected && s.offsetPx != null) s.offsetPx!,
   ];
-  final firstMove = GuideFocusHint(
-    TurnAdvice.hold,
-    l.bahtinovMakeMove,
-    l.bahtinovMakeMoveDetail,
-  );
+  final firstMove = GuideFocusHint(TurnAdvice.hold, l.bahtinovMakeMove, l.bahtinovMakeMoveDetail);
   if (offsets.length <= lookback) return firstMove;
   final now = _medianEndingAt(offsets, offsets.length - 1);
   final tolerance = math.max(zone / 2, 0.15);
@@ -547,8 +429,7 @@ GuideFocusHint bahtinovHint(
     final m = _medianEndingAt(offsets, end);
     // A plateau, not a frame taken while the focuser was still turning:
     // sizing the next move from a mid-move reading said "twice" for "a third".
-    if ((m - now).abs() > tolerance &&
-        _spreadEndingAt(offsets, end) <= 2 * tolerance) {
+    if ((m - now).abs() > tolerance && _spreadEndingAt(offsets, end) <= 2 * tolerance) {
       earlier = m;
       break;
     }
@@ -556,24 +437,14 @@ GuideFocusHint bahtinovHint(
   if (earlier == null) return firstMove;
   final moved = now - earlier;
   if (now.sign != earlier.sign && earlier.abs() > zone) {
-    return GuideFocusHint(
-      TurnAdvice.turnBack,
-      l.bahtinovGoBack,
-      l.bahtinovPassedDetail(_moveSize(l, now.abs() / moved.abs())),
-    );
+    return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack,
+        l.bahtinovPassedDetail(_moveSize(l, now.abs() / moved.abs())));
   }
   if (now.abs() < earlier.abs()) {
-    return GuideFocusHint(
-      TurnAdvice.keepGoing,
-      l.bahtinovKeepGoing,
-      l.bahtinovKeepGoingDetail(_moveSize(l, now.abs() / moved.abs())),
-    );
+    return GuideFocusHint(TurnAdvice.keepGoing, l.bahtinovKeepGoing,
+        l.bahtinovKeepGoingDetail(_moveSize(l, now.abs() / moved.abs())));
   }
-  return GuideFocusHint(
-    TurnAdvice.turnBack,
-    l.bahtinovGoBack,
-    l.bahtinovWrongWayDetail,
-  );
+  return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack, l.bahtinovWrongWayDetail);
 }
 
 /// A move as a multiple of the last one, in words.
@@ -625,8 +496,7 @@ class _Hero extends StatelessWidget {
         ? 'px · in focus ≤ $zone'
         : [
             'px',
-            if (defocus != null)
-              '≈ ${defocus.abs().toStringAsFixed(0)} µm from focus',
+            if (defocus != null) '≈ ${defocus.abs().toStringAsFixed(0)} µm from focus',
             'in focus ≤ $zone',
           ].join(' · ');
     final best = status.bestOffsetPx;
@@ -641,24 +511,13 @@ class _Hero extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: constraints.hasBoundedHeight
-                  ? constraints.maxHeight
-                  : 0,
-            ),
+            constraints: BoxConstraints(minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'SPIKE OFFSET',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: _textFont,
-                    color: AraColors.textSecondary,
-                    letterSpacing: 1.1,
-                  ),
-                ),
+                const Text('SPIKE OFFSET', textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, letterSpacing: 1.1)),
                 const SizedBox(height: 2),
                 FittedBox(
                   fit: BoxFit.scaleDown,
@@ -668,23 +527,14 @@ class _Hero extends StatelessWidget {
                       fontSize: short ? _heroFontShort : _heroFont,
                       fontWeight: FontWeight.w300,
                       height: 1.05,
-                      color: within
-                          ? AraColors.accentConnected
-                          : AraColors.textPrimary,
+                      color: within ? AraColors.accentConnected : AraColors.textPrimary,
                       fontFeatures: _tabular,
                     ),
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  sub,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: short ? 14 : 16,
-                    color: AraColors.textSecondary,
-                    fontFeatures: _tabular,
-                  ),
-                ),
+                Text(sub, textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular)),
                 if (status.active) ...[
                   SizedBox(height: short ? 8 : 14),
                   TurnHint(hint: bahtinovHint(context.l10n, status)),
@@ -694,33 +544,14 @@ class _Hero extends StatelessWidget {
                 SizedBox(height: short ? 8 : 14),
                 Row(
                   children: [
-                    Expanded(
-                      child: _Fact(
-                        label: 'Best',
-                        value: best == null
-                            ? '—'
-                            : formatOffset(best, signed: true),
-                      ),
-                    ),
-                    Expanded(
-                      child: _Fact(
+                    Expanded(child: _Fact(label: 'Best', value: best == null ? '—' : formatOffset(best, signed: true))),
+                    Expanded(child: _Fact(
                         label: 'Zone',
-                        value: status.zoneUm != null
-                            ? '±${status.zoneUm!.toStringAsFixed(0)}µm'
-                            : '≤${zone}px',
-                      ),
-                    ),
-                    Expanded(
-                      child: _Fact(
+                        value: status.zoneUm != null ? '±${status.zoneUm!.toStringAsFixed(0)}µm' : '≤${zone}px')),
+                    Expanded(child: _Fact(
                         label: 'Peak',
-                        value: latest == null || latest.peakAdu <= 0
-                            ? '—'
-                            : '${(latest.peakAdu / 1000).toStringAsFixed(1)}k',
-                      ),
-                    ),
-                    Expanded(
-                      child: _Fact(label: 'Frames', value: '${status.seq}'),
-                    ),
+                        value: latest == null || latest.peakAdu <= 0 ? '—' : '${(latest.peakAdu / 1000).toStringAsFixed(1)}k')),
+                    Expanded(child: _Fact(label: 'Frames', value: '${status.seq}')),
                   ],
                 ),
               ],
@@ -741,26 +572,15 @@ class _Fact extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: _textFont,
-            color: AraColors.textSecondary,
-          ),
-        ),
+        Text(label, style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(
-            value,
-            style: TextStyle(
-              fontSize: AraBreakpoints.isShort(context)
-                  ? _statFontShort
-                  : _statFont,
-              fontWeight: FontWeight.w600,
-              fontFeatures: _tabular,
-            ),
-          ),
+          child: Text(value,
+              style: TextStyle(
+                  fontSize: AraBreakpoints.isShort(context) ? _statFontShort : _statFont,
+                  fontWeight: FontWeight.w600,
+                  fontFeatures: _tabular)),
         ),
       ],
     );
@@ -778,21 +598,17 @@ class BahtinovFrameView extends StatelessWidget {
   final bool live;
   final String? caption;
   final double height;
-
   /// The analysed frame's size in frame pixels (0 when unknown) and what the
   /// picture covers when it is a crop. Together they map a tap on the picture
   /// to a frame pixel for [onPick].
   final int frameWidth;
   final int frameHeight;
   final BahtinovFrameCrop? crop;
-
   /// A star is locked by the user; shows the way back to the whole frame.
   final bool picked;
-
   /// A tap on the picture, in frame pixels. Null: the picture is not tappable.
   final void Function(int x, int y)? onPick;
   final VoidCallback? onClearPick;
-
   /// Magnification of the crop about its centre (1, 2 or 4): a short-spike
   /// pattern on a small image scale is a few dozen pixels across, invisible
   /// at 1×. The whole frame is never zoomed.
@@ -835,10 +651,8 @@ class BahtinovFrameView extends StatelessWidget {
   }) {
     final imgW = crop?.size ?? frameWidth;
     final imgH = crop?.size ?? frameHeight;
-    if (imgW <= 0 || imgH <= 0 || box.width <= 0 || box.height <= 0)
-      return null;
-    if (tap.dx < 0 || tap.dy < 0 || tap.dx > box.width || tap.dy > box.height)
-      return null;
+    if (imgW <= 0 || imgH <= 0 || box.width <= 0 || box.height <= 0) return null;
+    if (tap.dx < 0 || tap.dy < 0 || tap.dx > box.width || tap.dy > box.height) return null;
     final magnify = crop != null && zoom > 1 ? zoom : 1;
     final scale = math.min(box.width / imgW, box.height / imgH) * magnify;
     final u = (tap.dx - (box.width - imgW * scale) / 2) / scale;
@@ -853,14 +667,9 @@ class BahtinovFrameView extends StatelessWidget {
   Widget build(BuildContext context) {
     final jpeg = frame;
     final small = Theme.of(context).textTheme.bodySmall;
-    final tappable =
-        jpeg != null && onPick != null && frameWidth > 0 && frameHeight > 0;
+    final tappable = jpeg != null && onPick != null && frameWidth > 0 && frameHeight > 0;
     final magnify = crop != null && zoom > 1 ? zoom.toDouble() : 1.0;
-    Widget magnified(Widget child) => magnify == 1
-        ? child
-        : ClipRect(
-            child: Transform.scale(scale: magnify, child: child),
-          );
+    Widget magnified(Widget child) => magnify == 1 ? child : ClipRect(child: Transform.scale(scale: magnify, child: child));
     return ClipRRect(
       borderRadius: BorderRadius.circular(10),
       child: Container(
@@ -872,64 +681,44 @@ class BahtinovFrameView extends StatelessWidget {
             Positioned.fill(
               child: jpeg == null
                   ? Center(
-                      child: Text(
-                        'Waiting for the first frame…',
-                        style: small?.copyWith(color: AraColors.textSecondary),
-                      ),
+                      child: Text('Waiting for the first frame…',
+                          style: small?.copyWith(color: AraColors.textSecondary)),
                     )
-                  : magnified(
-                      Image.memory(
-                        jpeg,
-                        gaplessPlayback: true,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.medium,
-                      ),
-                    ),
+                  : magnified(Image.memory(jpeg,
+                      gaplessPlayback: true, fit: BoxFit.contain, filterQuality: FilterQuality.medium)),
             ),
             if (tappable)
               Positioned.fill(
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTapUp: (d) {
-                        final p = tapToFramePixel(
-                          box: constraints.biggest,
-                          tap: d.localPosition,
-                          frameWidth: frameWidth,
-                          frameHeight: frameHeight,
-                          crop: crop,
-                          zoom: zoom,
-                        );
-                        if (p != null) onPick!(p.x, p.y);
-                      },
-                      child: const MouseRegion(
-                        cursor: SystemMouseCursors.precise,
-                      ),
-                    );
-                  },
-                ),
+                child: LayoutBuilder(builder: (context, constraints) {
+                  return GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTapUp: (d) {
+                      final p = tapToFramePixel(
+                        box: constraints.biggest,
+                        tap: d.localPosition,
+                        frameWidth: frameWidth,
+                        frameHeight: frameHeight,
+                        crop: crop,
+                        zoom: zoom,
+                      );
+                      if (p != null) onPick!(p.x, p.y);
+                    },
+                    child: const MouseRegion(cursor: SystemMouseCursors.precise),
+                  );
+                }),
               ),
             if (tappable && overlay == null && crop == null)
               Positioned(
                 bottom: 12,
                 right: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: const Text(
-                    'Tap a star to zoom in on it',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AraColors.onFrameText,
-                    ),
-                  ),
+                  child: const Text('Tap a star to zoom in on it',
+                      style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
             if (jpeg != null && (crop != null || picked))
@@ -952,24 +741,14 @@ class BahtinovFrameView extends StatelessWidget {
                               TextButton(
                                 onPressed: () => onZoom!(z),
                                 style: TextButton.styleFrom(
-                                  foregroundColor: z == zoom
-                                      ? AraColors.onImageText
-                                      : AraColors.onFrameTextQuiet,
+                                  foregroundColor: z == zoom ? AraColors.onImageText : AraColors.onFrameTextQuiet,
                                   visualDensity: VisualDensity.compact,
                                   minimumSize: const Size(36, 32),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                  ),
+                                  padding: const EdgeInsets.symmetric(horizontal: 8),
                                 ),
-                                child: Text(
-                                  '$z×',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: z == zoom
-                                        ? FontWeight.w700
-                                        : FontWeight.w400,
-                                  ),
-                                ),
+                                child: Text('$z×',
+                                    style: TextStyle(
+                                        fontSize: 12, fontWeight: z == zoom ? FontWeight.w700 : FontWeight.w400)),
                               ),
                           ],
                         ),
@@ -984,10 +763,7 @@ class BahtinovFrameView extends StatelessWidget {
                           visualDensity: VisualDensity.compact,
                         ),
                         icon: const Icon(Icons.zoom_out_map, size: 16),
-                        label: const Text(
-                          'Whole frame',
-                          style: TextStyle(fontSize: 12),
-                        ),
+                        label: const Text('Whole frame', style: TextStyle(fontSize: 12)),
                       ),
                     ],
                   ],
@@ -998,11 +774,7 @@ class BahtinovFrameView extends StatelessWidget {
                 // Drawn only: a CustomPaint is hit everywhere by default, and on top of
                 // the tap layer and the zoom row it swallowed every tap once a pattern
                 // fitted (review of #1365).
-                child: IgnorePointer(
-                  child: magnified(
-                    CustomPaint(painter: _SpikePainter(overlay!, offsetPx)),
-                  ),
-                ),
+                child: IgnorePointer(child: magnified(CustomPaint(painter: _SpikePainter(overlay!, offsetPx)))),
               ),
             if (jpeg != null)
               Positioned(
@@ -1012,30 +784,19 @@ class BahtinovFrameView extends StatelessWidget {
                 child: StatusBlink(
                   on: live,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color:
-                          (live
-                                  ? AraColors.accentConnected
-                                  : AraColors.textSecondary)
-                              .withValues(alpha: 0.18),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      live ? 'LIVE' : 'LAST',
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (live ? AraColors.accentConnected : AraColors.textSecondary).withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(live ? 'LIVE' : 'LAST',
                       style: TextStyle(
-                        color: live
-                            ? AraColors.accentConnected
-                            : AraColors.textSecondary,
+                        color: live ? AraColors.accentConnected : AraColors.textSecondary,
                         fontSize: 11,
                         fontWeight: FontWeight.w700,
                         letterSpacing: 1,
-                      ),
-                    ),
-                  ),
+                      )),
+                ),
                 ),
               ),
             if (overlay != null)
@@ -1043,10 +804,7 @@ class BahtinovFrameView extends StatelessWidget {
                 top: 12,
                 right: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 6,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(8),
@@ -1056,23 +814,11 @@ class BahtinovFrameView extends StatelessWidget {
                     children: [
                       _LegendSwatch(color: AraColors.accentBusy, dashed: true),
                       SizedBox(width: 6),
-                      Text(
-                        'X spikes',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AraColors.onFrameText,
-                        ),
-                      ),
+                      Text('X spikes', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                       SizedBox(width: 12),
                       _LegendSwatch(color: AraColors.accentInfo),
                       SizedBox(width: 6),
-                      Text(
-                        'Centre spike',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: AraColors.onFrameText,
-                        ),
-                      ),
+                      Text('Centre spike', style: TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                     ],
                   ),
                 ),
@@ -1082,21 +828,12 @@ class BahtinovFrameView extends StatelessWidget {
                 bottom: 12,
                 left: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: AraColors.onImageChip,
                     borderRadius: BorderRadius.circular(6),
                   ),
-                  child: Text(
-                    caption!,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AraColors.onFrameText,
-                    ),
-                  ),
+                  child: Text(caption!, style: const TextStyle(fontSize: 12, color: AraColors.onFrameText)),
                 ),
               ),
           ],
@@ -1113,20 +850,18 @@ class _LegendSwatch extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-    width: 16,
-    height: 2,
-    child: dashed
-        ? Row(
-            children: [
-              Expanded(child: ColoredBox(color: color)),
-              const SizedBox(width: 2),
-              Expanded(child: ColoredBox(color: color)),
-              const SizedBox(width: 2),
-              Expanded(child: ColoredBox(color: color)),
-            ],
-          )
-        : ColoredBox(color: color),
-  );
+        width: 16,
+        height: 2,
+        child: dashed
+            ? Row(children: [
+                Expanded(child: ColoredBox(color: color)),
+                const SizedBox(width: 2),
+                Expanded(child: ColoredBox(color: color)),
+                const SizedBox(width: 2),
+                Expanded(child: ColoredBox(color: color)),
+              ])
+            : ColoredBox(color: color),
+      );
 }
 
 class _SpikePainter extends CustomPainter {
@@ -1182,18 +917,11 @@ class _SpikePainter extends CustomPainter {
           final tp = TextPainter(
             text: TextSpan(
               text: '${formatOffset(offsetPx!)} px',
-              style: const TextStyle(
-                color: AraColors.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
+              style: const TextStyle(color: AraColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             textDirection: TextDirection.ltr,
           )..layout();
-          final mid = Offset(
-            (cross.dx + foot.dx) / 2,
-            (cross.dy + foot.dy) / 2,
-          );
+          final mid = Offset((cross.dx + foot.dx) / 2, (cross.dy + foot.dy) / 2);
           tp.paint(canvas, mid + const Offset(10, 6));
         }
       }
@@ -1211,8 +939,7 @@ class _SpikePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_SpikePainter old) =>
-      old.overlay != overlay || old.offsetPx != offsetPx;
+  bool shouldRepaint(_SpikePainter old) => old.overlay != overlay || old.offsetPx != offsetPx;
 }
 
 /// The offset per frame (newest right) around zero, with the focus zone as a
@@ -1226,20 +953,15 @@ class BahtinovTrendChart extends StatelessWidget {
     final samples = status.recent;
     final spots = <FlSpot>[
       for (var i = 0; i < samples.length; i++)
-        if (samples[i].detected && samples[i].offsetPx != null)
-          FlSpot(i.toDouble(), samples[i].offsetPx!),
+        if (samples[i].detected && samples[i].offsetPx != null) FlSpot(i.toDouble(), samples[i].offsetPx!),
     ];
     if (spots.length < 2) {
       return Container(
-        decoration: BoxDecoration(
-          color: AraColors.bgPanelAlt,
-          borderRadius: BorderRadius.circular(10),
-        ),
+        decoration: BoxDecoration(color: AraColors.bgPanelAlt, borderRadius: BorderRadius.circular(10)),
         alignment: Alignment.center,
         child: Text(
           'The offset trend appears after the first measured frames.',
-          style: Theme.of(context).textTheme.bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
         ),
       );
     }
@@ -1247,10 +969,7 @@ class BahtinovTrendChart extends StatelessWidget {
     final peak = spots.fold<double>(0, (m, s) => math.max(m, s.y.abs()));
     final limit = _niceCeil(math.max(math.max(peak * 1.15, zone * 3), 1.0));
     return Container(
-      decoration: BoxDecoration(
-        color: AraColors.bgPanelAlt,
-        borderRadius: BorderRadius.circular(10),
-      ),
+      decoration: BoxDecoration(color: AraColors.bgPanelAlt, borderRadius: BorderRadius.circular(10)),
       padding: const EdgeInsets.fromLTRB(8, 12, 16, 8),
       child: LineChart(
         LineChartData(
@@ -1260,30 +979,19 @@ class BahtinovTrendChart extends StatelessWidget {
           maxY: limit,
           borderData: FlBorderData(show: false),
           gridData: const FlGridData(show: false),
-          rangeAnnotations: RangeAnnotations(
-            horizontalRangeAnnotations: [
-              HorizontalRangeAnnotation(
-                y1: -zone,
-                y2: zone,
-                color: AraColors.accentConnected.withValues(alpha: 0.22),
-              ),
-            ],
-          ),
-          extraLinesData: ExtraLinesData(
-            horizontalLines: [
-              HorizontalLine(
-                y: 0,
-                color: AraColors.textDisabled,
-                strokeWidth: 1,
-              ),
-            ],
-          ),
+          rangeAnnotations: RangeAnnotations(horizontalRangeAnnotations: [
+            HorizontalRangeAnnotation(
+              y1: -zone,
+              y2: zone,
+              color: AraColors.accentConnected.withValues(alpha: 0.22),
+            ),
+          ]),
+          extraLinesData: ExtraLinesData(horizontalLines: [
+            HorizontalLine(y: 0, color: AraColors.textDisabled, strokeWidth: 1),
+          ]),
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
-              axisNameWidget: const Text(
-                'offset (px)',
-                style: TextStyle(fontSize: 11),
-              ),
+              axisNameWidget: const Text('offset (px)', style: TextStyle(fontSize: 11)),
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 40,
@@ -1291,25 +999,14 @@ class BahtinovTrendChart extends StatelessWidget {
                 getTitlesWidget: (value, meta) => SideTitleWidget(
                   meta: meta,
                   child: Text(
-                    value == 0
-                        ? '0'
-                        : formatOffset(
-                            value,
-                            signed: true,
-                          ).replaceFirst(RegExp(r'\.?0+$'), ''),
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: AraColors.textSecondary,
-                    ),
+                    value == 0 ? '0' : formatOffset(value, signed: true).replaceFirst(RegExp(r'\.?0+$'), ''),
+                    style: const TextStyle(fontSize: 11, color: AraColors.textSecondary),
                   ),
                 ),
               ),
             ),
             bottomTitles: const AxisTitles(
-              axisNameWidget: Text(
-                'frames · green band = critical focus zone',
-                style: TextStyle(fontSize: 11),
-              ),
+              axisNameWidget: Text('frames · green band = critical focus zone', style: TextStyle(fontSize: 11)),
             ),
             topTitles: const AxisTitles(),
             rightTitles: const AxisTitles(),
@@ -1324,9 +1021,7 @@ class BahtinovTrendChart extends StatelessWidget {
                 show: true,
                 getDotPainter: (spot, _, _, index) => FlDotCirclePainter(
                   radius: index == spots.length - 1 ? 5 : 3,
-                  color: index == spots.length - 1
-                      ? AraColors.accentBusy
-                      : AraColors.bahtinovChart,
+                  color: index == spots.length - 1 ? AraColors.accentBusy : AraColors.bahtinovChart,
                   strokeWidth: 0,
                 ),
               ),

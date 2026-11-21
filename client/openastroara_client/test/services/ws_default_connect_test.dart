@@ -18,23 +18,14 @@ void main() {
     final streamErrors = <Object>[];
     final done = Completer<void>();
     runZonedGuarded(() {
-      final socket = defaultWsConnect(
-        Uri.parse('ws://127.0.0.1:$port/api/v1/ws'),
-        const {},
-      );
+      final socket = defaultWsConnect(Uri.parse('ws://127.0.0.1:$port/api/v1/ws'), const {});
       void finish() {
         if (!done.isCompleted) done.complete();
       }
-
-      socket.stream.listen(
-        (_) {},
-        onError: (Object e) {
-          streamErrors.add(e);
-          finish();
-        },
-        onDone: finish,
-        cancelOnError: true,
-      );
+      socket.stream.listen((_) {}, onError: (Object e) {
+        streamErrors.add(e);
+        finish();
+      }, onDone: finish, cancelOnError: true);
     }, (error, _) => uncaught.add(error));
 
     await done.future.timeout(const Duration(seconds: 5), onTimeout: () {});

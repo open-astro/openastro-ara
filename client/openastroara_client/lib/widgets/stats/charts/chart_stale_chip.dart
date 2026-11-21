@@ -27,10 +27,8 @@ class ChartStaleChip extends StatelessWidget {
           children: [
             Icon(Icons.sync_problem, size: 12, color: AraColors.accentBusy),
             SizedBox(width: 4),
-            Text(
-              'Stale',
-              style: TextStyle(fontSize: 10, color: AraColors.accentBusy),
-            ),
+            Text('Stale',
+                style: TextStyle(fontSize: 10, color: AraColors.accentBusy)),
           ],
         ),
       ),

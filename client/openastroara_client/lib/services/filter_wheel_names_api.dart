@@ -27,14 +27,12 @@ class FilterWheelSlots {
     if (raw is! List) return null;
     final slots = raw
         .whereType<Map<String, dynamic>>()
-        .map(
-          (s) => FilterWheelSlot(
-            name: (s['name'] ?? '').toString(),
-            focusOffset: s['focus_offset'] is num
-                ? (s['focus_offset'] as num).toInt()
-                : 0,
-          ),
-        )
+        .map((s) => FilterWheelSlot(
+              name: (s['name'] ?? '').toString(),
+              focusOffset: s['focus_offset'] is num
+                  ? (s['focus_offset'] as num).toInt()
+                  : 0,
+            ))
         .toList();
     return FilterWheelSlots(slots);
   }
@@ -44,21 +42,18 @@ class FilterWheelNamesApi {
   final Dio _dio;
 
   FilterWheelNamesApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ),
-      );
+        ));
 
   /// The connected wheel's slots, or null when none is connected. Throws
   /// `DioException` on transport failure.
   Future<FilterWheelSlots?> read() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/equipment/filterwheel',
-      );
+      final res =
+          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/filterwheel');
       final data = res.data;
       return data is Map<String, dynamic>
           ? FilterWheelSlots.fromFilterWheelJson(data)

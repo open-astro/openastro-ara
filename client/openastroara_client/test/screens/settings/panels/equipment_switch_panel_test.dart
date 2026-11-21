@@ -60,13 +60,11 @@ class _FakeSwitchApi implements SwitchClient {
     }
     return devices;
   }
-
   @override
   Future<void> connect(DiscoveredDevice device) async =>
       calls.add('connect:${device.alpacaDeviceNumber}');
   @override
   Future<void> reconnect() async => calls.add("reconnect");
-
   /// Thrown by [reconnectDevice] when set (the daemon-forgot-it 404 case).
   Object? reconnectDeviceError;
 
@@ -203,21 +201,10 @@ void main() {
     final api = _FakeSwitchApi([
       _device(const [
         SwitchPort(
-          id: 0,
-          name: 'DC2',
-          value: 1,
-          min: 0,
-          max: 1,
-          canWrite: true,
-        ),
+            id: 0, name: 'DC2', value: 1, min: 0, max: 1, canWrite: true),
         SwitchPort(
-          id: 1,
-          name: 'Input Voltage',
-          value: 12.6,
-          min: 0,
-          max: 30,
-          canWrite: false,
-        ),
+            id: 1, name: 'Input Voltage', value: 12.6, min: 0, max: 30,
+            canWrite: false),
       ], state: SwitchConnectionState.connected),
     ]);
     await tester.pumpWidget(
@@ -517,8 +504,7 @@ void main() {
           requestOptions: RequestOptions(path: '/switch'),
           statusCode: 409,
           data: const {
-            'detail':
-                'Turn the cooler off before stopping the fan — cooling '
+            'detail': 'Turn the cooler off before stopping the fan — cooling '
                 'with the fan off can damage the camera.',
           },
         ),
@@ -644,9 +630,7 @@ void main() {
   });
 
   testWidgets('an errored switch offers Connect as well', (tester) async {
-    await _pump(tester, [
-      _device(const [], state: SwitchConnectionState.error),
-    ]);
+    await _pump(tester, [_device(const [], state: SwitchConnectionState.error)]);
     expect(find.byTooltip('Connect'), findsOneWidget);
     expect(find.byTooltip('Disconnect'), findsNothing);
   });

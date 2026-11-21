@@ -123,11 +123,7 @@ void main() {
       expect(find.byKey(_seed), findsOneWidget);
       expect(find.byKey(_check), findsOneWidget);
       expect(find.byKey(_coarse), findsOneWidget);
-      expect(
-        find.byKey(const Key('polar-advanced-use-home')),
-        findsNothing,
-        reason: '#2048: no Home switch',
-      );
+      expect(find.byKey(const Key('polar-advanced-use-home')), findsNothing, reason: '#2048: no Home switch');
     },
   );
 

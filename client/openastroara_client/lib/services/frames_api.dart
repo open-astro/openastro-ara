@@ -13,13 +13,11 @@ class FramesApi {
   final Dio _dio;
 
   FramesApi(AraServer server)
-    : _dio = Dio(
-        BaseOptions(
+      : _dio = Dio(BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 15),
-        ),
-      );
+        ));
 
   /// True once the frame is registered in the catalog — i.e. the background
   /// capture finished writing the FITS. Until then GET returns 404.
@@ -40,9 +38,8 @@ class FramesApi {
   /// The frame's RAW 16-bit histogram — pre-stretch, so clipping shows even
   /// when the screen stretch hides it.
   Future<FrameHistogram> histogram(String id) async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/frames/$id/histogram',
-    );
+    final res =
+        await _dio.get<Map<String, dynamic>>('/api/v1/frames/$id/histogram');
     return FrameHistogram.fromJson(res.data ?? const {});
   }
 

@@ -24,11 +24,10 @@ class GuideReplay {
   });
 
   GuideReplay copyWith({int? played, bool? playing}) => GuideReplay(
-    fileName: fileName,
-    played: played ?? this.played,
-    total: total,
-    playing: playing ?? this.playing,
-  );
+      fileName: fileName,
+      played: played ?? this.played,
+      total: total,
+      playing: playing ?? this.playing);
 }
 
 /// PHD2 logs a frame every 2–3 s; 150 ms per frame is ~20× real time, so a
@@ -60,11 +59,7 @@ class GuideReplayNotifier extends Notifier<GuideReplay?> {
 
   /// Starts playing [log] from its first frame, replacing whatever the graph
   /// held. Returns false when the log has no guiding session.
-  bool start(
-    String fileName,
-    Phd2GuideLog log, {
-    Duration tick = kGuideReplayTick,
-  }) {
+  bool start(String fileName, Phd2GuideLog log, {Duration tick = kGuideReplayTick}) {
     _timer?.cancel();
     _steps = log.allSteps;
     _markers = log.allMarkers;
@@ -73,12 +68,7 @@ class GuideReplayNotifier extends Notifier<GuideReplay?> {
     _nextMarker = 0;
     ref.read(guideStepsProvider.notifier).clear();
     ref.read(guideMarkersProvider.notifier).clear();
-    state = GuideReplay(
-      fileName: fileName,
-      played: 0,
-      total: _steps.length,
-      playing: true,
-    );
+    state = GuideReplay(fileName: fileName, played: 0, total: _steps.length, playing: true);
     _timer = Timer.periodic(tick, (_) => tickOnce());
     return true;
   }
@@ -118,6 +108,5 @@ class GuideReplayNotifier extends Notifier<GuideReplay?> {
   }
 }
 
-final guideReplayProvider = NotifierProvider<GuideReplayNotifier, GuideReplay?>(
-  GuideReplayNotifier.new,
-);
+final guideReplayProvider =
+    NotifierProvider<GuideReplayNotifier, GuideReplay?>(GuideReplayNotifier.new);

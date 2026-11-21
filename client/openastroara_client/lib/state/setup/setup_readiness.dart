@@ -108,8 +108,7 @@ SetupStepState focusStepState(AutofocusLive live, {DateTime? now}) {
       isTonight(live.run.completedUtc, now)) {
     return SetupStepState.done;
   }
-  if (live.run.state == AutofocusRunStates.failed)
-    return SetupStepState.problem;
+  if (live.run.state == AutofocusRunStates.failed) return SetupStepState.problem;
   return SetupStepState.pending;
 }
 
@@ -123,10 +122,8 @@ final setupConnectStateProvider = Provider<SetupStepState>((ref) {
 /// Live polar-align step state — shared by the Setup checklist glyph and the
 /// Run pre-flight confirm.
 final setupPolarAlignStateProvider = Provider<SetupStepState>(
-  (ref) => polarAlignStepState(ref.watch(polarAlignLiveProvider)),
-);
+    (ref) => polarAlignStepState(ref.watch(polarAlignLiveProvider)));
 
 /// Live focusing step state for the checklist glyph.
 final setupFocusStateProvider = Provider<SetupStepState>(
-  (ref) => focusStepState(ref.watch(autofocusLiveProvider)),
-);
+    (ref) => focusStepState(ref.watch(autofocusLiveProvider)));

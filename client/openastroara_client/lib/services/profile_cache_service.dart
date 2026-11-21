@@ -29,7 +29,7 @@ class ProfileCacheService {
   /// [supportDir] overrides the app-support directory lookup (tests use a temp
   /// dir; production uses path_provider).
   ProfileCacheService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _fileName = 'profile_cache.json';
@@ -55,9 +55,7 @@ class ProfileCacheService {
   /// Replace the cached profile list + active id (keeps existing sections for
   /// ids still present; drops sections for profiles the daemon deleted).
   Future<void> saveList(
-    String? activeId,
-    List<({String id, String name})> profiles,
-  ) {
+      String? activeId, List<({String id, String name})> profiles) {
     return _mutate((cache) {
       cache['active_id'] = activeId;
       cache['profiles'] = [
@@ -76,31 +74,23 @@ class ProfileCacheService {
   Future<void> saveSections(String profileId, Map<String, dynamic> sections) {
     return _mutate((cache) {
       final all = cache['sections'];
-      final map = all is Map
-          ? Map<String, dynamic>.from(all)
-          : <String, dynamic>{};
+      final map = all is Map ? Map<String, dynamic>.from(all) : <String, dynamic>{};
       // Stamp when this gear snapshot was taken so offline surfaces can say
       // "cached N days ago" — a stale ranking should look stale.
-      map[profileId] = {
-        ...sections,
-        'captured_utc': DateTime.now().toUtc().toIso8601String(),
-      };
+      map[profileId] = {...sections, 'captured_utc': DateTime.now().toUtc().toIso8601String()};
       cache['sections'] = map;
       return cache;
     });
   }
 
   Future<void> _mutate(
-    Map<String, dynamic> Function(Map<String, dynamic>) apply,
-  ) {
+      Map<String, dynamic> Function(Map<String, dynamic>) apply) {
     final task = _chain.then((_) async {
       try {
         final cache = apply(await load());
         final f = await _file();
         await f.writeAsString(jsonEncode(cache), flush: true);
-      } catch (_) {
-        /* best effort — the cache is a convenience, never truth */
-      }
+      } catch (_) {/* best effort — the cache is a convenience, never truth */}
     });
     _chain = task;
     return task;

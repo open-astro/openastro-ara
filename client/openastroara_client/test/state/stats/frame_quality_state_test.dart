@@ -59,19 +59,15 @@ class _GatedFrameQualityClient implements FrameQualityClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 FrameQualityDistribution _dist(int count) => FrameQualityDistribution(
-  buckets: [FrameQualityBucket(rangeLow: 0.9, rangeHigh: 1.0, count: count)],
-  meanScore: 0.95,
-);
+      buckets: [FrameQualityBucket(rangeLow: 0.9, rangeHigh: 1.0, count: count)],
+      meanScore: 0.95,
+    );
 
 ProviderContainer _container(List<AraServer> servers, FrameQualityClient api) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      frameQualityApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    frameQualityApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -111,10 +107,7 @@ void main() {
       final api = _FakeFrameQualityClient(_dist(0))..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(
-        c.read(frameQualityProvider.future),
-        throwsA(isA<StateError>()),
-      );
+      await expectLater(c.read(frameQualityProvider.future), throwsA(isA<StateError>()));
       expect(c.read(frameQualityProvider).hasError, isTrue);
     });
 
@@ -126,9 +119,7 @@ void main() {
 
       api.throwOnFetch = true;
       await expectLater(
-        c.read(frameQualityProvider.notifier).refresh(),
-        throwsA(isA<StateError>()),
-      );
+          c.read(frameQualityProvider.notifier).refresh(), throwsA(isA<StateError>()));
       expect(c.read(frameQualityProvider).hasError, isFalse);
       expect(c.read(frameQualityProvider).value!.buckets.single.count, 7);
     });
@@ -156,8 +147,7 @@ void main() {
       await built;
 
       final notifier = c.read(frameQualityProvider.notifier);
-      final refreshing = notifier
-          .refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
       notifier.markBuild(); // stand in for a server-switch build() re-run
       api.calls[1].complete(_dist(99)); // now stale
       await refreshing;

@@ -18,9 +18,7 @@ class _MemCache extends ProfileCacheService {
 
   @override
   Future<void> saveList(
-    String? activeId,
-    List<({String id, String name})> profiles,
-  ) async {
+      String? activeId, List<({String id, String name})> profiles) async {
     store['active_id'] = activeId;
     store['profiles'] = [
       for (final p in profiles) {'id': p.id, 'name': p.name},
@@ -29,9 +27,7 @@ class _MemCache extends ProfileCacheService {
 
   @override
   Future<void> saveSections(
-    String profileId,
-    Map<String, dynamic> sections,
-  ) async {
+      String profileId, Map<String, dynamic> sections) async {
     (store['sections'] ??= <String, dynamic>{})[profileId] = sections;
   }
 }
@@ -44,80 +40,71 @@ void main() {
   });
 
   Future<ProviderContainer> pump(WidgetTester tester, {Locale? locale}) async {
-    final container = ProviderContainer(
-      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
-    );
+    final container = ProviderContainer(overrides: [
+      profileCacheServiceProvider.overrideWithValue(cache),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          locale: locale,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: const OfflineLaunchScreen(),
-        ),
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const OfflineLaunchScreen(),
       ),
-    );
+    ));
     await tester.pumpAndSettle();
     return container;
   }
 
-  testWidgets('the offline launch screen is in Brazilian Portuguese', (
-    tester,
-  ) async {
+  testWidgets('the offline launch screen is in Brazilian Portuguese',
+      (tester) async {
     await pump(tester, locale: const Locale('pt', 'BR'));
-    expect(
-      find.text('Planejando offline — nenhum servidor conectado'),
-      findsOneWidget,
-    );
+    expect(find.text('Planejando offline — nenhum servidor conectado'),
+        findsOneWidget);
     expect(find.text('Planning offline — no server connected'), findsNothing);
   });
 
   testWidgets(
-    'empty cache: no defaults path — only the way back to server setup',
-    (tester) async {
-      final container = await pump(tester);
-      container.read(offlineModeProvider.notifier).enter();
-      expect(find.textContaining('No profiles are cached'), findsOneWidget);
-      expect(
-        find.text('Plan'),
-        findsNothing,
-      ); // no way to plan without a profile
-      await tester.tap(find.text('Back to server setup'));
-      await tester.pumpAndSettle();
-      expect(container.read(offlineModeProvider), isFalse);
-      expect(container.read(profileGatePassedProvider), isFalse);
-    },
-  );
+      'empty cache: no defaults path — only the way back to server setup',
+      (tester) async {
+    final container = await pump(tester);
+    container.read(offlineModeProvider.notifier).enter();
+    expect(find.textContaining('No profiles are cached'), findsOneWidget);
+    expect(find.text('Plan'), findsNothing); // no way to plan without a profile
+    await tester.tap(find.text('Back to server setup'));
+    await tester.pumpAndSettle();
+    expect(container.read(offlineModeProvider), isFalse);
+    expect(container.read(profileGatePassedProvider), isFalse);
+  });
 
   testWidgets(
-    'cached profiles: pre-selects the active one; Plan seeds gear + passes the gate',
-    (tester) async {
-      await cache.saveList('p1', [
-        (id: 'p1', name: 'RedCat 91'),
-        (id: 'p2', name: 'Travel Rig'),
-      ]);
-      await cache.saveSections('p1', {
-        'optics': {
-          'focal_length_mm': 382,
-          'aperture_mm': 51,
-          'pixel_size_um': 3.76,
-        },
-      });
-      final container = await pump(tester);
-      expect(find.text('RedCat 91'), findsOneWidget); // pre-selected
-      await tester.tap(find.text('Plan'));
-      await tester.pumpAndSettle();
-      expect(container.read(profileGatePassedProvider), isTrue);
-      expect(container.read(opticsSettingsProvider).value!.focalLengthMm, 382);
-    },
-  );
+      'cached profiles: pre-selects the active one; Plan seeds gear + passes the gate',
+      (tester) async {
+    await cache.saveList('p1', [
+      (id: 'p1', name: 'RedCat 91'),
+      (id: 'p2', name: 'Travel Rig'),
+    ]);
+    await cache.saveSections('p1', {
+      'optics': {
+        'focal_length_mm': 382,
+        'aperture_mm': 51,
+        'pixel_size_um': 3.76,
+      },
+    });
+    final container = await pump(tester);
+    expect(find.text('RedCat 91'), findsOneWidget); // pre-selected
+    await tester.tap(find.text('Plan'));
+    await tester.pumpAndSettle();
+    expect(container.read(profileGatePassedProvider), isTrue);
+    expect(container.read(opticsSettingsProvider).value!.focalLengthMm, 382);
+  });
 
-  testWidgets('a profile without cached sections warns about defaults', (
-    tester,
-  ) async {
-    await cache.saveList('p2', [(id: 'p2', name: 'Travel Rig')]);
+  testWidgets('a profile without cached sections warns about defaults',
+      (tester) async {
+    await cache.saveList('p2', [
+      (id: 'p2', name: 'Travel Rig'),
+    ]);
     await pump(tester);
     expect(find.textContaining('haven\'t been cached yet'), findsOneWidget);
     expect(find.text('Plan'), findsOneWidget);

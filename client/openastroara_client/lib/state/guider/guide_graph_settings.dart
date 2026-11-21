@@ -11,7 +11,6 @@ enum GuideGraphUnit { auto, arcsec, px }
 class GuideGraphSettings {
   /// Frames in view. PHD2 offers 50 / 100 / 200 / 400.
   final int xRange;
-
   /// Half-range of the y axis in the graph's unit; null = auto.
   final double? yHalfRange;
   final GuideGraphUnit unit;
@@ -25,7 +24,6 @@ class GuideGraphSettings {
   });
 
   static const List<int> xRanges = [50, 100, 200, 400];
-
   /// PHD2's y choices in arcsec; the same ladder serves px.
   static const List<double> yRanges = [0.5, 1, 2, 4, 8, 16];
 
@@ -35,12 +33,13 @@ class GuideGraphSettings {
     bool clearY = false,
     GuideGraphUnit? unit,
     bool? showCorrections,
-  }) => GuideGraphSettings(
-    xRange: xRange ?? this.xRange,
-    yHalfRange: clearY ? null : (yHalfRange ?? this.yHalfRange),
-    unit: unit ?? this.unit,
-    showCorrections: showCorrections ?? this.showCorrections,
-  );
+  }) =>
+      GuideGraphSettings(
+        xRange: xRange ?? this.xRange,
+        yHalfRange: clearY ? null : (yHalfRange ?? this.yHalfRange),
+        unit: unit ?? this.unit,
+        showCorrections: showCorrections ?? this.showCorrections,
+      );
 
   @override
   bool operator ==(Object other) =>
@@ -59,15 +58,12 @@ class GuideGraphSettingsNotifier extends Notifier<GuideGraphSettings> {
   GuideGraphSettings build() => const GuideGraphSettings();
 
   void setXRange(int frames) => state = state.copyWith(xRange: frames);
-  void setYHalfRange(double? half) => state = half == null
-      ? state.copyWith(clearY: true)
-      : state.copyWith(yHalfRange: half);
+  void setYHalfRange(double? half) =>
+      state = half == null ? state.copyWith(clearY: true) : state.copyWith(yHalfRange: half);
   void setUnit(GuideGraphUnit unit) => state = state.copyWith(unit: unit);
-  void setShowCorrections(bool on) =>
-      state = state.copyWith(showCorrections: on);
+  void setShowCorrections(bool on) => state = state.copyWith(showCorrections: on);
 }
 
 final guideGraphSettingsProvider =
     NotifierProvider<GuideGraphSettingsNotifier, GuideGraphSettings>(
-      GuideGraphSettingsNotifier.new,
-    );
+        GuideGraphSettingsNotifier.new);

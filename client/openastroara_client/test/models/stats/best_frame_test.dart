@@ -19,18 +19,15 @@ void main() {
       expect(f.filterName, 'Ha');
     });
 
-    test(
-      'coerces an integer score to double and treats empty filter as null',
-      () {
-        final f = BestFrame.fromJson(const {
-          'frame_id': 'abc',
-          'composite_score': 1,
-          'filter_name': '',
-        });
-        expect(f.compositeScore, 1.0);
-        expect(f.filterName, isNull);
-      },
-    );
+    test('coerces an integer score to double and treats empty filter as null', () {
+      final f = BestFrame.fromJson(const {
+        'frame_id': 'abc',
+        'composite_score': 1,
+        'filter_name': '',
+      });
+      expect(f.compositeScore, 1.0);
+      expect(f.filterName, isNull);
+    });
 
     test('degrades on missing / wrong-typed fields', () {
       final f = BestFrame.fromJson(const {'composite_score': 'oops'});

@@ -5,11 +5,7 @@ import '../services/tonight_sky_api.dart';
 /// Tonight's Sky object, summed over the stats targets whose normalized name
 /// matches the object's id or name ("M 31", "M31" and "Andromeda Galaxy" all
 /// find their hours). Null = nothing captured. Pure — unit-tested.
-double? bankedHoursFor(
-  Iterable<StatsTarget> targets, {
-  required String id,
-  required String name,
-}) {
+double? bankedHoursFor(Iterable<StatsTarget> targets, {required String id, required String name}) {
   final keys = {_norm(id), _norm(name)}..remove('');
   var sum = 0.0;
   var found = false;

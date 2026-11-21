@@ -16,7 +16,6 @@ class ServerInternalState {
   final int gen1Collections;
   final int gen2Collections;
   final double gcPauseTotalMs;
-
   /// Share of one core's wall time since the previous read (400 = four cores
   /// flat out); null on the server's first read after boot.
   final double? cpuPercent;
@@ -55,14 +54,11 @@ class ServerInternalState {
   });
 
   factory ServerInternalState.fromJson(Map<String, dynamic> json) {
-    final process =
-        (json['process'] as Map?)?.cast<String, dynamic>() ?? const {};
-    final ws =
-        (json['web_sockets'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final process = (json['process'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final ws = (json['web_sockets'] as Map?)?.cast<String, dynamic>() ?? const {};
     final host = (json['host'] as Map?)?.cast<String, dynamic>() ?? const {};
     return ServerInternalState(
-      capturedUtc: DateTime.tryParse(json['captured_utc']?.toString() ?? '')
-          ?.toUtc(),
+      capturedUtc: DateTime.tryParse(json['captured_utc']?.toString() ?? '')?.toUtc(),
       uptimeSeconds: _dbl(json['uptime_seconds']),
       workingSetBytes: _int(process['working_set_bytes']),
       managedHeapBytes: _int(process['managed_heap_bytes']),
@@ -74,9 +70,7 @@ class ServerInternalState {
       cpuPercent: _dblOrNull(process['cpu_percent']),
       threadCount: _int(process['thread_count']),
       threadPoolBusyWorkers: _int(process['thread_pool_busy_workers']),
-      threadPoolPendingWorkItems: _int(
-        process['thread_pool_pending_work_items'],
-      ),
+      threadPoolPendingWorkItems: _int(process['thread_pool_pending_work_items']),
       wsOpenConnections: _int(ws['open_connections']),
       wsMaxConnections: _int(ws['max_connections']),
       processorCount: _int(host['processor_count']),
@@ -91,10 +85,7 @@ class ServerInternalState {
 /// "3d 4h", "4h 12m", "12m 05s" — the uptime tile.
 String formatUptime(double seconds) {
   final s = seconds.floor();
-  final d = s ~/ 86400,
-      h = (s % 86400) ~/ 3600,
-      m = (s % 3600) ~/ 60,
-      sec = s % 60;
+  final d = s ~/ 86400, h = (s % 86400) ~/ 3600, m = (s % 3600) ~/ 60, sec = s % 60;
   if (d > 0) return '${d}d ${h}h';
   if (h > 0) return '${h}h ${m.toString().padLeft(2, '0')}m';
   return '${m}m ${sec.toString().padLeft(2, '0')}s';
@@ -103,7 +94,6 @@ String formatUptime(double seconds) {
 /// Bytes as MB/GB with one decimal: the memory tiles.
 String formatBytes(int bytes) {
   const mb = 1024 * 1024;
-  if (bytes >= 1024 * mb)
-    return '${(bytes / (1024 * mb)).toStringAsFixed(2)} GB';
+  if (bytes >= 1024 * mb) return '${(bytes / (1024 * mb)).toStringAsFixed(2)} GB';
   return '${(bytes / mb).toStringAsFixed(1)} MB';
 }

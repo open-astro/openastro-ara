@@ -42,7 +42,9 @@ class FocusFrameView extends StatelessWidget {
                   ? Center(
                       child: Text(
                         emptyText,
-                        style: Theme.of(context).textTheme.bodySmall
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
                             ?.copyWith(color: AraColors.textSecondary),
                         textAlign: TextAlign.center,
                       ),
@@ -65,23 +67,20 @@ class FocusFrameView extends StatelessWidget {
                 child: StatusBlink(
                   on: badge == 'LIVE',
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: badgeColor,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      badge!,
-                      style: const TextStyle(
-                        color: AraColors.imageBackdrop,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: badgeColor,
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    badge!,
+                    style: const TextStyle(
+                      color: AraColors.imageBackdrop,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
+                ),
                 ),
               ),
             if (caption != null && jpeg != null)
@@ -89,17 +88,16 @@ class FocusFrameView extends StatelessWidget {
                 bottom: 6,
                 right: 8,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 6,
-                    vertical: 2,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                   decoration: BoxDecoration(
                     color: AraColors.bgPrimary.withValues(alpha: 0.7),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
                     caption!,
-                    style: Theme.of(context).textTheme.labelSmall
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelSmall
                         ?.copyWith(color: AraColors.textPrimary),
                   ),
                 ),
@@ -138,10 +136,8 @@ class FocusFrameView extends StatelessWidget {
               Positioned(
                 bottom: 16,
                 left: 16,
-                child: Text(
-                  caption!,
-                  style: const TextStyle(color: AraColors.textSecondary),
-                ),
+                child: Text(caption!,
+                    style: const TextStyle(color: AraColors.textSecondary)),
               ),
           ],
         ),

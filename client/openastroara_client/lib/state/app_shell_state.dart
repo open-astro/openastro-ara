@@ -46,10 +46,8 @@ class VisitedTabsNotifier extends Notifier<Set<int>> {
 
 final visitedTabsProvider =
     NotifierProvider.autoDispose<VisitedTabsNotifier, Set<int>>(
-      VisitedTabsNotifier.new,
-    );
+        VisitedTabsNotifier.new);
 
 final selectedTabIndexProvider =
     NotifierProvider<SelectedTabIndexNotifier, int>(
-      SelectedTabIndexNotifier.new,
-    );
+        SelectedTabIndexNotifier.new);

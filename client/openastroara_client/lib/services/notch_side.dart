@@ -26,14 +26,13 @@ class NotchSideProbe {
     }
   }
 
-  static Future<NotchSide> side() async =>
-      sideFor(await interfaceOrientation());
+  static Future<NotchSide> side() async => sideFor(await interfaceOrientation());
 
   /// UIKit's `landscapeRight` turns the device's top, where the island sits,
   /// to the left; `landscapeLeft` to the right.
   static NotchSide sideFor(String? orientation) => switch (orientation) {
-    'landscapeRight' => NotchSide.left,
-    'landscapeLeft' => NotchSide.right,
-    _ => NotchSide.unknown,
-  };
+        'landscapeRight' => NotchSide.left,
+        'landscapeLeft' => NotchSide.right,
+        _ => NotchSide.unknown,
+      };
 }

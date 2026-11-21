@@ -14,12 +14,11 @@ import 'package:openastroara/state/ws/ws_providers.dart';
 /// refresh-race ordering is fully controllable. Lifecycle ops are unused here.
 class _FakeSeqClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) => throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -28,11 +27,9 @@ class _FakeSeqClient implements SequenceClient {
       throw UnimplementedError();
 
   @override
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  }) => throw UnimplementedError();
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
   @override
   Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
@@ -62,38 +59,23 @@ class _FakeSeqClient implements SequenceClient {
     if (runStateGate != null) await runStateGate!.future;
     return runStateById != null ? runStateById![id] : runState;
   }
-
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
   @override
-  Future<SequenceDetail> updateSequence(
-    String id, {
-    String? name,
-    String? description,
-    Map<String, dynamic>? body,
-  }) async => SequenceDetail(
-    id: id,
-    name: name ?? id,
-    description: description,
-    body: body ?? const {},
-  );
+  Future<SequenceDetail> updateSequence(String id,
+          {String? name, String? description, Map<String, dynamic>? body}) async =>
+      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
   @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
-    id: 'root',
-    kind: SequenceNodeKind.root,
-    displayName: 'fake',
-  );
+      id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
   @override
   Future<String> start(String id) async => 'op';
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  }) async => 'op';
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
@@ -101,19 +83,15 @@ class _FakeSeqClient implements SequenceClient {
   @override
   Future<String> stop(String id) async => 'op';
   @override
-  Future<SequenceShareExport> exportShare(String id) async =>
-      throw UnimplementedError();
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? description,
-    String? idempotencyKey,
-  }) async => 'new-seq';
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description, String? idempotencyKey}) async =>
+      'new-seq';
   @override
   void close() {}
 }
@@ -121,11 +99,12 @@ class _FakeSeqClient implements SequenceClient {
 SequenceListItem _item(String id) => SequenceListItem(id: id, name: id);
 
 void main() {
-  test('refresh() is last-issued-wins: a slow older response cannot overwrite a newer one', () async {
+  test('refresh() is last-issued-wins: a slow older response cannot overwrite a newer one',
+      () async {
     final fake = _FakeSeqClient();
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(fake)],
-    );
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(fake),
+    ]);
     addTearDown(container.dispose);
 
     // Initial build() issues calls[0] synchronously; complete it FIRST, then
@@ -159,12 +138,10 @@ void main() {
     ProviderContainer setup(_FakeSeqClient fake, {String? selectFirst}) {
       final controller = StreamController<WsEvent>.broadcast();
       addTearDown(controller.close);
-      final container = ProviderContainer(
-        overrides: [
-          sequenceApiProvider.overrideWithValue(fake),
-          wsEventsProvider.overrideWith((ref) => controller.stream),
-        ],
-      );
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(fake),
+        wsEventsProvider.overrideWith((ref) => controller.stream),
+      ]);
       addTearDown(container.dispose);
       if (selectFirst != null) {
         container.read(selectedSequenceIdProvider.notifier).select(selectFirst);
@@ -174,45 +151,32 @@ void main() {
       return container;
     }
 
-    test(
-      'with nothing selected, the daemon\'s active run is selected and read',
-      () async {
-        final fake = _FakeSeqClient()
-          ..runStateById = {
-            'paused-run': const SequenceRunStateInfo(
-              state: SequenceRunState.pausedAwaitingUser,
-              runId: 'run-1',
-            ),
-          };
-        final container = setup(fake);
-        await pumpEventQueue();
-        fake.calls.single.complete(
-          SequencePage(
-            items: [
-              const SequenceListItem(
-                id: 'done',
-                currentRunState: SequenceRunState.completed,
-              ),
-              const SequenceListItem(
-                id: 'paused-run',
-                currentRunState: SequenceRunState.pausedAwaitingUser,
-              ),
-              const SequenceListItem(id: 'idle'),
-            ],
-          ),
-        );
-        await pumpEventQueue();
-        // The selection rebuilds the notifier; wait for the read keyed on it.
-        await container.read(sequenceRunStateProvider.future);
-        await pumpEventQueue();
+    test('with nothing selected, the daemon\'s active run is selected and read',
+        () async {
+      final fake = _FakeSeqClient()
+        ..runStateById = {
+          'paused-run': const SequenceRunStateInfo(
+              state: SequenceRunState.pausedAwaitingUser, runId: 'run-1'),
+        };
+      final container = setup(fake);
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'done', currentRunState: SequenceRunState.completed),
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+        const SequenceListItem(id: 'idle'),
+      ]));
+      await pumpEventQueue();
+      // The selection rebuilds the notifier; wait for the read keyed on it.
+      await container.read(sequenceRunStateProvider.future);
+      await pumpEventQueue();
 
-        expect(container.read(selectedSequenceIdProvider), 'paused-run');
-        expect(
-          container.read(sequenceRunStateProvider).value?.state,
-          SequenceRunState.pausedAwaitingUser,
-        );
-      },
-    );
+      expect(container.read(selectedSequenceIdProvider), 'paused-run');
+      expect(container.read(sequenceRunStateProvider).value?.state,
+          SequenceRunState.pausedAwaitingUser);
+    });
 
     test('a selection cleared after adoption is not adopted again', () async {
       // The editor clears the selection when it cannot load the body; adopting
@@ -220,22 +184,15 @@ void main() {
       final fake = _FakeSeqClient()
         ..runStateById = {
           'paused-run': const SequenceRunStateInfo(
-            state: SequenceRunState.pausedAwaitingUser,
-            runId: 'run-1',
-          ),
+              state: SequenceRunState.pausedAwaitingUser, runId: 'run-1'),
         };
       final container = setup(fake);
       await pumpEventQueue();
-      fake.calls.single.complete(
-        SequencePage(
-          items: [
-            const SequenceListItem(
-              id: 'paused-run',
-              currentRunState: SequenceRunState.pausedAwaitingUser,
-            ),
-          ],
-        ),
-      );
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+      ]));
       await pumpEventQueue();
       await container.read(sequenceRunStateProvider.future);
       expect(container.read(selectedSequenceIdProvider), 'paused-run');
@@ -250,88 +207,67 @@ void main() {
       expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
-    test(
-      'a pick made while the list is still loading is not overridden',
-      () async {
-        final fake = _FakeSeqClient();
-        final container = setup(fake);
-        await pumpEventQueue();
-        // The list read is in flight; the user picks a sequence meanwhile.
-        container.read(selectedSequenceIdProvider.notifier).select('mine');
-        await pumpEventQueue();
-        fake.calls.single.complete(
-          SequencePage(
-            items: [
-              const SequenceListItem(
-                id: 'paused-run',
-                currentRunState: SequenceRunState.pausedAwaitingUser,
-              ),
-            ],
-          ),
-        );
-        await pumpEventQueue();
-        await container.read(sequenceRunStateProvider.future);
-        await pumpEventQueue();
+    test('a pick made while the list is still loading is not overridden',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake);
+      await pumpEventQueue();
+      // The list read is in flight; the user picks a sequence meanwhile.
+      container.read(selectedSequenceIdProvider.notifier).select('mine');
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'paused-run',
+            currentRunState: SequenceRunState.pausedAwaitingUser),
+      ]));
+      await pumpEventQueue();
+      await container.read(sequenceRunStateProvider.future);
+      await pumpEventQueue();
 
-        expect(container.read(selectedSequenceIdProvider), 'mine');
-      },
-    );
+      expect(container.read(selectedSequenceIdProvider), 'mine');
+    });
 
-    test(
-      'with nothing selected and no active run, nothing is selected',
-      () async {
-        final fake = _FakeSeqClient();
-        final container = setup(fake);
-        await pumpEventQueue();
-        fake.calls.single.complete(
-          SequencePage(
-            items: [
-              const SequenceListItem(
-                id: 'done',
-                currentRunState: SequenceRunState.completed,
-              ),
-            ],
-          ),
-        );
-        await container.read(sequenceRunStateProvider.future);
+    test('with nothing selected and no active run, nothing is selected',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake);
+      await pumpEventQueue();
+      fake.calls.single.complete(SequencePage(items: [
+        const SequenceListItem(
+            id: 'done', currentRunState: SequenceRunState.completed),
+      ]));
+      await container.read(sequenceRunStateProvider.future);
 
-        expect(container.read(selectedSequenceIdProvider), isNull);
-        expect(container.read(sequenceRunStateProvider).value, isNull);
-      },
-    );
+      expect(container.read(selectedSequenceIdProvider), isNull);
+      expect(container.read(sequenceRunStateProvider).value, isNull);
+    });
 
-    test(
-      'an explicit selection is never overridden by an active run',
-      () async {
-        final fake = _FakeSeqClient();
-        final container = setup(fake, selectFirst: 'mine');
-        await container.read(sequenceRunStateProvider.future);
+    test('an explicit selection is never overridden by an active run',
+        () async {
+      final fake = _FakeSeqClient();
+      final container = setup(fake, selectFirst: 'mine');
+      await container.read(sequenceRunStateProvider.future);
 
-        expect(fake.calls, isEmpty, reason: 'the list is not consulted');
-        expect(container.read(selectedSequenceIdProvider), 'mine');
-      },
-    );
+      expect(fake.calls, isEmpty, reason: 'the list is not consulted');
+      expect(container.read(selectedSequenceIdProvider), 'mine');
+    });
   });
 
   group('sequenceRunStateProvider live WS updates', () {
     WsEvent event(String type, Map<String, dynamic> payload) =>
         WsEvent(type: type, ts: DateTime.utc(2026), seq: 1, payload: payload);
 
-    Future<(ProviderContainer, StreamController<WsEvent>, _FakeSeqClient)>
-    setup(
-      String selectId, {
-      bool awaitInitial = true,
-      Completer<SequenceRunStateInfo?>? gate,
-    }) async {
+    Future<(ProviderContainer, StreamController<WsEvent>, _FakeSeqClient)> setup(
+        String selectId,
+        {bool awaitInitial = true,
+        Completer<SequenceRunStateInfo?>? gate}) async {
       final controller = StreamController<WsEvent>.broadcast();
       addTearDown(controller.close);
       final fake = _FakeSeqClient()..runStateGate = gate;
-      final container = ProviderContainer(
-        overrides: [
-          sequenceApiProvider.overrideWithValue(fake),
-          wsEventsProvider.overrideWith((ref) => controller.stream),
-        ],
-      );
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(fake),
+        wsEventsProvider.overrideWith((ref) => controller.stream),
+      ]);
       addTearDown(container.dispose);
       container.read(selectedSequenceIdProvider.notifier).select(selectId);
       final sub = container.listen(sequenceRunStateProvider, (_, _) {});
@@ -342,39 +278,33 @@ void main() {
       return (container, controller, fake);
     }
 
-    test(
-      'a sequence.progress frame for the selected sequence updates run state',
-      () async {
-        final (container, controller, _) = await setup('seq-1');
-        controller.add(
-          event(SequenceWsEvents.progress, const {
-            'sequence_id': 'seq-1',
-            'run_id': 'run-9',
-            'state': 'running',
-            'current_instruction_index': 3,
-            'instructions_completed': 12,
-            'instructions_total': 60,
-          }),
-        );
-        await pumpEventQueue();
+    test('a sequence.progress frame for the selected sequence updates run state',
+        () async {
+      final (container, controller, _) = await setup('seq-1');
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'run_id': 'run-9',
+        'state': 'running',
+        'current_instruction_index': 3,
+        'instructions_completed': 12,
+        'instructions_total': 60,
+      }));
+      await pumpEventQueue();
 
-        final info = container.read(sequenceRunStateProvider).value;
-        expect(info?.state, SequenceRunState.running);
-        expect(info?.instructionsCompleted, 12);
-        expect(info?.instructionsTotal, 60);
-        expect(info?.currentInstructionIndex, 3);
-      },
-    );
+      final info = container.read(sequenceRunStateProvider).value;
+      expect(info?.state, SequenceRunState.running);
+      expect(info?.instructionsCompleted, 12);
+      expect(info?.instructionsTotal, 60);
+      expect(info?.currentInstructionIndex, 3);
+    });
 
     test('a frame naming a different sequence is ignored', () async {
       final (container, controller, _) = await setup('seq-1');
-      controller.add(
-        event(SequenceWsEvents.progress, const {
-          'sequence_id': 'other',
-          'state': 'running',
-          'instructions_completed': 7,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'other',
+        'state': 'running',
+        'instructions_completed': 7,
+      }));
       await pumpEventQueue();
 
       expect(container.read(sequenceRunStateProvider).value, isNull);
@@ -382,48 +312,40 @@ void main() {
 
     test('a non-sequence event is ignored', () async {
       final (container, controller, _) = await setup('seq-1');
-      controller.add(
-        event('diagnostics.issue_detected', const {
-          'sequence_id': 'seq-1',
-          'state': 'running',
-        }),
-      );
+      controller.add(event('diagnostics.issue_detected', const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+      }));
       await pumpEventQueue();
 
       expect(container.read(sequenceRunStateProvider).value, isNull);
     });
 
-    test('a frame arriving while loading is skipped; tracking resumes once loaded', () async {
+    test('a frame arriving while loading is skipped; tracking resumes once loaded',
+        () async {
       // Hold the initial getRunState open so the provider stays loading.
       final gate = Completer<SequenceRunStateInfo?>();
-      final (container, controller, _) = await setup(
-        'seq-1',
-        awaitInitial: false,
-        gate: gate,
-      );
+      final (container, controller, _) =
+          await setup('seq-1', awaitInitial: false, gate: gate);
       // First WS frame lands DURING loading — must be skipped (it would be
       // clobbered by the resolving build() future).
-      controller.add(
-        event(SequenceWsEvents.progress, const {
-          'sequence_id': 'seq-1',
-          'state': 'running',
-          'instructions_completed': 5,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'instructions_completed': 5,
+      }));
       await pumpEventQueue();
       expect(container.read(sequenceRunStateProvider).isLoading, isTrue);
 
       // Initial read resolves (no active run yet), THEN a fresh frame applies.
       gate.complete(null);
       await container.read(sequenceRunStateProvider.future);
-      controller.add(
-        event(SequenceWsEvents.progress, const {
-          'sequence_id': 'seq-1',
-          'state': 'running',
-          'instructions_completed': 9,
-          'instructions_total': 30,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'instructions_completed': 9,
+        'instructions_total': 30,
+      }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
@@ -445,14 +367,12 @@ void main() {
         instructionsCompleted: 60,
         instructionsTotal: 60,
       );
-      controller.add(
-        event(SequenceWsEvents.complete, const {
-          'sequence_id': 'seq-1',
-          'state': 'completed',
-          'instructions_completed': 60,
-          'instructions_total': 60,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.complete, const {
+        'sequence_id': 'seq-1',
+        'state': 'completed',
+        'instructions_completed': 60,
+        'instructions_total': 60,
+      }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
@@ -474,14 +394,12 @@ void main() {
         startedUtc: DateTime.utc(2026, 6, 18, 9),
         instructionsTotal: 60,
       );
-      controller.add(
-        event(SequenceWsEvents.started, const {
-          'sequence_id': 'seq-1',
-          'state': 'running',
-          'instructions_completed': 0,
-          'instructions_total': 60,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.started, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'instructions_completed': 0,
+        'instructions_total': 60,
+      }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;
@@ -490,22 +408,19 @@ void main() {
       expect(info?.currentTargetName, 'M31');
     });
 
-    test('a refresh in flight does not write back after the selection changes', () async {
+    test('a refresh in flight does not write back after the selection changes',
+        () async {
       final (container, controller, fake) = await setup('seq-1');
       // The refresh's read hangs; seq-1 would resolve to a terminal DTO, seq-2 to
       // a fresh (null) state.
       final terminal = SequenceRunStateInfo(
-        sequenceId: 'seq-1',
-        state: SequenceRunState.completed,
-      );
+          sequenceId: 'seq-1', state: SequenceRunState.completed);
       fake
         ..runStateById = {'seq-1': terminal, 'seq-2': null}
         ..runStateGate = Completer<SequenceRunStateInfo?>();
 
       // Start a refresh for seq-1 (read hangs), then switch to seq-2.
-      final pending = container
-          .read(sequenceRunStateProvider.notifier)
-          .refresh();
+      final pending = container.read(sequenceRunStateProvider.notifier).refresh();
       container.read(selectedSequenceIdProvider.notifier).select('seq-2');
       fake.runStateGate!.complete(null); // release both in-flight reads
       await pending;
@@ -526,14 +441,12 @@ void main() {
       expect(container.read(sequenceRunStateProvider).hasValue, isTrue);
 
       // A subsequent WS frame must still apply (not be dropped by the guard).
-      controller.add(
-        event(SequenceWsEvents.progress, const {
-          'sequence_id': 'seq-1',
-          'state': 'running',
-          'instructions_completed': 21,
-          'instructions_total': 60,
-        }),
-      );
+      controller.add(event(SequenceWsEvents.progress, const {
+        'sequence_id': 'seq-1',
+        'state': 'running',
+        'instructions_completed': 21,
+        'instructions_total': 60,
+      }));
       await pumpEventQueue();
 
       final info = container.read(sequenceRunStateProvider).value;

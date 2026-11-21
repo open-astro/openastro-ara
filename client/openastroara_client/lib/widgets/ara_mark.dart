@@ -12,8 +12,10 @@ class AraMark extends StatelessWidget {
   final double size;
 
   @override
-  Widget build(BuildContext context) =>
-      CustomPaint(size: Size.square(size), painter: const _AraMarkPainter());
+  Widget build(BuildContext context) => CustomPaint(
+    size: Size.square(size),
+    painter: const _AraMarkPainter(),
+  );
 }
 
 class _AraMarkPainter extends CustomPainter {
@@ -44,7 +46,8 @@ class _AraMarkPainter extends CustomPainter {
     // (the strip draws it at 30 px), so no line, ring or star goes under its
     // floor in pixels: lines 2, rings 1.5 wide and 3 across, the star 6.
     final px = _box.width / size.width;
-    double atLeast(double units, double pixels) => math.max(units, pixels * px);
+    double atLeast(double units, double pixels) =>
+        math.max(units, pixels * px);
     canvas
       ..scale(1 / px)
       ..translate(-_box.left, -_box.top);
@@ -76,11 +79,7 @@ class _AraMarkPainter extends CustomPainter {
         ..drawCircle(c, r, hole)
         ..drawCircle(c, r, stroke);
     }
-    canvas.drawCircle(
-      _bright,
-      atLeast(30, 3),
-      Paint()..color = AraColors.starlight,
-    );
+    canvas.drawCircle(_bright, atLeast(30, 3), Paint()..color = AraColors.starlight);
   }
 
   @override

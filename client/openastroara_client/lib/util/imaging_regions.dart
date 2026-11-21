@@ -24,12 +24,8 @@ class ImagingRegion {
   final String type; // OpenNGC-style code — drives emission class + tier logic
   final double sizeMajArcmin;
   final double? sizeMinArcmin;
-  const ImagingRegion(
-    this.name,
-    this.type,
-    this.sizeMajArcmin, [
-    this.sizeMinArcmin,
-  ]);
+  const ImagingRegion(this.name, this.type, this.sizeMajArcmin,
+      [this.sizeMinArcmin]);
 }
 
 const Map<String, ImagingRegion> overrides = {
@@ -163,7 +159,6 @@ int? photogenicTierOf(String id) {
 }
 
 final Set<String> _standaloneIds = {for (final r in standaloneRegions) r.id};
-
 /// Both sides of every anchor pair: the NGC/IC row that stands in for a
 /// Sharpless row is the same showpiece (NGC 6334 has no photometry either).
 final Set<String> _anchorIds = {for (final a in sharplessAnchors) a.$1};
@@ -338,10 +333,7 @@ ImagingRegion? overrideFor(PlanningDso o) {
 /// its designation, "Skull Nebula (NGC 246)", as before the names lost their
 /// bracket (#1957); any other object keeps its name as it is.
 String regionAwareName(String id, List<String> aliases, String name) {
-  final region = [
-    id,
-    ...aliases,
-  ].map((d) => _overridesByKey[designationKey(d)]).nonNulls.firstOrNull;
+  final region = [id, ...aliases].map((d) => _overridesByKey[designationKey(d)]).nonNulls.firstOrNull;
   return region?.name == name ? objectTitle(id, aliases, name) : name;
 }
 
@@ -370,9 +362,9 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
   final merged = [
     for (final o in catalog)
       if (!covered.contains(o.id) && !o.aliases.any(coveredByRegion.contains))
-        switch (overrideFor(o)) {
-          null => o,
-          final r => PlanningDso(
+      switch (overrideFor(o)) {
+        null => o,
+        final r => PlanningDso(
             id: o.id,
             name: r.name,
             type: r.type,
@@ -394,7 +386,7 @@ List<PlanningDso> applyImagingRegions(List<PlanningDso> catalog) {
             caldwellNum: o.caldwellNum,
             aliases: o.aliases,
           ),
-        },
+      },
     ...standaloneRegions,
   ];
   return merged;

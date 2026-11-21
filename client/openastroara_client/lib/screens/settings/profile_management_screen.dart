@@ -48,10 +48,7 @@ class ProfileManagementScreen extends ConsumerWidget {
       body: async.when(
         loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => _ErrorState(
-          message: friendlyDaemonError(
-            e,
-            fallback: "Couldn't load the profiles",
-          ),
+          message: friendlyDaemonError(e, fallback: "Couldn't load the profiles"),
           onRetry: () => ref.read(profileManagementProvider.notifier).refresh(),
         ),
         data: (list) => _ProfileListView(list: list),
@@ -63,9 +60,11 @@ class ProfileManagementScreen extends ConsumerWidget {
     // The wizard invalidates profileManagementProvider itself on a successful
     // save, so this list refreshes on its own — no onComplete/refresh needed here.
     // (A cancelled wizard never invalidates, so there's no needless re-fetch.)
-    await Navigator.of(context)
-        .push<void>(MaterialPageRoute(builder: (_) => const WizardShell()));
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (_) => const WizardShell()),
+    );
   }
+
 }
 
 class _ProfileListView extends ConsumerWidget {
@@ -76,10 +75,8 @@ class _ProfileListView extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     if (list.profiles.isEmpty) {
       return const Center(
-        child: Text(
-          'No profiles yet — use "Add profile" to create one.',
-          style: TextStyle(color: AraColors.textSecondary),
-        ),
+        child: Text('No profiles yet — use "Add profile" to create one.',
+            style: TextStyle(color: AraColors.textSecondary)),
       );
     }
     return ListView.separated(
@@ -91,29 +88,19 @@ class _ProfileListView extends ConsumerWidget {
         final isActive = p.id == list.activeId;
         return ListTile(
           leading: Icon(
-            isActive
-                ? Icons.radio_button_checked
-                : Icons.radio_button_unchecked,
-            color: isActive
-                ? AraColors.accentConnected
-                : AraColors.textSecondary,
+            isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+            color: isActive ? AraColors.accentConnected : AraColors.textSecondary,
           ),
           title: Text(p.name),
           subtitle: isActive
-              ? const Text(
-                  'Active',
-                  style: TextStyle(color: AraColors.accentConnected),
-                )
+              ? const Text('Active', style: TextStyle(color: AraColors.accentConnected))
               : null,
           trailing: PopupMenuButton<String>(
             onSelected: (action) =>
                 unawaited(_onAction(context, ref, action, p, isActive)),
             itemBuilder: (_) => [
               if (!isActive)
-                const PopupMenuItem(
-                  value: 'select',
-                  child: Text('Make active'),
-                ),
+                const PopupMenuItem(value: 'select', child: Text('Make active')),
               const PopupMenuItem(value: 'rename', child: Text('Rename')),
               // Export writes via FilePicker.saveFile(bytes:), which is only
               // reliable on the desktop targets — hide it elsewhere rather than
@@ -131,13 +118,8 @@ class _ProfileListView extends ConsumerWidget {
     );
   }
 
-  Future<void> _onAction(
-    BuildContext context,
-    WidgetRef ref,
-    String action,
-    ProfileMeta p,
-    bool isActive,
-  ) async {
+  Future<void> _onAction(BuildContext context, WidgetRef ref, String action,
+      ProfileMeta p, bool isActive) async {
     final messenger = ScaffoldMessenger.of(context);
     final notifier = ref.read(profileManagementProvider.notifier);
     switch (action) {
@@ -149,30 +131,22 @@ class _ProfileListView extends ConsumerWidget {
       case 'rename':
         final name = await _promptName(context, initial: p.name);
         if (name != null && name != p.name) {
-          await _run(
-            messenger,
-            () => notifier.rename(p.id, name),
-            'Couldn\'t rename profile',
-          );
+          await _run(messenger, () => notifier.rename(p.id, name), 'Couldn\'t rename profile');
         }
         break;
       case 'export':
         await _exportProfile(context, ref, p);
         break;
       case 'delete':
-        final choice = await showDeleteProfileDialog(
-          context,
-          name: p.name,
-          isActive: isActive,
-          isLast: list.profiles.length == 1,
-          preview: () => notifier.guiderTwin(p.id),
-        );
+        final choice = await showDeleteProfileDialog(context,
+            name: p.name,
+            isActive: isActive,
+            isLast: list.profiles.length == 1,
+            preview: () => notifier.guiderTwin(p.id));
         if (choice != null) {
           await _run(messenger, () async {
-            final result = await notifier.delete(
-              p.id,
-              deleteGuiderProfile: choice.deleteGuiderProfile,
-            );
+            final result = await notifier.delete(p.id,
+                deleteGuiderProfile: choice.deleteGuiderProfile);
             showGuiderTwinOutcome(messenger, result);
           }, 'Couldn\'t delete profile');
         }
@@ -184,36 +158,22 @@ class _ProfileListView extends ConsumerWidget {
   /// secrets / location / network already stripped by the daemon) and write it to
   /// a file the user picks. The recipient imports it as a starting template.
   Future<void> _exportProfile(
-    BuildContext context,
-    WidgetRef ref,
-    ProfileMeta p,
-  ) async {
+      BuildContext context, WidgetRef ref, ProfileMeta p) async {
     final messenger = ScaffoldMessenger.of(context);
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Connect to your rig first to export a profile.'),
-        ),
-      );
+      messenger.showSnackBar(const SnackBar(
+          content: Text('Connect to your rig first to export a profile.')));
       return;
     }
 
     ProfileShareExport share;
     try {
-      share = await runWithBlockingSpinner(
-        context,
-        () => api.exportProfile(p.id),
-      );
+      share = await runWithBlockingSpinner(context, () => api.exportProfile(p.id));
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            friendlyDaemonError(e, fallback: "Couldn't export that profile"),
-          ),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyDaemonError(e, fallback: "Couldn't export that profile")),
+          backgroundColor: AraColors.accentError));
       return;
     }
 
@@ -223,54 +183,37 @@ class _ProfileListView extends ConsumerWidget {
     // writes the bytes itself on the desktop targets and returns the saved
     // location as a Uri (null if the user cancels).
     final jsonBytes = Uint8List.fromList(
-      utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)),
-    );
+        utf8.encode(const JsonEncoder.withIndent('  ').convert(share.manifest)));
     final Uri? saved;
     try {
       saved = await FilePicker.saveFile(
         dialogTitle: 'Save profile share',
         fileName: shareFileName(
-          share.profileName.isEmpty ? p.name : share.profileName,
-        ),
+            share.profileName.isEmpty ? p.name : share.profileName),
         bytes: jsonBytes,
       );
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            friendlyDaemonError(e, fallback: "Couldn't save the file"),
-          ),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+          content: Text(friendlyDaemonError(e, fallback: "Couldn't save the file")),
+          backgroundColor: AraColors.accentError));
       return;
     }
     if (saved == null || !context.mounted) return; // cancelled / screen gone
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          'Exported "${p.name}" — share this file; the recipient '
-          'imports it as a starting template.',
-        ),
-      ),
-    );
+    messenger.showSnackBar(SnackBar(
+        content: Text('Exported "${p.name}" — share this file; the recipient '
+            'imports it as a starting template.')));
   }
 
-  Future<void> _run(
-    ScaffoldMessengerState messenger,
-    Future<void> Function() op,
-    String fallback,
-  ) async {
+  Future<void> _run(ScaffoldMessengerState messenger, Future<void> Function() op,
+      String fallback) async {
     try {
       await op();
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(friendlyDaemonError(e, fallback: fallback)),
-          backgroundColor: AraColors.accentError,
-        ),
-      );
+      messenger.showSnackBar(SnackBar(
+        content: Text(friendlyDaemonError(e, fallback: fallback)),
+        backgroundColor: AraColors.accentError,
+      ));
     }
   }
 }
@@ -295,10 +238,7 @@ Future<String?> _promptName(BuildContext context, {required String initial}) {
         },
       ),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(ctx).pop(),
-          child: const Text('Cancel'),
-        ),
+        TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
         FilledButton(
           onPressed: () {
             final v = controller.text.trim();
@@ -322,11 +262,9 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AraColors.textSecondary),
-          ),
+          Text(message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: AraColors.textSecondary)),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: onRetry,

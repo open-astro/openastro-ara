@@ -75,24 +75,14 @@ void main() {
     expect(container.read(pendingProfileReplayNoticeProvider), isNull);
   });
 
-  testWidgets('in Simple Mode the notice is a pill, not a snackbar', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [simpleModeActiveProvider.overrideWithValue(true)],
-    );
+  testWidgets('in Simple Mode the notice is a pill, not a snackbar', (tester) async {
+    final container = ProviderContainer(overrides: [simpleModeActiveProvider.overrideWithValue(true)]);
     addTearDown(container.dispose);
-    container
-        .read(pendingProfileReplayNoticeProvider.notifier)
-        .post('Applied.');
+    container.read(pendingProfileReplayNoticeProvider.notifier).post('Applied.');
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: container,
-        child: const MaterialApp(
-          home: Scaffold(
-            body: PendingProfileReplayListener(child: Text('shell')),
-          ),
-        ),
+        child: const MaterialApp(home: Scaffold(body: PendingProfileReplayListener(child: Text('shell')))),
       ),
     );
     await tester.pump();

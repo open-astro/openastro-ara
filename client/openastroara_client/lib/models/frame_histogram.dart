@@ -54,26 +54,26 @@ class FrameHistogram {
   });
 
   factory FrameHistogram.fromJson(Map<String, dynamic> json) => FrameHistogram(
-    bins: (json['bins'] as List<dynamic>? ?? const [])
-        .map((b) => (b as num).toInt())
-        .toList(growable: false),
-    minAdu: (json['min_adu'] as num?)?.toInt() ?? 0,
-    minCount: (json['min_count'] as num?)?.toInt() ?? 0,
-    maxAdu: (json['max_adu'] as num?)?.toInt() ?? 0,
-    maxCount: (json['max_count'] as num?)?.toInt() ?? 0,
-    meanAdu: (json['mean_adu'] as num?)?.toDouble() ?? 0,
-    stdDev: (json['std_dev'] as num?)?.toDouble() ?? 0,
-    median: (json['median'] as num?)?.toDouble() ?? 0,
-    mad: (json['mad'] as num?)?.toDouble() ?? 0,
-    lowClipFraction: (json['low_clip_fraction'] as num?)?.toDouble() ?? 0,
-    highClipFraction: (json['high_clip_fraction'] as num?)?.toDouble() ?? 0,
-    width: (json['width'] as num?)?.toInt() ?? 0,
-    height: (json['height'] as num?)?.toInt() ?? 0,
-    bitDepth: (json['bit_depth'] as num?)?.toInt() ?? 0,
-    stars: (json['stars'] as num?)?.toInt(),
-    clippedStars: (json['clipped_stars'] as num?)?.toInt(),
-    hfr: (json['hfr'] as num?)?.toDouble(),
-    gain: (json['gain'] as num?)?.toInt(),
-    offset: (json['offset'] as num?)?.toInt(),
-  );
+        bins: (json['bins'] as List<dynamic>? ?? const [])
+            .map((b) => (b as num).toInt())
+            .toList(growable: false),
+        minAdu: (json['min_adu'] as num?)?.toInt() ?? 0,
+        minCount: (json['min_count'] as num?)?.toInt() ?? 0,
+        maxAdu: (json['max_adu'] as num?)?.toInt() ?? 0,
+        maxCount: (json['max_count'] as num?)?.toInt() ?? 0,
+        meanAdu: (json['mean_adu'] as num?)?.toDouble() ?? 0,
+        stdDev: (json['std_dev'] as num?)?.toDouble() ?? 0,
+        median: (json['median'] as num?)?.toDouble() ?? 0,
+        mad: (json['mad'] as num?)?.toDouble() ?? 0,
+        lowClipFraction: (json['low_clip_fraction'] as num?)?.toDouble() ?? 0,
+        highClipFraction: (json['high_clip_fraction'] as num?)?.toDouble() ?? 0,
+        width: (json['width'] as num?)?.toInt() ?? 0,
+        height: (json['height'] as num?)?.toInt() ?? 0,
+        bitDepth: (json['bit_depth'] as num?)?.toInt() ?? 0,
+        stars: (json['stars'] as num?)?.toInt(),
+        clippedStars: (json['clipped_stars'] as num?)?.toInt(),
+        hfr: (json['hfr'] as num?)?.toDouble(),
+        gain: (json['gain'] as num?)?.toInt(),
+        offset: (json['offset'] as num?)?.toInt(),
+      );
 }

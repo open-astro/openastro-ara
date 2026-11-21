@@ -14,9 +14,7 @@ import '../saved_server_state.dart';
 /// Overridable in tests, mirroring `faultsApiFactoryProvider`.
 final notificationsApiFactoryProvider =
     Provider<NotificationsClient Function(AraServer)>(
-      (ref) =>
-          (server) => NotificationsApi(server),
-    );
+        (ref) => (server) => NotificationsApi(server));
 
 final notificationsApiProvider = Provider<NotificationsClient?>((ref) {
   final server = ref.watch(activeServerProvider);
@@ -64,8 +62,7 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
   /// Deliberately touches no notifier state — the caller decides, under its
   /// own generation guard, whether this fetch still gets to win.
   Future<(List<AraNotification>, bool)> _fetchAll(
-    NotificationsClient api,
-  ) async {
+      NotificationsClient api) async {
     final acc = <AraNotification>[];
     String? cursor;
     var truncated = false;
@@ -108,14 +105,17 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
   /// immediately; the server is the one that makes it stick, and a failure
   /// puts the dot back rather than lying about it.
   Future<void> markRead(String id) => _mutate(
-    id,
-    optimistic: (n) => n.copyWith(read: true),
-    call: (api) => api.markRead(id),
-  );
+        id,
+        optimistic: (n) => n.copyWith(read: true),
+        call: (api) => api.markRead(id),
+      );
 
   /// Dismiss one — it leaves the list entirely.
-  Future<void> dismiss(String id) =>
-      _mutate(id, optimistic: null, call: (api) => api.dismiss(id));
+  Future<void> dismiss(String id) => _mutate(
+        id,
+        optimistic: null,
+        call: (api) => api.dismiss(id),
+      );
 
   /// Mark every unread entry read. Nothing to undo, so it just re-reads the
   /// list at the end rather than tracking each call.
@@ -127,8 +127,7 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     if (unread.isEmpty) return;
     if (ref.mounted) {
       state = AsyncData(
-        current.map((n) => n.read ? n : n.copyWith(read: true)).toList(),
-      );
+          current.map((n) => n.read ? n : n.copyWith(read: true)).toList());
     }
     try {
       await Future.wait(unread.map((n) => api.markRead(n.id)));
@@ -148,7 +147,10 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
     if (api == null || before == null) return;
     final after = <AraNotification>[
       for (final n in before)
-        if (n.id != id) n else if (optimistic != null) optimistic(n)!,
+        if (n.id != id)
+          n
+        else if (optimistic != null)
+          optimistic(n)!,
     ];
     state = AsyncData(after);
     try {
@@ -172,8 +174,7 @@ class NotificationInboxNotifier extends AsyncNotifier<List<AraNotification>?> {
 
 final notificationInboxProvider =
     AsyncNotifierProvider<NotificationInboxNotifier, List<AraNotification>?>(
-      NotificationInboxNotifier.new,
-    );
+        NotificationInboxNotifier.new);
 
 /// How many are waiting to be read — what the bell shows.
 final unreadNotificationCountProvider = Provider<int>((ref) {
@@ -187,7 +188,6 @@ final unreadNotificationCountProvider = Provider<int>((ref) {
 final hasUrgentNotificationProvider = Provider<bool>((ref) {
   final inbox = ref.watch(notificationInboxProvider).value;
   if (inbox == null) return false;
-  return inbox.any(
-    (n) => !n.read && n.severity.index >= NotificationSeverity.error.index,
-  );
+  return inbox.any((n) =>
+      !n.read && n.severity.index >= NotificationSeverity.error.index);
 });

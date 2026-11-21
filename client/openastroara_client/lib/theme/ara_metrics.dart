@@ -46,37 +46,28 @@ class AraBlur {
 class AraText {
   /// Pane / dialog titles.
   static const TextStyle title = TextStyle(
-    fontSize: 15,
-    fontWeight: FontWeight.w600,
-    color: AraColors.textPrimary,
-  );
+      fontSize: 15, fontWeight: FontWeight.w600, color: AraColors.textPrimary);
 
   /// Uppercased group headers (palette categories, inspector sections).
   static const TextStyle section = TextStyle(
-    fontSize: 11,
-    fontWeight: FontWeight.w600,
-    letterSpacing: 0.6,
-    color: AraColors.textSecondary,
-  );
+      fontSize: 11,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.6,
+      color: AraColors.textSecondary);
 
   /// Default row/body text.
-  static const TextStyle body = TextStyle(
-    fontSize: 13,
-    color: AraColors.textPrimary,
-  );
+  static const TextStyle body =
+      TextStyle(fontSize: 13, color: AraColors.textPrimary);
 
   /// Secondary line under a body row.
-  static const TextStyle caption = TextStyle(
-    fontSize: 11.5,
-    color: AraColors.textSecondary,
-  );
+  static const TextStyle caption =
+      TextStyle(fontSize: 11.5, color: AraColors.textSecondary);
 
   /// Numeric readouts (timers, counts) — tabular figures so they don't jitter.
   static const TextStyle numeric = TextStyle(
-    fontSize: 13,
-    color: AraColors.textPrimary,
-    fontFeatures: [FontFeature.tabularFigures()],
-  );
+      fontSize: 13,
+      color: AraColors.textPrimary,
+      fontFeatures: [FontFeature.tabularFigures()]);
 }
 
 /// Simple Mode body text: 14 px minimum (brief), tabular for live numbers. The

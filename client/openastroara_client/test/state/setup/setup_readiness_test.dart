@@ -139,57 +139,39 @@ void main() {
 
   group('connectStepState', () {
     test('done only when mount AND camera are connected', () {
-      expect(
-        connectStepState(_mount('connected'), _camera('connected')),
-        SetupStepState.done,
-      );
-      expect(
-        connectStepState(_mount('connected'), _camera('disconnected')),
-        SetupStepState.pending,
-      );
-      expect(
-        connectStepState(_mount('disconnected'), _camera('connected')),
-        SetupStepState.pending,
-      );
+      expect(connectStepState(_mount('connected'), _camera('connected')),
+          SetupStepState.done);
+      expect(connectStepState(_mount('connected'), _camera('disconnected')),
+          SetupStepState.pending);
+      expect(connectStepState(_mount('disconnected'), _camera('connected')),
+          SetupStepState.pending);
     });
 
     test('null statuses (nothing ever connected) are pending', () {
       expect(connectStepState(null, null), SetupStepState.pending);
-      expect(
-        connectStepState(_mount('connected'), null),
-        SetupStepState.pending,
-      );
+      expect(connectStepState(_mount('connected'), null),
+          SetupStepState.pending);
     });
 
     test('a connecting device shows in-progress', () {
-      expect(
-        connectStepState(_mount('connecting'), _camera('connected')),
-        SetupStepState.inProgress,
-      );
-      expect(
-        connectStepState(null, _camera('connecting')),
-        SetupStepState.inProgress,
-      );
+      expect(connectStepState(_mount('connecting'), _camera('connected')),
+          SetupStepState.inProgress);
+      expect(connectStepState(null, _camera('connecting')),
+          SetupStepState.inProgress);
     });
 
     test('an errored device wins over everything else', () {
-      expect(
-        connectStepState(_mount('error'), _camera('connected')),
-        SetupStepState.problem,
-      );
-      expect(
-        connectStepState(_mount('connecting'), _camera('error')),
-        SetupStepState.problem,
-      );
+      expect(connectStepState(_mount('error'), _camera('connected')),
+          SetupStepState.problem);
+      expect(connectStepState(_mount('connecting'), _camera('error')),
+          SetupStepState.problem);
     });
   });
 
   group('polarAlignStepState', () {
     test('fresh session is pending', () {
-      expect(
-        polarAlignStepState(const PolarAlignLive()),
-        SetupStepState.pending,
-      );
+      expect(polarAlignStepState(const PolarAlignLive()),
+          SetupStepState.pending);
     });
 
     test('seeding / adjusting / paused are in-progress', () {
@@ -198,11 +180,9 @@ void main() {
         PolarAlignStates.adjusting,
         PolarAlignStates.paused,
       ]) {
-        expect(
-          polarAlignStepState(PolarAlignLive(phase: phase)),
-          SetupStepState.inProgress,
-          reason: 'failed for $phase',
-        );
+        expect(polarAlignStepState(PolarAlignLive(phase: phase)),
+            SetupStepState.inProgress,
+            reason: 'failed for $phase');
       }
     });
 
@@ -215,62 +195,45 @@ void main() {
       expect(polarAlignStepState(aligned), SetupStepState.done);
       // Stop keeps the zone (copyWith semantics) — still satisfied.
       expect(
-        polarAlignStepState(aligned.copyWith(phase: PolarAlignStates.stopped)),
-        SetupStepState.done,
-      );
+          polarAlignStepState(
+              aligned.copyWith(phase: PolarAlignStates.stopped)),
+          SetupStepState.done);
     });
 
     test("the rough stage's green zone is not done yet", () {
       // Rough is a first pass on the main camera; fine and check are still ahead.
       const rough = PolarAlignLive(
-        phase: PolarAlignStates.adjusting,
-        stage: PolarAlignStages.coarse,
-        zone: 'green',
-      );
+          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse, zone: 'green');
       expect(polarAlignStepState(rough), SetupStepState.inProgress);
       // A fine-stage green is the fine stage's own (a new stage starts with no
       // readout), so it counts.
-      expect(
-        polarAlignStepState(rough.copyWith(stage: PolarAlignStages.fine)),
-        SetupStepState.done,
-      );
+      expect(polarAlignStepState(rough.copyWith(stage: PolarAlignStages.fine)),
+          SetupStepState.done);
     });
 
     test('a finished check outside the green zone needs work', () {
       const checked = PolarAlignLive(
-        phase: PolarAlignStates.checked,
-        stage: PolarAlignStages.check,
-        zone: 'yellow',
-      );
+          phase: PolarAlignStates.checked, stage: PolarAlignStages.check, zone: 'yellow');
       expect(polarAlignStepState(checked), SetupStepState.problem);
-      expect(
-        polarAlignStepState(checked.copyWith(zone: 'green')),
-        SetupStepState.done,
-      );
+      expect(polarAlignStepState(checked.copyWith(zone: 'green')), SetupStepState.done);
     });
 
     test('red/yellow zones are not done', () {
       expect(
-        polarAlignStepState(
-          const PolarAlignLive(phase: PolarAlignStates.adjusting, zone: 'red'),
-        ),
-        SetupStepState.inProgress,
-      );
+          polarAlignStepState(const PolarAlignLive(
+              phase: PolarAlignStates.adjusting, zone: 'red')),
+          SetupStepState.inProgress);
       expect(
-        polarAlignStepState(
-          const PolarAlignLive(phase: PolarAlignStates.stopped, zone: 'yellow'),
-        ),
-        SetupStepState.pending,
-      );
+          polarAlignStepState(const PolarAlignLive(
+              phase: PolarAlignStates.stopped, zone: 'yellow')),
+          SetupStepState.pending);
     });
 
     test('failed routine is a problem (unless it had reached green)', () {
       expect(
-        polarAlignStepState(
-          const PolarAlignLive(phase: PolarAlignStates.failed),
-        ),
-        SetupStepState.problem,
-      );
+          polarAlignStepState(
+              const PolarAlignLive(phase: PolarAlignStates.failed)),
+          SetupStepState.problem);
     });
   });
 }

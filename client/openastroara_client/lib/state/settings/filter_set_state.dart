@@ -27,9 +27,9 @@ enum FilterKind {
   final String label;
 
   static FilterKind fromWire(String? v) => FilterKind.values.firstWhere(
-    (k) => k.wire == v,
-    orElse: () => FilterKind.l,
-  );
+        (k) => k.wire == v,
+        orElse: () => FilterKind.l,
+      );
 
   /// The kind's default effective passband in nm — mirrors Ara's
   /// `OptimalSubCalculator.DefaultBandwidthNm` table so the filter-set editor
@@ -37,11 +37,15 @@ enum FilterKind {
   /// per-pixel single-line width (each OSC Bayer channel sees only the line
   /// that lands in it).
   double get defaultBandwidthNm => switch (this) {
-    FilterKind.l || FilterKind.osc => 100,
-    FilterKind.r || FilterKind.g || FilterKind.b => 80,
-    FilterKind.ha || FilterKind.oiii || FilterKind.sii || FilterKind.duo => 7,
-    FilterKind.tri => 8,
-  };
+        FilterKind.l || FilterKind.osc => 100,
+        FilterKind.r || FilterKind.g || FilterKind.b => 80,
+        FilterKind.ha ||
+        FilterKind.oiii ||
+        FilterKind.sii ||
+        FilterKind.duo =>
+          7,
+        FilterKind.tri => 8,
+      };
 }
 
 /// One filter in the planning filter set. [name] is the key sequences match
@@ -58,15 +62,12 @@ class PlanningFilter {
     this.bandwidthNm = 0,
   });
 
-  PlanningFilter copyWith({
-    String? name,
-    FilterKind? kind,
-    double? bandwidthNm,
-  }) => PlanningFilter(
-    name: name ?? this.name,
-    kind: kind ?? this.kind,
-    bandwidthNm: bandwidthNm ?? this.bandwidthNm,
-  );
+  PlanningFilter copyWith({String? name, FilterKind? kind, double? bandwidthNm}) =>
+      PlanningFilter(
+        name: name ?? this.name,
+        kind: kind ?? this.kind,
+        bandwidthNm: bandwidthNm ?? this.bandwidthNm,
+      );
 }
 
 /// NEXTGEN §1/§4 — the user's declared planning filter set, captured once at
@@ -87,9 +88,8 @@ class FilterSetSettings {
   /// story.
   PlanningFilter? lookup(String name) {
     final key = name.trim().toLowerCase();
-    final exact = filters
-        .where((f) => f.name.trim().toLowerCase() == key)
-        .firstOrNull;
+    final exact =
+        filters.where((f) => f.name.trim().toLowerCase() == key).firstOrNull;
     if (exact != null) return exact;
     final kind = FilterSetNotifier.recognizedKind(name);
     if (kind == null) return null;

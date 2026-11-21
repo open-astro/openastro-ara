@@ -62,50 +62,22 @@ Future<void> _pump(
   await tester.pump();
 }
 
-Finder _inFlip(Finder f) => find.descendant(
-  of: find.byKey(const Key('simple-monitor-flip')),
-  matching: f,
-);
+Finder _inFlip(Finder f) => find.descendant(of: find.byKey(const Key('simple-monitor-flip')), matching: f);
 
 void main() {
-  testWidgets(
-    'the Flip tile says Waiting for flip, not Moving, during the pass-meridian wait (#1897)',
-    (tester) async {
-      await _pump(
-        tester,
-        MonitorFlip(
-          state: 'waiting_for_meridian',
-          at: DateTime(
-            2026,
-            11,
-            11,
-            23,
-            52,
-            0,
-          ).add(const Duration(seconds: 182)),
-        ),
-      );
-      expect(_inFlip(find.text('Waiting for flip')), findsOneWidget);
-      expect(
-        find.byKey(const Key('simple-monitor-flip-countdown')),
-        findsOneWidget,
-      );
-      expect(_inFlip(find.text('03:02')), findsOneWidget);
-      expect(_inFlip(find.text('Moving…')), findsNothing);
-    },
-  );
+  testWidgets('the Flip tile says Waiting for flip, not Moving, during the pass-meridian wait (#1897)', (tester) async {
+    await _pump(tester, MonitorFlip(state: 'waiting_for_meridian', at: DateTime(2026, 11, 11, 23, 52, 0).add(const Duration(seconds: 182))));
+    expect(_inFlip(find.text('Waiting for flip')), findsOneWidget);
+    expect(find.byKey(const Key('simple-monitor-flip-countdown')), findsOneWidget);
+    expect(_inFlip(find.text('03:02')), findsOneWidget);
+    expect(_inFlip(find.text('Moving…')), findsNothing);
+  });
 
-  testWidgets(
-    'the Flip tile keeps Moving and the step once the wait is over (#1897)',
-    (tester) async {
-      await _pump(
-        tester,
-        const MonitorFlip(state: 'flipping', step: 'Slewing'),
-      );
-      expect(_inFlip(find.text('Moving…')), findsOneWidget);
-      expect(_inFlip(find.text('Slewing')), findsOneWidget);
-    },
-  );
+  testWidgets('the Flip tile keeps Moving and the step once the wait is over (#1897)', (tester) async {
+    await _pump(tester, const MonitorFlip(state: 'flipping', step: 'Slewing'));
+    expect(_inFlip(find.text('Moving…')), findsOneWidget);
+    expect(_inFlip(find.text('Slewing')), findsOneWidget);
+  });
 
   // #1915: the phone column reuses the Now tile; Up next beside the state
   // block left it about 136 px.

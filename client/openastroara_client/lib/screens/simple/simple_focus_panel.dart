@@ -133,7 +133,8 @@ void simpleOpenFocusOffsets(WidgetRef ref) {
     picks,
     // Not loaded yet: no AF filter, so the L or Lum slot, as the daemon
     // picks with none set.
-    ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ?? '',
+    ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ??
+        '',
   );
   return ({...picks, ?reference}, reference);
 }
@@ -189,9 +190,7 @@ final simpleGuideExposureProvider =
 double? simpleFocusExposureShown(WidgetRef ref, double? picked) =>
     picked ??
     ref
-        .watch(
-          autofocusSettingsProvider.select((s) => s.value?.exposureSeconds),
-        )
+        .watch(autofocusSettingsProvider.select((s) => s.value?.exposureSeconds))
         ?.toDouble();
 
 /// Whether the focus run's frame, its measured stars circled, fills the screen
@@ -291,8 +290,7 @@ class SimpleFocusShutter extends ConsumerWidget {
       label: running
           ? context.l10n.focusCancelAutofocus
           : context.l10n.focusAutofocus,
-      onPressed:
-          live.busy || !(running || connected) || (!running && cameraBusy)
+      onPressed: live.busy || !(running || connected) || (!running && cameraBusy)
           ? null
           : running
           ? notifier.cancel
@@ -560,7 +558,10 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   ],
                 )
               else
-                _twoLines(headline, kSimpleText.copyWith(color: headlineColor)),
+                _twoLines(
+                  headline,
+                  kSimpleText.copyWith(color: headlineColor),
+                ),
               // One slot, so the run's end swaps the HFR for its figures in place.
               _slot(context, _kFocusReadoutHeight, [
                 // A finished run's Best position tile says where it is.
@@ -628,12 +629,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                         key: const Key('simple-focus-weak-fit'),
                         padding: const EdgeInsets.all(AraSpace.s8),
                         decoration: BoxDecoration(
-                          color: AraColors.accentWarning.withValues(
-                            alpha: 0.12,
-                          ),
-                          borderRadius: BorderRadius.circular(
-                            AraRadius.simplePanel,
-                          ),
+                          color: AraColors.accentWarning.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(AraRadius.simplePanel),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -678,16 +675,13 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 _keepRoom(
                   visible: live.frame != null,
                   child: Row(
-                    spacing: AraSpace.s12,
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.focusMeasuredStars,
-                          style: kSimpleText,
-                        ),
-                      ),
-                      stars,
-                    ],
+                  spacing: AraSpace.s12,
+                  children: [
+                    Expanded(
+                      child: Text(l10n.focusMeasuredStars, style: kSimpleText),
+                    ),
+                    stars,
+                  ],
                   ),
                 ),
               // The Focuser window's dial moves it; nothing to nudge here.
@@ -835,11 +829,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ? null
         : Text(error, style: kSimpleText.copyWith(color: AraColors.errorText));
     if (cal != null && cal.isRunning) {
-      final name =
-          cal.currentName ??
-          (cal.currentPosition == null
-              ? null
-              : l10n.deviceSlot(cal.currentPosition!));
+      final name = cal.currentName ??
+          (cal.currentPosition == null ? null : l10n.deviceSlot(cal.currentPosition!));
       return [
         _twoLines(
           name == null || cal.runIndex == 0
@@ -863,8 +854,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
       final measured = cal.filters.any(
         (f) => f.isMeasured && f.position != cal.referencePosition,
       );
-      final drift =
-          cal.referenceFirstPosition != null &&
+      final drift = cal.referenceFirstPosition != null &&
               cal.referenceSecondPosition != null
           ? (cal.referenceFirstPosition! - cal.referenceSecondPosition!).abs()
           : null;
@@ -882,10 +872,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         if (cal.reason case final reason? when reason.isNotEmpty)
           Text(reason, style: kSimpleText.copyWith(color: AraColors.errorText)),
         _offsetTable(l10n, cal),
-        if (cal.isComplete &&
-            cal.driftWarning &&
-            drift != null &&
-            cal.cfzSteps != null)
+        if (cal.isComplete && cal.driftWarning && drift != null && cal.cfzSteps != null)
           _warning(
             const Key('simple-offsets-drift'),
             l10n.focusOffsetsDrift(drift, cal.cfzSteps!),
@@ -901,9 +888,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                 key: const Key('simple-offsets-discard'),
                 onPressed: live.busy
                     ? null
-                    : ref
-                          .read(filterOffsetCalibrationProvider.notifier)
-                          .discard,
+                    : ref.read(filterOffsetCalibrationProvider.notifier).discard,
                 child: Text(l10n.focusOffsetsDiscard),
               ),
             ),
@@ -930,9 +915,8 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     final blocker = simpleOffsetsBlocker(ref, l10n);
     String named(FilterSlot s) =>
         s.name.isEmpty ? l10n.deviceSlot(s.position) : s.name;
-    final referenceSlot = slots
-        .where((s) => s.position == reference)
-        .firstOrNull;
+    final referenceSlot =
+        slots.where((s) => s.position == reference).firstOrNull;
     return [
       if (live.saved)
         Text(
@@ -942,10 +926,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ),
       Text(l10n.focusOffsetsIntro, style: AraText.caption),
       if (referenceSlot != null)
-        Text(
-          l10n.focusOffsetsReference(named(referenceSlot)),
-          style: kSimpleText,
-        ),
+        Text(l10n.focusOffsetsReference(named(referenceSlot)), style: kSimpleText),
       if (slots.isNotEmpty) ...[
         Text(l10n.focusOffsetsPicker, style: AraText.caption),
         Wrap(
@@ -1002,11 +983,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         for (final (i, t) in texts.indexed)
           Expanded(
             flex: i == 0 ? 3 : 2,
-            child: Text(
-              t,
-              style: style,
-              textAlign: i == 0 ? null : TextAlign.end,
-            ),
+            child: Text(t, style: style, textAlign: i == 0 ? null : TextAlign.end),
           ),
       ],
     );
@@ -1025,9 +1002,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         ),
         for (final f in cal.filters)
           () {
-            final filter = f.name.isEmpty
-                ? l10n.deviceSlot(f.position)
-                : f.name;
+            final filter = f.name.isEmpty ? l10n.deviceSlot(f.position) : f.name;
             final name = f.position == cal.referencePosition
                 ? l10n.focusOffsetsReferenceChip(filter)
                 : filter;
@@ -1042,8 +1017,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
             return Semantics(
               key: Key('simple-offsets-row-${f.position}'),
               container: true,
-              label:
-                  '$name, ${l10n.focusOffsetsColOffset} $offset, '
+              label: '$name, ${l10n.focusOffsetsColOffset} $offset, '
                   '${l10n.focusFitR2} $r2, ${l10n.focusOffsetsColPrevious} $previous'
                   '${f.isWeak ? '. ${l10n.focusOffsetsWeakFit(r2)}' : ''}'
                   '${f.isFailed && f.failureReason != null ? '. ${f.failureReason}' : ''}',
@@ -1063,9 +1037,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
                   if (f.isFailed && f.failureReason != null)
                     Text(
                       f.failureReason!,
-                      style: AraText.caption.copyWith(
-                        color: AraColors.errorText,
-                      ),
+                      style: AraText.caption.copyWith(color: AraColors.errorText),
                     ),
                 ],
               ),
@@ -1082,11 +1054,7 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
     crossAxisAlignment: CrossAxisAlignment.start,
     spacing: AraSpace.s8,
     children: [
-      const Icon(
-        Icons.warning_amber_rounded,
-        size: 18,
-        color: AraColors.accentWarning,
-      ),
+      const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
       Expanded(
         child: Text(
           text,
@@ -1159,52 +1127,48 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
           style: AraText.caption,
         ),
       _slot(context, _kFocusManualReadoutHeight, [
-        if (!status.active && !status.hasMeasurement && !live.finished)
-          Text(l10n.bahtinovFitMaskDetail, style: AraText.caption),
-        if (reading) ...[
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            spacing: AraSpace.s8,
-            children: [
-              Text(
-                formatOffset(steady.offsetPx!.abs()),
-                style: kSimpleText.copyWith(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w300,
-                  fontFeatures: const [FontFeature.tabularFigures()],
-                ),
+      if (!status.active && !status.hasMeasurement && !live.finished)
+        Text(l10n.bahtinovFitMaskDetail, style: AraText.caption),
+      if (reading) ...[
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.baseline,
+          textBaseline: TextBaseline.alphabetic,
+          spacing: AraSpace.s8,
+          children: [
+            Text(
+              formatOffset(steady.offsetPx!.abs()),
+              style: kSimpleText.copyWith(
+                fontSize: 40,
+                fontWeight: FontWeight.w300,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
-              Text(l10n.bahtinovPxFromFocus, style: AraText.caption),
-            ],
-          ),
-        ],
-        if (hint != null) ...[
-          Text(
-            hint.title,
-            textAlign: TextAlign.center,
-            style: kSimpleText.copyWith(
-              fontWeight: FontWeight.w600,
-              color: switch (hint.advice) {
-                TurnAdvice.atBest => AraColors.accentConnected,
-                TurnAdvice.turnBack => AraColors.accentBusy,
-                _ => AraColors.textPrimary,
-              },
             ),
+            Text(l10n.bahtinovPxFromFocus, style: AraText.caption),
+          ],
+        ),
+      ],
+      if (hint != null) ...[
+        Text(
+          hint.title,
+          textAlign: TextAlign.center,
+          style: kSimpleText.copyWith(
+            fontWeight: FontWeight.w600,
+            color: switch (hint.advice) {
+              TurnAdvice.atBest => AraColors.accentConnected,
+              TurnAdvice.turnBack => AraColors.accentBusy,
+              _ => AraColors.textPrimary,
+            },
           ),
-          Text(
-            hint.detail,
-            textAlign: TextAlign.center,
-            style: AraText.caption,
-          ),
-        ],
-        if (live.error != null)
-          Text(
-            failureReason(context.l10n, live.error!),
-            style: kSimpleText.copyWith(color: AraColors.errorText),
-            maxLines: 3,
-          ),
+        ),
+        Text(hint.detail, textAlign: TextAlign.center, style: AraText.caption),
+      ],
+      if (live.error != null)
+        Text(
+          failureReason(context.l10n, live.error!),
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+          maxLines: 3,
+        ),
       ]),
       _keepRoom(
         visible: !live.finished,
@@ -1274,52 +1238,46 @@ class _SimpleFocusPanelState extends ConsumerState<SimpleFocusPanel> {
         style: AraText.caption,
       ),
       _slot(context, _kFocusGuideReadoutHeight, [
-        if (gated && !status.active) ...[
-          Text(l10n.focusGuideMainFirst, style: AraText.caption),
-          OutlinedButton(
-            key: const Key('simple-guide-already-focused'),
-            onPressed: () =>
-                ref.read(autofocusLiveProvider.notifier).markFocusedManually(),
-            child: Text(l10n.focusAlreadyInFocus),
+      if (gated && !status.active) ...[
+        Text(l10n.focusGuideMainFirst, style: AraText.caption),
+        OutlinedButton(
+          key: const Key('simple-guide-already-focused'),
+          onPressed: () =>
+              ref.read(autofocusLiveProvider.notifier).markFocusedManually(),
+          child: Text(l10n.focusAlreadyInFocus),
+        ),
+      ],
+      if (blocker != null) Text(blocker, style: AraText.caption),
+      if (latest != null)
+        Row(
+          spacing: AraSpace.s4,
+          children: [
+            _figure(l10n.focusStars, '${latest.stars}'),
+            _figure(l10n.focusFrames, '${status.seq}'),
+          ],
+        ),
+      if (hint != null) ...[
+        Text(
+          hint.title,
+          textAlign: TextAlign.center,
+          style: kSimpleText.copyWith(
+            fontWeight: FontWeight.w600,
+            color: switch (hint.advice) {
+              TurnAdvice.atBest => AraColors.accentConnected,
+              TurnAdvice.turnBack => AraColors.accentBusy,
+              _ => AraColors.textPrimary,
+            },
           ),
-        ],
-        if (blocker != null) Text(blocker, style: AraText.caption),
-        if (latest != null)
-          Row(
-            spacing: AraSpace.s4,
-            children: [
-              _figure(l10n.focusStars, '${latest.stars}'),
-              _figure(l10n.focusFrames, '${status.seq}'),
-            ],
-          ),
-        if (hint != null) ...[
-          Text(
-            hint.title,
-            textAlign: TextAlign.center,
-            style: kSimpleText.copyWith(
-              fontWeight: FontWeight.w600,
-              color: switch (hint.advice) {
-                TurnAdvice.atBest => AraColors.accentConnected,
-                TurnAdvice.turnBack => AraColors.accentBusy,
-                _ => AraColors.textPrimary,
-              },
-            ),
-          ),
-          Text(
-            hint.detail,
-            textAlign: TextAlign.center,
-            style: AraText.caption,
-          ),
-        ],
-        if ((live.error == null
-                ? status.error
-                : failureReason(context.l10n, live.error!))
-            case final error?)
-          Text(
-            error,
-            style: kSimpleText.copyWith(color: AraColors.errorText),
-            maxLines: 3,
-          ),
+        ),
+        Text(hint.detail, textAlign: TextAlign.center, style: AraText.caption),
+      ],
+      if ((live.error == null ? status.error : failureReason(context.l10n, live.error!))
+          case final error?)
+        Text(
+          error,
+          style: kSimpleText.copyWith(color: AraColors.errorText),
+          maxLines: 3,
+        ),
       ]),
       Row(
         spacing: AraSpace.s12,
@@ -1366,7 +1324,10 @@ Widget _keepRoom({required bool visible, required Widget child}) => Visibility(
 /// A status line with room for two lines, however short it is.
 Widget _twoLines(String text, TextStyle style) => Stack(
   children: [
-    _keepRoom(visible: false, child: Text('\n', style: style)),
+    _keepRoom(
+      visible: false,
+      child: Text('\n', style: style),
+    ),
     Text(text, style: style, maxLines: 2),
   ],
 );

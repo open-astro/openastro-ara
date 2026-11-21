@@ -37,12 +37,10 @@ class FrameViewer extends ConsumerWidget {
         loading: () => const Center(child: AdaptiveProgressIndicator()),
         error: (e, _) => Center(
           child: Text(
-            friendlyError(
-              context.l10n,
-              e,
-              action: context.l10n.actionLoadPreview,
-            ),
-            style: Theme.of(context).textTheme.bodySmall
+            friendlyError(context.l10n, e, action: context.l10n.actionLoadPreview),
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
                 ?.copyWith(color: AraColors.textSecondary),
           ),
         ),
@@ -88,9 +86,8 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
   Future<void> _resolveSize() async {
     final image = await decodeImageFromList(widget.bytes);
     if (!mounted) return;
-    setState(
-      () => _imageSize = Size(image.width.toDouble(), image.height.toDouble()),
-    );
+    setState(() =>
+        _imageSize = Size(image.width.toDouble(), image.height.toDouble()));
     image.dispose();
   }
 
@@ -105,18 +102,14 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
   /// re-fit it.
   double get _zoom => _transform.value.entry(0, 0);
 
-  double _fitScale(Size viewport, Size image) =>
-      math.min(viewport.width / image.width, viewport.height / image.height);
+  double _fitScale(Size viewport, Size image) => math.min(
+      viewport.width / image.width, viewport.height / image.height);
 
   Matrix4 _fitMatrix(Size viewport, Size image) {
     final s = _fitScale(viewport, image);
     return Matrix4.identity()
-      ..translateByDouble(
-        (viewport.width - image.width * s) / 2,
-        (viewport.height - image.height * s) / 2,
-        0,
-        1,
-      )
+      ..translateByDouble((viewport.width - image.width * s) / 2,
+          (viewport.height - image.height * s) / 2, 0, 1)
       ..scaleByDouble(s, s, 1, 1);
   }
 
@@ -129,12 +122,8 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
       // At fit → 1:1, keeping the double-clicked spot under the cursor.
       final scenePoint = _transform.toScene(_doubleTapAt);
       _transform.value = Matrix4.identity()
-        ..translateByDouble(
-          _doubleTapAt.dx - scenePoint.dx,
-          _doubleTapAt.dy - scenePoint.dy,
-          0,
-          1,
-        );
+        ..translateByDouble(_doubleTapAt.dx - scenePoint.dx,
+            _doubleTapAt.dy - scenePoint.dy, 0, 1);
     } else {
       _transform.value = _fitMatrix(viewport, image);
     }
@@ -142,37 +131,37 @@ class _ZoomableFrameState extends State<_ZoomableFrame> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final viewport = Size(constraints.maxWidth, constraints.maxHeight);
-        final image = _imageSize;
-        if (image != null && _fittedFor != viewport) {
-          // First layout with known dimensions: open at fit-to-window rather
-          // than a 1:1 corner crop. On a plain window RESIZE, only re-fit when
-          // the user was still at fit — a zoomed/panned view they set up
-          // deliberately must survive the resize.
-          final wasAtFit =
-              _fittedFor == null ||
-              (_zoom - _fitScale(_fittedFor!, image)).abs() < 0.01;
-          _fittedFor = viewport;
-          if (wasAtFit) {
-            _transform.value = _fitMatrix(viewport, image);
-          }
+    return LayoutBuilder(builder: (context, constraints) {
+      final viewport = Size(constraints.maxWidth, constraints.maxHeight);
+      final image = _imageSize;
+      if (image != null && _fittedFor != viewport) {
+        // First layout with known dimensions: open at fit-to-window rather
+        // than a 1:1 corner crop. On a plain window RESIZE, only re-fit when
+        // the user was still at fit — a zoomed/panned view they set up
+        // deliberately must survive the resize.
+        final wasAtFit = _fittedFor == null ||
+            (_zoom -
+                        _fitScale(_fittedFor!, image))
+                    .abs() <
+                0.01;
+        _fittedFor = viewport;
+        if (wasAtFit) {
+          _transform.value = _fitMatrix(viewport, image);
         }
-        return GestureDetector(
-          onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
-          onDoubleTap: () => _onDoubleTap(viewport),
-          child: InteractiveViewer(
-            transformationController: _transform,
-            constrained: false,
-            boundaryMargin: const EdgeInsets.all(double.infinity),
-            minScale: 0.05,
-            maxScale: 8,
-            child: Image.memory(widget.bytes, gaplessPlayback: true),
-          ),
-        );
-      },
-    );
+      }
+      return GestureDetector(
+        onDoubleTapDown: (d) => _doubleTapAt = d.localPosition,
+        onDoubleTap: () => _onDoubleTap(viewport),
+        child: InteractiveViewer(
+          transformationController: _transform,
+          constrained: false,
+          boundaryMargin: const EdgeInsets.all(double.infinity),
+          minScale: 0.05,
+          maxScale: 8,
+          child: Image.memory(widget.bytes, gaplessPlayback: true),
+        ),
+      );
+    });
   }
 }
 
@@ -198,11 +187,9 @@ class _LiveView extends StatelessWidget {
                       children: [
                         const AdaptiveProgressIndicator(),
                         const SizedBox(height: 12),
-                        Text(
-                          'Starting Live View…',
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: AraColors.textSecondary),
-                        ),
+                        Text('Starting Live View…',
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AraColors.textSecondary)),
                       ],
                     ),
                   )
@@ -227,16 +214,13 @@ class _LiveView extends StatelessWidget {
                   color: AraColors.accentConnected,
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: const Text(
-                  'LIVE',
-                  style: TextStyle(
-                    // Pinned to black for legibility on the green badge,
-                    // independent of the theme's default foreground.
-                    color: AraColors.imageBackdrop,
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: const Text('LIVE',
+                    style: TextStyle(
+                        // Pinned to black for legibility on the green badge,
+                        // independent of the theme's default foreground.
+                        color: AraColors.imageBackdrop,
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold)),
               ),
             ),
           ),
@@ -245,11 +229,9 @@ class _LiveView extends StatelessWidget {
               bottom: 8,
               left: 8,
               right: 8,
-              child: Text(
-                'Live View: ${state.error}',
-                style: Theme.of(context).textTheme.bodySmall
-                    ?.copyWith(color: AraColors.accentError),
-              ),
+              child: Text('Live View: ${state.error}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AraColors.accentError)),
             ),
         ],
       ),
@@ -272,14 +254,16 @@ class _Placeholder extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'No frame yet',
-              style: Theme.of(context).textTheme.titleMedium
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
               'Take One to capture, or start a sequence in the Sequencer tab',
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textDisabled),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textDisabled,
+                  ),
             ),
           ],
         ),

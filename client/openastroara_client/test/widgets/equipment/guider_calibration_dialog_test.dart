@@ -13,9 +13,7 @@ import 'package:openastroara/widgets/equipment/guider_calibration_dialog.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   @override
-  Future<List<AraServer>> loadAll() async => const [
-    AraServer(hostname: 'h', port: 5555),
-  ];
+  Future<List<AraServer>> loadAll() async => const [AraServer(hostname: 'h', port: 5555)];
   @override
   Future<void> saveAll(List<AraServer> servers) async {}
   @override
@@ -36,7 +34,6 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
     if (throwOnStatus) throw StateError('status failed');
     return response;
   }
-
   @override
   Future<void> buildDarkLibrary({
     int frameCount = 5,
@@ -45,20 +42,20 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
     bool clearExisting = false,
     String? notes,
     bool loadAfter = true,
-  }) async => darkBuilds++;
+  }) async =>
+      darkBuilds++;
   @override
   Future<void> buildDefectMap({
     int exposureMs = 3000,
     int frameCount = 10,
     String? notes,
     bool loadAfter = true,
-  }) async => defectBuilds++;
+  }) async =>
+      defectBuilds++;
   @override
-  Future<void> setDarkLibraryEnabled(bool enabled) async =>
-      darkEnabled = enabled;
+  Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
   @override
-  Future<void> setDefectMapEnabled(bool enabled) async =>
-      defectEnabled = enabled;
+  Future<void> setDefectMapEnabled(bool enabled) async => defectEnabled = enabled;
   int deletes = 0;
   bool? lastDeleteDarks;
   bool? lastDeleteDefectmap;
@@ -84,21 +81,22 @@ CalibrationStatusResponse _connected({
   bool defectExists = false,
   bool defectLoaded = false,
   bool autoLoadDefectMap = false,
-}) => CalibrationStatusResponse(
-  connected: true,
-  status: CalibrationStatus(
-    profileId: 1,
-    darkLibraryExists: darkExists,
-    darkLibraryLoaded: darkLoaded,
-    autoLoadDarks: autoLoadDarks,
-    defectMapExists: defectExists,
-    defectMapLoaded: defectLoaded,
-    autoLoadDefectMap: autoLoadDefectMap,
-    darkCountLoaded: darkLoaded ? 20 : null,
-    darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
-    darkMaxExposureSecondsLoaded: darkLoaded ? 4.0 : null,
-  ),
-);
+}) =>
+    CalibrationStatusResponse(
+      connected: true,
+      status: CalibrationStatus(
+        profileId: 1,
+        darkLibraryExists: darkExists,
+        darkLibraryLoaded: darkLoaded,
+        autoLoadDarks: autoLoadDarks,
+        defectMapExists: defectExists,
+        defectMapLoaded: defectLoaded,
+        autoLoadDefectMap: autoLoadDefectMap,
+        darkCountLoaded: darkLoaded ? 20 : null,
+        darkMinExposureSecondsLoaded: darkLoaded ? 1.0 : null,
+        darkMaxExposureSecondsLoaded: darkLoaded ? 4.0 : null,
+      ),
+    );
 
 // The dialog watches guiderBuildActivityProvider, whose real notifier watches
 // the WS stream (which would dial a socket in tests) — stub it with a fixed map.
@@ -122,30 +120,24 @@ Widget _host(
   GuiderCalibrationClient fake, {
   Map<CalibrationArtifact, CalibrationBuildActivity> builds = const {},
   bool invalidated = false,
-}) => ProviderScope(
-  overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    guiderCalibrationApiFactoryProvider.overrideWithValue((_) => fake),
-    guiderBuildActivityProvider.overrideWith(() => _StubBuildActivity(builds)),
-    guiderDarkLibraryInvalidatedProvider.overrideWith(
-      () => _StubInvalidation(invalidated),
-    ),
-  ],
-  // Embedded in the guider Settings panel now, not a popup.
-  child: const MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(child: GuiderCalibrationSection()),
-    ),
-  ),
-);
+}) =>
+    ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+        guiderCalibrationApiFactoryProvider.overrideWithValue((_) => fake),
+        guiderBuildActivityProvider.overrideWith(() => _StubBuildActivity(builds)),
+        guiderDarkLibraryInvalidatedProvider
+            .overrideWith(() => _StubInvalidation(invalidated)),
+      ],
+      // Embedded in the guider Settings panel now, not a popup.
+      child: const MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: GuiderCalibrationSection())),
+      ),
+    );
 
 Future<void> _open(WidgetTester tester) async {
   await tester.pumpAndSettle();
-  expect(
-    find.byType(Dialog),
-    findsNothing,
-    reason: 'calibration is embedded, not a popup',
-  );
+  expect(find.byType(Dialog), findsNothing, reason: 'calibration is embedded, not a popup');
 }
 
 /// Answers the cover-the-scope confirmation that now precedes every build.
@@ -156,14 +148,8 @@ Future<void> _confirmCover(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('shows dark-library status + loaded detail when connected', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(
-        _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true)),
-      ),
-    );
+  testWidgets('shows dark-library status + loaded detail when connected', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true))));
     await _open(tester);
     expect(find.text('Dark library'), findsOneWidget);
     expect(find.text('Loaded'), findsWidgets);
@@ -171,52 +157,22 @@ void main() {
   });
 
   testWidgets('not connected → manage-calibration prompt', (tester) async {
-    await tester.pumpWidget(
-      _host(
-        _FakeCalibrationClient(
-          const CalibrationStatusResponse(connected: false),
-        ),
-      ),
-    );
+    await tester.pumpWidget(_host(_FakeCalibrationClient(const CalibrationStatusResponse(connected: false))));
     await _open(tester);
-    expect(
-      find.text('Connect the guider to manage calibration.'),
-      findsOneWidget,
-    );
+    expect(find.text('Connect the guider to manage calibration.'), findsOneWidget);
   });
 
-  testWidgets('a status fetch failure renders the neutral error message', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(_FakeCalibrationClient(_connected(), throwOnStatus: true)),
-    );
+  testWidgets('a status fetch failure renders the neutral error message', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(), throwOnStatus: true)));
     await _open(tester);
-    expect(
-      find.text('The last guider request failed. Tap Refresh to recheck.'),
-      findsOneWidget,
-    );
+    expect(find.text('The last guider request failed. Tap Refresh to recheck.'), findsOneWidget);
   });
 
-  testWidgets('connected but no status → status-unavailable (not "connect")', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(
-        _FakeCalibrationClient(
-          const CalibrationStatusResponse(connected: true),
-        ),
-      ),
-    );
+  testWidgets('connected but no status → status-unavailable (not "connect")', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(const CalibrationStatusResponse(connected: true))));
     await _open(tester);
-    expect(
-      find.text('Calibration status unavailable — tap Refresh.'),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Connect the guider to manage calibration.'),
-      findsNothing,
-    );
+    expect(find.text('Calibration status unavailable — tap Refresh.'), findsOneWidget);
+    expect(find.text('Connect the guider to manage calibration.'), findsNothing);
   });
 
   testWidgets('tapping Build dispatches a dark-library build', (tester) async {
@@ -230,30 +186,17 @@ void main() {
     expect(fake.darkBuilds, 1);
   });
 
-  testWidgets(
-    'the enable switch reflects auto-load, not transient loaded state',
-    (tester) async {
-      // Loaded in memory but auto-load disabled — the switch must read OFF.
-      final fake = _FakeCalibrationClient(
-        _connected(darkExists: true, darkLoaded: true),
-      );
-      await tester.pumpWidget(_host(fake));
-      await _open(tester);
-      final sw = tester.widget<Switch>(find.byType(Switch).first);
-      expect(
-        sw.value,
-        isFalse,
-        reason: 'bound to autoLoadDarks (false), not darkLibraryLoaded (true)',
-      );
-    },
-  );
+  testWidgets('the enable switch reflects auto-load, not transient loaded state', (tester) async {
+    // Loaded in memory but auto-load disabled — the switch must read OFF.
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    final sw = tester.widget<Switch>(find.byType(Switch).first);
+    expect(sw.value, isFalse, reason: 'bound to autoLoadDarks (false), not darkLibraryLoaded (true)');
+  });
 
-  testWidgets('toggling the dark-library switch calls setDarkLibraryEnabled', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      _connected(darkExists: true, darkLoaded: true, autoLoadDarks: true),
-    );
+  testWidgets('toggling the dark-library switch calls setDarkLibraryEnabled', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true, autoLoadDarks: true));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
     await tester.tap(find.byType(Switch).first);
@@ -261,146 +204,93 @@ void main() {
     expect(fake.darkEnabled, isFalse, reason: 'auto-load was on → toggled off');
   });
 
-  testWidgets('tapping the defect-map Build dispatches a defect-map build', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      _connected(),
-    ); // neither built → two "Build" buttons
+  testWidgets('tapping the defect-map Build dispatches a defect-map build', (tester) async {
+    final fake = _FakeCalibrationClient(_connected()); // neither built → two "Build" buttons
     await tester.pumpWidget(_host(fake));
     await _open(tester);
-    await tester.tap(
-      find.widgetWithText(TextButton, 'Build').at(1),
-    ); // defect map is the second
+    await tester.tap(find.widgetWithText(TextButton, 'Build').at(1)); // defect map is the second
     await tester.pumpAndSettle();
     await _confirmCover(tester);
     expect(fake.defectBuilds, 1);
   });
 
-  testWidgets(
-    'an already-built dark library shows Rebuild and dispatches a build',
-    (tester) async {
-      final fake = _FakeCalibrationClient(
-        _connected(darkExists: true, darkLoaded: true),
-      );
-      await tester.pumpWidget(_host(fake));
-      await _open(tester);
-      expect(find.widgetWithText(TextButton, 'Rebuild'), findsWidgets);
-      await tester.tap(find.widgetWithText(TextButton, 'Rebuild').first);
-      await tester.pumpAndSettle();
-      await _confirmCover(tester);
-      expect(fake.darkBuilds, 1);
-    },
-  );
+  testWidgets('an already-built dark library shows Rebuild and dispatches a build', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    expect(find.widgetWithText(TextButton, 'Rebuild'), findsWidgets);
+    await tester.tap(find.widgetWithText(TextButton, 'Rebuild').first);
+    await tester.pumpAndSettle();
+    await _confirmCover(tester);
+    expect(fake.darkBuilds, 1);
+  });
 
-  testWidgets('defect-map built-but-not-loaded shows the right state text', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(_FakeCalibrationClient(_connected(defectExists: true))),
-    );
+  testWidgets('defect-map built-but-not-loaded shows the right state text', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(defectExists: true))));
     await _open(tester);
     // Dark library not built → "Not built"; defect map built but not loaded.
     expect(find.text('Built (not loaded)'), findsOneWidget);
     expect(find.text('Not built'), findsOneWidget);
   });
 
-  testWidgets('toggling the defect-map switch calls setDefectMapEnabled', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      _connected(defectExists: true, autoLoadDefectMap: false),
-    );
+  testWidgets('toggling the defect-map switch calls setDefectMapEnabled', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(defectExists: true, autoLoadDefectMap: false));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
     // Defect map is the second artifact / second Switch.
     await tester.tap(find.byType(Switch).at(1));
     await tester.pumpAndSettle();
-    expect(
-      fake.defectEnabled,
-      isTrue,
-      reason: 'auto-load was off → toggled on',
-    );
+    expect(fake.defectEnabled, isTrue, reason: 'auto-load was off → toggled on');
   });
 
-  testWidgets(
-    'cancelling the cover-the-scope confirmation dispatches nothing',
-    (tester) async {
-      final fake = _FakeCalibrationClient(_connected());
-      await tester.pumpWidget(_host(fake));
-      await _open(tester);
-      await tester.tap(find.widgetWithText(TextButton, 'Build').first);
-      await tester.pumpAndSettle();
-      expect(find.text('Cover the scope'), findsOneWidget);
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(fake.darkBuilds, 0, reason: 'no confirm → no 202');
-    },
-  );
+  testWidgets('cancelling the cover-the-scope confirmation dispatches nothing', (tester) async {
+    final fake = _FakeCalibrationClient(_connected());
+    await tester.pumpWidget(_host(fake));
+    await _open(tester);
+    await tester.tap(find.widgetWithText(TextButton, 'Build').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Cover the scope'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(fake.darkBuilds, 0, reason: 'no confirm → no 202');
+  });
 
-  testWidgets(
-    'a building artifact shows the live building state and disables BOTH build buttons',
-    (tester) async {
-      final fake = _FakeCalibrationClient(_connected());
-      await tester.pumpWidget(
-        _host(
-          fake,
-          builds: const {
-            CalibrationArtifact.darkLibrary: CalibrationBuildActivity(
-              phase: CalibrationBuildPhase.building,
-            ),
-          },
-        ),
-      );
-      // No pumpAndSettle: the indeterminate build indicators animate forever.
-      for (var i = 0; i < 5; i++) {
-        await tester.pump(const Duration(milliseconds: 100));
-      }
-      expect(find.text('Building — keep the scope covered.'), findsOneWidget);
-      expect(find.widgetWithText(TextButton, 'Building…'), findsOneWidget);
-      // One camera, one build: the defect-map Build must be disabled too.
-      final defectBuild = tester.widget<TextButton>(
-        find.widgetWithText(TextButton, 'Build').first,
-      );
-      expect(defectBuild.onPressed, isNull, reason: 'shared single-build gate');
-    },
-  );
+  testWidgets('a building artifact shows the live building state and disables BOTH build buttons', (tester) async {
+    final fake = _FakeCalibrationClient(_connected());
+    await tester.pumpWidget(_host(fake, builds: const {
+      CalibrationArtifact.darkLibrary:
+          CalibrationBuildActivity(phase: CalibrationBuildPhase.building),
+    }));
+    // No pumpAndSettle: the indeterminate build indicators animate forever.
+    for (var i = 0; i < 5; i++) {
+      await tester.pump(const Duration(milliseconds: 100));
+    }
+    expect(find.text('Building — keep the scope covered.'), findsOneWidget);
+    expect(find.widgetWithText(TextButton, 'Building…'), findsOneWidget);
+    // One camera, one build: the defect-map Build must be disabled too.
+    final defectBuild = tester.widget<TextButton>(find.widgetWithText(TextButton, 'Build').first);
+    expect(defectBuild.onPressed, isNull, reason: 'shared single-build gate');
+  });
 
-  testWidgets('a failed build renders its error from the WS payload', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _host(
-        _FakeCalibrationClient(_connected()),
-        builds: const {
-          CalibrationArtifact.defectMap: CalibrationBuildActivity(
-            phase: CalibrationBuildPhase.failed,
-            error: 'camera timeout',
-          ),
-        },
-      ),
-    );
+  testWidgets('a failed build renders its error from the WS payload', (tester) async {
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected()), builds: const {
+      CalibrationArtifact.defectMap: CalibrationBuildActivity(
+          phase: CalibrationBuildPhase.failed, error: 'camera timeout'),
+    }));
     await _open(tester);
     expect(find.text('Build failed: camera timeout'), findsOneWidget);
   });
 
-  testWidgets('Delete is disabled when the artifact is not built', (
-    tester,
-  ) async {
+  testWidgets('Delete is disabled when the artifact is not built', (tester) async {
     await tester.pumpWidget(_host(_FakeCalibrationClient(_connected())));
     await _open(tester);
     final del = tester.widget<TextButton>(
-      find.widgetWithText(TextButton, 'Delete').first,
-    );
+        find.widgetWithText(TextButton, 'Delete').first);
     expect(del.onPressed, isNull);
   });
 
-  testWidgets('deleting the dark library confirms, then DELETEs darks only', (
-    tester,
-  ) async {
-    final fake = _FakeCalibrationClient(
-      _connected(darkExists: true, darkLoaded: true),
-    );
+  testWidgets('deleting the dark library confirms, then DELETEs darks only', (tester) async {
+    final fake = _FakeCalibrationClient(_connected(darkExists: true, darkLoaded: true));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
     // Dark library is the first artifact → the first Delete button.
@@ -416,15 +306,11 @@ void main() {
     expect(fake.lastDeleteDefectmap, isFalse, reason: 'the defect map is kept');
   });
 
-  testWidgets('deleting the defect map DELETEs the defect map only', (
-    tester,
-  ) async {
+  testWidgets('deleting the defect map DELETEs the defect map only', (tester) async {
     final fake = _FakeCalibrationClient(_connected(defectExists: true));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
-    await tester.tap(
-      find.widgetWithText(TextButton, 'Delete').at(1),
-    ); // defect map is second
+    await tester.tap(find.widgetWithText(TextButton, 'Delete').at(1)); // defect map is second
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
@@ -433,9 +319,7 @@ void main() {
     expect(fake.lastDeleteDefectmap, isTrue);
   });
 
-  testWidgets('cancelling the delete confirmation dispatches nothing', (
-    tester,
-  ) async {
+  testWidgets('cancelling the delete confirmation dispatches nothing', (tester) async {
     final fake = _FakeCalibrationClient(_connected(darkExists: true));
     await tester.pumpWidget(_host(fake));
     await _open(tester);
@@ -446,15 +330,9 @@ void main() {
     expect(fake.deletes, 0);
   });
 
-  testWidgets('the invalidation banner shows when flagged and is dismissible', (
-    tester,
-  ) async {
+  testWidgets('the invalidation banner shows when flagged and is dismissible', (tester) async {
     await tester.pumpWidget(
-      _host(
-        _FakeCalibrationClient(_connected(darkExists: true)),
-        invalidated: true,
-      ),
-    );
+        _host(_FakeCalibrationClient(_connected(darkExists: true)), invalidated: true));
     await _open(tester);
     expect(find.textContaining('Guide camera changed'), findsOneWidget);
     await tester.tap(find.byTooltip('Dismiss'));
@@ -463,81 +341,60 @@ void main() {
   });
 
   testWidgets('no banner when the flag is off', (tester) async {
-    await tester.pumpWidget(
-      _host(_FakeCalibrationClient(_connected(darkExists: true))),
-    );
+    await tester.pumpWidget(_host(_FakeCalibrationClient(_connected(darkExists: true))));
     await _open(tester);
     expect(find.textContaining('Guide camera changed'), findsNothing);
   });
 
   group('describeCalibrationActionError', () {
     DioException problem409(Object? data) => DioException(
-      requestOptions: RequestOptions(path: '/darklibrary/build'),
-      response: Response<Object?>(
-        requestOptions: RequestOptions(path: '/darklibrary/build'),
-        statusCode: 409,
-        data: data,
-      ),
-    );
+          requestOptions: RequestOptions(path: '/darklibrary/build'),
+          response: Response<Object?>(
+            requestOptions: RequestOptions(path: '/darklibrary/build'),
+            statusCode: 409,
+            data: data,
+          ),
+        );
 
     test('decodes application/problem+json delivered as a RAW STRING (Dio does not auto-parse it)', () {
       // Dio's default transformer only JSON-decodes application/json; the
       // daemon's Results.Problem responses are application/problem+json and
       // arrive as a string — the review-caught path.
-      final msg = describeCalibrationActionError(
-        problem409(
-          '{"type":"$kBuildInProgressProblemType","title":"conflict","status":409}',
-        ),
-      );
+      final msg = describeCalibrationActionError(problem409(
+          '{"type":"$kBuildInProgressProblemType","title":"conflict","status":409}'));
       expect(msg, contains('already running'));
     });
 
     test('still handles an already-decoded Map body', () {
       final msg = describeCalibrationActionError(
-        problem409({'type': kGuiderNotConnectedProblemType}),
-      );
+          problem409({'type': kGuiderNotConnectedProblemType}));
       expect(msg, contains('not connected'));
     });
 
-    test(
-      'a 422 surfaces the daemon problem detail, or an actionable generic',
-      () {
-        DioException rejection(Object? data) => DioException(
-          requestOptions: RequestOptions(path: '/darklibrary'),
-          response: Response<Object?>(
+    test('a 422 surfaces the daemon problem detail, or an actionable generic', () {
+      DioException rejection(Object? data) => DioException(
             requestOptions: RequestOptions(path: '/darklibrary'),
-            statusCode: 422,
-            data: data,
-          ),
-        );
-        expect(
-          describeCalibrationActionError(
-            rejection(
-              '{"title":"rejected","status":422,"detail":"capture active"}',
+            response: Response<Object?>(
+              requestOptions: RequestOptions(path: '/darklibrary'),
+              statusCode: 422,
+              data: data,
             ),
-          ),
-          'capture active',
-        );
-        expect(
-          describeCalibrationActionError(rejection('{"status":422}')),
-          contains('rejected the request'),
-        );
-      },
-    );
+          );
+      expect(
+          describeCalibrationActionError(
+              rejection('{"title":"rejected","status":422,"detail":"capture active"}')),
+          'capture active');
+      expect(describeCalibrationActionError(rejection('{"status":422}')),
+          contains('rejected the request'));
+    });
 
     test('non-JSON string bodies and unknown types fall through to the neutral hint', () {
-      expect(
-        describeCalibrationActionError(problem409('<html>teapot</html>')),
-        contains('Tap Refresh'),
-      );
-      expect(
-        describeCalibrationActionError(problem409('{"type":"something-else"}')),
-        contains('Tap Refresh'),
-      );
-      expect(
-        describeCalibrationActionError(StateError('plain failure')),
-        contains('Tap Refresh'),
-      );
+      expect(describeCalibrationActionError(problem409('<html>teapot</html>')),
+          contains('Tap Refresh'));
+      expect(describeCalibrationActionError(problem409('{"type":"something-else"}')),
+          contains('Tap Refresh'));
+      expect(describeCalibrationActionError(StateError('plain failure')),
+          contains('Tap Refresh'));
     });
   });
 }

@@ -33,10 +33,7 @@ class WsEvent {
     final type = json['type'];
     final seq = json['seq'];
     if (type is! String || seq is! int) {
-      throw FormatException(
-        'WsEvent frame missing string "type" / int "seq"',
-        json,
-      );
+      throw FormatException('WsEvent frame missing string "type" / int "seq"', json);
     }
     return WsEvent(
       type: type,
@@ -53,8 +50,7 @@ class WsEvent {
 
   static DateTime _parseTs(dynamic ts) {
     if (ts is String) {
-      return DateTime.tryParse(ts) ??
-          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      return DateTime.tryParse(ts) ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
     return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
   }

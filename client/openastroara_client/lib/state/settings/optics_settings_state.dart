@@ -95,15 +95,16 @@ class OpticsSettings {
     double? pixelSizeUm,
     double? apertureMm,
     String? telescopeName,
-  }) => OpticsSettings(
-    focalLengthMm: focalLengthMm ?? this.focalLengthMm,
-    reducerFactor: reducerFactor ?? this.reducerFactor,
-    sensorWidthPx: sensorWidthPx ?? this.sensorWidthPx,
-    sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
-    pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
-    apertureMm: apertureMm ?? this.apertureMm,
-    telescopeName: telescopeName ?? this.telescopeName,
-  );
+  }) =>
+      OpticsSettings(
+        focalLengthMm: focalLengthMm ?? this.focalLengthMm,
+        reducerFactor: reducerFactor ?? this.reducerFactor,
+        sensorWidthPx: sensorWidthPx ?? this.sensorWidthPx,
+        sensorHeightPx: sensorHeightPx ?? this.sensorHeightPx,
+        pixelSizeUm: pixelSizeUm ?? this.pixelSizeUm,
+        apertureMm: apertureMm ?? this.apertureMm,
+        telescopeName: telescopeName ?? this.telescopeName,
+      );
 }
 
 /// ADR 0015 — a value only once the rig has answered. Loads itself: planning,

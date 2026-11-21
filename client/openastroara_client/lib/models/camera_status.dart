@@ -90,18 +90,12 @@ class CameraCapabilities {
       // Absent on a pre-§25.5.5 daemon → fall back to canSetTemperature, which
       // reproduces the old cooler-UI gating exactly.
       hasCooler: json['has_cooler'] as bool? ?? canSetTemperature,
-      readoutModes:
-          (json['readout_modes'] as List?)?.whereType<String>().toList() ??
-          const [],
+      readoutModes: (json['readout_modes'] as List?)?.whereType<String>().toList() ?? const [],
       pixelSizeUmY: d('pixel_size_um_y'),
       sensorType: json['sensor_type'] as String?,
       hasShutter: json['has_shutter'] as bool? ?? false,
-      gains:
-          (json['gains'] as List?)?.map((g) => g.toString()).toList() ??
-          const [],
-      offsets:
-          (json['offsets'] as List?)?.map((o) => o.toString()).toList() ??
-          const [],
+      gains: (json['gains'] as List?)?.map((g) => g.toString()).toList() ?? const [],
+      offsets: (json['offsets'] as List?)?.map((o) => o.toString()).toList() ?? const [],
       exposureResolutionSec: d('exposure_resolution_sec'),
       minGain: i('min_gain'),
       maxGain: i('max_gain'),
@@ -147,30 +141,30 @@ class CameraCapabilities {
 
   @override
   int get hashCode => Object.hashAll([
-    sensorWidth,
-    sensorHeight,
-    pixelSizeUm,
-    canSetTemperature,
-    hasCooler,
-    Object.hashAll(readoutModes),
-    pixelSizeUmY,
-    sensorType,
-    hasShutter,
-    Object.hashAll(gains),
-    Object.hashAll(offsets),
-    exposureResolutionSec,
-    minGain,
-    maxGain,
-    minOffset,
-    maxOffset,
-    minBinX,
-    maxBinX,
-    minBinY,
-    maxBinY,
-    minExposureSec,
-    maxExposureSec,
-    bayerPattern,
-  ]);
+        sensorWidth,
+        sensorHeight,
+        pixelSizeUm,
+        canSetTemperature,
+        hasCooler,
+        Object.hashAll(readoutModes),
+        pixelSizeUmY,
+        sensorType,
+        hasShutter,
+        Object.hashAll(gains),
+        Object.hashAll(offsets),
+        exposureResolutionSec,
+        minGain,
+        maxGain,
+        minOffset,
+        maxOffset,
+        minBinX,
+        maxBinX,
+        minBinY,
+        maxBinY,
+        minExposureSec,
+        maxExposureSec,
+        bayerPattern,
+      ]);
 }
 
 /// #1663 — the switch port that is the camera's own anti-dew heater: the
@@ -251,8 +245,7 @@ class CameraStatus extends EquipmentDeviceStatus {
     this.coolerNotResponding = false,
   });
 
-  bool get isExposing =>
-      runtimeState == 'exposing' || runtimeState == 'downloading';
+  bool get isExposing => runtimeState == 'exposing' || runtimeState == 'downloading';
 
   @override
   bool get isBusy => isExposing;
@@ -260,18 +253,13 @@ class CameraStatus extends EquipmentDeviceStatus {
   factory CameraStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic>
-        ? runtime
-        : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
     return CameraStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(
-        json['state'] as String?,
-      ),
-      capabilities: caps is Map<String, dynamic>
-          ? CameraCapabilities.fromJson(caps)
-          : null,
+      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
+      capabilities:
+          caps is Map<String, dynamic> ? CameraCapabilities.fromJson(caps) : null,
       runtimeState: r['state'] as String? ?? '',
       ccdTemperature: (r['ccd_temperature'] as num?)?.toDouble(),
       coolerPowerPct: (r['cooler_power_pct'] as num?)?.toDouble(),
@@ -305,20 +293,8 @@ class CameraStatus extends EquipmentDeviceStatus {
           other.coolerNotResponding == coolerNotResponding);
 
   @override
-  int get hashCode => Object.hash(
-    deviceId,
-    name,
-    connectionState,
-    capabilities,
-    runtimeState,
-    ccdTemperature,
-    coolerPowerPct,
-    coolerOn,
-    exposureProgressPct,
-    coolerSetpointC,
-    readoutMode,
-    heatSinkTemperatureC,
-    dewHeater,
-    coolerNotResponding,
-  );
+  int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
+      runtimeState, ccdTemperature, coolerPowerPct, coolerOn, exposureProgressPct,
+      coolerSetpointC, readoutMode, heatSinkTemperatureC, dewHeater,
+      coolerNotResponding);
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-
 import '../help_icon.dart';
 import '../../theme/ara_colors.dart';
 
@@ -103,8 +102,7 @@ class _EditableTextRowState extends State<EditableTextRow> {
                       ),
                     ),
                   ),
-                  if (widget.helpKey != null)
-                    HelpIcon(helpKey: widget.helpKey!),
+                  if (widget.helpKey != null) HelpIcon(helpKey: widget.helpKey!),
                 ],
               ),
             ),

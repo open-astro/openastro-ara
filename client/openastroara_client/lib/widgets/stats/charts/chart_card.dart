@@ -41,8 +41,9 @@ class ChartCard extends StatelessWidget {
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: AraColors.textSecondary),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
                 ),
               ],
             ),

@@ -69,25 +69,19 @@ void main() {
     expect(s.isRunning, isTrue);
     expect(s.fraction, 0.25);
     expect(s.folders, ['manual/M31']);
-    expect(
-      const StorageCopyStatus(state: 'preparing').fraction,
-      isNull,
-      reason: 'no total while the file list is built',
-    );
+    expect(const StorageCopyStatus(state: 'preparing').fraction, isNull,
+        reason: 'no total while the file list is built');
   });
 
   test('a finished copy says what was copied, skipped and left alone', () {
-    final lines = copySummary(
-      _en,
-      const StorageCopyStatus(
-        state: 'done',
-        filesCopied: 3,
-        bytesCopied: 2600000000,
-        filesSkipped: 2,
-        filesConflicting: 1,
-        targetReleased: true,
-      ),
-    );
+    final lines = copySummary(_en, const StorageCopyStatus(
+      state: 'done',
+      filesCopied: 3,
+      bytesCopied: 2600000000,
+      filesSkipped: 2,
+      filesConflicting: 1,
+      targetReleased: true,
+    ));
     expect(lines, [
       'Copied 3 files (2.6 GB).',
       '2 files were already on the drive.',
@@ -98,109 +92,65 @@ void main() {
 
   test('a re-run with nothing new says so', () {
     expect(
-      copySummary(
-        _en,
-        const StorageCopyStatus(
-          state: 'done',
-          filesSkipped: 5,
-          targetReleased: true,
-        ),
-      ).first,
-      'Nothing new to copy.',
-    );
+        copySummary(_en, const StorageCopyStatus(
+                state: 'done', filesSkipped: 5, targetReleased: true))
+            .first,
+        'Nothing new to copy.');
   });
 
   test('a drive left mounted asks for an eject', () {
-    final lines = copySummary(
-      _en,
-      const StorageCopyStatus(
-        state: 'done',
-        filesCopied: 1,
-        errorCode: 'release_failed',
-      ),
-    );
+    final lines = copySummary(_en, const StorageCopyStatus(
+        state: 'done', filesCopied: 1, errorCode: 'release_failed'));
     expect(lines.last, contains('Eject it before unplugging'));
   });
 
   test('failures read in the user\'s terms', () {
-    expect(
-      copyFailureMessage(
-        _en,
-        'not_enough_space',
-        null,
-        bytesToCopy: 5000000000,
-      ),
-      'The drive doesn\'t have room for 5.0 GB.',
-    );
-    expect(
-      copyFailureMessage(_en, 'refused', 'is_store'),
-      'That drive is the one frames are saved to.',
-    );
-    expect(
-      copyFailureMessage(_en, 'device_busy', 'mounted_elsewhere'),
-      contains('somewhere else'),
-    );
-    expect(
-      copyFailureMessage(_en, 'exfat_unsupported', null),
-      'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.',
-    );
-    expect(
-      copyFailureMessage(_en, 'weird', 'helper said so'),
-      'helper said so',
-    );
+    expect(copyFailureMessage(_en, 'not_enough_space', null, bytesToCopy: 5000000000),
+        'The drive doesn\'t have room for 5.0 GB.');
+    expect(copyFailureMessage(_en, 'refused', 'is_store'),
+        'That drive is the one frames are saved to.');
+    expect(copyFailureMessage(_en, 'device_busy', 'mounted_elsewhere'),
+        contains('somewhere else'));
+    expect(copyFailureMessage(_en, 'exfat_unsupported', null),
+        'This server can\'t read exFAT drives. Erase the drive as ext4 and ARA can use it.');
+    expect(copyFailureMessage(_en, 'weird', 'helper said so'), 'helper said so');
   });
 
-  test(
-    'the exFAT refusal reads in the app language, as the disk chooser does',
-    () {
-      expect(
-        copyFailureMessage(_pt, 'exfat_unsupported', null),
-        _pt.storageConfigureExfatUnsupported,
-      );
-      expect(
-        _pt.storageConfigureExfatUnsupported,
-        isNot(_en.storageConfigureExfatUnsupported),
-      );
-    },
-  );
+  test('the exFAT refusal reads in the app language, as the disk chooser does', () {
+    expect(copyFailureMessage(_pt, 'exfat_unsupported', null), _pt.storageConfigureExfatUnsupported);
+    expect(_pt.storageConfigureExfatUnsupported, isNot(_en.storageConfigureExfatUnsupported));
+  });
 
   Future<void> pump(WidgetTester tester, List<StorageDevice> devices) async {
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          storageDevicesProvider.overrideWith((ref) async => devices),
-          storageCopyStatusProvider.overrideWith(
-            (ref) => Stream.value(StorageCopyStatus.idle),
-          ),
-        ],
-        child: MaterialApp(
-          home: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showStorageCopyDialog(context),
-              child: const Text('open'),
-            ),
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        storageDevicesProvider.overrideWith((ref) async => devices),
+        storageCopyStatusProvider
+            .overrideWith((ref) => Stream.value(StorageCopyStatus.idle)),
+      ],
+      child: MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showStorageCopyDialog(context),
+            child: const Text('open'),
           ),
         ),
       ),
-    );
+    ));
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('with no second drive the dialog says to plug one in', (
-    tester,
-  ) async {
+  testWidgets('with no second drive the dialog says to plug one in',
+      (tester) async {
     await pump(tester, [_store, _root]);
     expect(find.textContaining('No other drive to copy to'), findsOneWidget);
   });
 
   testWidgets('Copy waits for a target drive to be picked', (tester) async {
     await pump(tester, [_store, _other, _root]);
-    expect(
-      find.text('From ARA-DISK (USB 3.0 FD) to:'),
-      findsOneWidget,
-      reason: 'both drives are ARA-DISK; the model tells them apart',
-    );
+    expect(find.text('From ARA-DISK (USB 3.0 FD) to:'), findsOneWidget,
+        reason: 'both drives are ARA-DISK; the model tells them apart');
     FilledButton copy() =>
         tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Copy'));
     expect(copy().onPressed, isNull);

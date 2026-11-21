@@ -60,8 +60,9 @@ class _SessionCalibrationPanelState
             'start; panel flats start automatically when the run ends (light '
             'your panel when notified); sky flats are generated ready to run '
             'at twilight.',
-            style: Theme.of(context).textTheme.bodyMedium
-                ?.copyWith(color: AraColors.textSecondary),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: AraColors.textSecondary),
           ),
         ),
         SettingsDropdownRow<CalibrationCaptureDefault>(

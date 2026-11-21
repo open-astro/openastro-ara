@@ -11,8 +11,7 @@ class LastRig {
   final String? uuid;
 
   @override
-  bool operator ==(Object other) =>
-      other is LastRig && other.name == name && other.uuid == uuid;
+  bool operator ==(Object other) => other is LastRig && other.name == name && other.uuid == uuid;
 
   @override
   int get hashCode => Object.hash(name, uuid);
@@ -30,7 +29,7 @@ class LastRigService {
   /// [supportDir] overrides the app-support directory lookup (tests use a
   /// temp dir; production uses path_provider).
   LastRigService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
 
@@ -45,10 +44,7 @@ class LastRigService {
       final decoded = jsonDecode(await f.readAsString());
       if (decoded is! Map || decoded['name'] is! String) return null;
       final uuid = decoded['uuid'];
-      return LastRig(
-        decoded['name'] as String,
-        uuid: uuid is String ? uuid : null,
-      );
+      return LastRig(decoded['name'] as String, uuid: uuid is String ? uuid : null);
     } catch (_) {
       return null;
     }
@@ -57,9 +53,8 @@ class LastRigService {
   Future<void> save(LastRig rig) async {
     try {
       await (await _file()).writeAsString(
-        jsonEncode({'name': rig.name, if (rig.uuid != null) 'uuid': rig.uuid}),
-        flush: true,
-      );
+          jsonEncode({'name': rig.name, if (rig.uuid != null) 'uuid': rig.uuid}),
+          flush: true);
     } catch (_) {
       /* best effort — a failed write only means one more tap next launch */
     }

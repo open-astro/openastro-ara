@@ -35,14 +35,14 @@ class CustomTarget {
   /// The local mirror's JSON (and the profile's wire shape, which uses the
   /// same keys but `typed_as_j_now`; [toWire] / [fromWire] handle that).
   Map<String, Object?> toJson() => {
-    'name': name,
-    'ra_deg': raDeg,
-    'dec_deg': decDeg,
-    'jnow': typedAsJNow,
-    'saved_utc': savedUtc.toUtc().toIso8601String(),
-    if (aliases.isNotEmpty) 'aliases': aliases,
-    'source': source,
-  };
+        'name': name,
+        'ra_deg': raDeg,
+        'dec_deg': decDeg,
+        'jnow': typedAsJNow,
+        'saved_utc': savedUtc.toUtc().toIso8601String(),
+        if (aliases.isNotEmpty) 'aliases': aliases,
+        'source': source,
+      };
 
   /// RA in 0..360 as the daemon stores it, so an entry typed at 360.0 or a
   /// negative RA does not read as a difference to push on every build.
@@ -50,14 +50,14 @@ class CustomTarget {
 
   /// The profile section's wire shape (`PUT /profile/saved-targets`).
   Map<String, Object?> toWire() => {
-    'name': name,
-    'aliases': aliases,
-    'ra_deg': raDegWrapped,
-    'dec_deg': decDeg,
-    'source': source,
-    'saved_utc': savedUtc.toUtc().toIso8601String(),
-    'typed_as_j_now': typedAsJNow,
-  };
+        'name': name,
+        'aliases': aliases,
+        'ra_deg': raDegWrapped,
+        'dec_deg': decDeg,
+        'source': source,
+        'saved_utc': savedUtc.toUtc().toIso8601String(),
+        'typed_as_j_now': typedAsJNow,
+      };
 
   static CustomTarget? fromWire(Object? raw) {
     if (raw is! Map) return null;
@@ -85,7 +85,7 @@ class CustomTarget {
       source: source is String && source.isNotEmpty ? source : 'typed',
       savedUtc: saved is String
           ? (DateTime.tryParse(saved)?.toUtc() ??
-                DateTime.fromMillisecondsSinceEpoch(0, isUtc: true))
+              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true))
           : DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
     );
   }
@@ -109,8 +109,7 @@ bool isAcceptableSavedTarget(CustomTarget t) {
   if (name.codeUnits.any((c) => c < 0x20 || (c >= 0x7F && c <= 0x9F))) {
     return false;
   }
-  if (!t.raDeg.isFinite || !t.decDeg.isFinite || t.decDeg.abs() > 90)
-    return false;
+  if (!t.raDeg.isFinite || !t.decDeg.isFinite || t.decDeg.abs() > 90) return false;
   return const {'typed', 'index', 'cache', 'simbad'}.contains(t.source);
 }
 
@@ -122,7 +121,7 @@ bool isAcceptableSavedTarget(CustomTarget t) {
 /// first scope used. Writes are serialised and atomic (temp + rename).
 class CustomTargetsService {
   CustomTargetsService({Future<Directory> Function()? supportDir})
-    : _supportDir = supportDir ?? getApplicationSupportDirectory;
+      : _supportDir = supportDir ?? getApplicationSupportDirectory;
 
   final Future<Directory> Function() _supportDir;
   static const _fileName = 'custom_targets.json';
@@ -137,30 +136,21 @@ class CustomTargetsService {
   Future<Map<String, Object?>> _read() async {
     try {
       final f = await _file();
-      if (!await f.exists())
-        return {'last_scope': null, 'scopes': <String, Object?>{}};
+      if (!await f.exists()) return {'last_scope': null, 'scopes': <String, Object?>{}};
       final decoded = jsonDecode(await f.readAsString());
       if (decoded is List) {
         // A pre-#1267 mirror: one device-wide list. Adopted by the first
         // scope that reads it (see loadScope).
-        return {
-          'last_scope': null,
-          'scopes': <String, Object?>{},
-          'legacy': decoded,
-        };
+        return {'last_scope': null, 'scopes': <String, Object?>{}, 'legacy': decoded};
       }
       if (decoded is Map) {
         return {
           'last_scope': decoded['last_scope'],
-          'scopes': decoded['scopes'] is Map
-              ? Map<String, Object?>.from(decoded['scopes'] as Map)
-              : <String, Object?>{},
+          'scopes': decoded['scopes'] is Map ? Map<String, Object?>.from(decoded['scopes'] as Map) : <String, Object?>{},
           if (decoded['legacy'] is List) 'legacy': decoded['legacy'],
         };
       }
-    } catch (_) {
-      /* unreadable: start empty */
-    }
+    } catch (_) {/* unreadable: start empty */}
     return {'last_scope': null, 'scopes': <String, Object?>{}};
   }
 
@@ -170,9 +160,7 @@ class CustomTargetsService {
       final part = File('${f.path}.part');
       await part.writeAsString(jsonEncode(doc), flush: true);
       await part.rename(f.path);
-    } catch (_) {
-      /* best effort */
-    }
+    } catch (_) {/* best effort */}
   }
 
   static ScopedTargets _scopeOf(Map<String, Object?> doc, String? scope) {
@@ -183,12 +171,7 @@ class CustomTargetsService {
       final b = raw['base'];
       return ScopedTargets(
         t is List ? [for (final e in t) ?CustomTarget.fromJson(e)] : const [],
-        b is List
-            ? {
-                for (final e in b)
-                  if (e is String) e,
-              }
-            : const {},
+        b is List ? {for (final e in b) if (e is String) e} : const {},
       );
     }
     // A scope with nothing yet adopts what was saved before this device had a
@@ -198,21 +181,13 @@ class CustomTargetsService {
     }
     final legacy = doc['legacy'];
     if (legacy is List) {
-      return ScopedTargets([
-        for (final e in legacy) ?CustomTarget.fromJson(e),
-      ], const {});
+      return ScopedTargets([for (final e in legacy) ?CustomTarget.fromJson(e)], const {});
     }
     return ScopedTargets.empty;
   }
 
-  static Map<String, Object?> _withScope(
-    Map<String, Object?> doc,
-    String scope,
-    ScopedTargets s,
-  ) {
-    final scopes = Map<String, Object?>.from(
-      doc['scopes'] as Map<String, Object?>,
-    );
+  static Map<String, Object?> _withScope(Map<String, Object?> doc, String scope, ScopedTargets s) {
+    final scopes = Map<String, Object?>.from(doc['scopes'] as Map<String, Object?>);
     if (scope != 'local' && !scopes.containsKey(scope)) {
       scopes.remove('local'); // adopted into this scope (see _scopeOf)
     }
@@ -236,10 +211,8 @@ class CustomTargetsService {
   Future<List<CustomTarget>> load({String? scope}) async =>
       (await loadScope(scope)).targets;
 
-  Future<ScopedTargets> _mutate(
-    String? scope,
-    ScopedTargets Function(ScopedTargets current) apply,
-  ) {
+  Future<ScopedTargets> _mutate(String? scope,
+      ScopedTargets Function(ScopedTargets current) apply) {
     final task = _chain.then((_) async {
       final doc = await _read();
       final key = scope ?? doc['last_scope'] as String? ?? 'local';
@@ -255,50 +228,35 @@ class CustomTargetsService {
   /// the merge treats it as new even when another client forgot that name
   /// since the last sync (otherwise the re-add would be dropped as "the
   /// profile forgot it"; review r3).
-  Future<List<CustomTarget>> remember(
-    CustomTarget target, {
-    String? scope,
-  }) async => (await _mutate(
-    scope,
-    (cur) => ScopedTargets(
-      [
-        target,
-        ...cur.targets.where((t) => nameKey(t) != nameKey(target)),
-      ].take(maxEntries).toList(),
-      cur.base.difference({nameKey(target)}),
-    ),
-  )).targets;
+  Future<List<CustomTarget>> remember(CustomTarget target, {String? scope}) async =>
+      (await _mutate(scope, (cur) => ScopedTargets(
+            [
+              target,
+              ...cur.targets.where((t) => nameKey(t) != nameKey(target)),
+            ].take(maxEntries).toList(),
+            cur.base.difference({nameKey(target)}),
+          )))
+          .targets;
 
-  Future<List<CustomTarget>> forget(
-    CustomTarget target, {
-    String? scope,
-  }) async => (await _mutate(
-    scope,
-    (cur) => ScopedTargets(
-      cur.targets.where((t) => nameKey(t) != nameKey(target)).toList(),
-      cur.base,
-    ),
-  )).targets;
+  Future<List<CustomTarget>> forget(CustomTarget target, {String? scope}) async =>
+      (await _mutate(scope, (cur) => ScopedTargets(
+            cur.targets.where((t) => nameKey(t) != nameKey(target)).toList(),
+            cur.base,
+          )))
+          .targets;
 
   /// After a successful sync: the scope's targets ARE the profile's list, and
   /// the base is what the profile holds now.
-  Future<List<CustomTarget>> commitSync(
-    String scope,
-    List<CustomTarget> synced,
-  ) async => (await _mutate(
-    scope,
-    (_) => ScopedTargets(synced.take(maxEntries).toList(), {
-      for (final t in synced) nameKey(t),
-    }),
-  )).targets;
+  Future<List<CustomTarget>> commitSync(String scope, List<CustomTarget> synced) async =>
+      (await _mutate(scope, (_) => ScopedTargets(
+            synced.take(maxEntries).toList(),
+            {for (final t in synced) nameKey(t)},
+          )))
+          .targets;
 
   /// Replace a scope's targets, keeping its base (a failed push keeps the
   /// merged list locally).
-  Future<List<CustomTarget>> replaceAll(
-    List<CustomTarget> targets, {
-    String? scope,
-  }) async => (await _mutate(
-    scope,
-    (cur) => ScopedTargets(targets.take(maxEntries).toList(), cur.base),
-  )).targets;
+  Future<List<CustomTarget>> replaceAll(List<CustomTarget> targets, {String? scope}) async =>
+      (await _mutate(scope, (cur) => ScopedTargets(targets.take(maxEntries).toList(), cur.base)))
+          .targets;
 }

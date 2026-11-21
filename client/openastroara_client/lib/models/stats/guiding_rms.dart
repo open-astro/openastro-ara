@@ -25,8 +25,7 @@ class GuidingRmsPoint {
     this.decRms,
   });
 
-  factory GuidingRmsPoint.fromJson(Map<String, dynamic> json) =>
-      GuidingRmsPoint(
+  factory GuidingRmsPoint.fromJson(Map<String, dynamic> json) => GuidingRmsPoint(
         timestamp: parseStatsUtc(json['timestamp']),
         rmsArcsec: _dbl(json['rms_arcsec']),
         raRms: _dblOrNull(json['ra_rms']),

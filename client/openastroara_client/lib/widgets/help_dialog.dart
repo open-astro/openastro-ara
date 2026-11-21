@@ -17,7 +17,10 @@ import '../theme/ara_colors.dart';
 /// with daemon health (`/api/v1/server/info`), recent log tail, and last
 /// sequence state snapshot.
 Future<void> showHelpDialog(BuildContext context) async {
-  await showDialog<void>(context: context, builder: (_) => const _HelpDialog());
+  await showDialog<void>(
+    context: context,
+    builder: (_) => const _HelpDialog(),
+  );
 }
 
 const String _kRepoUrl = 'https://github.com/open-astro/openastro-ara';
@@ -55,53 +58,53 @@ class _HelpDialog extends ConsumerWidget {
         width: 480,
         child: SingleChildScrollView(
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Found a bug or have a question? Open an issue on GitHub. '
-                'The Copy diagnostics button below puts the build info on your '
-                'clipboard — paste it into the issue body so we have context.',
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Found a bug or have a question? Open an issue on GitHub. '
+              'The Copy diagnostics button below puts the build info on your '
+              'clipboard — paste it into the issue body so we have context.',
+            ),
+            const SizedBox(height: 16),
+            _DiagnosticRow(
+              label: 'App version',
+              value: appVersion.when(
+                data: (v) => v,
+                loading: () => '(loading...)',
+                error: (_, _) => '(unknown)',
               ),
-              const SizedBox(height: 16),
-              _DiagnosticRow(
-                label: 'App version',
-                value: appVersion.when(
-                  data: (v) => v,
-                  loading: () => '(loading...)',
-                  error: (_, _) => '(unknown)',
-                ),
+            ),
+            _DiagnosticRow(label: 'Active server', value: activeServer),
+            _DiagnosticRow(
+              // Session-only since #1129: rigs confirmed since launch.
+              label: 'Rigs this session',
+              value: '${servers.value?.length ?? 0}',
+            ),
+            // Listens to the log's status so an error recorded while the
+            // dialog is open shows up, matching the Support card.
+            ValueListenableBuilder<ClientErrorLogStatus>(
+              valueListenable: ref.watch(clientErrorLogProvider).status,
+              builder: (context, _, _) => _DiagnosticRow(
+                label: 'Client log',
+                value: _clientLogLine(ref.read(clientErrorLogProvider)),
               ),
-              _DiagnosticRow(label: 'Active server', value: activeServer),
-              _DiagnosticRow(
-                // Session-only since #1129: rigs confirmed since launch.
-                label: 'Rigs this session',
-                value: '${servers.value?.length ?? 0}',
-              ),
-              // Listens to the log's status so an error recorded while the
-              // dialog is open shows up, matching the Support card.
-              ValueListenableBuilder<ClientErrorLogStatus>(
-                valueListenable: ref.watch(clientErrorLogProvider).status,
-                builder: (context, _, _) => _DiagnosticRow(
-                  label: 'Client log',
-                  value: _clientLogLine(ref.read(clientErrorLogProvider)),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Useful links',
-                style: TextStyle(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 4),
-              _LinkRow(
-                url: '$_kRepoUrl/issues',
-                label: '• $_kRepoUrl/issues (file a new issue)',
-              ),
-              _LinkRow(
-                url: '$_kRepoUrl/wiki',
-                label: '• $_kRepoUrl/wiki (docs + troubleshooting)',
-              ),
-            ],
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Useful links',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 4),
+            _LinkRow(
+              url: '$_kRepoUrl/issues',
+              label: '• $_kRepoUrl/issues (file a new issue)',
+            ),
+            _LinkRow(
+              url: '$_kRepoUrl/wiki',
+              label: '• $_kRepoUrl/wiki (docs + troubleshooting)',
+            ),
+          ],
           ),
         ),
       ),
@@ -110,15 +113,13 @@ class _HelpDialog extends ConsumerWidget {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Close'),
         ),
-        Consumer(
-          builder: (context, ref, _) {
-            return FilledButton.icon(
-              onPressed: () => _copyDiagnostics(context, ref),
-              icon: const Icon(Icons.copy, size: 16),
-              label: const Text('Copy diagnostics'),
-            );
-          },
-        ),
+        Consumer(builder: (context, ref, _) {
+          return FilledButton.icon(
+            onPressed: () => _copyDiagnostics(context, ref),
+            icon: const Icon(Icons.copy, size: 16),
+            label: const Text('Copy diagnostics'),
+          );
+        }),
       ],
     );
   }
@@ -143,15 +144,10 @@ class _HelpDialog extends ConsumerWidget {
     try {
       version = formatFullVersion(await PackageInfo.fromPlatform());
     } catch (e, st) {
-      developer.log(
-        'Failed to read PackageInfo',
-        name: 'openastroara.help_dialog',
-        error: e,
-        stackTrace: st,
-      );
+      developer.log('Failed to read PackageInfo',
+          name: 'openastroara.help_dialog', error: e, stackTrace: st);
     }
-    final payload =
-        '''
+    final payload = '''
 OpenAstroAra diagnostics:
   app version: $version
   active server: $activeServer
@@ -171,12 +167,8 @@ Actual behavior:
     try {
       await Clipboard.setData(ClipboardData(text: payload));
     } on PlatformException catch (e, st) {
-      developer.log(
-        'Failed to copy diagnostics',
-        name: 'openastroara.help_dialog',
-        error: e,
-        stackTrace: st,
-      );
+      developer.log('Failed to copy diagnostics',
+          name: 'openastroara.help_dialog', error: e, stackTrace: st);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -213,9 +205,9 @@ class _LinkRow extends StatelessWidget {
         child: Text(
           label,
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AraColors.selectionBg,
-            decoration: TextDecoration.underline,
-          ),
+                color: AraColors.selectionBg,
+                decoration: TextDecoration.underline,
+              ),
         ),
       ),
     );
@@ -226,19 +218,17 @@ class _LinkRow extends StatelessWidget {
     try {
       final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
       if (!ok && context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Could not open $url')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open $url')),
+        );
       }
     } catch (e, st) {
-      developer.log(
-        'launchUrl failed',
-        name: 'openastroara.help_dialog',
-        error: e,
-        stackTrace: st,
-      );
+      developer.log('launchUrl failed',
+          name: 'openastroara.help_dialog', error: e, stackTrace: st);
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Could not open $url')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not open $url')),
+      );
     }
   }
 }
@@ -258,12 +248,14 @@ class _DiagnosticRow extends StatelessWidget {
             width: 140,
             child: Text(
               label,
-              style: Theme.of(context).textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
             ),
           ),
           Expanded(
-            child: Text(value, style: Theme.of(context).textTheme.bodyMedium),
+            child: Text(value,
+                style: Theme.of(context).textTheme.bodyMedium),
           ),
         ],
       ),

@@ -20,28 +20,27 @@ import 'package:openastroara/widgets/sequencer/sequencer_palette.dart';
 // A body whose single child is a Take Exposure, so the tree renders a row the
 // test can see — and the root Name carries the id to prove the right load.
 Map<String, dynamic> _bodyFor(String id) => {
-  r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-  'Name': 'Seq $id',
-  'Items': {
-    r'$type': itemsWrapperType,
-    r'$values': [
-      (instructionForType(
-                'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer',
-              ) ??
-              (throw StateError('TakeExposure missing from the catalog')))
-          .build(),
-    ],
-  },
-};
+      r'$type':
+          'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+      'Name': 'Seq $id',
+      'Items': {
+        r'$type': itemsWrapperType,
+        r'$values': [
+          (instructionForType(
+                      'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer') ??
+                  (throw StateError('TakeExposure missing from the catalog')))
+              .build(),
+        ],
+      },
+    };
 
 class _FakeClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(
-    String id, {
-    required List<int> parentPath,
-    int? index,
-    required Map<String, dynamic> item,
-  }) => throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(String id,
+          {required List<int> parentPath,
+          int? index,
+          required Map<String, dynamic> item}) =>
+      throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -50,11 +49,9 @@ class _FakeClient implements SequenceClient {
       throw UnimplementedError();
 
   @override
-  Future<String> decideAutoFlats(
-    String id, {
-    required String choice,
-    required bool remember,
-  }) => throw UnimplementedError();
+  Future<String> decideAutoFlats(String id,
+          {required String choice, required bool remember}) =>
+      throw UnimplementedError();
   @override
   Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
@@ -64,38 +61,23 @@ class _FakeClient implements SequenceClient {
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: _bodyFor(id));
   @override
-  Future<SequenceDetail> updateSequence(
-    String id, {
-    String? name,
-    String? description,
-    Map<String, dynamic>? body,
-  }) async => SequenceDetail(
-    id: id,
-    name: name ?? id,
-    description: description,
-    body: body ?? const {},
-  );
+  Future<SequenceDetail> updateSequence(String id,
+          {String? name, String? description, Map<String, dynamic>? body}) async =>
+      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
   @override
-  Future<SequenceNode> getSequence(String id) async => SequenceNode(
-    id: 'root',
-    kind: SequenceNodeKind.root,
-    displayName: 'Loaded $id',
-  );
+  Future<SequenceNode> getSequence(String id) async =>
+      SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: 'Loaded $id');
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
   @override
-  Future<SequencePage> list({int limit = 50, String? cursor}) async =>
-      const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
   @override
   Future<String> start(String id) async => 'op';
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  }) async => 'op';
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
@@ -103,19 +85,15 @@ class _FakeClient implements SequenceClient {
   @override
   Future<String> stop(String id) async => 'op';
   @override
-  Future<SequenceShareExport> exportShare(String id) async =>
-      throw UnimplementedError();
+  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
-  Future<String> create(
-    String name,
-    Map<String, dynamic> body, {
-    String? description,
-    String? idempotencyKey,
-  }) async => 'new-seq';
+  Future<String> create(String name, Map<String, dynamic> body,
+          {String? description, String? idempotencyKey}) async =>
+      'new-seq';
   @override
   void close() {}
 }
@@ -152,39 +130,30 @@ class _FlakyOnceClient extends _FakeClient {
 String? _loadedId(ProviderContainer c) => c.read(sequenceEditorProvider)?.id;
 
 void main() {
-  testWidgets(
-    '#1154 the zero state\'s Plan tonight opens the session planner, not just the Planning tab',
-    (tester) async {
-      final container = ProviderContainer(
-        overrides: [sequenceApiProvider.overrideWithValue(_FakeClient())],
-      );
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-        ),
-      );
-      expect(find.text('Plan tonight'), findsOneWidget);
-      await tester.tap(find.text('Plan tonight'));
-      await tester.pumpAndSettle();
-      expect(find.byType(SessionPlanDialog), findsOneWidget);
-    },
-  );
-
-  testWidgets('selecting a sequence loads its body into the editor', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(_FakeClient())],
-    );
+  testWidgets('#1154 the zero state\'s Plan tonight opens the session planner, not just the Planning tab', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    expect(find.text('Plan tonight'), findsOneWidget);
+    await tester.tap(find.text('Plan tonight'));
+    await tester.pumpAndSettle();
+    expect(find.byType(SessionPlanDialog), findsOneWidget);
+  });
+
+  testWidgets('selecting a sequence loads its body into the editor', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
 
     // Nothing loaded before selection.
     expect(_loadedId(container), isNull);
@@ -202,20 +171,17 @@ void main() {
     expect(find.text('Take Exposure'), findsNWidgets(2));
   });
 
-  testWidgets('a stale load response does not clobber a newer selection', (
-    tester,
-  ) async {
+  testWidgets('a stale load response does not clobber a newer selection',
+      (tester) async {
     final client = _ControllableClient();
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(client)],
-    );
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(client),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
 
     container.read(selectedSequenceIdProvider.notifier).select('seq-1');
     await tester.pump();
@@ -223,126 +189,101 @@ void main() {
     await tester.pump();
 
     // Newer (seq-2) resolves first, then the stale seq-1.
-    client.calls['seq-2']!.complete(
-      SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')),
-    );
-    client.calls['seq-1']!.complete(
-      SequenceDetail(id: 'seq-1', body: _bodyFor('seq-1')),
-    );
+    client.calls['seq-2']!.complete(SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')));
+    client.calls['seq-1']!.complete(SequenceDetail(id: 'seq-1', body: _bodyFor('seq-1')));
     await tester.pumpAndSettle();
 
     expect(_loadedId(container), 'seq-2'); // seq-1 stale, must not overwrite
   });
 
-  testWidgets(
-    'a stale load FAILURE shows no SnackBar and keeps the selection',
-    (tester) async {
-      final client = _ControllableClient();
-      final container = ProviderContainer(
-        overrides: [sequenceApiProvider.overrideWithValue(client)],
-      );
-      addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-        ),
-      );
+  testWidgets('a stale load FAILURE shows no SnackBar and keeps the selection',
+      (tester) async {
+    final client = _ControllableClient();
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(client),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
 
-      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
-      await tester.pump();
-      container.read(selectedSequenceIdProvider.notifier).select('seq-2');
-      await tester.pump();
+    container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+    await tester.pump();
+    container.read(selectedSequenceIdProvider.notifier).select('seq-2');
+    await tester.pump();
 
-      client.calls['seq-2']!.complete(
-        SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')),
-      );
-      await tester.pumpAndSettle();
-      client.calls['seq-1']!.completeError(Exception('late failure'));
-      await tester.pumpAndSettle();
+    client.calls['seq-2']!.complete(SequenceDetail(id: 'seq-2', body: _bodyFor('seq-2')));
+    await tester.pumpAndSettle();
+    client.calls['seq-1']!.completeError(Exception('late failure'));
+    await tester.pumpAndSettle();
 
-      expect(find.textContaining("Couldn't load the sequence"), findsNothing);
-      expect(container.read(selectedSequenceIdProvider), 'seq-2');
-      expect(_loadedId(container), 'seq-2');
-    },
-  );
+    expect(find.textContaining("Couldn't load the sequence"), findsNothing);
+    expect(container.read(selectedSequenceIdProvider), 'seq-2');
+    expect(_loadedId(container), 'seq-2');
+  });
 
-  testWidgets('loads a sequence already selected when the tab mounts', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(_FakeClient())],
-    );
+  testWidgets('loads a sequence already selected when the tab mounts',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+    ]);
     addTearDown(container.dispose);
     container.read(selectedSequenceIdProvider.notifier).select('seq-7');
 
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
     await tester.pumpAndSettle();
 
     expect(_loadedId(container), 'seq-7');
   });
 
   testWidgets('a load failure shows a SnackBar', (tester) async {
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(_ThrowingClient())],
-    );
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_ThrowingClient()),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
     container.read(selectedSequenceIdProvider.notifier).select('seq-x');
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
 
-  testWidgets('no client (disconnected) shows the SnackBar too', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(null)],
-    );
+  testWidgets('no client (disconnected) shows the SnackBar too', (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(null),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
     container.read(selectedSequenceIdProvider.notifier).select('seq-x');
     await tester.pump();
     await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load the sequence"), findsOneWidget);
   });
 
-  testWidgets('a failed load can be retried by re-selecting the sequence', (
-    tester,
-  ) async {
-    final container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWithValue(_FlakyOnceClient())],
-    );
+  testWidgets('a failed load can be retried by re-selecting the sequence',
+      (tester) async {
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FlakyOnceClient()),
+    ]);
     addTearDown(container.dispose);
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-      ),
-    );
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
 
     container.read(selectedSequenceIdProvider.notifier).select('seq-r');
     await tester.pumpAndSettle();
-    expect(
-      container.read(selectedSequenceIdProvider),
-      isNull,
-    ); // cleared on fail
+    expect(container.read(selectedSequenceIdProvider), isNull); // cleared on fail
 
     container.read(selectedSequenceIdProvider.notifier).select('seq-r');
     await tester.pumpAndSettle();
@@ -358,16 +299,14 @@ void main() {
       // selected; the default 800x600 test surface overflows.
       await tester.binding.setSurfaceSize(const Size(1600, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final container = ProviderContainer(
-        overrides: [sequenceApiProvider.overrideWithValue(_FakeClient())],
-      );
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+      ]);
       addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-        ),
-      );
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+      ));
       container.read(selectedSequenceIdProvider.notifier).select('seq-d');
       await tester.pumpAndSettle();
       // Select the single Take Exposure child so there's something to delete.
@@ -386,9 +325,8 @@ void main() {
       ('a text field', find.byType(EditableText)),
       ('a dropdown', find.byType(DropdownButton<String>)),
     ]) {
-      testWidgets('Delete with $label focused leaves the instruction alone', (
-        tester,
-      ) async {
+      testWidgets('Delete with $label focused leaves the instruction alone',
+          (tester) async {
         final container = await pumpLoaded(tester);
         expect(childCount(container), 1);
 
@@ -405,17 +343,13 @@ void main() {
         await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
         await tester.pumpAndSettle();
 
-        expect(
-          childCount(container),
-          1,
-          reason: 'editing a field must never delete the instruction',
-        );
+        expect(childCount(container), 1,
+            reason: 'editing a field must never delete the instruction');
       });
     }
 
-    testWidgets('Alt+Delete outside the inspector removes nothing', (
-      tester,
-    ) async {
+    testWidgets('Alt+Delete outside the inspector removes nothing',
+        (tester) async {
       // Alt+Backspace/Delete is a word-delete elsewhere; it was never bound to
       // removing an instruction.
       final container = await pumpLoaded(tester);
@@ -430,9 +364,8 @@ void main() {
       expect(childCount(container), 1);
     });
 
-    testWidgets('Delete outside the inspector still removes the selection', (
-      tester,
-    ) async {
+    testWidgets('Delete outside the inspector still removes the selection',
+        (tester) async {
       final container = await pumpLoaded(tester);
       expect(childCount(container), 1);
 
@@ -442,43 +375,30 @@ void main() {
       expect(childCount(container), 0);
     });
 
-    testWidgets(
-      'Backspace in the palette search edits the query, not the tree',
-      (tester) async {
-        final container = await pumpLoaded(tester);
-        expect(childCount(container), 1);
+    testWidgets('Backspace in the palette search edits the query, not the tree',
+        (tester) async {
+      final container = await pumpLoaded(tester);
+      expect(childCount(container), 1);
 
-        final search = find.descendant(
-          of: find.byType(SequencerPalette),
-          matching: find.byType(TextField),
-        );
-        await tester.tap(search);
-        await tester.enterText(search, 'take ex');
-        await tester.pumpAndSettle();
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.enterText(search, 'take ex');
+      await tester.pumpAndSettle();
 
-        await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
-        await tester.sendKeyEvent(LogicalKeyboardKey.delete);
-        await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.backspace);
+      await tester.sendKeyEvent(LogicalKeyboardKey.delete);
+      await tester.pumpAndSettle();
 
-        expect(
-          childCount(container),
-          1,
-          reason: 'searching must never delete the selected instruction',
-        );
-        expect(
-          tester
-              .widget<EditableText>(
-                find.descendant(
-                  of: search,
-                  matching: find.byType(EditableText),
-                ),
-              )
-              .controller
-              .text,
-          'take e',
-        );
-      },
-    );
+      expect(childCount(container), 1,
+          reason: 'searching must never delete the selected instruction');
+      expect(tester.widget<EditableText>(find.descendant(
+        of: search,
+        matching: find.byType(EditableText),
+      )).controller.text, 'take e');
+    });
   });
 
   // A shortcut the tab declines must reach the widget that has focus. The tab
@@ -488,66 +408,54 @@ void main() {
   // Space binding ate it).
   group('inspector typing beats the tab shortcuts', () {
     Future<List<LogicalKeyboardKey>> pumpWithRecorder(
-      WidgetTester tester,
-    ) async {
+        WidgetTester tester) async {
       await tester.binding.setSurfaceSize(const Size(1600, 1200));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       final seen = <LogicalKeyboardKey>[];
-      final container = ProviderContainer(
-        overrides: [sequenceApiProvider.overrideWithValue(_FakeClient())],
-      );
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+      ]);
       addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: MaterialApp(
-            home: Scaffold(
-              body: Focus(
-                onKeyEvent: (_, event) {
-                  if (event is KeyDownEvent) seen.add(event.logicalKey);
-                  return KeyEventResult.ignored;
-                },
-                child: const SequencerTab(),
-              ),
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Focus(
+              onKeyEvent: (_, event) {
+                if (event is KeyDownEvent) seen.add(event.logicalKey);
+                return KeyEventResult.ignored;
+              },
+              child: const SequencerTab(),
             ),
           ),
         ),
-      );
+      ));
       container.read(selectedSequenceIdProvider.notifier).select('seq-k');
       await tester.pumpAndSettle();
       container.read(sequenceEditorProvider.notifier).select(const [0]);
       await tester.pumpAndSettle();
 
       // Focus a field in the inspector — the "I am typing" state.
-      await tester.tap(
-        find
-            .descendant(
-              of: find.byType(SequenceFieldEditor),
-              matching: find.byType(EditableText),
-            )
-            .first,
-      );
+      await tester.tap(find.descendant(
+        of: find.byType(SequenceFieldEditor),
+        matching: find.byType(EditableText),
+      ).first);
       await tester.pumpAndSettle();
       seen.clear();
       return seen;
     }
 
-    testWidgets('Space reaches the focused field instead of the run controls', (
-      tester,
-    ) async {
+    testWidgets('Space reaches the focused field instead of the run controls',
+        (tester) async {
       final seen = await pumpWithRecorder(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pumpAndSettle();
-      expect(
-        seen,
-        contains(LogicalKeyboardKey.space),
-        reason: 'a swallowed space is a space you cannot type',
-      );
+      expect(seen, contains(LogicalKeyboardKey.space),
+          reason: 'a swallowed space is a space you cannot type');
     });
 
-    testWidgets('arrow keys reach the focused field (caret movement)', (
-      tester,
-    ) async {
+    testWidgets('arrow keys reach the focused field (caret movement)',
+        (tester) async {
       final seen = await pumpWithRecorder(tester);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
@@ -564,9 +472,8 @@ void main() {
       ('Shift', LogicalKeyboardKey.shiftLeft),
       ('Alt', LogicalKeyboardKey.altLeft),
     ]) {
-      testWidgets('$name + a shortcut key is not that shortcut', (
-        tester,
-      ) async {
+      testWidgets('$name + a shortcut key is not that shortcut',
+          (tester) async {
         final seen = await pumpWithRecorder(tester);
         await tester.sendKeyDownEvent(modifier);
         await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
@@ -580,9 +487,8 @@ void main() {
       });
     }
 
-    testWidgets("undo reaches the field's own undo, not the tree's", (
-      tester,
-    ) async {
+    testWidgets("undo reaches the field's own undo, not the tree's",
+        (tester) async {
       final seen = await pumpWithRecorder(tester);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyZ);
@@ -596,29 +502,24 @@ void main() {
   // needs coverage: state-dependent gating + the focus guard).
   group('lifecycle keyboard shortcuts', () {
     Future<(ProviderContainer, _RecordingClient)> pumpWithRun(
-      WidgetTester tester,
-      SequenceRunState? state,
-    ) async {
+        WidgetTester tester, SequenceRunState? state) async {
       final client = _RecordingClient(state);
-      final container = ProviderContainer(
-        overrides: [sequenceApiProvider.overrideWithValue(client)],
-      );
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(client),
+      ]);
       addTearDown(container.dispose);
-      await tester.pumpWidget(
-        UncontrolledProviderScope(
-          container: container,
-          child: const MaterialApp(home: Scaffold(body: SequencerTab())),
-        ),
-      );
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+      ));
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
       return (container, client);
     }
 
-    testWidgets('meta-R starts an idle sequence (through the pre-flight)', (
-      tester,
-    ) async {
+    testWidgets('meta-R starts an idle sequence (through the pre-flight)',
+        (tester) async {
       final (_, client) = await pumpWithRun(tester, SequenceRunState.idle);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
@@ -633,9 +534,8 @@ void main() {
       expect(client.calls, contains('start'));
     });
 
-    testWidgets('meta-R while paused offers the §38.10 resume choice', (
-      tester,
-    ) async {
+    testWidgets('meta-R while paused offers the §38.10 resume choice',
+        (tester) async {
       final (_, paused) = await pumpWithRun(tester, SequenceRunState.paused);
       await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
       await tester.sendKeyEvent(LogicalKeyboardKey.keyR);
@@ -657,9 +557,8 @@ void main() {
       expect(running.calls, contains('pause'));
     });
 
-    testWidgets('Space is a no-op when idle (it must never START a run)', (
-      tester,
-    ) async {
+    testWidgets('Space is a no-op when idle (it must never START a run)',
+        (tester) async {
       final (_, client) = await pumpWithRun(tester, SequenceRunState.idle);
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
@@ -667,9 +566,8 @@ void main() {
       expect(client.calls, isEmpty);
     });
 
-    testWidgets('Space defers to a focused button instead of pausing', (
-      tester,
-    ) async {
+    testWidgets('Space defers to a focused button instead of pausing',
+        (tester) async {
       final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
       // Tab moves primary focus from the tab-level Focus into the first
       // toolbar button; Space must then activate THAT (or nothing), never
@@ -680,33 +578,25 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
-      expect(
-        client.calls.where((c) => c == 'pause' || c == 'resume'),
-        isEmpty,
-        reason: 'the shortcut must yield while a button owns focus',
-      );
+      expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
+          reason: 'the shortcut must yield while a button owns focus');
     });
 
-    testWidgets(
-      'Space in the palette search types a space instead of pausing',
-      (tester) async {
-        final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
-        final search = find.descendant(
-          of: find.byType(SequencerPalette),
-          matching: find.byType(TextField),
-        );
-        await tester.tap(search);
-        await tester.pump();
-        await tester.sendKeyEvent(LogicalKeyboardKey.space);
-        await tester.pump();
-        await tester.pump(const Duration(milliseconds: 400));
-        expect(
-          client.calls.where((c) => c == 'pause' || c == 'resume'),
-          isEmpty,
-          reason: 'searching must never pause a running sequence',
-        );
-      },
-    );
+    testWidgets('Space in the palette search types a space instead of pausing',
+        (tester) async {
+      final (_, client) = await pumpWithRun(tester, SequenceRunState.running);
+      final search = find.descendant(
+        of: find.byType(SequencerPalette),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(search);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(client.calls.where((c) => c == 'pause' || c == 'resume'), isEmpty,
+          reason: 'searching must never pause a running sequence');
+    });
   });
 }
 
@@ -720,10 +610,7 @@ class _RecordingClient extends _FakeClient {
   Future<SequenceRunStateInfo?> getRunState(String id) async => _state == null
       ? null
       : SequenceRunStateInfo(
-          state: _state,
-          instructionsCompleted: 0,
-          instructionsTotal: 0,
-        );
+          state: _state, instructionsCompleted: 0, instructionsTotal: 0);
   @override
   Future<String> start(String id) async {
     calls.add('start');
@@ -737,11 +624,8 @@ class _RecordingClient extends _FakeClient {
   }
 
   @override
-  Future<String> resume(
-    String id, {
-    bool recenter = true,
-    bool refocus = false,
-  }) async {
+  Future<String> resume(String id,
+          {bool recenter = true, bool refocus = false}) async {
     calls.add('resume');
     return 'op';
   }

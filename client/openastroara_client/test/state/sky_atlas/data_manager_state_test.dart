@@ -40,9 +40,8 @@ class _FakeDataManagerClient implements DataManagerClient {
   bool throwOnDelete = false;
 
   @override
-  Future<SolverRecommendation> solverRecommendation(
-    SolverRecommendationRequest request,
-  ) async => const SolverRecommendation();
+  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request) async =>
+      const SolverRecommendation();
 
   @override
   Future<List<DataPackage>> listPackages() async {
@@ -51,10 +50,7 @@ class _FakeDataManagerClient implements DataManagerClient {
   }
 
   @override
-  Future<String> download(
-    String packageId, {
-    bool forceReinstall = false,
-  }) async {
+  Future<String> download(String packageId, {bool forceReinstall = false}) async {
     downloads++;
     lastDownloadId = packageId;
     lastForce = forceReinstall;
@@ -74,11 +70,8 @@ class _FakeDataManagerClient implements DataManagerClient {
   }
 
   @override
-  Future<List<CatalogObject>?> getCatalog(
-    String packageId, {
-    double? maxMag,
-    int? limit,
-  }) async => const <CatalogObject>[];
+  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async =>
+      const <CatalogObject>[];
 
   @override
   void close() {}
@@ -105,24 +98,15 @@ class _FakeConnector {
 }
 
 String _frame(String type, Map<String, dynamic> payload, int seq) =>
-    jsonEncode({
-      'type': type,
-      'ts': '2026-06-14T00:00:00.000Z',
-      'seq': seq,
-      'payload': payload,
-    });
+    jsonEncode({'type': type, 'ts': '2026-06-14T00:00:00.000Z', 'seq': seq, 'payload': payload});
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
 ProviderContainer _container(List<AraServer> servers, DataManagerClient api) {
-  final c = ProviderContainer(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(servers),
-      ),
-      dataManagerApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-  );
+  final c = ProviderContainer(overrides: [
+    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+    dataManagerApiFactoryProvider.overrideWithValue((_) => api),
+  ]);
   addTearDown(c.dispose);
   return c;
 }
@@ -136,9 +120,7 @@ void main() {
     });
 
     test('loads the catalog from the active server', () async {
-      final api = _FakeDataManagerClient(const [
-        DataPackage(id: 'tycho-2', sizeBytes: 10),
-      ]);
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2', sizeBytes: 10)]);
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       final pkgs = await c.read(dataManagerPackagesProvider.future);
@@ -146,40 +128,31 @@ void main() {
       expect(pkgs!.single.id, 'tycho-2');
     });
 
-    test(
-      'download forwards the id + force flag and returns the download id',
-      () async {
-        final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(dataManagerPackagesProvider.future);
+    test('download forwards the id + force flag and returns the download id', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
 
-        final id = await c
-            .read(dataManagerPackagesProvider.notifier)
-            .download('tycho-2', forceReinstall: true);
-        expect(api.downloads, 1);
-        expect(api.lastDownloadId, 'tycho-2');
-        expect(api.lastForce, isTrue);
-        expect(id, 'dl-tycho-2');
-      },
-    );
+      final id = await c.read(dataManagerPackagesProvider.notifier).download('tycho-2', forceReinstall: true);
+      expect(api.downloads, 1);
+      expect(api.lastDownloadId, 'tycho-2');
+      expect(api.lastForce, isTrue);
+      expect(id, 'dl-tycho-2');
+    });
 
-    test(
-      'download propagates a failure to the caller (the 409/error contract)',
-      () async {
-        final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])
-          ..throwOnDownload = true;
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(dataManagerPackagesProvider.future);
+    test('download propagates a failure to the caller (the 409/error contract)', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])..throwOnDownload = true;
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
 
-        await expectLater(
-          c.read(dataManagerPackagesProvider.notifier).download('tycho-2'),
-          throwsA(isA<StateError>()),
-          reason: 'a download failure throws to the caller — it does not land in provider state',
-        );
-      },
-    );
+      await expectLater(
+        c.read(dataManagerPackagesProvider.notifier).download('tycho-2'),
+        throwsA(isA<StateError>()),
+        reason: 'a download failure throws to the caller — it does not land in provider state',
+      );
+    });
 
     test('cancel forwards the download id to the client', () async {
       final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
@@ -192,10 +165,7 @@ void main() {
     });
 
     test('delete forwards then refreshes the catalog', () async {
-      final api = _FakeDataManagerClient(const [
-        DataPackage(id: 'tycho-2'),
-        DataPackage(id: 'gaia-edr3-bright'),
-      ]);
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2'), DataPackage(id: 'gaia-edr3-bright')]);
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(dataManagerPackagesProvider.future);
@@ -203,117 +173,69 @@ void main() {
       await c.read(dataManagerPackagesProvider.notifier).delete('tycho-2');
       expect(api.deleted, ['tycho-2']);
       final pkgs = c.read(dataManagerPackagesProvider).value!;
-      expect(pkgs.map((p) => p.id), [
-        'gaia-edr3-bright',
-      ], reason: 'the catalog re-reads after delete');
+      expect(pkgs.map((p) => p.id), ['gaia-edr3-bright'], reason: 'the catalog re-reads after delete');
     });
 
-    test(
-      'delete re-reads the catalog even when the delete call throws',
-      () async {
-        final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])
-          ..throwOnDelete = true;
-        final c = _container(const [_server], api);
-        await c.read(savedServersProvider.future);
-        await c.read(dataManagerPackagesProvider.future);
-        final listsBefore = api.lists;
+    test('delete re-reads the catalog even when the delete call throws', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')])..throwOnDelete = true;
+      final c = _container(const [_server], api);
+      await c.read(savedServersProvider.future);
+      await c.read(dataManagerPackagesProvider.future);
+      final listsBefore = api.lists;
 
-        await expectLater(
-          c.read(dataManagerPackagesProvider.notifier).delete('tycho-2'),
-          throwsA(isA<StateError>()),
-        );
-        expect(
-          api.lists,
-          greaterThan(listsBefore),
-          reason: 'refresh runs in the finally even on a failed delete',
-        );
-      },
-    );
+      await expectLater(
+        c.read(dataManagerPackagesProvider.notifier).delete('tycho-2'),
+        throwsA(isA<StateError>()),
+      );
+      expect(api.lists, greaterThan(listsBefore), reason: 'refresh runs in the finally even on a failed delete');
+    });
   });
 
   group('dataManagerDownloadsProvider', () {
-    test(
-      'folds download.* WS events into progress keyed by package id',
-      () async {
-        final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
-        final conn = _FakeConnector();
-        final c = ProviderContainer(
-          overrides: [
-            savedServerServiceProvider.overrideWithValue(
-              _FakeSavedServerService(const [_server]),
-            ),
-            dataManagerApiFactoryProvider.overrideWithValue((_) => api),
-            wsEventStreamFactoryProvider.overrideWithValue(
-              (s) => WsEventStream(s, connect: conn.connect),
-            ),
-          ],
-        );
-        addTearDown(c.dispose);
+    test('folds download.* WS events into progress keyed by package id', () async {
+      final api = _FakeDataManagerClient(const [DataPackage(id: 'tycho-2')]);
+      final conn = _FakeConnector();
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [_server])),
+        dataManagerApiFactoryProvider.overrideWithValue((_) => api),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
+      addTearDown(c.dispose);
 
-        await c.read(savedServersProvider.future);
-        // Subscribe so the notifier (and its WS stream) stay alive.
-        final sub = c.listen(dataManagerDownloadsProvider, (_, _) {});
-        addTearDown(sub.close);
-        c.read(dataManagerDownloadsProvider);
-        await pumpEventQueue();
+      await c.read(savedServersProvider.future);
+      // Subscribe so the notifier (and its WS stream) stay alive.
+      final sub = c.listen(dataManagerDownloadsProvider, (_, _) {});
+      addTearDown(sub.close);
+      c.read(dataManagerDownloadsProvider);
+      await pumpEventQueue();
 
-        final leg = conn.legs.single;
-        leg.incoming.add(
-          _frame('data_manager.download.progress', {
-            'download_id': 'd1',
-            'package_id': 'tycho-2',
-            'downloaded_bytes': 512,
-            'total_bytes': 1024,
-            'percent_complete': 50.0,
-          }, 1),
-        );
-        await pumpEventQueue();
+      final leg = conn.legs.single;
+      leg.incoming.add(_frame('data_manager.download.progress',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'downloaded_bytes': 512, 'total_bytes': 1024, 'percent_complete': 50.0}, 1));
+      await pumpEventQueue();
 
-        final map = c.read(dataManagerDownloadsProvider);
-        expect(map['tycho-2'], isNotNull);
-        expect(map['tycho-2']!.percentComplete, 50.0);
-        expect(map['tycho-2']!.isActive, isTrue);
+      final map = c.read(dataManagerDownloadsProvider);
+      expect(map['tycho-2'], isNotNull);
+      expect(map['tycho-2']!.percentComplete, 50.0);
+      expect(map['tycho-2']!.isActive, isTrue);
 
-        // A complete event flips the phase and pokes a catalog refresh.
-        final listsBefore = api.lists;
-        leg.incoming.add(
-          _frame('data_manager.download.complete', {
-            'download_id': 'd1',
-            'package_id': 'tycho-2',
-            'downloaded_bytes': 1024,
-            'total_bytes': 1024,
-            'percent_complete': 100.0,
-          }, 2),
-        );
-        await pumpEventQueue();
+      // A complete event flips the phase and pokes a catalog refresh.
+      final listsBefore = api.lists;
+      leg.incoming.add(_frame('data_manager.download.complete',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'downloaded_bytes': 1024, 'total_bytes': 1024, 'percent_complete': 100.0}, 2));
+      await pumpEventQueue();
 
-        expect(
-          c.read(dataManagerDownloadsProvider)['tycho-2']!.phase,
-          DownloadPhase.complete,
-        );
-        expect(
-          api.lists,
-          greaterThan(listsBefore),
-          reason: 'a complete event re-reads the catalog',
-        );
-      },
-    );
+      expect(c.read(dataManagerDownloadsProvider)['tycho-2']!.phase, DownloadPhase.complete);
+      expect(api.lists, greaterThan(listsBefore), reason: 'a complete event re-reads the catalog');
+    });
 
     test('each emitted state is an independent snapshot (a later event does not mutate a prior one)', () async {
       final conn = _FakeConnector();
-      final c = ProviderContainer(
-        overrides: [
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [_server]),
-          ),
-          dataManagerApiFactoryProvider.overrideWithValue(
-            (_) => _FakeDataManagerClient(const []),
-          ),
-          wsEventStreamFactoryProvider.overrideWithValue(
-            (s) => WsEventStream(s, connect: conn.connect),
-          ),
-        ],
-      );
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [_server])),
+        dataManagerApiFactoryProvider.overrideWithValue((_) => _FakeDataManagerClient(const [])),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
       addTearDown(c.dispose);
       await c.read(savedServersProvider.future);
       final sub = c.listen(dataManagerDownloadsProvider, (_, _) {});
@@ -322,53 +244,27 @@ void main() {
       await pumpEventQueue();
 
       final leg = conn.legs.single;
-      leg.incoming.add(
-        _frame('data_manager.download.progress', {
-          'download_id': 'd1',
-          'package_id': 'tycho-2',
-          'percent_complete': 25.0,
-        }, 1),
-      );
+      leg.incoming.add(_frame('data_manager.download.progress',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'percent_complete': 25.0}, 1));
       await pumpEventQueue();
-      final firstSnapshot = c.read(
-        dataManagerDownloadsProvider,
-      ); // captured at 25%
+      final firstSnapshot = c.read(dataManagerDownloadsProvider); // captured at 25%
 
-      leg.incoming.add(
-        _frame('data_manager.download.progress', {
-          'download_id': 'd1',
-          'package_id': 'tycho-2',
-          'percent_complete': 75.0,
-        }, 2),
-      );
+      leg.incoming.add(_frame('data_manager.download.progress',
+          {'download_id': 'd1', 'package_id': 'tycho-2', 'percent_complete': 75.0}, 2));
       await pumpEventQueue();
 
-      expect(
-        firstSnapshot['tycho-2']!.percentComplete,
-        25.0,
-        reason: 'the earlier snapshot is unchanged — Map.unmodifiable copied, not a live view',
-      );
-      expect(
-        c.read(dataManagerDownloadsProvider)['tycho-2']!.percentComplete,
-        75.0,
-      );
+      expect(firstSnapshot['tycho-2']!.percentComplete, 25.0,
+          reason: 'the earlier snapshot is unchanged — Map.unmodifiable copied, not a live view');
+      expect(c.read(dataManagerDownloadsProvider)['tycho-2']!.percentComplete, 75.0);
     });
 
     test('a failed event carries the error', () async {
       final conn = _FakeConnector();
-      final c = ProviderContainer(
-        overrides: [
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [_server]),
-          ),
-          dataManagerApiFactoryProvider.overrideWithValue(
-            (_) => _FakeDataManagerClient(const []),
-          ),
-          wsEventStreamFactoryProvider.overrideWithValue(
-            (s) => WsEventStream(s, connect: conn.connect),
-          ),
-        ],
-      );
+      final c = ProviderContainer(overrides: [
+        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [_server])),
+        dataManagerApiFactoryProvider.overrideWithValue((_) => _FakeDataManagerClient(const [])),
+        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
+      ]);
       addTearDown(c.dispose);
       await c.read(savedServersProvider.future);
       final sub = c.listen(dataManagerDownloadsProvider, (_, _) {});
@@ -376,13 +272,8 @@ void main() {
       c.read(dataManagerDownloadsProvider);
       await pumpEventQueue();
 
-      conn.legs.single.incoming.add(
-        _frame('data_manager.download.failed', {
-          'download_id': 'd1',
-          'package_id': 'gaia-edr3-bright',
-          'error': 'stalled',
-        }, 1),
-      );
+      conn.legs.single.incoming.add(_frame('data_manager.download.failed',
+          {'download_id': 'd1', 'package_id': 'gaia-edr3-bright', 'error': 'stalled'}, 1));
       await pumpEventQueue();
 
       final p = c.read(dataManagerDownloadsProvider)['gaia-edr3-bright']!;

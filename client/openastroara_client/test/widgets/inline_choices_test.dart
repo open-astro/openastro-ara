@@ -12,39 +12,31 @@ import 'package:openastroara/widgets/inline_choices.dart';
 const _viewport = 400.0;
 
 /// A button, a page's worth of space, and the question when [open].
-Widget _confirm(bool open, VoidCallback toggle, FocusNode opener) =>
-    MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              TextButton(
-                focusNode: opener,
-                onPressed: toggle,
-                child: const Text('Open'),
-              ),
-              const SizedBox(height: 2 * _viewport),
-              if (open)
-                InlineConfirm(
-                  id: 'ask',
-                  title: 'Sure?',
-                  body: const Text('Really.'),
-                  confirmLabel: 'Yes',
-                  cancelLabel: 'No',
-                  onConfirm: toggle,
-                  onCancel: toggle,
-                ),
-            ],
-          ),
-        ),
+Widget _confirm(bool open, VoidCallback toggle, FocusNode opener) => MaterialApp(
+  home: Scaffold(
+    body: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextButton(focusNode: opener, onPressed: toggle, child: const Text('Open')),
+          const SizedBox(height: 2 * _viewport),
+          if (open)
+            InlineConfirm(
+              id: 'ask',
+              title: 'Sure?',
+              body: const Text('Really.'),
+              confirmLabel: 'Yes',
+              cancelLabel: 'No',
+              onConfirm: toggle,
+              onCancel: toggle,
+            ),
+        ],
       ),
-    );
+    ),
+  ),
+);
 
-Future<void Function()> _pumpConfirm(
-  WidgetTester tester,
-  FocusNode opener,
-) async {
+Future<void Function()> _pumpConfirm(WidgetTester tester, FocusNode opener) async {
   tester.view.physicalSize = const Size(800, _viewport);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -64,51 +56,31 @@ Future<void Function()> _pumpConfirm(
 }
 
 void main() {
-  testWidgets(
-    'an inline confirm below the fold scrolls in, takes the focus and says its title',
-    (tester) async {
-      final opener = FocusNode();
-      addTearDown(opener.dispose);
-      final toggle = await _pumpConfirm(tester, opener);
-      toggle();
-      await tester.pumpAndSettle();
-      expect(
-        tester.getRect(find.byKey(const Key('ask-confirm'))).bottom,
-        lessThanOrEqualTo(_viewport),
-      );
-      expect(opener.hasFocus, isFalse);
-      expect(
-        FocusManager.instance.primaryFocus?.context
-            ?.findAncestorWidgetOfExactType<InlineConfirm>(),
-        isNotNull,
-      );
-      expect(
-        tester.takeAnnouncements().map((a) => a.message),
-        contains('Sure?'),
-      );
-    },
-  );
+  testWidgets('an inline confirm below the fold scrolls in, takes the focus and says its title', (tester) async {
+    final opener = FocusNode();
+    addTearDown(opener.dispose);
+    final toggle = await _pumpConfirm(tester, opener);
+    toggle();
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.byKey(const Key('ask-confirm'))).bottom, lessThanOrEqualTo(_viewport));
+    expect(opener.hasFocus, isFalse);
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<InlineConfirm>(), isNotNull);
+    expect(tester.takeAnnouncements().map((a) => a.message), contains('Sure?'));
+  });
 
-  testWidgets(
-    'answering an inline confirm gives the focus back to what opened it',
-    (tester) async {
-      final opener = FocusNode();
-      addTearDown(opener.dispose);
-      final toggle = await _pumpConfirm(tester, opener);
-      toggle();
-      await tester.pumpAndSettle();
-      await tester.tap(find.byKey(const Key('ask-cancel')));
-      await tester.pumpAndSettle();
-      expect(find.text('Sure?'), findsNothing);
-      expect(opener.hasFocus, isTrue);
-    },
-  );
+  testWidgets('answering an inline confirm gives the focus back to what opened it', (tester) async {
+    final opener = FocusNode();
+    addTearDown(opener.dispose);
+    final toggle = await _pumpConfirm(tester, opener);
+    toggle();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('ask-cancel')));
+    await tester.pumpAndSettle();
+    expect(find.text('Sure?'), findsNothing);
+    expect(opener.hasFocus, isTrue);
+  });
 
-  Future<void> pumpChooser(
-    WidgetTester tester, {
-    Locale? locale,
-    AraServer? server,
-  }) async {
+  Future<void> pumpChooser(WidgetTester tester, {Locale? locale, AraServer? server}) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [activeServerProvider.overrideWithValue(server)],
@@ -129,39 +101,22 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the inline device chooser takes the focus and says its title', (
-    tester,
-  ) async {
+  testWidgets('the inline device chooser takes the focus and says its title', (tester) async {
     await pumpChooser(tester);
-    expect(
-      tester.takeAnnouncements().map((a) => a.message),
-      contains('Choose Camera'),
-    );
-    expect(
-      FocusManager.instance.primaryFocus?.context
-          ?.findAncestorWidgetOfExactType<AlpacaDeviceChooser>(),
-      isNotNull,
-    );
+    expect(tester.takeAnnouncements().map((a) => a.message), contains('Choose Camera'));
+    expect(FocusManager.instance.primaryFocus?.context?.findAncestorWidgetOfExactType<AlpacaDeviceChooser>(), isNotNull);
   });
 
   testWidgets('a failed discovery shows the red error icon', (tester) async {
     await pumpChooser(tester);
-    expect(
-      tester.widget<Icon>(find.byIcon(Icons.error_outline)).color,
-      AraColors.accentError,
-    );
+    expect(tester.widget<Icon>(find.byIcon(Icons.error_outline)).color, AraColors.accentError);
   });
 
-  testWidgets('a refused discovery says so in plain words and fits a phone', (
-    tester,
-  ) async {
+  testWidgets('a refused discovery says so in plain words and fits a phone', (tester) async {
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
-    await pumpChooser(
-      tester,
-      server: const AraServer(hostname: 'rig', port: 1),
-    );
+    await pumpChooser(tester, server: const AraServer(hostname: 'rig', port: 1));
     expect(tester.takeException(), isNull);
     expect(find.textContaining('validateStatus'), findsNothing);
     expect(find.textContaining("Couldn't find devices"), findsOneWidget);
@@ -171,9 +126,6 @@ void main() {
     await pumpChooser(tester, locale: const Locale('pt', 'BR'));
     expect(find.text('Escolher Camera'), findsOneWidget);
     expect(find.text('Falha na busca'), findsOneWidget);
-    expect(
-      find.text('Não conectado — conecte-se ao seu setup para salvar.'),
-      findsOneWidget,
-    );
+    expect(find.text('Não conectado — conecte-se ao seu setup para salvar.'), findsOneWidget);
   });
 }

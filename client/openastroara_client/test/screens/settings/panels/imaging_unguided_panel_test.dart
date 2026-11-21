@@ -38,30 +38,17 @@ class _SeededMount extends MountNotifier {
   final MountStatus? _v;
   final bool neverLoads;
   @override
-  Future<MountStatus?> build() =>
-      neverLoads ? Completer<MountStatus?>().future : Future.value(_v);
+  Future<MountStatus?> build() => neverLoads ? Completer<MountStatus?>().future : Future.value(_v);
 }
 
 MountStatus _mount(MountSpecSheet? specs) => MountStatus(
-  deviceId: 'mnt',
-  name: 'EQM-35',
-  connectionState: EquipmentConnectionState.connected,
-  capabilities: MountCapabilities(
-    canSlew: true,
-    canSync: true,
-    canPark: true,
-    canUnpark: true,
-    canSetTracking: true,
-    canFindHome: false,
-    specs: specs,
-  ),
-  runtimeState: 'tracking',
-  rightAscensionHours: 5,
-  declinationDegrees: 20,
-  tracking: true,
-  parked: false,
-  atHome: false,
-);
+      deviceId: 'mnt', name: 'EQM-35', connectionState: EquipmentConnectionState.connected,
+      capabilities: MountCapabilities(
+          canSlew: true, canSync: true, canPark: true, canUnpark: true,
+          canSetTracking: true, canFindHome: false, specs: specs),
+      runtimeState: 'tracking', rightAscensionHours: 5, declinationDegrees: 20,
+      tracking: true, parked: false, atHome: false,
+    );
 
 Future<_Fixed> _pump(
   WidgetTester tester, {
@@ -88,12 +75,7 @@ Future<_Fixed> _pump(
           }).api(),
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
-        mountProvider.overrideWith(
-          () => _SeededMount(
-            mountKnown ? _mount(specs) : null,
-            neverLoads: mountLoading,
-          ),
-        ),
+        mountProvider.overrideWith(() => _SeededMount(mountKnown ? _mount(specs) : null, neverLoads: mountLoading)),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -188,43 +170,20 @@ void main() {
     },
   );
 
-  testWidgets(
-    '#1264 the spec-sheet row names the sheet, or says there is none',
-    (tester) async {
-      await _pump(
-        tester,
-        connected: true,
-        mountKnown: true,
-        specs: const MountSpecSheet(
-          model: 'EQM-35 Pro',
-          source: 'manufacturer',
-          wormPeriodS: 638,
-          periodicErrorPpArcsec: 25,
-          hasPec: true,
-        ),
-      );
-      expect(
-        find.textContaining(
-          'EQM-35 Pro: Periodic error 25″ p-p over 638 s · manufacturer · PEC available',
-        ),
-        findsOneWidget,
-      );
+  testWidgets('#1264 the spec-sheet row names the sheet, or says there is none', (tester) async {
+    await _pump(tester, connected: true, mountKnown: true,
+        specs: const MountSpecSheet(model: 'EQM-35 Pro', source: 'manufacturer', wormPeriodS: 638, periodicErrorPpArcsec: 25, hasPec: true));
+    expect(find.textContaining('EQM-35 Pro: Periodic error 25″ p-p over 638 s · manufacturer · PEC available'), findsOneWidget);
 
-      await tester.pumpWidget(const SizedBox());
-      await _pump(tester, connected: true, mountKnown: true);
-      expect(
-        find.textContaining('No spec sheet for this mount'),
-        findsOneWidget,
-      );
-    },
-  );
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, connected: true, mountKnown: true);
+    expect(find.textContaining('No spec sheet for this mount'), findsOneWidget);
+  });
 
-  testWidgets(
-    '#1264 the knobs edit the Unguided settings (guard switch, ladder text)',
-    (tester) async {
-      await _pump(tester, connected: true, mountKnown: true);
-      final element = tester.element(find.byType(ImagingUnguidedPanel));
-      final container = ProviderScope.containerOf(element);
+  testWidgets('#1264 the knobs edit the Unguided settings (guard switch, ladder text)', (tester) async {
+    await _pump(tester, connected: true, mountKnown: true);
+    final element = tester.element(find.byType(ImagingUnguidedPanel));
+    final container = ProviderScope.containerOf(element);
 
       await tester.tap(
         find.descendant(
@@ -276,70 +235,43 @@ void main() {
     },
   );
 
-  testWidgets(
-    '#1264 the spec-sheet row tells a missing mount and a loading one apart from "no sheet"',
-    (tester) async {
-      await _pump(tester, connected: true);
-      expect(find.text('Mount not connected.'), findsOneWidget);
-      expect(find.textContaining('No spec sheet'), findsNothing);
+  testWidgets('#1264 the spec-sheet row tells a missing mount and a loading one apart from "no sheet"', (tester) async {
+    await _pump(tester, connected: true);
+    expect(find.text('Mount not connected.'), findsOneWidget);
+    expect(find.textContaining('No spec sheet'), findsNothing);
 
-      await tester.pumpWidget(const SizedBox());
-      await _pump(tester, connected: true, mountLoading: true);
-      expect(find.text('Reading the mount…'), findsOneWidget);
-    },
-  );
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, connected: true, mountLoading: true);
+    expect(find.text('Reading the mount…'), findsOneWidget);
+  });
 
   test('#1264 basisGapFor names the missing figure, and only then', () {
     const noOptics = OpticsSettings();
     const optics = OpticsSettings(focalLengthMm: 447, pixelSizeUm: 3.76);
     expect(basisGapFor('max', optics: noOptics, seeingArcsec: 0), isNull);
-    expect(
-      basisGapFor('pixel', optics: noOptics, seeingArcsec: 3),
-      contains('optics'),
-    );
+    expect(basisGapFor('pixel', optics: noOptics, seeingArcsec: 3), contains('optics'));
     expect(basisGapFor('pixel', optics: optics, seeingArcsec: 0), isNull);
-    expect(
-      basisGapFor('seeing', optics: optics, seeingArcsec: 0),
-      contains('typical seeing'),
-    );
+    expect(basisGapFor('seeing', optics: optics, seeingArcsec: 0), contains('typical seeing'));
     expect(basisGapFor('seeing', optics: noOptics, seeingArcsec: 2.5), isNull);
   });
 
-  testWidgets('#1264 the basis hint appears only while its figure is missing', (
-    tester,
-  ) async {
+  testWidgets('#1264 the basis hint appears only while its figure is missing', (tester) async {
     await _pump(tester, connected: true, mountKnown: true);
     final element = tester.element(find.byType(ImagingUnguidedPanel));
     final container = ProviderScope.containerOf(element);
-    expect(
-      find.textContaining('gives no prior'),
-      findsNothing,
-      reason: 'max needs nothing',
-    );
+    expect(find.textContaining('gives no prior'), findsNothing, reason: 'max needs nothing');
 
-    container
-        .read(unguidedSettingsProvider.notifier)
-        .setPriorToleranceBasis('pixel');
+    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('pixel');
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('Needs the optics'),
-      findsOneWidget,
-      reason: 'default optics are unset',
-    );
+    expect(find.textContaining('Needs the optics'), findsOneWidget, reason: 'default optics are unset');
 
     container.read(opticsSettingsProvider.notifier).setFocalLengthMm(447);
     container.read(opticsSettingsProvider.notifier).setPixelSizeUm(3.76);
     await tester.pumpAndSettle();
     expect(find.textContaining('Needs the optics'), findsNothing);
 
-    container
-        .read(unguidedSettingsProvider.notifier)
-        .setPriorToleranceBasis('seeing');
+    container.read(unguidedSettingsProvider.notifier).setPriorToleranceBasis('seeing');
     await tester.pumpAndSettle();
-    expect(
-      find.textContaining('typical seeing'),
-      findsNothing,
-      reason: 'the default site seeing (2.5") is set',
-    );
+    expect(find.textContaining('typical seeing'), findsNothing, reason: 'the default site seeing (2.5") is set');
   });
 }

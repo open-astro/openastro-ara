@@ -12,121 +12,50 @@ import 'package:openastroara/services/stellarium_server.dart';
 // which is the part with real branching.
 void main() {
   group('StellariumServer.contentTypeFor', () {
-    test(
-      'serves WASM with the correct type (needed for streaming instantiation)',
-      () {
-        expect(
-          StellariumServer.contentTypeFor('/stellarium-web-engine.wasm')
-              .toString(),
-          'application/wasm',
-        );
-      },
-    );
+    test('serves WASM with the correct type (needed for streaming instantiation)', () {
+      expect(StellariumServer.contentTypeFor('/stellarium-web-engine.wasm').toString(),
+          'application/wasm');
+    });
     test('serves the bridge page as HTML and the engine as JavaScript', () {
-      expect(
-        StellariumServer.contentTypeFor('/index.html').mimeType,
-        'text/html',
-      );
-      expect(
-        StellariumServer.contentTypeFor('/stellarium-web-engine.js').mimeType,
-        'text/javascript',
-      );
+      expect(StellariumServer.contentTypeFor('/index.html').mimeType, 'text/html');
+      expect(StellariumServer.contentTypeFor('/stellarium-web-engine.js').mimeType,
+          'text/javascript');
     });
     test('serves gzipped data as gzip (the engine inflates it itself)', () {
-      expect(
-        StellariumServer.contentTypeFor('/skydata/tle_satellite.jsonl.gz')
-            .mimeType,
-        'application/gzip',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/tle_satellite.jsonl.gz').mimeType,
+          'application/gzip');
     });
     test('serves .webp landscape/art tiles as image/webp', () {
-      expect(
-        StellariumServer.contentTypeFor(
-          '/skydata/landscapes/guereins/tile.webp',
-        ).mimeType,
-        'image/webp',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/landscapes/guereins/tile.webp').mimeType,
+          'image/webp');
     });
     test('serves DSS2 JPEG tiles as image/jpeg', () {
-      expect(
-        StellariumServer.contentTypeFor('/dss/Norder3/Dir0/Npix0.jpg').mimeType,
-        'image/jpeg',
-      );
+      expect(StellariumServer.contentTypeFor('/dss/Norder3/Dir0/Npix0.jpg').mimeType,
+          'image/jpeg');
     });
     test('serves the DSS2 properties manifest as text', () {
-      expect(
-        StellariumServer.contentTypeFor('/dss/properties').mimeType,
-        'text/plain',
-      );
+      expect(StellariumServer.contentTypeFor('/dss/properties').mimeType, 'text/plain');
       // The same rule now types the bundled skydata manifests (previously
       // application/octet-stream); the engine reads them as bytes either way.
-      expect(
-        StellariumServer.contentTypeFor('/skydata/stars/properties').mimeType,
-        'text/plain',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/stars/properties').mimeType, 'text/plain');
     });
     test('unknown / binary sky-data blobs fall back to octet-stream', () {
-      expect(
-        StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph')
-            .mimeType,
-        'application/octet-stream',
-      );
+      expect(StellariumServer.contentTypeFor('/skydata/dso/Norder0/Dir0/Npix0.eph').mimeType,
+          'application/octet-stream');
     });
   });
 
   group('StellariumServer.isDssMediaType', () {
     test('tiles must be images, the manifest must be non-HTML text', () {
-      expect(
-        StellariumServer.isDssMediaType(
-          'Norder3/Dir0/Npix1.jpg',
-          ContentType('image', 'jpeg'),
-        ),
-        isTrue,
-      );
-      expect(
-        StellariumServer.isDssMediaType(
-          'Norder3/Allsky.jpg',
-          ContentType('image', 'png'),
-        ),
-        isTrue,
-      );
-      expect(
-        StellariumServer.isDssMediaType(
-          'properties',
-          ContentType('text', 'plain', charset: 'utf-8'),
-        ),
-        isTrue,
-      );
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType('image', 'jpeg')), isTrue);
+      expect(StellariumServer.isDssMediaType('Norder3/Allsky.jpg', ContentType('image', 'png')), isTrue);
+      expect(StellariumServer.isDssMediaType('properties', ContentType('text', 'plain', charset: 'utf-8')), isTrue);
       // What a captive portal serves for either.
-      expect(
-        StellariumServer.isDssMediaType(
-          'Norder3/Dir0/Npix1.jpg',
-          ContentType.html,
-        ),
-        isFalse,
-      );
-      expect(
-        StellariumServer.isDssMediaType('properties', ContentType.html),
-        isFalse,
-      );
-      expect(
-        StellariumServer.isDssMediaType(
-          'Norder3/Dir0/Npix1.jpg',
-          ContentType.json,
-        ),
-        isFalse,
-      );
-      expect(
-        StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', null),
-        isFalse,
-      );
-      expect(
-        StellariumServer.isDssMediaType(
-          'properties',
-          ContentType('image', 'jpeg'),
-        ),
-        isFalse,
-      );
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType.html), isFalse);
+      expect(StellariumServer.isDssMediaType('properties', ContentType.html), isFalse);
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', ContentType.json), isFalse);
+      expect(StellariumServer.isDssMediaType('Norder3/Dir0/Npix1.jpg', null), isFalse);
+      expect(StellariumServer.isDssMediaType('properties', ContentType('image', 'jpeg')), isFalse);
     });
   });
 
@@ -173,17 +102,15 @@ void main() {
     });
     setUp(() {
       StellariumServer.catalogListResolver = () async => [
-        {'id': 'messier', 'count': 110},
-      ];
+            {'id': 'messier', 'count': 110},
+          ];
       StellariumServer.catalogObjectsResolver = (id, limit) async => [
-        {'id': id, 'limit': limit},
-      ];
+            {'id': id, 'limit': limit},
+          ];
     });
 
-    Future<({int status, String? type, String body})> get(
-      String path, {
-      bool withToken = true,
-    }) async {
+    Future<({int status, String? type, String body})> get(String path,
+        {bool withToken = true}) async {
       final client = HttpClient();
       try {
         final req = await client.getUrl(Uri.parse('${server.baseUrl}$path'));
@@ -200,14 +127,10 @@ void main() {
     }
 
     test('refuses a request without the per-run token', () async {
-      expect(
-        (await get('/aracat', withToken: false)).status,
-        HttpStatus.forbidden,
-      );
-      expect(
-        (await get('/aracat/messier', withToken: false)).status,
-        HttpStatus.forbidden,
-      );
+      expect((await get('/aracat', withToken: false)).status,
+          HttpStatus.forbidden);
+      expect((await get('/aracat/messier', withToken: false)).status,
+          HttpStatus.forbidden);
     });
 
     test('lists the catalogs as JSON from the list resolver', () async {
@@ -219,23 +142,21 @@ void main() {
       ]);
     });
 
-    test(
-      'decodes the catalog id and parses ?limit=, defaulting to 500',
-      () async {
-        expect(jsonDecode((await get('/aracat/wr-stars?limit=25')).body), [
-          {'id': 'wr-stars', 'limit': 25},
-        ]);
-        expect(jsonDecode((await get('/aracat/sh2')).body), [
-          {'id': 'sh2', 'limit': 500},
-        ]);
-        expect(jsonDecode((await get('/aracat/sh2?limit=lots')).body), [
-          {'id': 'sh2', 'limit': 500},
-        ]);
-        expect(jsonDecode((await get('/aracat/Sharpless%202')).body), [
-          {'id': 'Sharpless 2', 'limit': 500},
-        ]);
-      },
-    );
+    test('decodes the catalog id and parses ?limit=, defaulting to 500',
+        () async {
+      expect(jsonDecode((await get('/aracat/wr-stars?limit=25')).body), [
+        {'id': 'wr-stars', 'limit': 25},
+      ]);
+      expect(jsonDecode((await get('/aracat/sh2')).body), [
+        {'id': 'sh2', 'limit': 500},
+      ]);
+      expect(jsonDecode((await get('/aracat/sh2?limit=lots')).body), [
+        {'id': 'sh2', 'limit': 500},
+      ]);
+      expect(jsonDecode((await get('/aracat/Sharpless%202')).body), [
+        {'id': 'Sharpless 2', 'limit': 500},
+      ]);
+    });
 
     test('404s an unknown catalog and an unwired resolver', () async {
       StellariumServer.catalogObjectsResolver = (id, limit) async => null;
@@ -246,25 +167,13 @@ void main() {
   });
 
   group('StellariumServer.dssRelativePath', () {
-    test(
-      'accepts the HiPS manifest, Allsky and tile paths the engine requests',
-      () {
-        expect(
-          StellariumServer.dssRelativePath('/dss/properties'),
-          'properties',
-        );
-        expect(
-          StellariumServer.dssRelativePath('/dss/Norder3/Allsky.jpg'),
-          'Norder3/Allsky.jpg',
-        );
-        expect(
-          StellariumServer.dssRelativePath(
-            '/dss/Norder7/Dir10000/Npix12345.jpg',
-          ),
-          'Norder7/Dir10000/Npix12345.jpg',
-        );
-      },
-    );
+    test('accepts the HiPS manifest, Allsky and tile paths the engine requests', () {
+      expect(StellariumServer.dssRelativePath('/dss/properties'), 'properties');
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/Allsky.jpg'),
+          'Norder3/Allsky.jpg');
+      expect(StellariumServer.dssRelativePath('/dss/Norder7/Dir10000/Npix12345.jpg'),
+          'Norder7/Dir10000/Npix12345.jpg');
+    });
     test('refuses empty and dot segments and anything outside the prefix', () {
       // The engine joins `url + "/" + path` verbatim, so a data-source URL
       // with a trailing slash produced exactly this — and DSS never loaded.
@@ -272,10 +181,7 @@ void main() {
       expect(StellariumServer.dssRelativePath('/dss/'), isNull);
       expect(StellariumServer.dssRelativePath('/dss'), isNull);
       expect(StellariumServer.dssRelativePath('/dss/../index.html'), isNull);
-      expect(
-        StellariumServer.dssRelativePath('/dss/Norder3/./Allsky.jpg'),
-        isNull,
-      );
+      expect(StellariumServer.dssRelativePath('/dss/Norder3/./Allsky.jpg'), isNull);
       expect(StellariumServer.dssRelativePath('/dss/a%2f..%2fb'), isNull);
       expect(StellariumServer.dssRelativePath('/skydata/stars'), isNull);
     });
@@ -304,15 +210,11 @@ void main() {
     // with the body still in flight is a race the Windows runner loses
     // ("Connection closed while receiving data"). A HEAD has no body to read.
     Future<({int status, int length, String? type, List<int> body})> send(
-      String method,
-      String path,
-    ) async {
+        String method, String path) async {
       final client = HttpClient();
       try {
         final req = await client.openUrl(
-          method,
-          Uri.parse('${server.baseUrl}$path'),
-        );
+            method, Uri.parse('${server.baseUrl}$path'));
         final res = await req.close();
         final body = method == 'HEAD'
             ? const <int>[]
@@ -328,76 +230,50 @@ void main() {
       }
     }
 
-    test(
-      "refuses the double-slash path a trailing-slash data source produces",
-      () async {
-        expect(
-          (await send('GET', '${server.dssPathPrefix}/properties')).status,
-          HttpStatus.forbidden,
-        );
-        expect(
-          (await send('GET', server.dssPathPrefix)).status,
-          HttpStatus.forbidden,
-        );
-      },
-    );
+    test("refuses the double-slash path a trailing-slash data source produces",
+        () async {
+      expect((await send('GET', '${server.dssPathPrefix}/properties')).status,
+          HttpStatus.forbidden);
+      expect((await send('GET', server.dssPathPrefix)).status, HttpStatus.forbidden);
+    });
 
-    test('the route carries the per-run token; the bare /dss/ route is gone (#1143)', () async {
+    test('the route carries the per-run token; the bare /dss/ route is gone (#1143)',
+        () async {
       final tile = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix2.jpg');
       await tile.parent.create(recursive: true);
       await tile.writeAsBytes([1, 2, 3]);
-      expect(
-        (await send('GET', '/dss/Norder3/Dir0/Npix2.jpg')).status,
-        HttpStatus.forbidden,
-        reason: 'no token in the path',
-      );
-      expect(
-        (await send('GET', '/dss-wrongtoken/Norder3/Dir0/Npix2.jpg')).status,
-        HttpStatus.forbidden,
-      );
-      expect(
-        (await send(
-          'GET',
-          '${server.dssPathPrefix}Norder3/Dir0/Npix2.jpg',
-        )).status,
-        HttpStatus.ok,
-      );
+      expect((await send('GET', '/dss/Norder3/Dir0/Npix2.jpg')).status,
+          HttpStatus.forbidden, reason: 'no token in the path');
+      expect((await send('GET', '/dss-wrongtoken/Norder3/Dir0/Npix2.jpg')).status,
+          HttpStatus.forbidden);
+      expect((await send('GET', '${server.dssPathPrefix}Norder3/Dir0/Npix2.jpg')).status,
+          HttpStatus.ok);
       // (`..` is covered by the dssRelativePath unit test above — Dart's
       // HttpClient normalises dot segments away before the request is sent.)
     });
 
-    test(
-      'serves a cached tile from disk (GET body, HEAD length only)',
-      () async {
-        final tile = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix1.jpg');
-        await tile.parent.create(recursive: true);
-        await tile.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
-        try {
-          final get = await send(
-            'GET',
-            '${server.dssPathPrefix}Norder3/Dir0/Npix1.jpg',
-          );
-          expect(get.status, HttpStatus.ok);
-          expect(get.type, 'image/jpeg');
-          expect(get.body, [0xFF, 0xD8, 0xFF, 0xD9]);
-          final head = await send(
-            'HEAD',
-            '${server.dssPathPrefix}Norder3/Dir0/Npix1.jpg',
-          );
-          expect(head.status, HttpStatus.ok);
-          expect(head.type, 'image/jpeg');
-          expect(head.length, 4);
-        } finally {
-          await tile.delete();
-        }
-      },
-    );
+    test('serves a cached tile from disk (GET body, HEAD length only)',
+        () async {
+      final tile = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix1.jpg');
+      await tile.parent.create(recursive: true);
+      await tile.writeAsBytes([0xFF, 0xD8, 0xFF, 0xD9]);
+      try {
+        final get = await send('GET', '${server.dssPathPrefix}Norder3/Dir0/Npix1.jpg');
+        expect(get.status, HttpStatus.ok);
+        expect(get.type, 'image/jpeg');
+        expect(get.body, [0xFF, 0xD8, 0xFF, 0xD9]);
+        final head = await send('HEAD', '${server.dssPathPrefix}Norder3/Dir0/Npix1.jpg');
+        expect(head.status, HttpStatus.ok);
+        expect(head.type, 'image/jpeg');
+        expect(head.length, 4);
+      } finally {
+        await tile.delete();
+      }
+    });
 
     test('rejects methods other than GET/HEAD', () async {
-      expect(
-        (await send('POST', '${server.dssPathPrefix}properties')).status,
-        HttpStatus.methodNotAllowed,
-      );
+      expect((await send('POST', '${server.dssPathPrefix}properties')).status,
+          HttpStatus.methodNotAllowed);
     });
 
     // The DNS-rebind guard: a page at http://evil.example resolving to
@@ -408,9 +284,7 @@ void main() {
       Future<int> withHost(String host) async {
         final client = HttpClient();
         try {
-          final req = await client.getUrl(
-            Uri.parse('${server.baseUrl}${server.dssPathPrefix}properties'),
-          );
+          final req = await client.getUrl(Uri.parse('${server.baseUrl}${server.dssPathPrefix}properties'));
           req.headers.set(HttpHeaders.hostHeader, host);
           final res = await req.close();
           await res.drain<void>();
@@ -419,7 +293,6 @@ void main() {
           client.close(force: true);
         }
       }
-
       expect(await withHost('localhost:$port'), HttpStatus.forbidden);
       expect(await withHost('evil.example:$port'), HttpStatus.forbidden);
       expect(await withHost('127.0.0.1:1'), HttpStatus.forbidden);
@@ -508,9 +381,7 @@ void main() {
         }
         await req.response.close();
       });
-      StellariumServer.dssOrigin = Uri.parse(
-        'http://127.0.0.1:${origin.port}/',
-      );
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
       StellariumServer.maxDssResourceBytes = 32;
       StellariumServer.dssBodyTimeout = const Duration(seconds: 1);
       StellariumServer.dssHeadersTimeout = const Duration(seconds: 2);
@@ -527,9 +398,7 @@ void main() {
       for (final r in stalled) {
         try {
           await r.close();
-        } catch (_) {
-          /* peer already gone */
-        }
+        } catch (_) {/* peer already gone */}
       }
       await origin.close(force: true);
     });
@@ -540,113 +409,63 @@ void main() {
     Future<({int status, List<int> body})> get(String path) async {
       final client = HttpClient();
       try {
-        final res = await (await client.getUrl(
-          Uri.parse('${server.baseUrl}$path'),
-        )).close();
-        return (
-          status: res.statusCode,
-          body: await res.fold<List<int>>([], (a, b) => a..addAll(b)),
-        );
+        final res = await (await client.getUrl(Uri.parse('${server.baseUrl}$path'))).close();
+        return (status: res.statusCode, body: await res.fold<List<int>>([], (a, b) => a..addAll(b)));
       } finally {
         client.close(force: true);
       }
     }
 
-    Future<Map<String, Object?>> status() async => jsonDecode(
-      utf8.decode((await get('${server.dssPathPrefix}status')).body),
-    ) as Map<String, Object?>;
+    Future<Map<String, Object?>> status() async =>
+        jsonDecode(utf8.decode((await get('${server.dssPathPrefix}status')).body)) as Map<String, Object?>;
 
-    test(
-      'a miss downloads once, persists atomically, then serves from disk',
-      () async {
-        final before = originHits;
-        final first = await get(
-          '${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg',
-        );
-        expect(first.status, HttpStatus.ok);
-        expect(first.body, tile);
-        final file = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix7.jpg');
-        expect(await file.readAsBytes(), tile);
-        expect(
-          file.parent.listSync().where((e) => e.path.contains('.part-')),
-          isEmpty,
-        );
-        final second = await get(
-          '${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg',
-        );
-        expect(second.body, tile);
-        expect(
-          originHits - before,
-          1,
-          reason: 'second request must be a cache hit',
-        );
-        expect((await status())['offline'], false);
-      },
-    );
+    test('a miss downloads once, persists atomically, then serves from disk', () async {
+      final before = originHits;
+      final first = await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg');
+      expect(first.status, HttpStatus.ok);
+      expect(first.body, tile);
+      final file = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix7.jpg');
+      expect(await file.readAsBytes(), tile);
+      expect(file.parent.listSync().where((e) => e.path.contains('.part-')), isEmpty);
+      final second = await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg');
+      expect(second.body, tile);
+      expect(originHits - before, 1, reason: 'second request must be a cache hit');
+      expect((await status())['offline'], false);
+    });
 
-    test(
-      'the engine\'s ?v= cache-buster is part of the cache key (#1143)',
-      () async {
-        final a = await get(
-          '${server.dssPathPrefix}Norder3/Allsky.jpg?v=2017-01-01',
-        );
-        expect(utf8.decode(a.body), 'v=2017-01-01');
-        final b = await get(
-          '${server.dssPathPrefix}Norder3/Allsky.jpg?v=2026-10-06',
-        );
-        expect(
-          utf8.decode(b.body),
-          'v=2026-10-06',
-          reason: 'a re-release is fetched again',
-        );
-        expect(
-          File('${server.dssCacheDir.path}/Norder3/Allsky.jpg@2017-01-01')
-              .existsSync(),
-          isTrue,
-        );
-        expect(
-          File('${server.dssCacheDir.path}/Norder3/Allsky.jpg@2026-10-06')
-              .existsSync(),
-          isTrue,
-        );
-        final before = originHits;
-        await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=2017-01-01');
-        expect(originHits, before, reason: 'each release is its own cache hit');
-        // A buster outside the HiPS alphabet is dropped entirely: the key is
-        // the bare tile and upstream sees the bare path with no `v`.
-        originUris.clear();
-        final bad = await get(
-          '${server.dssPathPrefix}Norder3/Allsky.jpg?v=..%2Fx',
-        );
-        expect(bad.status, HttpStatus.ok);
-        expect(utf8.decode(bad.body), 'v=null');
-        expect(originUris.map((u) => u.toString()), ['/Norder3/Allsky.jpg']);
-        expect(
-          File('${server.dssCacheDir.path}/Norder3/Allsky.jpg').existsSync(),
-          isTrue,
-        );
-        expect(
-          server.dssCacheDir.listSync(recursive: true).map((e) => e.path),
-          everyElement(isNot(contains('..'))),
-        );
-        originUris.clear();
-        expect(
-          (await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=')).status,
-          HttpStatus.ok,
-          reason: 'an empty buster is a cache hit on the bare tile',
-        );
-        expect(originUris, isEmpty);
-      },
-    );
+    test('the engine\'s ?v= cache-buster is part of the cache key (#1143)', () async {
+      final a = await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=2017-01-01');
+      expect(utf8.decode(a.body), 'v=2017-01-01');
+      final b = await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=2026-10-06');
+      expect(utf8.decode(b.body), 'v=2026-10-06', reason: 'a re-release is fetched again');
+      expect(File('${server.dssCacheDir.path}/Norder3/Allsky.jpg@2017-01-01').existsSync(), isTrue);
+      expect(File('${server.dssCacheDir.path}/Norder3/Allsky.jpg@2026-10-06').existsSync(), isTrue);
+      final before = originHits;
+      await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=2017-01-01');
+      expect(originHits, before, reason: 'each release is its own cache hit');
+      // A buster outside the HiPS alphabet is dropped entirely: the key is
+      // the bare tile and upstream sees the bare path with no `v`.
+      originUris.clear();
+      final bad = await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=..%2Fx');
+      expect(bad.status, HttpStatus.ok);
+      expect(utf8.decode(bad.body), 'v=null');
+      expect(originUris.map((u) => u.toString()), ['/Norder3/Allsky.jpg']);
+      expect(File('${server.dssCacheDir.path}/Norder3/Allsky.jpg').existsSync(), isTrue);
+      expect(server.dssCacheDir.listSync(recursive: true).map((e) => e.path),
+          everyElement(isNot(contains('..'))));
+      originUris.clear();
+      expect((await get('${server.dssPathPrefix}Norder3/Allsky.jpg?v=')).status, HttpStatus.ok,
+          reason: 'an empty buster is a cache hit on the bare tile');
+      expect(originUris, isEmpty);
+    });
 
-    test('a tile cached before the key carried the buster is adopted, not re-fetched', () async {
+    test('a tile cached before the key carried the buster is adopted, not re-fetched',
+        () async {
       final legacy = File('${server.dssCacheDir.path}/Norder3/Dir0/Npix30.jpg');
       await legacy.parent.create(recursive: true);
       await legacy.writeAsBytes(tile);
       final before = originHits;
-      final res = await get(
-        '${server.dssPathPrefix}Norder3/Dir0/Npix30.jpg?v=2017',
-      );
+      final res = await get('${server.dssPathPrefix}Norder3/Dir0/Npix30.jpg?v=2017');
       expect(res.status, HttpStatus.ok);
       expect(res.body, tile);
       expect(originHits, before, reason: 'served from the renamed legacy file');
@@ -654,83 +473,65 @@ void main() {
       expect(File('${legacy.path}@2017').existsSync(), isTrue);
     });
 
-    test(
-      'measureDssCache and clearDssCache act on the running server\'s cache',
-      () async {
-        await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg');
-        final seeded = File(
-          '${server.dssCacheDir.path}/Norder3/Dir1/Npix99.jpg',
-        );
-        await seeded.parent.create(recursive: true);
-        await seeded.writeAsBytes(List<int>.filled(10, 2));
-        final measured = await StellariumServer.measureDssCache();
-        expect(measured.files, greaterThanOrEqualTo(2));
-        final onDisk = server.dssCacheDir
-            .listSync(recursive: true)
-            .whereType<File>()
-            .fold<int>(0, (a, f) => a + f.lengthSync());
-        expect(measured.bytes, onDisk, reason: 'recursive, every file counted');
-        final cleared = await StellariumServer.clearDssCache();
-        expect(cleared, measured);
-        expect(
-          server.dssCacheDir.existsSync(),
-          isTrue,
-          reason: 'the folder stays',
-        );
-        expect(server.dssCacheDir.listSync(), isEmpty);
-        expect(await StellariumServer.measureDssCache(), (files: 0, bytes: 0));
-        // The next request is a miss again, served and re-persisted.
-        final before = originHits;
-        expect(
-          (await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status,
-          HttpStatus.ok,
-        );
-        expect(originHits, before + 1);
-      },
-    );
+    test('measureDssCache and clearDssCache act on the running server\'s cache',
+        () async {
+      await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg');
+      final seeded = File('${server.dssCacheDir.path}/Norder3/Dir1/Npix99.jpg');
+      await seeded.parent.create(recursive: true);
+      await seeded.writeAsBytes(List<int>.filled(10, 2));
+      final measured = await StellariumServer.measureDssCache();
+      expect(measured.files, greaterThanOrEqualTo(2));
+      final onDisk = server.dssCacheDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .fold<int>(0, (a, f) => a + f.lengthSync());
+      expect(measured.bytes, onDisk, reason: 'recursive, every file counted');
+      final cleared = await StellariumServer.clearDssCache();
+      expect(cleared, measured);
+      expect(server.dssCacheDir.existsSync(), isTrue, reason: 'the folder stays');
+      expect(server.dssCacheDir.listSync(), isEmpty);
+      expect(await StellariumServer.measureDssCache(), (files: 0, bytes: 0));
+      // The next request is a miss again, served and re-persisted.
+      final before = originHits;
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
+      expect(originHits, before + 1);
+    });
 
-    test(
-      'writes past the cap evict the oldest-fetched tiles (behavioural)',
-      () async {
-        final savedMax = StellariumServer.maxDssCacheBytes;
-        final savedEvery = StellariumServer.dssPruneCheckEvery;
-        // Cap of 2 tiles (7 B each): under 90 % of 15 B is one tile.
-        StellariumServer.maxDssCacheBytes = 15;
-        StellariumServer.dssPruneCheckEvery = 1;
-        try {
-          await StellariumServer.clearDssCache();
-          for (var i = 1; i <= 3; i++) {
-            await get('${server.dssPathPrefix}Norder6/Dir0/Npix$i.jpg');
-            // Distinct mtimes on a coarse filesystem clock.
-            await Future<void>.delayed(const Duration(milliseconds: 1100));
-          }
-          // The prune runs unawaited after the write; give it a moment.
-          var files = <String>[];
-          for (var tries = 0; tries < 20; tries++) {
-            await Future<void>.delayed(const Duration(milliseconds: 100));
-            files = server.dssCacheDir
-                .listSync(recursive: true)
-                .whereType<File>()
-                .map((f) => f.uri.pathSegments.last)
-                .toList();
-            if (files.length == 1) break;
-          }
-          expect(files, [
-            'Npix3.jpg',
-          ], reason: 'oldest two evicted, newest kept');
-        } finally {
-          StellariumServer.maxDssCacheBytes = savedMax;
-          StellariumServer.dssPruneCheckEvery = savedEvery;
+    test('writes past the cap evict the oldest-fetched tiles (behavioural)', () async {
+      final savedMax = StellariumServer.maxDssCacheBytes;
+      final savedEvery = StellariumServer.dssPruneCheckEvery;
+      // Cap of 2 tiles (7 B each): under 90 % of 15 B is one tile.
+      StellariumServer.maxDssCacheBytes = 15;
+      StellariumServer.dssPruneCheckEvery = 1;
+      try {
+        await StellariumServer.clearDssCache();
+        for (var i = 1; i <= 3; i++) {
+          await get('${server.dssPathPrefix}Norder6/Dir0/Npix$i.jpg');
+          // Distinct mtimes on a coarse filesystem clock.
+          await Future<void>.delayed(const Duration(milliseconds: 1100));
         }
-      },
-    );
+        // The prune runs unawaited after the write; give it a moment.
+        var files = <String>[];
+        for (var tries = 0; tries < 20; tries++) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          files = server.dssCacheDir
+              .listSync(recursive: true)
+              .whereType<File>()
+              .map((f) => f.uri.pathSegments.last)
+              .toList();
+          if (files.length == 1) break;
+        }
+        expect(files, ['Npix3.jpg'], reason: 'oldest two evicted, newest kept');
+      } finally {
+        StellariumServer.maxDssCacheBytes = savedMax;
+        StellariumServer.dssPruneCheckEvery = savedEvery;
+      }
+    });
 
-    test('misses beyond the concurrency cap wait for a slot, hits never queue (#1143)', () async {
+    test('misses beyond the concurrency cap wait for a slot, hits never queue (#1143)',
+        () async {
       // Warm one hit first (an earlier test may have evicted it).
-      expect(
-        (await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status,
-        HttpStatus.ok,
-      );
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
       final before = originHits;
       // Two fetches park on the stalled origin (cap = 2); a third distinct
       // miss is held back until one of them times out, so the survey sees
@@ -745,10 +546,7 @@ void main() {
       expect(originHits - before, 2, reason: 'the third miss is waiting');
       // A cache hit never queues behind the parked fetches.
       final sw = Stopwatch()..start();
-      expect(
-        (await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status,
-        HttpStatus.ok,
-      );
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
       expect(sw.elapsedMilliseconds, lessThan(500));
       for (final r in await Future.wait(parked)) {
         expect(r.status, HttpStatus.notFound);
@@ -787,81 +585,48 @@ void main() {
       expect(originPeak, 2, reason: 'never more than the cap in flight');
     });
 
-    test("an upstream 404 is the survey's answer: 404 through, nothing written, still online", () async {
-      expect(
-        (await get('${server.dssPathPrefix}Norder3/Dir0/Npix9.jpg')).status,
-        HttpStatus.notFound,
-      );
-      expect(
-        File('${server.dssCacheDir.path}/Norder3/Dir0/Npix9.jpg').existsSync(),
-        isFalse,
-      );
+    test("an upstream 404 is the survey's answer: 404 through, nothing written, still online",
+        () async {
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix9.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix9.jpg').existsSync(), isFalse);
       expect((await status())['offline'], false);
     });
 
-    test(
-      'a 404 whose body never arrives is bounded like every other read',
-      () async {
-        // The coalesced fetch must complete (404 to the page, entry released)
-        // within the body deadline, not hang for the app's life.
-        final res = await get('${server.dssPathPrefix}Norder3/Dir0/Npix12.jpg')
-            .timeout(const Duration(seconds: 4));
-        expect(res.status, HttpStatus.notFound);
-      },
-    );
-
-    test('a body over the cap is refused and not persisted', () async {
-      expect(
-        (await get('${server.dssPathPrefix}Norder3/Dir0/Npix8.jpg')).status,
-        HttpStatus.notFound,
-      );
-      expect(
-        File('${server.dssCacheDir.path}/Norder3/Dir0/Npix8.jpg').existsSync(),
-        isFalse,
-      );
+    test('a 404 whose body never arrives is bounded like every other read',
+        () async {
+      // The coalesced fetch must complete (404 to the page, entry released)
+      // within the body deadline, not hang for the app's life.
+      final res = await get('${server.dssPathPrefix}Norder3/Dir0/Npix12.jpg')
+          .timeout(const Duration(seconds: 4));
+      expect(res.status, HttpStatus.notFound);
     });
 
-    test(
-      'an unreachable origin flips /dss/status to offline and arms the backoff',
-      () async {
-        final dead = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
-        final deadPort = dead.port;
-        await dead.close(); // nothing listens here now → connection refused
-        StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:$deadPort/');
-        try {
-          expect(
-            (await status())['offline'],
-            false,
-            reason: 'fresh state per test',
-          );
-          expect(
-            (await get('${server.dssPathPrefix}Norder4/Dir0/Npix1.jpg')).status,
-            HttpStatus.notFound,
-          );
-          expect((await status())['offline'], true);
-          // Within the backoff window a further miss is answered from the cache
-          // state alone — the (now restored) origin is not contacted.
-          StellariumServer.dssOrigin = Uri.parse(
-            'http://127.0.0.1:${origin.port}/',
-          );
-          final before = originHits;
-          expect(
-            (await get('${server.dssPathPrefix}Norder4/Dir0/Npix2.jpg')).status,
-            HttpStatus.notFound,
-          );
-          expect(originHits, before);
-          // Cache hits still serve during the backoff.
-          expect(
-            (await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status,
-            HttpStatus.ok,
-          );
-        } finally {
-          StellariumServer.dssOrigin = Uri.parse(
-            'http://127.0.0.1:${origin.port}/',
-          );
-        }
-      },
-    );
+    test('a body over the cap is refused and not persisted', () async {
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix8.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix8.jpg').existsSync(), isFalse);
+    });
+
+    test('an unreachable origin flips /dss/status to offline and arms the backoff', () async {
+      final dead = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
+      final deadPort = dead.port;
+      await dead.close(); // nothing listens here now → connection refused
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:$deadPort/');
+      try {
+        expect((await status())['offline'], false, reason: 'fresh state per test');
+        expect((await get('${server.dssPathPrefix}Norder4/Dir0/Npix1.jpg')).status, HttpStatus.notFound);
+        expect((await status())['offline'], true);
+        // Within the backoff window a further miss is answered from the cache
+        // state alone — the (now restored) origin is not contacted.
+        StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+        final before = originHits;
+        expect((await get('${server.dssPathPrefix}Norder4/Dir0/Npix2.jpg')).status, HttpStatus.notFound);
+        expect(originHits, before);
+        // Cache hits still serve during the backoff.
+        expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix7.jpg')).status, HttpStatus.ok);
+      } finally {
+        StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
+      }
+    });
   });
 
   // A captive portal (hotel / campground / airport Wi-Fi) answers every URL
@@ -885,8 +650,7 @@ void main() {
           // Portal that redirects.
           req.response.statusCode = HttpStatus.found;
           req.response.headers.set(HttpHeaders.locationHeader, '/portal');
-        } else if (path == '/Norder3/Dir0/Npix21.jpg' ||
-            path == '/properties') {
+        } else if (path == '/Norder3/Dir0/Npix21.jpg' || path == '/properties') {
           // Portal that rewrites the body in place (200 + HTML).
           req.response.headers.contentType = ContentType.html;
           req.response.write(portalHtml);
@@ -895,9 +659,7 @@ void main() {
         }
         await req.response.close();
       });
-      StellariumServer.dssOrigin = Uri.parse(
-        'http://127.0.0.1:${origin.port}/',
-      );
+      StellariumServer.dssOrigin = Uri.parse('http://127.0.0.1:${origin.port}/');
       server = await StellariumServer.start();
     });
     tearDownAll(() async {
@@ -910,68 +672,32 @@ void main() {
     Future<({int status, List<int> body})> get(String path) async {
       final client = HttpClient();
       try {
-        final res = await (await client.getUrl(
-          Uri.parse('${server.baseUrl}$path'),
-        )).close();
-        return (
-          status: res.statusCode,
-          body: await res.fold<List<int>>([], (a, b) => a..addAll(b)),
-        );
+        final res = await (await client.getUrl(Uri.parse('${server.baseUrl}$path'))).close();
+        return (status: res.statusCode, body: await res.fold<List<int>>([], (a, b) => a..addAll(b)));
       } finally {
         client.close(force: true);
       }
     }
 
-    Future<Map<String, Object?>> status() async => jsonDecode(
-      utf8.decode((await get('${server.dssPathPrefix}status')).body),
-    ) as Map<String, Object?>;
+    Future<Map<String, Object?>> status() async =>
+        jsonDecode(utf8.decode((await get('${server.dssPathPrefix}status')).body)) as Map<String, Object?>;
 
-    test(
-      'a redirected tile is refused, not persisted, and reads as offline',
-      () async {
-        expect(
-          (await get('${server.dssPathPrefix}Norder3/Dir0/Npix20.jpg')).status,
-          HttpStatus.notFound,
-        );
-        expect(
-          File('${server.dssCacheDir.path}/Norder3/Dir0/Npix20.jpg')
-              .existsSync(),
-          isFalse,
-        );
-        expect((await status())['offline'], true);
-      },
-    );
+    test('a redirected tile is refused, not persisted, and reads as offline', () async {
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix20.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix20.jpg').existsSync(), isFalse);
+      expect((await status())['offline'], true);
+    });
 
-    test(
-      'a 200 whose body is not an image is refused and not persisted',
-      () async {
-        expect(
-          (await status())['offline'],
-          false,
-          reason: 'fresh state per test',
-        );
-        expect(
-          (await get('${server.dssPathPrefix}Norder3/Dir0/Npix21.jpg')).status,
-          HttpStatus.notFound,
-        );
-        expect(
-          File('${server.dssCacheDir.path}/Norder3/Dir0/Npix21.jpg')
-              .existsSync(),
-          isFalse,
-        );
-        expect((await status())['offline'], true);
-        server.resetDssState();
-        expect(
-          (await get('${server.dssPathPrefix}properties')).status,
-          HttpStatus.notFound,
-        );
-        expect(
-          File('${server.dssCacheDir.path}/properties').existsSync(),
-          isFalse,
-        );
-        expect((await status())['offline'], true);
-      },
-    );
+    test('a 200 whose body is not an image is refused and not persisted', () async {
+      expect((await status())['offline'], false, reason: 'fresh state per test');
+      expect((await get('${server.dssPathPrefix}Norder3/Dir0/Npix21.jpg')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/Norder3/Dir0/Npix21.jpg').existsSync(), isFalse);
+      expect((await status())['offline'], true);
+      server.resetDssState();
+      expect((await get('${server.dssPathPrefix}properties')).status, HttpStatus.notFound);
+      expect(File('${server.dssCacheDir.path}/properties').existsSync(), isFalse);
+      expect((await status())['offline'], true);
+    });
   });
 
   group('StellariumServer cache housekeeping (#1143)', () {
@@ -993,113 +719,65 @@ void main() {
       expect(await StellariumServer.sweepPartFiles(dir), 1);
       expect(File('${dir.path}/Norder3/Dir0/Npix1.jpg').existsSync(), isTrue);
       expect(File('${dir.path}/Norder3/Dir0/partial.jpg').existsSync(), isTrue);
-      expect(
-        File('${dir.path}/Norder3/Dir0/Npix2.jpg.part-1234567890').existsSync(),
-        isFalse,
-      );
-      expect(
-        await StellariumServer.sweepPartFiles(Directory('${dir.path}/nope')),
-        0,
-      );
+      expect(File('${dir.path}/Norder3/Dir0/Npix2.jpg.part-1234567890').existsSync(), isFalse);
+      expect(await StellariumServer.sweepPartFiles(Directory('${dir.path}/nope')), 0);
     });
 
-    test(
-      'the survey root is never evicted, however old (#1296 review)',
-      () async {
-        final t0 = DateTime(2026, 1, 1);
-        put('properties', 100, modified: t0);
-        put('Norder3/Allsky.jpg', 100, modified: t0);
-        put('Norder3/Dir0/Npix1.jpg', 100, modified: t0);
-        put(
-          'Norder7/Dir10000/Npix1.jpg',
-          100,
-          modified: t0.add(const Duration(days: 1)),
-        );
-        put(
-          'Norder8/Dir10000/Npix1.jpg',
-          100,
-          modified: t0.add(const Duration(days: 2)),
-        );
-        // 500 B over a 450 B cap (target 405): the only candidates are the two
-        // deep tiles, oldest first, and one of them is enough.
-        expect(await StellariumServer.pruneDssCache(dir, maxBytes: 450), 100);
-        expect(File('${dir.path}/properties').existsSync(), isTrue);
-        expect(File('${dir.path}/Norder3/Allsky.jpg').existsSync(), isTrue);
-        expect(File('${dir.path}/Norder3/Dir0/Npix1.jpg').existsSync(), isTrue);
-        expect(
-          File('${dir.path}/Norder7/Dir10000/Npix1.jpg').existsSync(),
-          isFalse,
-        );
-        expect(
-          File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(),
-          isTrue,
-        );
-        // Pinned bytes alone over the cap: nothing to do, nothing deleted.
-        expect(await StellariumServer.pruneDssCache(dir, maxBytes: 50), 100);
-        expect(File('${dir.path}/properties').existsSync(), isTrue);
-        expect(
-          File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(),
-          isFalse,
-        );
-      },
-    );
+    test('the survey root is never evicted, however old (#1296 review)', () async {
+      final t0 = DateTime(2026, 1, 1);
+      put('properties', 100, modified: t0);
+      put('Norder3/Allsky.jpg', 100, modified: t0);
+      put('Norder3/Dir0/Npix1.jpg', 100, modified: t0);
+      put('Norder7/Dir10000/Npix1.jpg', 100, modified: t0.add(const Duration(days: 1)));
+      put('Norder8/Dir10000/Npix1.jpg', 100, modified: t0.add(const Duration(days: 2)));
+      // 500 B over a 450 B cap (target 405): the only candidates are the two
+      // deep tiles, oldest first, and one of them is enough.
+      expect(await StellariumServer.pruneDssCache(dir, maxBytes: 450), 100);
+      expect(File('${dir.path}/properties').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder3/Allsky.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder3/Dir0/Npix1.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder7/Dir10000/Npix1.jpg').existsSync(), isFalse);
+      expect(File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(), isTrue);
+      // Pinned bytes alone over the cap: nothing to do, nothing deleted.
+      expect(await StellariumServer.pruneDssCache(dir, maxBytes: 50), 100);
+      expect(File('${dir.path}/properties').existsSync(), isTrue);
+      expect(File('${dir.path}/Norder8/Dir10000/Npix1.jpg').existsSync(), isFalse);
+    });
 
     test('isDssRootResource pins properties, Allsky and order ≤ 3', () {
       expect(StellariumServer.isDssRootResource('properties'), isTrue);
       expect(StellariumServer.isDssRootResource('properties@2017'), isTrue);
       expect(StellariumServer.isDssRootResource('Norder3/Allsky.jpg'), isTrue);
-      expect(
-        StellariumServer.isDssRootResource('Norder6/Allsky.jpg@2017'),
-        isTrue,
-      );
-      expect(
-        StellariumServer.isDssRootResource('Norder0/Dir0/Npix0.jpg'),
-        isTrue,
-      );
-      expect(
-        StellariumServer.isDssRootResource('Norder3/Dir0/Npix1.jpg'),
-        isTrue,
-      );
-      expect(
-        StellariumServer.isDssRootResource('Norder4/Dir0/Npix1.jpg'),
-        isFalse,
-      );
-      expect(
-        StellariumServer.isDssRootResource('Norder9/Dir10000/Npix1.jpg'),
-        isFalse,
-      );
+      expect(StellariumServer.isDssRootResource('Norder6/Allsky.jpg@2017'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder0/Dir0/Npix0.jpg'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder3/Dir0/Npix1.jpg'), isTrue);
+      expect(StellariumServer.isDssRootResource('Norder4/Dir0/Npix1.jpg'), isFalse);
+      expect(StellariumServer.isDssRootResource('Norder9/Dir10000/Npix1.jpg'), isFalse);
       expect(StellariumServer.isDssRootResource('other/thing.jpg'), isFalse);
     });
 
-    test(
-      'pruneDssCache evicts oldest-fetched first, down to 90 % of the cap',
-      () async {
-        final t0 = DateTime(2026, 1, 1);
-        put('a.jpg', 100, modified: t0);
-        put('b.jpg', 100, modified: t0.add(const Duration(minutes: 1)));
-        put('c.jpg', 100, modified: t0.add(const Duration(minutes: 2)));
-        put('d.jpg.part-1', 1000, modified: t0); // never counted, never removed
-        expect(
-          await StellariumServer.pruneDssCache(dir, maxBytes: 400),
-          0,
-          reason: '300 B of tiles under a 400 B cap',
-        );
-        final freed = await StellariumServer.pruneDssCache(dir, maxBytes: 250);
-        // 300 > 250 → down to ≤ 225: a.jpg goes (200 left), b stays.
-        expect(freed, 100);
-        expect(File('${dir.path}/a.jpg').existsSync(), isFalse);
-        expect(File('${dir.path}/b.jpg').existsSync(), isTrue);
-        expect(File('${dir.path}/c.jpg').existsSync(), isTrue);
-        expect(File('${dir.path}/d.jpg.part-1').existsSync(), isTrue);
-      },
-    );
+    test('pruneDssCache evicts oldest-fetched first, down to 90 % of the cap', () async {
+      final t0 = DateTime(2026, 1, 1);
+      put('a.jpg', 100, modified: t0);
+      put('b.jpg', 100, modified: t0.add(const Duration(minutes: 1)));
+      put('c.jpg', 100, modified: t0.add(const Duration(minutes: 2)));
+      put('d.jpg.part-1', 1000, modified: t0); // never counted, never removed
+      expect(await StellariumServer.pruneDssCache(dir, maxBytes: 400), 0,
+          reason: '300 B of tiles under a 400 B cap');
+      final freed = await StellariumServer.pruneDssCache(dir, maxBytes: 250);
+      // 300 > 250 → down to ≤ 225: a.jpg goes (200 left), b stays.
+      expect(freed, 100);
+      expect(File('${dir.path}/a.jpg').existsSync(), isFalse);
+      expect(File('${dir.path}/b.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/c.jpg').existsSync(), isTrue);
+      expect(File('${dir.path}/d.jpg.part-1').existsSync(), isTrue);
+    });
 
     test('start() wires the sweep and the start-time prune', () async {
       // The write-triggered prune is covered behaviourally above; the
       // start-time pass runs before a test can seed the temp cache, so its
       // wiring is pinned here.
-      final src = File('lib/services/stellarium_server.dart')
-          .readAsStringSync();
+      final src = File('lib/services/stellarium_server.dart').readAsStringSync();
       expect(src, contains('unawaited(instance._houseKeep());'));
       expect(src, contains('await sweepPartFiles(_dssCacheDir);'));
       expect(src, contains('await _pruneIfNeeded(force: true);'));
@@ -1154,26 +832,15 @@ void main() {
         'window.requestAnimationFrame = function (cb) { return araSkyFrame(araSky, cb); };',
       );
       expect(hook, greaterThan(0));
-      expect(
-        hook,
-        lessThan(page.indexOf('stellarium-web-engine.js"></script>')),
-      );
-      expect(
-        page,
-        contains(
-          "if (c.type === 'visibility') { araSkySetHidden(araSky, !!c.hidden); return; }",
-        ),
-      );
+      expect(hook, lessThan(page.indexOf('stellarium-web-engine.js"></script>')));
+      expect(page, contains("if (c.type === 'visibility') { araSkySetHidden(araSky, !!c.hidden); return; }"));
       expect(page, contains('if (araSky.hidden) araSkyWake(araSky, 1500);'));
       expect(page, contains('araSky.ready = true;'));
       expect(page, contains('if (!araSkyResting(araSky)) syncSelection();'));
       expect(page, isNot(contains('setInterval(syncSelection, 150)')));
       final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
           .readAsStringSync();
-      expect(
-        dart,
-        contains("_pushCmd({'type': 'visibility', 'hidden': !shown})"),
-      );
+      expect(dart, contains("_pushCmd({'type': 'visibility', 'hidden': !shown})"));
       expect(dart, contains('PlanetariumShownListener('));
     });
   });
@@ -1190,27 +857,17 @@ void main() {
       final ready = page.indexOf("body: JSON.stringify({ type: 'ready' })");
       expect(ready, greaterThan(0), reason: 'the page posts ready');
       expect(page.lastIndexOf("fetch('/araevent'", ready), greaterThan(0));
-      expect(
-        page.lastIndexOf('araSky.ready = true;', ready),
-        greaterThan(0),
-        reason: 'the same timer lets the page rest',
-      );
+      expect(page.lastIndexOf('araSky.ready = true;', ready), greaterThan(0),
+          reason: 'the same timer lets the page rest');
       // CRLF on a Windows checkout (`* text=auto`), as for the page above.
       final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
           .readAsStringSync()
           .replaceAll('\r\n', '\n');
-      expect(
-        dart,
-        contains(
-          "if (event['type'] == 'ready') {\n      ref.read(planetariumReadyProvider.notifier).set(true);",
-        ),
-      );
+      expect(dart, contains("if (event['type'] == 'ready') {\n      ref.read(planetariumReadyProvider.notifier).set(true);"));
       // A new page load starts not ready: one reset per platform path (the
       // web view and the Linux overlay).
       expect(
-        'ref.read(planetariumReadyProvider.notifier).set(false);'
-            .allMatches(dart)
-            .length,
+        'ref.read(planetariumReadyProvider.notifier).set(false);'.allMatches(dart).length,
         2,
       );
     });
@@ -1275,17 +932,7 @@ void main() {
       // a parentless toplevel (#1200), and X11 is refused (#1201). Match the
       // call form so a reworded comment can't mask a real call.
       expect(runner, isNot(contains('gdk_window_ensure_native(window')));
-      expect(
-        runner,
-        isNot(
-          matches(
-            RegExp(
-              r'^\s*(if\s*\(.*)?gdk_window_ensure_native\(',
-              multiLine: true,
-            ),
-          ),
-        ),
-      );
+      expect(runner, isNot(matches(RegExp(r'^\s*(if\s*\(.*)?gdk_window_ensure_native\(', multiLine: true))));
       expect(runner, isNot(contains('GDK_IS_WAYLAND_DISPLAY(')));
     });
   });
@@ -1314,24 +961,11 @@ void main() {
       expect(runner, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       expect(doc, contains('setting WEBKIT_DISABLE_DMABUF_RENDERER=1'));
       // NVIDIA keeps DMABUF and disables the driver's explicit sync instead.
-      expect(
-        runner,
-        contains('g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);'),
-      );
+      expect(runner, contains('g_setenv("__NV_DISABLE_EXPLICIT_SYNC", "1", TRUE);'));
       // The runner splits the literal across lines; the doc quotes it whole.
-      expect(
-        runner,
-        contains(
-          'setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, "',
-        ),
-      );
+      expect(runner, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, "'));
       expect(runner, contains('"compositing forced)"'));
-      expect(
-        doc,
-        contains(
-          'setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)',
-        ),
-      );
+      expect(doc, contains('setting __NV_DISABLE_EXPLICIT_SYNC=1 (DMABUF renderer kept, compositing forced)'));
       // The crash backstop: signal hooked, marker path documented.
       expect(runner, contains('"web-process-terminated"'));
       // Clean teardown: SIGTERM routes through GApplication and the overlay
@@ -1341,10 +975,7 @@ void main() {
       expect(app, contains('planetarium_overlay_shutdown();'));
       // The toplevel is app-paintable so GTK skips its per-frame software
       // background fill (37 % of the UI thread at 4K on NVIDIA Wayland).
-      expect(
-        app,
-        contains('gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);'),
-      );
+      expect(app, contains('gtk_widget_set_app_paintable(GTK_WIDGET(window), TRUE);'));
       // And FlView's background is fully transparent so the embedder skips
       // its own per-frame software paint (50 % of the UI thread at 4K).
       expect(app, contains('gdk_rgba_parse(&background_color, "#00000000");'));
@@ -1383,28 +1014,16 @@ void main() {
       final throttle = page.indexOf('var araIdleThrottle = (function () {');
       expect(caps, greaterThan(-1));
       expect(throttle, greaterThan(caps));
-      expect(
-        page,
-        contains("Object.defineProperty(window, 'devicePixelRatio'"),
-      );
-      expect(
-        page,
-        contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'),
-      );
+      expect(page, contains("Object.defineProperty(window, 'devicePixelRatio'"));
+      expect(page, contains('if (!araViewCaps.isLarge()) return nativeRaf(cb);'));
       // Off by default; only the Linux runner turns it on, where a CPU copy
       // per frame remains (shm renderer, or NVIDIA's GTK3-composited DMABUF).
       expect(page, contains('var enabled = false;'));
       // The real ratio must be read live, never frozen at load (review on
       // #1275: a 1x -> 2x monitor move kept the old backing resolution).
-      expect(
-        page,
-        contains("Object.getOwnPropertyDescriptor(proto, 'devicePixelRatio')"),
-      );
+      expect(page, contains("Object.getOwnPropertyDescriptor(proto, 'devicePixelRatio')"));
       expect(page, contains('return realDprGetter.call(window) || 1;'));
-      expect(
-        page,
-        isNot(contains('var realDpr = window.devicePixelRatio || 1;')),
-      );
+      expect(page, isNot(contains('var realDpr = window.devicePixelRatio || 1;')));
       final runner = File('linux/runner/planetarium_overlay.cc')
           .readAsStringSync();
       expect(runner, contains('"araViewCaps.enable()"'));
@@ -1429,30 +1048,23 @@ void main() {
       final page = File('assets/stellarium/index.html').readAsStringSync();
       final body = page.substring(page.indexOf('var araIdleThrottle'));
       expect(body, contains('queue.push({ id: id, cb: cb });'));
-      expect(
-        body,
-        contains('if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);'),
-      );
+      expect(body, contains('if (!timer) timer = setTimeout(flush, 1000 / IDLE_FPS);'));
       expect(body, isNot(contains('one throttled slot')));
     });
   });
 
   group('planetarium page scope box', () {
-    test(
-      'draws the daemon\'s latest solve as a second box and clears on request',
-      () {
-        // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}
-        // per solve; the page draws it beside the planned framing box.
-        final page = File('assets/stellarium/index.html').readAsStringSync();
-        expect(page, contains("c.type === 'scopeBox'"));
-        expect(page, contains('function scopeBoxData()'));
-        expect(page, contains('function updateScopeBox()'));
-        expect(page, contains("scopeBox = c.clear ? null :"));
-        final dart = File('lib/widgets/sky_atlas/stellarium_view.dart')
-            .readAsStringSync();
-        expect(dart, contains('scopeBoxCommandFor('));
-      },
-    );
+    test('draws the daemon\'s latest solve as a second box and clears on request', () {
+      // The by-hand rotation readout pushes {type:'scopeBox', ra, dec, paDeg, fov…}
+      // per solve; the page draws it beside the planned framing box.
+      final page = File('assets/stellarium/index.html').readAsStringSync();
+      expect(page, contains("c.type === 'scopeBox'"));
+      expect(page, contains('function scopeBoxData()'));
+      expect(page, contains('function updateScopeBox()'));
+      expect(page, contains("scopeBox = c.clear ? null :"));
+      final dart = File('lib/widgets/sky_atlas/stellarium_view.dart').readAsStringSync();
+      expect(dart, contains('scopeBoxCommandFor('));
+    });
   });
 
   group('planetarium page DSS data source', () {
@@ -1464,39 +1076,25 @@ void main() {
       expect(page, contains("core.dss.addDataSource({ url: DSS_BASE })"));
       expect(page, isNot(contains("url: './dss")));
     });
-    test(
-      'the Frame panel probes the cache and status, and keeps its message',
-      () {
-        // No harness runs index.html; this string guard keeps a future edit
-        // from silently dropping the two-step probe or the hint. Line endings
-        // are normalised: a Windows checkout has CRLF and the multi-line guard
-        // below is written with LF.
-        final page = File('assets/stellarium/index.html')
-            .readAsStringSync()
-            .replaceAll('\r\n', '\n');
-        expect(
-          page,
-          contains("fetch(DSS_BASE + '/properties', { method: 'HEAD'"),
-        );
-        expect(page, contains("fetch(DSS_BASE + '/status'"));
-        expect(
-          page,
-          contains("Some sky photos for this area aren't cached yet"),
-        );
-        expect(page, contains('if (frameOn) probeDssPhotos();'));
-        // No hint (and no request) for a layer the user turned off — checked
-        // inside probe(), so the 4 s re-probe cannot bypass it.
-        expect(
-          page,
-          contains(
-            "function probe() {\n"
-            "    // Photos the user switched off are not \"missing\": say nothing for them,\n"
-            "    // and send no request. Inside probe() so the delayed re-probe obeys too.\n"
-            "    if (stel && !dispState('dss')) { el.hidden = true; return; }\n"
-            "    fetch(DSS_BASE + '/properties'",
-          ),
-        );
-      },
-    );
+    test('the Frame panel probes the cache and status, and keeps its message', () {
+      // No harness runs index.html; this string guard keeps a future edit
+      // from silently dropping the two-step probe or the hint. Line endings
+      // are normalised: a Windows checkout has CRLF and the multi-line guard
+      // below is written with LF.
+      final page = File('assets/stellarium/index.html')
+          .readAsStringSync()
+          .replaceAll('\r\n', '\n');
+      expect(page, contains("fetch(DSS_BASE + '/properties', { method: 'HEAD'"));
+      expect(page, contains("fetch(DSS_BASE + '/status'"));
+      expect(page, contains("Some sky photos for this area aren't cached yet"));
+      expect(page, contains('if (frameOn) probeDssPhotos();'));
+      // No hint (and no request) for a layer the user turned off — checked
+      // inside probe(), so the 4 s re-probe cannot bypass it.
+      expect(page, contains("function probe() {\n"
+          "    // Photos the user switched off are not \"missing\": say nothing for them,\n"
+          "    // and send no request. Inside probe() so the delayed re-probe obeys too.\n"
+          "    if (stel && !dispState('dss')) { el.hidden = true; return; }\n"
+          "    fetch(DSS_BASE + '/properties'"));
+    });
   });
 }

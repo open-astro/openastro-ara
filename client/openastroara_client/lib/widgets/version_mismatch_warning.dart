@@ -19,10 +19,7 @@ class VersionMismatchWarning extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final pair = mismatchedVersions(
-      ref.watch(appVersionProvider),
-      serverVersion,
-    );
+    final pair = mismatchedVersions(ref.watch(appVersionProvider), serverVersion);
     if (pair == null) {
       return const SizedBox.shrink();
     }

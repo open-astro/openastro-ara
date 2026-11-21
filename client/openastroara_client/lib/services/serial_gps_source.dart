@@ -28,8 +28,7 @@ class OsSerialGpsSource implements SerialGpsSource {
   const OsSerialGpsSource();
 
   @override
-  bool get supported =>
-      Platform.isMacOS || Platform.isWindows || Platform.isLinux;
+  bool get supported => Platform.isMacOS || Platform.isWindows || Platform.isLinux;
 
   @override
   Future<List<String>> availablePorts() async {
@@ -41,11 +40,7 @@ class OsSerialGpsSource implements SerialGpsSource {
           .map((e) => e.path)
           .where(_isCandidatePosixPort)
           .toList();
-      names.sort(
-        (a, b) => _rank(a) != _rank(b)
-            ? _rank(a).compareTo(_rank(b))
-            : a.compareTo(b),
-      );
+      names.sort((a, b) => _rank(a) != _rank(b) ? _rank(a).compareTo(_rank(b)) : a.compareTo(b));
       return names;
     } catch (_) {
       return const [];
@@ -56,20 +51,14 @@ class OsSerialGpsSource implements SerialGpsSource {
     final n = p.split('/').last;
     if (Platform.isMacOS) {
       // cu.* are the call-out devices (open without waiting for carrier); tty.* would block.
-      return n.startsWith('cu.') &&
-          !n.startsWith('cu.Bluetooth') &&
-          !n.startsWith('cu.debug');
+      return n.startsWith('cu.') && !n.startsWith('cu.Bluetooth') && !n.startsWith('cu.debug');
     }
     return n.startsWith('ttyUSB') || n.startsWith('ttyACM');
   }
 
   static int _rank(String p) {
     final l = p.toLowerCase();
-    if (l.contains('usbserial') ||
-        l.contains('usbmodem') ||
-        l.contains('ttyusb') ||
-        l.contains('ttyacm'))
-      return 0;
+    if (l.contains('usbserial') || l.contains('usbmodem') || l.contains('ttyusb') || l.contains('ttyacm')) return 0;
     return 1;
   }
 
@@ -85,13 +74,12 @@ class OsSerialGpsSource implements SerialGpsSource {
   /// Pure — unit-testable: every distinct `COMn` mentioned in `mode`'s output,
   /// in numeric order, whatever language the headings are in.
   static List<String> parseWindowsModeOutput(String out) {
-    final found = RegExp(
-      r'\b(COM\d+)\b',
-      caseSensitive: false,
-    ).allMatches(out).map((m) => m.group(1)!.toUpperCase()).toSet().toList();
-    found.sort(
-      (a, b) => int.parse(a.substring(3)).compareTo(int.parse(b.substring(3))),
-    );
+    final found = RegExp(r'\b(COM\d+)\b', caseSensitive: false)
+        .allMatches(out)
+        .map((m) => m.group(1)!.toUpperCase())
+        .toSet()
+        .toList();
+    found.sort((a, b) => int.parse(a.substring(3)).compareTo(int.parse(b.substring(3))));
     return found;
   }
 
@@ -108,11 +96,7 @@ class OsSerialGpsSource implements SerialGpsSource {
               .openRead()
               .transform(const Utf8Decoder(allowMalformed: true))
               .transform(const LineSplitter())
-              .listen(
-                controller.add,
-                onError: controller.addError,
-                onDone: controller.close,
-              );
+              .listen(controller.add, onError: controller.addError, onDone: controller.close);
         } catch (e) {
           controller.addError(StateError('could not open $port: $e'));
           await controller.close();
@@ -141,57 +125,14 @@ class OsSerialGpsSource implements SerialGpsSource {
   static Future<void> _configure(String port) async {
     final ProcessResult r;
     if (Platform.isWindows) {
-      r = await Process.run('mode', [
-        '$port:',
-        'BAUD=9600',
-        'PARITY=n',
-        'DATA=8',
-        'STOP=1',
-        'to=off',
-        'xon=off',
-        'octs=off',
-        'rts=off',
-        'dtr=on',
-      ], runInShell: true);
+      r = await Process.run('mode', ['$port:', 'BAUD=9600', 'PARITY=n', 'DATA=8', 'STOP=1', 'to=off', 'xon=off', 'octs=off', 'rts=off', 'dtr=on'], runInShell: true);
     } else if (Platform.isMacOS) {
-      r = await Process.run('stty', [
-        '-f',
-        port,
-        '9600',
-        'raw',
-        '-echo',
-        'clocal',
-        'cs8',
-        '-parenb',
-        '-cstopb',
-        '-crtscts',
-        'min',
-        '0',
-        'time',
-        '$_posixReadTimeoutTenths',
-      ]);
+      r = await Process.run('stty', ['-f', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts', 'min', '0', 'time', '$_posixReadTimeoutTenths']);
     } else {
-      r = await Process.run('stty', [
-        '-F',
-        port,
-        '9600',
-        'raw',
-        '-echo',
-        'clocal',
-        'cs8',
-        '-parenb',
-        '-cstopb',
-        '-crtscts',
-        'min',
-        '0',
-        'time',
-        '$_posixReadTimeoutTenths',
-      ]);
+      r = await Process.run('stty', ['-F', port, '9600', 'raw', '-echo', 'clocal', 'cs8', '-parenb', '-cstopb', '-crtscts', 'min', '0', 'time', '$_posixReadTimeoutTenths']);
     }
     if (r.exitCode != 0) {
-      throw StateError(
-        '${'${r.stderr}'.trim().isEmpty ? r.stdout : r.stderr}'.trim(),
-      );
+      throw StateError('${'${r.stderr}'.trim().isEmpty ? r.stdout : r.stderr}'.trim());
     }
   }
 }

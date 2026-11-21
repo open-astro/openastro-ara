@@ -9,8 +9,8 @@ import 'stats_refresh_mixin.dart';
 /// Builds a [StatsOverviewClient] for a server. Overridable in tests.
 final statsOverviewApiFactoryProvider =
     Provider<StatsOverviewClient Function(AraServer)>(
-      (ref) => StatsOverviewApi.new,
-    );
+  (ref) => StatsOverviewApi.new,
+);
 
 /// [StatsOverviewClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -37,12 +37,11 @@ class StatsOverviewNotifier extends AsyncNotifier<StatsOverview?>
   /// Re-reads the overview, keeping the previous totals on screen if the read
   /// fails (the section shows a stale banner). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-    final api = ref.read(statsOverviewApiProvider);
-    return api?.fetch();
-  });
+        final api = ref.read(statsOverviewApiProvider);
+        return api?.fetch();
+      });
 }
 
 final statsOverviewProvider =
     AsyncNotifierProvider<StatsOverviewNotifier, StatsOverview?>(
-      StatsOverviewNotifier.new,
-    );
+        StatsOverviewNotifier.new);
