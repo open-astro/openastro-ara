@@ -6,7 +6,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadPageFunctions, pageSource } = require('./load_page.js');
 
-const WARNING = 'Set your camera + focal length in Options → Imaging → Optics.';
+// Simple Mode never sends the user to the Full UI's Options (its optics are in
+// Settings › Rig); the Full UI keeps its own path.
+const WARNING = 'The sensor or the focal length is not set: set them in Settings › Rig.';
+const FULL_WARNING = 'Set your camera + focal length in Options → Imaging → Optics.';
 
 function el() {
   const cls = new Set();
@@ -46,4 +49,8 @@ test('Full UI: the card keeps its Create Run hint', () => {
   const msg = render(false, { ok: true, fovWDeg: 2, fovHDeg: 1.3 });
   assert.equal(msg.textContent, 'Drag the sky to position the frame, then “Create Run”.');
   assert.ok(!msg.hidden);
+});
+
+test('Full UI: the optics warning keeps the Options path', () => {
+  assert.equal(render(false, { ok: false }).textContent, FULL_WARNING);
 });

@@ -1613,7 +1613,9 @@ function renderFramePanel() {
   // the warn styling rides on the element's class, so a future dynamic message here
   // can't become an injection point.
   if (!optics || !optics.ok) {
-    msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
+    // Simple Mode never sends the user to the Full UI: its optics are in Settings › Rig.
+    msg.textContent = CHART ? 'The sensor or the focal length is not set: set them in Settings › Rig.'
+      : 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
   } else if (!API) {
     // No daemon: the app still takes the frame — it saves a local draft run
