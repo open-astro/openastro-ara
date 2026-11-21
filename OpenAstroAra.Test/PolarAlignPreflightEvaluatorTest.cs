@@ -65,7 +65,9 @@ namespace OpenAstroAra.Test {
                 settings: () => throw boom,
                 clock: () => throw boom,
                 pose: _ => throw boom,
-                plan: _ => Task.FromException<PolarAlignStartPlanDto>(boom)) with { AlignerPresent = () => throw boom };
+                plan: _ => Task.FromException<PolarAlignStartPlanDto>(boom)) with {
+                    AlignerPresent = () => throw boom, AlignmentMode = () => throw boom, CanMovePrimaryAxis = () => throw boom,
+                };
 
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, CancellationToken.None).ConfigureAwait(false);
 
@@ -78,6 +80,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(Check(result, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(Check(result, PolarAlignPreflightChecks.StartPointing).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(Check(result, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(Check(result, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(Check(result, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
                 Assert.That(result.FirstFailure, Is.SameAs(boom), "a start throws the first failed read, as it did before the list");
             });
 
