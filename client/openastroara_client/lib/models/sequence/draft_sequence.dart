@@ -11,7 +11,9 @@ class DraftSequence {
   /// Last-saved instant (UTC) — drives newest-first ordering in pickers.
   final DateTime updatedUtc;
 
-  /// The raw NINA/§38.1 body, same shape as `SequenceDetail.body`.
+  /// The sequence body, same shape as `SequenceDetail.body`: a v2 document
+  /// from the NINA importer, a v1 (NINA-shaped) one from the editor and the
+  /// run builders until the v2 editor lands (#2025).
   final Map<String, dynamic> body;
 
   /// The Idempotency-Key the eventual daemon create must use. Stamped when

@@ -7131,6 +7131,44 @@ class AppLocalizationsPt extends AppLocalizations {
       'limit horizon altitude lowest meridian stop flip';
 
   @override
+  String get sequenceImportTooLarge =>
+      'That sequence file is too large to import (32 MiB limit).';
+
+  @override
+  String get sequenceImportReadError =>
+      'Couldn\'t read that file — check it still exists and you have access.';
+
+  @override
+  String get sequenceImportNotNina => 'This file is not a NINA sequence.';
+
+  @override
+  String get sequenceImportSharedNode =>
+      'This sequence has a shared node, which OpenAstro Ara cannot import.';
+
+  @override
+  String get sequenceImportFailed =>
+      'Couldn\'t import the sequence. Check the file and connection.';
+
+  @override
+  String sequenceImportDone(String name) {
+    return 'Imported \"$name\".';
+  }
+
+  @override
+  String sequenceImportConfirmTitle(String name) {
+    return 'Import \"$name\" with warnings?';
+  }
+
+  @override
+  String get sequenceImportConfirmBody => 'Check these before you import:';
+
+  @override
+  String get sequenceImportConfirm => 'Import';
+
+  @override
+  String get sequenceImportCancel => 'Cancel';
+
+  @override
   String paResidualChipMeasuring(String elapsed, String target) {
     return 'PA residual · measuring $elapsed / $target';
   }
@@ -14448,6 +14486,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get searchWordsMountLimits =>
       'limite horizonte altitude mínima meridiano parar virada';
+
+  @override
+  String get sequenceImportTooLarge =>
+      'Esse arquivo de sequência é grande demais para importar (limite de 32 MiB).';
+
+  @override
+  String get sequenceImportReadError =>
+      'Não foi possível ler esse arquivo — confira se ele ainda existe e se você tem acesso.';
+
+  @override
+  String get sequenceImportNotNina =>
+      'Este arquivo não é uma sequência do NINA.';
+
+  @override
+  String get sequenceImportSharedNode =>
+      'Esta sequência tem um nó compartilhado, que o OpenAstro Ara não consegue importar.';
+
+  @override
+  String get sequenceImportFailed =>
+      'Não foi possível importar a sequência. Confira o arquivo e a conexão.';
+
+  @override
+  String sequenceImportDone(String name) {
+    return '\"$name\" importada.';
+  }
+
+  @override
+  String sequenceImportConfirmTitle(String name) {
+    return 'Importar \"$name\" com avisos?';
+  }
+
+  @override
+  String get sequenceImportConfirmBody =>
+      'Confira estes pontos antes de importar:';
+
+  @override
+  String get sequenceImportConfirm => 'Importar';
+
+  @override
+  String get sequenceImportCancel => 'Cancelar';
 
   @override
   String paResidualChipMeasuring(String elapsed, String target) {

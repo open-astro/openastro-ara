@@ -7131,6 +7131,44 @@ class AppLocalizationsEn extends AppLocalizations {
       'limit horizon altitude lowest meridian stop flip';
 
   @override
+  String get sequenceImportTooLarge =>
+      'That sequence file is too large to import (32 MiB limit).';
+
+  @override
+  String get sequenceImportReadError =>
+      'Couldn\'t read that file — check it still exists and you have access.';
+
+  @override
+  String get sequenceImportNotNina => 'This file is not a NINA sequence.';
+
+  @override
+  String get sequenceImportSharedNode =>
+      'This sequence has a shared node, which OpenAstro Ara cannot import.';
+
+  @override
+  String get sequenceImportFailed =>
+      'Couldn\'t import the sequence. Check the file and connection.';
+
+  @override
+  String sequenceImportDone(String name) {
+    return 'Imported \"$name\".';
+  }
+
+  @override
+  String sequenceImportConfirmTitle(String name) {
+    return 'Import \"$name\" with warnings?';
+  }
+
+  @override
+  String get sequenceImportConfirmBody => 'Check these before you import:';
+
+  @override
+  String get sequenceImportConfirm => 'Import';
+
+  @override
+  String get sequenceImportCancel => 'Cancel';
+
+  @override
   String paResidualChipMeasuring(String elapsed, String target) {
     return 'PA residual · measuring $elapsed / $target';
   }
