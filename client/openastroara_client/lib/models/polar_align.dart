@@ -171,10 +171,17 @@ abstract final class PolarAlignerCauses {
   static const mountTracking = 'mount_tracking';
   static const mountSlewing = 'mount_slewing';
   static const stoppedByUser = 'stopped_by_user';
+  // #2069 (ARA-19): the verified stop and the run's caps.
+  static const stopNotConfirmed = 'stop_not_confirmed';
+  // A Stop owed from before the run, confirmed later in it: the run waits for Resume.
+  static const stopConfirmed = 'stop_confirmed';
+  static const travelLimit = 'travel_limit';
+  static const moveLimit = 'move_limit';
 
   static const all = [
     wrongDirection, wrongScale, deviceFault, notCalibrated, deviceRefused, diverging,
     timeout, linkLost, mountTracking, mountSlewing, stoppedByUser,
+    stopNotConfirmed, stopConfirmed, travelLimit, moveLimit,
   ];
 }
 

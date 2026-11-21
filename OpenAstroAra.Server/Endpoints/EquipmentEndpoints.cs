@@ -908,11 +908,14 @@ public static partial class EquipmentEndpoints {
         polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignCaptureAsync(svc, key, ct));
         // #1971 — the Polar Aligner in a running routine: stop its motors (the routine carries on by
-        // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume.
+        // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume, and (#2069) on a
+        // resume while the device's Stop is not confirmed.
         polar.MapPost("/correction/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectionAsync(() => svc.StopAlignerAsync(key, ct)));
+            await PolarAlignCorrectionAsync(() => svc.StopAlignerAsync(key, ct)))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
         polar.MapPost("/correction/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectionAsync(() => svc.ResumeAlignerAsync(key, ct)));
+            await PolarAlignCorrectionAsync(() => svc.ResumeAlignerAsync(key, ct)))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted).ProducesProblem(StatusCodes.Status409Conflict);
 
         // ─── Polar Aligner (#1972, #1973) ───
         var aligner = equipment.MapGroup("/polaraligner");

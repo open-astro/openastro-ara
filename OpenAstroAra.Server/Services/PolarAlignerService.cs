@@ -8,11 +8,13 @@
 */
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -24,10 +26,14 @@ public interface IPolarAlignerService {
     bool IsPresent { get; }
     /// <summary>Never throws for a device error: what could not be read is reported as unknown.</summary>
     Task<PolarAlignerDto> GetAsync(CancellationToken ct);
-    /// <summary>Stops both axes. Throws InvalidOperationException (→ 409) with no Polar Aligner
-    /// connected or when the device refuses, carrying the device's text.</summary>
+    /// <summary>Stops both axes and verifies it (#2069). Throws InvalidOperationException (→ 409) with no Polar Aligner
+    /// connected, or when the stop is not confirmed within its window (<c>stop_not_confirmed: …</c>, the verified stop's
+    /// own text, not the device's). A Stop the device refuses with its own error, followed by a still read, is confirmed
+    /// (→ 202).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
-    /// <summary>Sends the device home; same refusals as <see cref="StopAsync"/>.</summary>
+    /// <summary>Sends the device home. Throws InvalidOperationException (→ 409) with no Polar Aligner connected, while
+    /// a polar alignment run is moving it, while its last Stop is not confirmed (a Stop is owed), or when the device
+    /// refuses the Home, carrying the device's text.</summary>
     Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct);
 }
 
@@ -66,7 +72,7 @@ internal sealed class LiveDriverActions(IReadOnlyList<string> supportedActions, 
 /// switches the lowest UniqueId (ordinal) wins. No profile field names it.
 /// </summary>
 internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriverActionsCarriers mount,
-        Func<IPolarAlignerDriver?>? routine = null)
+        Func<IPolarAlignerDriver?>? routine = null, ILogger<PolarAlignerService>? logger = null)
         : IPolarAlignerService, IPolarAlignerSource {
     private readonly object _gate = new();
     // Info is static per connection; one connection's reply is kept (the carrier object is per connect).
@@ -81,11 +87,59 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
 
     public bool IsPresent => Choose() is not null;
 
-    public IPolarAligner? Current() => Choose() is { } chosen ? new PolarAlignActionsAligner(chosen.Device.Actions) : null;
+    public IPolarAligner? Current() {
+        if (Choose() is not { } chosen) {
+            return null;
+        }
+        var aligner = new PolarAlignActionsAligner(chosen.Device.Actions);
+        _handedOut.AddOrUpdate(aligner, KeyOf(chosen));
+        return aligner;
+    }
 
     public async Task<PolarAlignerDto> GetAsync(CancellationToken ct) {
         var chosen = Choose();
         return chosen is null ? None : await Task.Run(() => Read(chosen), ct).ConfigureAwait(false);
+    }
+
+    /// <summary>#2069 (ARA-19) — the verified stop's bounds (<see cref="PolarAlignerVerifiedStop"/>); tests shrink them.</summary>
+    internal TimeSpan StopWindow { get; set; } = PolarAlignerVerifiedStop.DefaultWindow;
+    internal TimeSpan StopPoll { get; set; } = PolarAlignerVerifiedStop.DefaultPoll;
+
+    // #2069 — the devices (carrier and UniqueId) whose last verified Stop was not confirmed. A plain reconnect of the same
+    // device keeps its owed Stop; a different Polar Aligner that connects in its place is not held by it. Guarded by _gate.
+    private readonly HashSet<string> _stopOwedBy = new(StringComparer.Ordinal);
+    // Each object Current() handed out, with its device's key: a Stop's outcome is filed under the device it went to,
+    // which may be older than the latest one handed out. Weak: an object nobody holds any more drops out.
+    private readonly ConditionalWeakTable<IPolarAligner, string> _handedOut = new();
+
+    private static string KeyOf(Chosen chosen) => chosen.Carrier + "/" + chosen.Device.DeviceId;
+
+    /// <inheritdoc />
+    /// <remarks>The device connected now owes a Stop. With none connected there is nothing to stop and nothing that can
+    /// move: false. The owed Stop stays with its device, which owes it again if it comes back.</remarks>
+    public bool StopOwed {
+        get {
+            if (Choose() is not { } chosen) {
+                return false;
+            }
+            lock (_gate) {
+                return _stopOwedBy.Contains(KeyOf(chosen));
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public void NoteStopOutcome(IPolarAligner device, bool confirmed) {
+        if (!_handedOut.TryGetValue(device, out var key)) {
+            return; // not a device this service handed out: no Stop of its devices
+        }
+        lock (_gate) {
+            if (confirmed) {
+                _stopOwedBy.Remove(key);
+            } else {
+                _stopOwedBy.Add(key);
+            }
+        }
     }
 
     public async Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct) {
@@ -94,13 +148,26 @@ internal sealed class PolarAlignerService(IDriverActionsCarriers switches, IDriv
         if (routine?.Invoke() is { DrivesPolarAligner: true } driver) {
             await driver.StopPolarAlignerAsync().ConfigureAwait(false);
         }
-        return await CommandAsync(c => c.Stop(), "polaraligner.stop", idempotencyKey).ConfigureAwait(false);
+        var aligner = Current() ?? throw new InvalidOperationException("no Polar Aligner is connected");
+        // #2069 — a verified stop: the caller (Emergency Stop's rung, a park, the Stop route) hears 409 when the
+        // device does not report both axes still, and the Stop is owed until one is confirmed.
+        var outcome = await Task.Run(() => PolarAlignerVerifiedStop.StopAsync(aligner, StopWindow, StopPoll, logger), CancellationToken.None)
+            .ConfigureAwait(false);
+        NoteStopOutcome(aligner, outcome.Confirmed);
+        if (!outcome.Confirmed) {
+            throw new InvalidOperationException(
+                $"stop_not_confirmed: the Polar Aligner did not report both axes still within {StopWindow.TotalSeconds:F0} s "
+                + $"of {outcome.Sends} Stop sends{(outcome.Error is { } e ? $" ({e})" : string.Empty)}. Cut its power if it still moves");
+        }
+        return new OperationAcceptedDto(Guid.NewGuid(), "polaraligner.stop", DateTimeOffset.UtcNow, idempotencyKey);
     }
 
     public Task<OperationAcceptedDto> HomeAsync(string? idempotencyKey, CancellationToken ct) =>
         routine?.Invoke() is { DrivesPolarAligner: true }
             ? throw new InvalidOperationException("polar alignment is moving the Polar Aligner; stop the motors first")
-            : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
+            : StopOwed
+                ? throw new InvalidOperationException("the Polar Aligner's last Stop was not confirmed; press Stop until it is, then Home")
+                : CommandAsync(c => c.Home(), "polaraligner.home", idempotencyKey);
 
     private Chosen? Choose() {
         var sw = switches.ConnectedActionCarriers()

@@ -6244,12 +6244,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String polarAlignerStopWrongDirection(String axis) {
-    return 'The test move on $axis went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.';
+    return 'A move on $axis went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.';
   }
 
   @override
   String polarAlignerStopWrongScale(String axis) {
-    return 'The test move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.';
+    return 'A move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.';
   }
 
   @override
@@ -6289,6 +6289,22 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarAlignerStopByUser => 'You stopped the motors.';
+
+  @override
+  String get polarAlignerStopNotConfirmed =>
+      'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.';
+
+  @override
+  String get polarAlignerStopConfirmed =>
+      'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.';
+
+  @override
+  String get polarAlignerStopTravelLimit =>
+      'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.';
+
+  @override
+  String get polarAlignerStopMoveLimit =>
+      'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.';
 
   @override
   String get polarAlignerStopUnknown => 'Ara stopped the motors.';

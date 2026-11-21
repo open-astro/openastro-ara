@@ -10482,13 +10482,13 @@ abstract class AppLocalizations {
   /// Polar Aligner stop cause wrong_direction
   ///
   /// In en, this message translates to:
-  /// **'The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'**
+  /// **'A move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'**
   String polarAlignerStopWrongDirection(String axis);
 
   /// Polar Aligner stop cause wrong_scale
   ///
   /// In en, this message translates to:
-  /// **'The test move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.'**
+  /// **'A move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.'**
   String polarAlignerStopWrongScale(String axis);
 
   /// Polar Aligner stop cause device_fault, with the device's own text
@@ -10544,6 +10544,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You stopped the motors.'**
   String get polarAlignerStopByUser;
+
+  /// Polar Aligner stop cause stop_not_confirmed (#2069): the device did not report both axes still after three Stops in 3 s
+  ///
+  /// In en, this message translates to:
+  /// **'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.'**
+  String get polarAlignerStopNotConfirmed;
+
+  /// Polar Aligner stop cause stop_confirmed (#2069): a Stop owed from before the run was confirmed at a later measurement; the run waits for the person's Resume
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.'**
+  String get polarAlignerStopConfirmed;
+
+  /// Polar Aligner stop cause travel_limit (#2069): the next move would take an axis past the run's travel cap
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.'**
+  String get polarAlignerStopTravelLimit;
+
+  /// Polar Aligner stop cause move_limit (#2069): a run sends 40 moves at most
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.'**
+  String get polarAlignerStopMoveLimit;
 
   /// Polar Aligner stop with a cause this app does not know
   ///

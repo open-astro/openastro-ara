@@ -2465,8 +2465,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/correction/resume:
     post:
       tags:
@@ -2477,8 +2487,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaraligner:
     get:
       tags:

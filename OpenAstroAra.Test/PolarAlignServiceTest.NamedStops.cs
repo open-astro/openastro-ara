@@ -196,21 +196,93 @@ namespace OpenAstroAra.Test {
 
         // ── the late mount_did_not_stop is told once ─────────────────────────────────────────
 
-        /// <summary>Stop timings for the late-report tests: each stop check gives up after 2 s. The stop path waits 3 s for
-        /// the run to unwind before it confirms the stop itself, so the run's exit has given up (at about 2 s) and the mount
-        /// obeys before the stop path's own check begins: its 2 s window has well over a second of slack.</summary>
-        private static void LateReportTimings(PolarAlignService s) {
-            s.StopVerifyWindow = TimeSpan.FromSeconds(2.0);
-            s.StopResendAfter = TimeSpan.FromSeconds(0.6);
+        /// <summary>A clock whose timers fire only once the test ends it (a timer made after that fires at once). The stop
+        /// path's unwind grace runs on it in the late-report tests: the stop path stops waiting for the run when the test says,
+        /// never by the wall clock of a loaded runner.</summary>
+        private sealed class HeldClock : TimeProvider {
+            private readonly object _lock = new();
+            private readonly System.Collections.Generic.List<HeldTimer> _timers = new();
+            private bool _ended;
+
+            public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) {
+                var timer = new HeldTimer(callback, state);
+                bool ended;
+                lock (_lock) {
+                    ended = _ended;
+                    if (!ended) {
+                        _timers.Add(timer);
+                    }
+                }
+                if (ended) {
+                    timer.Fire();
+                }
+                return timer;
+            }
+
+            public void End() {
+                HeldTimer[] due;
+                lock (_lock) {
+                    _ended = true;
+                    due = _timers.ToArray();
+                    _timers.Clear();
+                }
+                foreach (var timer in due) {
+                    timer.Fire();
+                }
+            }
+
+            private sealed class HeldTimer(TimerCallback callback, object? state) : ITimer {
+                private int _done;
+
+                public void Fire() {
+                    if (Interlocked.Exchange(ref _done, 1) == 0) {
+                        ThreadPool.QueueUserWorkItem(_ => callback(state));
+                    }
+                }
+
+                public bool Change(TimeSpan dueTime, TimeSpan period) => Volatile.Read(ref _done) == 0;
+
+                public void Dispose() => Interlocked.Exchange(ref _done, 1);
+
+                public ValueTask DisposeAsync() {
+                    Dispose();
+                    return ValueTask.CompletedTask;
+                }
+            }
+        }
+
+        /// <summary>Stop timings for the late-report tests. The run's exit gives up on its stop after a 1 s window (the mount
+        /// ignores every stop until then). The stop path's unwind grace runs on <paramref name="grace"/>: it ends only once the
+        /// exit has given up (<see cref="ExitGaveUp"/>), so the stop path's own check always begins after that, on a mount
+        /// that obeys, whatever the runner's load.</summary>
+        private static Action<PolarAlignService> LateReportTimings(HeldClock grace) => s => {
+            s.StopVerifyWindow = TimeSpan.FromSeconds(1.0);
+            s.StopResendAfter = TimeSpan.FromSeconds(0.4);
             s.StopVerifyNotBefore = TimeSpan.FromSeconds(0.2);
             s.StopVerifyStillFor = TimeSpan.FromSeconds(0.2);
             s.StopVerifyPoll = TimeSpan.FromMilliseconds(50);
-            s.RunUnwindGrace = TimeSpan.FromSeconds(3.0);
+            s.RunUnwindGrace = TimeSpan.FromSeconds(3.0); // on the held clock: never waited out by the wall clock
+            s.RunUnwindClock = grace;
+        };
+
+        /// <summary>In the exit's pose flag, once it gave up on its stop: the mount obeys from now on (the user's Stop Mount),
+        /// the stop path's own check gets a window no load can run out (it is read on every pass), and the stop path stops
+        /// waiting for the run.</summary>
+        private static void ExitGaveUp(PolarAlignService svc, FakeGemMount mount, HeldClock grace) {
+            mount.AbortIgnored = 0;
+            mount.MoveAxisStopIgnored = 0;
+            mount.AbortSlewAsync(CancellationToken.None).Wait(SignalTimeout);
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(30);
+            grace.End();
         }
+
+        /// <summary>A Stop of a late-report test: bounded, so a regression that never ends the held grace fails, not hangs.</summary>
+        private static Task<OperationAcceptedDto> LateReportStopAsync(PolarAlignService svc) =>
+            svc.StopAsync(null, CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(60));
 
         private static async Task<string?[]> ErrorsAfterAsync(WsRecorder ws) {
             var watch = Stopwatch.StartNew();
-            while (ws.Count(WsEventCatalog.PolarAlignError) == 0 && watch.Elapsed < TimeSpan.FromSeconds(5)) {
+            while (ws.Count(WsEventCatalog.PolarAlignError) == 0 && watch.Elapsed < TimeSpan.FromSeconds(10)) {
                 await Task.Delay(20).ConfigureAwait(false);
             }
             await Task.Delay(300).ConfigureAwait(false);
@@ -224,21 +296,20 @@ namespace OpenAstroAra.Test {
         public async Task A_late_exit_that_cannot_confirm_its_stop_after_the_stop_path_read_it_is_reported_once() {
             var mount = IgnoresEveryStop();
             var ws = new WsRecorder();
+            var grace = new HeldClock();
             var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings).ConfigureAwait(false);
+            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings(grace)).ConfigureAwait(false);
             mount.OnMarkPositionUnverified = _ => {
-                // The run's exit gave up on its stop. The mount stops now (the user's Stop Mount), so the stop path's own
-                // confirmation succeeds; the exit waits here until the stop path has read the finding and reported the end.
+                // The run's exit gave up on its stop. The mount stops now, so the stop path's own confirmation succeeds; the
+                // exit waits here until the stop path has read the finding and reported the end.
                 if (held.TrySetResult()) {
-                    mount.AbortIgnored = 0;
-                    mount.MoveAxisStopIgnored = 0;
-                    mount.AbortSlewAsync(CancellationToken.None).Wait(SignalTimeout);
+                    ExitGaveUp(svc, mount, grace);
                     release.Task.Wait(SignalTimeout);
                 }
             };
 
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await LateReportStopAsync(svc).ConfigureAwait(false);
             Assert.That(held.Task.IsCompleted, Is.True, "the exit gave up on its stop before the stop path answered");
             Assert.That(ws.Count(WsEventCatalog.PolarAlignStopped), Is.EqualTo(1), "the stop path confirmed the stop itself");
             release.SetResult();
@@ -257,17 +328,16 @@ namespace OpenAstroAra.Test {
         public async Task An_exit_finding_that_lands_while_the_stop_path_reports_the_end_is_told_once_by_the_stop_path() {
             var mount = IgnoresEveryStop();
             var ws = new WsRecorder();
+            var grace = new HeldClock();
             var endReporting = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var exitRecorded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var exitHeld = 0;
-            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings).ConfigureAwait(false);
+            using var svc = await InFirstGemTurnAsync(mount, ws, LateReportTimings(grace)).ConfigureAwait(false);
             mount.OnMarkPositionUnverified = _ => {
                 // The run's exit gave up on its stop; the mount obeys from now on. The exit is held until the stop path is in
                 // the middle of reporting the end (its "stopped" event), and records its finding then.
                 if (Interlocked.Exchange(ref exitHeld, 1) == 0) {
-                    mount.AbortIgnored = 0;
-                    mount.MoveAxisStopIgnored = 0;
-                    mount.AbortSlewAsync(CancellationToken.None).Wait(SignalTimeout);
+                    ExitGaveUp(svc, mount, grace);
                     endReporting.Task.Wait(SignalTimeout);
                 }
             };
@@ -285,7 +355,7 @@ namespace OpenAstroAra.Test {
                 }
             };
 
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await LateReportStopAsync(svc).ConfigureAwait(false);
             Assert.That(exitRecorded.Task.IsCompleted, Is.True, "the exit recorded its finding while the stop path reported the end");
 
             var errors = await ErrorsAfterAsync(ws).ConfigureAwait(false);
