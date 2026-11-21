@@ -12052,36 +12052,6 @@ abstract class AppLocalizations {
   /// **'RA motor control'**
   String get polarPreflightCheckCanMoveAxis;
 
-  /// Polar align (#2068): pre-flight check name (the AlpacaBridge version with its motion-safety marker)
-  ///
-  /// In en, this message translates to:
-  /// **'AlpacaBridge motion safety'**
-  String get polarPreflightCheckMotionSafety;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Pier side'**
-  String get polarPreflightCheckPierSide;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Start near the pole and above the horizon'**
-  String get polarPreflightCheckPoseEnvelope;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Counterweight angle at the start'**
-  String get polarPreflightCheckStartCwAngle;
-
-  /// Polar align (#2068): pre-flight check name
-  ///
-  /// In en, this message translates to:
-  /// **'Turn step within the counterweight limit'**
-  String get polarPreflightCheckTurnStep;
-
   /// Polar align (#2068): pre-flight check name (the motorised alt/az adjuster)
   ///
   /// In en, this message translates to:

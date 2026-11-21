@@ -1029,19 +1029,13 @@ public static class PolarAlignPreflightChecks {
     public const string StartPointing = "start_pointing";
     public const string MountType = "mount_type";
     public const string CanMoveAxis = "can_move_axis";
-    public const string MotionSafety = "motionsafety";
-    public const string PierSide = "pier_side";
-    public const string PoseEnvelope = "pose_envelope";
-    public const string StartCwAngle = "start_cw_angle";
-    public const string TurnStep = "turn_step";
     public const string Aligner = "aligner";
     public const string MountLimits = "mount_limits";
 
     /// <summary>Every id, in order.</summary>
     public static readonly IReadOnlyList<string> All = [
         MountConnected, MountParked, SiteLatitude, SiteLongitudeLst, MountClockOrSite, PoseVerified, ClearanceConfirmed,
-        StartPointing, MountType, CanMoveAxis, MotionSafety, PierSide, PoseEnvelope, StartCwAngle, TurnStep, Aligner,
-        MountLimits,
+        StartPointing, MountType, CanMoveAxis, Aligner, MountLimits,
     ];
 }
 

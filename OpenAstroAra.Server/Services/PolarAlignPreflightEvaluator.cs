@@ -70,10 +70,7 @@ internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exc
 /// (#2083) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
 /// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), the start pointing (the
 /// confirm step's plan), and (#2083) the mount type (alt-az refused) and CanMoveAxis(Primary) (false refuses a motor
-/// start; a hand-turn start only warns). The checks that #2065 adds (the AlpacaBridge <c>motionsafety</c> marker, pier
-/// side, the pose envelope, the start counterweight angle, a reduced turn step) are listed as <c>unknown</c> until they
-/// land, and never refuse. The Polar
-/// Aligner's check is <c>unknown</c> until its verified stop lands (#2069). A last <c>warn</c> asks the user to set the
+/// start; a hand-turn start only warns). The Polar Aligner's check is <c>unknown</c> until its verified stop lands (#2069). A last <c>warn</c> asks the user to set the
 /// mount's own limits.</para>
 /// </summary>
 internal static class PolarAlignPreflightEvaluator {
@@ -147,7 +144,7 @@ internal static class PolarAlignPreflightEvaluator {
         }
         var stage = inputs.Stage;
 
-        // The settings first: the turn step, the counterweight limit and the clearance read them.
+        // The settings first: the clearance, the Polar Aligner and the plan read them.
         PolarAlignSettingsDto settings;
         Exception? settingsError = null;
         try {
@@ -278,13 +275,6 @@ internal static class PolarAlignPreflightEvaluator {
         // #2083 — the mount type and CanMoveAxis(Primary), read at connect.
         EvaluateMountType(rows[PolarAlignPreflightChecks.MountType], inputs.AlignmentMode, connected);
         EvaluateCanMoveAxis(rows[PolarAlignPreflightChecks.CanMoveAxis], inputs.CanMovePrimaryAxis, connected, inputs.HandTurn);
-
-        // Filled by #2065 (counterweight model, envelope, mount checks).
-        rows[PolarAlignPreflightChecks.MotionSafety].Unknown("Not checked yet: the AlpacaBridge motion-safety marker is checked once #2065 lands.");
-        rows[PolarAlignPreflightChecks.PierSide].Unknown("Not checked yet: a pier side that disagrees with the hour angle is refused once #2065 lands.");
-        rows[PolarAlignPreflightChecks.PoseEnvelope].Unknown("Not checked yet: a start below 70° Dec or under the altitude floor is refused once #2065 lands.");
-        rows[PolarAlignPreflightChecks.StartCwAngle].Unknown("Not checked yet: the counterweight angle at the start is measured against the limit once #2065 lands.");
-        rows[PolarAlignPreflightChecks.TurnStep].Unknown("Not checked yet: a turn step too big for the counterweight limit is reduced once #2065 lands.");
 
         var alignerRow = rows[PolarAlignPreflightChecks.Aligner];
         try {

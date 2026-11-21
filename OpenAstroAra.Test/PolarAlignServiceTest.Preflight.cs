@@ -81,7 +81,6 @@ namespace OpenAstroAra.Test {
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.MountConnected), Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.StartPointing), Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.MountLimits), Is.EqualTo(PolarAlignPreflightStatuses.Warn));
-                Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.StartCwAngle), Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
                 Assert.That(preflight.MountKey, Is.EqualTo(PolarAlignPreflightEvaluator.UnidentifiedMountKey));
                 Assert.That(preflight.Planned.Direction, Is.Not.Null, "the plan the next Start would confirm");
                 Assert.That(preflight.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));

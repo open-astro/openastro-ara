@@ -7255,24 +7255,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override
@@ -14660,25 +14642,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarPreflightCheckCanMoveAxis => 'Controle do motor de AR';
-
-  @override
-  String get polarPreflightCheckMotionSafety =>
-      'Segurança de movimento do AlpacaBridge';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Lado do pilar';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Início perto do polo e acima do horizonte';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Ângulo do contrapeso no início';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Passo de giro dentro do limite do contrapeso';
 
   @override
   String get polarPreflightCheckAligner => 'Alinhador polar';

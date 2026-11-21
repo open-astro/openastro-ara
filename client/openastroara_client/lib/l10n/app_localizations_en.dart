@@ -7255,24 +7255,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPreflightCheckCanMoveAxis => 'RA motor control';
 
   @override
-  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
-
-  @override
-  String get polarPreflightCheckPierSide => 'Pier side';
-
-  @override
-  String get polarPreflightCheckPoseEnvelope =>
-      'Start near the pole and above the horizon';
-
-  @override
-  String get polarPreflightCheckStartCwAngle =>
-      'Counterweight angle at the start';
-
-  @override
-  String get polarPreflightCheckTurnStep =>
-      'Turn step within the counterweight limit';
-
-  @override
   String get polarPreflightCheckAligner => 'Polar Aligner';
 
   @override

@@ -26,12 +26,14 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#2068 (ARA-18) — the pre-flight evaluator's table: it never throws, the checks later PRs fill read
-    /// <c>unknown</c>, the mount clock check is #2087's gate, and the clearance is per mount.</summary>
+    /// <summary>#2068 (ARA-18) — the pre-flight evaluator's table: it never throws, the mount clock check is #2087's gate, and the clearance is per mount.</summary>
     [TestFixture]
     public class PolarAlignPreflightEvaluatorTest {
 
         private const string MountId = "a1b2c3d4-mount";
+
+        /// <summary>The placeholder rows #2065 would have filled; #2065 is closed (NINA parity, Joey 2026-11-21).</summary>
+        private static readonly string[] DroppedRows = ["motionsafety", "pier_side", "pose_envelope", "start_cw_angle", "turn_step"];
 
         private static readonly PolarAlignStartPlanDto Plan = new(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 2, 20.0);
 
@@ -92,17 +94,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task The_checks_later_changes_fill_read_unknown_and_never_refuse() {
+        public async Task The_mount_limits_note_warns_and_never_refuses() {
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
 
-            var later = new[] {
-                PolarAlignPreflightChecks.MotionSafety, PolarAlignPreflightChecks.PierSide, PolarAlignPreflightChecks.PoseEnvelope,
-                PolarAlignPreflightChecks.StartCwAngle, PolarAlignPreflightChecks.TurnStep,
-            };
             Assert.Multiple(() => {
-                foreach (var id in later) {
-                    Assert.That(Check(result, id).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown), id);
-                    Assert.That(Check(result, id).Detail, Does.Contain("#20"), id + " names the issue that fills it");
+                foreach (var dropped in DroppedRows) {
+                    Assert.That(result.Dto.Checks.Select(c => c.Id), Does.Not.Contain(dropped));
                 }
                 Assert.That(Check(result, PolarAlignPreflightChecks.MountLimits).Status, Is.EqualTo(PolarAlignPreflightStatuses.Warn));
                 Assert.That(result.Dto.Ready, Is.True, "unknown and warn checks never refuse");
