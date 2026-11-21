@@ -383,7 +383,9 @@ class SimpleCalibrationShutter extends ConsumerWidget {
             excludeFromSemantics: true,
             child: button,
           ),
-        if (captioned) const SimpleCalibrationShutterCaption(),
+        // None while idle, so the spacing adds no gap under the button.
+        if (captioned && job.run != null)
+          const SimpleCalibrationShutterCaption(),
       ],
     );
   }
