@@ -136,6 +136,7 @@ void main() {
     );
     final f = await _api(canned).frame();
     expect(canned.last!.path, '/api/v1/equipment/camera/live-stack/frame');
-    expect((f!.bytes, f.seq, f.lights), ([0xFF, 0xD8, 1], 9, 8));
+    expect(f!.bytes, equals([0xFF, 0xD8, 1]));
+    expect((f.seq, f.lights), (9, 8));
   });
 }

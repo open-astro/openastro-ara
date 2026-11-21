@@ -225,7 +225,6 @@ void main() {
     tester,
   ) async {
     final handle = tester.ensureSemantics();
-    addTearDown(handle.dispose);
     final daemon = FakeSessionLiveStackClient()
       ..enabled = true
       ..unregistered = 1
@@ -247,6 +246,7 @@ void main() {
       find.byKey(const Key('simple-live-stack-readout')),
     );
     expect(node.label, contains(text));
+    handle.dispose();
   });
 
   testWidgets('the Queue screen fills the screen with the stacked frame while '
