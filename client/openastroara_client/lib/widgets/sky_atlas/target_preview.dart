@@ -261,6 +261,7 @@ class SurveyThumb extends StatelessWidget {
               bytes,
               width: size,
               height: size,
+              cacheWidth: (size * MediaQuery.devicePixelRatioOf(context)).round(),
               fit: BoxFit.cover,
               gaplessPlayback: true,
               errorBuilder: (_, _, _) => SizedBox(width: size, height: size),
