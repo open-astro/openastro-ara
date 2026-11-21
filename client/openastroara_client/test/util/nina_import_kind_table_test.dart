@@ -63,7 +63,6 @@ String _ninaName(String field) => switch (field) {
 void main() {
   final daemon = daemonKinds();
   final schemaClasses = schemaKindClasses();
-  final tableKinds = {for (final k in daemon) k.kind: k};
   // `root` is the document root, not a list entry.
   final listKinds = [
     for (final k in daemon)
@@ -118,6 +117,8 @@ void main() {
       'targetId',
       'errorBehavior',
       'trackingMode',
+      'filter',
+      'binning',
     };
     for (final k in listKinds) {
       test(k.kind, () {
@@ -141,6 +142,21 @@ void main() {
           };
           input[_ninaName(field)] = nina;
           expected[field] = v2;
+        }
+        // The two nested values with their own key rule (spec "Renamed fields"):
+        // only the spec keys stay, `_name` and `Name` alike.
+        if (spec.containsKey('filter')) {
+          input['Filter'] = {
+            r'$type': 'x, y',
+            '_name': 'L',
+            '_position': 2,
+            '_autoFocusGain': 1,
+          };
+          expected['filter'] = {'name': 'L', 'position': 2};
+        }
+        if (spec.containsKey('binning')) {
+          input['Binning'] = {r'$type': 'x, y', 'X': 2, 'Y': 3, 'Name': 'n'};
+          expected['binning'] = {'x': 2, 'y': 3};
         }
         if (k.role == 'Container') input['Items'] = {r'$values': <Object?>[]};
         if (k.kind == 'target') {
@@ -168,11 +184,6 @@ void main() {
 
   group('classes with no kind become placeholders', () {
     const absent = {
-      'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer':
-          'Container',
-      'NINA.Sequencer.Container.TargetAreaContainer, NINA.Sequencer':
-          'Container',
-      'NINA.Sequencer.Container.EndAreaContainer, NINA.Sequencer': 'Container',
       'NINA.Sequencer.Container.ConditionalContainer, NINA.Sequencer':
           'Container',
       'NINA.Sequencer.SequenceItem.Imaging.GloverExposure, NINA.Sequencer':
@@ -183,6 +194,14 @@ void main() {
           'Trigger',
       'NINA.Plugins.Connector.Instructions.SomethingNew, NINA.Plugins.Connector':
           'Instruction',
+      // A plugin class that shares a name with a kind is still a plugin class.
+      'NINA.Plugin.Example.SequenceItem.TakeExposure, NINA.Plugin.Example':
+          'Instruction',
+      'NINA.Plugin.Example.Trigger.DitherAfterExposures, NINA.Plugin.Example':
+          'Trigger',
+      // The Connector namespace names six classes, not every class of that name.
+      'NINA.Plugins.Connector.Instructions.ParkScope, NINA.Plugins.Connector':
+          'Instruction',
     };
     for (final e in absent.entries) {
       test(e.key.split(',').first.split('.').last, () {
@@ -190,7 +209,25 @@ void main() {
         expect(out, isNotNull);
         expect(out!['kind'], 'unknown');
         expect(out['originalType'], e.key);
-        expect(tableKinds.containsKey('glover-exposure'), isFalse);
+        expect(out['role'], e.value.toLowerCase());
+      });
+    }
+  });
+
+  group('the area containers import as sequential', () {
+    for (final cls in [
+      'StartAreaContainer',
+      'TargetAreaContainer',
+      'EndAreaContainer',
+    ]) {
+      test(cls, () {
+        final out = _imported('Container', {
+          r'$type': 'NINA.Sequencer.Container.$cls, NINA.Sequencer',
+          'Name': 'Area',
+          'Items': {r'$values': <Object?>[]},
+        });
+        expect(out!['kind'], 'sequential');
+        expect(out['name'], 'Area');
       });
     }
   });

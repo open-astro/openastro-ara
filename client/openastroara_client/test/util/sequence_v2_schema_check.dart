@@ -39,7 +39,8 @@ List<DaemonKind> daemonKinds() {
 
 bool _isType(Object? v, String t) => switch (t) {
   'string' => v is String,
-  'integer' => v is int || (v is double && v == v.truncateToDouble()),
+  // The daemon refuses the `5.0` token for an integer (`FitsInteger`).
+  'integer' => v is int,
   'number' => v is num,
   'boolean' => v is bool,
   'array' => v is List,
@@ -48,14 +49,26 @@ bool _isType(Object? v, String t) => switch (t) {
   _ => false,
 };
 
-/// The JSON-Schema-level violations of a v2 document: unknown keys, missing
-/// required keys, wrong value kinds, an unknown `kind`, an unresolved
-/// `targetId`. The rules that need the whole document beyond that (roles by
-/// list, capturable) stay the daemon validator's. An `unknown` node's payload is
-/// opaque and not walked, as in the daemon.
+/// The roles a list takes, as `SequenceNodeRole` names in lower case.
+const _listRoles = {
+  'items': {'container', 'instruction'},
+  'conditions': {'condition'},
+  'triggers': {'trigger'},
+  'run': {'instruction'},
+};
+
+/// The violations of a v2 document that the daemon validator reports for what
+/// the importer controls: unknown keys, missing required keys, wrong value
+/// kinds (an integer is an `int`), an unknown `kind`, `wrong_role` by list (a
+/// placeholder by its `role`), `misplaced_root`, `duplicate_target_id` and an
+/// unresolved `targetId`. Whether a capturable instruction is reachable is
+/// [hasCapturable]. An `unknown` node's payload is opaque and not walked, as
+/// in the daemon.
 List<String> schemaViolations(Map<String, dynamic> doc) {
   final schema = loadSequenceV2Schema();
   final defs = schema[r'$defs'] as Map<String, dynamic>;
+  final roleOf = {for (final k in daemonKinds()) k.kind: k.role.toLowerCase()};
+  const roles = {'container', 'instruction', 'condition', 'trigger'};
   final errors = <String>[];
 
   void object(Object? value, Map<String, dynamic> def, String path) {
@@ -91,7 +104,7 @@ List<String> schemaViolations(Map<String, dynamic> doc) {
   }
 
   final targetIds = <String>{};
-  void node(Object? n, String path) {
+  void node(Object? n, String path, String list) {
     if (n is! Map) {
       errors.add('$path: not an object');
       return;
@@ -103,6 +116,15 @@ List<String> schemaViolations(Map<String, dynamic> doc) {
       return;
     }
     object(n, def, path);
+    if (kind == 'root' && path != r'$.root') {
+      errors.add('$path: misplaced root');
+    }
+    final role = kind == 'unknown' ? n['role'] : roleOf[kind];
+    if (kind == 'unknown' && !roles.contains(role)) {
+      errors.add('$path.role: not a role: $role');
+    } else if (!_listRoles[list]!.contains(role)) {
+      errors.add('$path: wrong role $role in $list');
+    }
     if (kind == 'unknown') return;
     if (kind == 'target') {
       final id = n['targetId'];
@@ -114,7 +136,7 @@ List<String> schemaViolations(Map<String, dynamic> doc) {
       final children = n[list];
       if (children is List) {
         for (var i = 0; i < children.length; i++) {
-          node(children[i], '$path.$list[$i]');
+          node(children[i], '$path.$list[$i]', list);
         }
       }
     }
@@ -130,7 +152,8 @@ List<String> schemaViolations(Map<String, dynamic> doc) {
         '\$.targets[$i]',
       );
       if (targets[i] is Map && (targets[i] as Map)['id'] is String) {
-        targetIds.add((targets[i] as Map)['id'] as String);
+        final id = (targets[i] as Map)['id'] as String;
+        if (!targetIds.add(id)) errors.add('\$.targets[$i].id: duplicate $id');
       }
     }
   }
@@ -138,8 +161,29 @@ List<String> schemaViolations(Map<String, dynamic> doc) {
   if (root is Map && root['kind'] != 'root') {
     errors.add(r'$.root: kind is not root');
   }
-  node(root, r'$.root');
+  node(root, r'$.root', 'items');
   return errors;
+}
+
+/// Whether the daemon counts a capturable instruction: a `capture`,
+/// `flat-panel-flats` or `sky-flats` reachable from the root through `items`
+/// (not through a condition, a trigger's `run` or a placeholder's payload).
+bool hasCapturable(Map<String, dynamic> doc) {
+  bool walk(Map<String, dynamic> n) {
+    if (const {
+      'capture',
+      'flat-panel-flats',
+      'sky-flats',
+    }.contains(n['kind'])) {
+      return true;
+    }
+    final items = n['items'];
+    return items is List &&
+        items.any((c) => c is Map && walk(c.cast<String, dynamic>()));
+  }
+
+  final root = doc['root'];
+  return root is Map && walk(root.cast<String, dynamic>());
 }
 
 /// Every node (a map with a `kind`) under [node], [node] first, in tree order

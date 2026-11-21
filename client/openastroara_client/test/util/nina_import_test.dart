@@ -52,6 +52,26 @@ Map<String, dynamic> _ninaRoot({
   ...?extra,
 };
 
+/// The first node of the NINA file [source] whose `$type` contains [type], as
+/// found (the payload of a placeholder is this, unchanged).
+Map<String, dynamic>? _source(Object? source, String type) {
+  if (source is Map) {
+    if ('${source[r'$type']}'.contains(type)) {
+      return source.cast<String, dynamic>();
+    }
+    for (final v in source.values) {
+      final found = _source(v, type);
+      if (found != null) return found;
+    }
+  } else if (source is List) {
+    for (final v in source) {
+      final found = _source(v, type);
+      if (found != null) return found;
+    }
+  }
+  return null;
+}
+
 Matcher _refusedWith(String text) =>
     throwsA(predicate((e) => e.toString().contains(text)));
 
@@ -270,14 +290,11 @@ void main() {
         ph['reason'],
         isA<String>().having((s) => s.isNotEmpty, 'not empty', isTrue),
       );
-      final payload = ph['originalPayload'] as Map;
-      expect(payload['Retries'], 3);
       expect(
-        payload[r'$type'],
-        token,
-        reason: 'the source node is kept as found',
+        ph['originalPayload'],
+        _source(_fixture('connector_plugin'), 'ReconnectOnDownloadFailure'),
+        reason: 'the source node is kept as found: \$id, Parent, \$values',
       );
-      expect(payload.containsKey('TriggerRunner'), isTrue);
       expect(ph.containsKey('run'), isFalse);
       expect(_all(t), hasLength(10), reason: 'the payload is not walked');
       expect(schemaViolations(t.body), isEmpty);
@@ -316,7 +333,7 @@ void main() {
         byType.keys,
         unorderedEquals([
           'NINA.Plugin.Example.Instructions.ExampleInstruction, NINA.Plugin.Example',
-          'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer',
+          'NINA.Sequencer.Container.ConditionalContainer, NINA.Sequencer',
           '',
           'NINA.Plugin.Example.Conditions.LoopWhileExample, NINA.Plugin.Example',
         ]),
@@ -348,11 +365,14 @@ void main() {
           'unknown',
         ).firstWhere((n) => n['role'] == 'container');
         expect(area.containsKey('items'), isFalse);
-        expect((area['originalPayload'] as Map).containsKey('Items'), isTrue);
+        expect(
+          area['originalPayload'],
+          _source(_fixture('unsupported'), 'ConditionalContainer'),
+        );
         expect(
           _ofKind(t, 'annotation'),
           isEmpty,
-          reason: 'the Annotation inside StartAreaContainer is not imported',
+          reason: 'the Annotation inside ConditionalContainer is not imported',
         );
         expect(_all(t), hasLength(8));
       },
@@ -377,7 +397,7 @@ void main() {
             'NINA.Plugin.Example.Instructions.ExampleInstruction, NINA.Plugin.Example',
           ),
           _placeholderWarning(
-            'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer',
+            'NINA.Sequencer.Container.ConditionalContainer, NINA.Sequencer',
           ),
           _placeholderWarning(''),
           _placeholderWarning(
@@ -451,7 +471,7 @@ void main() {
       expect(
         () => translateNinaSequence({
           r'$type':
-              'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer',
+              'NINA.Sequencer.Container.ConditionalContainer, NINA.Sequencer',
           'Items': {r'$values': <Object?>[]},
         }),
         _refusedWith(_refused),
@@ -558,15 +578,23 @@ void main() {
     });
 
     test('an enum written as a number becomes the v2 token', () {
-      Map<String, dynamic> instr(Object behaviour) => {
+      Map<String, dynamic> instr(Object behaviour, Object tracking) => {
         r'$type':
             'NINA.Sequencer.SequenceItem.Telescope.SetTracking, NINA.Sequencer',
-        'TrackingMode': 5,
+        'TrackingMode': tracking,
         'ErrorBehavior': behaviour,
       };
       final t = _import(
         _ninaRoot(
-          items: [instr(0), instr(1), instr(2), instr('abort-on-error')],
+          items: [
+            instr(0, 0),
+            instr(1, 1),
+            instr(2, 2),
+            instr(3, 3),
+            instr('abort-on-error', 4),
+            instr(0, 5),
+            instr(0, 'Solar'),
+          ],
         ),
       );
       final nodes = _ofKind(t, 'set-tracking');
@@ -574,9 +602,20 @@ void main() {
         'continue-on-error',
         'skip-instruction-set-on-error',
         'abort-on-error',
+        'skip-to-sequence-end-instructions',
         'abort-on-error',
+        'continue-on-error',
+        'continue-on-error',
       ]);
-      expect(nodes.map((n) => n['trackingMode']), everyElement('Stopped'));
+      expect(nodes.map((n) => n['trackingMode']), [
+        'Sidereal',
+        'Lunar',
+        'Solar',
+        'King',
+        'Custom',
+        'Stopped',
+        'Solar',
+      ]);
     });
 
     test('the input map is not mutated', () {
@@ -594,6 +633,432 @@ void main() {
       ]) {
         expect(_ofKind(_import(_fixture(name)), 'glover-exposure'), isEmpty);
       }
+    });
+  });
+
+  group('the area containers of a real NINA file', () {
+    late NinaImportTranslation t;
+    setUp(() => t = _import(_fixture('area_containers')));
+
+    test('each becomes a sequential with its own name and its children', () {
+      final areas = (_root(t)['items'] as List).cast<Map<String, dynamic>>();
+      expect(_kinds(areas), ['sequential', 'sequential', 'sequential']);
+      expect(areas.map((a) => a['name']), ['Start', 'Targets', 'End']);
+      expect(_kinds(areas[0]['items']), ['cool-camera', 'unpark-mount']);
+      expect(_kinds(areas[1]['items']), ['target']);
+      expect(_kinds(areas[2]['items']), ['warm-camera', 'park-mount']);
+    });
+
+    test('the triggers of an area container are imported', () {
+      final areas = (_root(t)['items'] as List).cast<Map<String, dynamic>>();
+      expect(_kinds(areas[1]['triggers']), ['meridian-flip']);
+    });
+
+    test('the file imports with a capture reachable through items', () {
+      expect(schemaViolations(t.body), isEmpty);
+      expect(hasCapturable(t.body), isTrue);
+      expect(_ofKind(t, 'unknown'), isEmpty);
+      expect(t.warnings, isEmpty);
+    });
+
+    test('the conditions of an area container are imported', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type':
+                  'NINA.Sequencer.Container.EndAreaContainer, NINA.Sequencer',
+              'Name': 'End',
+              'Items': {r'$values': <Object?>[]},
+              'Conditions': {
+                r'$values': [
+                  {
+                    r'$type': 'NINA.Sequencer.Conditions.LoopCondition, NINA.Sequencer',
+                    'Iterations': 2,
+                  },
+                ],
+              },
+            },
+          ],
+        ),
+      );
+      final end = (_root(t)['items'] as List).single as Map;
+      expect(end['kind'], 'sequential');
+      expect(_kinds(end['conditions']), ['loop-iterations']);
+    });
+
+    test('an area container at the top is wrapped in a root', () {
+      final t = _import({
+        r'$type': 'NINA.Sequencer.Container.StartAreaContainer, NINA.Sequencer',
+        'Name': 'Start',
+        'Items': {r'$values': <Object?>[]},
+      });
+      expect(_kinds(_root(t)['items']), ['sequential']);
+    });
+  });
+
+  group('the targets', () {
+    Map<String, dynamic> dso(String name, [List<Object?> inner = const []]) => {
+      r'$type':
+          'NINA.Sequencer.Container.DeepSkyObjectContainer, NINA.Sequencer',
+      'Name': name,
+      'Items': {r'$values': inner},
+      'Target': {
+        'TargetName': name,
+        'InputCoordinates': {'RAHours': 1, 'DecDegrees': 2},
+      },
+    };
+
+    test('are numbered in tree order, each container naming its own', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA.Sequencer',
+              'Name': 'Wrapper',
+              'Items': {
+                r'$values': [
+                  dso('A', [dso('B')]),
+                ],
+              },
+            },
+            dso('C'),
+          ],
+        ),
+      );
+      final targets = (t.body['targets'] as List).cast<Map>();
+      expect(targets.map((x) => (x['id'], x['name'])), [
+        ('t1', 'A'),
+        ('t2', 'B'),
+        ('t3', 'C'),
+      ]);
+      expect(_ofKind(t, 'target').map((n) => (n['name'], n['targetId'])), [
+        ('A', 't1'),
+        ('B', 't2'),
+        ('C', 't3'),
+      ]);
+      expect(schemaViolations(t.body), isEmpty);
+    });
+  });
+
+  group('the altitude deprecation shims', () {
+    const coordinates = {
+      'RAHours': 5,
+      'RAMinutes': 35,
+      'RASeconds': 17.3,
+      'NegativeDec': true,
+      'DecDegrees': 5,
+      'DecMinutes': 23,
+      'DecSeconds': 28.0,
+    };
+    // kind, the list it sits in, its NINA class
+    const classes = [
+      (
+        'wait-for-sun-altitude',
+        'Items',
+        'NINA.Sequencer.SequenceItem.Utility.WaitForSunAltitude, NINA.Sequencer',
+      ),
+      (
+        'loop-while-above-horizon',
+        'Conditions',
+        'NINA.Sequencer.Conditions.AboveHorizonCondition, NINA.Sequencer',
+      ),
+      (
+        'loop-while-altitude',
+        'Conditions',
+        'NINA.Sequencer.Conditions.AltitudeCondition, NINA.Sequencer',
+      ),
+    ];
+
+    Map<String, dynamic> data(
+      (String, String, String) c,
+      Map<String, dynamic> props,
+    ) {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            if (c.$2 == 'Items') {r'$type': c.$3, ...props},
+          ],
+          extra: {
+            if (c.$2 == 'Conditions')
+              'Conditions': {
+                r'$values': [
+                  {r'$type': c.$3, ...props},
+                ],
+              },
+          },
+        ),
+      );
+      expect(schemaViolations(t.body), isEmpty);
+      return _ofKind(t, c.$1).single['data'] as Map<String, dynamic>;
+    }
+
+    for (final c in classes) {
+      test('fold into data for ${c.$1}', () {
+        expect(data(c, {'Altitude': 30.0, 'Comparator': 4}), {
+          'offset': 30.0,
+          'comparator': 'GreaterThan',
+        });
+        expect(
+          data(c, {'UserSunAltitude': -12.0, 'Comparator': 'LessThanOrEqual'}),
+          {'offset': -12.0, 'comparator': 'LessThan'},
+        );
+        expect(data(c, {'UserMoonAltitude': 5.0, 'AltitudeOffset': 7.0}), {
+          'offset': 7.0,
+        });
+        expect(data(c, {'Coordinates': coordinates}), {
+          'coordinates': {
+            'raHours': 5,
+            'raMinutes': 35,
+            'raSeconds': 17.3,
+            'negativeDec': true,
+            'decDegrees': 5,
+            'decMinutes': 23,
+            'decSeconds': 28.0,
+          },
+        });
+      });
+    }
+
+    test('a shim wins over Data when a file has both', () {
+      final c = classes[2];
+      expect(
+        data(c, {
+          'Data': {r'$type': 'x, y', 'Offset': 10.0, 'Comparator': 3},
+          'Altitude': 20.0,
+          'Comparator': 1,
+        }),
+        {'offset': 20.0, 'comparator': 'LessThan'},
+      );
+    });
+
+    test('data.comparator is an engine name; the OrEqual forms fold', () {
+      final c = classes[0];
+      Object? comparator(Object value) => data(c, {
+        'Data': {'Offset': 1.0, 'Comparator': value},
+      })['comparator'];
+      expect([0, 1, 2, 3, 4, 5].map(comparator), [
+        'EQUALS',
+        'LessThan',
+        'LessThan',
+        'GreaterThan',
+        'GreaterThan',
+        'NotEqual',
+      ]);
+      expect(comparator('GreaterThanOrEqual'), 'GreaterThan');
+    });
+  });
+
+  group('the keys of a value', () {
+    test('are recased inside list elements and nested coordinates', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type': 'NINA.Sequencer.Container.DeepSkyObjectContainer, NINA.Sequencer',
+              'Name': 'M42',
+              'Items': {r'$values': <Object?>[]},
+              'Target': {'TargetName': 'M42', 'InputCoordinates': {}},
+              'ExposureInfoList': {
+                r'$id': '9',
+                r'$type': 'System.Collections.ObjectModel.ObservableCollection`1[[x]]',
+                r'$values': [
+                  {
+                    r'$id': '10',
+                    r'$type':
+                        'NINA.Sequencer.Utility.ExposureInfo, NINA.Sequencer',
+                    'Count': 2,
+                    'ExposureTime': 60.0,
+                    'Gain': 100,
+                    'ImageType': 'DARKFLAT',
+                    'BinningX': 1,
+                    'BinningY': 1,
+                    'ROI': 1.0,
+                  },
+                ],
+              },
+            },
+            {
+              r'$type': 'NINA.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, NINA.Sequencer',
+              'Inherited': false,
+              'Coordinates': {
+                r'$type': 'NINA.Astrometry.InputCoordinates, NINA.Astrometry',
+                'RAHours': 5,
+                'RAMinutes': 35,
+                'RASeconds': 17.3,
+                'NegativeDec': true,
+                'DecDegrees': 5,
+                'DecMinutes': 23,
+                'DecSeconds': 28.0,
+              },
+            },
+          ],
+        ),
+      );
+      expect(_ofKind(t, 'target').single['exposureInfoList'], [
+        {
+          'count': 2,
+          'exposureTime': 60.0,
+          'gain': 100,
+          'imageType': 'DARK',
+          'binningX': 1,
+          'binningY': 1,
+          'roi': 1.0,
+        },
+      ]);
+      expect(_ofKind(t, 'slew-radec').single['coordinates'], {
+        'raHours': 5,
+        'raMinutes': 35,
+        'raSeconds': 17.3,
+        'negativeDec': true,
+        'decDegrees': 5,
+        'decMinutes': 23,
+        'decSeconds': 28.0,
+      });
+    });
+
+    test('of a shared value are expanded from its \$id', () {
+      Map<String, dynamic> capture(Object binning) => {
+        r'$type':
+            'NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer',
+        'Binning': binning,
+      };
+      final t = _import(
+        _ninaRoot(
+          items: [
+            capture({
+              r'$id': '5',
+              r'$type': 'NINA.Core.Model.Equipment.BinningMode, NINA.Core',
+              'X': 2,
+              'Y': 2,
+            }),
+            capture({r'$ref': '5'}),
+          ],
+        ),
+      );
+      expect(_ofKind(t, 'capture').map((c) => c['binning']), [
+        {'x': 2, 'y': 2},
+        {'x': 2, 'y': 2},
+      ]);
+    });
+
+    test(r'a $ref that names no $id refuses the import', () {
+      expect(
+        () => translateNinaSequence(
+          _ninaRoot(
+            items: [
+              {
+                r'$type': 'NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer',
+                'Binning': {r'$ref': '404'},
+              },
+            ],
+          ),
+        ),
+        _refusedWith(_refused),
+      );
+    });
+  });
+
+  group('node positions', () {
+    test(r'a $ref as the TriggerRunner is a shared node', () {
+      expect(
+        () => translateNinaSequence(
+          _ninaRoot(
+            extra: {
+              'Triggers': {
+                r'$values': [
+                  {
+                    r'$type': 'NINA.Sequencer.Trigger.Guider.DitherAfterExposures, NINA.Sequencer',
+                    'TriggerRunner': {r'$ref': '1'},
+                  },
+                ],
+              },
+            },
+          ),
+        ),
+        _refusedWith('shared node'),
+      );
+    });
+
+    test('a root container nested in the tree is a placeholder', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type': 'NINA.Sequencer.Container.SequenceRootContainer, NINA.Sequencer',
+              'Name': 'Inner',
+            },
+          ],
+        ),
+      );
+      expect(_ofKind(t, 'root'), hasLength(1));
+      expect(_ofKind(t, 'unknown').single['role'], 'container');
+      expect(schemaViolations(t.body), isEmpty);
+    });
+  });
+
+  group('device ids', () {
+    Map<String, dynamic> switchValue(int device) => {
+      r'$type':
+          'NINA.Sequencer.SequenceItem.Switch.SetSwitchValue, NINA.Sequencer',
+      'Value': 1.0,
+      'SwitchIndex': 0,
+      'AlpacaDeviceNumber': device,
+    };
+
+    test('a set-switch-value device number other than -1 warns once', () {
+      final t = _import(_ninaRoot(items: [switchValue(3), switchValue(-1)]));
+      expect(
+        _ofKind(t, 'set-switch-value').map((n) => n['alpacaDeviceNumber']),
+        [3, -1],
+      );
+      expect(t.warnings, [
+        'The device "3" of "set-switch-value" is not one of this rig\'s '
+            'equipment roles. It was kept as found; assign it in the editor.',
+      ]);
+    });
+
+    test('a connect-equipment device that is not a rig role warns by name', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type': 'NINA.Plugins.Connector.Instructions.ConnectEquipment, NINA.Plugins.Connector',
+              'SelectedDevice': 'Example Camera 7',
+            },
+            {
+              r'$type': 'NINA.Plugins.Connector.Instructions.ConnectEquipment, NINA.Plugins.Connector',
+              'SelectedDevice': '',
+            },
+          ],
+        ),
+      );
+      expect(t.warnings, [
+        'The device "Example Camera 7" of "connect-equipment" is not one of '
+            'this rig\'s equipment roles. It was kept as found; assign it in '
+            'the editor.',
+      ]);
+    });
+  });
+
+  group('a provider the table does not name', () {
+    test('is left out, so the field takes its default', () {
+      final t = _import(
+        _ninaRoot(
+          items: [
+            {
+              r'$type': 'NINA.Sequencer.SequenceItem.Utility.WaitForTime, NINA.Sequencer',
+              'SelectedProvider': {
+                r'$type': 'NINA.Plugin.Example.Provider, NINA.Plugin.Example',
+              },
+              'Hours': 3,
+            },
+          ],
+        ),
+      );
+      final wait = _ofKind(t, 'wait-for-time').single;
+      expect(wait.containsKey('provider'), isFalse);
+      expect(wait['hours'], 3);
     });
   });
 }

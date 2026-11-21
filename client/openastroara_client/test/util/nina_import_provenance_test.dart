@@ -40,13 +40,15 @@ void main() {
         fileName: 'M42 wide.json',
         now: DateTime.utc(2026, 11, 19, 12, 30, 5),
       );
-      expect(t.body['metadata'], {
-        'importedFrom': {
-          'format': 'nina',
-          'fileName': 'M42 wide.json',
-          'importedUtc': '2026-11-19T12:30:05.000Z',
-        },
-      });
+      final metadata = t.body['metadata'] as Map;
+      expect(metadata.keys, ['importedFrom']);
+      final from = metadata['importedFrom'] as Map;
+      expect(from.keys, ['format', 'fileName', 'importedUtc']);
+      expect(from['format'], 'nina');
+      expect(from['fileName'], 'M42 wide.json');
+      final stamp = from['importedUtc'] as String;
+      expect(stamp, endsWith('Z'));
+      expect(DateTime.parse(stamp), DateTime.utc(2026, 11, 19, 12, 30, 5));
     },
   );
 

@@ -48,12 +48,27 @@
               "$id": "6",
               "$type": "NINA.Sequencer.SequenceItem.FilterWheel.SwitchFilter, NINA.Sequencer",
               "Filter": {
+                "$id": "9004",
                 "$type": "NINA.Core.Model.Equipment.FilterInfo, NINA.Core",
-                "Name": "Ha",
-                "FocusOffset": 0,
-                "Position": 4,
-                "AutoFocusExposureTime": -1.0,
-                "AutoFocusFilter": false
+                "_name": "Ha",
+                "_focusOffset": 0,
+                "_position": 4,
+                "_autoFocusExposureTime": -1.0,
+                "_autoFocusFilter": false,
+                "FlatWizardFilterSettings": {
+                  "$id": "9005",
+                  "$type": "NINA.Core.Model.Equipment.FlatWizardFilterSettings, NINA.Core",
+                  "FlatWizardMode": 0,
+                  "HistogramMeanTargetPercentage": 0.5
+                },
+                "_autoFocusBinning": {
+                  "$id": "9006",
+                  "$type": "NINA.Core.Model.Equipment.BinningMode, NINA.Core",
+                  "X": 1,
+                  "Y": 1
+                },
+                "_autoFocusGain": -1,
+                "_autoFocusOffset": -1
               },
               "Parent": {
                 "$ref": "3"
