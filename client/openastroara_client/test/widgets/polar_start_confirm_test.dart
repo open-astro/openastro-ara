@@ -214,6 +214,31 @@ void main() {
     expect(rig.started.single.directionTestDeg, 0.5, reason: 'the start carries the test the user saw');
   });
 
+  testWidgets('a confirm step that offers only Turn RA by hand shows no motor-direction test (#2081)', (tester) async {
+    const plan = PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.east,
+      stepDeg: 10,
+      handTurnAvailable: true,
+      directionTestDeg: 0.5,
+    );
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: const Scaffold(body: PolarStartConfirmDialog(plan: plan, motorAllowed: false)),
+    ));
+    expect(find.byKey(const Key('polar-start-confirm-hand')), findsOneWidget);
+    expect(find.textContaining('to learn the motor direction'), findsNothing,
+        reason: 'a hand-turn run makes no direction test');
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: PolarStartConfirmDialog(plan: plan.byHand())),
+    ));
+    expect(find.textContaining('to learn the motor direction'), findsNothing, reason: 'a hand-turn plan makes no test');
+  });
+
   testWidgets('the motor-direction test distance uses the language decimal comma in pt-BR (#2081)', (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(
       stage: PolarAlignStages.fine,

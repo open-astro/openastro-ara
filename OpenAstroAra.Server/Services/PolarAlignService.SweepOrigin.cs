@@ -20,6 +20,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -50,7 +51,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A pose the mount reported: its RA (degrees, as read), when (a <see cref="Stopwatch"/> timestamp, the
         /// daemon's monotonic clock), and its pier side.</summary>
-        private sealed record SweepPose(double RaDeg, double DecDeg, long At, PierSide Side);
+        internal sealed record SweepPose(double RaDeg, double DecDeg, long At, PierSide Side);
 
         /// <summary>The session's sweep origin: the pose, the way its first run turned (+1 east, −1 west in RA-reading
         /// terms), and the mount session it belongs to.</summary>
@@ -58,7 +59,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>What a start from <c>Pose</c> does with the origin: a new one, or how far the axis has turned from it
         /// (+ east) and which way the run turns first.</summary>
-        private sealed record SweepPlan(SweepPose Pose, bool NewOrigin, double OffsetDeg, double DirSign, double LimitDeg, long SessionEpoch);
+        internal sealed record SweepPlan(SweepPose Pose, bool NewOrigin, double OffsetDeg, double DirSign, double LimitDeg, long SessionEpoch);
 
         // Guarded by _gate. The origin is set when a confirmed start launches its run; the last pose is where Polar
         // Align's own moves last left the mount (each motor reading, and the exit's after the stop).
@@ -91,9 +92,10 @@ namespace OpenAstroAra.Server.Services {
         /// repeated Starts never walk the mount one way. Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would
         /// take the axis past the limit, the motor-direction test it makes first (<paramref name="testDeg"/>, either way)
         /// included. <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it), and
-        /// <paramref name="side"/> the pier side that reading reported (never the refresh cache's).</summary>
-        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch, PierSide side,
-                double newOriginSign, double testDeg) {
+        /// <paramref name="side"/> the pier side that reading reported (never the refresh cache's).
+        /// <paramref name="bandToleranceDeg"/> is <see cref="BandToleranceDeg"/> but for tests.</summary>
+        internal SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch, PierSide side,
+                double newOriginSign, double testDeg, double bandToleranceDeg = BandToleranceDeg) {
             var pose = new SweepPose(raDeg, decDeg, Stopwatch.GetTimestamp(), side);
             SweepOrigin? origin;
             SweepPose? lastLeft;
@@ -101,13 +103,22 @@ namespace OpenAstroAra.Server.Services {
                 origin = _sweepOrigin;
                 lastLeft = _sweepLastLeft;
             }
-            var limitDeg = Math.Max(MaxSweepFromOriginDeg, maxSweepDeg + BandToleranceDeg);
+            var limitDeg = Math.Max(MaxSweepFromOriginDeg, maxSweepDeg + bandToleranceDeg);
             var why = origin is null ? "no origin this mount session"
                 : origin.SessionEpoch != epoch ? "the mount reconnected"
                 : MovedSince(lastLeft, pose) is { } moved ? moved
                 : null;
             if (why is not null) {
                 LogSweepNewOrigin(raDeg, why);
+                // #2081 — the direction test turns testDeg first, so it counts here as on a continued start.
+                if (maxSweepDeg + testDeg > limitDeg) {
+                    throw new RefusalException(RefusalCatalog.PolarAlignSweepLimit, string.Create(CultureInfo.InvariantCulture,
+                        $"This start's turns and its {testDeg:F1}° motor-direction test would take RA past the {limitDeg:F0}° limit; set smaller steps and confirm again"),
+                        new Dictionary<string, object?> {
+                            ["offset_deg"] = 0.0,
+                            ["limit_deg"] = limitDeg,
+                        });
+                }
                 return new SweepPlan(pose, NewOrigin: true, OffsetDeg: 0.0, newOriginSign >= 0 ? 1.0 : -1.0, limitDeg, epoch);
             }
             var offset = FoldTolerantSignedTurnDeg(MechanicalTurnDeg(origin!.Pose.RaDeg, raDeg, SecondsBetween(origin.Pose.At, pose.At)));

@@ -98,8 +98,9 @@ class PolarStartConfirmDialog extends StatelessWidget {
       // #2083 — NINA's guidance on the start field.
       l10n.polarConfirmGuideField,
       l10n.polarConfirmGuideMeridian,
-      // #2081 — the motor-direction test, the run's first move.
-      if (plan.directionTestDeg > 0)
+      // #2081 — the motor-direction test, the run's first move: a motor run's
+      // only (a hand-turn run makes no test).
+      if (motorAllowed && !plan.handTurn && plan.directionTestDeg > 0)
         l10n.polarConfirmDirectionTest(
           NumberFormat(
             '0.0',

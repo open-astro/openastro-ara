@@ -26,6 +26,7 @@ using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 
 namespace OpenAstroAra.Test {
 
@@ -131,6 +132,46 @@ namespace OpenAstroAra.Test {
             // The run still used the sign it learned: both turns went east, as the confirm step said.
             Assert.That(turns.Skip(1).Select(t => t.TrueDeltaHaDeg), Has.All.EqualTo(-10.0).Within(TrueTurnToleranceDeg), mount.Describe());
             mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public async Task A_direction_test_whose_reading_ends_under_a_quarter_degree_fails_turn_mismatch_and_saves_nothing() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            using var svc = NewGemService(mount, ws, store, motorDirectionSaved: false);
+            // Once the test move's motor has stopped, the RA reading falls back 0.45°: it ends under 0.25° from its start.
+            mount.OnFreshRead = _ => {
+                if (mount.RaJumpHours == 0 && mount.Motions.Any(m => m.Kind == MotionKind.RaMotor && !m.Refused) && mount.MotorRate(0) == 0) {
+                    mount.RaJumpHours = -0.45 / 15.0;
+                }
+            };
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check,
+                new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, DirectionTest: true), null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TurnMismatch), mount.Describe());
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("direction test"));
+            Assert.That(store.GetPolarAlignMotorDirection(), Is.Null, "a test that did not move the reading learns no sign");
+            Assert.That(RaTurns(mount), Has.Length.EqualTo(1), "nothing turned after the test move. " + mount.Describe());
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public void A_new_origin_whose_turns_fit_the_limit_but_not_with_the_direction_test_is_refused() {
+            var mount = PolledGemAt(-4.0);
+            using var svc = NewGemService(mount, new WsRecorder(), TenDegreeStore(), motorDirectionSaved: false);
+            // A 40° sweep and a 0.25° band tolerance: the limit is 40.25°, so the sweep fits and the 0.5° test does not.
+            var fits = svc.PlanSweep(0.0, 85.0, 40.0, epoch: 1, PierSide.pierWest, newOriginSign: 1.0, testDeg: 0.0, bandToleranceDeg: 0.25);
+            Assert.That((fits.NewOrigin, fits.LimitDeg), Is.EqualTo((true, 40.25)));
+
+            var refusal = Assert.Throws<RefusalException>(() => svc.PlanSweep(0.0, 85.0, 40.0, epoch: 1, PierSide.pierWest,
+                newOriginSign: 1.0, testDeg: PolarAlignService.DirectionTestDeg, bandToleranceDeg: 0.25));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSweepLimit));
+            Assert.That(refusal.Parameters["limit_deg"], Is.EqualTo(40.25));
         }
 
         [Test]
