@@ -23,6 +23,8 @@ const rigPolarAlign = PolarAlignSettings(
   coarseExposureSeconds: 3.0,
   polarAlignerAuto: true,
   stopTrackingWhenDone: true,
+  camera: PolarAlignCameras.guide,
+  framesPerPoint: 3,
   mountClearance: {},
 );
 

@@ -6078,6 +6078,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarRoughFirst => 'Rough first (main camera)';
 
   @override
+  String polarRoughFirstCaption(String step) {
+    return 'Rough first turns the mount 2 × $step° and measures with the main camera.';
+  }
+
+  @override
+  String get polarNoisyMeasurement =>
+      'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
+
+  @override
+  String get polarKnobCamera => 'Camera';
+
+  @override
+  String get polarKnobCameraGuide => 'Guide camera';
+
+  @override
+  String get polarKnobCameraMain => 'Main camera';
+
+  @override
+  String get polarKnobFramesPerPoint => 'Frames per point (1 to 5)';
+
+  @override
+  String get polarKnobFramesPerPointHint =>
+      'Averaged; a point scattered over 3″ is retaken once';
+
+  @override
+  String get polarConfirmMainCamera => 'This measurement uses the main camera.';
+
+  @override
   String get polarStepDone => 'Done';
 
   @override
@@ -6672,7 +6700,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalPolarAlignMovingMount =>
-      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+      'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
   String polarAlignStoppedFromOutside(String by) {
@@ -6705,6 +6733,10 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get refusalPolarAlignPoseAmbiguous =>
       'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.';
+
+  @override
+  String get refusalPolarAlignMountBusy =>
+      'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.';
 
   @override
   String get actionConfirmFlip => 'confirm the meridian flip';

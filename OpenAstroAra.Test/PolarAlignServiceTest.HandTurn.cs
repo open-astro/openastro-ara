@@ -91,6 +91,60 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
 
+        /// <summary>The true-sky solve (<see cref="TrueSkySolver"/>), recording each frame's id (its file name).</summary>
+        private sealed class RecordingTrueSkySolver(FakeGemMount mount) : IPolarAlignFrameSolver {
+            private readonly System.Collections.Generic.List<string> _frames = new();
+            public string[] Frames {
+                get {
+                    lock (_frames) {
+                        return _frames.ToArray();
+                    }
+                }
+            }
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+                lock (_frames) {
+                    _frames.Add(System.IO.Path.GetFileNameWithoutExtension(fitsPath));
+                }
+                var (ra, dec) = mount.TrueSky;
+                return Task.FromResult(new PolarAlignSolveOutcome(true, ra, dec));
+            }
+        }
+
+        [Test]
+        public async Task A_hand_turn_run_averages_frames_per_point_at_each_point_once_the_turn_is_in() {
+            // #2082 with #2083: three frames per point. The first point is averaged where the mount points; points 2 and 3
+            // are averaged once the turn is taken and the mount still, their ids going on from the wait's frames.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var solver = new RecordingTrueSkySolver(mount);
+            var logger = new CapturingLogger();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { FramesPerPoint = 3 });
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewServiceOn(NewFake(), solver, mount, ws, store, logger: logger);
+            svc.AxisFastRateDegPerSec = 30.0;
+            svc.AxisSlowRateDegPerSec = 10.0;
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, encodersFollow: true).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, encodersFollow: true).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"),
+                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
+            var scatter = logger.Entries.Where(e => e.EventId == 4574).Select(e => e.Message).ToArray();
+            Assert.That(scatter, Has.Length.EqualTo(3), "each of the three points is averaged");
+            Assert.That(scatter, Has.All.Contains("3 solves averaged"));
+            foreach (var point in new[] { "seed-b", "seed-c" }) {
+                var ids = solver.Frames.Where(f => f.StartsWith(point + "-", StringComparison.Ordinal)).ToArray();
+                Assert.That(ids, Is.Unique, "the averaged frames' ids go on from the wait's");
+                Assert.That(ids.Length, Is.GreaterThanOrEqualTo(2 + 3), point + ": the wait's still solves, then three frames averaged");
+            }
+            Assert.That(status.CurrentErrorArcmin, Is.LessThan(3.0));
+            Assert.That(mount.Motions, Is.Empty, "Ara moved nothing");
+        }
+
         [Test]
         public async Task A_hand_turn_run_shows_how_far_the_axis_has_turned_and_waits_until_the_turn_is_in() {
             var mount = PolledGemAt(-4.0);
@@ -419,6 +473,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_hand_turn_run_gives_the_mount_back_when_it_ends_so_a_sync_goes_out_and_clears_the_clutch_refusal() {
+            // #2066 x #2083 — the hand run holds the mount's motion owner like a motor run, so the sync the clutch refusal
+            // asks for (Center's) is not sent while it runs. Once the run ends it gives the mount back: the sync goes out,
+            // and a motor start goes ahead.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var ownerWhileRunning = mount.MotionOwner;
+            var syncedWhileRunning = mount.SyncAsTheDaemonDoes();
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var ownerAfter = mount.MotionOwner;
+            var syncedAfter = mount.SyncAsTheDaemonDoes();
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            RefusalException? refusal = null;
+            try {
+                await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (RefusalException ex) {
+                refusal = ex;
+            }
+            var motorStarted = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ownerWhileRunning, Is.EqualTo(MotionOwners.PolarAlign), "the hand run holds the mount");
+            Assert.That(syncedWhileRunning, Is.False, "no sync while the run holds the mount");
+            Assert.That(ownerAfter, Is.Null, "given back once the run ended");
+            Assert.That(syncedAfter, Is.True, "the sync goes out once the run ended");
+            Assert.That(refusal, Is.Null, "the sync cleared the clutch refusal");
+            Assert.That(motorStarted.HandTurn, Is.False, "the motor start went ahead");
+        }
+
+        [Test]
         public async Task A_motor_Check_from_the_adjust_loop_after_a_clutch_turn_is_refused_and_the_loop_runs_on() {
             // The adjust screen's Check with Move the mount after a clutch-open hand run: refused while the loop still runs,
             // so the user keeps the live readout and the mount is not stopped. Refused only after the loop ended, the
@@ -659,6 +751,20 @@ namespace OpenAstroAra.Test {
 
             Assert.That(ws.Events.Any(e => Point(e, 3)), Is.False, "five solves at rest after a 4° nudge, and the turn is not taken yet");
             Assert.That(waiting.HandTurnWait?.Point, Is.EqualTo(2));
+        }
+
+        [Test]
+        public void ReadingAt_moves_an_averaged_points_reading_to_its_mean_time_only_when_the_mount_does_not_track() {
+            // #2082 with #2083: the reading is read as the turn is taken, the averaged point's time is 60 s later.
+            var readAt = DateTimeOffset.UnixEpoch;
+            var at = readAt.AddSeconds(60.0);
+            var drift = 60.0 * PolarAlignService.SiderealDegPerSecond;
+            var off = PolarAlignService.ReadingAt((10.0, 85.0), readAt, at, tracking: false);
+            var on = PolarAlignService.ReadingAt((10.0, 85.0), readAt, at, tracking: true);
+            Assert.That(off!.Value.RaDeg, Is.EqualTo(10.0 + drift).Within(1e-9), "a standing axis's RA reading runs on with the Earth's turn");
+            Assert.That(off.Value.DecDeg, Is.EqualTo(85.0));
+            Assert.That(on, Is.EqualTo(((double, double)?)(10.0, 85.0)), "tracking holds the reading");
+            Assert.That(PolarAlignService.ReadingAt(null, readAt, at, tracking: false), Is.Null, "a failed read stays failed");
         }
 
         [Test]

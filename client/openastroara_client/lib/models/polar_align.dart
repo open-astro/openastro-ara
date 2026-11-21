@@ -39,6 +39,16 @@ abstract final class PolarAlignReadoutCautions {
   static const altitudeWeak = 'altitude_weak';
 }
 
+/// #2082 the camera a measurement uses (`polar_align.camera`, the start
+/// plan's and the status's `camera`).
+abstract final class PolarAlignCameras {
+  /// Through the guider, with the guide optics (the default).
+  static const guide = 'guide';
+
+  /// The main camera with its own solver, at the main-camera exposure.
+  static const main = 'main';
+}
+
 /// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, then the
 /// three-point seed — two RA-motor turns — + live loop on the main camera), fine (the same on the guide
 /// camera), check (Home, three guide-camera solves, an exact fit).
@@ -79,6 +89,9 @@ class PolarAlignCheckResult {
   /// `excellent` | `very_good` | `good` | `rough` | `far_off`.
   final String verdict;
 
+  /// #2082 a point of the check stayed scattered over 3″ after its retake.
+  final bool noisy;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -88,6 +101,7 @@ class PolarAlignCheckResult {
     this.fineErrorArcmin,
     this.fineDeltaArcmin,
     this.verdict = '',
+    this.noisy = false,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -100,6 +114,7 @@ class PolarAlignCheckResult {
         fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
+        noisy: json['noisy'] == true,
       );
 }
 
@@ -363,6 +378,13 @@ class PolarAlignStatus {
   /// from an older daemon.
   final String? readoutCaution;
 
+  /// #2082 the run's camera ([PolarAlignCameras]); null before a run or from
+  /// an older daemon.
+  final String? camera;
+
+  /// #2082 a point of the measurement stayed scattered over 3″ after its
+  /// retake: the readout rests on noisy solves.
+  final bool measurementNoisy;
   /// #2083 the current or last run turns RA by hand (Ara moves nothing).
   final bool handTurn;
 
@@ -385,6 +407,8 @@ class PolarAlignStatus {
     this.lastResult,
     this.correction,
     this.readoutCaution,
+    this.camera,
+    this.measurementNoisy = false,
     this.handTurn = false,
     this.handTurnWait,
   });
@@ -410,6 +434,8 @@ class PolarAlignStatus {
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
         correction: PolarAlignerRun.tryParse(json['correction']),
         readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
+        camera: json['camera'] is String ? json['camera'] as String : null,
+        measurementNoisy: json['measurement_noisy'] == true,
         handTurn: json['hand_turn'] == true,
         handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
       );
@@ -449,6 +475,12 @@ class PolarAlignSettings {
   /// found; a Stop or a failure still leaves tracking off.
   final bool stopTrackingWhenDone;
 
+  /// #2082 the camera of the measurement, its live loop and the check
+  /// ([PolarAlignCameras]). Rough first is always the main camera.
+  final String camera;
+
+  /// #2082 frames averaged at each of a measurement's three points (1–5).
+  final int framesPerPoint;
   /// #2068 the counterweight limit and the clearance confirmation per mount,
   /// keyed by the mount's identity (the rig's [PolarAlignPreflight.mountKey]).
   /// A mount with no entry has the rig's defaults: the pre-flight list shows
@@ -467,6 +499,8 @@ class PolarAlignSettings {
     required this.coarseExposureSeconds,
     required this.polarAlignerAuto,
     required this.stopTrackingWhenDone,
+    required this.camera,
+    required this.framesPerPoint,
     required this.mountClearance,
   });
 
@@ -482,6 +516,8 @@ class PolarAlignSettings {
         'coarse_exposure_seconds': coarseExposureSeconds,
         'polar_aligner_auto': polarAlignerAuto,
         'stop_tracking_when_done': stopTrackingWhenDone,
+        'camera': camera,
+        'frames_per_point': framesPerPoint,
         'mount_clearance': {
           for (final e in mountClearance.entries) e.key: e.value.toJson(),
         },
@@ -499,6 +535,8 @@ class PolarAlignSettings {
     double? coarseExposureSeconds,
     bool? polarAlignerAuto,
     bool? stopTrackingWhenDone,
+    String? camera,
+    int? framesPerPoint,
     Map<String, PolarAlignMountClearance>? mountClearance,
   }) =>
       PolarAlignSettings(
@@ -515,6 +553,8 @@ class PolarAlignSettings {
             coarseExposureSeconds ?? this.coarseExposureSeconds,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
         stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
+        camera: camera ?? this.camera,
+        framesPerPoint: framesPerPoint ?? this.framesPerPoint,
         mountClearance: mountClearance ?? this.mountClearance,
       );
 
@@ -731,6 +771,10 @@ class PolarAlignStartPlan {
   final bool handTurnAvailable;
   final bool handTurn;
 
+  /// #2082 the camera the run measures with ([PolarAlignCameras]): the main
+  /// camera for Rough first, else the profile's.
+  final String camera;
+
   const PolarAlignStartPlan({
     this.stage,
     required this.direction,
@@ -740,6 +784,7 @@ class PolarAlignStartPlan {
     this.newOrigin = true,
     this.originOffsetDeg = 0.0,
     this.sweepLimitDeg = 30.0,
+    this.camera = PolarAlignCameras.guide,
     this.handTurnAvailable = false,
     this.handTurn = false,
   });
@@ -754,6 +799,7 @@ class PolarAlignStartPlan {
         newOrigin: newOrigin,
         originOffsetDeg: originOffsetDeg,
         sweepLimitDeg: sweepLimitDeg,
+        camera: camera,
         handTurnAvailable: handTurnAvailable,
         handTurn: true,
       );
@@ -770,6 +816,9 @@ class PolarAlignStartPlan {
         newOrigin: json['new_origin'] != false,
         originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
         sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
+        camera: json['camera'] == PolarAlignCameras.main
+            ? PolarAlignCameras.main
+            : PolarAlignCameras.guide,
         handTurnAvailable: json['hand_turn_available'] == true,
       );
 }

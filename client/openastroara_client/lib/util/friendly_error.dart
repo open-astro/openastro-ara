@@ -120,6 +120,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignOnAxis => l.refusalPolarAlignOnAxis,
     RefusalCause.polarAlignPointingUnknown => l.refusalPolarAlignPointingUnknown,
     RefusalCause.polarAlignPoseAmbiguous => l.refusalPolarAlignPoseAmbiguous,
+    RefusalCause.polarAlignMountBusy => l.refusalPolarAlignMountBusy,
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,

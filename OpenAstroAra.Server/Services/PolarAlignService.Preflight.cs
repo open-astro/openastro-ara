@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Runtime.ExceptionServices;
 using System.Threading;
@@ -67,6 +68,33 @@ namespace OpenAstroAra.Server.Services {
             if (preflight.Result.FirstFailure is { } failure) {
                 ExceptionDispatchInfo.Capture(failure).Throw();
             }
+        }
+
+        /// <summary>#2066 + #2068 — a start's refusal with the run's hold of the motion owner: <paramref name="holdRefusal"/>
+        /// (another owner holds the mount, or a GoTo, park, Find Home or sync is being sent: <c>polar-align-mount-busy</c>)
+        /// comes after the checks before the clearance (the mount, the site, the mount clock, the position) and before the
+        /// clearance and the start pointing. Without one, the first failing check.</summary>
+        private static void ThrowOnFirstFailure(StartPreflight preflight, RefusalException? holdRefusal) {
+            if (holdRefusal is not null) {
+                var clearanceAt = IndexOfCheck(PolarAlignPreflightChecks.ClearanceConfirmed);
+                foreach (var check in preflight.Result.Dto.Checks) {
+                    if (check.Status == PolarAlignPreflightStatuses.Fail && IndexOfCheck(check.Id) < clearanceAt) {
+                        ThrowOnFirstFailure(preflight);
+                    }
+                }
+                ExceptionDispatchInfo.Capture(holdRefusal).Throw();
+            }
+            ThrowOnFirstFailure(preflight);
+        }
+
+        private static int IndexOfCheck(string id) {
+            var all = PolarAlignPreflightChecks.All;
+            for (var i = 0; i < all.Count; i++) {
+                if (all[i] == id) {
+                    return i;
+                }
+            }
+            return all.Count;
         }
 
         /// <summary>The run's plan, band and sweep, once <see cref="ThrowOnFirstFailure"/> let the start through (the

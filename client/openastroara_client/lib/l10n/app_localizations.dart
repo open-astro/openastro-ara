@@ -10221,6 +10221,54 @@ abstract class AppLocalizations {
   /// **'Rough first (main camera)'**
   String get polarRoughFirst;
 
+  /// Polar align (#2082): caption with the Rough first button, how far it turns the mount (the profile's turn, whole degrees) before it moves
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first turns the mount 2 × {step}° and measures with the main camera.'**
+  String polarRoughFirstCaption(String step);
+
+  /// Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake
+  ///
+  /// In en, this message translates to:
+  /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
+  String get polarNoisyMeasurement;
+
+  /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get polarKnobCamera;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the guide camera (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera'**
+  String get polarKnobCameraGuide;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the main camera with its own solver
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera'**
+  String get polarKnobCameraMain;
+
+  /// Settings > Imaging > Polar align (#2082): how many frames are averaged at each of the three points, with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Frames per point (1 to 5)'**
+  String get polarKnobFramesPerPoint;
+
+  /// Settings > Imaging > Polar align (#2082): hint under frames per point
+  ///
+  /// In en, this message translates to:
+  /// **'Averaged; a point scattered over 3″ is retaken once'**
+  String get polarKnobFramesPerPointHint;
+
+  /// Polar align start confirm dialog (#2082): shown when the run measures with the main camera (Rough first, or the profile's camera)
+  ///
+  /// In en, this message translates to:
+  /// **'This measurement uses the main camera.'**
+  String get polarConfirmMainCamera;
+
   /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
   ///
   /// In en, this message translates to:
@@ -11167,10 +11215,10 @@ abstract class AppLocalizations {
   /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
   String refusalPolarAlignSweepLimit(String offset);
 
-  /// Refusal (polar-align-moving-mount, #2066): a GoTo, a direction-pad move, Home or Park was refused because polar alignment is turning the mount's RA motor; Stop Mount ends polar alignment too
+  /// Refusal (polar-align-moving-mount, #2066): a GoTo, Center, Home or Park was refused because polar alignment holds the mount for its whole run (its turns, solves and adjust loop); a direction-pad move only while it turns the RA motor; Stop Mount ends polar alignment too
   ///
   /// In en, this message translates to:
-  /// **'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.'**
+  /// **'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.'**
   String get refusalPolarAlignMovingMount;
 
   /// Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token
@@ -11202,6 +11250,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.'**
   String get refusalPolarAlignPoseAmbiguous;
+
+  /// Refusal (polar-align-mount-busy, #2066): polar alignment was started while the mount slews (or does not say whether it does), or while the guider guides or calibrates; it would turn the mount beside another motion
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.'**
+  String get refusalPolarAlignMountBusy;
 
   /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
   ///

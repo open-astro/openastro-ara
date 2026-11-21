@@ -305,6 +305,7 @@ void main() {
       null,
       ...without(rigDefaults['polar-align']!),
       {...rigDefaults['polar-align']!, 'loop_mode': 'bogus'},
+      {...rigDefaults['polar-align']!, 'camera': 'bogus'},
     ],
     'site': [
       null,

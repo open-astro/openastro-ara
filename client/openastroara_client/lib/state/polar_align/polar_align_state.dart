@@ -86,6 +86,13 @@ class PolarAlignLive {
   /// the last progress event; null when the readout is sound.
   final String? readoutCaution;
 
+  /// #2082 the run's camera ([PolarAlignCameras]) from `started` or the
+  /// status; null before a run or from an older daemon.
+  final String? camera;
+
+  /// #2082 a point of the measurement stayed scattered over 3″ after its
+  /// retake (from each progress event and the status).
+  final bool measurementNoisy;
   /// #2083 the run turns RA by hand: Ara moves nothing.
   final bool handTurn;
 
@@ -118,10 +125,17 @@ class PolarAlignLive {
     this.checkResult,
     this.correction,
     this.readoutCaution,
+    this.camera,
+    this.measurementNoisy = false,
     this.handTurn = false,
     this.handTurnWait,
     this.initialErrorArcmin,
   });
+
+  /// #2082 the run shoots the main camera (Rough first, or the profile's
+  /// camera): the guider has no picture of it to show.
+  bool get usesMainCamera =>
+      stage == PolarAlignStages.coarse || camera == PolarAlignCameras.main;
 
   /// True between a frame's `frame_started` and its `frame_complete`.
   bool get frameInProgress => frameStartedAt != null;
@@ -156,6 +170,7 @@ class PolarAlignLive {
     bool clearCorrection = false,
     String? readoutCaution,
     bool clearReadoutCaution = false,
+    bool? measurementNoisy,
     bool? handTurn,
     PolarAlignHandTurn? handTurnWait,
     bool clearHandTurnWait = false,
@@ -191,6 +206,8 @@ class PolarAlignLive {
         correction: clearCorrection ? null : correction ?? this.correction,
         // The readout's own caution goes with it.
         readoutCaution: clearReadout || clearReadoutCaution ? null : readoutCaution ?? this.readoutCaution,
+        camera: camera,
+        measurementNoisy: clearReadout ? false : measurementNoisy ?? this.measurementNoisy,
         handTurn: handTurn ?? this.handTurn,
         handTurnWait: clearHandTurnWait ? null : handTurnWait ?? this.handTurnWait,
         // A new stage's readout starts afresh: so does its first readout.
@@ -219,6 +236,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         stage: event.payload['stage'] is String
             ? event.payload['stage'] as String
             : PolarAlignStages.fine,
+        camera: _str(event.payload, 'camera'),
         handTurn: event.payload['hand_turn'] == true,
       );
     case PolarAlignWsEvents.stopped:
@@ -285,6 +303,7 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         // Every progress event says the readout's caution afresh (absent = sound).
         readoutCaution: _str(event.payload, 'readout_caution'),
         clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
+        measurementNoisy: event.payload['measurement_noisy'] == true,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -402,6 +421,8 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       checkResult: status.checkResult,
       correction: status.correction,
       readoutCaution: status.readoutCaution,
+      camera: status.camera,
+      measurementNoisy: status.measurementNoisy,
       handTurn: status.handTurn,
       handTurnWait: status.handTurnWait,
     );

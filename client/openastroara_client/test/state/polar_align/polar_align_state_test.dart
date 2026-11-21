@@ -51,6 +51,33 @@ void main() {
       expect(folded.consecutiveSolveFailures, 0, reason: 'a solved iteration clears the retry streak');
     });
 
+    test('started carries the run camera and progress the noisy flag; a new run clears it (#2082)', () {
+      final started = foldPolarAlignEvent(
+        const PolarAlignLive(),
+        _event(PolarAlignWsEvents.started, {'state': 'seeding', 'stage': 'fine', 'camera': 'main'}),
+      )!;
+      expect(started.camera, PolarAlignCameras.main);
+      expect(started.usesMainCamera, isTrue);
+      final noisy = foldPolarAlignEvent(
+        started,
+        _event(PolarAlignWsEvents.progress, {
+          'iteration': 0,
+          'altitude_error_arcmin': 1.0,
+          'azimuth_error_arcmin': 1.0,
+          'total_error_arcmin': 1.41,
+          'measurement_noisy': true,
+        }),
+      )!;
+      expect(noisy.measurementNoisy, isTrue);
+      expect(noisy.camera, PolarAlignCameras.main, reason: 'progress keeps the run camera');
+      final next = foldPolarAlignEvent(noisy, _event(PolarAlignWsEvents.started, {'stage': 'fine', 'camera': 'guide'}))!;
+      expect((next.measurementNoisy, next.usesMainCamera), (false, false));
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson({
+        'state': 'adjusting', 'stage': 'fine', 'camera': 'main', 'measurement_noisy': true,
+      }));
+      expect((fromStatus.camera, fromStatus.measurementNoisy), (PolarAlignCameras.main, true));
+    });
+
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),
@@ -329,6 +356,24 @@ void main() {
       expect(folded.totalErrorArcmin, 0.98);
       expect(folded.zone, 'green');
       expect(polarAlignStepState(folded), SetupStepState.done);
+    });
+
+    test('a checked event and a status check result carry the noisy flag (#2082)', () {
+      final noisy = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true}),
+      )!;
+      expect(noisy.checkResult!.noisy, isTrue);
+      final steady = foldPolarAlignEvent(
+        const PolarAlignLive(stage: PolarAlignStages.check, phase: PolarAlignStates.checking),
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.98, 'verdict': 'excellent'}),
+      )!;
+      expect(steady.checkResult!.noisy, isFalse, reason: 'an older daemon sends no key');
+      final fromStatus = liveFromStatus(PolarAlignStatus.fromJson(const {
+        'state': 'checked',
+        'check_result': {'total_error_arcmin': 0.98, 'verdict': 'excellent', 'noisy': true},
+      }));
+      expect(fromStatus.checkResult!.noisy, isTrue);
     });
 
     test('progress carries the stage; an older daemon leaves it null', () {

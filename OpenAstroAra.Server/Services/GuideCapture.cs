@@ -32,6 +32,11 @@ internal interface IGuideCapture {
 
     /// <summary>Asks the custody module for the camera (refused while the Guider is busy).</summary>
     Task<GuideCameraCustody.Claim> TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct);
+
+    /// <summary>#2066 (ARA-2) — the guider's PHD2 app state now (<see cref="GuideCameraCustody.IsBusy"/> says whether it
+    /// guides or calibrates), or null when none is known. Polar Align reads it before each motion: a guider that started
+    /// guiding by its own controls would chase the turn.</summary>
+    string? AppState => null;
 }
 
 /// <summary>One connected guider's capture operations.</summary>
