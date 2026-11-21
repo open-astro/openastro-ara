@@ -385,6 +385,17 @@ public sealed class InMemoryProfileStore : IProfileStore {
         RaiseChanged();
     }
 
+    private PolarAlignMotorDirectionDto? _polarAlignMotorDirection = ProfileSections.PolarAlignMotorDirection.Default;
+
+    public PolarAlignMotorDirectionDto? GetPolarAlignMotorDirection() {
+        lock (_lock) { return _polarAlignMotorDirection; }
+    }
+
+    public void PutPolarAlignMotorDirection(PolarAlignMotorDirectionDto? value) {
+        lock (_lock) { _polarAlignMotorDirection = value; }
+        RaiseChanged();
+    }
+
     private SkyModelCalibrationDto? _skyModelCalibration = ProfileSections.SkyModelCalibration.Default;
 
     public SkyModelCalibrationDto? GetSkyModelCalibration() {

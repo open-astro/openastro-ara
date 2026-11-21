@@ -899,6 +899,20 @@ public static partial class EquipmentEndpoints {
         // with the achieved error so the dashboard can surface PA quality.
         polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.CompleteAsync(key, ct)));
+        // #2081 — the RA motor direction Polar Align's 0.5° test saved for this profile's mount (null = never tested), and
+        // whether it stands for the connected mount's driver; "Test direction again" forgets it, so the next start tests.
+        polar.MapGet("/motor-direction", (IProfileStore profiles, HttpContext http) =>
+                Results.Ok(PolarAlignMotorDirection(profiles, http.RequestServices)))
+            .WithName("GetPolarAlignMotorDirection")
+            .WithSummary("The RA motor direction Polar Align tested and saved for this profile's mount, and whether it stands for the connected mount's driver.")
+            .Produces<PolarAlignMotorDirectionStateDto>();
+        polar.MapPost("/motor-direction/retest", (IProfileStore profiles) => {
+            profiles.PutPolarAlignMotorDirection(null);
+            return Results.NoContent();
+        })
+            .WithName("RetestPolarAlignMotorDirection")
+            .WithSummary("Forget the saved RA motor direction: the next Polar Align start tests it again with a 0.5° turn its confirm step shows.")
+            .Produces(StatusCodes.Status204NoContent);
         // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
         polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
             await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
@@ -1270,7 +1284,7 @@ public static partial class EquipmentEndpoints {
     /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
     /// service refuses a start without one).</summary>
     internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
-        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn) : null;
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn, body.DirectionTest) : null;
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
@@ -1287,6 +1301,16 @@ public static partial class EquipmentEndpoints {
             // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
         }
+    }
+
+    /// <summary>#2081 — <c>GET /polaralign/motor-direction</c>: the saved test, beside the connected mount's driver (no
+    /// mount service, or none connected: the match is null).</summary>
+    internal static PolarAlignMotorDirectionStateDto PolarAlignMotorDirection(IProfileStore profiles, IServiceProvider services) {
+        ArgumentNullException.ThrowIfNull(profiles);
+        ArgumentNullException.ThrowIfNull(services);
+        var mount = services.GetService(typeof(OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator))
+            as OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator;
+        return PolarAlignService.MotorDirectionState(profiles.GetPolarAlignMotorDirection(), mount?.GetInfo());
     }
 
     public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {

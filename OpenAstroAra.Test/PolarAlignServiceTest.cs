@@ -305,17 +305,29 @@ namespace OpenAstroAra.Test {
                 Mock<ITelescopeMediator>? mount = null, WsRecorder? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
-                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null) {
-            return NewServiceOn(guider, solver, (mount ?? NewMount()).Object, ws, store, log, fetcher, logger, mainCamera, aligner, mountClock);
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null,
+                bool motorDirectionSaved = true) {
+            return NewServiceOn(guider, solver, (mount ?? NewMount()).Object, ws, store, log, fetcher, logger, mainCamera, aligner, mountClock,
+                motorDirectionSaved);
         }
 
-        /// <summary><see cref="NewService"/> on any mount: a mock's object, or the fake GEM mount (#2064).</summary>
+        /// <summary><see cref="NewService"/> on any mount: a mock's object, or the fake GEM mount (#2064). With
+        /// <paramref name="motorDirectionSaved"/> (the default) the store already holds a +1 RA motor direction for the
+        /// mount's driver (#2081), so a run makes no 0.5° direction test and its turns are the measurement's alone; a test
+        /// of the direction test itself passes false.</summary>
         private static PolarAlignService NewServiceOn(IGuideCapture guider, IPolarAlignFrameSolver solver,
                 ITelescopeMediator mount, WsRecorder? ws = null, IProfileStore? store = null,
                 IPolarAlignmentLog? log = null, IPolarAlignFrameFetcher? fetcher = null,
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
-                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null) {
+                IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null,
+                bool motorDirectionSaved = true) {
             ws ??= new WsRecorder();
+            store ??= NewStore();
+            if (motorDirectionSaved && store.GetPolarAlignMotorDirection() is null) {
+                var driver = mount.GetInfo();
+                store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, driver?.DriverInfo ?? string.Empty,
+                    driver?.DriverVersion ?? string.Empty, DateTimeOffset.UtcNow));
+            }
             if (mount is IMocked<ITelescopeMediator> mocked && mount is ITelescopeService service) {
                 // #2067 — a mock set up as the telescope service answers a turn's poll (position and pier side) with its
                 // position read, and takes every rate the turn asks for: a test that needs otherwise sets them up itself.
@@ -324,7 +336,7 @@ namespace OpenAstroAra.Test {
                 face.Setup(s => s.MatchMoveAxisRate(It.IsAny<int>(), It.IsAny<double>())).Returns((int _, double rate) => rate);
             }
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
-                mount, MediatorMotionControl.For(mount), store ?? NewStore(), ws, log,
+                mount, MediatorMotionControl.For(mount), store, ws, log,
                 fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner, mountClock: mountClock) {
                 PausedRetryDelay = TimeSpan.FromMilliseconds(20),
                 TrackingConfirmTimeout = TimeSpan.FromMilliseconds(200),
@@ -1334,32 +1346,36 @@ namespace OpenAstroAra.Test {
             Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
         }
 
-        // A driver's sign for a "positive" RA motor rate is not standard. The turn must still go the way the
-        // routine chose (away from the meridian): a motor that runs the other way is stopped and reversed.
+        // #2081 — the saved RA motor direction says a positive rate raises RA; this driver lowers it (a driver upgrade that
+        // changed its sign). The turn used to be stopped and reversed mid-move, trusting the reading's sign; now it is
+        // stopped within 0.5° (plus one command's travel) and the run fails. The motor never runs the other way.
         [Test]
-        public async Task A_motor_that_runs_the_wrong_way_is_reversed_and_the_turn_goes_the_chosen_way() {
+        public async Task A_motor_that_runs_the_other_way_from_its_saved_direction_fails_and_is_never_reversed() {
             var mount = NewMount();
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             SimulateMotors(mount, () => position, c => position = c, raUpIsNegative: true);
             var solver = new ScriptedSolver();
             solver.Enqueue(SolveA, SolveB, SolveC);
-            using var svc = NewService(NewFake(), solver, mount);
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), solver, mount, ws);
 
             await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
-            Assert.That(status.State, Is.EqualTo("adjusting"));
-            // LST 20 h puts RA 0 east of the meridian: the chosen way is RA up, two 30° turns.
-            Assert.That(position.RADegrees, Is.EqualTo(60.0).Within(1e-6), "both turns went RA up despite the motor's sign");
-            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.Is<double>(r => r < 0)), Times.AtLeastOnce(), "the reversal");
-            // The reversal is learned for the run: the second turn starts the right way at once.
+            Assert.That(status.State, Is.EqualTo("failed"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.TurnWrongWay));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("Test direction again"));
+            // LST 20 h, RA 0, east (the profile's default in the north): the turn was asked for RA up and went down.
+            var wrongWay = -Wrap180Test(position.RADegrees);
+            Assert.That(wrongWay, Is.GreaterThanOrEqualTo(PolarAlignService.WrongWayDeg).And.LessThanOrEqualTo(PolarAlignService.WrongWayDeg + MotorStepDeg),
+                "stopped within 0.5° and one command of travel the wrong way");
             var rates = mount.Invocations.Where(i => i.Method.Name == nameof(ITelescopeMediator.MoveAxis)
                     && i.Arguments[0] is TelescopeAxes.Primary)
-                .Select(i => i.Arguments[1] is double r ? r : double.NaN).ToArray();
-            var secondTurn = rates.SkipWhile(r => r != 0).Skip(1).SkipWhile(r => r != 0).Skip(1).ToArray(); // after the reversal stop and the first turn's stop
-            Assert.That(secondTurn.FirstOrDefault(r => r != 0), Is.LessThan(0), "the second turn starts with the learned sign");
+                .Select(i => i.Arguments[1] is double r ? r : double.NaN).Where(r => r != 0).ToArray();
+            Assert.That(rates, Is.Not.Empty);
+            Assert.That(rates, Has.All.GreaterThan(0), "never reversed: every motor command is the confirmed way's");
         }
 
         // On the daemon the mount is the telescope service: each turn runs on its leased MoveAxis (the motor stops by

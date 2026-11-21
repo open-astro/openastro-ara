@@ -242,8 +242,8 @@ namespace OpenAstroAra.Test {
             var seen = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
             Assert.That((seen.NewOrigin, seen.Direction), Is.EqualTo((false, PolarAlignDirections.West)));
 
-            // The user slews the mount to RA 270° (west of the meridian) after reading the plan. The turn direction is
-            // west either way; but the plan they confirmed continued the old origin, so the confirmation moves nothing.
+            // The user slews the mount to RA 270° (west of the meridian) after reading the plan. The plan they confirmed
+            // continued the old origin (west, back toward it), so the confirmation moves nothing.
             mount.MoveByHand(270.0);
             var at = mount.Count;
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
@@ -251,9 +251,9 @@ namespace OpenAstroAra.Test {
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignUnconfirmed), "confirm again");
             AssertNoMotionAfter(mount, at);
 
-            // The confirm step asks again: a new start, which becomes the origin.
+            // The confirm step asks again: a new start, which becomes the origin and turns the profile's way (#2081: east).
             var fresh = await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
-            Assert.That((fresh.NewOrigin, fresh.OriginOffsetDeg, fresh.Direction), Is.EqualTo((true, 0.0, PolarAlignDirections.West)));
+            Assert.That((fresh.NewOrigin, fresh.OriginOffsetDeg, fresh.Direction), Is.EqualTo((true, 0.0, PolarAlignDirections.East)));
             var far = OffsetFrom(270.0, mount.RaDeg);
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
             var next = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);

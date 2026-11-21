@@ -529,6 +529,8 @@ public sealed record Phd2SettingsDto(
 /// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
 /// <c>Camera</c> the camera of the measurement and its live loop (<see cref="PolarAlignCameras"/>, #2082);
 /// <c>FramesPerPoint</c> the frames averaged at each of the measurement's three points (1–5, #2082);
+/// <c>EastDirection</c> the RA turn direction of a run that starts a new sweep origin (#2081; null = by hemisphere,
+/// <see cref="PolarAlignEastDirection"/>);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
 /// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
@@ -563,7 +565,11 @@ public sealed record PolarAlignSettingsDto(
     string Camera = PolarAlignCameras.Guide,
     // #2082: frames per point of a measurement, the mount still, averaged as unit vectors (their rms scatter is logged).
     // A point scattered over 3″ is retaken once; still over, the result is flagged noisy. Clamped to 1–5.
-    int FramesPerPoint = 3);
+    int FramesPerPoint = 3,
+    // #2081: the way a run's RA turns go when it starts a NEW sweep origin (NINA's EastDirection): true = east (the
+    // mount's RA reading rises), false = west, null = by the site's hemisphere (east in the north, west in the south).
+    // Later runs of the same session keep turning back toward the origin (#2089), whatever this says.
+    bool? EastDirection = null);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
@@ -654,6 +660,34 @@ public static class PolarAlignCameras {
     public const string Main = "main";
     public static bool IsValid(string? camera) => camera is Guide or Main;
 }
+
+/// <summary>#2081 — <see cref="PolarAlignSettingsDto.EastDirection"/>: the way a new sweep origin's RA turns go.</summary>
+public static class PolarAlignEastDirection {
+    /// <summary>+1 (east: the mount's RA reading rises) or −1 (west) for <paramref name="eastDirection"/>; null is the
+    /// hemisphere's default: east in the north, where NINA's start field near the pole turns away from the meridian, and
+    /// west in the south, where east would end about 2° past it.</summary>
+    public static double Sign(bool? eastDirection, double latitudeDeg) =>
+        (eastDirection ?? latitudeDeg >= 0) ? 1.0 : -1.0;
+}
+
+/// <summary>#2081 — the RA motor direction Polar Align learned on this profile's mount with a 0.5° test move, and
+/// saved (profile section <c>polar_align_motor_direction</c>, daemon-owned, null until a test ran). <c>Sign</c> +1: a
+/// positive primary-axis MoveAxis rate raises the mount's RA reading (east, NINA's assumption); −1: it lowers it.
+/// <c>DriverInfo</c> and <c>DriverVersion</c> are the mount driver's when it was tested: a mount whose driver reports
+/// another name or version is tested again (an AlpacaBridge upgrade that changed the sign). <c>TestedUtc</c> is when.</summary>
+public sealed record PolarAlignMotorDirectionDto(int Sign, string DriverInfo, string DriverVersion, DateTimeOffset TestedUtc) {
+    /// <summary>The saved test stands for a mount whose driver reports <paramref name="driverInfo"/> and
+    /// <paramref name="driverVersion"/> now (compared exactly; null reads as empty).</summary>
+    public bool IsFor(string? driverInfo, string? driverVersion) =>
+        Sign is 1 or -1
+        && string.Equals(DriverInfo ?? string.Empty, driverInfo ?? string.Empty, StringComparison.Ordinal)
+        && string.Equals(DriverVersion ?? string.Empty, driverVersion ?? string.Empty, StringComparison.Ordinal);
+}
+
+/// <summary>#2081 — <c>GET /api/v1/equipment/polaralign/motor-direction</c>: the saved test (null = never tested, or
+/// forgotten by "Test direction again"), and whether it stands for the mount connected now (null = no mount connected).
+/// A start whose mount it does not stand for tests the direction first (a 0.5° turn the confirm step shows).</summary>
+public sealed record PolarAlignMotorDirectionStateDto(PolarAlignMotorDirectionDto? Saved, bool? MatchesConnectedMount);
 
 /// <summary>§45 live-adjust capture modes (<see cref="PolarAlignSettingsDto.LoopMode"/>).</summary>
 public static class PolarAlignLoopModes {

@@ -159,8 +159,10 @@ namespace OpenAstroAra.Server.Services {
             var north = site.LatitudeDeg > 0;
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
-            // The way the user confirmed (PlanSweep): away from the meridian at a new origin, else back toward it.
+            // The way the user confirmed (PlanSweep): the profile's east_direction at a new origin, else back toward it (#2081).
             var dirSign = band.AwaySign;
+            // #2081 — a mount with no saved RA motor direction for its driver turns 0.5° first and saves which way it went.
+            await TestRaMotorDirectionIfOwedAsync(band, gen, ct).ConfigureAwait(false);
 
             // ── seed: three frames with two RA turns of SeedRotationDeg between them (NINA's
             // Three Point Polar Alignment: 10° steps, 20° in all, from where the scope points). The
@@ -171,8 +173,8 @@ namespace OpenAstroAra.Server.Services {
             var (a, aTime) = await SolveSeedFrameAsync(capture, "seed-a", (ra0, dec0), settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-a", a.RaDegJnow, a.DecDegJnow);
 
-            // ── RA turns: at a new origin away from the meridian so the arc cannot cross it (a crossing risks a
-            // meridian flip, which garbles the fit — guider design §5 step 2); a later start's back toward the origin.
+            // ── RA turns: at a new origin the profile's east_direction, shown in the confirm step (#2081; the user picks a
+            // start whose turns do not cross the meridian, NINA's advice); a later start's back toward the origin.
             var p1 = await TurnRaAsync(ra0, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
             var mountTurn1 = FoldTolerantSignedTurnDeg(p1.RaDeg - ra0);
             var (b, bTime) = await SolveSeedFrameAsync(capture, "seed-b", p1, settings, gen, ct).ConfigureAwait(false);
@@ -258,6 +260,7 @@ namespace OpenAstroAra.Server.Services {
 
             var step = settings.CheckStepDeg; // always in range: PolarAlignSettingsClamp on every read
             var dirSign = band.AwaySign;
+            await TestRaMotorDirectionIfOwedAsync(band, gen, ct).ConfigureAwait(false); // #2081
             // Read from the driver like the turns' own readings, so the mount turns compare like with like.
             var (ra0, dec0) = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
             // A check frame on the main camera may need the blind fallback, like a seed frame.
@@ -463,15 +466,6 @@ namespace OpenAstroAra.Server.Services {
             return Math.Abs(a) > 90.0 ? a - Math.CopySign(180.0, a) : a;
         }
 
-        /// <summary>With HA = LST − RA, decreasing RA increases HA (further west): turn west when
-        /// already west of the meridian, east when east — the arc then cannot cross it. Read at a new sweep origin's
-        /// start (the direction the user confirms, <see cref="PlanSweep"/>).</summary>
-        private double AwayFromMeridianSign(double mountRaDeg) {
-            var lstDeg = _mount.GetInfo().SiderealTime * 15.0;
-            var haDeg = Wrap180(lstDeg - mountRaDeg);
-            return haDeg >= 0 ? -1.0 : 1.0;
-        }
-
         /// <summary>How far past its planned turns a start's sweep may reach before the session's limit refuses it: a turn
         /// overshoots its step by a fraction of a degree, and tracking drifts the axis between the turns.</summary>
         internal const double BandToleranceDeg = 2.0;
@@ -501,7 +495,8 @@ namespace OpenAstroAra.Server.Services {
         /// <see cref="AxisSlowZoneDeg"/>, so the stop on the mount's reading lands within about a degree. #2083 — each is
         /// matched to the fastest rate the mount offers at or below it (<see cref="MatchTurnRates"/>), never rounded up.</summary>
         internal double AxisFastRateDegPerSec { get; set; } = 3.0;
-        /// <summary>−1 once a turn of this run found the driver's RA motor sign inverted; reset per run.</summary>
+        /// <summary>#2081 — the RA motor sign this run turns with: the saved one, or the one its direction test learned
+        /// (−1: a positive rate lowers the mount's RA reading). Set per run; guarded by <c>_gate</c>.</summary>
         private double _raMotorSign = 1.0;
         internal double AxisSlowRateDegPerSec { get; set; } = 1.0;
         internal const double AxisSlowZoneDeg = 3.0;
@@ -524,9 +519,11 @@ namespace OpenAstroAra.Server.Services {
         /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second; fast
         /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the
         /// routine's (never above, #2083). Then stop, wait for the mount to stand still, check the turn arrived, and return
-        /// the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below −0.5°)
-        /// is stopped and reversed once — a driver's sign for "positive" is not standard; a move that then runs back past
-        /// its start again does not reverse a second time, it stalls and fails. #2067 (<see cref="SlewStalled"/> and the
+        /// the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below
+        /// −<see cref="WrongWayDeg"/>) is stopped and fails the run (<see cref="TurnWrongWay"/>, #2081): it is never reversed,
+        /// because a reversal trusts the reading's sign, and a wrong reading (a bad sync, counterweight up) would turn the
+        /// motor toward the limit and call that the right way. The RA motor's sign is the run's saved or tested one
+        /// (<paramref name="motorSign"/> overrides it: the direction test sends a positive-assumed rate). #2067 (<see cref="SlewStalled"/> and the
         /// other move guards, PolarAlignService.MoveGuards.cs) — every exit stops the motor: Stop, failure, a stall (no
         /// progress for 2 s), a time bound of twice the planned travel time, a Dec reading that moves, a pier side that
         /// changes, a reading that jumps, and a mount that runs on past the step after its stop.</summary>
@@ -535,7 +532,7 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(double RaDeg, double DecDeg)> MoveAxisUntilAsync(
                 TelescopeAxes axis, double sign, double degrees,
                 Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, bool checkDirection,
-                int gen, CancellationToken ct, Action<(double RaDeg, double DecDeg)>? beforeMove = null) {
+                int gen, CancellationToken ct, Action<(double RaDeg, double DecDeg)>? beforeMove = null, double? motorSign = null) {
             // #2089 — every reading of a move comes from the driver, never the cache: after a failed status poll the cache
             // is the (0, 0) placeholder, and progress read from it can look like a wrong-way turn, reverse the motor and run
             // it away from the band (and the session's origin) until the stall bound. #2066 — a reading the run cannot trust
@@ -548,10 +545,14 @@ namespace OpenAstroAra.Server.Services {
             var (fastRate, slowRate) = MatchTurnRates(axis);
             // The caller's check of the move from the reading it starts at, before the motor runs (a turn's sweep limit).
             beforeMove?.Invoke(start);
-            // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
+            // #2081 — the RA motor's saved (or just tested) sign: the reading moves the way the run asks, or it fails.
             double learnedSign;
-            lock (_gate) {
-                learnedSign = axis == TelescopeAxes.Primary ? _raMotorSign : 1.0;
+            if (motorSign is double fixedSign) {
+                learnedSign = fixedSign;
+            } else {
+                lock (_gate) {
+                    learnedSign = axis == TelescopeAxes.Primary ? _raMotorSign : 1.0;
+                }
             }
             var direction = (sign >= 0 ? 1.0 : -1.0) * learnedSign;
             // Stop Mount (or Emergency Stop, a park, a Find Home) aborts the mount from outside this routine: every poll
@@ -563,7 +564,6 @@ namespace OpenAstroAra.Server.Services {
             double Rate() => direction * (fast ? fastRate : slowRate);
             var bound = TurnTimeBound(degrees, fastRate, slowRate);
             var best = 0.0;
-            var reversed = false;
             var settled = false;
             var startRate = Rate();
             LogAxisMove(axis, degrees, startRate);
@@ -600,31 +600,10 @@ namespace OpenAstroAra.Server.Services {
                     if (p >= degrees - 1e-9) {
                         break;
                     }
-                    if (checkDirection && !reversed && p <= -0.5) {
-                        reversed = true;
-                        direction = -direction;
-                        if (axis == TelescopeAxes.Primary) {
-                            lock (_gate) {
-                                if (_generation == gen) { // never a superseded run's lesson, checked and written as one
-                                    _raMotorSign = -_raMotorSign;
-                                }
-                            }
-                        }
-                        var reversedRate = Rate();
-                        LogAxisMoveReversed(axis, reversedRate);
-                        if (RunStopsFenced(gen)) {
-                            // #2066 — a takeover or an end gave up on this run: the mount is someone else's, no stop from here.
-                            throw new OperationCanceledException("the run was fenced while the mount reversed");
-                        }
-                        await RunAxisAsync(axis, 0).ConfigureAwait(false);
-                        if (!IsCurrent(gen)) {
-                            // A Stop during the stop above must not get the motor restarted the other way.
-                            throw new OperationCanceledException("the run was stopped while the mount reversed");
-                        }
-                        await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
-                        best = p;
-                        bestAt = Clock.GetTimestamp();
-                        continue;
+                    if (checkDirection && p <= -WrongWayDeg) {
+                        // #2081 — never reversed: the motor stops (the finally below) and the run fails.
+                        LogAxisMoveWrongWay(axis, -p, Rate(), learnedSign);
+                        throw new RoutineFailedException(TurnWrongWay, TurnWrongWayMessage);
                     }
                     if (p > best + 0.05) {
                         best = p;
@@ -712,8 +691,8 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4550, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} motor move of {Degrees:F1}° at {Rate:F2}°/s (no GoTo)")]
         private partial void LogAxisMove(TelescopeAxes axis, double degrees, double rate);
 
-        [LoggerMessage(EventId = 4551, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} motor ran the wrong way — reversed to {Rate:F2}°/s")]
-        private partial void LogAxisMoveReversed(TelescopeAxes axis, double rate);
+        [LoggerMessage(EventId = 4551, Level = LogLevel.Warning, Message = "§45 polar-align: the {Axis} motor turned {WrongDeg:F2}° the other way at {Rate:F2}°/s (saved motor sign {Sign:+0;-0}) — stopped, never reversed: turn_wrong_way")]
+        private partial void LogAxisMoveWrongWay(TelescopeAxes axis, double wrongDeg, double rate, double sign);
 
         [LoggerMessage(EventId = 4552, Level = LogLevel.Information, Message = "§45 polar-align: {Axis} motor move done, {Moved:F2}° by the mount's reading")]
         private partial void LogAxisMoveDone(TelescopeAxes axis, double moved);

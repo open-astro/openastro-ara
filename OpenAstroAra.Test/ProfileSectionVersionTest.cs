@@ -74,7 +74,7 @@ namespace OpenAstroAra.Test {
         /// client write to check.</summary>
         private static readonly string[] DaemonOnly = [
             "FocusCalibration", "CalibrationState", "TrackingCalibration",
-            "SkyModelCalibration", "EquipmentIdentity", "FilterFocusOffsets",
+            "SkyModelCalibration", "EquipmentIdentity", "FilterFocusOffsets", "PolarAlignMotorDirection",
         ];
 
         /// <summary>One valid edit per routed section, applied to the body its GET returned. The walk PUTs it so

@@ -101,4 +101,7 @@ public sealed record ProfileSnapshotDto(
     // #1675 — the per-slot focus offsets the offset calibration saved. Null (every pre-#1675 file) = none saved.
     FilterFocusOffsetsDto? FilterFocusOffsets = null,
     // #1689 — the dome's geometry and follow-the-mount setting. Null (every pre-#1689 file) = the defaults, not following.
-    DomeSettingsDto? Dome = null);
+    DomeSettingsDto? Dome = null,
+    // #2081 — the RA motor direction Polar Align's 0.5° test learned on this profile's mount, keyed by the driver's name
+    // and version. Daemon-owned; null (every pre-#2081 file, and after "Test direction again") = never tested.
+    PolarAlignMotorDirectionDto? PolarAlignMotorDirection = null);
