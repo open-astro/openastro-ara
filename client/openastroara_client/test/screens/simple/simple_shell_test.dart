@@ -9213,6 +9213,7 @@ void main() {
     Future<ProviderContainer> panel(
       WidgetTester tester, {
       SequenceRunStateInfo? runState,
+      FakeSessionLiveStackClient? daemon,
     }) async {
       final c = await _pump(
         tester,
@@ -9222,7 +9223,7 @@ void main() {
         runState: runState,
         gear: [
           sessionLiveStackApiFactoryProvider.overrideWithValue(
-            (_) => FakeSessionLiveStackClient(),
+            (_) => daemon ?? FakeSessionLiveStackClient(),
           ),
           simpleLiveStackViewPrefsProvider.overrideWithValue(_ViewPrefs()),
         ],
@@ -9290,6 +9291,43 @@ void main() {
         tester.getBottomLeft(row).dy,
         lessThanOrEqualTo(tester.getTopLeft(queued).dy),
       );
+      await leave(tester, c);
+    });
+
+    testWidgets('no camera: no row, so one 8 px gap from the progress to the '
+        'queue list; a re-probe that finds one adds the row', (tester) async {
+      final daemon = FakeSessionLiveStackClient()..unsupported = 'no_camera';
+      final c = await panel(
+        tester,
+        runState: const SequenceRunStateInfo(
+          sequenceId: 'seq-1',
+          runId: 'r1',
+          state: SequenceRunState.running,
+          framesCaptured: 3,
+        ),
+        daemon: daemon,
+      );
+      final run = find.byType(SimpleRunPanel);
+      final row = find.descendant(
+        of: run,
+        matching: find.byKey(const Key('simple-live-stack-row')),
+      );
+      final progress = find.descendant(of: run, matching: find.text('3 / 30'));
+      final queue = find.descendant(
+        of: run,
+        matching: find.textContaining('QUEUE'),
+      );
+      expect(row, findsNothing);
+      expect(
+        tester.getTopLeft(queue).dy - tester.getBottomLeft(progress).dy,
+        moreOrLessEquals(AraSpace.s8),
+        reason: 'a hidden row leaves no second gap',
+      );
+
+      daemon.unsupported = null;
+      await tester.pump(kSimpleLiveStackReprobe);
+      await tester.pump();
+      expect(row, findsOneWidget);
       await leave(tester, c);
     });
 

@@ -16,6 +16,7 @@ import '../../state/sequencer/sequence_list_state.dart';
 import '../../state/settings/filter_set_state.dart';
 import '../../state/setup/setup_readiness.dart';
 import '../../state/imaging/exposure_state.dart';
+import '../../state/simple_live_stack_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../state/simple_mode_state.dart';
 import '../../state/simple_run_state.dart';
@@ -2166,6 +2167,9 @@ class SimpleRunPanel extends ConsumerWidget {
     final mountStopped = ref.watch(simpleMountStoppedProvider);
     final limitReason = ref.watch(simpleMountLimitProvider);
     final imaging = info?.state?.isActive ?? false;
+    final liveStackShown = ref.watch(
+      simpleLiveStackProvider.select(simpleLiveStackRowShown),
+    );
     return SimplePanel(
       padding: const EdgeInsets.all(AraSpace.s16),
       child: SizedBox(
@@ -2267,7 +2271,8 @@ class SimpleRunPanel extends ConsumerWidget {
                 ),
             ],
             // Under the progress, above the queue; also before Start, to set it.
-            const SimpleLiveStackRow(),
+            // Left out while hidden: an empty child would double the 8 px gap.
+            if (liveStackShown) const SimpleLiveStackRow(),
             // One target imaging is the headline; before that it's the way to edit it.
             if (run.targets.length > 1 || (run.targets.isNotEmpty && !imaging))
               _QueueList(run: run, onEdit: onEdit),

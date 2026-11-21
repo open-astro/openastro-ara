@@ -18,14 +18,22 @@ String simpleLiveStackReadout(AppLocalizations l10n, SessionLiveStackStatus s) {
   return out == 0 ? text : '$text · ${l10n.simpleLiveStackLeftOut(out)}';
 }
 
+/// The `unsupported` tokens the user can act on, and their words.
+final _reasons = <String, String Function(AppLocalizations)>{
+  'not_colour': (l10n) => l10n.simpleLiveStackNotColour,
+  'too_large': (l10n) => l10n.simpleLiveStackTooLarge,
+};
+
 /// Why the stack cannot run with this camera, for the two reasons the user can
 /// act on (`not_colour`, `too_large`); null for any other token.
 String? simpleLiveStackReason(AppLocalizations l10n, String? token) =>
-    switch (token) {
-      'not_colour' => l10n.simpleLiveStackNotColour,
-      'too_large' => l10n.simpleLiveStackTooLarge,
-      _ => null,
-    };
+    _reasons[token]?.call(l10n);
+
+/// Whether the row shows: once the daemon says the stack can run, or says why
+/// it cannot in words the user can act on. The run panel adds the row only
+/// then, so a hidden row leaves no gap between its neighbours.
+bool simpleLiveStackRowShown(SimpleLiveStack s) =>
+    s.supported || _reasons.containsKey(s.status?.unsupported);
 
 /// A failed start, stop or reset shows as one error pill (DESIGN.md
 /// "Errors": a Queue failure after a rig round-trip).
@@ -59,10 +67,9 @@ class SimpleLiveStackRow extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
     final s = ref.watch(simpleLiveStackProvider);
-    final status = s.status;
-    if (status == null) return const SizedBox.shrink();
+    if (!simpleLiveStackRowShown(s)) return const SizedBox.shrink();
+    final status = s.status!;
     final reason = simpleLiveStackReason(l10n, status.unsupported);
-    if (!s.supported && reason == null) return const SizedBox.shrink();
     final stack = ref.read(simpleLiveStackProvider.notifier);
     final dim = kSimpleText.copyWith(color: AraColors.textSecondary);
     final outcome = s.supported
