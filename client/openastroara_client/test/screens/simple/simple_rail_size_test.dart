@@ -201,7 +201,9 @@ final _caption = find.byKey(const Key('simple-calibration-shutter-caption'));
 
 void main() {
   for (final (where, size, text, roomy) in const [
+    // At 720 high the rail is as tall as it can be; at 900 it could grow.
     ('1280x720 at 1.0x', Size(1280, 720), 1.0, true),
+    ('1280x900 at 1.0x', Size(1280, 900), 1.0, true),
     ('1024x560 at 1.0x', Size(1024, 560), 1.0, false),
     ('1280x720 at 1.5x', Size(1280, 720), 1.5, false),
   ]) {
