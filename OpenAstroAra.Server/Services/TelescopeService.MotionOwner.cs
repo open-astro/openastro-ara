@@ -40,7 +40,9 @@ public sealed partial class TelescopeService {
     // The live hold (its identity: an older hold of the same owner gives nothing back) and its owner. Guarded by _ownerGate.
     private object? _holdToken;
     private string? _holdOwner;
-    // GoTos, parks, Find Homes and syncs being sent now (TryBeginMotionDispatch). Guarded by _ownerGate.
+    // The moves that yield to the owner and are on their way now (TryBeginMotionDispatch): a REST GoTo or sync from its
+    // owner check to its send, a REST Park or Find Home from the end of its checks to its send, a mediator GoTo, park, Find
+    // Home or sync while it is sent. Never the safety and fault parks. Guarded by _ownerGate.
     private int _dispatching;
 
     /// <inheritdoc />

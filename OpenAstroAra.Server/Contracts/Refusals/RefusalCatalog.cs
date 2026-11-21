@@ -68,8 +68,10 @@ public static class RefusalCatalog {
     // #2089 — the RA axis has turned too far from where Polar Align started this session (offset_deg from the origin,
     // limit_deg the bound): slew it back near the pole and confirm again.
     public static readonly RefusalCause PolarAlignSweepLimit = new("polar-align-sweep-limit", 409, "The mount has turned too far from where Polar Align started", "offset_deg", "limit_deg");
-    // #2066 — a GoTo, a pad move, Home or Park while Polar Align turns the mount (or its stop is not confirmed yet): stop
-    // Polar Align first. A pad stop (rate 0) and Stop Mount are never refused.
+    // #2066 — Polar Align holds the mount's motion owner for its whole run (its solves and the adjust loop included): a GoTo,
+    // a sync, Center, Park or Home meanwhile is refused, a REST Park or Home whose checks were still running when it took the
+    // mount too. A pad move is refused only while a turn runs (or its stop is not confirmed yet). Stop Polar Align first. A
+    // pad stop (rate 0) and Stop Mount are never refused; the safety, fault and shutdown parks end Polar Align first.
     public static readonly RefusalCause PolarAlignMovingMount = new("polar-align-moving-mount", 409, "Polar alignment is moving the mount");
     // #2082 — the scope points within 3° of the pole: the camera would look along the RA axis, and nothing tilts it off the
     // axis any more. Point it 2–5° from the pole and start again.
