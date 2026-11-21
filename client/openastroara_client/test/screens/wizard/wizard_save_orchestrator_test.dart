@@ -1,3 +1,4 @@
+import '../../support/fake_section_rig.dart';
 import '../../support/storage_fixture.dart';
 
 import 'package:dio/dio.dart';
@@ -41,7 +42,11 @@ class _FakeProfileApi extends ProfileApi {
 
   bool failTransport = false; // every PUT dies with no response (link gone)
 
-  Future<T> _put<T>(String key, T value) async {
+  Future<({T value, String? etag})> _put<T>(
+    String key,
+    T value,
+    String? ifMatch,
+  ) async {
     if (failTransport) {
       throw DioException(
         requestOptions: RequestOptions(path: '/api/v1/profile/$key'),
@@ -50,64 +55,170 @@ class _FakeProfileApi extends ProfileApi {
     }
     if (failSections.contains(key)) throw StateError('$key PUT failed');
     putCalls.add(key);
-    return value;
+    return (value: value, etag: ifMatch);
   }
 
+  static Future<({T value, String? etag})> _get<T>(T value) async =>
+      (value: value, etag: '"v1"');
+
   @override
-  Future<CoolingFan> putCoolingFan(CoolingFan v) => _put('cooling-fan', v);
+  Future<({CoolingFan value, String? etag})> getCoolingFanSection() =>
+      _get(const CoolingFan());
   @override
-  Future<SiteSettings> getSiteSettings() async => const SiteSettings();
+  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
+    CoolingFan v, {
+    String? ifMatch,
+  }) => _put('cooling-fan', v, ifMatch);
   @override
-  Future<SiteSettings> putSiteSettings(SiteSettings v) => _put('site', v);
+  Future<({SiteSettings value, String? etag})> getSiteSection() =>
+      _get(const SiteSettings());
+  @override
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) => _put('site', v, ifMatch);
   @override
   Future<OpticsSettings> getOptics() async => const OpticsSettings();
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings v) => _put('optics', v);
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _get(const OpticsSettings());
   @override
-  Future<ImagingDefaults> getImagingDefaults() async => const ImagingDefaults();
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _put('optics', v, ifMatch);
   @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) =>
-      _put('imaging', v);
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
+      _get(const ImagingDefaults());
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) => _put('imaging', v, ifMatch);
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings v) => _put('phd2', v);
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
+      _get(const Phd2Settings());
   @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const PlateSolveSettings();
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) => _put('phd2', v, ifMatch);
   @override
-  Future<PlateSolveSettings> putPlateSolveSettings(PlateSolveSettings v) =>
-      _put('platesolve', v);
+  Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
+      _get(const PlateSolveSettings());
   @override
-  Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings();
+  Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
+    PlateSolveSettings v, {
+    String? ifMatch,
+  }) => _put('platesolve', v, ifMatch);
   @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) =>
-      _put('autofocus', v);
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
+      _get(const AutofocusSettings());
   @override
-  Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics();
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) => _put('autofocus', v, ifMatch);
   @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) =>
-      _put('electronics', v);
+  Future<({CameraElectronics value, String? etag})>
+  getCameraElectronicsSection() => _get(const CameraElectronics());
   @override
-  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
+  Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
+    CameraElectronics v, {
+    String? ifMatch,
+  }) => _put('electronics', v, ifMatch);
   @override
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) =>
-      _put('filterset', v);
+  Future<({FilterSetSettings value, String? etag})> getFilterSetSection() =>
+      _get(const FilterSetSettings());
   @override
-  Future<StorageSettings> getStorageSettings() async => kTestStorage;
+  Future<({FilterSetSettings value, String? etag})> putFilterSetSection(
+    FilterSetSettings v, {
+    String? ifMatch,
+  }) => _put('filterset', v, ifMatch);
   @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) =>
-      _put('storage', v);
+  Future<({StorageSettings value, String? etag})> getStorageSection() =>
+      _get(kTestStorage);
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
+  Future<({StorageSettings value, String? etag})> putStorageSection(
+    StorageSettings v, {
+    String? ifMatch,
+  }) => _put('storage', v, ifMatch);
   @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) =>
-      _put('safety', v);
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
+      _get(const SafetyPolicies());
+  @override
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies v, {
+    String? ifMatch,
+  }) => _put('safety', v, ifMatch);
+}
+
+/// The wizard against the rig at the HTTP level (ADR 0015): it serves every
+/// section with a tag and refuses a PUT with none (428) or a stale one (412).
+class _RigApi extends ProfileApi {
+  _RigApi(FakeSectionRig rig)
+    : super(
+        const AraServer(hostname: 'rig.test', port: 1),
+        dio: Dio(BaseOptions(baseUrl: 'http://rig.test:1'))
+          ..httpClientAdapter = rig,
+      );
+
+  @override
+  Future<ProfileMeta> createProfile(String name) async =>
+      ProfileMeta(id: 'profile-1', name: name);
 }
 
 void main() {
+  test('the wizard sends every section the tag of the copy it loaded', () async {
+    final rig = FakeSectionRig({...rigDefaults, 'storage': rigStorage});
+    await saveWizardProfile(
+      _RigApi(rig),
+      ProfileDraft()
+        ..profileName = 'Rig'
+        ..coolingFan = const CoolingFan(deviceId: 'box', portId: 3),
+    );
+    expect(rig.ifMatches, isNot(contains(null)));
+    expect({for (final p in rig.puts) p.section: p.ifMatch}, {
+      for (final s in [
+        'site',
+        'optics',
+        'imaging-defaults',
+        'phd2',
+        'plate-solve',
+        'autofocus',
+        'camera-electronics',
+        'filter-set',
+        'storage',
+        'safety',
+        'cooling-fan',
+      ])
+        s: '"$s-v1"',
+    });
+  });
+
+  test('a focal length change on a rig with a confirmed first flip saves safety with the tag after the optics write', () async {
+    final rig = FakeSectionRig({
+      ...rigDefaults,
+      'storage': rigStorage,
+      'safety': {
+        ...rigDefaults['safety']!,
+        'first_flip_confirmed': true,
+        'first_flip_completed_utc': '2026-11-01T22:14:00Z',
+        'first_flip_pier_side_changed': true,
+      },
+    });
+    final d = ProfileDraft()..profileName = 'Rig';
+    d.telescope.focalLengthMm = 400;
+    await saveWizardProfile(_RigApi(rig), d);
+    expect(rig.ifMatches, isNot(contains(null)));
+    final tags = {for (final p in rig.puts) p.section: p.ifMatch};
+    expect(tags.keys, containsAll(['optics', 'safety']));
+    // The optics write moved safety to v2; the safety PUT carries that tag.
+    expect(tags['safety'], '"safety-v2"');
+    expect((rig.sectionOf('optics') as Map)['focal_length_mm'], 400);
+    expect((rig.sectionOf('safety') as Map)['first_flip_confirmed'], isFalse);
+  });
+
   group('saveWizardProfile orchestration', () {
     test('happy path creates once and PUTs every section', () async {
       final api = _FakeProfileApi();

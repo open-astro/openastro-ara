@@ -249,29 +249,9 @@ class ProfileApi {
     return imagingDefaultsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's imaging-defaults section. Returns Ara's
-  /// echo so the caller can confirm what was persisted.
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/imaging-defaults',
-      data: imagingDefaultsToJson(value),
-    );
-    return imagingDefaultsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's optics section (§36 — FOV geometry inputs).
   Future<OpticsSettings> getOptics() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/optics');
-    return opticsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's optics section. Returns Ara's echo (it may
-  /// normalize fields — e.g. it rejects reducer_factor ≤ 0).
-  Future<OpticsSettings> putOptics(OpticsSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/optics',
-      data: opticsToJson(value),
-    );
     return opticsFromJson(res.data ?? const {});
   }
 
@@ -284,43 +264,34 @@ class ProfileApi {
     return cameraElectronicsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's camera-electronics section. Returns Ara's
-  /// echo (it validates ranges — e.g. QE peak must be in [0, 1]).
-  Future<CameraElectronics> putCameraElectronics(
-    CameraElectronics value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/camera-electronics',
-      data: cameraElectronicsToJson(value),
-    );
-    return cameraElectronicsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's recent and saved targets (#1267 item 5),
-  /// newest first. A daemon predating the section (404) answers empty.
-  Future<List<CustomTarget>> getSavedTargets() async {
+  /// newest first, with the rig's `ETag`. A daemon predating the section
+  /// (404) answers empty with no tag, so nothing is pushed to it.
+  Future<({List<CustomTarget> value, String? etag})> getSavedTargets() async {
     try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/profile/saved-targets',
-      );
-      return savedTargetsFromJson(res.data ?? const {});
+      return await _getTagged('saved-targets', savedTargetsFromJson);
     } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return const [];
+      if (e.response?.statusCode == 404) {
+        return (value: const <CustomTarget>[], etag: null);
+      }
       rethrow;
     }
   }
 
-  /// PUT the whole list; the daemon canonicalizes (one per name, newest
-  /// first, capped) and echoes it.
-  Future<List<CustomTarget>> putSavedTargets(List<CustomTarget> targets) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/saved-targets',
-      data: {
-        'targets': [for (final t in targets) t.toWire()],
-      },
-    );
-    return savedTargetsFromJson(res.data ?? const {});
-  }
+  /// PUT the whole list over the copy [ifMatch] names (the read's `ETag`); a
+  /// list another device saved since answers 412. The daemon canonicalizes
+  /// (one per name, newest first, capped) and echoes it with its new tag.
+  Future<({List<CustomTarget> value, String? etag})> putSavedTargets(
+    List<CustomTarget> targets, {
+    required String? ifMatch,
+  }) => _putTagged(
+    'saved-targets',
+    {
+      'targets': [for (final t in targets) t.toWire()],
+    },
+    savedTargetsFromJson,
+    ifMatch,
+  );
 
   static List<CustomTarget> savedTargetsFromJson(Map<String, dynamic> j) {
     final list = j['targets'];
@@ -370,51 +341,27 @@ class ProfileApi {
     return filterSetFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's planning filter set. Returns Ara's echo
-  /// (it rejects empty or duplicate case-insensitive names).
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/filter-set',
-      data: filterSetToJson(value),
-    );
-    return filterSetFromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's storage-settings section.
-  Future<StorageSettings> getStorageSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
-    return _storageSettingsFromJson(res.data ?? const {});
-  }
-
   /// GET the storage section with the rig's `ETag` (ADR 0015).
-  Future<({StorageSettings value, String? etag})> getStorageSection() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/storage');
-    return (
-      value: _storageSettingsFromJson(res.data ?? const {}),
-      etag: res.headers.value('etag'),
-    );
-  }
+  Future<({StorageSettings value, String? etag})> getStorageSection() =>
+      _getTagged('storage', _storageSettingsFromJson);
 
   /// PUT the storage section; [ifMatch] is the `ETag` of the copy that was
   /// loaded, so a newer copy on the rig answers 412 and is left alone.
   Future<({StorageSettings value, String? etag})> putStorageSection(
     StorageSettings value, {
     String? ifMatch,
-  }) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/storage',
-      data: _storageSettingsToJson(value),
-      options: Options(headers: {'If-Match': ?ifMatch}),
-    );
-    return (
-      value: _storageSettingsFromJson(res.data ?? const {}),
-      etag: res.headers.value('etag'),
-    );
-  }
+  }) => _putTagged(
+    'storage',
+    _storageSettingsToJson(value),
+    _storageSettingsFromJson,
+    ifMatch,
+  );
 
   // ADR 0015 — the sections that load before they save. Each pair reads
   // `/api/v1/profile/<route>` with the rig's `ETag` and writes it back with
-  // the loaded one as `If-Match`.
+  // the loaded one as `If-Match`. Every section write goes through
+  // [_putTagged], which sends nothing without that tag: the daemon refuses a
+  // section PUT with no `If-Match` (428).
   Future<({T value, String? etag})> _getTagged<T>(
     String route,
     T Function(Map<String, dynamic>) parse,
@@ -432,10 +379,16 @@ class ProfileApi {
     T Function(Map<String, dynamic>) parse,
     String? ifMatch,
   ) async {
+    // No tag: the copy was not loaded from this rig, or the rig is from before
+    // section versions (#1886) and sent none. Saving it would write over a
+    // copy nobody saw, so nothing is sent.
+    if (ifMatch == null || ifMatch.isEmpty) {
+      throw SectionVersionMissingException(route);
+    }
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/$route',
       data: body,
-      options: Options(headers: {'If-Match': ?ifMatch}),
+      options: Options(headers: {'If-Match': ifMatch}),
     );
     return (
       value: parse(res.data ?? const {}),
@@ -1018,47 +971,10 @@ class ProfileApi {
       if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
   };
 
-  /// PUT the active profile's storage-settings section.
-  Future<StorageSettings> putStorageSettings(StorageSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/storage',
-      data: _storageSettingsToJson(value),
-    );
-    return _storageSettingsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's site-settings section.
   Future<SiteSettings> getSiteSettings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/site');
     return siteSettingsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's site-settings section.
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/site',
-      data: siteSettingsToJson(value),
-    );
-    return siteSettingsFromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's safety policies.
-  Future<SafetyPolicies> getSafetyPolicies() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/safety');
-    return safetyPoliciesFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's safety policies. `first_flip_confirmed` and
-  /// the completed-flip record are daemon-owned and ignored server-side on
-  /// PUT (the stored values are preserved and echoed back) — a stale panel
-  /// Save can never clobber them; confirming and re-arming go through
-  /// [confirmFirstFlip] and [rearmFirstFlip].
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/safety',
-      data: safetyPoliciesToJson(value),
-    );
-    return safetyPoliciesFromJson(res.data ?? const {});
   }
 
   /// GET the active profile's unguided-imaging settings (#1264). A daemon
@@ -1117,17 +1033,6 @@ class ProfileApi {
     return autofocusSettingsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's autofocus settings.
-  Future<AutofocusSettings> putAutofocusSettings(
-    AutofocusSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/autofocus',
-      data: autofocusSettingsToJson(value),
-    );
-    return autofocusSettingsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's plate-solve settings.
   Future<PlateSolveSettings> getPlateSolveSettings() async {
     final res = await _dio.get<Map<String, dynamic>>(
@@ -1136,40 +1041,10 @@ class ProfileApi {
     return _plateSolveSettingsFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's plate-solve settings.
-  Future<PlateSolveSettings> putPlateSolveSettings(
-    PlateSolveSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/plate-solve',
-      data: _plateSolveSettingsToJson(value),
-    );
-    return _plateSolveSettingsFromJson(res.data ?? const {});
-  }
-
   /// GET the active profile's OpenAstro Guider settings.
   Future<Phd2Settings> getPhd2Settings() async {
     final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/phd2');
     return _phd2SettingsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's OpenAstro Guider settings.
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/phd2',
-      data: phd2SettingsToJson(value),
-    );
-    return _phd2SettingsFromJson(res.data ?? const {});
-  }
-
-  /// PUT the cooling fan designation from the wizard, which writes without a
-  /// loaded version (see [putCoolingFanSection] for the loaded path).
-  Future<CoolingFan> putCoolingFan(CoolingFan value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/cooling-fan',
-      data: value.toJson(),
-    );
-    return CoolingFan.fromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -2096,4 +1971,19 @@ class ProfileApi {
     'on_plate_solve_failed': v.onPlateSolveFailed,
     'on_disk_space_low': v.onDiskSpaceLow,
   };
+}
+
+/// ADR 0015 — a section PUT was not sent: there was no `ETag` of a loaded copy
+/// to send as `If-Match` (the copy was not loaded from this rig, or the rig is
+/// from before section versions and sent none). Nothing was written.
+class SectionVersionMissingException implements Exception {
+  const SectionVersionMissingException(this.route);
+
+  /// The section route under `/api/v1/profile/`.
+  final String route;
+
+  @override
+  String toString() =>
+      'The rig sent no version for the $route settings, so nothing was saved. '
+      'Update the rig to save them.';
 }

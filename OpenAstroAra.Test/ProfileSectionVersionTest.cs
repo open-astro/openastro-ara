@@ -61,8 +61,8 @@ namespace OpenAstroAra.Test {
     /// <summary>
     /// Record 0015 rule 5, built on the section table of record 0012: every profile section a client can write
     /// answers a read with an <c>ETag</c> derived from the stored section, refuses a write whose <c>If-Match</c>
-    /// names another copy with a 412 that writes nothing, and (until the daemon requires a version) still
-    /// accepts a write with no <c>If-Match</c>. A write that changes the section moves the tag, so the copy
+    /// names another copy with a 412 and a write with no <c>If-Match</c> with a 428, both writing nothing, and
+    /// takes <c>*</c> or the current tag. A write that changes the section moves the tag, so the copy
     /// loaded before it is refused and a read answers the new tag. The test walks <see cref="ProfileSections.All"/> and finds each
     /// section's route by the DTO its PUT accepts, so a new section is covered without a new test.
     /// </summary>
@@ -184,6 +184,13 @@ namespace OpenAstroAra.Test {
                     && !e.Metadata.OfType<IProducesResponseTypeMetadata>().Any(m => m.StatusCode == StatusCodes.Status412PreconditionFailed))
                 .Select(e => e.RoutePattern.RawText).ToList();
             Assert.That(no412, Is.Empty, "a section PUT can answer 412, so its metadata must declare it");
+            var no428 = ((IEndpointRouteBuilder)_app).DataSources
+                .SelectMany(d => d.Endpoints).OfType<RouteEndpoint>()
+                .Where(e => e.Metadata.GetMetadata<ProfileSection>() is not null
+                    && e.Metadata.GetMetadata<IHttpMethodMetadata>()?.HttpMethods.Contains("PUT") == true
+                    && !e.Metadata.OfType<IProducesResponseTypeMetadata>().Any(m => m.StatusCode == StatusCodes.Status428PreconditionRequired))
+                .Select(e => e.RoutePattern.RawText).ToList();
+            Assert.That(no428, Is.Empty, "a section PUT can answer 428, so its metadata must declare it");
             Assert.That(Changes.Keys, Is.EquivalentTo(routed), "every routed section needs one edit in Changes, and only those");
         }
 
@@ -219,9 +226,19 @@ namespace OpenAstroAra.Test {
                     }
                 }
 
-                using (var unversioned = await Put(path, body, null)) {
-                    if (unversioned.StatusCode != HttpStatusCode.OK) {
-                        failures.Add($"{section} PUT {path} with no If-Match: {(int)unversioned.StatusCode}, want 200 until a version is required");
+                // No If-Match, or an empty one, is a 428 problem with a title, and nothing is written.
+                foreach (var missing in new[] { null, "", " " }) {
+                    writesBefore = _counter.WriteCalls;
+                    using var unversioned = await Put(path, body, missing);
+                    var shown = missing is null ? "no If-Match" : $"If-Match '{missing}'";
+                    if (unversioned.StatusCode != (HttpStatusCode)StatusCodes.Status428PreconditionRequired) {
+                        failures.Add($"{section} PUT {path} with {shown}: {(int)unversioned.StatusCode}, want 428");
+                    } else if (JsonNode.Parse(await unversioned.Content.ReadAsStringAsync())?["title"]?.GetValue<string>()
+                            != "Precondition Required") {
+                        failures.Add($"{section} PUT {path} with {shown}: the 428 problem has no 'Precondition Required' title");
+                    }
+                    if (_counter.WriteCalls != writesBefore) {
+                        failures.Add($"{section} PUT {path} with {shown} wrote to the store");
                     }
                 }
 
