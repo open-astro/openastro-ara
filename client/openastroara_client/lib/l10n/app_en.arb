@@ -8627,5 +8627,47 @@
   "clockWrongStartAnyway": "Start anyway",
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
+  },
+  "simpleLiveStackTitle": "Live Stack",
+  "@simpleLiveStackTitle": {
+    "description": "Run panel: the switch that stacks the session's lights into one growing picture"
+  },
+  "simpleLiveStackReset": "Reset",
+  "@simpleLiveStackReset": {
+    "description": "Run panel, Live Stack: empties the stack; the next light starts it again"
+  },
+  "simpleLiveStackViewStack": "Live Stack",
+  "@simpleLiveStackViewStack": {
+    "description": "Run panel, Live Stack: show the stacked picture on the screen"
+  },
+  "simpleLiveStackViewLastLight": "Last light",
+  "@simpleLiveStackViewLastLight": {
+    "description": "Run panel, Live Stack: show the last single light on the screen"
+  },
+  "simpleLiveStackLights": "Live Stack · {count, plural, =1{1 light} other{{count} lights}}",
+  "@simpleLiveStackLights": {
+    "description": "Readout on the stacked picture: how many lights are stacked",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "simpleLiveStackLeftOut": "{count} left out",
+  "@simpleLiveStackLeftOut": {
+    "description": "Readout, appended after a ' · ': lights the stack could not add (not aligned, or the stacker was busy)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "simpleLiveStackNotColour": "Needs a color camera",
+  "@simpleLiveStackNotColour": {
+    "description": "Run panel, Live Stack row: why it is unavailable with a mono camera, or with a binned one"
+  },
+  "simpleLiveStackTooLarge": "Frame too large to stack",
+  "@simpleLiveStackTooLarge": {
+    "description": "Run panel, Live Stack row: why it is unavailable when the sensor frame is above the stack's size limit"
   }
 }

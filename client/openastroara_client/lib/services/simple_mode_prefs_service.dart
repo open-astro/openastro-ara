@@ -34,8 +34,8 @@ class SimpleModePrefsService {
   Future<bool> load() async {
     try {
       final f = await _file();
-      if (!await f.exists()) return false;
-      final decoded = jsonDecode(await f.readAsString());
+      if (!f.existsSync()) return false;
+      final decoded = jsonDecode(f.readAsStringSync());
       if (decoded is! Map) return false;
       return decoded['enabled'] is bool ? decoded['enabled'] as bool : false;
     } catch (_) {

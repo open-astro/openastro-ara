@@ -48,6 +48,7 @@ import '../../state/simple_recent_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
+import 'simple_live_stack_row.dart';
 import '../../util/tonight_sky_local.dart'
     show altitudeDegAt, darkStart, hoursAboveInSpan, nightEnd;
 import '../../widgets/platform_context_menu.dart';
@@ -2326,6 +2327,8 @@ class SimpleRunPanel extends ConsumerWidget {
                   ],
                 ),
             ],
+            // Under the progress, above the queue; also before Start, to set it.
+            const SimpleLiveStackRow(),
             // One target imaging is the headline; before that it's the way to edit it.
             if (run.targets.length > 1 || (run.targets.isNotEmpty && !imaging))
               _QueueList(run: run, onEdit: onEdit),

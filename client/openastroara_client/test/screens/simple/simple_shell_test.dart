@@ -136,7 +136,11 @@ import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/state/settings/settings_search.dart'
     show buildSearchIndex;
+import 'package:openastroara/state/simple_live_stack_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+
+import '../../helpers/fake_session_live_stack_client.dart';
+
 import 'package:openastroara/theme/ara_metrics.dart' show AraBlur, AraSpace;
 import 'package:openastroara/widgets/imaging/frame_viewer.dart' show FrameViewer;
 import 'package:openastroara/models/guide_focus.dart';
@@ -169,6 +173,15 @@ class _SavedRigs extends SavedServersNotifier {
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
+  @override
+  Future<bool> load() async => value;
+  @override
+  Future<void> save(bool enabled) async => value = enabled;
+}
+
+/// The Live Stack view choice: the default (Live Stack).
+class _ViewPrefs extends SimpleModePrefsService {
+  bool value = false;
   @override
   Future<bool> load() async => value;
   @override
@@ -8307,6 +8320,195 @@ void main() {
         await end(tester);
       },
     );
+  });
+
+  group('Live Stack on the Queue screen', () {
+    Future<(ProviderContainer, FakeSessionLiveStackClient)> stacked(
+      WidgetTester tester,
+    ) async {
+      final daemon = FakeSessionLiveStackClient()
+        ..enabled = true
+        ..target = 'M31'
+        ..stackOne()
+        ..stackOne();
+      final c = await _pump(
+        tester,
+        const Size(1024, 768),
+        server: const AraServer(hostname: '192.0.2.10', port: 5000),
+        gear: [
+          sessionLiveStackApiFactoryProvider.overrideWithValue((_) => daemon),
+          simpleLiveStackViewPrefsProvider.overrideWithValue(_ViewPrefs()),
+        ],
+      );
+      await openMode(tester, 'plan');
+      await tester.pump();
+      await tester.pump();
+      return (c, daemon);
+    }
+
+    // A rig that answers 400 to the other panels leaves their retries
+    // pending: dispose the container with the tree.
+    Future<void> leave(WidgetTester tester, ProviderContainer c) async {
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    }
+
+    testWidgets('the stacked image and its readout fill the screen; Last light '
+        'shows the last light while the status poll goes on; the switch off '
+        'shows the last light', (tester) async {
+      final (c, daemon) = await stacked(tester);
+      await _frame(tester, c); // a last light exists, under the stack
+      expect(find.byKey(const Key('simple-live-stack-frame')), findsOneWidget);
+      final readout = find.byKey(const Key('simple-live-stack-readout'));
+      expect(readout, findsOneWidget);
+      expect(
+        tester.getRect(readout).bottom,
+        greaterThan(tester.view.physicalSize.height / 2),
+        reason: 'the readout sits at the foot of the picture',
+      );
+
+      await c
+          .read(simpleLiveStackProvider.notifier)
+          .setView(SimpleLiveStackView.lastLight);
+      await tester.pump();
+      expect(find.byKey(const Key('simple-live-stack-frame')), findsNothing);
+      expect(readout, findsNothing);
+      final before = daemon.count('status');
+      await tester.pump(kSimpleLiveStackPoll);
+      expect(daemon.count('status'), greaterThan(before));
+
+      await c
+          .read(simpleLiveStackProvider.notifier)
+          .setView(SimpleLiveStackView.stack);
+      await tester.pump();
+      expect(find.byKey(const Key('simple-live-stack-frame')), findsOneWidget);
+      await c.read(simpleLiveStackProvider.notifier).setOn(false);
+      await tester.pump();
+      expect(find.byKey(const Key('simple-live-stack-frame')), findsNothing);
+      expect(find.byType(FrameViewer), findsOneWidget);
+      await leave(tester, c);
+    });
+
+    const twoTargets = SimpleRun(
+      sequenceId: 'seq-1',
+      targets: [
+        SimpleTarget(
+          name: 'M31',
+          steps: [
+            FilterPlanStep(
+              filterName: 'L',
+              exposureSeconds: 120,
+              frameCount: 30,
+            ),
+          ],
+        ),
+        SimpleTarget(
+          name: 'M42',
+          steps: [
+            FilterPlanStep(
+              filterName: 'L',
+              exposureSeconds: 120,
+              frameCount: 30,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    Future<ProviderContainer> panel(
+      WidgetTester tester, {
+      SequenceRunStateInfo? runState,
+    }) async {
+      final c = await _pump(
+        tester,
+        const Size(1024, 768),
+        server: const AraServer(hostname: '192.0.2.10', port: 5000),
+        plan: twoTargets,
+        runState: runState,
+        gear: [
+          sessionLiveStackApiFactoryProvider.overrideWithValue(
+            (_) => FakeSessionLiveStackClient(),
+          ),
+          simpleLiveStackViewPrefsProvider.overrideWithValue(_ViewPrefs()),
+        ],
+      );
+      await openMode(tester, 'focus');
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const Key('simple-run-tracker')),
+          matching: find.text('M31'),
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      return c;
+    }
+
+    testWidgets('imaging: the row sits in the run panel under the progress '
+        'and above the queue list', (tester) async {
+      final c = await panel(
+        tester,
+        runState: const SequenceRunStateInfo(
+          sequenceId: 'seq-1',
+          runId: 'r1',
+          state: SequenceRunState.running,
+          framesCaptured: 3,
+        ),
+      );
+      final run = find.byType(SimpleRunPanel);
+      final row = find.descendant(
+        of: run,
+        matching: find.byKey(const Key('simple-live-stack-row')),
+      );
+      final progress = find.descendant(of: run, matching: find.text('3 / 30'));
+      final queued = find.descendant(
+        of: run,
+        matching: find.byKey(const Key('simple-run-edit-0')),
+      );
+      expect(row, findsOneWidget);
+      expect(progress, findsOneWidget);
+      expect(
+        tester.getTopLeft(progress).dy,
+        lessThan(tester.getTopLeft(row).dy),
+      );
+      expect(
+        tester.getBottomLeft(row).dy,
+        lessThanOrEqualTo(tester.getTopLeft(queued).dy),
+      );
+      await leave(tester, c);
+    });
+
+    testWidgets('not imaging: the row keeps its slot above the queue list, so '
+        'the switch can be set before Start', (tester) async {
+      final c = await panel(tester);
+      final run = find.byType(SimpleRunPanel);
+      final row = find.descendant(
+        of: run,
+        matching: find.byKey(const Key('simple-live-stack-row')),
+      );
+      final queued = find.descendant(
+        of: run,
+        matching: find.byKey(const Key('simple-run-edit-0')),
+      );
+      expect(row, findsOneWidget);
+      expect(
+        tester.getBottomLeft(row).dy,
+        lessThanOrEqualTo(tester.getTopLeft(queued).dy),
+      );
+      await leave(tester, c);
+    });
+
+    testWidgets('leaving the Queue screen stops the polling', (tester) async {
+      final (c, daemon) = await stacked(tester);
+      await openMode(tester, 'focus');
+      await tester.pump();
+      await tester.pump();
+      final before = daemon.calls.length;
+      await tester.pump(kSimpleLiveStackPoll * 3);
+      expect(daemon.calls.length, before);
+      await leave(tester, c);
+    });
   });
 }
 

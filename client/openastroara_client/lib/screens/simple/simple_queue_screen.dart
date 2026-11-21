@@ -3,10 +3,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../state/simple_live_stack_state.dart';
 import '../../state/simple_preflight_state.dart';
 import '../../state/simple_messages_state.dart';
 import '../../l10n/l10n.dart';
 import '../../state/sequencer/sequence_list_state.dart';
+import 'simple_live_stack_row.dart';
 import 'simple_plan_panel.dart';
 import 'simple_screen.dart';
 
@@ -34,6 +36,29 @@ class SimpleQueueScreen extends SimpleScreen {
     onCreated: host.onSheetDone ?? () {},
     onSeeAll: host.onSeeAll,
   );
+
+  /// The Live Stack's picture while it is on, chosen and has a frame; null
+  /// otherwise, so the shell shows the last light.
+  @override
+  Widget? frame(WidgetRef ref) {
+    final s = ref.watch(simpleLiveStackProvider);
+    return simpleStackShown(s)
+        ? Image.memory(
+            s.frame!.image,
+            key: const Key('simple-live-stack-frame'),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            // A frame that does not decode leaves the sky, not an error box.
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          )
+        : null;
+  }
+
+  @override
+  Widget? frameCaption(WidgetRef ref) =>
+      simpleStackShown(ref.watch(simpleLiveStackProvider))
+      ? const SimpleLiveStackReadout()
+      : null;
 
   @override
   Widget get shutter => const SimpleRunShutter();

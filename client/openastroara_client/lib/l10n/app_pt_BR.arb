@@ -1850,5 +1850,13 @@
   "clockNoticeSlow": "O relógio do setup está {amount} atrasado e não pôde ser ajustado. Horários e alvos ficarão errados.",
   "clockNoticeFast": "O relógio do setup está {amount} adiantado e não pôde ser ajustado. Horários e alvos ficarão errados.",
   "clockWrongTitle": "O relógio do setup está errado",
-  "clockWrongStartAnyway": "Iniciar mesmo assim"
+  "clockWrongStartAnyway": "Iniciar mesmo assim",
+  "simpleLiveStackTitle": "Live Stack",
+  "simpleLiveStackReset": "Zerar",
+  "simpleLiveStackViewStack": "Live Stack",
+  "simpleLiveStackViewLastLight": "Último quadro",
+  "simpleLiveStackLights": "Live Stack · {count, plural, =1{1 quadro} other{{count} quadros}}",
+  "simpleLiveStackLeftOut": "{count} de fora",
+  "simpleLiveStackNotColour": "Precisa de uma câmera colorida",
+  "simpleLiveStackTooLarge": "Quadro grande demais para empilhar"
 }

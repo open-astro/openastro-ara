@@ -11204,6 +11204,54 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start anyway'**
   String get clockWrongStartAnyway;
+
+  /// Run panel: the switch that stacks the session's lights into one growing picture
+  ///
+  /// In en, this message translates to:
+  /// **'Live Stack'**
+  String get simpleLiveStackTitle;
+
+  /// Run panel, Live Stack: empties the stack; the next light starts it again
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get simpleLiveStackReset;
+
+  /// Run panel, Live Stack: show the stacked picture on the screen
+  ///
+  /// In en, this message translates to:
+  /// **'Live Stack'**
+  String get simpleLiveStackViewStack;
+
+  /// Run panel, Live Stack: show the last single light on the screen
+  ///
+  /// In en, this message translates to:
+  /// **'Last light'**
+  String get simpleLiveStackViewLastLight;
+
+  /// Readout on the stacked picture: how many lights are stacked
+  ///
+  /// In en, this message translates to:
+  /// **'Live Stack · {count, plural, =1{1 light} other{{count} lights}}'**
+  String simpleLiveStackLights(int count);
+
+  /// Readout, appended after a ' · ': lights the stack could not add (not aligned, or the stacker was busy)
+  ///
+  /// In en, this message translates to:
+  /// **'{count} left out'**
+  String simpleLiveStackLeftOut(int count);
+
+  /// Run panel, Live Stack row: why it is unavailable with a mono camera, or with a binned one
+  ///
+  /// In en, this message translates to:
+  /// **'Needs a color camera'**
+  String get simpleLiveStackNotColour;
+
+  /// Run panel, Live Stack row: why it is unavailable when the sensor frame is above the stack's size limit
+  ///
+  /// In en, this message translates to:
+  /// **'Frame too large to stack'**
+  String get simpleLiveStackTooLarge;
 }
 
 class _AppLocalizationsDelegate

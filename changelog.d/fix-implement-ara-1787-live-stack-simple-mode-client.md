@@ -1,0 +1,3 @@
+### Added (live stack)
+
+- **Live Stack switch in Simple Mode** (#1787): on a one-shot-colour camera the Queue panel has a Live Stack row (switch, Reset, and while on a Live Stack / Last light choice) and the stacked picture fills the Queue screen with a "Live Stack · N lights" readout at its foot. A mono or too-large camera shows the row with its reason and no switch; a rig with no camera, or without the capability, shows no row. The rig owns the switch: the app adopts a stack that is already on, and polls its status every 4 s only while the screen is open and the stack is on (every 30 s while the camera is absent). The view choice is kept on this device and defaults to Live Stack. English and Brazilian Portuguese.
