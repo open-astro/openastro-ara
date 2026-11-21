@@ -1,8 +1,7 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
@@ -18,18 +17,7 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Sequencer.Trigger.Connect {
     [JsonObject(MemberSerialization.OptIn)]
     public class ReconnectTrigger : SequenceTrigger, IValidatable {
-        private IProfileService profileService;
-        private ICameraMediator cameraMediator;
-        private IFilterWheelMediator fwMediator;
-        private IFocuserMediator focuserMediator;
-        private IRotatorMediator rotatorMediator;
-        private ITelescopeMediator telescopeMediator;
-        private IGuiderMediator guiderMediator;
-        private ISwitchMediator switchMediator;
-        private IFlatDeviceMediator flatDeviceMediator;
-        private IWeatherDataMediator weatherDataMediator;
-        private IDomeMediator domeMediator;
-        private ISafetyMonitorMediator safetyMonitorMediator;
+        private readonly IEquipmentConnections connections;
         private ConnectEquipment connectEquipmentInstruction;
 
         [OnDeserialized]
@@ -51,36 +39,12 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
             }
         }
 
-        public ReconnectTrigger(IProfileService profileService,
-                ICameraMediator cameraMediator,
-                IFilterWheelMediator fwMediator,
-                IFocuserMediator focuserMediator,
-                IRotatorMediator rotatorMediator,
-                ITelescopeMediator telescopeMediator,
-                IGuiderMediator guiderMediator,
-                ISwitchMediator switchMediator,
-                IFlatDeviceMediator flatDeviceMediator,
-                IWeatherDataMediator weatherDataMediator,
-                IDomeMediator domeMediator,
-                ISafetyMonitorMediator safetyMonitorMediator) {
-
-            this.profileService = profileService;
-            this.cameraMediator = cameraMediator;
-            this.fwMediator = fwMediator;
-            this.focuserMediator = focuserMediator;
-            this.rotatorMediator = rotatorMediator;
-            this.telescopeMediator = telescopeMediator;
-            this.guiderMediator = guiderMediator;
-            this.switchMediator = switchMediator;
-            this.flatDeviceMediator = flatDeviceMediator;
-            this.weatherDataMediator = weatherDataMediator;
-            this.domeMediator = domeMediator;
-            this.safetyMonitorMediator = safetyMonitorMediator;
-
-            connectEquipmentInstruction = new ConnectEquipment(profileService, cameraMediator, fwMediator, focuserMediator, rotatorMediator, telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator);
+        public ReconnectTrigger(IEquipmentConnections connections) {
+            this.connections = connections;
+            // Set once, here: OnDeserialized re-adds this same instance, so the recover path survives a round trip.
+            connectEquipmentInstruction = new ConnectEquipment(connections) { Recover = true };
             TriggerRunner.Add(connectEquipmentInstruction);
         }
-
 
         [JsonProperty]
         public string SelectedDevice {
@@ -99,18 +63,7 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
         private IList<string> issues = new List<string>();
         public IList<string> Issues { get => issues; set { issues = value; RaisePropertyChanged(); } }
 
-        private ReconnectTrigger(ReconnectTrigger copyMe) : this(copyMe.profileService,
-                                                                 copyMe.cameraMediator,
-                                                                 copyMe.fwMediator,
-                                                                 copyMe.focuserMediator,
-                                                                 copyMe.rotatorMediator,
-                                                                 copyMe.telescopeMediator,
-                                                                 copyMe.guiderMediator,
-                                                                 copyMe.switchMediator,
-                                                                 copyMe.flatDeviceMediator,
-                                                                 copyMe.weatherDataMediator,
-                                                                 copyMe.domeMediator,
-                                                                 copyMe.safetyMonitorMediator) {
+        private ReconnectTrigger(ReconnectTrigger copyMe) : this(copyMe.connections) {
             CopyMetaData(copyMe);
             SelectedDevice = copyMe.SelectedDevice;
         }
@@ -130,13 +83,15 @@ namespace OpenAstroAra.Sequencer.Trigger.Connect {
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}, Selected device id: {connectEquipmentInstruction.ProfileId}";
+            return $"Category: {Category}, Item: {nameof(ReconnectTrigger)}, Selected device: {connectEquipmentInstruction.SelectedDevice}";
         }
 
         public override bool ShouldTrigger(ISequenceItem? previousItem, ISequenceItem? nextItem) {
             var isConnected = connectEquipmentInstruction.IsConnected();
-            Logger.Debug($"The {connectEquipmentInstruction.SelectedDevice} is ${(isConnected ? "connected" : "not connected. Trigger should fire.")}");
-            return !isConnected;
+            // A device the user disconnected is not a dropped device: stay quiet instead of failing before every item.
+            var byUser = !isConnected && connectEquipmentInstruction.IsDisconnectedByUser();
+            Logger.Debug($"The {connectEquipmentInstruction.SelectedDevice} is {(isConnected ? "connected" : byUser ? "disconnected by the user" : "not connected. Trigger should fire.")}");
+            return !isConnected && !byUser;
         }
 
         public override async Task Execute(ISequenceContainer context, IProgress<ApplicationStatus> progress, CancellationToken token) {

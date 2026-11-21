@@ -1,0 +1,3 @@
+### Fixed
+
+- **The Connect Equipment instruction and the Reconnect trigger now connect the device the rig remembers** (Sequencer, #1545): they looked a device up by a profile id nothing writes, so Connect Equipment reported "not found" for a remembered Safety Monitor or Rotator and the Reconnect trigger never redialled it. They now use the same remembered (or retained) device as auto-connect and the Reconnect button, wait until it reads Connected, and stop at once when a run is stopped. A role with nothing remembered fails with "No <device> is remembered on this rig: connect it once from the Equipment page". The Reconnect trigger stays quiet for a device you disconnected yourself.

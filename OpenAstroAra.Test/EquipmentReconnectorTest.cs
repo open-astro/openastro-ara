@@ -12,15 +12,17 @@
 
 #endregion "copyright"
 
+using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
+using NUnit.Framework;
+using OpenAstroAra.Core.Model;
+using OpenAstroAra.Sequencer.Connections;
+using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
-using NUnit.Framework;
-using OpenAstroAra.Server.Contracts;
-using OpenAstroAra.Server.Services;
 
 namespace OpenAstroAra.Test {
 
@@ -311,5 +313,121 @@ namespace OpenAstroAra.Test {
             Assert.That(store.Remembered, Is.Empty);
             Assert.That(store.Relocated, Is.Empty);
         }
+
+        // ── The Sequencer's connections port (#1545) ──
+
+        private static readonly EquipmentConnectionState[] ConnectingThenConnected = { EquipmentConnectionState.Connecting, EquipmentConnectionState.Connected };
+        private static readonly EquipmentConnectionState[] ConnectingThenError = { EquipmentConnectionState.Connecting, EquipmentConnectionState.Error };
+        private static readonly EquipmentConnectionState[] StaysConnecting = { EquipmentConnectionState.Connecting };
+        private static readonly EquipmentConnectionState[] StaysConnected = { EquipmentConnectionState.Connected };
+        private static readonly EquipmentConnectionState[] StaysDisconnected = { EquipmentConnectionState.Disconnected };
+        private static readonly bool[] CleanOnThirdRead = { false, false, true };
+
+        // A Safety Monitor service whose state walks the given sequence (the last state repeats) and whose
+        // clean read walks `clean`; it is the remembered device unless `remember` is false.
+        private static (EquipmentReconnector Reconnector, Mock<ISafetyMonitorService> Service) MonitorRig(
+                EquipmentConnectionState[] states, bool[]? clean = null, bool remember = true) {
+            var polls = 0;
+            var cleanReads = 0;
+            var svc = new Mock<ISafetyMonitorService>();
+            svc.Setup(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>())).ReturnsAsync(Accepted());
+            svc.Setup(s => s.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync(() =>
+                new SafetyMonitorDto("sm", "sm", states[Math.Min(polls++, states.Length - 1)], true, "t"));
+            svc.As<IRecoverableDevice>().SetupGet(d => d.IsCleanlyConnected)
+                .Returns(() => clean is null || clean[Math.Min(cleanReads++, clean.Length - 1)]);
+            var store = remember ? new FakeStore(Device(DeviceType.SafetyMonitor, "sm")) : new FakeStore();
+            return (Build(store, (typeof(ISafetyMonitorService), svc.Object)), svc);
+        }
+
+        [Test]
+        public async Task Port_connect_settles_only_once_the_state_is_Connected_and_the_read_is_clean() {
+            var (r, svc) = MonitorRig(
+                ConnectingThenConnected, clean: CleanOnThirdRead);
+
+            await r.ConnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None);
+
+            svc.Verify(s => s.GetAsync(It.IsAny<CancellationToken>()), Times.AtLeast(3));
+            Assert.That(r.IsConnected(EquipmentRole.SafetyMonitor), Is.True);
+        }
+
+        [Test]
+        public async Task Port_connect_throws_a_failure_naming_the_role_when_the_device_ends_in_Error() {
+            var (r, _) = MonitorRig(ConnectingThenError);
+
+            var ex = await Assert.CatchAsync<SequenceEntityFailedException>(() => r.ConnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Message, Is.EqualTo("Failed to connect to Safety Monitor"));
+            Assert.That(ex, Is.Not.InstanceOf<EquipmentRefusedException>(), "a connect that ran and failed is not a refusal");
+        }
+
+        [Test]
+        public async Task Port_connect_with_a_cancelled_token_throws_cancellation_not_a_failure() {
+            var (r, _) = MonitorRig(StaysConnecting);
+            using var stop = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+            await Assert.CatchAsync<OperationCanceledException>(() => r.ConnectAsync(EquipmentRole.SafetyMonitor, stop.Token));
+        }
+
+        [Test]
+        public async Task Port_connect_that_never_settles_fails_at_the_settle_timeout() {
+            var (r, _) = MonitorRig(StaysConnecting);
+            r.SettleTimeout = TimeSpan.FromMilliseconds(300);
+
+            var ex = await Assert.CatchAsync<SequenceEntityFailedException>(() => r.ConnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Message, Is.EqualTo("Failed to connect to Safety Monitor"));
+        }
+
+        [Test]
+        public async Task Port_connect_with_nothing_remembered_or_retained_refuses_NotKnown_and_dials_nothing() {
+            var (r, svc) = MonitorRig(StaysConnected, remember: false);
+
+            var ex = await Assert.CatchAsync<EquipmentRefusedException>(() => r.ConnectAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Cause, Is.EqualTo(EquipmentRefusalCause.NotKnown));
+            Assert.That(ex.Message, Does.StartWith("No Safety Monitor is remembered on this rig"));
+            svc.Verify(s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task Port_recover_refuses_DisconnectedByUser_for_a_device_the_user_disconnected() {
+            var (r, svc) = MonitorRig(StaysDisconnected);
+            svc.As<IRecoverableDevice>().Setup(d => d.TryRecover(It.IsAny<DiscoveredDeviceDto>())).Returns(false);
+            svc.As<IRecoverableDevice>().SetupGet(d => d.DesiredConnection).Returns(DesiredConnection.DisconnectedByUser);
+
+            var ex = await Assert.CatchAsync<EquipmentRefusedException>(() => r.RecoverAsync(EquipmentRole.SafetyMonitor, CancellationToken.None));
+
+            Assert.That(ex!.Cause, Is.EqualTo(EquipmentRefusalCause.DisconnectedByUser));
+            Assert.That(r.IsDisconnectedByUser(EquipmentRole.SafetyMonitor), Is.True);
+        }
+
+        // Remembers a device of `type` and mocks the one service that type answers to; the role's connect must
+        // dial that service. The service never reports a state, so the settle runs out: only the dial is asserted.
+        private static async Task AssertRoleDialsItsService<T>(EquipmentRole role, DeviceType type,
+                System.Linq.Expressions.Expression<Func<T, Task<OperationAcceptedDto>>> connect) where T : class {
+            var svc = new Mock<T>();
+            svc.Setup(connect).ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(Device(type, "dev")), (typeof(T), svc.Object));
+            r.SettleTimeout = TimeSpan.FromMilliseconds(200);
+
+            await Assert.CatchAsync<SequenceEntityFailedException>(() => r.ConnectAsync(role, CancellationToken.None));
+
+            svc.Verify(connect, Times.Once);
+        }
+
+        [Test]
+        public Task Port_maps_the_Mount_role_to_the_telescope_service() =>
+            AssertRoleDialsItsService<ITelescopeService>(EquipmentRole.Mount, DeviceType.Telescope,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
+
+        [Test]
+        public Task Port_maps_the_FlatPanel_role_to_the_flat_device_service() =>
+            AssertRoleDialsItsService<IFlatDeviceService>(EquipmentRole.FlatPanel, DeviceType.CoverCalibrator,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
+
+        [Test]
+        public Task Port_maps_the_Weather_role_to_the_observing_conditions_service() =>
+            AssertRoleDialsItsService<IObservingConditionsService>(EquipmentRole.Weather, DeviceType.ObservingConditions,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
     }
 }

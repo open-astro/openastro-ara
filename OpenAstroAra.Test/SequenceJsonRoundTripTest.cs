@@ -12,12 +12,16 @@
 
 #endregion "copyright"
 
+using Moq;
 using NUnit.Framework;
+using OpenAstroAra.Core.Model;
 using OpenAstroAra.Sequencer.Conditions;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Container;
 using OpenAstroAra.Sequencer.SequenceItem;
 using OpenAstroAra.Sequencer.SequenceItem.Utility;
 using OpenAstroAra.Sequencer.Serialization;
+using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Services;
 using System.Linq;
 using System.Text.Json;
@@ -310,6 +314,26 @@ namespace OpenAstroAra.Test {
             var until = ((SequentialContainer)container!).Conditions.Single() as TimeCondition;
             Assert.That(until, Is.Not.Null, "a TimeCondition, not a placeholder");
             Assert.That(until!.SelectedProvider, Is.InstanceOf(expected));
+        }
+
+        // #1545 note K — the Reconnect trigger's instruction recovers (a user disconnect stays), and that survives a
+        // round trip: the constructor sets it once, and OnDeserialized re-adds the same instance.
+        [Test]
+        public async Task Roundtrip_ReconnectTrigger_still_recovers_instead_of_connecting() {
+            var port = new Mock<IEquipmentConnections>();
+            port.Setup(c => c.RecoverAsync(It.IsAny<EquipmentRole>(), It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+            var factory = HeadlessSequencerFactory.WithDefaults(equipmentConnections: port.Object);
+            var converter = new SequenceJsonConverter(factory);
+            var original = new SequentialContainer();
+            original.Triggers.Add(new ReconnectTrigger(port.Object) { SelectedDevice = "Rotator" });
+
+            var roundTripped = (SequentialContainer)converter.Deserialize(converter.Serialize(original));
+            var trigger = (ReconnectTrigger)roundTripped.Triggers.Single();
+            await trigger.Execute(null!, new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(trigger.SelectedDevice, Is.EqualTo("Rotator"));
+            port.Verify(c => c.RecoverAsync(EquipmentRole.Rotator, It.IsAny<CancellationToken>()), Times.Once);
+            port.Verify(c => c.ConnectAsync(It.IsAny<EquipmentRole>(), It.IsAny<CancellationToken>()), Times.Never);
         }
     }
 }

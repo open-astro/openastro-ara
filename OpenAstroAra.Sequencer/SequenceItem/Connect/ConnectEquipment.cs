@@ -1,33 +1,18 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Equipment;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
-using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.Serialization;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
     [JsonObject(MemberSerialization.OptIn)]
     public class ConnectEquipment : SequenceItem, IValidatable {
-        private IProfileService profileService;
-        private ICameraMediator cameraMediator;
-        private IFilterWheelMediator fwMediator;
-        private IFocuserMediator focuserMediator;
-        private IRotatorMediator rotatorMediator;
-        private ITelescopeMediator telescopeMediator;
-        private IGuiderMediator guiderMediator;
-        private ISwitchMediator switchMediator;
-        private IFlatDeviceMediator flatDeviceMediator;
-        private IWeatherDataMediator weatherDataMediator;
-        private IDomeMediator domeMediator;
-        private ISafetyMonitorMediator safetyMonitorMediator;
+        private readonly IEquipmentConnections connections;
 
         [OnDeserialized]
         public void OnDeserialized(StreamingContext context) {
@@ -36,30 +21,8 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        public ConnectEquipment(IProfileService profileService,
-                                ICameraMediator cameraMediator,
-                                IFilterWheelMediator fwMediator,
-                                IFocuserMediator focuserMediator,
-                                IRotatorMediator rotatorMediator,
-                                ITelescopeMediator telescopeMediator,
-                                IGuiderMediator guiderMediator,
-                                ISwitchMediator switchMediator,
-                                IFlatDeviceMediator flatDeviceMediator,
-                                IWeatherDataMediator weatherDataMediator,
-                                IDomeMediator domeMediator,
-                                ISafetyMonitorMediator safetyMonitorMediator) {
-            this.profileService = profileService;
-            this.cameraMediator = cameraMediator;
-            this.fwMediator = fwMediator;
-            this.focuserMediator = focuserMediator;
-            this.rotatorMediator = rotatorMediator;
-            this.telescopeMediator = telescopeMediator;
-            this.guiderMediator = guiderMediator;
-            this.switchMediator = switchMediator;
-            this.flatDeviceMediator = flatDeviceMediator;
-            this.weatherDataMediator = weatherDataMediator;
-            this.domeMediator = domeMediator;
-            this.safetyMonitorMediator = safetyMonitorMediator;
+        public ConnectEquipment(IEquipmentConnections connections) {
+            this.connections = connections;
             Devices = new List<string>() {
                 "Camera",
                 "Filter Wheel",
@@ -89,56 +52,28 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        private object? GetMediator() {
-            switch (SelectedDevice) {
-                case "Camera": return cameraMediator;
-                case "Filter Wheel": return fwMediator;
-                case "Focuser": return focuserMediator;
-                case "Rotator": return rotatorMediator;
-                case "Telescope": return telescopeMediator;
-                case "Mount": return telescopeMediator;
-                case "Guider": return guiderMediator;
-                case "Switch": return switchMediator;
-                case "Flat Panel": return flatDeviceMediator;
-                case "Weather": return weatherDataMediator;
-                case "Dome": return domeMediator;
-                case "Safety Monitor": return safetyMonitorMediator;
-                default: return null;
-            }
-        }
+        /// <summary>True for the Reconnect trigger's instruction: it recovers, so a device the user disconnected
+        /// stays off. Not serialized (ADR 0018): the trigger sets it in its constructor.</summary>
+        internal bool Recover { get; init; }
 
-        public string? ProfileId {
-            get {
-            switch (SelectedDevice) {
-                case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
-                case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;
-                case "Focuser": return profileService.ActiveProfile.FocuserSettings.Id;
-                case "Rotator": return profileService.ActiveProfile.RotatorSettings.Id;
-                case "Telescope": return profileService.ActiveProfile.TelescopeSettings.Id;
-                case "Mount": return profileService.ActiveProfile.TelescopeSettings.Id;
-                case "Guider": return profileService.ActiveProfile.GuiderSettings.GuiderName;
-                case "Switch": return profileService.ActiveProfile.SwitchSettings.Id;
-                case "Flat Panel": return profileService.ActiveProfile.FlatDeviceSettings.Id;
-                case "Weather": return profileService.ActiveProfile.WeatherDataSettings.Id;
-                case "Dome": return profileService.ActiveProfile.DomeSettings.Id;
-                case "Safety Monitor": return profileService.ActiveProfile.SafetyMonitorSettings.Id;
-                default: return null;
-            }
-            }
-        }
+        /// <summary>The role <see cref="SelectedDevice"/> names, or null for a name no role has.</summary>
+        public EquipmentRole? Role => SelectedDevice switch {
+            "Camera" => EquipmentRole.Camera,
+            "Filter Wheel" => EquipmentRole.FilterWheel,
+            "Focuser" => EquipmentRole.Focuser,
+            "Rotator" => EquipmentRole.Rotator,
+            "Telescope" or "Mount" => EquipmentRole.Mount,
+            "Guider" => EquipmentRole.Guider,
+            "Switch" => EquipmentRole.Switch,
+            "Flat Panel" => EquipmentRole.FlatPanel,
+            "Weather" => EquipmentRole.Weather,
+            "Dome" => EquipmentRole.Dome,
+            "Safety Monitor" => EquipmentRole.SafetyMonitor,
+            _ => null,
+        };
 
-        private ConnectEquipment(ConnectEquipment copyMe) : this(copyMe.profileService,
-                                                                 copyMe.cameraMediator,
-                                                                 copyMe.fwMediator,
-                                                                 copyMe.focuserMediator,
-                                                                 copyMe.rotatorMediator,
-                                                                 copyMe.telescopeMediator,
-                                                                 copyMe.guiderMediator,
-                                                                 copyMe.switchMediator,
-                                                                 copyMe.flatDeviceMediator,
-                                                                 copyMe.weatherDataMediator,
-                                                                 copyMe.domeMediator,
-                                                                 copyMe.safetyMonitorMediator) {
+        private ConnectEquipment(ConnectEquipment copyMe) : this(copyMe.connections) {
+            Recover = copyMe.Recover;
             CopyMetaData(copyMe);
         }
 
@@ -154,65 +89,32 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
-
-
-            if (!IsConnected()) {
-                var profileId = ProfileId;
-                var mediator = GetMediator();
-                if (mediator == null) { return; }
-
-                var type = mediator.GetType();
-                var GetInfo = type.GetMethod("GetInfo");
-                var Rescan = type.GetMethod("Rescan");
-                var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
-
-                if (profileId != null && devices.Contains(profileId)) {
-                    // #1228 — a mediator that offers Connect(CancellationToken) gets the sequencer's token, so a
-                    // Stop/Abort cancels a connect that is waiting out a reconnect window; the rest keep the
-                    // parameterless interface method (looked up by exact signature so the overload can't make
-                    // GetMethod ambiguous).
-                    var connectWithToken = type.GetMethod("Connect", new[] { typeof(CancellationToken) });
-                    var success = connectWithToken is not null
-                        ? await (Task<bool>)connectWithToken.Invoke(mediator, new object[] { token })!
-                        : await (Task<bool>)type.GetMethod("Connect", Type.EmptyTypes)!.Invoke(mediator, null)!;
-
-                    DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-                    success = success && infoAfterConnect.Connected;
-                    if (!success) {
-                        throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice}");
-                    }
-                } else {
-                    throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice} as it was not found");
-                }
-            } else {
-                Logger.Info($"{SelectedDevice} is already connected");
+            if (Role is not { } role) {
+                throw new SequenceEntityFailedException($"Failed to connect to {SelectedDevice} as it is not a known device");
             }
+            if (connections.IsConnected(role)) {
+                Logger.Info($"{SelectedDevice} is already connected");
+                return;
+            }
+            await (Recover ? connections.RecoverAsync(role, token) : connections.ConnectAsync(role, token)).ConfigureAwait(false);
         }
 
-        public bool IsConnected() {
-            var mediator = GetMediator();
-            if (mediator == null) { return false; }
+        public bool IsConnected() => Role is { } role && connections.IsConnected(role);
 
-            var type = mediator.GetType();
-            var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-            return info.Connected;
-        }
+        /// <summary>True when the user disconnected the selected device, so the Reconnect trigger stays quiet.</summary>
+        public bool IsDisconnectedByUser() => Role is { } role && connections.IsDisconnectedByUser(role);
 
         public bool Validate() {
             var i = new List<string>();
-
-            var profileId = ProfileId;
-            if (profileId == "No_Device" || profileId == "No_Guider") {
-                i.Add($"There is no device id stored in the profile for the {SelectedDevice}. Make sure to manually connect a {SelectedDevice} once, so that a device id for a {SelectedDevice} is stored in the profile.");
+            if (Role is null) {
+                i.Add($"{SelectedDevice} is not a device the Connect Equipment instruction knows.");
             }
-
             Issues = i;
             return i.Count == 0;
         }
 
         public override string ToString() {
-            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}, Selected device id: {ProfileId}";
+            return $"Category: {Category}, Item: {nameof(ConnectEquipment)}, Selected device: {SelectedDevice}";
         }
     }
 }
