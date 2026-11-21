@@ -68,7 +68,40 @@ namespace OpenAstroAra.Test {
             File.SetLastWriteTimeUtc(stale, DateTime.UtcNow - StorageDeviceService.SweepMinimumAge - TimeSpan.FromMinutes(1));
             previousExchangeDir = Environment.GetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar);
             Environment.SetEnvironmentVariable(StorageDeviceService.ExchangeDirEnvVar, exchangeDir);
-            app = Program.BuildApp([]);
+            app = Program.BuildApp([], services => {
+                // What Program.cs itself registers, read before the test seams replace it.
+                productionSupervisor = services.Last(d => d.ServiceType == typeof(IGuiderProcessSupervisor)).ImplementationType;
+                TestHostSeams.Replace(services);
+            });
+        }
+
+        private Type? productionSupervisor;
+
+        [Test]
+        public void The_test_host_resolves_the_fake_guider_supervisor_not_systemctl() {
+            // The real supervisor runs `systemctl start|restart openastro-guider`; on a Linux desktop with a
+            // polkit agent every test run popped a password dialog. Program.cs keeps the real one, and every
+            // test host must swap it. A registration the override cannot reach fails this test: a second
+            // registration after it, or an inline `new` in the GuiderService / recovery factories (the two
+            // consumers' supervisor fields are read back below).
+            var consumers = new object[] {
+                app.Services.GetRequiredService<GuiderService>(),
+                app.Services.GetRequiredService<GuiderRecoveryCoordinator>(),
+            };
+            var held = consumers.SelectMany(c => c.GetType()
+                    .GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .Where(f => f.FieldType == typeof(IGuiderProcessSupervisor))
+                    .Select(f => f.GetValue(c)?.GetType()))
+                .ToList();
+            Assert.Multiple(() => {
+                Assert.That(held, Has.Count.EqualTo(2), "GuiderService and GuiderRecoveryCoordinator each hold one supervisor");
+                Assert.That(held, Is.All.EqualTo(typeof(TestHostSeams.FakeGuiderProcessSupervisor)));
+                Assert.That(productionSupervisor, Is.EqualTo(typeof(SystemctlGuiderProcessSupervisor)),
+                    "Program.cs registers the systemctl supervisor for the rig");
+                Assert.That(app.Services.GetServices<IGuiderProcessSupervisor>().Select(s => s.GetType()),
+                    Is.EqualTo(new[] { typeof(TestHostSeams.FakeGuiderProcessSupervisor) }));
+                Assert.That(app.Services.GetRequiredService<IHostPoweroffStarter>(), Is.TypeOf<TestHostSeams.FakeHostPoweroffStarter>());
+            });
         }
 
         [Test]

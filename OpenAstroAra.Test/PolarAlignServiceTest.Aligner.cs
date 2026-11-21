@@ -113,22 +113,23 @@ namespace OpenAstroAra.Test {
             public IPolarAligner? Current() => Device;
         }
 
-        /// <summary>Seed frames A and B as the bench's fixed sky; every live frame is B's pointing moved by the
+        /// <summary>Seed frames A, B and C as the bench's fixed sky; every live frame is C's pointing moved by the
         /// aligner's offset: azimuth is a turn about the vertical, altitude a tilt.</summary>
         private sealed class CorrectedSky(FakeAligner aligner, double latDeg = SiteLatDeg) : IPolarAlignFrameSolver {
-            // The bench's two seed frames, mirrored to the southern sky for a southern site.
+            // The bench's three seed frames, mirrored to the southern sky for a southern site.
             private readonly PolarAlignSolveOutcome _a = new(true, SolveA.RaDegJnow, Math.Sign(latDeg) * SolveA.DecDegJnow);
             private readonly PolarAlignSolveOutcome _b = new(true, SolveB.RaDegJnow, Math.Sign(latDeg) * SolveB.DecDegJnow);
+            private readonly PolarAlignSolveOutcome _c = new(true, SolveC.RaDegJnow, Math.Sign(latDeg) * SolveC.DecDegJnow);
             private int _solves;
             public Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) =>
                 Task.FromResult<double?>(null);
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 var n = Interlocked.Increment(ref _solves);
-                if (n <= 2) {
-                    return Task.FromResult(n == 1 ? _a : _b);
+                if (n <= 3) {
+                    return Task.FromResult(n == 1 ? _a : n == 2 ? _b : _c);
                 }
                 var now = DateTimeOffset.UtcNow;
-                var p = PolarAlignGeometry.PointingAltAz(_b.RaDegJnow, _b.DecDegJnow, latDeg, SiteLonDeg, now);
+                var p = PolarAlignGeometry.PointingAltAz(_c.RaDegJnow, _c.DecDegJnow, latDeg, SiteLonDeg, now);
                 var (az, alt) = aligner.Offset;
                 var (newAlt, newAz) = MovedWithTheMount(p.AltDeg, p.AzDeg, alt / 60.0, az / 60.0, latDeg);
                 var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(newAlt, newAz, latDeg,

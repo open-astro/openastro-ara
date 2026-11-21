@@ -19,16 +19,16 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>§45.12 — the polar-align turn and rough-exposure knobs, held in range wherever they are
 /// read or written. The app has no control for them yet (#1736) and an older build stored any value,
-/// so a stored 0° turn (the mount "did not rotate") or a 200° one (into a GEM's limit) must never reach
+/// so a stored 0° turn (the mount "did not rotate") or a 60° one (two of them toward a GEM's limit) must never reach
 /// the routine, and a PUT of the whole document must never be refused over a field the user cannot
 /// reach. One table, used by <c>PUT /profile/polar-align</c> and by every read in the service.</summary>
 public static class PolarAlignSettingsClamp {
     public const double MinSeedRotationDeg = 5.0;
-    public const double MaxSeedRotationDeg = 120.0;
-    public const double DefaultSeedRotationDeg = 60.0;
+    public const double MaxSeedRotationDeg = 30.0;
+    public const double DefaultSeedRotationDeg = 10.0;
     public const double MinCheckStepDeg = 5.0;
-    public const double MaxCheckStepDeg = 60.0;
-    public const double DefaultCheckStepDeg = 30.0;
+    public const double MaxCheckStepDeg = 30.0;
+    public const double DefaultCheckStepDeg = 10.0;
     public const double MaxCoarseExposureSeconds = 60.0;
     public const double DefaultCoarseExposureSeconds = 3.0;
 

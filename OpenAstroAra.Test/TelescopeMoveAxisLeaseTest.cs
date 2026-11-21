@@ -113,12 +113,12 @@ namespace OpenAstroAra.Test {
             : null;
 
         private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync(
-                Func<string, string?>? putResponder = null) {
+                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null) {
             var box = ScriptedAlpacaDevice.Start(Mount(), putResponder);
             box.RespondWithQuery((path, _) => path.EndsWith("/axisrates", StringComparison.Ordinal)
                 ? "[{\"Minimum\":0.002,\"Maximum\":4.0}]" : null);
             var clock = new ManualClock();
-            var svc = new TelescopeService { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
+            var svc = new TelescopeService(logger) { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             var sw = Stopwatch.StartNew();
             while ((await svc.GetAsync(CancellationToken.None))?.Capabilities?.MoveAxisRateBandsDegPerSec is not { Count: > 0 }) {
@@ -136,6 +136,154 @@ namespace OpenAstroAra.Test {
         private static bool IsStop(string body, int axis) =>
             body.Contains($"Axis={axis}", StringComparison.Ordinal) && body.Contains("Rate=0&", StringComparison.Ordinal)
             || body.Contains($"Axis={axis}", StringComparison.Ordinal) && body.EndsWith("Rate=0", StringComparison.Ordinal);
+
+        private sealed class WarningCounter : Microsoft.Extensions.Logging.ILogger<TelescopeService> {
+            private int _snapped;
+            public int Snapped => Volatile.Read(ref _snapped);
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) {
+                if (formatter(state, exception).Contains("snapped to", StringComparison.Ordinal)) {
+                    Interlocked.Increment(ref _snapped);
+                }
+            }
+        }
+
+        // Polar alignment stops its motor moves on this read: it must be the driver's answer now, not the 2 s refresh.
+        [Test]
+        public async Task ReadPointingNow_returns_the_drivers_position_at_once() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5" : mount(path));
+
+            var now = await svc.ReadPointingNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.EqualTo(((double, double)?)(7.5, 45.0)));
+        }
+
+        [Test]
+        public async Task ReadPointingNow_is_null_without_a_mount() {
+            using var svc = new TelescopeService();
+
+            Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ReadPointingNow_is_null_when_the_driver_read_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        // #2048 — Polar Align confirms its stop on this read: the driver's Slewing now, not the 2 s refresh.
+        [TestCase("true", true)]
+        [TestCase("false", false)]
+        public async Task ReadSlewingNow_returns_the_drivers_slewing_at_once(string answer, bool expected) {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            // The cache was filled with "false": a true answer can only come from a read of the driver now.
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? answer : mount(path));
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.EqualTo(expected));
+        }
+
+        [Test]
+        public async Task ReadSlewingNow_is_null_without_a_mount() {
+            using var svc = new TelescopeService();
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        [Test]
+        public async Task ReadSlewingNow_is_null_when_the_driver_read_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.Null);
+        }
+
+        // A polar-align move renews its lease four times a second: the snap warning belongs to the driver call only.
+        [Test]
+        public async Task A_snapped_rate_is_logged_once_per_driver_call_not_per_renewal() {
+            var log = new WarningCounter();
+            var (box, svc, clock) = await ArmedAsync(logger: log);
+            await using var _ = box;
+            using var __ = svc;
+
+            await svc.MoveAxisAsync(0, 9.0, 1000, CancellationToken.None); // the bands top out at 4°/s
+            for (var i = 0; i < 3; i++) {
+                clock.Now = clock.Now.AddMilliseconds(250);
+                await svc.MoveAxisAsync(0, 9.0, 1000, CancellationToken.None);
+            }
+
+            Assert.That(log.Snapped, Is.EqualTo(1));
+        }
+
+        // Stop Mount cancels a routine's lease; the routine's next renewal would reach the driver as a new move and
+        // start the motor again. A renewal tagged with the abort count it began under is refused instead.
+        [Test]
+        public async Task A_renewal_from_before_Stop_Mount_does_not_restart_the_motor() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            await svc.AbortSlewAsync(CancellationToken.None);
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            Assert.That(svc.AbortEpoch, Is.Not.EqualTo(since));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(1), "only the first start reached the driver");
+            await svc.MoveAxisAsync(0, 0, null, since, CancellationToken.None); // a stop is always allowed
+            await svc.MoveAxisAsync(0, 1.0, 1000, svc.AbortEpoch, CancellationToken.None); // a new move after the abort is fine
+            Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(2));
+        }
+
+        // The race the check before the driver call cannot see: Stop Mount lands while the move's own PUT is in flight,
+        // so the move may reach the mount after the AbortSlew. The service stops the axis again and refuses the move.
+        [Test]
+        public async Task A_move_that_races_Stop_Mount_is_stopped_again_after_the_driver_call() {
+            TelescopeService? service = null;
+            Task? abort = null;
+            var raced = 0;
+            var (box, svc, _) = await ArmedAsync(path => {
+                if (path.EndsWith("/moveaxis", StringComparison.Ordinal) && Interlocked.Exchange(ref raced, 1) == 0 && service is { } s) {
+                    var before = s.AbortEpoch;
+                    abort = Task.Run(() => s.AbortSlewAsync(CancellationToken.None)); // the user taps Stop Mount now
+                    var sw = Stopwatch.StartNew();
+                    while (s.AbortEpoch == before && sw.Elapsed < TimeSpan.FromSeconds(5)) {
+                        Thread.Sleep(5);
+                    }
+                }
+                return null;
+            });
+            await using var _ = box;
+            using var __ = svc;
+            service = svc;
+            var since = svc.AbortEpoch;
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            if (abort is not null) {
+                await abort;
+            }
+
+            Assert.That(raced, Is.EqualTo(1), "the abort raced the move's PUT");
+            Assert.That(MoveAxisPuts(box).Last(), Does.Contain("Axis=0").And.Contain("Rate=0"), "the axis is stopped after the racing move");
+            Assert.That(svc.Lease.Any, Is.False, "no lease is left to renew");
+        }
 
         [Test]
         public async Task A_leased_move_with_no_renewal_is_stopped_after_the_lease() {

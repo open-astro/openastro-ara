@@ -59,5 +59,22 @@ namespace OpenAstroAra.Test {
             Assert.That(meridian.Object.PauseTimeBeforeMeridian, Is.EqualTo(7));
             Assert.That(meridian.Object.Recenter, Is.False);
         }
+
+        // #2044 Testing Decision 6 — Simple Mode's signed "At the meridian" lands as these three wire values
+        // (client codec: −10 → pause 10 after 0, 0 → both 0, +5 → after 5 max 10); the real NINA settings take them.
+        [TestCase(10, 0, 5)]
+        [TestCase(0, 0, 5)]
+        [TestCase(0, 5, 10)]
+        public void Minutes_after_meridian_and_its_max_reach_the_flip_settings(int pause, int after, int max) {
+            var settings = new OpenAstroAra.Profile.MeridianFlipSettings();
+            var profile = new Mock<IProfile>();
+            profile.SetupGet(p => p.MeridianFlipSettings).Returns(settings);
+            ProfileStoreMapper.ApplyMeridian(Safety("never") with {
+                MeridianPauseMin = pause, MinutesAfterMeridian = after, MaxMinutesAfterMeridian = max,
+            }, profile.Object);
+            Assert.That(settings.PauseTimeBeforeMeridian, Is.EqualTo(pause));
+            Assert.That(settings.MinutesAfterMeridian, Is.EqualTo(after));
+            Assert.That(settings.MaxMinutesAfterMeridian, Is.EqualTo(max));
+        }
     }
 }

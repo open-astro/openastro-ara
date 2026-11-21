@@ -90,6 +90,12 @@ class MountNotifier extends EquipmentDeviceNotifier<MountStatus> {
   /// Slew the mount to its home position (homing switch). Gated on canFindHome.
   Future<bool> findHome() => performAction((api) => api.command('home'));
 
+  /// The user says the mount is physically at Home (#2070): a position the rig
+  /// marked unverified after a power loss is trusted again. The rig refuses it
+  /// (409) while the mount does not report Home.
+  Future<bool> confirmHome() =>
+      performAction((api) => api.command('confirm-home'), pollAfter: true);
+
   /// GoTo: slew to the given RA (hours) / Dec (degrees), or sync the pointing
   /// model to them when [sync] is true. Gated on canSlew / canSync. While a
   /// sequence run is in progress the daemon refuses a slew (409

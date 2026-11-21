@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/screens/simple/simple_monitor_screen.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
+import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
 
@@ -46,14 +47,19 @@ MonitorSnapshot _snap({
   bool gear = true,
   List<MonitorFrame> frames = const [],
   bool frozen = false,
+  MonitorConditions? conditions,
+  List<MonitorUpNext>? upNext,
+  MonitorVerdict? verdict,
 }) => MonitorSnapshot(
   asOf: _asOf,
   frozenSince: frozen ? _asOf : null,
-  verdict: const MonitorVerdict(
-    MonitorVerdictKind.allGood,
-    MonitorStatus.normal,
-    target: 'NGC 1269',
-  ),
+  verdict:
+      verdict ??
+      const MonitorVerdict(
+        MonitorVerdictKind.allGood,
+        MonitorStatus.normal,
+        target: 'NGC 1269',
+      ),
   now: MonitorNow(
     status: MonitorStatus.working,
     word: MonitorNowWord.exposing,
@@ -66,13 +72,15 @@ MonitorSnapshot _snap({
     targetSecondsLeft: 5640,
     filters: const [(filter: '', done: 26, total: 120, inHand: true)],
   ),
-  upNext: [
-    MonitorUpNext(
-      MonitorUpKind.nextFrame,
-      at: _asOf.add(const Duration(seconds: 36)),
-      frame: 28,
-    ),
-  ],
+  upNext:
+      upNext ??
+      [
+        MonitorUpNext(
+          MonitorUpKind.nextFrame,
+          at: _asOf.add(const Duration(seconds: 36)),
+          frame: 28,
+        ),
+      ],
   target: MonitorTarget(
     name: 'NGC 1269',
     status: MonitorStatus.working,
@@ -90,15 +98,25 @@ MonitorSnapshot _snap({
   safety: gear
       ? const MonitorSafety(status: MonitorStatus.normal, safe: true)
       : null,
-  weather: gear
-      ? const MonitorWeather(
-          status: MonitorStatus.normal,
-          cells: [
-            (cell: MonitorWeatherCell.cloud, value: 6, overLimit: null),
-            (cell: MonitorWeatherCell.air, value: 11.4, overLimit: null),
-          ],
-        )
-      : null,
+  conditions:
+      conditions ??
+      (gear
+          ? const MonitorConditions(
+              weather: MonitorWeather(
+                status: MonitorStatus.normal,
+                cells: [
+                  (cell: MonitorWeatherCell.cloud, value: 6, overLimit: null),
+                  (cell: MonitorWeatherCell.air, value: 11.4, overLimit: null),
+                ],
+              ),
+              rig: MonitorRigTemps(
+                sensorC: -10.2,
+                sensorTargetC: -10,
+                coolerPowerPct: 41,
+                focuserC: 8.4,
+              ),
+            )
+          : null),
   guider: MonitorGuider(
     status: MonitorStatus.working,
     word: MonitorGuiderWord.guiding,
@@ -125,6 +143,7 @@ Future<void> _pump(
   MonitorSnapshot snap, {
   Size size = const Size(1288, 780),
   Locale? locale,
+  void Function(MonitorDestination)? onOpen,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -141,7 +160,7 @@ Future<void> _pump(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SimpleMonitorScreen(onOpen: (_) {}),
+        home: SimpleMonitorScreen(onOpen: onOpen ?? (_) {}),
       ),
     ),
   );
@@ -365,4 +384,120 @@ void main() {
       handle.dispose();
     },
   );
+
+  testWidgets('Conditions holds the weather and a Camera and focuser group', (
+    tester,
+  ) async {
+    await _pump(tester, _snap());
+    expect(_in('conditions', 'Conditions'), findsOneWidget);
+    expect(_in('conditions', 'Cloud'), findsOneWidget);
+    expect(_in('conditions', 'Camera and focuser'), findsOneWidget);
+    expect(_in('conditions', 'Sensor · -10'), findsOneWidget);
+    expect(_in('conditions', 'Cooler power'), findsOneWidget);
+    expect(_in('conditions', 'Focuser'), findsOneWidget);
+    expect(_k('weather'), findsNothing);
+  });
+
+  testWidgets('a rig with no weather station shows the group alone', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _snap(
+        conditions: const MonitorConditions(
+          rig: MonitorRigTemps(sensorC: -10.2),
+        ),
+      ),
+    );
+    expect(_in('conditions', 'Camera and focuser'), findsOneWidget);
+    expect(_in('conditions', 'Sensor'), findsOneWidget);
+    expect(_in('conditions', 'Cloud'), findsNothing);
+    expect(_in('conditions', 'Cooler power'), findsNothing);
+    expect(_in('conditions', 'Focuser'), findsNothing);
+  });
+
+  testWidgets(
+    'a tap on Conditions opens the weather window when a station reports',
+    (tester) async {
+      final opened = <MonitorDestination>[];
+      await _pump(tester, _snap(), onOpen: opened.add);
+      await tester.tap(_k('conditions'));
+      expect(opened, [MonitorDestination.weather]);
+    },
+  );
+
+  testWidgets(
+    'a tap on Conditions with no weather station opens the camera window',
+    (tester) async {
+      final opened = <MonitorDestination>[];
+      await _pump(
+        tester,
+        _snap(
+          conditions: const MonitorConditions(
+            rig: MonitorRigTemps(sensorC: -10.2),
+          ),
+        ),
+        onOpen: opened.add,
+      );
+      await tester.tap(_k('conditions'));
+      expect(opened, [MonitorDestination.camera]);
+    },
+  );
+
+  testWidgets(
+    'a rig with no weather and no camera or focuser has no Conditions',
+    (tester) async {
+      await _pump(tester, _snap(gear: false));
+      expect(_k('conditions'), findsNothing);
+    },
+  );
+
+  testWidgets('an empty Up next shows no caption', (tester) async {
+    await _pump(tester, _snap(upNext: const []));
+    expect(_in('now', 'Up next'), findsNothing);
+    await _pump(tester, _snap());
+    expect(_in('now', 'Up next'), findsOneWidget);
+  });
+
+  testWidgets('the top line names Monitor, read as a heading', (tester) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, _snap());
+    expect(_k('title'), findsOneWidget);
+    expect(
+      tester.getSemantics(_k('title')),
+      matchesSemantics(label: 'Monitor', isHeader: true),
+    );
+    handle.dispose();
+  });
+
+  testWidgets(
+    "a wide window gives a stop's outcome the whole top line, no title",
+    (tester) async {
+      await _pump(
+        tester,
+        _snap(
+          verdict: const MonitorVerdict(
+            MonitorVerdictKind.message,
+            MonitorStatus.warning,
+            message: SimpleMessage(
+              id: 1,
+              kind: SimpleMessageKind.warning,
+              title: 'Emergency Stop: done',
+              sticky: true,
+            ),
+          ),
+        ),
+      );
+      expect(_k('title'), findsNothing);
+    },
+  );
+
+  testWidgets('a wide window above 1.3x text leaves the title out', (
+    tester,
+  ) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 1.5;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _snap());
+    expect(_k('title'), findsNothing);
+  });
 }

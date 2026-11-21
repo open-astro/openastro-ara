@@ -6235,7 +6235,7 @@ NINA's TPPA plugin slews to 3 widely-separated points, plate-solves each, and co
 - **Slow over Alpaca/HTTP** — main camera at full resolution = 50+ MB FITS per point × 3 points × multiple iterations = lots of waiting on transfers
 - **Bad UX** — adjust the knob, wait 30s for the next solve, see the error jumped instead of decreased, adjust again, repeat
 
-ARA drops TPPA entirely. The user's tip-of-the-spear hardware (iPolar) shows the better path: a tight feedback loop with small images and a visual aim point.
+ARA first dropped TPPA's *workflow* (re-measure after every adjustment). The user's tip-of-the-spear hardware (iPolar) shows the better path for the adjust loop: a tight feedback loop with small images and a visual aim point. Since 2026-11-19 (§45.16 "Revisited again") the *measurement* that seeds that loop is TPPA's: three solves with two 10° RA-motor turns, never a GoTo.
 
 ### 45.2 iPolar's approach + ARA's adaptation
 
@@ -6278,8 +6278,12 @@ This gives ARA users iPolar-quality alignment WITHOUT requiring a dedicated PA c
 9. When error is within user's target tolerance (default 1 arcmin),
    user taps [Done] — server logs the achieved error to session DB
    and the polar-alignment workflow ends
-10. If user aborts or backs out: server kills the loop, mount stays
-    where it was (no slewing back to "home" or anything)
+10. If user aborts or backs out: server kills the loop, mount stops
+    where it is (no slewing back to "home" or anything). Every end of a
+    run (Stop, Done, failure, the check's verdict, shutdown) sends
+    AbortSlew when a GoTo, Find Home or motor move may run, then MoveAxis 0
+    on both axes, confirms the stop on fresh reads, and leaves tracking off
+    (`stop_tracking_when_done`, #2048)
 ```
 
 ### 45.4 Binning per camera
@@ -6345,9 +6349,9 @@ Given:
 - `P_solved` = where the mount's optical axis currently points (RA/Dec from plate solve)
 - `P_mount_axis` = direction the RA axis is pointing (≠ P_solved if mount isn't perfectly polar-aligned)
 
-To find `P_mount_axis`, server captures two frames with the mount rotated in RA by Δ (e.g., 30°). The two solved positions form a great-circle arc; the center of that arc is `P_mount_axis`. Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
+To find `P_mount_axis`, server captures three frames with the mount's RA motor turning Δ (10° by default) between them (since 2026-11-19; before that, two frames one turn apart). The three solved positions lie on a small circle about the axis; its pole is `P_mount_axis` (`FitAxisThreePoint`, each solve moved to the last one's time by the Earth's turn). Difference between `P_mount_axis` and `P_pole` is the alignment error, decomposed into altitude + azimuth components per the user's site latitude.
 
-Once `P_mount_axis` is known (after the initial 2-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
+Once `P_mount_axis` is known (after the initial 3-frame seed), subsequent single frames update the estimate via plate-solve + reverse-projection (no need to re-rotate the mount continuously).
 
 This is the same math iPolar uses internally; we're just running it on the main camera at lower resolution instead of a dedicated PA cam.
 
@@ -6431,7 +6435,8 @@ Failure events:
 | Failure | Handling |
 |---|---|
 | Plate solve fails (clouds, no stars) | Loop pauses; WILMA shows "No solve — check sky and try again" with retry counter. After 5 consecutive failures, suggest user check focus / point closer to pole |
-| Mount can't rotate in RA for initial 30° seed | Cap to whatever rotation is possible; user shown warning that estimate may be less precise |
+| Mount can't turn in RA for a seed step (10° by default) | The motor move stops after 10 s without progress, or after three times its travel time, and the run fails with `slew_failed` (no partial-turn estimate) |
+| Mount does not confirm it stopped (any end of a run, #2048) | The stop (AbortSlew, MoveAxis 0 on both axes) is sent three times, 2 s apart; after 8 s without two still, not-slewing fresh reads 1.5 s apart, the daemon logs a Critical line and the run ends `failed` with `mount_did_not_stop` (or its own failure reason with the same sentence): "cut the mount's power" |
 | Camera reports cooler instability mid-PA | Notify, recapture dark, continue |
 | User's site latitude too far from pole (extreme polar latitudes) | Workflow allows; bullseye math still works; just narrower workable window |
 | Southern hemisphere | Same workflow, just plate-solving against SCP region instead of NCP — no code difference; the math uses lat/long from profile |
@@ -6443,10 +6448,11 @@ Polar Alignment section of profile (default values shown):
 - Exposure time: 1 s (the 0.5 s first planned was too little signal for a guide scope at the pole)
 - Binning: auto (`0`, per §45.4; 1–4 overrides)
 - Target tolerance: 1 arcmin (controls when [Done] enables)
-- Initial RA rotation for seed: 60° (`seed_rotation_deg`; was 30° — §45.16 Revisited: a 30° turn amplifies solve noise ~1.9×, 60° passes it through 1:1; clamped to 5–120°)
-- Check-stage turns: 30° each (`check_step_deg`, 5–60°; the three-point check's two RA turns)
+- Seed turns: 10° each (`seed_rotation_deg`; the two RA-motor turns between the seed's three solves, as NINA's Three Point Polar Alignment — §45.16 Revisited again 2026-11-19; clamped to 5–30°)
+- Check-stage turns: 10° each (`check_step_deg`, 5–30°; the three-point check's two RA turns)
 - Rough-stage main-camera exposure: 3 s (`coarse_exposure_seconds`, up to 60 s)
 - Use Home: on (`use_home`; every stage sends the mount Home first, a mount without Find Home is asked; off starts from the current pointing)
+- Stop tracking when done: on (`stop_tracking_when_done`, NINA's StopTrackingWhenDone, #2048; every end of a run turns tracking off; off gives back the tracking the run found after Done or the check's verdict, never after a Stop or a failure)
 - Loop cadence (target): 1000 ms (a 500 ms loop never fit a capture + fetch + solve on the Pi 4, §45.7)
 - Save PA dark to library: off
 
@@ -6482,11 +6488,14 @@ When support is added for an iPolar / PoleMaster / dedicated PA camera attached 
 
 ### 45.15 What we're explicitly NOT doing
 
-- Three-point polar alignment (TPPA) — dropped per §45.1, re-affirmed with numbers in §45.16
+- ~~Three-point polar alignment (TPPA) — dropped per §45.1, re-affirmed with numbers in §45.16~~ — adopted 2026-11-19, see §45.16 "Revisited again"
 - Drift-alignment method (the historical hour-of-RA-drift technique) — too slow + obsolete given plate-solve approach
 - Pre-canned "well-known star" alignments (Polaris reticle patterns) — manual workflows, replaced by automated continuous loop
 
 ### 45.16 Solve-error budget and the 2-point call (2026-10-19, #1133)
+
+> Superseded 2026-11-19: every stage now seeds with three solves and two 10° RA-motor turns (see
+> "Revisited again" at the end of this section). The 30°/60° defaults and the 2-point call below are history.
 
 Written down after the on-sky nights of 2026-10-04 (41″ final on the HAE29C / ASI120MM Mini guide
 scope, +1.9° residual confirmed by the rotate-by-hand readout) and 2026-10-16/18 (CM4 rig; the
@@ -6549,6 +6558,20 @@ the axis (cone error, non-orthogonality, the Home position), by a degree on an o
 coarse stage now runs the seed turn and the two-point fit too; only the camera (and its 3 s
 exposure) differs from the fine stage. Nothing in a polar-align readout is ever a pointing read as
 the axis any more.
+
+
+**Revisited again 2026-11-19 (#2048): three solves and motor moves, NINA's way.** On the HAE29C
+(GNTO, 2026-11-18) the check's GoTo from Home to Dec 85° swung the tube toward the pier: at Home the
+hour angle is ±6 h and a GoTo leaves the firmware to choose the pier side. The 60° seed turn above had
+already been reported as alarming. Every stage now measures like NINA's TPPA: Home, the Dec motor
+alone tilts the tube 5° off the pole, then three solves with two **10°** RA-motor turns (MoveAxis at
+3°/s, 1°/s for the last 3°, stopped on the mount's position read from the driver four times a
+second), and the axis is the circle through the three pointings (`FitAxisThreePoint`, each solve
+moved to the last one's time). The 2-point seed's noise numbers above no longer apply: the
+three-point fit has no read-back-Δ term (the mount's turns only cross-check it), and a short arc
+trades amplification for safety — on the rig the fine stage and the check agreed to 0.62′ (check
+0.79′, turn mismatch 0.05°). No polar-align move is a GoTo except the `use_home: false` return to the
+start pointing. API_CONTRACT.md 2026-11-19 has the wire shape.
 
 ---
 
@@ -8343,7 +8366,7 @@ The button surfaces (as a large, prominent overlay near the top of the active vi
 - **Recovery slew** — §28 mount-home or slew-to-saved-target during crash recovery
 - **Plate-solve re-center slew** — post-slew correction
 - **Park / unpark / home** — these are also slews; the button appears
-- **Polar-align turns** — §45's 60° RA rotation for the seed and the check stage's two 30° turns
+- **Polar-align turns** — §45's single-axis motor moves (MoveAxis, not slews): the 5° Dec tilt off the pole and the two 10° RA turns of each stage's seed and of the check
 
 Does **not** appear for:
 - Sidereal tracking (not a slew event)
@@ -10261,6 +10284,7 @@ ARA's Pi-side integration with the service:
 
 - **Connection target:** `localhost:4400` (PHD2 default JSON-RPC port)
 - **Restart authority:** ARA can request restart via `systemctl restart openastro-guider`. Authorised by a **polkit rule** ARA's .deb ships (`usr/share/polkit-1/rules.d/50-openastroara-guider.rules`: `org.freedesktop.systemd1.manage-units`, this unit, verbs start/restart, user openastroara) — NOT sudo: the daemon's unit runs with `NoNewPrivileges=true`, under which sudo refuses to run (verified on the Pi, #1093)
+- **No interactive authentication:** every `systemctl` the daemon runs (guider start/restart/is-active, the storage and update template units, poweroff) passes `--no-ask-password`. Where the polkit rule is installed this changes nothing; where it is not (a dev box, a CI runner, a test host) the call fails fast with an access-denied exit instead of popping a desktop polkit password dialog. Test hosts replace the guider supervisor and poweroff starter with fakes, so a test run never reaches the real `systemctl` start/restart/poweroff path
 - **Stop authority:** none granted — the polkit rule deliberately excludes `stop` (an admin's `systemctl stop openastro-guider` must not be undoable by the daemon); tests drive the fake guider instead
 - **Status observation:** ARA polls `systemctl is-active openastro-guider` for service-level health alongside the JSON-RPC ping (unprivileged; note `is-active` on a unit that does not exist prints `inactive`, which is how the old `openastro-phd2` name went unnoticed)
 
