@@ -15185,6 +15185,7 @@ components:
         - polar-align-on-axis
         - polar-align-pointing-unknown
         - polar-align-pose-ambiguous
+        - polar-align-mount-busy
         - first-flip-not-completed
         - mount-clock-not-verified
         - polar-align-already-running

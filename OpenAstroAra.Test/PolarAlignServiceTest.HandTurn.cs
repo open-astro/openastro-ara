@@ -473,6 +473,44 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_hand_turn_run_gives_the_mount_back_when_it_ends_so_a_sync_goes_out_and_clears_the_clutch_refusal() {
+            // #2066 x #2083 — the hand run holds the mount's motion owner like a motor run, so the sync the clutch refusal
+            // asks for (Center's) is not sent while it runs. Once the run ends it gives the mount back: the sync goes out,
+            // and a motor start goes ahead.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            var ownerWhileRunning = mount.MotionOwner;
+            var syncedWhileRunning = mount.SyncAsTheDaemonDoes();
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var ownerAfter = mount.MotionOwner;
+            var syncedAfter = mount.SyncAsTheDaemonDoes();
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            RefusalException? refusal = null;
+            try {
+                await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None)
+                    .ConfigureAwait(false);
+            } catch (RefusalException ex) {
+                refusal = ex;
+            }
+            var motorStarted = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(ownerWhileRunning, Is.EqualTo(MotionOwners.PolarAlign), "the hand run holds the mount");
+            Assert.That(syncedWhileRunning, Is.False, "no sync while the run holds the mount");
+            Assert.That(ownerAfter, Is.Null, "given back once the run ended");
+            Assert.That(syncedAfter, Is.True, "the sync goes out once the run ended");
+            Assert.That(refusal, Is.Null, "the sync cleared the clutch refusal");
+            Assert.That(motorStarted.HandTurn, Is.False, "the motor start went ahead");
+        }
+
+        [Test]
         public async Task A_motor_Check_from_the_adjust_loop_after_a_clutch_turn_is_refused_and_the_loop_runs_on() {
             // The adjust screen's Check with Move the mount after a clutch-open hand run: refused while the loop still runs,
             // so the user keeps the live readout and the mount is not stopped. Refused only after the loop ended, the

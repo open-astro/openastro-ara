@@ -332,6 +332,8 @@ namespace OpenAstroAra.Test {
                 StopResendAfter = TimeSpan.FromMilliseconds(20),
                 StopVerifyWindow = TimeSpan.FromMilliseconds(500),
                 ShutdownGrace = TimeSpan.FromSeconds(2),
+                // #2066 (ARA-2) — the two readings before each turn back to back (the daemon waits 1 s between them).
+                MountSteadyFor = TimeSpan.Zero,
                 // #2083: a clutch turn is taken on its solves at rest alone at bench speed (the daemon waits 5 s at least).
                 HandTurnClutchMinWait = TimeSpan.Zero,
             };
