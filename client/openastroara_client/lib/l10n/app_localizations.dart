@@ -11807,6 +11807,12 @@ abstract class AppLocalizations {
   /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.'**
   String get polarReadoutCautionAltitudeWeak;
 
+  /// Polar align (Simple Mode panel and full UI): NINA's warning when the mount's Dec reading spread more than 2 arcseconds across the three measuring points (dec_spread_arcsec, #2081); {arcsec} is the spread in arcseconds, one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s Dec reading moved {arcsec}″ across the three points (more than 2″), so this measurement may be off. Check the Dec clutch is tight, then measure again.'**
+  String polarDecSpreadWarning(String arcsec);
+
   /// Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'
   ///
   /// In en, this message translates to:

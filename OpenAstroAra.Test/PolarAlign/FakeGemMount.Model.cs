@@ -14,6 +14,7 @@
 
 using OpenAstroAra.Core.Enums;
 using System;
+using System.Threading;
 
 namespace OpenAstroAra.Test.PolarAlign {
 
@@ -212,10 +213,12 @@ namespace OpenAstroAra.Test.PolarAlign {
     /// travel (degrees, both axes, tracking excluded).</summary>
     internal sealed record PoseSample(TimeSpan At, GemPose Pose, double PhiDeg, PierSide Side, bool Tracking, double MotorTravelDeg);
 
-    /// <summary>A clock a test moves by hand, for the fake's own unit tests.</summary>
+    /// <summary>A clock a test moves by hand, for the fake's own unit tests. Its monotonic timestamp
+    /// (<see cref="GetTimestamp"/>, what <see cref="TimeProvider.GetElapsedTime(long)"/> measures) moves with it.</summary>
     internal sealed class ManualMountClock : TimeProvider {
         private readonly object _lock = new();
         private DateTimeOffset _now = new(2026, 11, 20, 3, 0, 0, TimeSpan.Zero);
+        private long _ticks;
 
         public override DateTimeOffset GetUtcNow() {
             lock (_lock) {
@@ -223,10 +226,33 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() {
+            lock (_lock) {
+                return _ticks;
+            }
+        }
+
         public void Advance(TimeSpan by) {
             lock (_lock) {
                 _now += by;
+                _ticks += by.Ticks;
             }
         }
+    }
+
+    /// <summary>#2067 — <paramref name="inner"/> with a wall clock a test can step (chrony's makestep, a UTCDate write that
+    /// steps the Pi's clock) while its monotonic timestamp runs on untouched.</summary>
+    internal sealed class SteppedWallClock(TimeProvider inner) : TimeProvider {
+        private long _offsetTicks;
+
+        public void Step(TimeSpan by) => Interlocked.Add(ref _offsetTicks, by.Ticks);
+
+        public override DateTimeOffset GetUtcNow() => inner.GetUtcNow() + TimeSpan.FromTicks(Interlocked.Read(ref _offsetTicks));
+
+        public override long TimestampFrequency => inner.TimestampFrequency;
+
+        public override long GetTimestamp() => inner.GetTimestamp();
     }
 }

@@ -134,6 +134,17 @@ int? simplePolarStep(PolarAlignLive live) {
 String? simplePolarSideText(PolarAlignLive live, AppLocalizations l10n) =>
     polarSideOfPoleText(l10n, live.altErrorArcmin, live.azErrorArcmin);
 
+/// #2081 the Dec spread (arcsec) the panel warns about, or null: the check's
+/// on its verdict, else the seed's while the live readout runs (adjusting or
+/// paused, not while verifying). Pure — unit-tested.
+double? simplePolarDecSpread(PolarAlignLive live, {required bool verifying}) {
+  if (live.phase == PolarAlignStates.checked) return live.checkResult?.decSpreadArcsec;
+  if (verifying) return null;
+  return live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused
+      ? live.decSpreadArcsec
+      : null;
+}
+
 /// The checked verdict's word in the user's language: the daemon's own verdict
 /// token, or the local bands on the total for a token this build does not know.
 String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
@@ -507,6 +518,14 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               Text(
                 l10n.polarReadoutCautionAltitudeWeak,
                 key: const Key('simple-polar-readout-caution'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
+            // #2081 the mount's Dec moved across the three points: the live readout, or the check's verdict, may be off.
+            if (simplePolarDecSpread(live, verifying: verifying) case final spread?)
+              Text(
+                l10n.polarDecSpreadWarning(spread.toStringAsFixed(1)),
+                key: const Key('simple-polar-dec-spread'),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
                 maxLines: 4,
               ),

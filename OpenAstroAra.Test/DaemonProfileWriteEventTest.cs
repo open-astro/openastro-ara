@@ -283,14 +283,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_route_write_with_no_IfMatch_is_refused_and_publishes_nothing() {
+            var etag = await Tag("site");
+            var site = _store.GetSiteSettings();
+            _ws.Clear();
+            using var content = JsonContent(site with { BortleClass = site.BortleClass == 4 ? 5 : 4 });
+            using var put = await _http.PutAsync(new Uri("/api/v1/profile/site", UriKind.Relative), content);
+            Assert.That((int)put.StatusCode, Is.EqualTo(StatusCodes.Status428PreconditionRequired));
+            Assert.That(Seen(), Is.Empty, "a refused write publishes no profile.updated");
+            Assert.That(_store.GetSiteSettings(), Is.EqualTo(site), "nothing is written");
+            Assert.That(await Tag("site"), Is.EqualTo(etag));
+        }
+
+        [Test]
         public async Task An_optics_route_write_that_clears_the_flip_confirmation_also_publishes_safety() {
             // The store clears first_flip_confirmed on a real optics change: the safety tag moves too.
             _store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = true });
             var safety = await Tag("safety");
             _ws.Clear();
             var optics = _store.GetOpticsSettings();
-            using var content = JsonContent(optics with { ApertureMm = optics.ApertureMm + 10 });
-            using var put = await _http.PutAsync(new Uri("/api/v1/profile/optics", UriKind.Relative), content);
+            using var request = new HttpRequestMessage(HttpMethod.Put, new Uri("/api/v1/profile/optics", UriKind.Relative)) {
+                Content = JsonContent(optics with { ApertureMm = optics.ApertureMm + 10 }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", await Tag("optics"));
+            _ws.Clear();
+            using var put = await _http.SendAsync(request);
             Assert.That(put.StatusCode, Is.EqualTo(HttpStatusCode.OK));
             Assert.That(Seen(), Is.EqualTo("optics,safety"));
             Assert.That(await Tag("safety"), Is.Not.EqualTo(safety));

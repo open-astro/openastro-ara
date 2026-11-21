@@ -1069,7 +1069,9 @@ public static class PolarAlignDirections {
 /// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
-/// point stayed noisy after its retake (#2082, <c>Noisy</c>).</summary>
+/// point stayed noisy after its retake (#2082, <c>Noisy</c>).
+/// <c>DecSpreadArcsec</c> (#2081): how far the mount's Dec reading spread across the check's three points, when that is
+/// over 2″ (NINA's warning: the mount moved in Dec, so the result may be off); null otherwise.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -1081,7 +1083,9 @@ public sealed record PolarAlignCheckResultDto(
     string Verdict,
     DateTimeOffset MeasuredAt,
     // #2082 — a point of the check stayed scattered over 3″ after its retake (polar_align.frames_per_point).
-    bool Noisy = false);
+    bool Noisy = false,
+    // #2081 — the mount's Dec spread across the check's three points (arcseconds) when over 2″; null otherwise.
+    double? DecSpreadArcsec = null);
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
@@ -1122,7 +1126,10 @@ public sealed record PolarAlignStateDto(
     // #2083 — the current run, or the last one, turns RA by hand (no motor moves); false before any run.
     bool HandTurn = false,
     // #2083 — a hand-turn run waiting for the user's turn; null otherwise.
-    PolarAlignHandTurnDto? HandTurnWait = null);
+    PolarAlignHandTurnDto? HandTurnWait = null,
+    // #2081 — the mount's Dec spread across the seed's three points (arcseconds) when over 2″ (NINA's warning: the
+    // readout may be off), also on each polar_align.progress event; null otherwise and outside adjusting/paused.
+    double? DecSpreadArcsec = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

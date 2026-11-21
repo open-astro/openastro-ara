@@ -231,6 +231,8 @@ namespace OpenAstroAra.Server.Services {
                     LastFrameId: _lastFrameId,
                     WaitingForCapture: _waitingForCapture,
                     LastFrame: _lastFrame,
+                    // #2081 — the seed's Dec-spread warning describes the live readout too: shown only while one runs.
+                    DecSpreadArcsec: _state is "adjusting" or "paused" ? _decSpreadArcsec : null,
                     Stage: _stage,
                     WaitingForHome: false,
                     CheckSolvesDone: _checkSolvesDone,
@@ -1369,6 +1371,21 @@ namespace OpenAstroAra.Server.Services {
             return (set.Point, set.At);
         }
 
+        /// <summary>#2067 — the circular mean (degrees) of a point's frames' position angles, the frames with none left out;
+        /// null when none has one. Circular: frames at 359° and 1° are 0°, not 180°.</summary>
+        internal static double? MeanPositionAngleDeg(IReadOnlyList<double?> anglesDeg) {
+            double sin = 0, cos = 0;
+            var any = false;
+            foreach (var a in anglesDeg) {
+                if (a is double deg) {
+                    sin += Math.Sin(deg * Math.PI / 180.0);
+                    cos += Math.Cos(deg * Math.PI / 180.0);
+                    any = true;
+                }
+            }
+            return any ? Math.Atan2(sin, cos) * 180.0 / Math.PI : null;
+        }
+
         /// <summary>The frames each point of a measurement averages (<c>polar_align.frames_per_point</c>, clamped).</summary>
         private static int FramesPerPoint(PolarAlignSettingsDto settings) =>
             Math.Clamp(settings.FramesPerPoint, PolarAlignSettingsClamp.MinFramesPerPoint, PolarAlignSettingsClamp.MaxFramesPerPoint);
@@ -1421,7 +1438,9 @@ namespace OpenAstroAra.Server.Services {
                 var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.ConvertAll(p => (p.S.RaDegJnow, p.S.DecDegJnow)));
                 var first = solves[0].At;
                 var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
-                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec), meanAt, solves.Count, failed, scatter, attempt);
+                // #2067 ARA-13 — the point keeps its frames' position angle, so the field check sees every point.
+                var positionAngle = MeanPositionAngleDeg(solves.ConvertAll(p => p.S.PositionAngleDeg));
+                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec, positionAngle), meanAt, solves.Count, failed, scatter, attempt);
             }
             if (retake) {
                 return null;
@@ -1847,15 +1866,18 @@ namespace OpenAstroAra.Server.Services {
             var total = Math.Sqrt(altErrArcmin * altErrArcmin + azErrArcmin * azErrArcmin);
             string? stage;
             string? caution;
+            double? decSpread;
             bool noisy;
             lock (_gate) {
                 stage = _stage;
                 caution = _readoutCaution;
+                decSpread = _decSpreadArcsec;
                 noisy = _measurementNoisy;
             }
             return PublishAsync(WsEventCatalog.PolarAlignProgress, new JsonObject {
                 ["stage"] = stage,
                 ["readout_caution"] = caution,
+                ["dec_spread_arcsec"] = decSpread,
                 ["measurement_noisy"] = noisy,
                 ["iteration"] = iteration,
                 ["altitude_error_arcmin"] = Math.Round(altErrArcmin, 2),

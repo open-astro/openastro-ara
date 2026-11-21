@@ -316,6 +316,13 @@ namespace OpenAstroAra.Test {
                 Microsoft.Extensions.Logging.ILogger<PolarAlignService>? logger = null,
                 IPolarAlignMainCameraSolver? mainCamera = null, IPolarAlignerSource? aligner = null, IMountClockGate? mountClock = null) {
             ws ??= new WsRecorder();
+            if (mount is IMocked<ITelescopeMediator> mocked && mount is ITelescopeService service) {
+                // #2067 — a mock set up as the telescope service answers a turn's poll (position and pier side) with its
+                // position read, and takes every rate the turn asks for: a test that needs otherwise sets them up itself.
+                var face = mocked.Mock.As<ITelescopeService>();
+                face.Setup(s => s.ReadPoseNowAsync(It.IsAny<CancellationToken>())).Returns((CancellationToken c) => service.ReadPositionNowAsync(c));
+                face.Setup(s => s.MatchMoveAxisRate(It.IsAny<int>(), It.IsAny<double>())).Returns((int _, double rate) => rate);
+            }
             var svc = new PolarAlignService(guider, logger ?? NullLogger<PolarAlignService>.Instance, solver,
                 mount, MediatorMotionControl.For(mount), store ?? NewStore(), ws, log,
                 fetcher ?? new FakeFrameFetcher(), mainCamera: mainCamera, aligner: aligner, mountClock: mountClock) {
@@ -1142,13 +1149,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_seed_slew_the_mount_accepts_but_never_turns_fails_as_slew_failed() {
+        public async Task A_seed_turn_the_mount_accepts_but_never_turns_fails_as_slew_stalled() {
             // The mount takes the motor command, but its reported RA does not move: there is no turn
-            // to fit, so the routine must stop (and stop the motor) rather than run on.
+            // to fit, so the routine must stop (and stop the motor) rather than run on. #2067 — a stall is its own cause.
             var mount = NewMount();
             mount.Setup(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsAny<double>()));
 
-            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
+            Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo(PolarAlignService.SlewStalled));
         }
 
         // #1222 — the mediator refuses a slew it cannot frame (#1124) by throwing; that is a slew
@@ -1531,7 +1538,7 @@ namespace OpenAstroAra.Test {
         }
 
         // A mount that creeps (each poll a little progress, so never a stall) but far slower than asked must not
-        // run on: the move has a time bound of three times its travel at the slow speed.
+        // run on: #2067 — the move has a time bound of twice its travel at the rates it runs at (NINA's), slew_timeout.
         [Test]
         public async Task A_turn_that_creeps_past_its_time_bound_fails_and_stops_the_motor() {
             var mount = NewMount();
@@ -1549,7 +1556,8 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new ScriptedSolver(), mount, ws);
             svc.AxisMovePoll = TimeSpan.FromMilliseconds(10);
-            svc.AxisSlowRateDegPerSec = 100.0; // bound = 30° / 100°/s × 3 = 0.9 s; the creep needs 5 s
+            svc.AxisFastRateDegPerSec = 100.0;
+            svc.AxisSlowRateDegPerSec = 100.0; // bound = 30° / 100°/s × 2 = 0.6 s; the creep needs 5 s
             svc.AxisMoveBoundSlack = TimeSpan.Zero;
             svc.AxisMoveStall = TimeSpan.FromMinutes(5);
 
@@ -1558,8 +1566,8 @@ namespace OpenAstroAra.Test {
 
             Assert.That(status.State, Is.EqualTo("failed"));
             var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("moved only"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.SlewTimeout));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("turned only").And.Contain("twice the time"));
             Assert.That(stops, Is.GreaterThanOrEqualTo(1), "the motor is stopped");
         }
 

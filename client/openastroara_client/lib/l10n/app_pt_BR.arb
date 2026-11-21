@@ -1997,5 +1997,6 @@
   "polarKnobClearanceConfirmed": "{deg}° a partir do contrapeso para baixo, confirmado para esta montagem",
   "polarKnobClearanceNotConfirmed": "{deg}° a partir do contrapeso para baixo, não confirmado: o alinhamento polar não move esta montagem",
   "polarKnobClearanceNoMount": "Conecte a montagem para ver e confirmar a folga",
-  "polarKnobClearanceHint": "Guardado para cada montagem. Meça com o controle de mão."
+  "polarKnobClearanceHint": "Guardado para cada montagem. Meça com o controle de mão.",
+  "polarDecSpreadWarning": "A leitura de Dec da montagem variou {arcsec}″ entre os três pontos (mais de 2″), então esta medição pode estar errada. Verifique se a trava de Dec está firme e meça de novo."
 }
