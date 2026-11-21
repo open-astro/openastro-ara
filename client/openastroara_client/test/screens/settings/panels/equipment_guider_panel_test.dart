@@ -440,6 +440,21 @@ void main() {
     expect(h.equipment.calls, isNot(contains('push')));
   });
 
+  testWidgets('an OAG guide focal length waits for the optics from the rig: Not loaded with Retry, and Retry loads them (ADR 0015)',
+      (tester) async {
+    final h = await _pump(
+        tester, const TestPhd2Settings(guiderSetupType: 'oag', guideFocalLength: 320), failOptics: true);
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+    expect(find.text('Guide setup'), findsNothing, reason: 'the guider settings wait for the optics too');
+    expect(find.text('Guide focal length (mm)'), findsNothing, reason: 'no length derived from defaults');
+    h.profile.failOptics = false;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Not loaded'), findsNothing);
+    expect(find.text('Guide focal length (mm)'), findsOneWidget, reason: 'Retry loads the optics');
+    expect(find.text('320'), findsOneWidget, reason: '400 mm × 0.8 from the rig');
+  });
+
   testWidgets('#1806 Connect after a failed load does not write over the rig', (tester) async {
     final h = await _pump(tester, const TestPhd2Settings(ditherEnabled: true), failLoad: true);
     final container = ProviderScope.containerOf(tester.element(find.byType(EquipmentGuiderPanel)));

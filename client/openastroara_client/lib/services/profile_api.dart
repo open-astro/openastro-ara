@@ -720,7 +720,7 @@ class ProfileApi {
 
   // Strict like the readers above: an unknown filter kind, a missing name or a
   // wheel with no slot list fails the load instead of reading as `l`, '' or the
-  // reference wheel (the lenient filterSetFromJson stays for the offline cache).
+  // reference wheel. The offline cache reads through it too (filterSetFromJson).
   static FilterSetSettings _filterSetFromRig(Map<String, dynamic> j) =>
       FilterSetSettings(
         filters: [
@@ -772,7 +772,8 @@ class ProfileApi {
 
   // Strict like the readers above: an unknown frame type, autofocus method or
   // telescope type fails the load instead of reading as light, the V-curve or
-  // `other` (the lenient readers stay for the offline cache and the wizard).
+  // `other`. The offline cache and the wizard read through it too
+  // (imagingDefaultsFromJson).
   static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
       ImagingDefaults(
         defaultExposure: Duration(
