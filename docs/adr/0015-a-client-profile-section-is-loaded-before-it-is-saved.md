@@ -1,6 +1,6 @@
 # A client profile section is loaded before it is saved
 
-Status: proposed
+Status: accepted
 
 ## Context
 
@@ -12,11 +12,11 @@ We decided (2026-11-12, [#1807](https://github.com/open-astro/openastro-ara/issu
 
 ## Rules
 
-1. A section is saved only after it was loaded from the rig; a failed load is retried once and then the save is refused with nothing written. Scope: `client/openastroara_client/lib/state/settings/*.dart`, `client/openastroara_client/lib/screens/settings/panels/*.dart`. Checked by: review (a migrated panel or notifier that can reach a PUT while its section is not loaded from the rig).
+1. A section is saved only after it was loaded from the rig; a failed load is retried once and then the save is refused with nothing written. Scope: `client/openastroara_client/lib/state/settings/*.dart`, `client/openastroara_client/lib/screens/settings/panels/*.dart`, `client/openastroara_client/lib/screens/simple/simple_shell.dart`, `client/openastroara_client/lib/screens/simple/simple_device_windows.dart`. Checked by: review (a migrated panel, notifier or Simple Mode write that can reach a PUT while its section is not loaded from the rig).
 2. A section seeded from the offline cache is readable and is never saved. Scope: `client/openastroara_client/lib/state/profile_cache_state.dart`, `client/openastroara_client/lib/state/settings/*.dart`. Checked by: review (a cache seed that a migrated section reports as loaded from the rig).
 3. The client writes no default value for a migrated section. Scope: `client/openastroara_client/lib/state/settings/*.dart`, `client/openastroara_client/lib/services/profile_api.dart`, `client/openastroara_client/lib/settings/registry.dart`. Checked by: review (a default for a migrated section's field in a notifier, a JSON reader or the settings registry).
 4. A change of rig or of active profile resets every section to not loaded in one place. Scope: `client/openastroara_client/lib/state/settings/*.dart`, `client/openastroara_client/lib/state/profile_management_state.dart`, `client/openastroara_client/lib/state/saved_server_state.dart`. Checked by: review (a section that keeps its values across a rig or profile change, or a per-panel reset).
-5. The daemon answers a section read with a derived `ETag` and refuses a write whose `If-Match` names an older copy. Scope: `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs`. Checked by: review (a migrated section endpoint with a stored version, or one that accepts a stale `If-Match`).
+5. The daemon answers a section read with a derived `ETag`, refuses a write whose `If-Match` names an older copy (412) and refuses a section PUT with no `If-Match` (428). Scope: `OpenAstroAra.Server/Endpoints/ProfileEndpoints.cs`. Checked by: `ProfileSectionVersionTest`, review (a section endpoint with a stored version, or one that accepts a stale or missing `If-Match`).
 6. After a refused write the app keeps the person's edits and offers a reload, and it never merges or overwrites. Scope: `client/openastroara_client/lib/screens/settings/panels/*.dart`. Checked by: review (a migrated panel that drops edits or retries the write after a version mismatch).
 
 ## Alternatives rejected
@@ -32,7 +32,7 @@ We decided (2026-11-12, [#1807](https://github.com/open-astro/openastro-ara/issu
 
 - The load-before-save rule is tested once in state, with no widget.
 - A settings panel with no rig shows a not-loaded state where it showed defaults; planning keeps working from the cache.
-- The REST contract gains `ETag` and `If-Match` on profile sections; the daemon accepts a write without one while Simple Mode's writes have not moved, which leaves those writes unguarded in that period.
+- The REST contract gains `ETag` and a required `If-Match` on profile section writes; a client built before the daemon required it gets 428 on every section write that sends none, so the app and the rig are updated together.
 - The rollout past Storage waits for ADR 0012.
 
 ## How to reverse

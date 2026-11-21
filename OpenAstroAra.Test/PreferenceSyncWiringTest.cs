@@ -83,8 +83,16 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_site_save_over_HTTP_reaches_the_broadcaster_as_profile_updated() {
-            var seen = await Collect(() => http.PutAsync(new Uri("/api/v1/profile/site", UriKind.Relative),
-                new StringContent("{}", Encoding.UTF8, "application/json")), "profile.updated");
+            // The section PUT sends the tag of the copy it loaded (ADR 0015: no If-Match is a 428).
+            using var get = await http.GetAsync(new Uri("/api/v1/profile/site", UriKind.Relative));
+            var etag = get.Headers.ETag!.ToString();
+            var seen = await Collect(() => {
+                var put = new HttpRequestMessage(HttpMethod.Put, new Uri("/api/v1/profile/site", UriKind.Relative)) {
+                    Content = new StringContent("{}", Encoding.UTF8, "application/json"),
+                };
+                put.Headers.TryAddWithoutValidation("If-Match", etag);
+                return http.SendAsync(put);
+            }, "profile.updated");
             Assert.That(seen, Does.Contain("\"section\":\"site\""));
         }
 
