@@ -2330,6 +2330,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String guiderStateCalibrationDistanceOf(String moved, String target) {
+    return '$moved of $target px';
+  }
+
+  @override
   String guideFindStarFailed(String reason) {
     return 'Couldn\'t find a star: $reason';
   }
@@ -9270,6 +9275,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String guiderStateCalibrationStep(String direction, String step) {
     return '$direction passo $step';
+  }
+
+  @override
+  String guiderStateCalibrationDistanceOf(String moved, String target) {
+    return '$moved de $target px';
   }
 
   @override

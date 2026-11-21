@@ -260,6 +260,28 @@ void main() {
     });
   }
 
+  testWidgets('the strip header says how far the calibration leg has to go, and drops the "of" with no target '
+      '(#1895)', (tester) async {
+    GuiderStatus calibrating(Map<String, dynamic> extra) => GuiderStatus.fromJson(<String, dynamic>{
+          'state': 'connected',
+          'runtime': <String, dynamic>{
+            'state': 'calibrating',
+            'calibration_direction': 'North',
+            'calibration_step': 7,
+            'calibration_distance_px': 11.94,
+            ...extra,
+          },
+        });
+    var container = await _pump(tester, guider: _FakeGuiderApi(), status: calibrating({'calibration_target_px': 25}));
+    expect(find.textContaining('calibrating · North step 7 · 11.9 of 25 px'), findsOneWidget);
+    await _teardownPanel(tester, container);
+
+    container = await _pump(tester, guider: _FakeGuiderApi(), status: calibrating({}));
+    expect(find.textContaining('calibrating · North step 7 · 11.9 px'), findsOneWidget);
+    expect(find.textContaining('11.9 of'), findsNothing);
+    await _teardownPanel(tester, container);
+  });
+
   testWidgets('a start the guider gave up on shows its reason in a snackbar '
       '(#1664)', (tester) async {
     final guider = _FakeGuiderApi()
@@ -1035,6 +1057,14 @@ void main() {
         'state': 'calibrating', 'calibration_direction': 'East', 'calibration_step': 4, 'calibration_distance_px': 6.0,
       })),
       'calibrating · East step 4 · 6.0 px',
+      reason: 'a guider that reports no target keeps today\'s text',
+    );
+    expect(
+      GuidingStrip.stateLabel(_en, st(GuiderRuntimeState.calibrating, cal: {
+        'state': 'calibrating', 'calibration_direction': 'East', 'calibration_step': 4, 'calibration_distance_px': 6.0,
+        'calibration_target_px': 25,
+      })),
+      'calibrating · East step 4 · 6.0 of 25 px',
     );
     for (final r in GuiderRuntimeState.values.where((r) => r != GuiderRuntimeState.unknown)) {
       expect(GuidingStrip.stateLabel(_en, st(r)), guiderRuntimeText(_en, r).toLowerCase(), reason: '$r drifts from the shared wording');

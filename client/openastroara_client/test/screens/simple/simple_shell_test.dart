@@ -726,15 +726,20 @@ class _PolarRun extends PolarAlignLiveNotifier {
 
 /// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
 class _GuiderAt extends GuiderStatusNotifier {
-  _GuiderAt(this.runtime);
+  _GuiderAt(this.runtime, {this.target = 25});
   final String runtime;
-  static GuiderStatus _wire(String r) => GuiderStatus.fromJson({
+  /// The guider's calibration distance in pixels; null is a guider that reports none (#1895).
+  final num? target;
+  static GuiderStatus _wire(String r, num? target) => GuiderStatus.fromJson({
         'device_id': 'g', 'name': 'PHD2', 'state': 'connected',
-        'runtime': {'state': r, 'calibration_direction': 'West', 'calibration_step': 3, 'rms_total_arcsec': 0.62},
+        'runtime': {
+          'state': r, 'calibration_direction': 'West', 'calibration_step': 3, 'calibration_distance_px': 11.94,
+          'calibration_target_px': target, 'rms_total_arcsec': 0.62,
+        },
       });
   @override
-  Future<GuiderStatus?> build() async => _wire(runtime);
-  void at(String r) => state = AsyncData(_wire(r));
+  Future<GuiderStatus?> build() async => _wire(runtime, target);
+  void at(String r) => state = AsyncData(_wire(r, target));
 
   /// What the rig answers on the next read.
   late String rig = runtime;
@@ -742,7 +747,7 @@ class _GuiderAt extends GuiderStatusNotifier {
   @override
   Future<void> refresh([GuiderClient? client]) async {
     refreshes++;
-    state = AsyncData(_wire(rig));
+    state = AsyncData(_wire(rig, target));
   }
 }
 
@@ -2680,8 +2685,26 @@ void main() {
         .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
         .map((t) => t.text.toPlainText())
         .join('|');
-    expect(text, contains('Start guiding · Guider calibrating · West step 3'));
+    expect(text, contains('Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px'));
     expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
+  });
+
+  testWidgets('the calibration pill says how far the leg has to go, and keeps today\'s text with no target (#1895)',
+      (tester) async {
+    String pill() => tester
+        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
+        .map((t) => t.text.toPlainText())
+        .join(' ');
+    await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
+    await tester.pump();
+    expect(pill(), contains('Calibrating · West step 3 · 11.9 of 25 px'));
+    await tester.pumpWidget(const SizedBox());
+
+    await _pump(tester, const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating', target: null))]);
+    await tester.pump();
+    expect(pill(), contains('Calibrating · West step 3 · 11.9 px'));
+    expect(pill(), isNot(contains(' of ')));
   });
 
   testWidgets('the Guiding Assistant has its own pill with time left on its bar; the Done pill fades after 10 s '

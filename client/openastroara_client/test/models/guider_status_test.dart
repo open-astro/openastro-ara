@@ -107,6 +107,27 @@ void main() {
       expect(bare.calibrationText(_en), isNull, reason: 'no leg reported yet');
     });
 
+    test('the leg reads "of <target> px" when the guider reports its calibration distance, else today\'s text', () {
+      GuiderStatus leg(Map<String, dynamic> extra) => GuiderStatus.fromJson(<String, dynamic>{
+            'state': 'connected',
+            'runtime': <String, dynamic>{
+              'state': 'calibrating',
+              'calibration_direction': 'West',
+              'calibration_step': 3,
+              'calibration_distance_px': 11.94,
+              ...extra,
+            },
+          });
+      expect(leg({'calibration_target_px': 25}).calibrationTargetPx, 25.0);
+      expect(leg({'calibration_target_px': 25}).calibrationText(_en), 'West step 3 · 11.9 of 25 px');
+      expect(leg({'calibration_target_px': 25}).runtimeSummary(_en), 'Calibrating · West step 3 · 11.9 of 25 px');
+      expect(leg({'calibration_target_px': 12.5}).calibrationText(_en), 'West step 3 · 11.9 of 12.5 px');
+      expect(leg({}).calibrationTargetPx, isNull, reason: 'an older daemon sends no target');
+      expect(leg({}).calibrationText(_en), 'West step 3 · 11.9 px');
+      expect(leg({'calibration_target_px': null}).calibrationText(_en), 'West step 3 · 11.9 px');
+      expect(leg({'calibration_target_px': 'junk'}).calibrationText(_en), 'West step 3 · 11.9 px');
+    });
+
     test('looping, a selected star and settling are their own phases', () {
       GuiderStatus withState(String token) => GuiderStatus.fromJson(<String, dynamic>{
             'state': 'connected',
