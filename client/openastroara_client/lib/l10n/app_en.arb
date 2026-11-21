@@ -7854,6 +7854,40 @@
   "@polarNoisyMeasurement": {
     "description": "Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake"
   },
+  "polarErrorWithSigma": "{value} ± {sigma}",
+  "@polarErrorWithSigma": {
+    "description": "Polar align readout (#2072): an error with its 1σ uncertainty, e.g. '+0.2′ ± 1.1′'",
+    "placeholders": {
+      "value": {"type": "String"},
+      "sigma": {"type": "String"}
+    }
+  },
+  "polarUnconfirmedBySigma": "Inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).",
+  "@polarUnconfirmedBySigma": {
+    "description": "Polar align (#2072): the error is inside the tolerance but the error plus twice its 1σ is not, so the alignment is not confirmed (Done stays available)",
+    "placeholders": {
+      "tolerance": {"type": "String"},
+      "sigma": {"type": "String"}
+    }
+  },
+  "polarAlignerConvergedUnconfirmed": "The motors stopped inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can't confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.",
+  "@polarAlignerConvergedUnconfirmed": {
+    "description": "Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it, so the alignment is not confirmed",
+    "placeholders": {
+      "tolerance": {"type": "String"},
+      "sigma": {"type": "String"}
+    }
+  },
+  "paResidualDetailDisagreeSigma": "Polar Align and guiding disagree ({align} ± {alignSigma} vs at least {guiding} ± {guidingSigma}), by more than their combined uncertainty. Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.",
+  "@paResidualDetailDisagreeSigma": {
+    "description": "Guiding residual tooltip (#2072): the residual is above Polar Align's figure by more than their combined 1σ; both figures with their uncertainty, both causes and how to tell them apart",
+    "placeholders": {
+      "align": {"type": "String"},
+      "alignSigma": {"type": "String"},
+      "guiding": {"type": "String"},
+      "guidingSigma": {"type": "String"}
+    }
+  },
   "polarKnobCamera": "Camera",
   "@polarKnobCamera": {
     "description": "Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop"
@@ -8071,7 +8105,7 @@
   "@polarAlignerTurnByHand": {
     "description": "Polar Aligner block: follows a not-drivable sentence"
   },
-  "polarAlignerStopWrongDirection": "The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.",
+  "polarAlignerStopWrongDirection": "A move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.",
   "@polarAlignerStopWrongDirection": {
     "description": "Polar Aligner stop cause wrong_direction",
     "placeholders": {
@@ -8080,7 +8114,7 @@
       }
     }
   },
-  "polarAlignerStopWrongScale": "The test move on {axis} didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting.",
+  "polarAlignerStopWrongScale": "A move on {axis} didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting.",
   "@polarAlignerStopWrongScale": {
     "description": "Polar Aligner stop cause wrong_scale",
     "placeholders": {
@@ -8139,6 +8173,22 @@
   "polarAlignerStopByUser": "You stopped the motors.",
   "@polarAlignerStopByUser": {
     "description": "Polar Aligner stop cause stopped_by_user"
+  },
+  "polarAlignerStopNotConfirmed": "Ara sent Stop, but the Polar Aligner didn't confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.",
+  "@polarAlignerStopNotConfirmed": {
+    "description": "Polar Aligner stop cause stop_not_confirmed (#2069): the device did not report both axes still after three Stops in 3 s"
+  },
+  "polarAlignerStopConfirmed": "The Polar Aligner has now confirmed its motors stopped. Ara won't move them again until you Resume.",
+  "@polarAlignerStopConfirmed": {
+    "description": "Polar Aligner stop cause stop_confirmed (#2069): a Stop owed from before the run was confirmed at a later measurement; the run waits for the person's Resume"
+  },
+  "polarAlignerStopTravelLimit": "The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.",
+  "@polarAlignerStopTravelLimit": {
+    "description": "Polar Aligner stop cause travel_limit (#2069): the next move would take an axis past the run's travel cap"
+  },
+  "polarAlignerStopMoveLimit": "The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.",
+  "@polarAlignerStopMoveLimit": {
+    "description": "Polar Aligner stop cause move_limit (#2069): a run sends 40 moves at most"
   },
   "polarAlignerStopUnknown": "Ara stopped the motors.",
   "@polarAlignerStopUnknown": {

@@ -12,7 +12,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../status_indicator.dart';
-import 'polar_align_readout.dart' show formatArcmin;
+import 'polar_align_readout.dart' show formatArcmin, formatSigmaArcmin, polarUnconfirmed;
 
 /// #1971 the Polar Aligner's state and controls, the one module both
 /// presentations render (ADR 0013): Simple Mode's Polar align panel between
@@ -78,6 +78,10 @@ String polarAlignerStopText(AppLocalizations l, PolarAlignerRun run) {
     PolarAlignerCauses.mountTracking => l.polarAlignerStopMountTracking,
     PolarAlignerCauses.mountSlewing => l.polarAlignerStopMountSlewing,
     PolarAlignerCauses.stoppedByUser => l.polarAlignerStopByUser,
+    PolarAlignerCauses.stopNotConfirmed => l.polarAlignerStopNotConfirmed,
+    PolarAlignerCauses.stopConfirmed => l.polarAlignerStopConfirmed,
+    PolarAlignerCauses.travelLimit => l.polarAlignerStopTravelLimit,
+    PolarAlignerCauses.moveLimit => l.polarAlignerStopMoveLimit,
     _ => unknown,
   };
 }
@@ -174,6 +178,8 @@ class PolarAlignerBlock extends ConsumerWidget {
       body = [line(l10n.polarAlignerByHand, color: AraColors.textSecondary), position];
     } else if (run?.state == PolarAlignerStates.stopped) {
       final lost = run!.cause == PolarAlignerCauses.linkLost;
+      // #2069: Home is a move, and the daemon refuses it while a Stop is owed.
+      final unconfirmed = run.cause == PolarAlignerCauses.stopNotConfirmed;
       body = [
         // The one line that must be heard: the motors stopped, and why.
         Semantics(
@@ -186,20 +192,25 @@ class PolarAlignerBlock extends ConsumerWidget {
         Row(
           spacing: AraSpace.s8,
           children: [
-            Expanded(child: home(enabled: !lost)),
-            Expanded(
-              child: FilledButton(
-                key: const Key('polar-aligner-resume'),
-                style: FilledButton.styleFrom(
-                  backgroundColor: AraColors.accentConnected,
-                  foregroundColor: AraColors.bgPrimary,
-                  minimumSize: const Size(0, 44),
+            Expanded(child: home(enabled: !lost && !unconfirmed)),
+            // #2069: the daemon refuses Resume until a Stop is confirmed, so the
+            // person gets Stop to send again in its place.
+            if (unconfirmed)
+              Expanded(child: stopMotors(aligner.stopInRoutine))
+            else
+              Expanded(
+                child: FilledButton(
+                  key: const Key('polar-aligner-resume'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AraColors.accentConnected,
+                    foregroundColor: AraColors.bgPrimary,
+                    minimumSize: const Size(0, 44),
+                  ),
+                  // Offered after a lost link too: only the daemon can tell whether the device answers again.
+                  onPressed: busy ? null : () => command(l10n.polarAlignerActionResume, aligner.resumeInRoutine),
+                  child: Text(l10n.polarAlignerResume),
                 ),
-                // Offered after a lost link too: only the daemon can tell whether the device answers again.
-                onPressed: busy ? null : () => command(l10n.polarAlignerActionResume, aligner.resumeInRoutine),
-                child: Text(l10n.polarAlignerResume),
               ),
-            ),
           ],
         ),
         if (lost) Text(l10n.polarAlignerLinkLostCaption, style: AraText.caption),
@@ -218,10 +229,18 @@ class PolarAlignerBlock extends ConsumerWidget {
         stopMotors(aligner.stopInRoutine),
       ];
     } else if (run?.state == PolarAlignerStates.converged) {
+      // #2072 inside the tolerance, but not with twice its 1σ: the motors may
+      // stop, but the line must not claim the alignment (Joey, 2026-11-21).
+      // More moves cannot shrink the fit's uncertainty.
+      final unconfirmed = settings != null &&
+          polarUnconfirmed(live.totalErrorArcmin, live.totalSigmaArcmin, settings.targetToleranceArcmin);
       body = [
         line(
           settings == null
               ? l10n.polarAlignerConvergedPlain(run!.moves)
+              : unconfirmed
+              ? l10n.polarAlignerConvergedUnconfirmed(
+                  polarToleranceText(settings.targetToleranceArcmin), formatSigmaArcmin(live.totalSigmaArcmin!))
               : l10n.polarAlignerConverged(run!.moves, polarToleranceText(settings.targetToleranceArcmin)),
           color: AraColors.accentConnected,
           key: const Key('polar-aligner-converged'),

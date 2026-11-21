@@ -145,10 +145,12 @@ double? simplePolarDecSpread(PolarAlignLive live, {required bool verifying}) {
       : null;
 }
 
-/// The checked verdict's word in the user's language: the daemon's own verdict
-/// token, or the local bands on the total for a token this build does not know.
+/// The checked verdict's word in the user's language: #2072 with the result's
+/// 1σ, the bands on the error plus twice it (so a noisy check never reads
+/// Excellent); without one, the daemon's own verdict token, or the local bands
+/// on the total for a token this build does not know.
 String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
-  final token = polarRatingForVerdict(r.verdict) == null ? polarVerdictFor(r.totalErrorArcmin) : r.verdict;
+  final token = polarCheckVerdict(r);
   return switch (token) {
     'excellent' => l10n.polarVerdictExcellent,
     'very_good' => l10n.polarVerdictVeryGood,
@@ -283,6 +285,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         total != null &&
         settings != null &&
         total <= settings.targetToleranceArcmin;
+    // #2072 "inside your tolerance" only when the error plus twice its 1σ is;
+    // inside on the error alone, the panel says the measurement cannot confirm
+    // it. Done stays available inside the tolerance (Joey, 2026-11-21).
+    final aligned = polarAligned(total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
+    final unconfirmed = polarUnconfirmedText(l10n, total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
@@ -409,7 +416,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   if ((active || live.phase == PolarAlignStates.checked) && total != null) ...[
                     Icon(Icons.circle, size: 12, color: color),
                     Text(
-                      '${total.toStringAsFixed(1)}′',
+                      // #2072 the total with its 1σ: "0.2′ ± 1.1′".
+                      polarErrorWithSigmaText(l10n, '${total.toStringAsFixed(1)}′', live.totalSigmaArcmin),
+                      key: const Key('simple-polar-total'),
                       style: kSimpleText.copyWith(
                         fontSize: AraFontSize.simpleReadingLarge,
                         fontWeight: FontWeight.w300,
@@ -615,16 +624,17 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               // #2082 — no Next: fine; the guide camera is a new Start.
               if (total != null && settings != null)
                 Text(
-                  inTolerance
+                  aligned
                       ? l10n.polarInsideTolerance(
                           polarToleranceText(settings.targetToleranceArcmin),
                         )
-                      : l10n.polarOutsideTolerance(
-                          polarToleranceText(settings.targetToleranceArcmin),
-                        ),
+                      : unconfirmed ??
+                          l10n.polarOutsideTolerance(
+                            polarToleranceText(settings.targetToleranceArcmin),
+                          ),
                   key: const Key('simple-polar-tolerance-caption'),
                   style: AraText.caption,
-                  maxLines: 3,
+                  maxLines: 4,
                 ),
               if (inTolerance && !motorsBusy)
                 OutlinedButton(
@@ -680,6 +690,20 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 child: Text(l10n.polarRoughFirst),
               ),
             ],
+            // #2072 inside the tolerance, but not with twice its uncertainty:
+            // the measurement cannot confirm it.
+            if (unconfirmed != null &&
+                active &&
+                !motorsBusy &&
+                live.stage != PolarAlignStages.coarse &&
+                (live.phase == PolarAlignStates.adjusting ||
+                    live.phase == PolarAlignStates.paused))
+              Text(
+                unconfirmed,
+                key: const Key('simple-polar-unconfirmed'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
             if (checkCaption != null &&
                 active &&
                 !motorsBusy &&

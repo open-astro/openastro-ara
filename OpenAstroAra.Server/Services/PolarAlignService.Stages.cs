@@ -187,21 +187,23 @@ namespace OpenAstroAra.Server.Services {
             NoteDecSpread(gen, "seed", dec0, p1.DecDeg, p2.DecDeg); // #2081 — NINA's 2″ Dec-spread warning
 
             var (axis, _) = FitThreePointOrFail((a, aTime), (b, bTime), (c, cTime), mountTurn1, mountTurn2, north);
-            await AdjustFromSeedAsync(axis, c, cTime, mountTurn1 + mountTurn2, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
+            var sigma = FitUncertaintyFor((a, aTime), (b, bTime), (c, cTime), north, site); // #2072
+            await AdjustFromSeedAsync(axis, sigma, c, cTime, mountTurn1 + mountTurn2, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
         }
 
         /// <summary>The seed's axis error, then the live adjust loop until Stop or Done: shared by the motor seed and
         /// the hand-turn seed (#2083). <paramref name="c"/> is the seed's last solve, taken at <paramref name="cTime"/>;
-        /// <paramref name="seedTurnDeg"/> is logged.</summary>
+        /// <paramref name="seedTurnDeg"/> is logged; <paramref name="sigma"/> is the fit's uncertainty (#2072), the live readout's.</summary>
         private async Task AdjustFromSeedAsync(
-                (double RaDeg, double DecDeg, double ConeDeg) axis, PolarAlignSolveOutcome c, DateTimeOffset cTime, double seedTurnDeg,
+                (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, PolarAlignSolveOutcome c, DateTimeOffset cTime, double seedTurnDeg,
                 LiveCapture liveCapture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, int gen, CancellationToken ct) {
             var north = site.LatitudeDeg > 0;
             var (seedAltErr, seedAzErr) = PolarAlignGeometry.AxisError(
                 axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, cTime);
             var seedPointing = PolarAlignGeometry.PointingAltAz(
                 c.RaDegJnow, c.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, cTime);
-            LogSeedFit(seedTurnDeg, axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
+            LogSeedFit(seedTurnDeg, axis.RaDeg, axis.DecDeg, seedAltErr, sigma.AltSigmaArcmin, seedAzErr, sigma.AzSigmaArcmin, sigma.TotalSigmaArcmin, sigma.Solves, sigma.Floor);
+            SetFitSigma(gen, sigma);
 
             // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
             // every subsequent solve's alt/az delta from the seed pointing is purely the user's
@@ -286,13 +288,13 @@ namespace OpenAstroAra.Server.Services {
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
 
             var (axis, mismatch) = FitThreePointOrFail((s1, t1), (s2, t2), (s3, at), mountTurn1, mountTurn2, north);
-            return CheckResultFor(axis, mismatch, site, at);
+            return CheckResultFor(axis, FitUncertaintyFor((s1, t1), (s2, t2), (s3, at), north, site), mismatch, site, at);
         }
 
         /// <summary>The check's verdict from its fitted axis, measured at <paramref name="at"/>, beside the last run's
         /// readout: shared by the motor check and the hand-turn check (#2083).</summary>
         private PolarAlignCheckResultDto CheckResultFor(
-                (double RaDeg, double DecDeg, double ConeDeg) axis, double mismatch, SiteSettingsDto site, DateTimeOffset at) {
+                (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, double mismatch, SiteSettingsDto site, DateTimeOffset at) {
             var (altErr, azErr) = PolarAlignGeometry.AxisError(axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, at);
             // Rounded first: the verdict and the total the client colours by must sit in the same band
             // (1.004′ is "excellent" at 1.00′, not "very_good" beside a 1.0′ readout).
@@ -320,10 +322,14 @@ namespace OpenAstroAra.Server.Services {
                 TurnMismatchDeg: Math.Round(mismatch, 3),
                 FineErrorArcmin: fine is double f ? Math.Round(f, 2) : null,
                 FineDeltaArcmin: fineDelta is double g ? Math.Round(g, 2) : null,
-                Verdict: VerdictFor(total),
+                // #2072 — rated on the error plus twice its 1σ (Joey, 2026-11-21): 0.2′ ± 1.3′ is not "excellent".
+                Verdict: VerdictFor(RatedErrorArcmin(total, sigma.TotalSigmaArcmin)),
                 MeasuredAt: at,
-                Noisy: noisy);
-            LogCheckResult(axis.RaDeg, axis.DecDeg, altErr, azErr, total, axis.ConeDeg, mismatch, fine);
+                Noisy: noisy,
+                AltitudeSigmaArcmin: Math.Round(sigma.AltSigmaArcmin, 2),
+                AzimuthSigmaArcmin: Math.Round(sigma.AzSigmaArcmin, 2),
+                TotalSigmaArcmin: Math.Round(sigma.TotalSigmaArcmin, 2));
+            LogCheckResult(axis.RaDeg, axis.DecDeg, altErr, azErr, total, sigma.TotalSigmaArcmin, axis.ConeDeg, mismatch, fine, sigma.Solves, sigma.Floor);
             return result;
         }
 
@@ -385,6 +391,7 @@ namespace OpenAstroAra.Server.Services {
                 _checkResult = result;
                 _altErrorArcmin = result.AltitudeErrorArcmin;
                 _azErrorArcmin = result.AzimuthErrorArcmin;
+                _fitSigma = CheckSigma(result); // #2072 — the verdict's own σ, on the status and the session row
                 RecordLastResultLocked(complete: false);
                 RememberRunReadoutLocked(); // #2082 — the verdict is the readout a later check compares with
             }
@@ -399,13 +406,17 @@ namespace OpenAstroAra.Server.Services {
                 ["verdict"] = result.Verdict,
                 ["dec_spread_arcsec"] = result.DecSpreadArcsec,
                 ["noisy"] = result.Noisy,
+                ["altitude_sigma_arcmin"] = result.AltitudeSigmaArcmin,
+                ["azimuth_sigma_arcmin"] = result.AzimuthSigmaArcmin,
+                ["total_sigma_arcmin"] = result.TotalSigmaArcmin,
                 ["measured_at"] = result.MeasuredAt.ToString("O", CultureInfo.InvariantCulture),
             }).ConfigureAwait(false);
             await WriteSessionRowBestEffortAsync("checked", CancellationToken.None).ConfigureAwait(false);
             await ReleaseLeaseBestEffortAsync().ConfigureAwait(false);
         }
 
-        /// <summary>The verdict bands the client's rating uses (polar_error_rating.dart).</summary>
+        /// <summary>The verdict bands the client's rating uses (polar_error_rating.dart), applied to the error plus twice
+        /// its 1σ (<see cref="RatedErrorArcmin"/>, #2072).</summary>
         internal static string VerdictFor(double totalArcmin) =>
             totalArcmin <= 1.0 ? "excellent"
             : totalArcmin <= 3.0 ? "very_good"
@@ -778,7 +789,7 @@ namespace OpenAstroAra.Server.Services {
         [LoggerMessage(EventId = 4534, Level = LogLevel.Information, Message = "§45 polar-align stage {Stage} ({State})")]
         private partial void LogStage(string stage, string state);
 
-        [LoggerMessage(EventId = 4539, Level = LogLevel.Information, Message = "§45 polar-align three-point check: axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ total {TotalArcmin:F2}′; cone {ConeDeg:F2}°; turn mismatch {MismatchDeg:F3}°; last run said {FineArcmin}′")]
-        private partial void LogCheckResult(double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin, double totalArcmin, double coneDeg, double mismatchDeg, double? fineArcmin);
+        [LoggerMessage(EventId = 4539, Level = LogLevel.Information, Message = "§45 polar-align three-point check: axis RA {AxisRaDeg:F4}° Dec {AxisDecDeg:F4}°; error alt {AltArcmin:F2}′ az {AzArcmin:F2}′ total {TotalArcmin:F2}′ ± {TotalSigmaArcmin:F2}′ (1σ); cone {ConeDeg:F2}°; turn mismatch {MismatchDeg:F3}°; last run said {FineArcmin}′; solves {Solves}; σ floor {Floor}")]
+        private partial void LogCheckResult(double axisRaDeg, double axisDecDeg, double altArcmin, double azArcmin, double totalArcmin, double totalSigmaArcmin, double coneDeg, double mismatchDeg, double? fineArcmin, string solves, string floor);
     }
 }

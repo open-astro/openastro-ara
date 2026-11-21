@@ -30,6 +30,7 @@ namespace OpenAstroAra.Test {
              "simultaneousMoves":false,"movesWhileTracking":true,"movesWhileSlewing":false,"canStop":true,"settleSeconds":1.5}
             """;
         private const string HealthyStatus = """{"az":{"moving":true,"position":-4.5},"alt":{"moving":false,"position":2,"fault":"limit"}}""";
+        private const string StillStatus = """{"az":{"moving":false,"position":-4.5},"alt":{"moving":false,"position":2}}""";
 
         /// <summary>A device's actions in memory: answers by action name, records every call.</summary>
         private sealed class ScriptedActions(params string[] supported) : IDriverActions {
@@ -48,7 +49,7 @@ namespace OpenAstroAra.Test {
         }
 
         private static readonly string[] JustStop = ["PolarAlign:Stop"];
-        private static readonly string[] StopThenHome = ["PolarAlign:Stop", "PolarAlign:Home"];
+        private static readonly string[] StopThenHome = ["PolarAlign:Stop", "PolarAlign:Status", "PolarAlign:Home"];
 
         private Carriers _switches = null!;
         private Carriers _mount = null!;
@@ -59,7 +60,8 @@ namespace OpenAstroAra.Test {
             _mount = new Carriers();
         }
 
-        private PolarAlignerService Build() => new(_switches, _mount);
+        // #2069 — the verified stop at bench speed.
+        private PolarAlignerService Build() => new(_switches, _mount) { StopWindow = TimeSpan.FromMilliseconds(150), StopPoll = TimeSpan.FromMilliseconds(5) };
 
         private static ScriptedActions Healthy() {
             var actions = new ScriptedActions("PolarAlign:Info", "PolarAlign:Status");
@@ -249,6 +251,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task Stop_and_home_call_the_device() {
             var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
             _switches.Connected.Add(new("sw", "Base", actions));
             var service = Build();
 
@@ -272,13 +275,14 @@ namespace OpenAstroAra.Test {
             }
         }
 
-        private static readonly string[] RoutineThenDevice = ["routine stops its motor loop", "PolarAlign:Stop"];
+        private static readonly string[] RoutineThenDevice = ["routine stops its motor loop", "PolarAlign:Stop", "PolarAlign:Status"];
 
         [Test]
         public async Task Stop_ends_a_running_routines_motor_loop_before_it_stops_the_device() {
             // The emergency stop and the Stop route both come through here. A device Stop alone reads to
             // the routine as a finished move, and its next measurement would move the motors again.
             var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
             _switches.Connected.Add(new("sw", "Base", actions));
             var routine = new FakeRoutine(actions);
             var service = new PolarAlignerService(_switches, _mount, () => routine);
@@ -296,6 +300,255 @@ namespace OpenAstroAra.Test {
 
             await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
             Assert.That(actions.Calls, Is.Empty, "nothing reached the device");
+        }
+
+        // ─── #2069 (ARA-19): the verified stop (the Stop route, Emergency Stop and the parks) ───
+
+        private static int StopCalls(ScriptedActions actions) => actions.Calls.Count(c => c == "PolarAlign:Stop");
+
+        [Test]
+        public async Task Aligner_stop_is_retried_until_the_device_reports_still() {
+            var actions = Healthy();
+            // The first two Stops are lost: the device reads moving until the third arrives.
+            actions.Replies["PolarAlign:Status"] = () => StopCalls(actions) < 3 ? HealthyStatus : StillStatus;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            // All three sends must start inside the window, also on a loaded CI runner (150 ms fitted only two there).
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
+
+            var stop = await service.StopAsync(null, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(StopCalls(actions), Is.EqualTo(PolarAlignerVerifiedStop.Sends));
+                Assert.That(stop.OperationType, Is.EqualTo("polaraligner.stop"));
+                Assert.That(service.StopOwed, Is.False);
+            });
+        }
+
+        [Test]
+        public async Task A_stop_the_device_never_confirms_is_refused_and_owed_until_one_is() {
+            var actions = Healthy(); // an axis reads moving whatever is sent
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            // All three sends must start inside the window, also on a loaded CI runner (150 ms fitted only two there).
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
+
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+            Assert.That(StopCalls(actions), Is.EqualTo(PolarAlignerVerifiedStop.Sends), "sent three times, then given up");
+            Assert.That(service.StopOwed, Is.True);
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException,
+                "no Home while a Stop is owed");
+            Assert.That(actions.Calls, Does.Not.Contain("PolarAlign:Home"));
+
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
+            await service.StopAsync(null, CancellationToken.None);
+            Assert.That(service.StopOwed, Is.False);
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(actions.Calls, Does.Contain("PolarAlign:Home"));
+        }
+
+        [Test]
+        public async Task A_stop_the_device_refuses_is_confirmed_by_a_still_read() {
+            // A driver without PolarAlign:Stop answers it with an error: the device answered, so a still read confirms it,
+            // and no Stop is owed for ever (it would refuse every later Home and run).
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Stop"] = () => throw new ASCOM.ActionNotImplementedException("PolarAlign:Stop");
+            actions.Replies["PolarAlign:Status"] = () => StillStatus;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+
+            var stop = await service.StopAsync(null, CancellationToken.None);
+
+            Assert.Multiple(() => {
+                Assert.That(stop.OperationType, Is.EqualTo("polaraligner.stop"));
+                Assert.That(service.StopOwed, Is.False);
+            });
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(actions.Calls, Does.Contain("PolarAlign:Home"));
+        }
+
+        [Test]
+        public async Task A_verified_stop_on_a_slow_link_ends_within_its_window() {
+            // #2069 — Emergency Stop's aligner step runs two verified stops inside its 10 s bound: a Status read that takes
+            // longer than the window (a slow link) must not hold the stop past it.
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => {
+                Thread.Sleep(TimeSpan.FromSeconds(6));
+                return StillStatus;
+            };
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+
+            Assert.That(clock.Elapsed, Is.LessThan(TimeSpan.FromSeconds(3)), "the 150 ms window bounds the stop, not the 6 s read");
+            Assert.That(service.StopOwed, Is.True, "a read that did not answer in time confirms nothing");
+        }
+
+        /// <summary>Records each log entry's event id, level and text.</summary>
+        private sealed class RecordingLogger : Microsoft.Extensions.Logging.ILogger<PolarAlignerService> {
+            public ConcurrentQueue<(int Id, Microsoft.Extensions.Logging.LogLevel Level, string Text)> Entries { get; } = new();
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+                    TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                Entries.Enqueue((eventId.Id, logLevel, formatter(state, exception)));
+        }
+
+        [Test]
+        public async Task A_verified_stop_that_leaves_a_device_call_running_logs_a_warning_with_the_count() {
+            // #2069 — a call still waiting at the window's end keeps its own thread until it returns (a dead link: the HTTP
+            // timeout). Each one the stop abandons is counted and logged, so a dead link holding threads shows in the log.
+            // The Status read is held by the test (not timed): it is under way when the window ends and answers only once the
+            // stop has returned. The window is long enough for the Stop send to answer on a loaded runner, so the read is the
+            // one call left running.
+            var readEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var actions = Healthy();
+            actions.Replies["PolarAlign:Status"] = () => {
+                readEntered.TrySetResult();
+                release.Task.Wait(TimeSpan.FromSeconds(30));
+                return StillStatus;
+            };
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var logger = new RecordingLogger();
+            var service = new PolarAlignerService(_switches, _mount, logger: logger) {
+                StopWindow = TimeSpan.FromSeconds(1.5), StopPoll = TimeSpan.FromMilliseconds(5),
+            };
+
+            try {
+                await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                    Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+                Assert.That(readEntered.Task.IsCompleted, Is.True, "the Stop answered and the Status read was under way at the window's end");
+                Assert.That(PolarAlignerVerifiedStop.StillRunning, Is.GreaterThanOrEqualTo(1), "the Status read still holds its thread");
+            } finally {
+                release.TrySetResult();
+            }
+
+            var warnings = logger.Entries.Where(e => e.Id == 4644).ToList();
+            Assert.That(warnings, Has.Count.EqualTo(1));
+            Assert.Multiple(() => {
+                Assert.That(warnings[0].Level, Is.EqualTo(Microsoft.Extensions.Logging.LogLevel.Warning));
+                Assert.That(warnings[0].Text, Does.Contain("1 device call(s) still waiting"), "the held read, and no call started after it");
+                Assert.That(StopCalls(actions), Is.EqualTo(1), "no Stop resent once the read used up the window");
+            });
+        }
+
+        [Test]
+        public async Task A_stop_outcome_is_filed_under_the_device_it_went_to_not_the_newest_one_handed_out() {
+            // #2069 — the routine's stop may go to the device object it read at the start of its run, older than the latest
+            // one Current() handed out (another Polar Aligner connected in between): the outcome belongs to the older one.
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            var service = Build();
+            var older = service.Current()!;
+
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-new", "New base", Healthy()));
+            Assert.That(service.Current(), Is.Not.Null);
+
+            // Healthy reads an axis moving whatever is sent: the older device's stop is not confirmed.
+            var outcome = await PolarAlignerVerifiedStop.StopAsync(older, service.StopWindow, service.StopPoll);
+            Assert.That(outcome.Confirmed, Is.False);
+            service.NoteStopOutcome(older, outcome.Confirmed);
+
+            Assert.That(service.StopOwed, Is.False, "the newer device owes nothing");
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            Assert.That(service.StopOwed, Is.True, "the older device, which the Stop went to, owes it");
+        }
+
+        /// <summary>A device that never confirms a Stop (an axis reads moving) leaves one owed on <paramref name="service"/>.</summary>
+        private static async Task OweAStopAsync(PolarAlignerService service) {
+            await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+            Assert.That(service.StopOwed, Is.True);
+        }
+
+        [Test]
+        public async Task A_different_polar_aligner_that_connects_is_not_held_by_the_old_ones_owed_stop() {
+            // #2069 — the owed Stop belongs to the device it was sent to: a swapped-in device (another UniqueId) can be homed.
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            var replacement = Healthy();
+            replacement.Replies["PolarAlign:Status"] = () => StillStatus;
+            _switches.Connected.Add(new("sw-new", "New base", replacement));
+
+            Assert.That(service.StopOwed, Is.False, "the new device owes nothing");
+            await service.HomeAsync(null, CancellationToken.None);
+            Assert.That(replacement.Calls, Does.Contain("PolarAlign:Home"));
+
+            // The old device comes back: its Stop is still owed.
+            _switches.Connected.Clear();
+            _switches.Connected.Add(new("sw-old", "Old base", Healthy()));
+            Assert.That(service.StopOwed, Is.True);
+        }
+
+        [Test]
+        public async Task A_plain_reconnect_of_the_same_polar_aligner_keeps_its_owed_stop() {
+            // #2069 — the same device (its UniqueId) on a new connection may still be moving: Home stays refused.
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            var reconnected = Healthy();
+            _switches.Connected.Add(new("sw", "Base", reconnected));
+
+            Assert.That(service.StopOwed, Is.True);
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None), Throws.InvalidOperationException);
+            Assert.That(reconnected.Calls, Does.Not.Contain("PolarAlign:Home"));
+        }
+
+        [Test]
+        public async Task An_owed_stop_is_not_owed_while_no_polar_aligner_is_connected_and_returns_with_its_device() {
+            // #2069 — the person cut the owing device's power (its carrier disconnected): nothing can be stopped or moved, so
+            // nothing is owed now. The same device on a new connection owes it again.
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+
+            _switches.Connected.Clear();
+            Assert.That(service.StopOwed, Is.False, "no device connected owes a Stop");
+
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            Assert.That(service.StopOwed, Is.True, "the same device came back: still owed");
+        }
+
+        [Test]
+        public async Task Home_with_no_polar_aligner_connected_says_so_while_a_stop_is_owed() {
+            _switches.Connected.Add(new("sw", "Base", Healthy()));
+            var service = Build();
+            await OweAStopAsync(service);
+            _switches.Connected.Clear();
+
+            await Assert.ThatAsync(() => service.HomeAsync(null, CancellationToken.None),
+                Throws.InvalidOperationException.With.Message.EqualTo("no Polar Aligner is connected"));
+        }
+
+        [Test]
+        public async Task A_stop_delivered_after_a_failed_send_that_still_reads_moving_reports_the_axis_moving() {
+            // #2069 — the first send is lost (link down), the second gets through but an axis still reads moving: the 409
+            // says what the latest send found, not the first send's error.
+            var actions = Healthy(); // an axis reads moving whatever is sent
+            var sends = 0;
+            actions.Replies["PolarAlign:Stop"] = () => ++sends == 1 ? throw new ASCOM.NotConnectedException("link down") : string.Empty;
+            _switches.Connected.Add(new("sw", "Base", actions));
+            var service = Build();
+            // At least two sends must start inside the window, also on a loaded CI runner.
+            service.StopWindow = TimeSpan.FromSeconds(1.5);
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => service.StopAsync(null, CancellationToken.None));
+
+            Assert.That(refused!.Message, Does.StartWith("stop_not_confirmed"));
+            Assert.That(sends, Is.GreaterThanOrEqualTo(2));
+            Assert.That(refused.Message, Does.Contain(PolarAlignerVerifiedStop.StillMoving));
+            Assert.That(refused.Message, Does.Not.Contain("link down"));
         }
 
         [Test]

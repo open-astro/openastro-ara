@@ -135,6 +135,35 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_solved_frame_carries_the_guide_pixel_scale_it_was_solved_at() {
+            // #2072: the fit's precision floor scales with it. 200 mm, 3.75 µm, 2×2: 206.265 × 7.5 / 200 = 7.73″/px.
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 200, GuidePixelSize = 3.75 });
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = new Coordinates(10.0, 85.0, Epoch.J2000, Coordinates.RAType.Degrees) });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object);
+
+            var outcome = await sut.SolveAsync(WriteFrame(), 2, 10, 85, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Success, Is.True);
+            Assert.That(outcome.PixelScaleArcsec, Is.EqualTo(206.265 * 3.75 * 2 / 200).Within(1e-9));
+        }
+
+        [Test]
+        public void Optics_with_no_finite_positive_scale_give_no_pixel_scale() {
+            // #2072 review: a focal length of 0 would make the scale infinite; the outcome carries null (unknown) instead.
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(7.5, 200), Is.EqualTo(206.265 * 7.5 / 200).Within(1e-12));
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(7.5, 0), Is.Null);
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(0, 200), Is.Null);
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(double.NaN, 200), Is.Null);
+        }
+
+        [Test]
         public async Task The_measuring_solve_reports_nothing_when_the_frame_does_not_solve() {
             var (sut, _) = NewSolver();
 
