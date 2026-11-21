@@ -263,6 +263,19 @@ const rigDefaults = <String, Map<String, Object?>>{
     'max_iterations': 5,
     'convergence_tolerance_arcsec': 60,
   },
+  'polar-align': {
+    'exposure_seconds': 1.0,
+    'binning': 0,
+    'target_tolerance_arcmin': 1.0,
+    'seed_rotation_deg': 10.0,
+    'loop_cadence_ms': 1000,
+    'settle_seconds': 2.0,
+    'loop_mode': 'loop',
+    'check_step_deg': 10.0,
+    'coarse_exposure_seconds': 3.0,
+    'polar_aligner_auto': true,
+    'stop_tracking_when_done': true,
+  },
   // The daemon sends null for a profile's unset guider mode and a blank
   // unattended window; the keys are there.
   'safety': {
@@ -291,6 +304,8 @@ const rigDefaults = <String, Map<String, Object?>>{
     'flip_safety_enabled': true,
     'expected_flip_slew_seconds': 90,
     'first_flip_confirmed': false,
+    'first_flip_completed_utc': null,
+    'first_flip_pier_side_changed': false,
     'unattended_escalation': true,
     'unattended_shutdown_enabled': true,
     'unattended_shutdown_wait_minutes': 30,

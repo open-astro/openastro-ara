@@ -61,7 +61,8 @@ class SafetyPolicies {
   final String unattendedWindowStart;
   final String unattendedWindowEnd;
 
-  // On altitude limit.
+  // Unused (#1589): no daemon code reads on_altitude_limit and the panel no
+  // longer shows it. Kept only so the field round-trips on the wire.
   final AltitudeLimitAction onAltitudeLimit;
   final bool parkIfNoMoreTargets;
 
@@ -83,11 +84,18 @@ class SafetyPolicies {
   // min(3 × this, 5 min).
   final int expectedFlipSlewSeconds;
 
-  // §58.8 — whether this profile's one-time first-flip announce has already
-  // run (true = later flips are silent). The daemon sets it after the first
-  // announced flip and clears it on an optics change; the panel shows the
-  // state and offers a manual re-arm (set back to false).
+  // §58.8 — whether the user confirmed a completed meridian flip on this
+  // profile (true = later flips are silent). Until then every flip alerts and
+  // waits 60 s. The daemon owns it: the user confirms through
+  // [ProfileApi.confirmFirstFlip] (#1589) after a flip completed, and re-arm
+  // or an optics change clears it.
   final bool firstFlipConfirmed;
+
+  // #1589 — the last flip that ran to the end while the profile was not
+  // confirmed (null = none), and whether the mount reported its pier side
+  // changing (false = the mount did not report its pier side). Daemon-owned.
+  final DateTime? firstFlipCompletedUtc;
+  final bool firstFlipPierSideChanged;
 
   // §58.10 — bump equipment-impacting notification severities one level while
   // the site sits in astronomical darkness. Default on.
@@ -170,6 +178,8 @@ class SafetyPolicies {
     this.flipSafetyEnabled = true,
     this.expectedFlipSlewSeconds = 90,
     this.firstFlipConfirmed = false,
+    this.firstFlipCompletedUtc,
+    this.firstFlipPierSideChanged = false,
     this.unattendedEscalation = true,
     this.unattendedShutdownEnabled = true,
     this.unattendedShutdownWaitMinutes = 30,
@@ -218,6 +228,9 @@ class SafetyPolicies {
     bool? flipSafetyEnabled,
     int? expectedFlipSlewSeconds,
     bool? firstFlipConfirmed,
+    DateTime? firstFlipCompletedUtc,
+    bool clearFirstFlipCompletedUtc = false,
+    bool? firstFlipPierSideChanged,
     bool? unattendedEscalation,
     bool? unattendedShutdownEnabled,
     int? unattendedShutdownWaitMinutes,
@@ -274,6 +287,11 @@ class SafetyPolicies {
         expectedFlipSlewSeconds:
             expectedFlipSlewSeconds ?? this.expectedFlipSlewSeconds,
         firstFlipConfirmed: firstFlipConfirmed ?? this.firstFlipConfirmed,
+        firstFlipCompletedUtc: clearFirstFlipCompletedUtc
+            ? null
+            : firstFlipCompletedUtc ?? this.firstFlipCompletedUtc,
+        firstFlipPierSideChanged:
+            firstFlipPierSideChanged ?? this.firstFlipPierSideChanged,
         unattendedEscalation:
             unattendedEscalation ?? this.unattendedEscalation,
         unattendedShutdownEnabled:
@@ -304,6 +322,16 @@ class SafetyPolicies {
         skyFlatStopAtMinAdu: skyFlatStopAtMinAdu ?? this.skyFlatStopAtMinAdu,
         skyFlatSunAltitude: skyFlatSunAltitude ?? this.skyFlatSunAltitude,
         unmodeled: unmodeled ?? this.unmodeled,
+      );
+
+  /// This state with the daemon-owned first-flip fields taken from [echoed]
+  /// (the daemon's answer to a confirm or a re-arm); every other field keeps
+  /// its local value, so unsaved panel edits survive.
+  SafetyPolicies withFirstFlipFrom(SafetyPolicies echoed) => copyWith(
+        firstFlipConfirmed: echoed.firstFlipConfirmed,
+        firstFlipCompletedUtc: echoed.firstFlipCompletedUtc,
+        clearFirstFlipCompletedUtc: echoed.firstFlipCompletedUtc == null,
+        firstFlipPierSideChanged: echoed.firstFlipPierSideChanged,
       );
 }
 
@@ -399,8 +427,6 @@ class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
     edit((c) => c.copyWith(expectedFlipSlewSeconds: v));
   }
 
-  void setOnAltitudeLimit(AltitudeLimitAction a) =>
-      edit((c) => c.copyWith(onAltitudeLimit: a));
   void setParkIfNoMoreTargets(bool v) =>
       edit((c) => c.copyWith(parkIfNoMoreTargets: v));
   void setOnGuiderLost(GuiderLostAction a) =>
@@ -494,26 +520,35 @@ class SafetyPoliciesNotifier extends SelfLoadingSection<SafetyPolicies> {
   void setOnDiskSpaceCritical(DiskSpaceCriticalAction a) =>
       edit((c) => c.copyWith(onDiskSpaceCritical: a));
 
-  /// §58.8 — re-arm the one-time first-flip announce (e.g. after re-balancing
-  /// or any rig change the optics-based auto-reset can't see). Goes straight
-  /// to the daemon's dedicated endpoint — the flag is DAEMON-owned (the flip
-  /// executor sets it out-of-band, and the general safety PUT ignores it), so
-  /// a local-only mutation deferred to Save could clobber or be clobbered by
-  /// an overnight flip.
+  /// §58.8 — re-arm the unconfirmed-flip announce (e.g. after re-balancing or any
+  /// rig change the optics-based auto-reset can't see). Goes straight to the
+  /// daemon's dedicated endpoint — the fields are DAEMON-owned (the flip
+  /// executor records a completed flip out-of-band, and the general safety PUT
+  /// ignores them), so a local-only mutation deferred to Save could clobber or
+  /// be clobbered by an overnight flip.
   ///
-  /// Only the flag is patched into the shown copy: replacing it with the
-  /// rig's would discard unsaved edits staged in the panel. The rig answers
-  /// its new tag (#1807), kept so the next Save is not refused as stale; when
-  /// the rig's copy differs by more than the flag, another device saved in
-  /// between and the panel offers Reload instead (ADR 0015).
-  Future<void> rearmFirstFlip() => actOnRig(
-    (api) => api.rearmFirstFlip(),
-    apply: (shown, rig) =>
-        shown.copyWith(firstFlipConfirmed: rig.firstFlipConfirmed),
+  /// Only the first-flip fields are patched into the shown copy: replacing it
+  /// with the rig's would discard unsaved edits staged in the panel. The rig
+  /// answers its new tag (#1807), kept so the next Save is not refused as
+  /// stale; when the rig's copy differs by more than those fields, another
+  /// device saved in between and the panel offers Reload instead (ADR 0015).
+  Future<void> rearmFirstFlip() =>
+      _firstFlipAction((api) => api.rearmFirstFlip());
+
+  /// #1589 — confirm the profile's completed meridian flip (the user watched
+  /// it). Straight to the daemon's endpoint, like [rearmFirstFlip]: the
+  /// confirmation is daemon-owned. Patches only the first-flip fields from
+  /// the rig's answer, so unsaved panel edits survive.
+  Future<void> confirmFirstFlip() =>
+      _firstFlipAction((api) => api.confirmFirstFlip());
+
+  Future<void> _firstFlipAction(
+    Future<Tagged<SafetyPolicies>> Function(ProfileApi api) action,
+  ) => actOnRig(
+    action,
+    apply: (shown, rig) => shown.withFirstFlipFrom(rig),
     onlyAction: (loaded, rig) => mapEquals(
-      ProfileApi.safetyPoliciesToJson(
-        loaded.copyWith(firstFlipConfirmed: rig.firstFlipConfirmed),
-      ),
+      ProfileApi.safetyPoliciesToJson(loaded.withFirstFlipFrom(rig)),
       ProfileApi.safetyPoliciesToJson(rig),
     ),
   );

@@ -221,7 +221,7 @@ namespace OpenAstroAra.Test {
         // ─── Center ───
 
         [Test]
-        public void Center_on_another_target_while_one_runs_refuses_center_in_progress_naming_the_running_job() {
+        public async Task Center_on_another_target_while_one_runs_refuses_center_in_progress_naming_the_running_job() {
             var running = Guid.NewGuid();
             var jobs = new Mock<IBatchJobService>();
             jobs.Setup(j => j.Enqueue(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<Func<Action<int>, CancellationToken, Task>>(), It.IsAny<string?>()))
@@ -231,7 +231,7 @@ namespace OpenAstroAra.Test {
             var profileService = new Mock<IProfileService>();
             profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
 
-            var refusal = Assert.Throws<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0),
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(6.5, -10.0),
                 Mock.Of<ICenteringService>(), jobs.Object, profileService.Object));
             Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.CenterInProgress));
             Assert.That(refusal.Parameters["job_id"], Is.EqualTo(running.ToString()));

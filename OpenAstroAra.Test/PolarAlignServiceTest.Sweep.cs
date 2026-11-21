@@ -31,8 +31,8 @@ using PierSide = OpenAstroAra.Core.Enums.PierSide;
 namespace OpenAstroAra.Test {
 
     /// <summary>
-    /// #2089 — the RA sweep bound across runs. Within one run the band holds (Rough 0 → 20, Fine 20 → 0, Verify 0 → 20),
-    /// but with no Home each new Start used to build a new band from wherever the mount was: "Adjust again" after Verify
+    /// #2089 — the RA sweep bound across runs. With no Home each new Start used to build a new band from wherever the mount
+    /// was (#2082: every measurement is its own Start now, Verify included): "Adjust again" after Verify
     /// turned 20 → 40° from the first start, and repeated runs walked toward the pier. Polar Align now keeps the session's
     /// sweep origin, turns every later run back toward it, and refuses a run that would go more than 30° from it. All of
     /// it from RA differences the mount reports, never its clock, LST or absolute RA.
@@ -61,8 +61,9 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task Rough_Fine_Verify_and_Adjust_again_stay_within_20_degrees_of_the_origin() {
-            // The reviewers' case: Rough 0 → 20, Fine 20 → 0, Verify 0 → 20, then "Adjust again" (a fine start) used to
-            // build a new band at 20 and turn 20 → 40. It now turns back toward the origin: 20 → 0, and its Verify 0 → 20.
+            // The reviewers' case, one measurement per Start (#2082): Rough 0 → 20, Stop; Fine 20 → 0; Verify (the Check of the
+            // adjust loop) 0 → 20; then "Adjust again" (a fine start) used to build a new band at 20 and turn 20 → 40. Every
+            // Start goes through the session's sweep plan and turns back toward the origin: 20 → 0, and its Verify 0 → 20.
             var stops = new ConcurrentQueue<Coordinates>();
             var mount = NewMount(); // RA 0 / Dec 85, east of the meridian at LST 20 h
             var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
@@ -74,20 +75,24 @@ namespace OpenAstroAra.Test {
             Assert.That((first.NewOrigin, first.OriginOffsetDeg, first.Direction, first.SweepLimitDeg), Is.EqualTo((true, 0.0, PolarAlignDirections.East, 30.0)));
             await svc.StartAsync(PolarAlignStages.Coarse, new PolarAlignStartConfirmation(first.Direction, first.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await StageSettledAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
 
             // Adjust again: the plan says where the axis is from the origin, and that it turns back (west).
             var again = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
             Assert.That(again.NewOrigin, Is.False);
             Assert.That(again.OriginOffsetDeg, Is.EqualTo(20.0).Within(0.5));
             Assert.That(again.Direction, Is.EqualTo(PolarAlignDirections.West), "back toward the origin, as the confirm step shows");
-            var mark = Mark(svc);
+            mark = Mark(svc);
             await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(again.Direction, again.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, mark, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
             Assert.That((await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false)).State, Is.EqualTo("checked"));
 
             var turns = stops.Select(c => OffsetFrom(0.0, c.RADegrees)).ToArray();
@@ -161,6 +166,69 @@ namespace OpenAstroAra.Test {
             Assert.That((plan.NewOrigin, plan.OriginOffsetDeg), Is.EqualTo((true, 0.0)));
         }
 
+        [Test]
+        public async Task Repeated_Checks_are_refused_at_the_sweep_limit() {
+            // #2082 — Check is a confirmed Start(check) through the session's sweep plan, from the adjust loop too: the fine
+            // run's bench 30° turns leave the axis 60° from the origin, past the 30° a check (2 × 10°) may reach. Next used
+            // to lead the run into its check inside the run's own 60° band, with no session limit.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var fake = NewFake();
+            using var svc = NewService(fake, new HintFollowingSolver(), mount.Mock, ws, store: NewStore());
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            var at = mount.Count;
+            var leases = fake.LeaseCalls.Count;
+            var events = ws.Events.Count;
+
+            for (var attempt = 0; attempt < 2; attempt++) {
+                var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None));
+                var startRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
+                    PolarAlignStages.Check, new PolarAlignStartConfirmation(PolarAlignDirections.West), null, CancellationToken.None));
+                Assert.That(planRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSweepLimit), "the confirm step already says so");
+                Assert.That(startRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSweepLimit));
+                Assert.That((double)startRefusal.Parameters["offset_deg"]!, Is.EqualTo(60.0).Within(0.5));
+            }
+
+            // Refused before the loop was touched: it runs on, nothing moved, the camera was not taken again.
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That((status.State, status.Stage), Is.EqualTo(("adjusting", PolarAlignStages.Fine)));
+            AssertNoMotionAfter(mount, at);
+            Assert.That(mount.Since(at), Does.Not.Contain("abort polar_align"), "the loop was not stopped");
+            Assert.That(ws.Events.Skip(events).Select(e => e.Type), Has.None.EqualTo(WsEventCatalog.PolarAlignStopped).And.None.EqualTo(WsEventCatalog.PolarAlignStarted));
+            Assert.That(fake.LeaseCalls.Count, Is.EqualTo(leases));
+
+            // After the loop ends (Stop, or Done), a Check is refused the same way.
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var afterStop = mount.Count;
+            var after = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(
+                PolarAlignStages.Check, new PolarAlignStartConfirmation(PolarAlignDirections.West), null, CancellationToken.None));
+            Assert.That(after!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignSweepLimit));
+            AssertNoMotionAfter(mount, afterStop);
+        }
+
+        [Test]
+        public async Task A_run_that_failed_after_a_readout_is_the_last_run_a_Check_compares_with() {
+            // #2082 review — the last run's readout, whatever ended it: a fine loop a Stop Mount failed still had one.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            var loop = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.That(loop.CurrentErrorArcmin, Is.Not.Null, "the loop has a readout");
+
+            var mark = Mark(svc);
+            mount.StopMount();
+            Assert.That((await PollStateAsync(svc, mark, "failed").ConfigureAwait(false)).State, Is.EqualTo("failed"));
+            mark = Mark(svc);
+            await svc.StartConfirmedAsync(PolarAlignStages.Check, null, CancellationToken.None).ConfigureAwait(false);
+            var check = await PollStateAsync(svc, mark, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(check.State, Is.EqualTo("checked"));
+            Assert.That(check.CheckResult!.FineErrorArcmin, Is.Not.Null, "the failed run's readout is the last run's");
+        }
+
         // ── moved by other means ─────────────────────────────────────────────────────────────
 
         [Test]
@@ -198,6 +266,22 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_pier_side_that_changed_since_Polar_Align_last_turned_the_mount_is_a_new_start() {
             var mount = new FakeStopMount(tracking: true) { Side = PierSide.pierEast };
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false)).NewOrigin, Is.False);
+
+            mount.Side = PierSide.pierWest; // a flip GoTo that came back to the same RA reading
+
+            Assert.That((await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false)).NewOrigin, Is.True);
+        }
+
+        [Test]
+        public async Task A_pier_flip_the_refresh_cache_missed_is_a_new_start() {
+            // The cache's last SideOfPier read failed (pierUnknown): only the fresh reading shows the flip.
+            var mount = new FakeStopMount(tracking: true) { Side = PierSide.pierEast, CachePierSideFailed = true };
             var ws = new WsRecorder();
             mount.EventCount = () => ws.Events.Count;
             using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore());
@@ -277,8 +361,8 @@ namespace OpenAstroAra.Test {
             await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
             var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
 
-            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("mount_fault"));
-            Assert.That(error.GetProperty("message").GetString(), Does.Contain("did not report where it points during the turn"));
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo(PolarAlignService.PointingUnknown));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("no fresh reading of where the mount points"));
             Assert.That(mount.Log.Where(c => c.StartsWith("move primary -", StringComparison.Ordinal)), Is.Empty,
                 "never reversed on the placeholder: " + string.Join(", ", mount.Log));
             Assert.That(mount.RaDeg, Is.InRange(12.0, 13.0), "stopped where the read failed");

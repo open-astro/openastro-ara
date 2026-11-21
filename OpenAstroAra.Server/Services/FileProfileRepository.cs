@@ -127,6 +127,11 @@ public sealed partial class FileProfileRepository : IProfileRepository, IDisposa
             // A profile cloned from the live store is usually for another rig (#1362 review): its devices are
             // unknown until they connect, so its first connect must be a quiet sighting, not a swap notice.
             var snap = settings ?? ProfileStoreSnapshot.Capture(_liveStore) with { EquipmentIdentity = EquipmentIdentityDto.Empty };
+            // §58.8 (#1589 review) — no flip has run on a new profile, so it starts unconfirmed with no completed
+            // flip, from a clone or from a body: only the flip executor and the confirm endpoint write these fields.
+            if (snap.SafetyPolicies is not null) {
+                snap = snap with { SafetyPolicies = ProfileSections.WithoutFirstFlip(snap.SafetyPolicies) };
+            }
             if (!WriteFile(new StoredProfileDto(meta, snap))) {
                 // Don't register a profile we couldn't persist — it would vanish on restart.
                 throw new IOException($"Failed to write profile file for '{meta.Name}'.");

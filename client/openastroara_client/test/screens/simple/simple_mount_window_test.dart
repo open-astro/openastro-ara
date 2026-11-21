@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
@@ -116,13 +117,13 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
 }
 
 /// #2070 — a mount at its false zero after a power loss: the rig does not trust its position.
-Map<String, dynamic> _unverified({required bool atHome}) {
+Map<String, dynamic> _unverified({required bool atHome, String reason = 'at_home_on_connect'}) {
   final w = _wire(tracking: false, runtime: 'idle');
   w['runtime'] = {
     ...w['runtime'] as Map<String, dynamic>,
     'at_home': atHome,
     'position_unverified': true,
-    'position_unverified_reason': 'at_home_on_connect',
+    'position_unverified_reason': reason,
   };
   return w;
 }
@@ -140,6 +141,15 @@ void main() {
     await tester.tap(find.text('Yes, it is at Home'));
     await tester.pump();
     expect(mount.calls, ['confirm-home']);
+  });
+
+  // #2066 polar alignment's stop was not confirmed: the window says so, not
+  // "the mount may have lost power".
+  testWidgets('Simple: a position left unverified by an unconfirmed stop says why', (tester) async {
+    await _pump(tester, _unverified(atHome: false, reason: 'stop_unconfirmed'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
+    expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
   });
 
   testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {

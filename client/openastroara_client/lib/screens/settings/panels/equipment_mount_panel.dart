@@ -332,7 +332,11 @@ class _PositionUnverified extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(l10n.mountPositionUnverifiedBody),
+          Text(
+            status.positionUnverifiedByStop
+                ? l10n.mountPositionStopUnconfirmedBody
+                : l10n.mountPositionUnverifiedBody,
+          ),
           const SizedBox(height: 4),
           if (status.atHome)
             OutlinedButton(

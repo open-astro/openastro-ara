@@ -40,6 +40,12 @@ public interface IGuiderEpisodeListener {
     /// paused episode ends when this count moves. A count, not a flag: a Disconnect then Connect
     /// between two polls still ends it.</summary>
     int UserDisconnects => 0;
+
+    /// <summary>#1589 — the shared reaction holds this guider fault no longer: its episode ended (it skipped,
+    /// aborted or only notified, the fault was recovered, or the user took the guider back), or the fault
+    /// joined a guider episode already running. A fault the guider still has open can then make way for a
+    /// new one that runs the plan again. Called outside the reaction's lock.</summary>
+    void Released(EquipmentFaultEvent fault) { }
 }
 
 /// <summary>
@@ -156,15 +162,26 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     /// mismatch must not lose its one notification just because the same device type happens
     /// to be mid-reconnect (review finding).</summary>
     internal void OnFault(EquipmentFaultEvent fault) {
+        // #1589 — the guider publishes its faults while it holds its own _gate, and its listener
+        // methods (Paused, Released) take that _gate. So never call _guiderEpisodes
+        // inside this service's lock(_gate): a guider thread holding its _gate would wait here for
+        // ours while we wait for its _gate — a deadlock. Call the listener after the lock is released.
+        if (!TryStartEpisode(fault) && fault.DeviceType == DeviceType.Guider) {
+            // #1589 — joined the running guider episode (or none started): no episode holds this fault.
+            _guiderEpisodes?.Invoke()?.Released(fault);
+        }
+    }
+
+    private bool TryStartEpisode(EquipmentFaultEvent fault) {
         lock (_gate) {
             if (_disposed || _cts.IsCancellationRequested) {
-                return;
+                return false;
             }
             var recoverable = fault.Kind is EquipmentFaultKind.Disconnected or EquipmentFaultKind.TrackingLost;
             var key = recoverable ? (object)NormalizeType(fault.DeviceType) : new object();
             if (recoverable && _episodes.ContainsKey(key)) {
                 LogEpisodeAlreadyActive(fault.DeviceType, fault.Kind);
-                return;
+                return false;
             }
             // §42.2 items 2+5 — non-recoverable kinds also feed the persistence counter: the
             // fault that tips its device over the threshold escalates (its episode runs the
@@ -175,6 +192,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             var escalated = !recoverable
                 && _escalator.Observe(NormalizeType(fault.DeviceType), fault.Kind, DateTimeOffset.UtcNow);
             _episodes[key] = Task.Run(() => RunEpisodeAsync(key, fault, escalated), CancellationToken.None);
+            return true;
         }
     }
 
@@ -310,9 +328,14 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogEpisodeFailed(fault.DeviceType, ex);
         } finally {
+            bool guiderEpisode;
             lock (_gate) {
                 _episodes.Remove(key);
-                _recoveryWaiters.Remove(key);
+                guiderEpisode = _recoveryWaiters.Remove(key, out var waiter) && ReferenceEquals(waiter.Fault, fault);
+            }
+            // #1589 — after the slot is free, so a fault the guider publishes in answer starts its own episode.
+            if (guiderEpisode) {
+                _guiderEpisodes?.Invoke()?.Released(fault);
             }
         }
     }
@@ -325,24 +348,29 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         var what = fault.Details switch {
             "star_lost" => "Guide star lost",
             "equipment_disconnected" => "Guide camera dropped",
+            "dec_runaway" => "Dec guiding ran away",
             _ => "Guiding lost",
         };
+        // #1589 — the daemon stopped guiding itself: guiding on the same calibration would run away again.
+        var advice = fault.Details == "dec_runaway"
+            ? " Guiding was stopped. Calibrate the guider again (after a meridian flip, check the guider's 'Meridian flip reverses Dec' setting) before you resume."
+            : "";
         if (plan.Skip || plan.TerminalAction == FaultTerminalAction.Abort) {
             var acted = plan.Skip ? await SkipActiveRunsAsync().ConfigureAwait(false) : await AbortActiveRunsAsync().ConfigureAwait(false);
             if (acted == 0) {
                 await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
             } else if (plan.Skip) {
                 await PublishActionAsync(fault, "skipped", extra: p => p["skipped_runs"] = acted).ConfigureAwait(false);
                 await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — current target skipped",
-                    $"'{label}' reported {fault.Details} and your safety policy is set to skip: the current instructions were skipped.").ConfigureAwait(false);
+                    $"'{label}' reported {fault.Details} and your safety policy is set to skip: the current instructions were skipped.{advice}").ConfigureAwait(false);
             } else {
                 await PublishActionAsync(fault, "gave_up", persistAs: "gave_up:abort", extra: p => {
                     p["terminal"] = "abort";
                     p["aborted_runs"] = acted;
                 }).ConfigureAwait(false);
                 await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence aborted",
-                    $"'{label}' reported {fault.Details} and your safety policy is set to abort: {acted} run(s) aborted, the mount was not parked.").ConfigureAwait(false);
+                    $"'{label}' reported {fault.Details} and your safety policy is set to abort: {acted} run(s) aborted, the mount was not parked.{advice}").ConfigureAwait(false);
             }
             return;
         }
@@ -352,13 +380,13 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         _guiderEpisodes?.Invoke()?.Paused(fault, paused);
         if (paused.Count == 0) {
             await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.").ConfigureAwait(false);
+            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
             return;
         }
         await PublishActionAsync(fault, "sequence_paused", extra: p => p["paused_runs"] = paused.Count).ConfigureAwait(false);
         await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — sequence paused",
             $"'{label}' reported {fault.Details}: {paused.Count} run(s) paused so no unguided frame burns sky time. "
-            + "They resume on their own once the guider is back; otherwise Resume them.").ConfigureAwait(false);
+            + $"They resume on their own once the guider is back; otherwise Resume them.{advice}").ConfigureAwait(false);
 
         while (!recovered.IsCompleted) {
             await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
@@ -753,52 +781,19 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         }
     }
 
-    /// <summary>#2066 — the park's first step, as in <see cref="SafetyReactionService"/>: a running polar alignment ends
-    /// and leaves the mount to the park (no stop confirmation of its own, which would hold the park back), then the Polar
-    /// Aligner stops. Each step is bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>; a fault or a hang is logged and
-    /// the park goes ahead.</summary>
-    private async Task StopPolarAlignQuietlyAsync() {
-        var polarAlign = _polarAlignResolver?.Invoke();
-        if (polarAlign is { IsActive: true }) {
-            await BoundedQuietlyAsync("stop_polar_align", () => polarAlign.StopForTakeoverAsync("fault_park", CancellationToken.None)).ConfigureAwait(false);
-        }
-        if (_polarAligner is { IsPresent: true } aligner) {
-            await BoundedQuietlyAsync("stop_polar_aligner", () => aligner.StopAsync(null, CancellationToken.None)).ConfigureAwait(false);
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort step before the park: a routine or aligner that faults or hangs must not block the park; logged, never rethrown.")]
-    private async Task BoundedQuietlyAsync(string rung, Func<Task> step) {
-        try {
-            await step().WaitAsync(StopPolarAlignBeforeParkTimeout).ConfigureAwait(false);
-        } catch (Exception ex) {
-            LogRungFailed(rung, ex);
-        }
-    }
+    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopPolarAlignBeforeParkAsync"/>, shared with the
+    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>.</summary>
+    private Task StopPolarAlignQuietlyAsync() =>
+        ReactionMountStops.StopPolarAlignBeforeParkAsync(_polarAlignResolver, _polarAligner, MountStopReasons.FaultPark,
+            StopPolarAlignBeforeParkTimeout, LogRungFailed);
 
     // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
     // tracking (best effort) and say so loudly, since the run ended with the mount unparked. The abort
     // also ends any axis lease (a pad move): the refused park no longer cancels them itself.
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort rung: a motion or tracking stop that fails is logged and named in the alert, never thrown.")]
     private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
-        var motionStopped = false;
-        var stopped = false;
-        if (_telescope is not null) {
-            try {
-                await _telescope.AbortSlewAsync(CancellationToken.None).ConfigureAwait(false);
-                motionStopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("abort_slew", ex);
-            }
-            try {
-                await _telescope.SetTrackingAsync(false, CancellationToken.None).ConfigureAwait(false);
-                stopped = true;
-            } catch (Exception ex) {
-                LogRungFailed("tracking_off", ex);
-            }
-        }
+        // #2107 — counted under its own reason: a polar alignment this stop ends names this reaction, not Stop Mount.
+        var (motionStopped, stopped) = await ReactionMountStops.StopMotionAndTrackingAsync(_telescope, MountStopReasons.FaultReaction, LogRungFailed)
+            .ConfigureAwait(false);
         LogParkRefusedUnverified(stopped);
         await NotifyQuietlyAsync(NotificationSeverity.Critical, "Mount NOT parked (position unverified)",
             "An equipment fault asked for a park, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "

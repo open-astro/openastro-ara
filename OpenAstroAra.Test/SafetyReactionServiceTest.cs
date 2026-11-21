@@ -880,8 +880,9 @@ namespace OpenAstroAra.Test {
 
             await service.TickAsync();
 
-            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once,
-                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends)");
+            telescope.Verify(t => t.AbortSlewAsync(MountStopReasons.PoseUnverified, It.IsAny<CancellationToken>()), Times.Once,
+                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends), under its own name (#2107)");
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Never, "never counted as Stop Mount");
             telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once,
                 "the mount stops tracking instead of parking");
             Assert.That(postedNotifications.Count(n => n.Severity == NotificationSeverity.Critical

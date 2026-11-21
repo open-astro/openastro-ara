@@ -599,8 +599,8 @@ const List<Setting> settingsRegistry = [
   Setting(
     id: 'safety.policies.first_flip_confirmed',
     tier: SettingTier.advanced,
-    label: 'First-flip announce',
-    description: 'The very first meridian flip on a profile posts a critical alert and waits 60 seconds before proceeding — cheap insurance against a wrong pause value flipping the OTA into the tripod. Runs once; changing the optics train (or the Re-arm button here) arms it again.',
+    label: 'Meridian flip confirmation',
+    description: 'Until you confirm a meridian flip on this profile, every flip posts a critical alert and waits 60 seconds before it starts — stop the run in that window if the scope could hit the mount. After a flip runs to the end, press Confirm here if the scope cleared the mount and the tripod and frames and guiding came back. Ara never confirms on its own; changing the optics train (or the Re-arm button here) asks again.',
     keywords: [
       'meridian',
       'flip',
@@ -620,21 +620,6 @@ const List<Setting> settingsRegistry = [
       'safety.policies.flip_safety_enabled',
       'safety.policies.meridian_flip_auto',
     ],
-  ),
-  Setting(
-    id: 'safety.policies.on_altitude_limit',
-    tier: SettingTier.advanced,
-    label: 'On altitude limit',
-    description: 'Action when a target drops below the minimum-altitude floor.',
-    keywords: ['altitude', 'limit', 'horizon', 'skip', 'pause', 'abort', 'low'],
-    path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.enumValue([
-      'Skip target',
-      'Pause sequence',
-      'Abort sequence',
-    ]),
-    defaultValue: null,
-    profilePath: 'safety.on_altitude_limit',
   ),
   Setting(
     id: 'safety.policies.park_if_no_more_targets',
@@ -1476,7 +1461,8 @@ const List<Setting> settingsRegistry = [
     defaultValue: '',
   ),
   // #1736 Imaging → Polar align — the routine's knobs. State lives in
-  // `polarAlignSettingsProvider` (profile section `polar_align`).
+  // `polarAlignSettingsProvider` (profile section `polar_align`); the rig owns
+  // their defaults (ADR 0015 rule 3, #1807).
   Setting(
     id: 'img.polar.target_tolerance_arcmin',
     tier: SettingTier.advanced,
@@ -1485,7 +1471,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tolerance', 'done', 'arcmin', 'error'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 10.0, step: 0.1),
-    defaultValue: 1.0,
+    defaultValue: null,
     profilePath: 'polar_align.target_tolerance_arcmin',
   ),
   Setting(
@@ -1496,7 +1482,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'polar aligner', 'motors', 'by hand', 'turned by', 'rpa'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.polar_aligner_auto',
   ),
   Setting(
@@ -1507,7 +1493,7 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'tracking', 'stop', 'pier', 'collision', 'nina'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
-    defaultValue: true,
+    defaultValue: null,
     profilePath: 'polar_align.stop_tracking_when_done',
   ),
   Setting(
@@ -1518,18 +1504,18 @@ const List<Setting> settingsRegistry = [
     keywords: ['polar', 'alignment', 'rotation', 'turn', 'ra', 'seed'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.seed_rotation_deg',
   ),
   Setting(
     id: 'img.polar.check_step_deg',
     tier: SettingTier.advanced,
-    label: 'Verify step (°)',
-    description: 'The RA turn between the three frames of Verify. Kept between 5° and 30°.',
+    label: 'Check step (°)',
+    description: 'The RA turn between the three frames of a Check, which turns the mount 2 × this step. Kept between 5° and 30°.',
     keywords: ['polar', 'alignment', 'verify', 'check', 'three point', 'step'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 5, max: 30, step: 5),
-    defaultValue: 10.0,
+    defaultValue: null,
     profilePath: 'polar_align.check_step_deg',
   ),
   Setting(
@@ -1547,7 +1533,7 @@ const List<Setting> settingsRegistry = [
     ],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.doubleRange(min: 0.1, max: 60, step: 0.5),
-    defaultValue: 3.0,
+    defaultValue: null,
     profilePath: 'polar_align.coarse_exposure_seconds',
   ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig

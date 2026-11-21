@@ -22,6 +22,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/unguided_settings_state.dart';
@@ -50,6 +51,7 @@ const _paths = [
   'optics',
   'phd2',
   'plate-solve',
+  'polar-align',
   'safety',
   'site',
   'storage',
@@ -66,6 +68,7 @@ final _selfLoading = {
   imagingDefaultsProvider,
   opticsSettingsProvider,
   phd2SettingsProvider,
+  polarAlignSettingsProvider,
   safetyPoliciesProvider,
   siteSettingsProvider,
 };
@@ -190,6 +193,9 @@ void main() {
     'safety': (c) =>
         c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12),
     'phd2': (c) => c.read(phd2SettingsProvider.notifier).setSettleTimeSec(15),
+    'polar-align': (c) => c
+        .read(polarAlignSettingsProvider.notifier)
+        .edit((v) => v.copyWith(exposureSeconds: 4)),
   };
 
   for (final MapEntry(key: route, value: edit) in edits.entries) {
@@ -295,6 +301,11 @@ void main() {
       {...rigDefaults['autofocus']!, 'telescope_type': 'bogus'},
     ],
     'optics': [null, ...without(rigDefaults['optics']!)],
+    'polar-align': [
+      null,
+      ...without(rigDefaults['polar-align']!),
+      {...rigDefaults['polar-align']!, 'loop_mode': 'bogus'},
+    ],
     'site': [
       null,
       ...without(rigDefaults['site']!),
@@ -368,6 +379,7 @@ void main() {
     'optics': 'focal_length_mm',
     'phd2': 'settle_time_sec',
     'plate-solve': 'center_after_slew',
+    'polar-align': 'exposure_seconds',
     'safety': 'meridian_pause_min',
     'site': 'latitude_deg',
     'unguided': 'guard_enabled',
@@ -464,10 +476,11 @@ void main() {
     final rig = _rig();
     final c = _container(rig);
     await settle(() => c.read(safetyPoliciesProvider).canSave);
-    // The flip executor confirms the first flip on the rig and announces it.
+    // The flip executor records a completed flip on the rig and announces it.
     rig.daemonWrote('safety', {
       ...rigDefaults['safety']!,
-      'first_flip_confirmed': true,
+      'first_flip_completed_utc': '2026-11-20T02:00:00Z',
+      'first_flip_pier_side_changed': true,
     });
     await applyProfileUpdated(c, 'safety');
     c.read(safetyPoliciesProvider.notifier).setMeridianPauseMin(12);
@@ -475,7 +488,8 @@ void main() {
     final put = rig.puts.single;
     expect(put.ifMatch, '"safety-v2"', reason: 'the tag of the copy the daemon wrote');
     expect((put.body as Map)['meridian_pause_min'], 12);
-    expect(c.read(safetyPoliciesProvider).value!.firstFlipConfirmed, isTrue);
+    expect(c.read(safetyPoliciesProvider).value!.firstFlipCompletedUtc,
+        DateTime.utc(2026, 11, 20, 2));
   });
 
   test('phd2: a guide camera fill announced by profile.updated reloads the '

@@ -24,6 +24,7 @@ using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
+using OpenAstroAra.Test.PolarAlign;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -96,10 +97,18 @@ namespace OpenAstroAra.Test {
             /// <summary>#2089 — one fresh read fails (the cache turns to the placeholder) once the RA motor runs at or past this
             /// RA: a WiFi hiccup in the middle of a turn. Guarded by the lock.</summary>
             public double? FailReadPastRaDeg { get; set; }
+            /// <summary>Awaited by the next MoveAxis 0 (once, then cleared; the axis has stopped by then): a test holds a stop
+            /// here to keep the end that sent it in flight.</summary>
+            public Func<Task>? StopGate { get; set; }
             /// <summary>How many WS events were published when a command arrived: the order against the run's last event.</summary>
             public Func<int>? EventCount { get; set; }
 
             public TaskCompletionSource FirstMove { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            /// <summary>#2066 — the next fresh read taken with no motor running, once a motor has run, comes after a park from
+            /// outside and then a reconnect (a Wi-Fi blip, and the user's Park while nothing turns): that reading is of a new
+            /// mount session, and the park owns the mount. Guarded by the lock.</summary>
+            public bool ParkAndReconnectBeforeTheNextRestRead { get; set; }
+            private bool _motorRan;
 
             public FakeStopMount(bool tracking = true, bool canFindHome = false) {
                 _tracking = tracking;
@@ -107,7 +116,7 @@ namespace OpenAstroAra.Test {
                     lock (_lock) {
                         return new TelescopeInfo {
                             Connected = true, SiderealTime = Lst, TrackingEnabled = _tracking, CanFindHome = canFindHome,
-                            Slewing = SlewingLocked(), SideOfPier = _side ?? CounterweightDownSide(Lst, _raDeg),
+                            Slewing = SlewingLocked(), SideOfPier = CachePierSideFailed ? PierSide.pierUnknown : SideLocked(),
                         };
                     }
                 });
@@ -159,7 +168,9 @@ namespace OpenAstroAra.Test {
                 var service = Mock.As<ITelescopeService>();
                 service.SetupGet(s => s.AbortEpoch).Returns(() => Interlocked.Read(ref _epoch));
                 service.SetupGet(s => s.SessionEpoch).Returns(() => Interlocked.Read(ref _sessionEpoch));
-                service.Setup(s => s.ReadPointingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
+                service.Setup(s => s.ReadNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
+                service.Setup(s => s.ReadPositionNowAsync(It.IsAny<CancellationToken>())).Returns(Read);
+                Task<MountReading?> Read() {
                     lock (_lock) {
                         if (FailReadPastRaDeg is double past && _rates[0] != 0 && _raDeg >= past) {
                             FailReadPastRaDeg = null;
@@ -168,22 +179,24 @@ namespace OpenAstroAra.Test {
                         if (_driverReadsFail > 0) {
                             _driverReadsFail--;
                             _cacheLost = true;
-                            return Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+                            return Task.FromResult<MountReading?>(null);
                         }
                         _cacheLost = false;
+                        if (ParkAndReconnectBeforeTheNextRestRead && _motorRan && _rates[0] == 0 && _rates[1] == 0) {
+                            ParkAndReconnectBeforeTheNextRestRead = false;
+                            Record("park");
+                            _reasons.Add((Interlocked.Increment(ref _epoch), "park"));
+                            Interlocked.Increment(ref _sessionEpoch);
+                        }
                         if (!Frozen) {
                             _raDeg = (_raDeg + (Math.Sign(_rates[0]) * StepDeg) + (_runaway ? StepDeg : 0.0) + 360.0) % 360.0;
                             var dec = Math.Sign(_rates[1]) * StepDeg;
                             _decDeg = _decDeg >= 0 ? _decDeg - dec : _decDeg + dec;
                         }
-                        return Task.FromResult<(double RaHours, double DecDegrees)?>((_raDeg / 15.0, _decDeg));
+                        return Task.FromResult<MountReading?>(new MountReading(_raDeg / 15.0, _decDeg, SlewingLocked(),
+                            SideLocked(), DateTimeOffset.UtcNow, Interlocked.Read(ref _sessionEpoch)));
                     }
-                });
-                service.Setup(s => s.ReadSlewingNowAsync(It.IsAny<CancellationToken>())).Returns(() => {
-                    lock (_lock) {
-                        return Task.FromResult<bool?>(SlewingLocked());
-                    }
-                });
+                }
                 service.Setup(s => s.MoveAxisAsync(It.IsAny<int>(), It.IsAny<double>(), It.IsAny<int?>(), It.IsAny<long?>(), It.IsAny<CancellationToken>()))
                     .Returns((int axis, double rate, int? _, long? since, CancellationToken _) => {
                         lock (_lock) {
@@ -204,7 +217,12 @@ namespace OpenAstroAra.Test {
                             }
                             _rates[axis] = rate;
                             if (rate != 0) {
+                                _motorRan = true;
                                 FirstMove.TrySetResult();
+                            }
+                            if (rate == 0 && StopGate is { } gate) {
+                                StopGate = null;
+                                return gate();
                             }
                             return Task.CompletedTask;
                         }
@@ -287,6 +305,12 @@ namespace OpenAstroAra.Test {
             /// <summary>#2089 — the mount disconnects and connects again: a new mount session.</summary>
             public void Reconnect() => Interlocked.Increment(ref _sessionEpoch);
 
+            private PierSide SideLocked() => _side ?? CounterweightDownSide(Lst, _raDeg);
+
+            /// <summary>#2066 — the daemon's refresh cache holds <c>pierUnknown</c> (its last SideOfPier read failed); a fresh
+            /// read still reports the side. Guarded by the lock.</summary>
+            public bool CachePierSideFailed { get; set; }
+
             /// <summary>The pier side the mount reports, in place of the hour-angle model's.</summary>
             public PierSide Side {
                 set {
@@ -319,6 +343,20 @@ namespace OpenAstroAra.Test {
                 get {
                     lock (_lock) {
                         return _raDeg;
+                    }
+                }
+            }
+
+            /// <summary>The mount's Dec reading; set it to put the scope somewhere else between two of the routine's reads.</summary>
+            public double DecDeg {
+                get {
+                    lock (_lock) {
+                        return _decDeg;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _decDeg = value;
                     }
                 }
             }
@@ -408,8 +446,9 @@ namespace OpenAstroAra.Test {
         /// row and the camera release, or the app reports a failed Stop while the daemon is still stopping the mount.</summary>
         [Test]
         public void The_clients_end_timeout_outlasts_the_daemons_slowest_end() {
+            var mount = NewMount().Object;
             using var svc = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
-                NewMount().Object, NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
+                mount, MediatorMotionControl.For(mount), NewStore(), new WsRecorder(), log: null, new FakeFrameFetcher());
             Assert.That(svc.EndWorstCase, Is.EqualTo(TimeSpan.FromSeconds(47.25)), "the default bounds");
 
             var dir = new DirectoryInfo(AppContext.BaseDirectory);
@@ -424,6 +463,27 @@ namespace OpenAstroAra.Test {
             var client = TimeSpan.FromSeconds(int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture));
             Assert.That(client - svc.EndWorstCase, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(10)),
                 $"the client waits {client.TotalSeconds} s; the daemon may take {svc.EndWorstCase.TotalSeconds} s before the end's last writes");
+        }
+
+        // #2066 — the takeover fences a stuck run before it answers, and only that keeps the run's late stops off the park.
+        // Its bound must end inside every caller's own bound, with margin: a caller that gives up first parks while the run
+        // is still unfenced.
+        [Test]
+        public void The_takeovers_stop_bound_ends_inside_every_callers_bound() {
+            var mount = NewMount().Object;
+            using var svc = new PolarAlignService(NewFake(), NullLogger<PolarAlignService>.Instance, new ScriptedSolver(),
+                mount, MediatorMotionControl.For(mount), NewStore(), new WsRecorder(), log: null,
+                new FakeFrameFetcher());
+            using var safety = new SafetyReactionService();
+            using var fault = new FaultReactionService();
+            var emergency = new EmergencyStopService();
+            var margin = TimeSpan.FromSeconds(1);
+
+            Assert.Multiple(() => {
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(safety.StopPolarAlignBeforeParkTimeout), "the safety park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(fault.StopPolarAlignBeforeParkTimeout), "the fault park");
+                Assert.That(svc.TakeoverStopBound + margin, Is.LessThanOrEqualTo(emergency.RungTimeout), "Emergency Stop's rung");
+            });
         }
 
         // ── user Stop ────────────────────────────────────────────────────────────────────────

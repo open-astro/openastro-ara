@@ -4,7 +4,6 @@ import 'package:dio/dio.dart';
 
 import '../models/polar_align.dart';
 import '../models/server.dart';
-import 'profile_api.dart';
 import 'refusal.dart';
 
 /// The §45 polar-align operations the state layer depends on. An interface so
@@ -16,25 +15,23 @@ abstract interface class PolarAlignClient {
   /// answers before the mount moves.
   Future<PolarAlignStartPlan> startPlan({String? stage});
 
-  /// Begin the [plan] the user confirmed: from where the mount points, at its
-  /// stage, turning its direction.
+  /// Begin the [plan] the user confirmed: from where the mount points, one
+  /// measurement at its stage, turning its direction (#2082: a measurement
+  /// never leads into another; a check started from the adjust loop ends the
+  /// loop first).
   Future<void> start(PolarAlignStartPlan plan);
-
-  /// Next (coarse → fine, fine → check).
-  Future<void> next();
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
   Future<Uint8List?> getLiveFrame();
-  Future<PolarAlignSettings> getSettings();
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings settings);
   void close();
 }
 
 /// Client wrapper around the §45 surface: the routine
 /// (`/api/v1/equipment/polaralign/{status,start,stop,complete}` — the POSTs are
-/// 202-Accepted; live progress arrives on the `polar_align.*` WS stream) and the
-/// §45.12 profile section (`/api/v1/profile/polar-align`).
+/// 202-Accepted; live progress arrives on the `polar_align.*` WS stream). The
+/// §45.12 profile section (`/api/v1/profile/polar-align`) is a profile section
+/// like the others: `ProfileApi` and `polarAlignSettingsProvider` (ADR 0015).
 class PolarAlignApi implements PolarAlignClient {
   final Dio _dio;
 
@@ -47,10 +44,7 @@ class PolarAlignApi implements PolarAlignClient {
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 5),
             ),
-          ) {
-    // #1644: its settings save is this device's own profile write too.
-    _dio.interceptors.add(ProfileApi.ownWriteRecorder);
-  }
+          );
 
   /// Current routine snapshot, or `null` on a `404` (a server predating §45).
   /// Other HTTP failures throw `DioException` for the caller to surface.
@@ -93,7 +87,10 @@ class PolarAlignApi implements PolarAlignClient {
   /// Begin the routine (preflight: connected guider + mount, configured site)
   /// at the [plan]'s stage, confirmed by the user with the plan's direction
   /// (#2048). 202-Accepted; a failed preflight surfaces as a 409/422 — a
-  /// parked mount, or a direction that changed since, is a [Refusal].
+  /// parked mount, a direction that changed since, a scope within 3° of the
+  /// pole or turns past the sweep limit is a [Refusal]. `/polaralign/next` is
+  /// retired (#2082): this client never calls it. A check waits [endTimeout]:
+  /// from the adjust screen the daemon ends the loop (a confirmed stop) first.
   @override
   Future<void> start(PolarAlignStartPlan plan) async {
     try {
@@ -104,19 +101,16 @@ class PolarAlignApi implements PolarAlignClient {
           'confirmed': true,
           'direction': plan.direction,
           'new_origin': plan.newOrigin,
+          // #2083 — only when the user chose it: the rig then moves nothing.
+          if (plan.handTurn) 'hand_turn': true,
         },
+        options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
       if (refusal != null) throw refusal;
       rethrow;
     }
-  }
-
-  /// Next. 202-Accepted; a 409 when nothing waits on the user.
-  @override
-  Future<void> next() async {
-    await _dio.post<void>('/api/v1/equipment/polaralign/next');
   }
 
   /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
@@ -173,27 +167,6 @@ class PolarAlignApi implements PolarAlignClient {
       if (e.response?.statusCode == 404) return null;
       rethrow;
     }
-  }
-
-  @override
-  Future<PolarAlignSettings> getSettings() async {
-    final res = await _dio.get<dynamic>('/api/v1/profile/polar-align');
-    final data = res.data;
-    return data is Map<String, dynamic>
-        ? PolarAlignSettings.fromJson(data)
-        : const PolarAlignSettings();
-  }
-
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings settings) async {
-    final res = await _dio.put<dynamic>(
-      '/api/v1/profile/polar-align',
-      data: settings.toJson(),
-    );
-    final data = res.data;
-    return data is Map<String, dynamic>
-        ? PolarAlignSettings.fromJson(data)
-        : settings;
   }
 
   /// Releases the underlying Dio's connection pool. Call when the API is

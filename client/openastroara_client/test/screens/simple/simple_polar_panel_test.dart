@@ -19,21 +19,47 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/services/profile_api.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart' show Tagged;
+
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
+
+import '../../support/imaging_sections.dart' show staleSave;
+import '../../support/polar_align_section.dart';
+
+/// The profile's polar-align section (ADR 0015), each save sent also in [calls].
+class _Section extends FakePolarAlignSection {
+  // In from the rig from the first frame: these tests are about the routine.
+  _Section(this.calls) : super(loaded: true);
+  final List<String> calls;
+  @override
+  Future<Tagged<PolarAlignSettings>> send(ProfileApi api, PolarAlignSettings value, String? etag) {
+    calls.add('save ${value.exposureSeconds} ${value.loopMode}');
+    return super.send(api, value, etag);
+  }
+}
 
 class _Api implements PolarAlignClient {
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
-  PolarAlignSettings settings = const PolarAlignSettings(targetToleranceArcmin: 1.0);
+  late final section = _Section(calls);
+
+  /// The stage of each start the user confirmed (null: the default measurement).
+  final stages = <String?>[];
+
+  /// The rig's copy of the profile's polar-align section.
+  PolarAlignSettings get settings => section.initial!;
+  set settings(PolarAlignSettings s) => section.initial = s;
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async {
+    calls.add('start');
+    stages.add(plan.stage);
+  }
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -43,18 +69,7 @@ class _Api implements PolarAlignClient {
   @override
   Future<Uint8List?> getLiveFrame() async => null;
   @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    calls.add('save ${next.exposureSeconds} ${next.loopMode}');
-    return settings = next;
-  }
-  @override
   void close() {}
-}
-
-/// A rig whose settings read fails.
-class _NoSettingsApi extends _Api {
-  @override
-  Future<PolarAlignSettings> getSettings() async => throw StateError('rig gone');
 }
 
 class _FailingApi extends _Api {
@@ -111,11 +126,12 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
   final api = server
       ? (_Api()
         ..settings = tolerance == null
-            ? PolarAlignSettings(loopMode: loopMode)
-            : PolarAlignSettings(loopMode: loopMode, targetToleranceArcmin: tolerance))
+            ? rigPolarAlign.copyWith(loopMode: loopMode)
+            : rigPolarAlign.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
       : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
+      if (api != null) ...polarAlignSectionOverrides(api.section) else profileApiProvider.overrideWithValue(null),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(live)),
     ],
@@ -128,9 +144,10 @@ Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
 void main() {
   test('simplePolarSummary: the settings, tight enough for the 60 px chip', () {
     final en = lookupAppLocalizations(const Locale('en'));
-    expect(simplePolarSummary(const PolarAlignSettings(), en), '1 s\nLoop');
-    expect(simplePolarSummary(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
+    expect(simplePolarSummary(rigPolarAlign, en), '1 s\nLoop');
+    expect(simplePolarSummary(rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), en),
         '45 s\nSingle');
+    expect(simplePolarSummary(null, en), '', reason: 'not loaded from the rig: no made-up setup');
   });
 
   test('simplePolarSideText names the side of the pole in the chosen language', () {
@@ -284,31 +301,6 @@ void main() {
     expect(api!.calls, ['capture']);
   });
 
-  testWidgets('waiting for Home: Continue tells the daemon the mount is at Home', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(phase: PolarAlignStates.homing, stage: PolarAlignStages.coarse, waitingForHome: true),
-    );
-    expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'nothing to hand over yet');
-    await tester.tap(find.byKey(const Key('simple-polar-continue')));
-    await tester.pump();
-    expect(api!.calls, ['next']);
-  });
-
-  testWidgets('rough stage: Next: fine hands the routine to the guide camera', (tester) async {
-    final api = await _pump(
-      tester,
-      const PolarAlignLive(
-          phase: PolarAlignStates.adjusting, stage: PolarAlignStages.coarse,
-          altErrorArcmin: 40, azErrorArcmin: 12, totalErrorArcmin: 41.8, zone: 'red'),
-    );
-    expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the fine buttons wait for the fine stage');
-    expect(find.byKey(const Key('simple-polar-continue')), findsNothing);
-    await tester.tap(find.byKey(const Key('simple-polar-next-fine')));
-    await tester.pump();
-    expect(api!.calls, ['next']);
-  });
-
   testWidgets(
     'rough stage outside the tolerance: no Done, and the caption says so (#1875)',
     (tester) async {
@@ -327,7 +319,7 @@ void main() {
       expect(find.byKey(const Key('simple-polar-done-rough')), findsNothing);
       expect(
         find.text(
-          'Outside your 2′ tolerance: refine it, or stop with the shutter.',
+          'Outside your 2′ tolerance: stop with the shutter, then start again to refine it with the guide camera.',
         ),
         findsOneWidget,
       );
@@ -335,7 +327,7 @@ void main() {
   );
 
   testWidgets(
-    'rough stage inside the tolerance: Done is outlined, Next: fine stays the green primary (#1875)',
+    'rough stage inside the tolerance: Done is outlined, and no Next: fine leads on (#1875, #2082)',
     (tester) async {
       final api = await _pump(
         tester,
@@ -351,19 +343,13 @@ void main() {
       );
       expect(
         find.text(
-          'Inside your 2′ tolerance. Done keeps this alignment; Next: fine refines it.',
+          'Inside your 2′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.',
         ),
         findsOneWidget,
       );
       expect(find.byType(OutlinedButton), findsOneWidget);
-      expect(
-        find
-            .byKey(const Key('simple-polar-next-fine'))
-            .evaluate()
-            .single
-            .widget,
-        isA<FilledButton>(),
-      );
+      expect(find.byKey(const Key('simple-polar-next-fine')), findsNothing, reason: 'one measurement per Start');
+      expect(find.byKey(const Key('simple-polar-check')), findsNothing, reason: 'the rough step has no Check');
       await tester.tap(find.byKey(const Key('simple-polar-done-rough')));
       await tester.pump();
       expect(api!.calls, ['complete']);
@@ -384,7 +370,7 @@ void main() {
     expect(find.text('Rough'), findsOneWidget);
     expect(find.byIcon(Icons.check), findsNothing);
     expect(find.text('Fine'), findsOneWidget);
-    expect(find.text('Verify'), findsOneWidget);
+    expect(find.text('Check'), findsOneWidget);
   });
 
   testWidgets(
@@ -414,46 +400,77 @@ void main() {
   );
 
   testWidgets(
-    'the stepper ticks Rough once the routine is in the fine step (#1875)',
+    'the stepper ticks no step before the one running, and a finished check its own (#2082)',
     (tester) async {
       await _pump(
         tester,
         const PolarAlignLive(
-          phase: PolarAlignStates.adjusting,
-          stage: PolarAlignStages.fine,
-          totalErrorArcmin: 9,
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+          totalErrorArcmin: 0.4,
         ),
       );
       expect(
         find.descendant(
-          of: find.byKey(const Key('simple-polar-step-0')),
+          of: find.byKey(const Key('simple-polar-step-2')),
           matching: find.byIcon(Icons.check),
         ),
         findsOneWidget,
       );
+      expect(find.byIcon(Icons.check), findsOneWidget, reason: 'each step is its own Start: Rough and Fine never ran');
+      expect(find.text('Rough'), findsOneWidget);
+      expect(find.text('Fine'), findsOneWidget);
       expect(
         tester.widget<Icon>(find.byIcon(Icons.check)).semanticLabel,
         'Done',
         reason: 'a screen reader hears the tick',
       );
-      expect(find.text('Rough'), findsOneWidget);
-      expect(find.text('Fine'), findsOneWidget);
     },
   );
 
-  testWidgets('after a failed settings load a changed value sends no PUT (#1736)', (tester) async {
-    final api = _NoSettingsApi();
+  testWidgets("the setup rows wait for the profile from the rig: Not loaded with Retry, then save over the rig's copy (ADR 0015)",
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
     await tester.pumpWidget(ProviderScope(
       overrides: [
+        ...polarAlignSectionOverrides(api.section),
         polarAlignApiProvider.overrideWithValue(api),
         polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive())),
       ],
       child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
     ));
     await tester.pumpAndSettle();
+    expect(find.text('Single'), findsNothing, reason: 'no made-up Loop/Single');
+    expect(find.text('1 s'), findsNothing, reason: 'no made-up exposure');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+
+    api.settings = rigPolarAlign;
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Single'));
     await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.startsWith('save')), isEmpty);
+    expect(api.calls, ['save 1.0 single'], reason: "saved over the rig's copy once it is in");
+  });
+
+  testWidgets("a Setup row refused as stale shows the rig's copy again, and the next change saves (ADR 0015)",
+      (tester) async {
+    final api = (await _pump(tester, const PolarAlignLive()))!;
+    api.section.refuse = staleSave();
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts, isEmpty);
+    expect(api.section.loads, 1, reason: "the rig's copy is loaded again");
+    final container = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)));
+    expect(container.read(polarAlignSettingsProvider).value!.loopMode, PolarAlignLoopModes.loop,
+        reason: 'the rig still loops: Single must not stay on screen');
+    expect(container.read(polarAlignSettingsProvider).conflict, isFalse, reason: 'no Reload here to clear it');
+
+    api.section.refuse = null;
+    await tester.tap(find.text('Single'));
+    await tester.pumpAndSettle();
+    expect(api.section.puts.single.loopMode, PolarAlignLoopModes.single);
   });
 
   testWidgets('idle: no stepper, only the settings (#1875)', (tester) async {
@@ -513,12 +530,12 @@ void main() {
       );
       expect(
         find.text(
-          'Verify moves the mount and takes three frames to confirm the alignment.',
+          'Check turns the mount 2 × 10° and takes three frames to measure the alignment.',
         ),
         findsOneWidget,
       );
       expect(
-        find.text('Verify'),
+        find.text('Check'),
         findsNWidgets(2),
         reason: 'the stepper step and the button',
       );
@@ -646,10 +663,60 @@ void main() {
         reason: 'enabled at the tolerance exactly (<=), not only below it',
       );
       await tester.tap(find.byKey(const Key('simple-polar-check')));
-      await tester.pump();
-      expect(api!.calls, ['next']);
+      await tester.pumpAndSettle();
+      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step (#2082)');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(api.stages, [PolarAlignStages.check], reason: 'a confirmed Start(check), never Next');
     },
   );
+
+  testWidgets(
+    'after Done, Check again says how far it turns and starts a confirmed check (#2082)',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(phase: PolarAlignStates.stopped, stage: PolarAlignStages.fine, totalErrorArcmin: 0.8),
+      );
+      expect(
+        find.text('Check turns the mount 2 × 10° and takes three frames to measure the alignment.'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('simple-polar-check-again')));
+      await tester.pumpAndSettle();
+      expect(api!.calls, isEmpty, reason: 'nothing moves before the confirm step');
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(api.stages, [PolarAlignStages.check]);
+    },
+  );
+
+  testWidgets("Check again names only the rig's own step: no caption until the profile loads (ADR 0015)",
+      (tester) async {
+    final api = _Api();
+    api.section.initial = null; // the rig does not answer
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        ...polarAlignSectionOverrides(api.section),
+        polarAlignApiProvider.overrideWithValue(api),
+        polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
+            phase: PolarAlignStates.stopped, stage: PolarAlignStages.fine, totalErrorArcmin: 0.8))),
+      ],
+      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePolarPanel()))),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-check-again-caption')), findsNothing,
+        reason: 'no made-up step is said before the mount turns');
+    expect(find.byKey(const Key('simple-polar-check-again')), findsOneWidget);
+
+    api.settings = rigPolarAlign.copyWith(checkStepDeg: 20);
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Check turns the mount 2 × 20° and takes three frames to measure the alignment.'),
+      findsOneWidget,
+    );
+  });
 
   testWidgets(
     'checked: Done completes the routine and leaves the verdict alone',
@@ -683,8 +750,9 @@ void main() {
   });
 
   testWidgets('in Preflight, polar align is the last step: Done reads Done · Start imaging', (tester) async {
-    final api = _Api()..settings = PolarAlignSettings();
+    final api = _Api();
     final c = ProviderContainer(overrides: [
+      ...polarAlignSectionOverrides(api.section),
       polarAlignApiProvider.overrideWithValue(api),
       polarAlignLiveProvider.overrideWith(() => _Live(const PolarAlignLive(
           phase: PolarAlignStates.adjusting, altErrorArcmin: 0.3, azErrorArcmin: -0.5, totalErrorArcmin: 0.6))),
@@ -724,6 +792,21 @@ void main() {
     expect(find.text('Altitude got worse. Turn that bolt back past where you started.'), findsOneWidget);
   });
 
+  testWidgets('a readout weak in altitude says so while adjusting, in the chosen words (#2072)', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsNothing);
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    live.frame(_adjusting.copyWith(readoutCaution: PolarAlignReadoutCautions.altitudeWeak));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-readout-caution')), findsOneWidget);
+    expect(find.text(en.polarReadoutCautionAltitudeWeak), findsOneWidget);
+  });
+
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);
@@ -732,6 +815,22 @@ void main() {
   testWidgets('a failed routine shows why, and Start again', (tester) async {
     await _pump(tester, const PolarAlignLive(phase: PolarAlignStates.failed, errorMessage: 'The mount would not rotate.'));
     expect(find.text('The mount would not rotate.'), findsOneWidget);
+  });
+
+  // #2107 a stop from outside is worded by what stopped the mount, in the app's
+  // language, not the daemon's English (which always said "Stop Mount" before).
+  testWidgets('Simple: a run a pad stop ended names the direction pad, not the daemon English', (tester) async {
+    await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.failed,
+          errorReason: 'slew_aborted_externally',
+          errorMessage: 'the mount was stopped from the direction pad — polar alignment ended. Start again when ready',
+          errorStoppedBy: 'pad_stop',
+        ));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.polarAlignStoppedFromOutside('pad_stop')), findsOneWidget);
+    expect(find.textContaining('the mount was stopped from the direction pad —'), findsNothing);
   });
 
   group('the shutter runs the routine', () {

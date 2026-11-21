@@ -142,6 +142,20 @@ namespace OpenAstroAra.Test {
             Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
         }
 
+        // #2083 — the user chose to turn RA by hand in the confirm step: the body's hand_turn reaches the service with it.
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task A_start_body_carries_the_hand_turn_choice_the_user_confirmed(bool handTurn) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IPolarAlignService>();
+            svc.Setup(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation("east", true, handTurn), null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object,
+                new PolarAlignStartRequestDto(PolarAlignStages.Fine, true, "east", true, HandTurn: handTurn), null, CancellationToken.None);
+
+            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
+        }
+
         // ADR 0022 — the parked and unconfirmed refusals leave the endpoint for the one Refusal handler, which answers with
         // their reason; the endpoint's own 409 catch would drop it.
         [Test]
@@ -169,21 +183,10 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Next_returns_202_accepted_on_success() {
-            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.next", DateTimeOffset.UtcNow, "idem-2");
-            var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.NextAsync("idem-2", It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
-
-            var result = await EquipmentEndpoints.PolarAlignNextAsync(svc.Object, "idem-2", CancellationToken.None);
-
-            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
-        }
-
-        [Test]
         public async Task Next_with_nothing_to_advance_maps_to_409() {
             var svc = new Mock<IPolarAlignService>();
             svc.Setup(s => s.NextAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new InvalidOperationException("polar alignment has nothing to advance — it is not waiting on you"));
+                .ThrowsAsync(new InvalidOperationException(PolarAlignService.NextRetiredMessage));
 
             var result = await EquipmentEndpoints.PolarAlignNextAsync(svc.Object, null, CancellationToken.None);
 

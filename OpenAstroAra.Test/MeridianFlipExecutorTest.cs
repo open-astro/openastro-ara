@@ -124,14 +124,16 @@ namespace OpenAstroAra.Test {
         /// existing layer tests exercise their own concern without the §58.8 announce+wait in
         /// front; the dedicated §58.8 tests opt into false.</summary>
         private static SafetyPoliciesDto Safety(bool enabled = true, int expectedSlewSeconds = 90,
-                bool recalGuider = false, bool firstFlipConfirmed = true) =>
+                bool recalGuider = false, bool firstFlipConfirmed = true,
+                DateTimeOffset? firstFlipCompletedUtc = null, bool firstFlipPierSideChanged = false) =>
             new(OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
                 MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
                 MeridianRecalGuider: recalGuider, OnAltitudeLimit: "skip_target",
                 ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
                 GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true,
                 FlipSafetyEnabled: enabled, ExpectedFlipSlewSeconds: expectedSlewSeconds,
-                FirstFlipConfirmed: firstFlipConfirmed);
+                FirstFlipConfirmed: firstFlipConfirmed,
+                FirstFlipCompletedUtc: firstFlipCompletedUtc, FirstFlipPierSideChanged: firstFlipPierSideChanged);
 
         /// <summary>Site at lat 40 N with a 20° horizon floor. The default <see cref="SafeTarget"/>
         /// (dec 89°) is circumpolar with min altitude ≈ 39° — above the floor at ANY sidereal time,
@@ -145,10 +147,24 @@ namespace OpenAstroAra.Test {
         private static readonly Coordinates SafeTarget = new(Angle.ByHours(5), Angle.ByDegree(89), Epoch.J2000);
         private static readonly Coordinates LowTarget = new(Angle.ByHours(5), Angle.ByDegree(-40), Epoch.J2000);
 
+        /// <summary>#1589 — every value the executor wrote through UpdateSafetyPolicies, in order.</summary>
+        private List<SafetyPoliciesDto> safetyWrites = null!;
+
         private void SetupSafety(SafetyPoliciesDto safety) {
             profileStore = new Mock<IProfileStore>();
             profileStore.Setup(p => p.GetSafetyPolicies()).Returns(safety);
             profileStore.Setup(p => p.GetSiteSettings()).Returns(Site());
+            // Apply the executor's transform to the stored policies, like the real store does.
+            safetyWrites = new List<SafetyPoliciesDto>();
+            profileStore.Setup(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()))
+                .Returns<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>(f => {
+                    var next = f(safety);
+                    if (next is null) {
+                        return safety;
+                    }
+                    safetyWrites.Add(next);
+                    return next;
+                });
 
             published = new List<NotificationDto>();
             notifications = new Mock<INotificationService>();
@@ -711,11 +727,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_pier_side_failure_after_guider_resume_still_ends_with_the_guider_stopped() {
-            // #630 review: the pier-side hard fail fires AFTER the guider-resume step, so safe
-            // rest must stop the guider again — the "guider is stopped" claim in the notification
-            // has to hold for every path into the failure handler, not just pre-resume ones.
-            SetupProfile(recenter: false);
+        public async Task A_pier_side_that_did_not_change_fails_before_recenter_and_guider_resume() {
+            // #1589: the pier side is checked as soon as the flip slew returns. A mount that did
+            // not flip must never be re-centred or guided first: safe rest follows at once, with
+            // the guider stopped.
+            SetupProfile(recenter: true);
             SetupSafety(Safety());
             telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
                 Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierEast,   // never flips
@@ -726,11 +742,11 @@ namespace OpenAstroAra.Test {
             var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.False);
-            var resumeIndex = callLog.LastIndexOf("StartGuiding");
-            var finalStopIndex = callLog.LastIndexOf("StopGuiding");
-            Assert.That(resumeIndex, Is.GreaterThanOrEqualTo(0), "the resume step ran before the pier-side check");
-            Assert.That(finalStopIndex, Is.GreaterThan(resumeIndex),
-                "safe rest must stop the guider AFTER the resume that preceded the pier-side failure");
+            var afterFlip = callLog.Skip(callLog.IndexOf("Flip") + 1).ToList();
+            Assert.That(afterFlip, Has.None.EqualTo("Recenter").And.None.EqualTo("AutoSelectGuideStar").And.None.EqualTo("StartGuiding"),
+                "nothing re-centres or guides a mount that did not flip: " + string.Join(", ", callLog));
+            Assert.That(afterFlip, Does.Contain("StopGuiding"), "safe rest stops the guider");
+            Assert.That(published.Single().Message, Does.Contain("pier side"));
         }
 
         [Test]
@@ -782,30 +798,104 @@ namespace OpenAstroAra.Test {
 
         // ─── §58.8 — the first-flip confirmation safety net ───
 
+        private static readonly DateTimeOffset FlipInstant = new(2026, 11, 20, 3, 0, 0, TimeSpan.Zero);
+
         [Test]
-        public async Task The_first_flip_announces_waits_out_the_window_and_persists_the_confirmation() {
-            // recenter off: the §58.9 Layer-3 solve gate is another test's concern.
+        public async Task An_unconfirmed_flip_records_the_completed_flip_and_its_pier_side_change_but_does_not_confirm() {
+            // #1589: the 60 s window is no consent. A flip that ran to the end is recorded for
+            // the user to confirm; only the user confirms. recenter off: the §58.9 Layer-3 solve
+            // gate is another test's concern.
             SetupProfile(recenter: false);
             SetupSafety(Safety(firstFlipConfirmed: false));
             SetupHealthyTrackingMount();
-            SafetyPoliciesDto? persisted = null;
-            profileStore.Setup(p => p.UpdateSafetyPolicies(It.IsAny<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>()))
-                .Returns<Func<SafetyPoliciesDto, SafetyPoliciesDto?>>(f => {
-                    // Apply the executor's transform to the armed policies, like the real store would.
-                    persisted = f(Safety(firstFlipConfirmed: false));
-                    return persisted!;
-                });
             var sut = CreateSafetySUT();
+            sut.UtcNow = () => FlipInstant;
 
             var ok = await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(published[0].Title, Does.Contain("First meridian flip"),
+            Assert.That(published[0].Title, Does.Contain("not confirmed"),
                 "the announce fires BEFORE any flip state is touched");
             Assert.That(published[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
-            Assert.That(persisted, Is.Not.Null, "the window elapsing counts as consent");
-            Assert.That(persisted!.FirstFlipConfirmed, Is.True,
-                "subsequent flips must run without the announce");
+            var record = safetyWrites.Single();
+            Assert.That(record.FirstFlipConfirmed, Is.False, "the executor never confirms a flip");
+            Assert.That(record.FirstFlipCompletedUtc, Is.EqualTo(FlipInstant));
+            Assert.That(record.FirstFlipPierSideChanged, Is.True, "the mount went east to west");
+        }
+
+        [Test]
+        public async Task A_completed_unconfirmed_flip_asks_the_user_to_confirm_it() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+
+            Assert.That(await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+
+            var ask = published.Last();
+            Assert.That(ask.Title, Is.EqualTo("Confirm this profile's meridian flip"));
+            Assert.That(ask.Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(ask.Message, Does.Contain("When to stop"));
+        }
+
+        [Test]
+        public async Task An_unknown_pier_side_records_the_flip_as_not_seen_to_change() {
+            // A mount that reports no pier side cannot show the flip; the user checks it by eye.
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            telescope.Setup(t => t.GetInfo()).Returns(new TelescopeInfo {
+                Connected = true, TrackingEnabled = true, SideOfPier = PierSide.pierUnknown,
+                RightAscension = 5, Declination = 20,
+            });
+            var sut = CreateSafetySUT();
+
+            Assert.That(await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.True);
+
+            var record = safetyWrites.Single();
+            Assert.That(record.FirstFlipCompletedUtc, Is.Not.Null);
+            Assert.That(record.FirstFlipPierSideChanged, Is.False);
+            Assert.That(record.FirstFlipConfirmed, Is.False);
+        }
+
+        [Test]
+        public async Task A_recenter_gate_failure_records_no_completed_flip() {
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
+            centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
+                    It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = false });
+            var sut = CreateSafetySUT();
+
+            Assert.That(await sut.MeridianFlip(SafeTarget, TimeSpan.Zero, Progress, CancellationToken.None), Is.False);
+
+            Assert.That(safetyWrites, Is.Empty, "a failed flip is nothing to confirm");
+        }
+
+        [Test]
+        public async Task With_safety_off_an_unchanged_pier_side_warns_at_the_slew_and_records_the_flip_to_check_by_eye() {
+            // A driver that always reports one pier side is why flip safety can be off: its flips
+            // must still be confirmable, or every flip alerts and waits 60 s for good.
+            SetupProfile(recenter: true);
+            SetupSafety(Safety(enabled: false, firstFlipConfirmed: false));
+            // The SetUp mount reports pierEast before and after the "flip".
+            notifications.Setup(n => n.CreateAsync(It.IsAny<NotificationDto>(), It.IsAny<CancellationToken>()))
+                .Callback<NotificationDto, CancellationToken>((dto, _) => { published.Add(dto); callLog.Add("Notify:" + dto.Title); })
+                .Returns(Task.CompletedTask);
+            var sut = CreateSafetySUT();
+
+            var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True, "safety off: misreporting drivers keep working");
+            var warning = published.Single(n => n.Title == "The mount may not have flipped");
+            Assert.That(warning.Severity, Is.EqualTo(NotificationSeverity.Warning));
+            Assert.That(callLog.IndexOf("Notify:" + warning.Title), Is.LessThan(callLog.IndexOf("Recenter")),
+                "the warning goes out at the slew, before the recovery: " + string.Join(", ", callLog));
+            var record = safetyWrites.Single();
+            Assert.That(record.FirstFlipCompletedUtc, Is.Not.Null, "the user can confirm what they watched");
+            Assert.That(record.FirstFlipPierSideChanged, Is.False, "the mount showed no pier-side change");
+            Assert.That(record.FirstFlipConfirmed, Is.False, "the executor never confirms a flip");
+            Assert.That(published.Last().Message, Does.Contain("same pier side").And.Contain("check by eye"));
         }
 
         [Test]
@@ -840,15 +930,16 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_announce_is_independent_of_the_flip_safety_toggle() {
             // §58.8 is its own net — a rig that turned the §58.9 layers off (misreporting pier
-            // side) still gets the one-time first-flip announce.
+            // side) still gets the unconfirmed-flip announce, on every flip until the user confirms one.
             SetupProfile(recenter: true);
             SetupSafety(Safety(enabled: false, firstFlipConfirmed: false));
+            SetupHealthyTrackingMount();
             var sut = CreateSafetySUT();
 
             var ok = await sut.MeridianFlip(Target, TimeSpan.Zero, Progress, CancellationToken.None);
 
             Assert.That(ok, Is.True);
-            Assert.That(published.Single().Title, Does.Contain("First meridian flip"));
+            Assert.That(published[0].Title, Does.Contain("not confirmed"));
         }
 
         [Test]
@@ -896,6 +987,7 @@ namespace OpenAstroAra.Test {
             // #1716: nobody is watching at the meridian.
             SetupProfile(recenter: false);
             SetupSafety(Safety(enabled: false));
+            SetupHealthyTrackingMount();
             SetupRecalibrateAndGuide(false);
             var sut = CreateSafetySUT();
 
@@ -950,6 +1042,7 @@ namespace OpenAstroAra.Test {
         public async Task A_best_effort_recenter_failure_notifies_but_does_not_fail_the_flip() {
             SetupProfile(recenter: true);
             SetupSafety(Safety(enabled: false));
+            SetupHealthyTrackingMount();
             centering.Setup(c => c.CenterOnTarget(It.IsAny<Coordinates>(), It.IsAny<IProgress<PlateSolveProgress>>(),
                     It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(new PlateSolveResult { Success = false });
@@ -969,6 +1062,7 @@ namespace OpenAstroAra.Test {
             // #1138: the store's policy decides now; "always" is the one that re-focuses regardless of
             // the (absent) history and focuser temperature this fixture carries.
             SetupSafety(Safety(enabled: false) with { MeridianRefocus = "always" });
+            SetupHealthyTrackingMount();
             var autofocus = new Mock<OpenAstroAra.Sequencer.SequenceItem.Autofocus.IAutofocusExecutor>();
             autofocus.Setup(a => a.RunAutofocusAsync(It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/guider_twin.dart';
+import '../models/polar_align.dart';
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
 import '../models/profile_share_export.dart';
@@ -61,8 +62,7 @@ class ProfileApi {
   /// Notes each profile-section write as it goes out (the daemon publishes the
   /// event before its HTTP answer) and drops the note when the daemon refuses
   /// the write (an error answer, e.g. 409 stale-session): that published
-  /// nothing, and must not hide another device's change to the section. Shared
-  /// with `PolarAlignApi`, whose settings save is a profile write too.
+  /// nothing, and must not hide another device's change to the section.
   static final Interceptor ownWriteRecorder = InterceptorsWrapper(
     onRequest: (req, handler) {
       const prefix = '/api/v1/profile/';
@@ -601,19 +601,39 @@ class ProfileApi {
     String? ifMatch,
   }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
 
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Answers the rig's policies with their new
-  /// tag (#1807): this device's own write, so no `profile.updated` reloads it.
-  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() async {
+  /// §58.8 — re-arm the unconfirmed-flip announce (the daemon clears
+  /// `first_flip_confirmed` and the completed-flip record, so the next flip
+  /// alerts and waits again). Answers the rig's policies with their new tag
+  /// (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() =>
+      _postSafetyAction('first-flip/rearm');
+
+  /// #1589 — confirm the profile's completed meridian flip: the user watched
+  /// it and the scope cleared the mount. The daemon sets
+  /// `first_flip_confirmed` and keeps the record; with no completed flip on
+  /// record it refuses (409 `first-flip-not-completed`). Answers the rig's
+  /// policies with their new tag, as [rearmFirstFlip] does.
+  Future<({SafetyPolicies value, String? etag})> confirmFirstFlip() =>
+      _postSafetyAction('first-flip/confirm');
+
+  Future<({SafetyPolicies value, String? etag})> _postSafetyAction(
+    String route,
+  ) async {
     final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
+      '/api/v1/profile/safety/$route',
     );
     return (
       value: _safetyFromRig(res.data ?? const {}),
       etag: res.headers.value('etag'),
     );
   }
+
+  Future<({PolarAlignSettings value, String? etag})> getPolarAlignSection() =>
+      _getTagged('polar-align', _polarAlignFromRig);
+  Future<({PolarAlignSettings value, String? etag})> putPolarAlignSection(
+    PolarAlignSettings v, {
+    String? ifMatch,
+  }) => _putTagged('polar-align', v.toJson(), _polarAlignFromRig, ifMatch);
 
   Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
       _getTagged('phd2', _phd2FromRig);
@@ -918,6 +938,17 @@ class ProfileApi {
       flipSafetyEnabled: j['flip_safety_enabled'] as bool,
       expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
       firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      // #1589 — the daemon's completed-flip record (null: no flip on record;
+      // the key is still there).
+      firstFlipCompletedUtc: switch (nullable('first_flip_completed_utc')) {
+        null => null,
+        final String at => DateTime.parse(at).toUtc(),
+        final other => throw FormatException(
+          'bad first_flip_completed_utc',
+          other,
+        ),
+      },
+      firstFlipPierSideChanged: j['first_flip_pier_side_changed'] as bool,
       unattendedEscalation: j['unattended_escalation'] as bool,
       unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
       unattendedShutdownWaitMinutes:
@@ -945,6 +976,31 @@ class ProfileApi {
       skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
       skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
       unmodeled: _safetyUnmodeled(j),
+    );
+  }
+
+  // Strict like the readers above: a missing key, or a loop mode the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (1 s, Loop, motors on), which a Save would then write over the
+  // rig's polar-align knobs (#1807).
+  static PolarAlignSettings _polarAlignFromRig(Map<String, dynamic> j) {
+    final mode = j['loop_mode'];
+    if (mode != PolarAlignLoopModes.loop &&
+        mode != PolarAlignLoopModes.single) {
+      throw FormatException('unknown loop_mode', mode);
+    }
+    return PolarAlignSettings(
+      exposureSeconds: (j['exposure_seconds'] as num).toDouble(),
+      binning: (j['binning'] as num).toInt(),
+      targetToleranceArcmin: (j['target_tolerance_arcmin'] as num).toDouble(),
+      seedRotationDeg: (j['seed_rotation_deg'] as num).toDouble(),
+      loopCadenceMs: (j['loop_cadence_ms'] as num).toInt(),
+      settleSeconds: (j['settle_seconds'] as num).toDouble(),
+      loopMode: mode as String,
+      checkStepDeg: (j['check_step_deg'] as num).toDouble(),
+      coarseExposureSeconds: (j['coarse_exposure_seconds'] as num).toDouble(),
+      polarAlignerAuto: j['polar_aligner_auto'] as bool,
+      stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
     );
   }
 
@@ -990,11 +1046,11 @@ class ProfileApi {
     return safetyPoliciesFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's safety policies. `first_flip_confirmed` is
-  /// daemon-owned and ignored server-side on PUT (the stored value is
-  /// preserved and echoed back) — a stale panel Save can never clobber a
-  /// confirmation an overnight flip set; re-arming goes through
-  /// [rearmFirstFlip].
+  /// PUT the active profile's safety policies. `first_flip_confirmed` and
+  /// the completed-flip record are daemon-owned and ignored server-side on
+  /// PUT (the stored values are preserved and echoed back) — a stale panel
+  /// Save can never clobber them; confirming and re-arming go through
+  /// [confirmFirstFlip] and [rearmFirstFlip].
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
@@ -1662,6 +1718,11 @@ class ProfileApi {
     expectedFlipSlewSeconds:
         (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
     firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+    firstFlipCompletedUtc: j['first_flip_completed_utc'] is String
+        ? DateTime.tryParse(j['first_flip_completed_utc'] as String)?.toUtc()
+        : null,
+    firstFlipPierSideChanged:
+        (j['first_flip_pier_side_changed'] as bool?) ?? false,
     unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
     unattendedShutdownEnabled:
         (j['unattended_shutdown_enabled'] as bool?) ?? true,
@@ -1731,6 +1792,10 @@ class ProfileApi {
     'flip_safety_enabled': v.flipSafetyEnabled,
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
     'first_flip_confirmed': v.firstFlipConfirmed,
+    'first_flip_completed_utc': v.firstFlipCompletedUtc
+        ?.toUtc()
+        .toIso8601String(),
+    'first_flip_pier_side_changed': v.firstFlipPierSideChanged,
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,
