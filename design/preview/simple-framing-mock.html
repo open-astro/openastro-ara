@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Mode framing (mock)</title>
+<style>
+  /* One self-contained file, no network. Four frames of one flow (#1899): (a) the framing box on the Simple Mode sky,
+     (b) the plan sheet row, (c) Rotate camera without a rotator, (d) Companion Mode. Slice 2 builds only (a).
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A8A8A8; --dis: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --warn: #FFB300; --err: #E53935; --errt: #FF8A80;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  h2 { font-size: 15px; font-weight: 600; margin: 0; }
+  p { margin: 0; } .note { color: var(--text2); max-width: 80ch; }
+  .tag { font-size: 11px; letter-spacing: .5px; text-transform: uppercase; padding: 1px 7px; border-radius: 10px; border: 1px solid var(--warn); color: var(--warn); margin-left: 6px; vertical-align: 2px; }
+  section.frame { display: flex; flex-direction: column; gap: 10px; }
+  .stage-wrap { overflow-x: auto; }
+  button { font-family: var(--sys); }
+  button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .caption { color: var(--text2); font-size: 12px; }
+
+  .ipad { width: 1024px; height: 640px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 55% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .ipad svg.sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .strip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); margin-right: 6px; }
+  .glass { background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px); border-radius: 14px; }
+  .win { position: absolute; left: 16px; top: 88px; width: 330px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head .sub { margin-left: auto; font-weight: 400; color: var(--text2); font-size: 13px; }
+  .row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .row .l { flex: 1; min-width: 0; }
+  .hr { border-top: 1px solid var(--border); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; min-height: 44px; min-width: 64px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  .step { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .step button { width: 44px; height: 44px; background: transparent; border: 0; color: var(--text); font: 600 18px var(--sys); cursor: pointer; }
+  .step output { min-width: 78px; text-align: center; font-variant-numeric: tabular-nums; border-left: 1px solid var(--border); border-right: 1px solid var(--border); line-height: 44px; font-weight: 600; }
+  .act { background: rgba(56,56,56,.55); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 0 14px; min-height: 44px; font: 13px var(--sys); cursor: pointer; }
+  .act.primary { background: var(--sel); border-color: var(--sel); color: #fff; }
+  .act.danger { color: var(--errt); border-color: rgba(229,57,53,.6); }
+  .act:disabled, .step button:disabled { color: var(--dis); cursor: default; }
+  .dial { width: 150px; height: 150px; align-self: center; touch-action: none; cursor: grab; border-radius: 50%; }
+  .dial text { fill: var(--text2); font: 12px var(--sys); }
+  .pill { position: absolute; right: 16px; bottom: 16px; background: rgba(26,26,26,.9); border-radius: 18px; padding: 6px 14px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+  /* (b) plan sheet */
+  .sheet { width: 420px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 14px; }
+  .item { display: flex; flex-direction: column; gap: 2px; padding: 8px 0; }
+  .item + .item { border-top: 1px solid var(--border); }
+  .item .t { display: flex; gap: 8px; align-items: center; font-weight: 600; }
+  .item .t span.r { margin-left: auto; color: var(--text2); font-weight: 400; font-size: 13px; }
+  .fr { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 13px; }
+  .fr .info { flex: 1; min-width: 0; } .fr b { font-weight: 600; }
+  .off { display: inline-flex; align-items: center; gap: 4px; color: var(--warn); }
+  .off svg { width: 16px; height: 16px; }
+  .sheets { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+
+  /* (c) rotate camera */
+  .bar { position: relative; height: 10px; border-radius: 5px; background: #333; overflow: hidden; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--info); }
+  .big { font: 600 28px var(--sys); font-variant-numeric: tabular-nums; }
+  .ok { color: var(--ok); }
+
+  /* (d) phone */
+  .phone { width: 390px; height: 780px; position: relative; overflow: hidden; border-radius: 44px; box-shadow: 0 0 0 10px #111, 0 0 0 11px #2a2a2a;
+           background: radial-gradient(ellipse at 50% 30%, #3a3f4c 0, #12141a 60%, #08090c 100%); }
+  .phone svg.sky { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .phone .sb { position: absolute; top: 0; left: 0; right: 0; height: 47px; display: flex; align-items: center; justify-content: space-between; padding: 6px 30px 0 34px; font: 600 15px var(--sys); color: #fff; }
+  .phone .sheetb { position: absolute; left: 8px; right: 8px; bottom: 26px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .phone .big { text-align: center; }
+  .phone .act { min-height: 52px; font-size: 15px; }
+  .phone .step button { width: 56px; height: 52px; } .phone .step output { line-height: 52px; min-width: 92px; }
+  .phone .row2 { display: flex; gap: 8px; } .phone .row2 > * { flex: 1; }
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; }
+  .notes h2 { margin-bottom: 4px; } .notes p { color: var(--text2); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Frame a Target in Simple Mode <span class="tag">mock</span></h1>
+  <p class="note">Issue #1899. Pick a Target, switch Framing on, turn the camera box on the sky, queue it. The angle is degrees east of north, the same number the Full UI Planning tab uses. Frame (a) is built in slice 2; (b) to (d) are for reviewing the whole flow and are built in slice 3. Everything here is drawn from one angle value; try the dial, the steppers and Snap in (a).</p>
+
+  <section class="frame" aria-labelledby="ha">
+    <h2 id="ha">(a) Picked Target, framing box on the sky <span class="tag">slice 2</span></h2>
+    <div class="stage-wrap"><div class="ipad" id="ipad">
+      <svg class="sky" viewBox="0 0 1024 640" aria-label="Sky with the framing box on M 31">
+        <g fill="#cfd8ea" opacity=".75">
+          <circle cx="130" cy="520" r="1.6"/><circle cx="260" cy="590" r="1.2"/><circle cx="420" cy="140" r="1.8"/><circle cx="560" cy="560" r="1.4"/>
+          <circle cx="760" cy="150" r="1.6"/><circle cx="880" cy="480" r="1.2"/><circle cx="930" cy="250" r="1.8"/><circle cx="470" cy="520" r="1.3"/>
+          <circle cx="660" cy="130" r="1.2"/><circle cx="820" cy="580" r="1.5"/><circle cx="380" cy="330" r="1.3"/><circle cx="905" cy="370" r="1.2"/>
+        </g>
+        <ellipse cx="640" cy="330" rx="150" ry="46" transform="rotate(-38 640 330)" fill="#8f9dc4" opacity=".28"/>
+        <ellipse cx="640" cy="330" rx="86" ry="26" transform="rotate(-38 640 330)" fill="#c9d3ee" opacity=".38"/>
+        <ellipse cx="640" cy="330" rx="20" ry="9" transform="rotate(-38 640 330)" fill="#fff4d6" opacity=".8"/>
+        <g id="box" transform="translate(640 330) rotate(135)">
+          <rect id="boxRect" x="-190" y="-127" width="380" height="254" fill="rgba(66,165,245,.08)" stroke="#42A5F5" stroke-width="2"/>
+          <path d="M-190,-127 h26 M-190,-127 v26 M190,-127 h-26 M190,-127 v26 M-190,127 h26 M-190,127 v-26 M190,127 h-26 M190,127 v-26" stroke="#fff" stroke-width="3" fill="none"/>
+          <line x1="0" y1="-127" x2="0" y2="-158" stroke="#42A5F5" stroke-width="2"/>
+          <circle cx="0" cy="-166" r="7" fill="#42A5F5"/>
+        </g>
+        <g stroke="#E0E0E0" stroke-width="1.4" opacity=".7"><line x1="628" y1="330" x2="652" y2="330"/><line x1="640" y1="318" x2="640" y2="342"/></g>
+        <g fill="#E0E0E0" font-size="13"><text x="660" y="306">M 31</text></g>
+        <g id="north" transform="translate(960 120)"><circle r="26" fill="rgba(26,26,26,.9)"/><path d="M0,-17 L6,5 L0,1 L-6,5Z" fill="#E0E0E0"/><text y="20" text-anchor="middle" fill="#A8A8A8" font-size="11">N</text></g>
+      </svg>
+      <div class="strip"><span><i></i>Camera</span><span><i></i>Mount</span><span><i></i>Focuser</span><span><i></i>Guider</span><span style="margin-left:auto">M 31 · Andromeda Galaxy</span></div>
+      <div class="win glass" aria-label="Framing">
+        <div class="head">Framing <span class="sub" id="fovTxt">1.9° × 1.3°</span></div>
+        <div class="row"><span class="l">Show the camera box</span>
+          <div class="seg" role="group" aria-label="Framing" id="onSeg"><button data-v="0" aria-pressed="false">Off</button><button data-v="1" aria-pressed="true">On</button></div></div>
+        <div id="ctl" style="display:flex;flex-direction:column;gap:8px">
+          <svg class="dial" id="dial" viewBox="-75 -75 150 150" role="slider" tabindex="0" aria-label="Camera angle, degrees east of north" aria-valuemin="0" aria-valuemax="359" aria-valuenow="135">
+            <circle r="62" fill="rgba(56,56,56,.55)" stroke="#404040" stroke-width="1.5"/>
+            <g stroke="#606060" id="ticks"></g>
+            <text y="-47" text-anchor="middle">N</text><text x="50" y="4" text-anchor="middle">E</text><text y="54" text-anchor="middle">S</text><text x="-50" y="4" text-anchor="middle">W</text>
+            <g id="hand"><line y1="0" y2="-40" stroke="#42A5F5" stroke-width="3" stroke-linecap="round"/><circle cy="-40" r="7" fill="#42A5F5"/></g>
+            <circle r="3" fill="#E0E0E0"/>
+          </svg>
+          <div class="row" style="justify-content:center"><div class="step" role="group" aria-label="Angle">
+            <button id="dn" aria-label="Turn 1 degree less">−</button><output id="num" aria-live="polite">135°</output><button id="up" aria-label="Turn 1 degree more">+</button></div></div>
+          <p class="caption" style="text-align:center">Degrees east of north</p>
+          <div class="row"><button class="act" id="snap" style="flex:1">Snap to catalogue angle (35°)</button></div>
+          <div class="hr"></div>
+          <div class="row"><button class="act primary" style="flex:1">Add to queue</button></div>
+        </div>
+      </div>
+      <div class="pill" id="pill"><i></i><span>Framing on · 135° · centred on M 31</span></div>
+    </div></div>
+    <p class="note">The box is the camera's field on the profile optics (as in the Full UI), drawn on the bare sky. Dragging the dial, the − and + steppers (1° per tap, hold to repeat) and Snap all move the same angle. Snap sets the catalogue position angle of the object (35° for M 31); it is disabled when the catalogue has none. Picking another Target sets Framing back to Off and the angle to 0°; picking the same Target again keeps both. Off means a plain centred GoTo, On means Center and Rotate at this angle, 0° included.</p>
+  </section>
+
+  <section class="frame" aria-labelledby="hb">
+    <h2 id="hb">(b) Plan sheet row <span class="tag">slice 3</span></h2>
+    <div class="sheets">
+      <div class="sheet" aria-label="Plan sheet, framed Target">
+        <div class="item"><div class="t">M 31 · Andromeda Galaxy <span class="r">3 h 20 min</span></div>
+          <div class="caption">L 40 × 180 s · RGB 20 × 180 s</div>
+          <div class="fr"><div class="info"><b>Framed 135°</b> east of north<br><span class="off"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="5.5"/><circle cx="11" cy="6" r="1.6" fill="currentColor"/></svg>Off centre · 0.4° from M 31</span></div>
+            <button class="act danger">Clear</button></div></div>
+        <div class="item"><div class="t">M 42 · Orion Nebula <span class="r">1 h 05 min</span></div><div class="caption">L 20 × 120 s · centred, no framing</div></div>
+      </div>
+      <div class="sheet" aria-label="Plan sheet, framing cleared">
+        <div class="item"><div class="t">M 31 · Andromeda Galaxy <span class="r">3 h 20 min</span></div>
+          <div class="caption">L 40 × 180 s · RGB 20 × 180 s</div>
+          <div class="fr"><div class="info" style="color:var(--text2)">Not framed · centred on M 31</div></div></div>
+      </div>
+    </div>
+    <p class="note">A queued Target keeps the framing it was planned with; later changes on the sky never rewrite it. Clear (red) removes it and the block goes back to a plain centred GoTo. The off-centre marker only shows when the box centre is not on the catalogue centre.</p>
+  </section>
+
+  <section class="frame" aria-labelledby="hc">
+    <h2 id="hc">(c) No rotator: Rotate camera <span class="tag">slice 3</span></h2>
+    <div class="sheets">
+      <div class="sheet" aria-label="Rotate camera by hand" style="gap:10px">
+        <div class="head">Rotate camera <span class="sub">no rotator on this rig</span></div>
+        <p class="caption">Turn the camera by hand until the readout matches the angle.</p>
+        <div style="display:flex;justify-content:space-between;align-items:baseline"><div><div class="caption">Camera now</div><div class="big" id="cur">112°</div></div>
+          <div style="text-align:right"><div class="caption">Aim</div><div class="big">135°</div></div></div>
+        <div class="bar" aria-hidden="true"><i id="barfill" style="width:83%"></i></div>
+        <div class="row" style="min-height:28px"><span id="togo" class="lbl">23° to go, turn east of north</span></div>
+        <div class="row"><button class="act" id="turn" style="flex:1">Simulate a turn by hand</button><button class="act primary" id="done" disabled>Done</button></div>
+        <p class="caption">You can queue the Target without turning the camera; the plan then runs at whatever angle the camera has.</p>
+      </div>
+    </div>
+    <p class="note">Shown only when the rig has no rotator; with one, Center and Rotate turns it and this row never appears. The readout is live from the plate solve loop. Done enables within 1° of the aim and the number turns green.</p>
+  </section>
+
+  <section class="frame" aria-labelledby="hd">
+    <h2 id="hd">(d) Companion Mode, one thumb <span class="tag">slice 3</span></h2>
+    <div style="padding:12px 12px 12px 12px"><div class="phone" aria-label="Companion Mode framing">
+      <svg class="sky" viewBox="0 0 390 780"><g fill="#cfd8ea" opacity=".75"><circle cx="50" cy="120" r="1.5"/><circle cx="310" cy="90" r="1.7"/><circle cx="90" cy="300" r="1.2"/><circle cx="340" cy="260" r="1.4"/><circle cx="200" cy="60" r="1.2"/></g>
+        <ellipse cx="195" cy="250" rx="70" ry="22" transform="rotate(-38 195 250)" fill="#c9d3ee" opacity=".35"/>
+        <g transform="translate(195 250) rotate(135)"><rect x="-80" y="-54" width="160" height="108" fill="rgba(66,165,245,.08)" stroke="#42A5F5" stroke-width="2"/><circle cy="-70" r="6" fill="#42A5F5"/></g></svg>
+      <div class="sb"><span>21:07</span><span>Companion</span></div>
+      <div class="sheetb glass">
+        <div class="head">M 31 · Framing <span class="sub">1.9° × 1.3°</span></div>
+        <div class="big">135°</div>
+        <p class="caption" style="text-align:center;margin-top:-8px">east of north</p>
+        <div class="row2"><div class="step" style="flex:1" role="group" aria-label="Angle"><button style="flex:1">−5</button><button style="flex:1;border-left:1px solid var(--border)">+5</button></div><button class="act">Snap 35°</button></div>
+        <div class="row2"><button class="act">Off</button><button class="act primary" style="flex:2">Add to queue</button></div>
+      </div>
+    </div></div>
+    <p class="note">Same controls, thumb reach: everything lives in the bottom third, targets are 52 pt or more, the big angle is the only number. Steps are 5° here; the sky stays visible above so the box can be checked at a glance. Night mode is a brightness filter over the whole screen, as everywhere else.</p>
+  </section>
+</div>
+
+<script>
+const st = { on: true, deg: 135, cat: 35, cur: 112 };
+const $ = id => document.getElementById(id);
+const norm = d => ((Math.round(d) % 360) + 360) % 360;
+$('ticks').innerHTML = Array.from({ length: 36 }, (_, i) => { const a = i * 10 * Math.PI / 180, r1 = i % 9 ? 58 : 54;
+  return `<line x1="${(Math.sin(a) * r1).toFixed(1)}" y1="${(-Math.cos(a) * r1).toFixed(1)}" x2="${(Math.sin(a) * 62).toFixed(1)}" y2="${(-Math.cos(a) * 62).toFixed(1)}"/>`; }).join('');
+function draw() {
+  $('box').style.display = st.on ? '' : 'none';
+  $('box').setAttribute('transform', `translate(640 330) rotate(${st.deg})`);
+  $('hand').setAttribute('transform', `rotate(${st.deg})`);
+  $('num').textContent = st.deg + '°';
+  $('dial').setAttribute('aria-valuenow', st.deg);
+  $('ctl').style.opacity = st.on ? 1 : .45;
+  for (const b of $('ctl').querySelectorAll('button')) b.disabled = !st.on;
+  $('snap').disabled = !st.on || st.deg === st.cat;
+  for (const b of $('onSeg').children) b.setAttribute('aria-pressed', String(+b.dataset.v === +st.on));
+  $('pill').querySelector('span').textContent = st.on ? `Framing on · ${st.deg}° · centred on M 31` : 'Framing off · plain centred GoTo';
+}
+const set = d => { st.deg = norm(d); draw(); };
+$('onSeg').onclick = e => { if (e.target.dataset.v) { st.on = e.target.dataset.v === '1'; draw(); } };
+$('up').onclick = () => set(st.deg + 1); $('dn').onclick = () => set(st.deg - 1);
+$('snap').onclick = () => set(st.cat);
+$('dial').onkeydown = e => { if (e.key === 'ArrowRight' || e.key === 'ArrowUp') set(st.deg + 1); if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') set(st.deg - 1); };
+const fromPtr = e => { const r = $('dial').getBoundingClientRect(); set(Math.atan2(e.clientX - r.left - r.width / 2, -(e.clientY - r.top - r.height / 2)) * 180 / Math.PI); };
+$('dial').onpointerdown = e => { if (!st.on) return; $('dial').setPointerCapture(e.pointerId); fromPtr(e); };
+$('dial').onpointermove = e => { if ($('dial').hasPointerCapture(e.pointerId)) fromPtr(e); };
+function rot() {
+  const left = ((135 - st.cur) % 360 + 360) % 360, near = Math.abs(left) <= 1;
+  $('cur').textContent = st.cur + '°'; $('cur').classList.toggle('ok', near);
+  $('barfill').style.width = Math.min(100, st.cur / 135 * 100) + '%';
+  $('togo').textContent = near ? 'On the angle' : `${135 - st.cur}° to go, turn east of north`;
+  $('done').disabled = !near;
+}
+$('turn').onclick = () => { st.cur = Math.min(135, st.cur + 8); rot(); };
+draw(); rot();
+// #a, #b, #c or #d shows that frame alone (for screenshots).
+if (/^#[abcd]$/.test(location.hash)) document.querySelectorAll('section.frame').forEach(f => { if (f.getAttribute('aria-labelledby') !== 'h' + location.hash[1]) f.style.display = 'none'; });
+</script>
+</body>
+</html>
