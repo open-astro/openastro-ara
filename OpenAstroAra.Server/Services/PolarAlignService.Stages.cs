@@ -144,6 +144,11 @@ namespace OpenAstroAra.Server.Services {
         private async Task RunSeededAdjustAsync(
                 LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 RunBand band, int gen, CancellationToken ct, LiveCapture? liveCapture = null) {
+            if (band.HandTurn) {
+                // #2083 — the user turns RA by hand: no tracking switch-on, no tilt, no motor turn (PolarAlignService.HandTurn.cs).
+                await RunSeededAdjustByHandAsync(capture, renewLeaseIfDue, site, settings, band, gen, liveCapture, ct).ConfigureAwait(false);
+                return;
+            }
             var north = site.LatitudeDeg > 0;
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
@@ -175,11 +180,21 @@ namespace OpenAstroAra.Server.Services {
             LogSeedSolve("seed-c", c.RaDegJnow, c.DecDegJnow);
 
             var (axis, _) = FitThreePointOrFail((a, aTime), (b, bTime), (c, cTime), mountTurn1, mountTurn2, north);
+            await AdjustFromSeedAsync(axis, c, cTime, mountTurn1 + mountTurn2, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
+        }
+
+        /// <summary>The seed's axis error, then the live adjust loop until Stop or Done: shared by the motor seed and
+        /// the hand-turn seed (#2083). <paramref name="c"/> is the seed's last solve, taken at <paramref name="cTime"/>;
+        /// <paramref name="seedTurnDeg"/> is logged.</summary>
+        private async Task AdjustFromSeedAsync(
+                (double RaDeg, double DecDeg, double ConeDeg) axis, PolarAlignSolveOutcome c, DateTimeOffset cTime, double seedTurnDeg,
+                LiveCapture liveCapture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, int gen, CancellationToken ct) {
+            var north = site.LatitudeDeg > 0;
             var (seedAltErr, seedAzErr) = PolarAlignGeometry.AxisError(
                 axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, cTime);
             var seedPointing = PolarAlignGeometry.PointingAltAz(
                 c.RaDegJnow, c.DecDegJnow, site.LatitudeDeg, site.LongitudeDeg, cTime);
-            LogSeedFit(mountTurn1 + mountTurn2, axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
+            LogSeedFit(seedTurnDeg, axis.RaDeg, axis.DecDeg, seedAltErr, seedAzErr);
 
             // ── live adjust: tracking OFF makes the camera direction stationary in alt/az, so
             // every subsequent solve's alt/az delta from the seed pointing is purely the user's
@@ -190,7 +205,7 @@ namespace OpenAstroAra.Server.Services {
             await PublishProgressAsync(gen, 0, seedAltErr, seedAzErr, solved: true).ConfigureAwait(false);
             ResetAlignerBaseline();
             await SolveLoopAsync(
-                liveCapture ?? capture,
+                liveCapture,
                 toError: (s, at) => {
                     // §45.8 reverse-projection: the pointing's alt/az delta since the seed is the knob
                     // adjustment seen from the camera (rigid mount, tracking stopped); far from the pole it
@@ -223,6 +238,9 @@ namespace OpenAstroAra.Server.Services {
             var north = site.LatitudeDeg > 0;
             // From where the mount points (#2048), the way the user confirmed (#2082: a Check is its own confirmed Start).
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
+            if (band.HandTurn) {
+                return await RunCheckByHandAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false); // #2083
+            }
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
             // StartAsync clears the frame size per run: a check reads it afresh.
             _runFrameSize = await ReadGuideFrameSizeAsync(guiderClient, ct).ConfigureAwait(false);
@@ -253,6 +271,13 @@ namespace OpenAstroAra.Server.Services {
             var at = DateTimeOffset.UtcNow;
 
             var (axis, mismatch) = FitThreePointOrFail((s1, t1), (s2, t2), (s3, at), mountTurn1, mountTurn2, north);
+            return CheckResultFor(axis, mismatch, site, at);
+        }
+
+        /// <summary>The check's verdict from its fitted axis, measured at <paramref name="at"/>, beside the last run's
+        /// readout: shared by the motor check and the hand-turn check (#2083).</summary>
+        private PolarAlignCheckResultDto CheckResultFor(
+                (double RaDeg, double DecDeg, double ConeDeg) axis, double mismatch, SiteSettingsDto site, DateTimeOffset at) {
             var (altErr, azErr) = PolarAlignGeometry.AxisError(axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, at);
             // Rounded first: the verdict and the total the client colours by must sit in the same band
             // (1.004′ is "excellent" at 1.00′, not "very_good" beside a 1.0′ readout).

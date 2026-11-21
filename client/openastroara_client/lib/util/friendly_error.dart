@@ -123,6 +123,8 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignMountBusy => l.refusalPolarAlignMountBusy,
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
+    RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
+    RefusalCause.polarAlignClutchTurned => l.refusalPolarAlignClutchTurned,
     null => _firstLine(r.detail),
   };
 }

@@ -31,6 +31,7 @@
     { "name": "PolarAlignStage", "type": "polar_align.stage" },
     { "name": "PolarAlignChecked", "type": "polar_align.checked" },
     { "name": "PolarAlignCorrection", "type": "polar_align.correction" },
+    { "name": "PolarAlignHandTurn", "type": "polar_align.hand_turn" },
     { "name": "AutofocusCollimationVerdict", "type": "autofocus.collimation_verdict" },
     { "name": "AutofocusStarted", "type": "autofocus.started" },
     { "name": "AutofocusShotComplete", "type": "autofocus.shot_complete" },

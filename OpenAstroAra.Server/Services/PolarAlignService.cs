@@ -233,7 +233,9 @@ namespace OpenAstroAra.Server.Services {
                     LastResult: _lastResult,
                     Correction: _aligner,
                     // #2072 — the caution describes a live readout: shown only while one runs.
-                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null));
+                    ReadoutCaution: _state is "adjusting" or "paused" ? _readoutCaution : null,
+                    HandTurn: _handTurn,
+                    HandTurnWait: _handTurnWait));
             }
         }
 
@@ -341,8 +343,9 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>#2048 — the run's RA turns: the way the user confirmed (+1 east, −1 west in RA-reading terms) and how far
-        /// they take the axis (this measurement's two turns).</summary>
-        private sealed record RunBand(double AwaySign, double MaxSweepDeg);
+        /// they take the axis (this measurement's two turns). <c>HandTurn</c> (#2083): the user makes those turns by hand,
+        /// and the run sends the mount no move (PolarAlignService.HandTurn.cs).</summary>
+        private sealed record RunBand(double AwaySign, double MaxSweepDeg, bool HandTurn = false);
 
         /// <summary>The plan of a start at <paramref name="stage"/> from the mount's pointing read now, with the turns the
         /// run makes and their place against the session's sweep origin (#2089, <see cref="PlanSweep"/>). At a new origin
@@ -391,7 +394,8 @@ namespace OpenAstroAra.Server.Services {
         /// measurement per Start (#2082); each starts from the current pointing (#2048: no Home, no GoTo). Preflight
         /// (connected guider, connected and unparked mount, a configured site latitude, a pointing 3° or more from the
         /// pole, the user's <paramref name="confirmation"/> of the turn direction), then the guide-camera PA-session lease,
-        /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept, except a
+        /// then the run on a background task. Idempotent — Start on an already-running routine is a no-op accept (refused
+        /// with <c>polar-align-already-running</c> when its confirmation picked the other way of turning RA, #2083), except a
         /// <c>check</c> while the routine adjusts: the Check button of the adjust screen, which checks the mount's clock and
         /// plans and confirms the check first (those refusals leave the loop running), then ends the loop like Stop and
         /// starts the check. A mount clock push in flight is waited for first, as a GoTo waits (#2071). Throws
@@ -477,6 +481,16 @@ namespace OpenAstroAra.Server.Services {
             try {
                 lock (_gate) {
                     if (_active) {
+                        // #2083 — a retry of the same start is a no-op accept; a start that confirmed the other way of
+                        // turning RA (by hand while the motor turns it, or the reverse) is refused: the user was promised
+                        // something the running run does not do. _handTurn records the last run, so this comparison is
+                        // valid only here, inside if (_active): moved out, it would compare against a finished run.
+                        if (confirmation is not null && confirmation.HandTurn != _handTurn) {
+                            throw new RefusalException(RefusalCatalog.PolarAlignAlreadyRunning,
+                                _handTurn
+                                    ? "polar alignment is already running, and in it you turn RA by hand — stop it first, then start again"
+                                    : "polar alignment is already running, and it turns RA with the mount's motor — stop it first, then start again");
+                        }
                         return Accepted("polar-align.start", idempotencyKey);
                     }
                 }
@@ -520,6 +534,9 @@ namespace OpenAstroAra.Server.Services {
                 // pointed the mount, so the user has to see where it will turn.
                 var (plan, band, sweep) = await PlanStartAsync(stage, settings, ct).ConfigureAwait(false);
                 ThrowIfNotConfirmed(confirmation, plan);
+                ThrowIfClutchTurned(confirmation); // #2083 — the mount's reading is off by a clutch turn: no motor run
+                // #2083 — the user's choice in the confirm step: turn RA by hand, so the run moves nothing.
+                band = band with { HandTurn = confirmation!.HandTurn };
                 var mainCamera = _mainCamera;
                 if (stage == PolarAlignStages.Coarse) {
                     // Before the mount moves: a camera that is off would otherwise turn the mount and then
@@ -589,6 +606,8 @@ namespace OpenAstroAra.Server.Services {
                         _waitingForCapture = false;
                         _lastFrame = null;
                         _runFrameSize = null; // read afresh per run — the guide camera may have changed since the last one
+                        _handTurn = band.HandTurn;
+                        _handTurnWait = null;
                         gen = ++_generation;
                         runEnd.Fence = StopFence; // #2066 — before the run is published; a fence from here on is this run's too
                         _runFence = (gen, runEnd.Fence);
@@ -618,9 +637,14 @@ namespace OpenAstroAra.Server.Services {
                 var runToken = runCts.Token;
                 LogStarted(stage);
                 LogStartConfirmed(plan.Direction, plan.StepDeg, plan.MaxSweepDeg);
+                if (band.HandTurn) {
+                    LogHandTurnRun();
+                }
                 // `started` goes out BEFORE the run task exists: the run's first stage event is only a directory
                 // create and a few mount reads away, and a client must fold `started` first.
-                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject { ["state"] = initialState, ["stage"] = stage }).ConfigureAwait(false);
+                await PublishAsync(WsEventCatalog.PolarAlignStarted, new JsonObject {
+                    ["state"] = initialState, ["stage"] = stage, ["hand_turn"] = band.HandTurn,
+                }).ConfigureAwait(false);
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
             } catch {
@@ -676,6 +700,7 @@ namespace OpenAstroAra.Server.Services {
             var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
             var (plan, _, _) = await PlanStartAsync(PolarAlignStages.Check, settings, ct).ConfigureAwait(false);
             ThrowIfNotConfirmed(confirmation, plan);
+            ThrowIfClutchTurned(confirmation); // #2083 — refused while the loop still runs
             (long Epoch, long OwnAborts)? watch;
             lock (_gate) {
                 watch = _abortWatch is { } w && w.Gen == _generation ? (w.Epoch, w.OwnAborts) : null;
@@ -807,6 +832,7 @@ namespace OpenAstroAra.Server.Services {
                     }
                     // The run's own gen-fenced resets are no-ops once the generation moved on above.
                     _waitingForCapture = false;
+                    _handTurnWait = null; // #2083 — the wait's own reset is one of them: no run waits for a turn now
                     // A terminal "failed" or "checked" is a real outcome a polling client must still
                     // see — a late/stray Stop must not clobber it back to "stopped" (both already
                     // published their event, wrote their row and released the lease). The user's own
