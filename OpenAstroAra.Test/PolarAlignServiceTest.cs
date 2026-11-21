@@ -332,6 +332,8 @@ namespace OpenAstroAra.Test {
                 StopResendAfter = TimeSpan.FromMilliseconds(20),
                 StopVerifyWindow = TimeSpan.FromMilliseconds(500),
                 ShutdownGrace = TimeSpan.FromSeconds(2),
+                // #2083: a clutch turn is taken on its solves at rest alone at bench speed (the daemon waits 5 s at least).
+                HandTurnClutchMinWait = TimeSpan.Zero,
             };
             if (mount is FakeGemMount gem) {
                 svc.Clock = gem.Clock; // #2066 — a reading's age on the fake's own clock

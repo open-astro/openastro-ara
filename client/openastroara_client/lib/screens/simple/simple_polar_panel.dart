@@ -310,7 +310,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(axis, style: AraText.caption, maxLines: 1),
+                // One line, scaled down when the convention (#2083) makes it long.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(axis, key: Key('simple-polar-turn-$id-axis'), style: AraText.caption, maxLines: 1),
+                ),
                 Text(
                   value == null
                       ? hint.$2
@@ -355,7 +360,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       ),
       turn(
         'az',
-        l10n.polarAzimuth,
+        // #2083 the azimuth's convention: a true arc, not NINA's angle.
+        '${l10n.polarAzimuth} · ${l10n.polarAzimuthArc}',
         live.azErrorArcmin,
         polarAzHint(l10n, live.azErrorArcmin, southern: southern),
       ),
@@ -472,6 +478,18 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
+            // #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
+            if (active &&
+                live.handTurn &&
+                (live.phase == PolarAlignStates.seeding || live.phase == PolarAlignStates.checking))
+              Text(
+                polarHandTurnText(l10n, live.handTurnWait) ?? l10n.polarHandTurnRunNote,
+                key: const Key('simple-polar-hand-turn'),
+                style: kSimpleText.copyWith(
+                  color: live.handTurnWait == null ? null : AraColors.accentBusy,
+                ),
+                maxLines: 4,
+              ),
             // #2072 the camera sits where the readout reads the altitude bolt poorly.
             if (active &&
                 !verifying &&
@@ -533,6 +551,13 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     ),
                 ],
               ),
+              if (polarInitialErrorText(l10n, live.initialErrorArcmin) case final warning?)
+                Text(
+                  warning,
+                  key: const Key('simple-polar-initial-error'),
+                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                  maxLines: 4,
+                ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
             if (active && _bolt.nudge != null)

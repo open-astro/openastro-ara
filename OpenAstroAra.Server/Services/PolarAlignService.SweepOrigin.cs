@@ -182,16 +182,27 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
-        /// <summary>The exit's reading after the mount stopped (best-effort: a failed read keeps the last motor reading).</summary>
+        /// <summary>The exit's reading after the mount stopped (best-effort: a failed read keeps the last motor reading).
+        /// #2083 — not while a clutch turn stands (<see cref="ClutchTurnStands"/>): the reading is off by the user's turns,
+        /// and the pose Polar Align left the mount at stays forgotten with the origin.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A best-effort read on the exit path: its fault must never mask the exit's outcome.")]
         private async Task NoteMountLeftAfterStopAsync() {
             try {
-                if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now) {
+                if (await TrustedPointingJnowOrNullAsync(CancellationToken.None).ConfigureAwait(false) is { } now && !ClutchTurnStands()) {
                     NoteMountLeft((now.RaDeg, now.DecDeg), now.Side);
                 }
             } catch (Exception ex) {
                 LogSweepExitReadFailed(ex);
+            }
+        }
+
+        /// <summary>Where Polar Align last left the mount (RA, degrees JNOW); null when forgotten. For the tests.</summary>
+        internal double? SweepLastLeftRaDeg {
+            get {
+                lock (_gate) {
+                    return _sweepLastLeft?.RaDeg;
+                }
             }
         }
 

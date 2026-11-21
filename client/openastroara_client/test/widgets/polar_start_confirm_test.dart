@@ -149,6 +149,43 @@ void main() {
     expect(find.textContaining('Later steps'), findsNothing);
   });
 
+  testWidgets("the confirm step gives NINA's guidance on the start field (#2083)", (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east));
+    await _open(tester, rig);
+    expect(
+      find.text('Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.'),
+      findsOneWidget,
+    );
+    expect(find.text('Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'), findsOneWidget);
+  });
+
+  testWidgets('Turn RA by hand starts a run that asks the rig to move nothing, with the direction shown (#2083)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.west,
+      handTurnAvailable: true,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine);
+    expect(find.textContaining('with Turn RA by hand, Ara moves nothing'), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('polar-start-confirm-hand')));
+    await tester.pumpAndSettle();
+    expect(rig.started.single.handTurn, isTrue);
+    expect(rig.started.single.direction, PolarAlignDirections.west, reason: 'the turns the user makes go the way shown');
+    expect(rig.started.single.stage, PolarAlignStages.fine);
+  });
+
+  testWidgets('an older rig, which would turn the mount with its motor, is offered no hand turn (#2083)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east));
+    await _open(tester, rig);
+    expect(find.byKey(const Key('polar-start-confirm-hand')), findsNothing);
+    expect(find.textContaining('Turn RA by hand'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+    await tester.pumpAndSettle();
+    expect(rig.started.single.handTurn, isFalse, reason: 'Move the mount is a motor run');
+  });
+
   testWidgets('the confirm step reads in Brazilian Portuguese', (tester) async {
     final rig = _Rig(const PolarAlignStartPlan(direction: PolarAlignDirections.east, stepDeg: 10, maxSweepDeg: 20));
     await _open(tester, rig, locale: const Locale('pt', 'BR'));

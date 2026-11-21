@@ -59,9 +59,10 @@ namespace OpenAstroAra.Test {
         /// <summary>The routine on the fake, with NINA's 10° steps unless <paramref name="store"/> says otherwise. With
         /// <paramref name="benchMotors"/> the motor speeds are 30°/s and 10°/s, so a run takes seconds; without, the
         /// daemon's 3°/s and 1°/s, so a test can land inside a turn.</summary>
-        private static PolarAlignService NewGemService(FakeGemMount mount, WsRecorder ws, IProfileStore? store = null, bool benchMotors = true) {
+        private static PolarAlignService NewGemService(FakeGemMount mount, WsRecorder ws, IProfileStore? store = null, bool benchMotors = true,
+                IPolarAlignerSource? aligner = null) {
             mount.EventCount = () => ws.Events.Count;
-            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore());
+            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store ?? TenDegreeStore(), aligner: aligner);
             if (benchMotors) {
                 svc.AxisFastRateDegPerSec = 30.0;
                 svc.AxisSlowRateDegPerSec = 10.0;
