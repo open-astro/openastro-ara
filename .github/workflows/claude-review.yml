@@ -143,7 +143,8 @@ jobs:
               records="none (the base branch has no decision records)"
             else
               git archive "${BASE_SHA}" docs/adr | tar -x -C "${records_tree}" || fail "the base branch's records could not be extracted"
-              changed="$(gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only)" || fail "the PR's changed files could not be listed"
+              # The files API, not `gh pr diff`: the diff endpoint refuses a PR over 300 files (HTTP 406); this one pages to 3000.
+              changed="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')" || fail "the PR's changed files could not be listed"
               listed="$(printf '%s\n' "${changed}" \
                 | python3 -I "${tools}/scripts/check-adr-scope.py" --list --root "${records_tree}")" \
                 || fail "check-adr-scope.py --list exited non-zero"
@@ -179,6 +180,8 @@ jobs:
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE SHA: ${{ github.event.pull_request.base.sha }}
+            HEAD SHA: ${{ github.event.pull_request.head.sha }}
 
             You are the checker in a builder/checker pair. The PR branch is
             checked out in the current working directory. Review the diff
@@ -188,7 +191,8 @@ jobs:
             CLAUDE.md, AGENTS.md and .claude/ in this checkout are the base
             branch's copies (or absent), so `git diff` and `git show` present
             that substitution as a change or deletion the PR did not make;
-            read the PR's changes to those paths with `gh pr diff` only.
+            read the PR's changes to those paths with `gh pr diff`, or with
+            `git diff` between the two commits (never the working tree).
 
             DEFECTS block the merge. Only these count:
             - The changed code gives a wrong result on a realistic input.
@@ -275,7 +279,14 @@ jobs:
             For a large diff, page through `gh pr diff <PR NUMBER>` piped to
             `sed -n 'START,ENDp'`; do not redirect output to files — the
             sandbox blocks shell redirection (use the Write tool for the one
-            file you need, below).
+            file you need, below). On a PR with more than 300 changed files
+            `gh pr diff` fails (HTTP 406, "exceeded the maximum number of
+            files"); read the diff from git instead. The checkout is shallow,
+            so first run `git fetch --unshallow origin` (exactly that: naming
+            the SHAs on that command fails with "shallow file has changed"),
+            then `git diff --name-only <BASE SHA>...<HEAD SHA>` for the file
+            list and `git diff <BASE SHA>...<HEAD SHA> -- <path>` per path
+            (page long output with `sed -n`).
 
             Post your review as a SINGLE top-level comment, and post it BEFORE
             you finish — the check fails if the run ends without a fresh
@@ -313,15 +324,18 @@ jobs:
       - name: Assert the review comment posted
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           # The action refuses to run on a PR that modifies this very workflow
           # (it requires the file to match the default branch). That skip is
           # loud in the log and only possible on a workflow-editing PR, which
           # the maintainer reviews by eye — exempt it so such PRs aren't
           # permanently red, while every normal PR still requires a comment.
-          if gh pr diff "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" --name-only \
-              | grep -qx ".github/workflows/claude-review.yml"; then
+          # The files API, not `gh pr diff` (406 over 300 files); captured first so
+          # grep -q closing the pipe early cannot fail the listing under pipefail.
+          changed="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')" || changed=""
+          if grep -qx ".github/workflows/claude-review.yml" <<< "${changed}"; then
             echo "::warning::This PR modifies the review workflow — the action skips itself on such PRs; passing without a review comment. Review it by eye."
             exit 0
           fi
@@ -458,7 +472,8 @@ jobs:
               records="none (the base branch has no decision records)"
             else
               git archive "${BASE_SHA}" docs/adr | tar -x -C "${records_tree}" || fail "the base branch's records could not be extracted"
-              changed="$(gh pr diff "${PR_NUMBER}" --repo "${REPO}" --name-only)" || fail "the PR's changed files could not be listed"
+              # The files API, not `gh pr diff`: the diff endpoint refuses a PR over 300 files (HTTP 406); this one pages to 3000.
+              changed="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')" || fail "the PR's changed files could not be listed"
               listed="$(printf '%s\n' "${changed}" \
                 | python3 -I "${tools}/scripts/check-adr-scope.py" --list --root "${records_tree}")" \
                 || fail "check-adr-scope.py --list exited non-zero"
@@ -528,6 +543,8 @@ jobs:
           prompt: |
             REPO: ${{ github.repository }}
             PR NUMBER: ${{ github.event.pull_request.number }}
+            BASE SHA: ${{ github.event.pull_request.base.sha }}
+            HEAD SHA: ${{ github.event.pull_request.head.sha }}
 
             You are the checker in a builder/checker pair. The PR branch is
             checked out in the current working directory. Review the diff
@@ -537,7 +554,8 @@ jobs:
             CLAUDE.md, AGENTS.md and .claude/ in this checkout are the base
             branch's copies (or absent), so `git diff` and `git show` present
             that substitution as a change or deletion the PR did not make;
-            read the PR's changes to those paths with `gh pr diff` only.
+            read the PR's changes to those paths with `gh pr diff`, or with
+            `git diff` between the two commits (never the working tree).
 
             DEFECTS block the merge. Only these count:
             - The changed code gives a wrong result on a realistic input.
@@ -624,7 +642,14 @@ jobs:
             For a large diff, page through `gh pr diff <PR NUMBER>` piped to
             `sed -n 'START,ENDp'`; do not redirect output to files — the
             sandbox blocks shell redirection (use the Write tool for the one
-            file you need, below).
+            file you need, below). On a PR with more than 300 changed files
+            `gh pr diff` fails (HTTP 406, "exceeded the maximum number of
+            files"); read the diff from git instead. The checkout is shallow,
+            so first run `git fetch --unshallow origin` (exactly that: naming
+            the SHAs on that command fails with "shallow file has changed"),
+            then `git diff --name-only <BASE SHA>...<HEAD SHA>` for the file
+            list and `git diff <BASE SHA>...<HEAD SHA> -- <path>` per path
+            (page long output with `sed -n`).
 
             Post your review as a SINGLE top-level comment, and post it BEFORE
             you finish — the check fails if the run ends without a fresh
@@ -649,15 +674,18 @@ jobs:
       - name: Assert the review comment posted
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
         run: |
           # The action refuses to run on a PR that modifies this very workflow
           # (it requires the file to match the default branch). That skip is
           # loud in the log and only possible on a workflow-editing PR, which
           # the maintainer reviews by eye — exempt it so such PRs aren't
           # permanently red, while every normal PR still requires a comment.
-          if gh pr diff "${{ github.event.pull_request.number }}" \
-              --repo "${{ github.repository }}" --name-only \
-              | grep -qx ".github/workflows/claude-review.yml"; then
+          # The files API, not `gh pr diff` (406 over 300 files); captured first so
+          # grep -q closing the pipe early cannot fail the listing under pipefail.
+          changed="$(gh api --paginate "repos/${REPO}/pulls/${PR_NUMBER}/files" --jq '.[].filename')" || changed=""
+          if grep -qx ".github/workflows/claude-review.yml" <<< "${changed}"; then
             echo "::warning::This PR modifies the review workflow — the action skips itself on such PRs; passing without a review comment. Review it by eye."
             exit 0
           fi
