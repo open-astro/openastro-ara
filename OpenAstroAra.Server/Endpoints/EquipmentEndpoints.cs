@@ -867,62 +867,8 @@ public static partial class EquipmentEndpoints {
             await SetDefectMapEnabledAsync(request, svc, ct));
 
         // ─── Polar Alignment ───
-        var polar = equipment.MapGroup("/polaralign");
-        polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
-            Results.Ok(await svc.GetStatusAsync(ct)));
-        // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
-        // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
-        // #2068 — hand_turn=true plans a hand-turn start, which an unconfirmed clearance does not refuse.
-        polar.MapGet("/start-plan", async (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
-                await PolarAlignStartPlanAsync(svc, stage, handTurn == true, ct))
-            .WithName("GetPolarAlignStartPlan")
-            .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
-            .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
-        // #2068 (ARA-18) — the Start card's pre-flight list: every check a start makes (ok | warn | fail | unknown), in its
-        // order, and what the start would do. Always 200 (a failing check is a row, not an error); 400 for an unknown stage.
-        // Start and start-plan refuse on the first failing check, with its cause.
-        // hand_turn=true lists a hand-turn start: its clearance check warns, not fails, while the clearance is not confirmed.
-        polar.MapGet("/preflight", (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
-                PolarAlignPreflightAsync(svc, stage, handTurn == true, ct))
-            .WithName("GetPolarAlignPreflight")
-            .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
-            .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
-        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
-        // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
-        // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
-        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis; no fresh reading of the
-        // mount polar-align-pointing-unknown, a Dec past the pole polar-align-pose-ambiguous (#2066). A check while the
-        // routine adjusts ends the loop first (the adjust screen's Check).
-        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
-                [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
-                IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, body, key, ct));
-        // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
-        polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-                await PolarAlignNextAsync(svc, key, ct))
-            .WithName("PolarAlignNext")
-            .WithSummary("Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.")
-            .ProducesProblem(StatusCodes.Status409Conflict);
-        polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.StopAsync(key, ct)));
-        // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
-        // with the achieved error so the dashboard can surface PA quality.
-        polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.CompleteAsync(key, ct)));
-        // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
-        polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
-            await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
-                ? Results.File(jpeg, "image/jpeg")
-                : Results.NotFound());
-        // Single-frame mode: take the next adjust frame. 409 outside the adjust phase.
-        polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCaptureAsync(svc, key, ct));
-        // #1971 — the Polar Aligner in a running routine: stop its motors (the routine carries on by
-        // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume.
-        polar.MapPost("/correction/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectionAsync(() => svc.StopAlignerAsync(key, ct)));
-        polar.MapPost("/correction/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignCorrectionAsync(() => svc.ResumeAlignerAsync(key, ct)));
+        // #2068 — mapped on its own so a test can host the polar-align routes alone (EquipmentEndpointsPolarAlignTest).
+        MapPolarAlign(equipment.MapGroup("/polaralign"));
 
         // ─── Polar Aligner (#1972, #1973) ───
         var aligner = equipment.MapGroup("/polaraligner");
@@ -1021,6 +967,65 @@ public static partial class EquipmentEndpoints {
     }
 
     /// <summary>#1675 — the focus offset calibration routes under <c>/equipment/filterwheel</c>.</summary>
+    /// <summary>The polar-align routes (<c>/api/v1/equipment/polaralign</c>).</summary>
+    internal static void MapPolarAlign(IEndpointRouteBuilder polar) {
+        polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
+            Results.Ok(await svc.GetStatusAsync(ct)));
+        // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
+        // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
+        // #2068 — hand_turn=true plans a hand-turn start, which an unconfirmed clearance does not refuse.
+        polar.MapGet("/start-plan", async (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignStartPlanAsync(svc, stage, handTurn == true, ct))
+            .WithName("GetPolarAlignStartPlan")
+            .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
+            .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
+        // #2068 (ARA-18) — the Start card's pre-flight list: every check a start makes (ok | warn | fail | unknown), in its
+        // order, and what the start would do. Always 200 (a failing check is a row, not an error); 400 for an unknown stage.
+        // Start and start-plan refuse on the first failing check, with its cause.
+        // hand_turn=true lists a hand-turn start: its clearance check warns, not fails, while the clearance is not confirmed.
+        polar.MapGet("/preflight", (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
+                PolarAlignPreflightAsync(svc, stage, handTurn == true, ct))
+            .WithName("GetPolarAlignPreflight")
+            .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
+            .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
+        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
+        // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
+        // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
+        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis; no fresh reading of the
+        // mount polar-align-pointing-unknown, a Dec past the pole polar-align-pose-ambiguous (#2066). A check while the
+        // routine adjusts ends the loop first (the adjust screen's Check).
+        polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
+                [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
+                IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignStartAsync(svc, body, key, ct));
+        // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
+        polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignNextAsync(svc, key, ct))
+            .WithName("PolarAlignNext")
+            .WithSummary("Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.")
+            .ProducesProblem(StatusCodes.Status409Conflict);
+        polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.StopAsync(key, ct)));
+        // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
+        // with the achieved error so the dashboard can surface PA quality.
+        polar.MapPost("/complete", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            Results.Accepted(value: await svc.CompleteAsync(key, ct)));
+        // Live view: the guide camera's latest frame as a JPEG (proxied from the guider daemon).
+        polar.MapGet("/frame.jpg", async (IPolarAlignService svc, CancellationToken ct) =>
+            await svc.GetLiveFrameJpegAsync(ct) is byte[] jpeg
+                ? Results.File(jpeg, "image/jpeg")
+                : Results.NotFound());
+        // Single-frame mode: take the next adjust frame. 409 outside the adjust phase.
+        polar.MapPost("/capture", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCaptureAsync(svc, key, ct));
+        // #1971 — the Polar Aligner in a running routine: stop its motors (the routine carries on by
+        // hand), or correct with them again after a stop. 409 when there is nothing to stop or resume.
+        polar.MapPost("/correction/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.StopAlignerAsync(key, ct)));
+        polar.MapPost("/correction/resume", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
+            await PolarAlignCorrectionAsync(() => svc.ResumeAlignerAsync(key, ct)));
+    }
+
     internal static void MapOffsetCalibration(IEndpointRouteBuilder filterwheel) {
         // 202 + the batch job; 400 for a slot the wheel does not have; 409 with the reason when a
         // precondition fails (devices, manual wheel, relative focuser, a plan or another focus routine, nothing picked).
