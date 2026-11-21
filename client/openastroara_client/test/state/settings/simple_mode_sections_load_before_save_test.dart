@@ -17,9 +17,10 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import '../../support/fake_section_rig.dart';
 
 // ADR 0015 for the sections Simple Mode writes (slice 3 of #1807, PR 2c-i:
-// optics, imaging defaults, autofocus). Each case runs the write a Simple Mode
+// optics, imaging defaults, autofocus). Most cases run the write a Simple Mode
 // window makes (load the rig's copy, apply one change to it, save it with the
-// loaded tag) and asserts only on what reached the rig (FakeSectionRig.puts).
+// loaded tag); the failed-load and cache cases edit and save the notifier
+// itself. All assert only on what reached the rig (FakeSectionRig.puts).
 // These cases guard the notifiers (strict readers, refusal, reset, cache);
 // that each Simple Mode window loads before it writes is guarded by the widget
 // cases in test/screens/simple/.
@@ -34,6 +35,7 @@ class _Case {
     required this.cacheKey,
     required this.cacheBody,
     required this.setThenSave,
+    required this.editThenSave,
     required this.load,
     required this.provider,
     required this.toJson,
@@ -57,6 +59,10 @@ class _Case {
 
   /// What the Simple Mode window does: one setter, then persist.
   final Future<void> Function(ProviderContainer c, ProfileApi api) setThenSave;
+
+  /// The same change straight on the notifier: edit, then save. No load
+  /// first, so the module's own refusal is what decides (ADR 0015 rule 1).
+  final Future<void> Function(ProviderContainer c, ProfileApi api) editThenSave;
   final Future<void> Function(ProviderContainer c, ProfileApi api) load;
 
   /// The section's provider, and its wire form (to compare with the rig's).
@@ -93,6 +99,11 @@ final _cases = <_Case>[
         (o) => o.copyWith(focalLengthMm: 1200),
       );
     },
+    editThenSave: (c, api) async {
+      final n = c.read(opticsSettingsProvider.notifier)
+        ..edit((o) => o.copyWith(focalLengthMm: 1200));
+      await n.save(api);
+    },
     load: (c, api) => c.read(opticsSettingsProvider.notifier).load(api),
     provider: opticsSettingsProvider,
     toJson: (v) => ProfileApi.opticsToJson(v as OpticsSettings),
@@ -121,6 +132,11 @@ final _cases = <_Case>[
         (d) => d.copyWith(coolerTargetC: -5),
       );
     },
+    editThenSave: (c, api) async {
+      final n = c.read(imagingDefaultsProvider.notifier)
+        ..edit((d) => d.copyWith(coolerTargetC: -5));
+      await n.save(api);
+    },
     load: (c, api) => c.read(imagingDefaultsProvider.notifier).load(api),
     provider: imagingDefaultsProvider,
     toJson: (v) => ProfileApi.imagingDefaultsToJson(v as ImagingDefaults),
@@ -144,6 +160,11 @@ final _cases = <_Case>[
         api,
         (a) => a.copyWith(exposureSeconds: 10),
       );
+    },
+    editThenSave: (c, api) async {
+      final n = c.read(autofocusSettingsProvider.notifier)
+        ..edit((a) => a.copyWith(exposureSeconds: 10));
+      await n.save(api);
     },
     load: (c, api) => c.read(autofocusSettingsProvider.notifier).load(api),
     provider: autofocusSettingsProvider,
@@ -237,7 +258,7 @@ void main() {
 
       test('a set-then-save after a failed load writes nothing', () async {
         rig.failGet.add(k.route);
-        await _try(() => k.setThenSave(c, rig.api()));
+        await _try(() => k.editThenSave(c, rig.api()));
         expect(rig.puts, isEmpty);
       });
 
@@ -279,7 +300,7 @@ void main() {
           c.read(_connected.notifier).set(false); // an offline session
           expect(await seedPlanningFromCache(c, 'p1'), isTrue);
           rig.failGet.add(k.route);
-          await _try(() => k.setThenSave(c, rig.api()));
+          await _try(() => k.editThenSave(c, rig.api()));
           expect(rig.puts, isEmpty);
         });
 
