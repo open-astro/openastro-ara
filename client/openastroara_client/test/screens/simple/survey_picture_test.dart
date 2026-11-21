@@ -319,7 +319,7 @@ void main() {
       );
       await tester.tap(find.byKey(skySurvey));
       await tester.pump();
-      expect(find.text('DSS2 colour survey (CDS hips2fits)'), findsOneWidget);
+      expect(find.text('DSS2 color survey (CDS hips2fits)'), findsOneWidget);
     });
 
     // Falsified by: target_preview.dart surveyPicture, drop the isSolarSystemName check.

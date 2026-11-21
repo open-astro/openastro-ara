@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/target_preview_service.dart';
 import '../../services/tonight_sky_api.dart';
 import '../../state/album/album_art.dart';
@@ -284,7 +285,7 @@ class SurveyThumb extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-    message: 'DSS2 colour survey (CDS hips2fits)',
+    message: context.l10n.surveyPictureCredit,
     triggerMode: TooltipTriggerMode.tap,
     showDuration: const Duration(seconds: 4),
     child: Stack(
