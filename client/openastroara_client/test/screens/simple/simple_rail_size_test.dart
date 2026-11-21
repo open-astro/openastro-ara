@@ -1,4 +1,8 @@
+import 'dart:io' show File, Platform;
+import 'dart:typed_data' show ByteData;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FontLoader;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
@@ -71,8 +75,13 @@ class _GuiderCal extends GuiderCalibrationNotifier {
   Future<void> refresh() async {}
 }
 
-Future<void> _pump(WidgetTester tester, List<Override> extra) async {
-  tester.view.physicalSize = const Size(1280, 720);
+Future<void> _pump(
+  WidgetTester tester,
+  List<Override> extra, {
+  Size size = const Size(1280, 720),
+  double text = 1,
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
@@ -91,47 +100,131 @@ Future<void> _pump(WidgetTester tester, List<Override> extra) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
       container: container,
-      child: const MaterialApp(
-        home: SimpleShell(planetarium: SizedBox(key: Key('sky'))),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context)
+              .copyWith(textScaler: TextScaler.linear(text)),
+          child: child!,
+        ),
+        home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
       ),
     ),
   );
   await tester.pump();
 }
 
-Rect _rail(WidgetTester tester) =>
-    tester.getRect(find.byKey(const Key('simple-rail-tabs')));
+// The rail is the panel round the shutter: the tab list on a tablet or
+// desktop, the mode button and grid on a phone held sideways.
+Rect _rail(WidgetTester tester) => tester.getRect(
+  find
+      .ancestor(
+        of: find.byKey(const Key('simple-shutter')),
+        matching: find.byType(SimplePanel),
+      )
+      .first,
+);
 
 Future<void> _open(WidgetTester tester, String slug) async {
   final tab = find.byKey(Key('simple-rail-tab-$slug'));
-  await tester.ensureVisible(tab);
-  await tester.tap(tab);
+  if (tab.evaluate().isEmpty) {
+    await tester.tap(find.byKey(const Key('simple-mode')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(Key('simple-mode-$slug')));
+  } else {
+    await tester.ensureVisible(tab);
+    await tester.tap(tab);
+  }
   await tester.pumpAndSettle();
 }
 
+final _ready = <Override>[
+  guiderStatusProvider.overrideWith(_Guider.new),
+  guiderCalibrationProvider.overrideWith(_GuiderCal.new),
+  simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
+];
+
+final _caption = find.byKey(const Key('simple-calibration-shutter-caption'));
+
 void main() {
-  for (final (name, ready) in const [
-    ('idle', false),
-    ('with a job ready', true),
+  for (final (where, size, text, roomy) in const [
+    ('1280x720 at 1.0x', Size(1280, 720), 1.0, true),
+    ('1024x560 at 1.0x', Size(1024, 560), 1.0, false),
+    ('1280x720 at 1.5x', Size(1280, 720), 1.5, false),
   ]) {
-    testWidgets('the rail is the same size on Preview and Calibration, $name '
-        '(#2038)', (tester) async {
-      await _pump(tester, [
-        if (ready) ...[
-          guiderStatusProvider.overrideWith(_Guider.new),
-          guiderCalibrationProvider.overrideWith(_GuiderCal.new),
-          simpleCalibrationTabProvider.overrideWith(_GuideTab.new),
-        ],
-      ]);
-      await _open(tester, 'preview');
-      final preview = _rail(tester);
-      await _open(tester, 'calibration');
-      expect(
-        find.byKey(const Key('simple-calibration-shutter-caption')),
-        ready ? findsOneWidget : findsNothing,
-        reason: 'the caption is what differs',
-      );
-      expect(_rail(tester), preview);
-    });
+    for (final (name, ready) in const [
+      ('idle', false),
+      ('with a job ready', true),
+    ]) {
+      testWidgets('the rail is the same size on Preview and Calibration, '
+          '$name, $where (#2038)', (tester) async {
+        await _pump(tester, [if (ready) ..._ready], size: size, text: text);
+        await _open(tester, 'preview');
+        final preview = _rail(tester);
+        await _open(tester, 'calibration');
+        expect(
+          _caption,
+          ready && roomy ? findsOneWidget : findsNothing,
+          reason: 'the caption shows only where it fits',
+        );
+        expect(_rail(tester), preview);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
+  testWidgets('where the caption does not fit it is the shutter tooltip and '
+      'label (#2038)', (tester) async {
+    await _pump(tester, _ready, size: const Size(1024, 560));
+    await _open(tester, 'calibration');
+    final caption = tester
+        .widget<Tooltip>(
+          find.ancestor(
+            of: find.byKey(const Key('simple-shutter')),
+            matching: find.byType(Tooltip),
+          ),
+        )
+        .message!;
+    expect(caption, isNotEmpty);
+    final handle = tester.ensureSemantics();
+    expect(
+      tester.getSemantics(find.byKey(const Key('simple-shutter'))).label,
+      caption,
+    );
+    handle.dispose();
+  });
+
+  // The test font draws every glyph as a square; the caption's fit is measured
+  // with the Roboto the Flutter SDK ships (as simple_text_scale_test does).
+  final fonts =
+      '${Platform.environment['FLUTTER_ROOT']}/bin/cache/artifacts/material_fonts';
+  final hasFonts = File('$fonts/Roboto-Regular.ttf').existsSync();
+  for (final text in const [1.0, 1.3]) {
+    testWidgets(
+      'the Guide caption is not shrunk in its slot at ${text}x (#2038)',
+      skip: !hasFonts,
+      (tester) async {
+        final roboto = FontLoader('Roboto')
+          ..addFont(
+            Future.value(
+              ByteData.view(
+                File('$fonts/Roboto-Regular.ttf').readAsBytesSync().buffer,
+              ),
+            ),
+          );
+        await roboto.load();
+        await _pump(tester, _ready, text: text);
+        await _open(tester, 'calibration');
+        final box = tester.getSize(
+          find.ancestor(of: _caption, matching: find.byType(FittedBox)),
+        );
+        final inner = tester.getSize(_caption);
+        expect(inner.width, box.width, reason: 'wrapped to the slot');
+        expect(
+          inner.height,
+          lessThanOrEqualTo(box.height),
+          reason: 'within three lines, so the FittedBox scale is 1.0',
+        );
+      },
+    );
   }
 }

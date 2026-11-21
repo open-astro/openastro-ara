@@ -350,9 +350,10 @@ String simpleCalibrationSummary(BuildContext context, WidgetRef ref) =>
     simpleCalibrationJob(context, ref).chip;
 
 /// The Calibration mode's shutter: the current tab's job; its red square
-/// stops a run. [captioned] false leaves the caption to
-/// [SimpleCalibrationShutterCaption], which the rail draws in a slot it keeps
-/// on every mode (#2038).
+/// stops a run. [captioned] false draws no caption under it (the rail keeps one
+/// size, #2038): the rail draws [SimpleCalibrationShutterCaption] in a slot of
+/// its own where there is room, and the job's caption is the shutter's tooltip
+/// where there is not.
 class SimpleCalibrationShutter extends ConsumerWidget {
   const SimpleCalibrationShutter({super.key, this.captioned = true});
 
@@ -362,17 +363,26 @@ class SimpleCalibrationShutter extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final job = simpleCalibrationJob(context, ref);
     final running = simpleCalibrationProgress(ref) != null;
+    final button = SimpleShutterButton(
+      start: true,
+      running: running,
+      label: job.caption,
+      whyOff: job.whyOff,
+      onPressed: job.run == null ? null : () => _runJob(context, ref, job),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
       children: [
-        SimpleShutterButton(
-          start: true,
-          running: running,
-          label: job.caption,
-          whyOff: job.whyOff,
-          onPressed: job.run == null ? null : () => _runJob(context, ref, job),
-        ),
+        // The semantics label already says it; the tooltip is for the eye.
+        if (captioned || job.run == null)
+          button
+        else
+          Tooltip(
+            message: job.caption,
+            excludeFromSemantics: true,
+            child: button,
+          ),
         if (captioned) const SimpleCalibrationShutterCaption(),
       ],
     );
@@ -382,7 +392,10 @@ class SimpleCalibrationShutter extends ConsumerWidget {
 /// What the shutter will do, under it, only when it can: the chip says the
 /// state, and a tap on an idle shutter says why in a pill, as the panel does.
 class SimpleCalibrationShutterCaption extends ConsumerWidget {
-  const SimpleCalibrationShutterCaption({super.key});
+  const SimpleCalibrationShutterCaption({super.key, this.width});
+
+  /// Where the caption wraps; the rail's width at the text size when null.
+  final double? width;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -392,7 +405,7 @@ class SimpleCalibrationShutterCaption extends ConsumerWidget {
       // As wide as the rail at every text size, so large text wraps the same
       // words to the same lines instead of cutting them.
       child: SizedBox(
-        width: 64 * simpleRailScale(context),
+        width: width ?? 64 * simpleRailScale(context),
         child: Text(
           job.caption,
           key: const Key('simple-calibration-shutter-caption'),

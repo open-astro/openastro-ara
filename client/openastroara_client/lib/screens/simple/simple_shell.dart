@@ -2752,6 +2752,13 @@ const double kSimpleRigControlWidth = 160;
 /// whose rows are a label and a [kSimpleRigControlWidth] value.
 const double kSimpleSettingsMaxWidth = 640;
 
+/// Whether the rail has room for the shutter's caption slot: a window at least
+/// 600 high and text up to 1.3x. Read by [_RailShutter] alone, the one place
+/// that decides caption slot or tooltip (#2038).
+bool simpleRailRoomy(BuildContext context) =>
+    MediaQuery.sizeOf(context).height >= 600 &&
+    MediaQuery.textScalerOf(context).scale(1) <= 1.3;
+
 double simpleRailScale(BuildContext context) =>
     math.max(1, MediaQuery.textScalerOf(context).scale(1) / 1.1);
 
@@ -3101,9 +3108,9 @@ class _RailTabs extends ConsumerWidget {
 
 /// The shutter with the room for its caption, the same on every mode so the
 /// rail keeps one size and its top stays put (#2038): Calibration's caption
-/// wraps to three lines at most, and the slot holds three. On a short window
-/// or at large text there is no room to spare, so the caption sits under the
-/// shutter as before and only Calibration's rail grows.
+/// wraps to three lines at most, and the slot holds three. Where there is no
+/// room to spare ([simpleRailRoomy] false) no mode has a slot, and
+/// Calibration's caption is its shutter's tooltip instead.
 class _RailShutter extends StatelessWidget {
   const _RailShutter({required this.mode});
 
@@ -3113,9 +3120,11 @@ class _RailShutter extends StatelessWidget {
   Widget build(BuildContext context) {
     final calibration = mode == SimpleModeScreen.calibration;
     final scaler = MediaQuery.textScalerOf(context);
-    final roomy =
-        MediaQuery.sizeOf(context).height >= 600 && scaler.scale(1) <= 1.3;
-    if (!roomy) return SimpleScreen.of(mode).shutter;
+    if (!simpleRailRoomy(context)) {
+      return calibration
+          ? const SimpleCalibrationShutter(captioned: false)
+          : SimpleScreen.of(mode).shutter;
+    }
     return Column(
       mainAxisSize: MainAxisSize.min,
       spacing: AraSpace.s4,
@@ -3128,9 +3137,13 @@ class _RailShutter extends StatelessWidget {
           height: 3 * scaler.scale(kSimpleCaption.fontSize! * 1.5),
           // A longer caption shrinks into the slot, never cut and never taller.
           child: calibration
-              ? const FittedBox(
-                  fit: BoxFit.scaleDown,
-                  child: SimpleCalibrationShutterCaption(),
+              ? LayoutBuilder(
+                  // Wrapped to the slot's own width, so it shrinks only when
+                  // three lines are not enough.
+                  builder: (context, box) => FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: SimpleCalibrationShutterCaption(width: box.maxWidth),
+                  ),
                 )
               : null,
         ),
