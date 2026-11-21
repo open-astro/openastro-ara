@@ -47,8 +47,7 @@ import '../../state/imaging/live_view_state.dart';
 import '../../state/night_mode_state.dart';
 import '../../models/sequence/sequence_summary.dart';
 import '../../state/sequencer/sequence_list_state.dart';
-import '../../state/simple_calibration_state.dart'
-    show simpleCalibrationRunStateProvider;
+import '../../state/simple_calibration_state.dart' show simpleCalibrationRunStateProvider;
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/settings/cooling_fan_state.dart';
 import '../../state/settings/settings_nav.dart';
@@ -58,8 +57,7 @@ import '../../state/simple_monitor_state.dart';
 import '../../util/app_licenses.dart';
 import '../../state/simple_preflight_state.dart';
 import '../../state/rig_setup_state.dart';
-export '../../state/simple_preflight_state.dart'
-    show SimpleModeScreen, SimpleModeScreenLabels;
+export '../../state/simple_preflight_state.dart' show SimpleModeScreen, SimpleModeScreenLabels;
 
 import 'dart:ui' show ImageFilter;
 
@@ -73,11 +71,9 @@ import '../../models/equipment_device_status.dart';
 import '../../models/polar_align.dart' show PolarAligner;
 import '../../state/equipment/camera_state.dart';
 import '../../state/settings/polar_align_settings_state.dart';
-import '../../state/polar_align/polar_align_state.dart'
-    show polarAlignLiveProvider;
+import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
 import '../../state/polar_align/polar_aligner_state.dart';
-import '../../widgets/imaging/polar_aligner_block.dart'
-    show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
+import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
 import '../../state/equipment/dome_state.dart';
 import '../../state/equipment/equipment_device_state.dart';
 import '../../state/equipment/filter_wheel_state.dart';
@@ -311,8 +307,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
           .read(switchListProvider.future)
           .catchError((Object _) => const <SwitchDevice>[]);
       // Dew may have cleared during the wait.
-      if (!mounted ||
-          !ref.read(diagnosticsStateProvider).openTypes.contains(dew)) {
+      if (!mounted || !ref.read(diagnosticsStateProvider).openTypes.contains(dew)) {
         return;
       }
       final switchUp = devices.any(
@@ -341,8 +336,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// responding (no 12 V); it goes when the cooler responds or the camera
   /// drops.
   void _syncCoolerPill(CameraStatus? next) {
-    final on =
-        next != null &&
+    final on = next != null &&
         next.connectionState == EquipmentConnectionState.connected &&
         next.coolerNotResponding;
     final messages = ref.read(simpleMessagesProvider.notifier);
@@ -444,19 +438,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       // rig's copy only when its tag moved; failures stay in the section.
       unawaited(ref.read(opticsSettingsProvider.notifier).syncFromServer(api));
     }
-
-    ref.listenManual(
-      mountProvider.select((m) => (m.value?.capabilities, m.value?.deviceId)),
-      readOpticsOnConnect,
-      fireImmediately: true,
-    );
-    ref.listenManual(
-      cameraStatusProvider.select(
-        (c) => (c.value?.capabilities, c.value?.deviceId),
-      ),
-      readOpticsOnConnect,
-      fireImmediately: true,
-    );
+    ref.listenManual(mountProvider.select((m) => (m.value?.capabilities, m.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
+    ref.listenManual(cameraStatusProvider.select((c) => (c.value?.capabilities, c.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
     _watchDeviceFailures();
     // #2044 — kept alive with the shell: a meridian stop shows its pill on any screen.
     ref.listenManual(simpleMountLimitProvider, (_, _) {});
@@ -471,24 +456,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _syncAwaitingPill();
     });
-    ref.listenManual(
-      sequenceRunStateProvider,
-      (_, _) => syncAwaiting(),
-      fireImmediately: true,
-    );
+    ref.listenManual(sequenceRunStateProvider, (_, _) => syncAwaiting(),
+        fireImmediately: true);
     // A calibration run started outside the queue is polled on its own too (it is not always the selected sequence).
-    ref.listenManual(
-      simpleCalibrationRunStateProvider,
-      (_, _) => syncAwaiting(),
-    );
+    ref.listenManual(simpleCalibrationRunStateProvider, (_, _) => syncAwaiting());
     // #1756 — a Guider start that failed after calibration began: the pill a quick failure shows.
     ref.listenManual(guideStartLateFailureProvider, (_, failed) {
       if (failed != null && mounted) {
-        _messages.show(
-          SimpleMessageKind.error,
-          friendlyError(context.l10n, failed),
-          origin: SimpleStatusOrigin.guide,
-        );
+        _messages.show(SimpleMessageKind.error, friendlyError(context.l10n, failed), origin: SimpleStatusOrigin.guide);
       }
     });
   }
@@ -508,8 +483,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       final run = ref.read(simpleRunProvider);
       if (i.sequenceId != run.sequenceId) return true;
       final t = run.targets;
-      return t.isNotEmpty &&
-          t[simpleCurrentTarget(t, i.framesCaptured)].calibration;
+      return t.isNotEmpty && t[simpleCurrentTarget(t, i.framesCaptured)].calibration;
     }
 
     bool waiting(SequenceRunStateInfo? i) =>
@@ -542,11 +516,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             if (!mounted) return;
             _messages.show(
               SimpleMessageKind.error,
-              friendlyError(
-                context.l10n,
-                e,
-                action: context.l10n.planActionResume,
-              ),
+              friendlyError(context.l10n, e, action: context.l10n.planActionResume),
             );
           }
         }),
@@ -575,12 +545,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         final now = next.value?.connectionState;
         // A pill closed with × no longer counts: the next failure shows a new one.
         final showing = _devicePills[key];
-        final stillShown =
-            showing != null &&
-            ref.read(simpleMessagesProvider).any((m) => m.id == showing);
-        if (now == EquipmentConnectionState.error &&
-            was != now &&
-            !stillShown) {
+        final stillShown = showing != null && ref.read(simpleMessagesProvider).any((m) => m.id == showing);
+        if (now == EquipmentConnectionState.error && was != now && !stillShown) {
           if (!mounted) return;
           final l10n = context.l10n;
           _devicePills[key] = _messages.show(
@@ -588,17 +554,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
             l10n.simpleDeviceDidNotConnect(type(l10n)),
             actions: [
               SimpleMessageAction(l10n.shellReconnect, () {
-                unawaited(
-                  ref
-                      .read(provider.notifier)
-                      .reconnect()
-                      .catchError((Object _) => false),
-                );
+                unawaited(ref.read(provider.notifier).reconnect().catchError((Object _) => false));
               }),
-              SimpleMessageAction(
-                l10n.shellSectionDevices,
-                () => _openMenu(section: 'Devices'),
-              ),
+              SimpleMessageAction(l10n.shellSectionDevices, () => _openMenu(section: 'Devices')),
             ],
           );
         } else if (now == EquipmentConnectionState.connected) {
@@ -623,8 +581,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   late SimpleMessagesNotifier _messages;
 
   // A frame late: providers can't change while the tree builds or unmounts.
-  void _publishOnTop(bool onTop) =>
-      WidgetsBinding.instance.addPostFrameCallback((_) => _onTop.set(onTop));
+  void _publishOnTop(bool onTop) => WidgetsBinding.instance
+      .addPostFrameCallback((_) => _onTop.set(onTop));
 
   @override
   void didChangeDependencies() {
@@ -703,8 +661,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
 
   /// ⌘. / Ctrl+.: the showing Screen decides (only Queue stops its run).
   void _stopRun() =>
-      SimpleScreen.of(ref.read(simpleShowingProvider))
-          .onStopShortcut(context, ref);
+      SimpleScreen.of(ref.read(simpleShowingProvider)).onStopShortcut(context, ref);
 
   SimpleModeScreen? _lastShown;
 
@@ -770,10 +727,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     if (window != null) return _openDevice(window);
     // The Polar Aligner's line opens the Polar align Screen, where its block is.
     final mode = SimpleScreen.showing(
-      origin == SimpleStatusOrigin.polarAligner
-          ? SimpleStatusOrigin.polar
-          : origin,
-    );
+        origin == SimpleStatusOrigin.polarAligner ? SimpleStatusOrigin.polar : origin);
     // A Preflight on that step keeps going; anything else switches mode.
     if (ref.read(simpleShowingProvider) != mode) _pickMode(mode);
     setState(() {
@@ -792,9 +746,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   });
 
   void _openLibrary() => unawaited(
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen())),
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
+    ),
   );
 
   /// The deck's settings chip: the right rail's, in Preflight's two-line form.
@@ -1219,7 +1173,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final pilot = ref.watch(simplePreflightProvider);
     final shown = ref.watch(simpleShowingProvider);
     _syncGuiderPoll(
-      ref.watch(guiderStatusProvider.select((s) => s.value?.isBusy)),
+      ref.watch(
+        guiderStatusProvider.select((s) => s.value?.isBusy),
+      ),
     );
     // The Screen that stopped showing tidies up (Focus: a pill asks for the mask).
     final left = _lastShown;
@@ -1307,8 +1263,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // any text size.
     final deck = companionPortrait(context, ref);
     final railTabs = simpleRailTabs(context, ref);
-    final barHeight =
-        kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
+    final barHeight = kSimpleBarHeight + (deck ? _companionStripRow(context, ref) : 0);
     final railTop = kSimpleInset * 2 + barHeight;
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
@@ -1334,9 +1289,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final deckTop = kSimpleInset + (_deckHeight == 0 ? 192.0 : _deckHeight);
     final rowBottom = deck ? deckTop + AraSpace.s8 : kSimpleInset;
     final aboveRow = statsShown
-        ? (deck
-              ? rowBottom + bottomRow + AraSpace.s8
-              : kSimpleInset * 2 + bottomRow)
+        ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
         : rowBottom;
     // What the right rail leaves clear under it: Stop's block, or the
     // bottom row when Stop is the rail's own foot.
@@ -1374,8 +1327,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final besideRoom = messagesWidth - railShift * 2;
     bool besideRailAt(double top) =>
         !narrow &&
-        _messagesHeight >
-            (panels ? leftRailTop - top - kSimpleInset : double.infinity) &&
+        _messagesHeight > (panels ? leftRailTop - top - kSimpleInset : double.infinity) &&
         besideRoom >= 240;
     // Beside the steps only when its real left edge (moved beside the rail
     // when it is that tall) leaves the gap. Not measured yet (0): under them,
@@ -1421,10 +1373,11 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // move up only when they don't fit (user, 2026-11-04).
     // Pills grow with large text; none showing still keeps a pill's room.
     final popoverTop =
-        railTop + math.max(kSimpleStatusHeight, _statusHeight) + AraSpace.s8;
+        railTop +
+        math.max(kSimpleStatusHeight, _statusHeight) +
+        AraSpace.s8;
     final preflightPanel = pilot != null && _popover == _Popover.settings;
-    final guiderPanel =
-        !preflightPanel &&
+    final guiderPanel = !preflightPanel &&
         _popover == _Popover.settings &&
         shown == SimpleModeScreen.guide;
     // A closed Guider panel opens centred again.
@@ -1445,9 +1398,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final squaresBesideRail =
         !deck &&
         rightRailTop + _rightRailHeight + AraSpace.s8 >
-            height -
-                aboveStop -
-                kSimplePlanSquareHeight * simpleRailScale(context);
+        height - aboveStop - kSimplePlanSquareHeight * simpleRailScale(context);
     // Beside it they still hold one square (a rail wide): a phone at 2x text.
     final squaresLeft = squaresBesideRail
         ? math.min(width / 2, width - kSimpleInset * 2 - railWidth * 2)
@@ -1469,11 +1420,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     // open window or popover.
     final cardSide = kSimpleInset * 2 + railWidth;
     final cardNarrow = panels && width - cardSide * 2 < kSimpleRigCardMinWidth;
-    final cardOpen =
-        _rigCardOpen &&
-        _device == null &&
-        _popover == _Popover.none &&
-        !_adding;
+    final cardOpen = _rigCardOpen && _device == null && _popover == _Popover.none && !_adding;
     final rigCard = Positioned(
       left: panels && !cardNarrow ? cardSide : kSimpleInset,
       right: panels && !cardNarrow ? cardSide : kSimpleInset,
@@ -1485,9 +1432,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
               ? () {
                   setState(() => _rigCardOpen = false);
                   // Back where the user opened it; a drop alone never takes focus.
-                  WidgetsBinding.instance.addPostFrameCallback(
-                    (_) => _rigBarConnect.requestFocus(),
-                  );
+                  WidgetsBinding.instance.addPostFrameCallback((_) => _rigBarConnect.requestFocus());
                 }
               : null,
         ),
@@ -1497,10 +1442,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       left: kSimpleInset,
       right: rowRight,
       bottom: deck ? rowBottom : kSimpleInset,
-      child: SimpleRigBar(
-        focusNode: _rigBarConnect,
-        onOpen: () => setState(() => _rigCardOpen = true),
-      ),
+      child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
     final pillsLeft = kSimpleInset + (pillsBesideRail ? railShift : 0);
     final pillsTop = panels ? messagesTop : kSimpleInset;
@@ -1515,7 +1457,9 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       left: pillsLeft,
       top: pillsTop,
       // As wide as its widest line (up to 420 px) off a phone; on one, the row.
-      width: narrow ? messagesWidth - (pillsOverRail ? railShift : 0) : null,
+      width: narrow
+          ? messagesWidth - (pillsOverRail ? railShift : 0)
+          : null,
       duration: motion,
       curve: Curves.easeOut,
       child: NotificationListener<SizeChangedLayoutNotification>(
@@ -1586,601 +1530,566 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                   skipTraversal: true,
                   onKeyEvent: _railKey,
                   child: Focus(
-                    focusNode: _focus,
-                    child: SafeArea(
-                      // One shared blur for every frosted panel over the image
-                      // (iPad 6, 2026-11-05: one filter each cost ~30 ms a frame
-                      // against 4 ms with none; see simpleFrost).
-                      child: BackdropGroup(
-                        child: Stack(
-                          children: [
-                            Positioned.fill(
-                              // Screen readers get the immersive toggle by name.
-                              child: Semantics(
-                                button: !showSky,
-                                label: showSky
-                                    ? null
-                                    : _clean
-                                    ? context.l10n.shellShowControls
-                                    : context.l10n.shellHideControls,
-                                child: GestureDetector(
-                                  key: const Key('simple-frame'),
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => _tapImage(!showSky),
-                                  // The sky loads with Simple Mode and stays
-                                  // loaded, offstage with its tickers off while
-                                  // a frame or the wallpaper shows: opening it
-                                  // no longer starts the web view, the engine and
-                                  // its tiles again, and it shows only once it has
-                                  // drawn (or after 3 s), so the tiles are never
-                                  // seen filling in (user, 2026-11-13). Put away,
-                                  // the page rests and draws nothing
-                                  // (PlanetariumShownListener).
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      Offstage(
-                                        offstage: !skyShown,
-                                        child: TickerMode(
-                                          enabled: skyShown,
-                                          child: KeyedSubtree(
-                                            key: const Key(
-                                              'simple-planetarium',
-                                            ),
-                                            child: widget.planetarium,
+                  focusNode: _focus,
+                  child: SafeArea(
+                    // One shared blur for every frosted panel over the image
+                    // (iPad 6, 2026-11-05: one filter each cost ~30 ms a frame
+                    // against 4 ms with none; see simpleFrost).
+                    child: BackdropGroup(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          // Screen readers get the immersive toggle by name.
+                          child: Semantics(
+                            button: !showSky,
+                            label: showSky
+                                ? null
+                                : _clean
+                                ? context.l10n.shellShowControls
+                                : context.l10n.shellHideControls,
+                            child: GestureDetector(
+                              key: const Key('simple-frame'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapImage(!showSky),
+                              // The sky loads with Simple Mode and stays
+                              // loaded, offstage with its tickers off while
+                              // a frame or the wallpaper shows: opening it
+                              // no longer starts the web view, the engine and
+                              // its tiles again, and it shows only once it has
+                              // drawn (or after 3 s), so the tiles are never
+                              // seen filling in (user, 2026-11-13). Put away,
+                              // the page rests and draws nothing
+                              // (PlanetariumShownListener).
+                              child: Stack(
+                                fit: StackFit.expand,
+                                children: [
+                                  Offstage(
+                                    offstage: !skyShown,
+                                    child: TickerMode(
+                                      enabled: skyShown,
+                                      child: KeyedSubtree(
+                                        key: const Key('simple-planetarium'),
+                                        child: widget.planetarium,
+                                      ),
+                                    ),
+                                  ),
+                                  if (!showSky) ...[
+                                    screenFrame ?? const FrameViewer(),
+                                    // A caption over the frame (the Live
+                                    // Stack readout), only with a screen frame.
+                                    if (screenFrame != null &&
+                                        frameCaption != null)
+                                      Align(
+                                        alignment: Alignment.bottomCenter,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: kSimpleInset,
+                                          ),
+                                          child: IgnorePointer(
+                                            child: frameCaption,
                                           ),
                                         ),
                                       ),
-                                      if (!showSky) ...[
-                                        screenFrame ?? const FrameViewer(),
-                                        // A caption over the frame (the Live
-                                        // Stack readout), only with a screen frame.
-                                        if (screenFrame != null &&
-                                            frameCaption != null)
-                                          Align(
-                                            alignment: Alignment.bottomCenter,
-                                            child: Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: kSimpleInset,
-                                              ),
-                                              child: IgnorePointer(
-                                                child: frameCaption,
-                                              ),
-                                            ),
+                                  ] else if (!skyShown) ...[
+                                    const SimpleWallpaper(
+                                      key: Key('simple-wallpaper'),
+                                    ),
+                                    if (!wallpaper)
+                                      Center(
+                                        child: Text(
+                                          context.l10n.shellLoadingSky,
+                                          key: const Key('simple-sky-loading'),
+                                          style: kSimpleText.copyWith(
+                                            color: AraColors.textSecondary,
                                           ),
-                                      ] else if (!skyShown) ...[
-                                        const SimpleWallpaper(
-                                          key: Key('simple-wallpaper'),
                                         ),
-                                        if (!wallpaper)
-                                          Center(
-                                            child: Text(
-                                              context.l10n.shellLoadingSky,
-                                              key: const Key(
-                                                'simple-sky-loading',
-                                              ),
-                                              style: kSimpleText.copyWith(
-                                                color: AraColors.textSecondary,
-                                              ),
-                                            ),
+                                      ),
+                                  ],
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        // The planetarium takes taps itself, so while a
+                        // window is open a layer over the background closes
+                        // them all instead. It paints (1/255, unseen): on
+                        // macOS a click reaches the native sky view unless
+                        // Flutter has drawn over that spot (iOS asks Flutter
+                        // first either way).
+                        if (_anyOpen)
+                          Positioned.fill(
+                            child: GestureDetector(
+                              key: const Key('simple-background-close'),
+                              behavior: HitTestBehavior.opaque,
+                              onTap: () => _tapImage(!showSky),
+                              child: const ColoredBox(color: AraColors.unseenPaint),
+                            ),
+                          ),
+                        // #1559 — no rig link: the card offers one, over the wallpaper.
+                        if (!linkUp) ...[
+                          if (!cardNarrow) rigCard,
+                        ] else if (!hasFrame &&
+                            // #1775 — upright, a panel opens across the middle:
+                            // the hint waits for it rather than show half under it.
+                            !(deck &&
+                                (_popover != _Popover.none ||
+                                    _device != null ||
+                                    _adding)))
+                          Positioned.fill(
+                            // #1775 — upright, centred in the panels' room
+                            // between the strip and the deck, not under it.
+                            left: deck ? kSimpleInset : 0,
+                            top: deck ? kSimpleInset + barHeight : 0,
+                            right: deck ? railGap : 0,
+                            bottom: deck ? betweenBottom : 0,
+                            child: IgnorePointer(
+                              child: Center(
+                                child: Text(
+                                  !guidePreview
+                                      ? context.l10n.shellTapShutter
+                                      : ref.watch(
+                                          guideFocusProvider.select(
+                                            (g) => g.status.active,
                                           ),
-                                      ],
-                                    ],
+                                        )
+                                      ? context.l10n.guideFocusStarting
+                                      : context.l10n.previewGuideEmpty,
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    letterSpacing: 2,
+                                    // Dim but solid: 8:1 on a dark sky.
+                                    color: AraColors.textSecondary,
                                   ),
                                 ),
                               ),
                             ),
-                            // The planetarium takes taps itself, so while a
-                            // window is open a layer over the background closes
-                            // them all instead. It paints (1/255, unseen): on
-                            // macOS a click reaches the native sky view unless
-                            // Flutter has drawn over that spot (iOS asks Flutter
-                            // first either way).
-                            if (_anyOpen)
-                              Positioned.fill(
-                                child: GestureDetector(
-                                  key: const Key('simple-background-close'),
-                                  behavior: HitTestBehavior.opaque,
-                                  onTap: () => _tapImage(!showSky),
-                                  child: const ColoredBox(
-                                    color: AraColors.unseenPaint,
+                          ),
+                        // The message pills, top-left under the strip (under the
+                        // Preflight strip when it shows), down to the left rail;
+                        // they stay in the immersive view.
+                        pillsOverRail ? emptyPillSlot : messagePills,
+                        _Fade(
+                          visible: panels,
+                          child: Stack(
+                            children: [
+                              Positioned(
+                                left: kSimpleInset,
+                                right: kSimpleInset,
+                                top: kSimpleInset,
+                                height: barHeight,
+                                child: _StatusStrip(
+                                  stacked: deck,
+                                  onAra: () => _toggle(_Popover.ara),
+                                  onSearch: () => _toggle(_Popover.search),
+                                  onSettings: () => _openMenu(),
+                                  onDevices: () =>
+                                      _openMenu(section: 'Devices'),
+                                  onFullUi: _leaveForFullUi,
+                                ),
+                              ),
+                              // Info: fact tiles hugging the bottom-left corner,
+                              // above the bottom row.
+                              if (ref.watch(simpleInfoShownProvider))
+                                AnimatedPositioned(
+                                  // Keyed: each slides only from its own place.
+                                  key: const ValueKey('info'),
+                                  left: kSimpleInset,
+                                  bottom: aboveRow,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
+                                  child: const SimpleInfoPanel(),
+                                ),
+                              // Guiding and the histogram along the bottom, each
+                              // once it has data: 16 px from the edge and from Stop.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: rowRight,
+                                bottom: rowBottom,
+                                height: bottomRow,
+                                child: const _StatsRow(),
+                              ),
+                              // #1775 — the deck: both rails and Stop in one.
+                              if (deck)
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  bottom: kSimpleInset,
+                                  child: KeyedSubtree(
+                                    key: _deckKey,
+                                    child: CompanionDeck(
+                                      mode: shown,
+                                      chipLabel: _deckChipLabel(shown, pilot != null),
+                                      settingsOpen: _popover == _Popover.settings,
+                                      sky: _sky,
+                                      info: ref.watch(simpleInfoShownProvider),
+                                      onSection: _pickFromGrid,
+                                      onMonitor: _openMonitor,
+                                      onBest: _openBest,
+                                      onSky: () => setState(() => _sky = !_sky),
+                                      onInfo: () => ref
+                                          .read(simpleInfoShownProvider.notifier)
+                                          .toggle(),
+                                      onLibrary: _openLibrary,
+                                      onSettings: () => _toggle(_Popover.settings),
+                                    ),
+                                  ),
+                                )
+                              else ...[
+                              Positioned(
+                                left: kSimpleInset,
+                                top: railTop,
+                                bottom: railTop,
+                                width: railWidth,
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: KeyedSubtree(
+                                    key: _leftRailKey,
+                                    child: _LeftRail(
+                                      sky: _sky,
+                                      onSky: () => setState(() => _sky = !_sky),
+                                      onAlbum: _openAlbum,
+                                      onBest: _openBest,
+                                      onMonitor: _openMonitor,
+                                    ),
                                   ),
                                 ),
                               ),
-                            // #1559 — no rig link: the card offers one, over the wallpaper.
-                            if (!linkUp) ...[
-                              if (!cardNarrow) rigCard,
-                            ] else if (!hasFrame &&
-                                // #1775 — upright, a panel opens across the middle:
-                                // the hint waits for it rather than show half under it.
-                                !(deck &&
-                                    (_popover != _Popover.none ||
-                                        _device != null ||
-                                        _adding)))
-                              Positioned.fill(
-                                // #1775 — upright, centred in the panels' room
-                                // between the strip and the deck, not under it.
-                                left: deck ? kSimpleInset : 0,
-                                top: deck ? kSimpleInset + barHeight : 0,
-                                right: deck ? railGap : 0,
-                                bottom: deck ? betweenBottom : 0,
-                                child: IgnorePointer(
-                                  child: Center(
-                                    child: Text(
-                                      !guidePreview
-                                          ? context.l10n.shellTapShutter
-                                          : ref.watch(
-                                              guideFocusProvider.select(
-                                                (g) => g.status.active,
-                                              ),
-                                            )
-                                          ? context.l10n.guideFocusStarting
-                                          : context.l10n.previewGuideEmpty,
-                                      style: TextStyle(
-                                        fontSize: 20,
-                                        letterSpacing: 2,
-                                        // Dim but solid: 8:1 on a dark sky.
-                                        color: AraColors.textSecondary,
+                              // The right rail: only as tall as its controls and
+                              // centred between the strip and Stop. Its popover
+                              // (modes or settings) follows the rail's top-left
+                              // corner, so opening one never moves the rail.
+                              Positioned(
+                                right: kSimpleInset,
+                                top: railTop,
+                                bottom: railBottom,
+                                width: railWidth,
+                                child: Center(
+                                  child: CompositedTransformTarget(
+                                    link: _railLink,
+                                    child: railTabs
+                                        ? _RailTabs(
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onPick: _pickTab,
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                            footHeight: footHeight,
+                                          )
+                                        : _RightRail(
+                                            key: _rightRailKey,
+                                            mode: shown,
+                                            named: pilot != null
+                                                ? SimpleModeScreen.preflight
+                                                : null,
+                                            popover: _popover,
+                                            onModes: () =>
+                                                _toggle(_Popover.modes),
+                                            onSettings: () =>
+                                                _toggle(_Popover.settings),
+                                          ),
+                                  ),
+                                ),
+                              ),
+                              ],
+                              // #1562 — the first-time Rig setup sheet, where Plan's
+                              // sheet sits: each window and popover after it here
+                              // draws over it, and it stays up under Settings so
+                              // its ticks follow the edits.
+                              Positioned(
+                                left: kSimpleInset,
+                                right: railGap,
+                                top: popoverTop,
+                                bottom: betweenBottom,
+                                child: SimpleRigSetupHost(
+                                  autoOpened: _rigSetupOpened,
+                                  onOpenRig: _showRigPage,
+                                  onOpenOptics: _showRigOptics,
+                                  onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
+                                ),
+                              ),
+                              // Plan's sheet and Night done: beside the rail;
+                              // while imaging, its panel sits there like any
+                              // mode's.
+                              // Between the status pill and the bottom row (the
+                              // plan squares step aside while it shows); a tall
+                              // sheet scrolls inside.
+                              if (runSheet)
+                                Positioned(
+                                  // Beside the rail like every mode's panel,
+                                  // with the sheet's height (user, 2026-11-04;
+                                  // it was centred over the image).
+                                  left: kSimpleInset,
+                                  right: railGap,
+                                  // Centred between the status pill and the
+                                  // bottom row (user, 2026-11-04).
+                                  top: popoverTop,
+                                  bottom: betweenBottom,
+                                  child: Align(
+                                    alignment: Alignment.centerRight,
+                                    child: sheet,
+                                  ),
+                                )
+                              // The rail's own popovers; Settings and Search
+                              // have their places of their own.
+                              else if (const {
+                                _Popover.modes,
+                                _Popover.settings,
+                                _Popover.queue,
+                              }.contains(_popover))
+                                Positioned(
+                                  left: deck ? kSimpleInset : 0,
+                                  right: railGap,
+                                  top: popoverTop,
+                                  // Plan's bottom limit; the plan squares,
+                                  // which its sheet moves, stay clear.
+                                  bottom: planSquares && !preflightPanel
+                                      ? popoverBottom
+                                      : betweenBottom,
+                                  child: CustomSingleChildLayout(
+                                    delegate: _BesideRail(
+                                      fitWidth: deck,
+                                      centre:
+                                          preflightPanel ||
+                                          (_popover == _Popover.settings &&
+                                              shown == SimpleModeScreen.guide),
+                                      // The Guider panel keeps the top it
+                                      // opened at, whatever its tab or the
+                                      // guider's routine (#1884 audit).
+                                      held: guiderPanel ? _guiderTop : null,
+                                      preferredTop: math.max(
+                                        0,
+                                        rightRailTop - popoverTop,
                                       ),
                                     ),
-                                  ),
-                                ),
-                              ),
-                            // The message pills, top-left under the strip (under the
-                            // Preflight strip when it shows), down to the left rail;
-                            // they stay in the immersive view.
-                            pillsOverRail ? emptyPillSlot : messagePills,
-                            _Fade(
-                              visible: panels,
-                              child: Stack(
-                                children: [
-                                  Positioned(
-                                    left: kSimpleInset,
-                                    right: kSimpleInset,
-                                    top: kSimpleInset,
-                                    height: barHeight,
-                                    child: _StatusStrip(
-                                      stacked: deck,
-                                      onAra: () => _toggle(_Popover.ara),
-                                      onSearch: () => _toggle(_Popover.search),
-                                      onSettings: () => _openMenu(),
-                                      onDevices: () =>
-                                          _openMenu(section: 'Devices'),
-                                      onFullUi: _leaveForFullUi,
-                                    ),
-                                  ),
-                                  // Info: fact tiles hugging the bottom-left corner,
-                                  // above the bottom row.
-                                  if (ref.watch(simpleInfoShownProvider))
-                                    AnimatedPositioned(
-                                      // Keyed: each slides only from its own place.
-                                      key: const ValueKey('info'),
-                                      left: kSimpleInset,
-                                      bottom: aboveRow,
-                                      duration: motion,
-                                      curve: Curves.easeOut,
-                                      child: const SimpleInfoPanel(),
-                                    ),
-                                  // Guiding and the histogram along the bottom, each
-                                  // once it has data: 16 px from the edge and from Stop.
-                                  Positioned(
-                                    left: kSimpleInset,
-                                    right: rowRight,
-                                    bottom: rowBottom,
-                                    height: bottomRow,
-                                    child: const _StatsRow(),
-                                  ),
-                                  // #1775 — the deck: both rails and Stop in one.
-                                  if (deck)
-                                    Positioned(
-                                      left: kSimpleInset,
-                                      right: kSimpleInset,
-                                      bottom: kSimpleInset,
-                                      child: KeyedSubtree(
-                                        key: _deckKey,
-                                        child: CompanionDeck(
-                                          mode: shown,
-                                          chipLabel: _deckChipLabel(
-                                            shown,
-                                            pilot != null,
-                                          ),
-                                          settingsOpen:
-                                              _popover == _Popover.settings,
-                                          sky: _sky,
-                                          info: ref.watch(
-                                            simpleInfoShownProvider,
-                                          ),
-                                          onSection: _pickFromGrid,
-                                          onMonitor: _openMonitor,
-                                          onBest: _openBest,
-                                          onSky: () =>
-                                              setState(() => _sky = !_sky),
-                                          onInfo: () => ref
-                                              .read(
-                                                simpleInfoShownProvider
-                                                    .notifier,
+                                    child: SingleChildScrollView(
+                                        child: _popover == _Popover.queue
+                                            ? queuePanel
+                                            : _popover == _Popover.modes
+                                            ? _ModeGrid(
+                                                current: pilot != null
+                                                    ? SimpleModeScreen.preflight
+                                                    : shown,
+                                                onPicked: _pickFromGrid,
                                               )
-                                              .toggle(),
-                                          onLibrary: _openLibrary,
-                                          onSettings: () =>
-                                              _toggle(_Popover.settings),
-                                        ),
-                                      ),
-                                    )
-                                  else ...[
-                                    Positioned(
-                                      left: kSimpleInset,
-                                      top: railTop,
-                                      bottom: railTop,
-                                      width: railWidth,
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: KeyedSubtree(
-                                          key: _leftRailKey,
-                                          child: _LeftRail(
-                                            sky: _sky,
-                                            onSky: () =>
-                                                setState(() => _sky = !_sky),
-                                            onAlbum: _openAlbum,
-                                            onBest: _openBest,
-                                            onMonitor: _openMonitor,
-                                          ),
-                                        ),
-                                      ),
+                                            : SimpleScreen.of(shown)
+                                                  .panel(screenHost),
                                     ),
-                                    // The right rail: only as tall as its controls and
-                                    // centred between the strip and Stop. Its popover
-                                    // (modes or settings) follows the rail's top-left
-                                    // corner, so opening one never moves the rail.
-                                    Positioned(
-                                      right: kSimpleInset,
-                                      top: railTop,
-                                      bottom: railBottom,
-                                      width: railWidth,
-                                      child: Center(
-                                        child: CompositedTransformTarget(
-                                          link: _railLink,
-                                          child: railTabs
-                                              ? _RailTabs(
-                                                  key: _rightRailKey,
-                                                  mode: shown,
-                                                  named: pilot != null
-                                                      ? SimpleModeScreen
-                                                            .preflight
-                                                      : null,
-                                                  popover: _popover,
-                                                  onPick: _pickTab,
-                                                  onSettings: () => _toggle(
-                                                    _Popover.settings,
-                                                  ),
-                                                  footHeight: footHeight,
-                                                )
-                                              : _RightRail(
-                                                  key: _rightRailKey,
-                                                  mode: shown,
-                                                  named: pilot != null
-                                                      ? SimpleModeScreen
-                                                            .preflight
-                                                      : null,
-                                                  popover: _popover,
-                                                  onModes: () =>
-                                                      _toggle(_Popover.modes),
-                                                  onSettings: () => _toggle(
-                                                    _Popover.settings,
-                                                  ),
-                                                ),
-                                        ),
-                                      ),
+                                  ),
+                                ),
+                              // Preflight's steps, or the offer to start it, centred
+                              // under the strip.
+                              if (simplePreflightRow)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  top: railTop,
+                                  child: Center(
+                                    child: KeyedSubtree(
+                                      key: _simplePreflightRowKey,
+                                      child: const SimplePreflightStrip(),
                                     ),
-                                  ],
-                                  // #1562 — the first-time Rig setup sheet, where Plan's
-                                  // sheet sits: each window and popover after it here
-                                  // draws over it, and it stays up under Settings so
-                                  // its ticks follow the edits.
-                                  Positioned(
-                                    left: kSimpleInset,
-                                    right: railGap,
-                                    top: popoverTop,
-                                    bottom: betweenBottom,
-                                    child: SimpleRigSetupHost(
-                                      autoOpened: _rigSetupOpened,
-                                      onOpenRig: _showRigPage,
-                                      onOpenOptics: _showRigOptics,
-                                      onOpenGuider: () => _openFromPill(
-                                        SimpleStatusOrigin.guide,
+                                  ),
+                                ),
+                              // The plan squares hug the bottom-right corner, just
+                              // above the bottom row, growing left over the right
+                              // half (the Info tiles have the left); beside the
+                              // rail when it reaches down that far, one square wide
+                              // at least. Not before the rail is measured, so they
+                              // never slide there.
+                              if (!runSheet &&
+                                  !preflightPanel &&
+                                  (deck || _rightRailHeight > 0))
+                                AnimatedPositioned(
+                                  key: const ValueKey('plan-squares'),
+                                  left: squaresLeft,
+                                  right: squaresBesideRail
+                                      ? kSimpleInset * 2 + railWidth
+                                      : kSimpleInset,
+                                  bottom: aboveStop,
+                                  duration: motion,
+                                  curve: Curves.easeOut,
+                                  child: Align(
+                                    alignment: Alignment.bottomRight,
+                                    child: SimpleRunTracker(
+                                      onTap: () => _toggle(_Popover.queue),
+                                    ),
+                                  ),
+                                ),
+                              // The sky's pick, offered to Plan; above the plan
+                              // squares while they show. #1778: upright, above
+                              // the deck and within its insets, never over it.
+                              if (_sky && sel != null && !runSheet)
+                                Positioned(
+                                  left: deck ? kSimpleInset : 0,
+                                  right: deck ? kSimpleInset : 0,
+                                  bottom: planSquares && !preflightPanel
+                                      ? popoverBottom
+                                      : deck
+                                      ? aboveRow
+                                      : kSimpleInset * 2 + 40,
+                                  child: Center(
+                                    child: _SkyPick(
+                                      selection: sel,
+                                      onImage: _imagePick,
+                                    ),
+                                  ),
+                                ),
+                              // Settings: a sheet over the dimmed image, from the
+                              // strip down to the bottom row; Stop stays above
+                              // the veil, within reach.
+                              // A device's window, under the strip's dots.
+                              if (_device != null)
+                                Positioned(
+                                  left: _topLeftOverlayLeft(context),
+                                  top: railTop,
+                                  // Never past the bottom row: a tall window
+                                  // (a many-slot filter wheel) scrolls. The
+                                  // Guider window may go over the guiding bar,
+                                  // so its options fit (user, 2026-11-11).
+                                  bottom: _device == 'eq.guider'
+                                      ? kSimpleInset
+                                      : aboveRow,
+                                  // Never wider than the screen beside it: a
+                                  // narrow one puts the Mount pad under its rows.
+                                  width: math.min(
+                                    (_device == 'eq.mount'
+                                            ? kSimpleMountWindowWidth
+                                            : kSimpleDeviceWindowWidth) *
+                                        simpleRailScale(context),
+                                    width -
+                                        _topLeftOverlayLeft(context) -
+                                        kSimpleInset,
+                                  ),
+                                  child: Align(
+                                    alignment: Alignment.topLeft,
+                                    child: SimplePanel(
+                                      child: SingleChildScrollView(
+                                        padding: const EdgeInsets.all(
+                                          AraSpace.s16,
+                                        ),
+                                        child: _deviceWindows[_device]!,
                                       ),
                                     ),
                                   ),
-                                  // Plan's sheet and Night done: beside the rail;
-                                  // while imaging, its panel sits there like any
-                                  // mode's.
-                                  // Between the status pill and the bottom row (the
-                                  // plan squares step aside while it shows); a tall
-                                  // sheet scrolls inside.
-                                  if (runSheet)
-                                    Positioned(
-                                      // Beside the rail like every mode's panel,
-                                      // with the sheet's height (user, 2026-11-04;
-                                      // it was centred over the image).
-                                      left: kSimpleInset,
-                                      right: railGap,
-                                      // Centred between the status pill and the
-                                      // bottom row (user, 2026-11-04).
-                                      top: popoverTop,
-                                      bottom: betweenBottom,
-                                      child: Align(
-                                        alignment: Alignment.centerRight,
-                                        child: sheet,
-                                      ),
-                                    )
-                                  // The rail's own popovers; Settings and Search
-                                  // have their places of their own.
-                                  else if (const {
-                                    _Popover.modes,
-                                    _Popover.settings,
-                                    _Popover.queue,
-                                  }.contains(_popover))
-                                    Positioned(
-                                      left: deck ? kSimpleInset : 0,
-                                      right: railGap,
-                                      top: popoverTop,
-                                      // Plan's bottom limit; the plan squares,
-                                      // which its sheet moves, stay clear.
-                                      bottom: planSquares && !preflightPanel
-                                          ? popoverBottom
-                                          : betweenBottom,
-                                      child: CustomSingleChildLayout(
-                                        delegate: _BesideRail(
-                                          fitWidth: deck,
-                                          centre:
-                                              preflightPanel ||
-                                              (_popover == _Popover.settings &&
-                                                  shown ==
-                                                      SimpleModeScreen.guide),
-                                          // The Guider panel keeps the top it
-                                          // opened at, whatever its tab or the
-                                          // guider's routine (#1884 audit).
-                                          held: guiderPanel ? _guiderTop : null,
-                                          preferredTop: math.max(
-                                            0,
-                                            rightRailTop - popoverTop,
-                                          ),
-                                        ),
-                                        child: SingleChildScrollView(
-                                          child: _popover == _Popover.queue
-                                              ? queuePanel
-                                              : _popover == _Popover.modes
-                                              ? _ModeGrid(
-                                                  current: pilot != null
-                                                      ? SimpleModeScreen
-                                                            .preflight
-                                                      : shown,
-                                                  onPicked: _pickFromGrid,
-                                                )
-                                              : SimpleScreen.of(shown)
-                                                    .panel(screenHost),
-                                        ),
-                                      ),
-                                    ),
-                                  // Preflight's steps, or the offer to start it, centred
-                                  // under the strip.
-                                  if (simplePreflightRow)
-                                    Positioned(
-                                      left: 0,
-                                      right: 0,
-                                      top: railTop,
-                                      child: Center(
-                                        child: KeyedSubtree(
-                                          key: _simplePreflightRowKey,
-                                          child: const SimplePreflightStrip(),
-                                        ),
-                                      ),
-                                    ),
-                                  // The plan squares hug the bottom-right corner, just
-                                  // above the bottom row, growing left over the right
-                                  // half (the Info tiles have the left); beside the
-                                  // rail when it reaches down that far, one square wide
-                                  // at least. Not before the rail is measured, so they
-                                  // never slide there.
-                                  if (!runSheet &&
-                                      !preflightPanel &&
-                                      (deck || _rightRailHeight > 0))
-                                    AnimatedPositioned(
-                                      key: const ValueKey('plan-squares'),
-                                      left: squaresLeft,
-                                      right: squaresBesideRail
-                                          ? kSimpleInset * 2 + railWidth
-                                          : kSimpleInset,
-                                      bottom: aboveStop,
-                                      duration: motion,
-                                      curve: Curves.easeOut,
-                                      child: Align(
-                                        alignment: Alignment.bottomRight,
-                                        child: SimpleRunTracker(
-                                          onTap: () => _toggle(_Popover.queue),
-                                        ),
-                                      ),
-                                    ),
-                                  // The sky's pick, offered to Plan; above the plan
-                                  // squares while they show. #1778: upright, above
-                                  // the deck and within its insets, never over it.
-                                  if (_sky && sel != null && !runSheet)
-                                    Positioned(
-                                      left: deck ? kSimpleInset : 0,
-                                      right: deck ? kSimpleInset : 0,
-                                      bottom: planSquares && !preflightPanel
-                                          ? popoverBottom
-                                          : deck
-                                          ? aboveRow
-                                          : kSimpleInset * 2 + 40,
-                                      child: Center(
-                                        child: _SkyPick(
-                                          selection: sel,
-                                          onImage: _imagePick,
-                                        ),
-                                      ),
-                                    ),
-                                  // Settings: a sheet over the dimmed image, from the
-                                  // strip down to the bottom row; Stop stays above
-                                  // the veil, within reach.
-                                  // A device's window, under the strip's dots.
-                                  if (_device != null)
-                                    Positioned(
-                                      left: _topLeftOverlayLeft(context),
-                                      top: railTop,
-                                      // Never past the bottom row: a tall window
-                                      // (a many-slot filter wheel) scrolls. The
-                                      // Guider window may go over the guiding bar,
-                                      // so its options fit (user, 2026-11-11).
-                                      bottom: _device == 'eq.guider'
-                                          ? kSimpleInset
-                                          : aboveRow,
-                                      // Never wider than the screen beside it: a
-                                      // narrow one puts the Mount pad under its rows.
+                                ),
+                              // Search drops from the strip, centred.
+                              if (_popover == _Popover.search)
+                                Positioned(
+                                  top: railTop,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: aboveRow,
+                                  child: Align(
+                                    alignment: Alignment.topCenter,
+                                    child: SizedBox(
                                       width: math.min(
-                                        (_device == 'eq.mount'
-                                                ? kSimpleMountWindowWidth
-                                                : kSimpleDeviceWindowWidth) *
+                                        480.0,
+                                        width - kSimpleInset * 2,
+                                      ),
+                                      child: SimpleSearchPanel(onHit: _openHit),
+                                    ),
+                                  ),
+                                ),
+                              if (_popover == _Popover.ara)
+                                Positioned(
+                                  top: kSimpleInset * 2 + barHeight,
+                                  left: _topLeftOverlayLeft(context),
+                                  child: _AraSheet(
+                                    onClose: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                  ),
+                                ),
+                              if (_popover == _Popover.menu) ...[
+                                // Under the strip, which stays live (its
+                                // gear closes Settings, the rest still work).
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  top: kSimpleInset + barHeight,
+                                  child: GestureDetector(
+                                    key: const Key('simple-menu-veil'),
+                                    behavior: HitTestBehavior.opaque,
+                                    onTap: () => setState(
+                                      () => _popover = _Popover.none,
+                                    ),
+                                    child: const ColoredBox(
+                                      color: AraColors.popoverShade,
+                                    ),
+                                  ),
+                                ),
+                                Positioned(
+                                  left: kSimpleInset,
+                                  right: kSimpleInset,
+                                  top: railTop,
+                                  bottom: aboveFoot,
+                                  // Under the gear, as wide as its content
+                                  // needs (user, 2026-11-04: window-wide was
+                                  // mostly empty space).
+                                  child: Align(
+                                    alignment: Alignment.topRight,
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        // Grows with the text, like the rails.
+                                        maxWidth:
+                                            kSimpleSettingsMaxWidth *
                                             simpleRailScale(context),
-                                        width -
-                                            _topLeftOverlayLeft(context) -
-                                            kSimpleInset,
                                       ),
-                                      child: Align(
-                                        alignment: Alignment.topLeft,
-                                        child: SimplePanel(
-                                          child: SingleChildScrollView(
-                                            padding: const EdgeInsets.all(
-                                              AraSpace.s16,
-                                            ),
-                                            child: _deviceWindows[_device]!,
-                                          ),
+                                      child: _SettingsSheet(
+                                        key: ValueKey((
+                                          _menuSection,
+                                          _revealStorage,
+                                        )),
+                                        section: _menuSection,
+                                        revealStorage: _revealStoragePending,
+                                        onOpenGuider: () => _openFromPill(
+                                          SimpleStatusOrigin.guide,
                                         ),
-                                      ),
-                                    ),
-                                  // Search drops from the strip, centred.
-                                  if (_popover == _Popover.search)
-                                    Positioned(
-                                      top: railTop,
-                                      left: 0,
-                                      right: 0,
-                                      bottom: aboveRow,
-                                      child: Align(
-                                        alignment: Alignment.topCenter,
-                                        child: SizedBox(
-                                          width: math.min(
-                                            480.0,
-                                            width - kSimpleInset * 2,
-                                          ),
-                                          child: SimpleSearchPanel(
-                                            onHit: _openHit,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  if (_popover == _Popover.ara)
-                                    Positioned(
-                                      top: kSimpleInset * 2 + barHeight,
-                                      left: _topLeftOverlayLeft(context),
-                                      child: _AraSheet(
                                         onClose: () => setState(
                                           () => _popover = _Popover.none,
                                         ),
                                       ),
                                     ),
-                                  if (_popover == _Popover.menu) ...[
-                                    // Under the strip, which stays live (its
-                                    // gear closes Settings, the rest still work).
-                                    Positioned(
-                                      left: 0,
-                                      right: 0,
-                                      bottom: 0,
-                                      top: kSimpleInset + barHeight,
-                                      child: GestureDetector(
-                                        key: const Key('simple-menu-veil'),
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () => setState(
-                                          () => _popover = _Popover.none,
-                                        ),
-                                        child: const ColoredBox(
-                                          color: AraColors.popoverShade,
-                                        ),
-                                      ),
-                                    ),
-                                    Positioned(
-                                      left: kSimpleInset,
-                                      right: kSimpleInset,
-                                      top: railTop,
-                                      bottom: aboveFoot,
-                                      // Under the gear, as wide as its content
-                                      // needs (user, 2026-11-04: window-wide was
-                                      // mostly empty space).
-                                      child: Align(
-                                        alignment: Alignment.topRight,
-                                        child: ConstrainedBox(
-                                          constraints: BoxConstraints(
-                                            // Grows with the text, like the rails.
-                                            maxWidth:
-                                                kSimpleSettingsMaxWidth *
-                                                simpleRailScale(context),
-                                          ),
-                                          child: _SettingsSheet(
-                                            key: ValueKey((
-                                              _menuSection,
-                                              _revealStorage,
-                                            )),
-                                            section: _menuSection,
-                                            revealStorage:
-                                                _revealStoragePending,
-                                            onOpenGuider: () => _openFromPill(
-                                              SimpleStatusOrigin.guide,
-                                            ),
-                                            onClose: () => setState(
-                                              () => _popover = _Popover.none,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                  // Stop on its own at the bottom, under the rail (a phone
-                                  // held sideways; desktop and iPad have it as the foot).
-                                  if (footShown)
-                                    Positioned(
-                                      right: kSimpleInset,
-                                      top: footTop,
-                                      width: railWidth,
-                                      height: footHeight,
-                                      child: const EmergencyStopButton(
-                                        railFoot: true,
-                                      ),
-                                    )
-                                  else if (!deck && !railFoot)
-                                    Positioned(
-                                      right:
-                                          kSimpleInset +
-                                          (railWidth - stopSize) / 2,
-                                      bottom: kSimpleInset,
-                                      width: stopSize,
-                                      height: stopSize,
-                                      child: const EmergencyStopButton(
-                                        compact: true,
-                                      ),
-                                    ),
-                                ],
+                                  ),
+                                ),
+                              ],
+                              // Stop on its own at the bottom, under the rail (a phone
+                              // held sideways; desktop and iPad have it as the foot).
+                              if (footShown)
+                                Positioned(
+                                  right: kSimpleInset,
+                                  top: footTop,
+                                  width: railWidth,
+                                  height: footHeight,
+                                  child: const EmergencyStopButton(railFoot: true),
+                                )
+                              else if (!deck && !railFoot)
+                              Positioned(
+                                right:
+                                    kSimpleInset + (railWidth - stopSize) / 2,
+                                bottom: kSimpleInset,
+                                width: stopSize,
+                                height: stopSize,
+                                child: const EmergencyStopButton(compact: true),
                               ),
-                            ),
-                            // #1559 — a narrow window's bar, or the card it opens over the rails.
-                            if (!linkUp && cardNarrow)
-                              cardOpen ? rigCard : rigBar,
-                            // Above the rail only when it would cover them, and
-                            // never above an open window or popover.
-                            pillsOverRail ? messagePills : emptyPillSlot,
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
+                        // #1559 — a narrow window's bar, or the card it opens over the rails.
+                        if (!linkUp && cardNarrow) cardOpen ? rigCard : rigBar,
+                        // Above the rail only when it would cover them, and
+                        // never above an open window or popover.
+                        pillsOverRail ? messagePills : emptyPillSlot,
+                      ],
+                    ),
                     ),
                   ),
+                ),
                 ),
               ),
             ),
@@ -2229,6 +2138,7 @@ Widget simpleArtCredit(
     ),
   );
 }
+
 
 /// The object picked in the sky, over it: its Album Art and credit if any,
 /// name, type and altitude, and Image this, which opens Plan's sheet with it.
@@ -2889,58 +2799,56 @@ class _LeftRail extends StatelessWidget {
     // made it five).
     child: SingleChildScrollView(
       child: Column(
-        mainAxisSize: MainAxisSize.min,
-        spacing: 4,
-        children: [
-          _RailButton(
-            key: const Key('simple-sky'),
-            glyph: (c) => SkyChartIcon(color: c),
-            twoLines: true,
-            label: context.l10n.shellSky,
-            selected: sky,
-            onTap: onSky,
+      mainAxisSize: MainAxisSize.min,
+      spacing: 4,
+      children: [
+        _RailButton(
+          key: const Key('simple-sky'),
+          glyph: (c) => SkyChartIcon(color: c),
+          twoLines: true,
+          label: context.l10n.shellSky,
+          selected: sky,
+          onTap: onSky,
+        ),
+        // Info moved to Preview's and Focus's panels: Monitor watches the
+        // night (user, 2026-11-11).
+        _RailButton(
+          key: const Key('simple-library'),
+          icon: Icons.photo_library_outlined,
+          label: context.l10n.shellLibrary,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const ImageLibraryScreen()),
           ),
-          // Info moved to Preview's and Focus's panels: Monitor watches the
-          // night (user, 2026-11-11).
-          _RailButton(
-            key: const Key('simple-library'),
-            icon: Icons.photo_library_outlined,
-            label: context.l10n.shellLibrary,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ImageLibraryScreen(),
-              ),
+        ),
+        _RailButton(
+          key: const Key('simple-stats'),
+          icon: Icons.bar_chart_outlined,
+          label: context.l10n.shellStats,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const StatsDashboardScreen(simple: true),
             ),
           ),
-          _RailButton(
-            key: const Key('simple-stats'),
-            icon: Icons.bar_chart_outlined,
-            label: context.l10n.shellStats,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const StatsDashboardScreen(simple: true),
-              ),
-            ),
-          ),
-          _RailButton(
-            key: const Key('simple-album'),
-            icon: albumIcon,
-            label: context.l10n.shellAlbum,
-            onTap: onAlbum,
-          ),
-          _RailButton(
-            key: const Key('simple-monitor-open'),
-            icon: Icons.monitor_heart_outlined,
-            label: context.l10n.monitorTitle,
-            onTap: onMonitor,
-          ),
-          _RailButton(
-            key: const Key('simple-best-open'),
-            icon: Icons.star_outline,
-            label: context.l10n.bestNav,
-            onTap: onBest,
-          ),
-        ],
+        ),
+        _RailButton(
+          key: const Key('simple-album'),
+          icon: albumIcon,
+          label: context.l10n.shellAlbum,
+          onTap: onAlbum,
+        ),
+        _RailButton(
+          key: const Key('simple-monitor-open'),
+          icon: Icons.monitor_heart_outlined,
+          label: context.l10n.monitorTitle,
+          onTap: onMonitor,
+        ),
+        _RailButton(
+          key: const Key('simple-best-open'),
+          icon: Icons.star_outline,
+          label: context.l10n.bestNav,
+          onTap: onBest,
+        ),
+      ],
       ),
     ),
   );
@@ -3981,12 +3889,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
       if (ref.watch(
         switchListProvider.select((v) => v.value?.isNotEmpty ?? false),
       ))
-        (
-          'Switches',
-          l10n.shellSwitches,
-          (c) => glyph(Icons.toggle_on, c),
-          true,
-        ),
+        ('Switches', l10n.shellSwitches, (c) => glyph(Icons.toggle_on, c), true),
       if (ref.watch(flatPanelProvider.select((v) => v.value != null)))
         (
           'Flat panel',
@@ -4058,9 +3961,7 @@ class _SettingsSheetState extends ConsumerState<_SettingsSheet> {
                       borderRadius: BorderRadius.circular(AraRadius.container),
                       child: InkWell(
                         key: Key('simple-menu-nav-$name'),
-                        borderRadius: BorderRadius.circular(
-                          AraRadius.container,
-                        ),
+                        borderRadius: BorderRadius.circular(AraRadius.container),
                         onTap: () => setState(() => _section = name),
                         child: Semantics(
                           selected: _section == name,
@@ -4174,105 +4075,81 @@ class _Gear extends ConsumerWidget {
     final l10n = context.l10n;
     // Each row with its shown type, so the list sorts itself in any locale.
     final rows = <(String, Widget)>[
-      (
-        l10n.shellSectionCamera,
-        _GearRow(
+      (l10n.shellSectionCamera, _GearRow(
           id: 'camera',
           deviceType: EquipmentDeviceType.camera,
           type: l10n.shellSectionCamera,
           provider: cameraStatusProvider,
           onOpen: () => onOpen('Camera'),
-        ),
-      ),
-      (
-        l10n.shellSectionMount,
-        _GearRow(
+        )),
+      (l10n.shellSectionMount, _GearRow(
           id: 'mount',
           deviceType: EquipmentDeviceType.mount,
           type: l10n.shellSectionMount,
           provider: mountProvider,
           onOpen: () => onOpen('Mount'),
-        ),
-      ),
-      (
-        l10n.shellSectionFocuser,
-        _GearRow(
+        )),
+      (l10n.shellSectionFocuser, _GearRow(
           id: 'focuser',
           deviceType: EquipmentDeviceType.focuser,
           type: l10n.shellSectionFocuser,
           provider: focuserProvider,
           onOpen: () => onOpen('Focuser'),
-        ),
-      ),
+        )),
       (l10n.shellSectionGuider, _GuiderGearRow(onOpen: () => onOpen('Guider'))),
-      (
-        l10n.shellFilterWheel,
-        _GearRow(
+      (l10n.shellFilterWheel, _GearRow(
           id: 'filterwheel',
           deviceType: EquipmentDeviceType.filterWheel,
           type: l10n.shellFilterWheel,
           provider: filterWheelProvider,
           onOpen: () => onOpen('Filter wheel'),
-        ),
-      ),
-      (
-        l10n.shellRotator,
-        _GearRow(
+        )),
+      (l10n.shellRotator, _GearRow(
           id: 'rotator',
           deviceType: EquipmentDeviceType.rotator,
           type: l10n.shellRotator,
           provider: rotatorProvider,
           onOpen: () => onOpen('Rotator'),
-        ),
-      ),
-      (
-        l10n.shellFlatPanel,
-        _GearRow(
+        )),
+      (l10n.shellFlatPanel, _GearRow(
           id: 'flat',
           deviceType: EquipmentDeviceType.flatPanel,
           type: l10n.shellFlatPanel,
           provider: flatPanelProvider,
           onOpen: () => onOpen('Flat panel'),
-        ),
-      ),
+        )),
       (l10n.shellSwitches, _SwitchGearRows(onOpen: () => onOpen('Switches'))),
-      (
-        l10n.shellDome,
-        _GearRow(
+      (l10n.shellDome, _GearRow(
           id: 'dome',
           deviceType: EquipmentDeviceType.dome,
           type: l10n.shellDome,
           provider: domeProvider,
           onOpen: () => onOpen('Dome'),
-        ),
-      ),
-      (
-        l10n.shellWeather,
-        _GearRow(
+        )),
+      (l10n.shellWeather, _GearRow(
           id: 'weather',
           deviceType: EquipmentDeviceType.weather,
           type: l10n.shellWeather,
           provider: weatherProvider,
           onOpen: () => onOpen('Weather'),
-        ),
-      ),
-      (
-        l10n.shellSafetyMonitor,
-        _GearRow(
+        )),
+      (l10n.shellSafetyMonitor, _GearRow(
           id: 'safety',
           deviceType: EquipmentDeviceType.safetyMonitor,
           type: l10n.shellSafetyMonitor,
           provider: safetyMonitorProvider,
           onOpen: () => onOpen('Safety monitor'),
-        ),
-      ),
+        )),
       (l10n.polarAligner, const _PolarAlignerGearRows()),
     ]..sort((a, b) => simpleCompareNames(a.$1, b.$1));
     return Column(
       key: const Key('simple-gear'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       spacing: AraSpace.s8,
-      children: [for (final row in rows) row.$2, const _AddGearRow()],
+      children: [
+        for (final row in rows) row.$2,
+        const _AddGearRow(),
+      ],
     );
   }
 }
@@ -4309,9 +4186,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
     }
     // No rig, a daemon that predates the Polar Aligner (404), or none found (#2042).
     if (device == null || !device.present) return const SizedBox.shrink();
-    final moving =
-        device.moving ||
-        polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
+    final moving = device.moving || polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
     final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
     final (dot, word, caption) = !device.drivable
         ? (
@@ -4322,9 +4197,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
         : (
             moving ? StatusLevel.active : StatusLevel.connected,
             moving ? l10n.deviceMoving : l10n.polarAlignerReady,
-            device.carrier == 'mount'
-                ? l10n.polarAlignerFoundMount
-                : l10n.polarAlignerFoundBase,
+            device.carrier == 'mount' ? l10n.polarAlignerFoundMount : l10n.polarAlignerFoundBase,
           );
     final title = device.name == null
         ? l10n.polarAligner
@@ -4352,12 +4225,8 @@ class _PolarAlignerGearRows extends ConsumerWidget {
             .changeAndSave((s) => s.copyWith(polarAlignerAuto: next));
       } catch (e) {
         notify(
-          l10n.shellGearActionFailed(
-            l10n.polarAlignerTurnedBy,
-            l10n.polarAligner,
-          ),
-          detail:
-              e is SectionNotLoadedException || e is SectionConflictException
+          l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
+          detail: e is SectionNotLoadedException || e is SectionConflictException
               ? e.toString()
               : failureReason(l10n, e),
           error: true,
@@ -4372,10 +4241,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
         row,
         Container(
           key: const Key('simple-gear-polaraligner-turned-by'),
-          padding: const EdgeInsets.symmetric(
-            horizontal: AraSpace.s12,
-            vertical: AraSpace.s8,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: AraSpace.s12, vertical: AraSpace.s8),
           decoration: BoxDecoration(
             color: AraColors.tileFill,
             borderRadius: BorderRadius.circular(AraRadius.simplePanel),
@@ -4387,9 +4253,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
               Text(l10n.polarAlignerTurnedBy, style: kSimpleText),
               if (auto != null)
                 Text(
-                  auto
-                      ? l10n.polarAlignerMotorsCaption
-                      : l10n.polarAlignerHandCaption,
+                  auto ? l10n.polarAlignerMotorsCaption : l10n.polarAlignerHandCaption,
                   style: AraText.caption,
                 ),
               SimpleSegments<bool>(
@@ -4425,43 +4289,23 @@ class _AddGearRow extends ConsumerWidget {
     ) => (type, label, ref.read(provider.notifier).connect);
     final missing = [
       if (ref.watch(cameraStatusProvider).value == null)
-        entry(
-          EquipmentDeviceType.camera,
-          l10n.shellSectionCamera,
-          cameraStatusProvider,
-        ),
+        entry(EquipmentDeviceType.camera, l10n.shellSectionCamera, cameraStatusProvider),
       if (ref.watch(mountProvider).value == null)
         entry(EquipmentDeviceType.mount, l10n.shellSectionMount, mountProvider),
       if (ref.watch(focuserProvider).value == null)
-        entry(
-          EquipmentDeviceType.focuser,
-          l10n.shellSectionFocuser,
-          focuserProvider,
-        ),
+        entry(EquipmentDeviceType.focuser, l10n.shellSectionFocuser, focuserProvider),
       if (ref.watch(filterWheelProvider).value == null)
-        entry(
-          EquipmentDeviceType.filterWheel,
-          l10n.shellFilterWheel,
-          filterWheelProvider,
-        ),
+        entry(EquipmentDeviceType.filterWheel, l10n.shellFilterWheel, filterWheelProvider),
       if (ref.watch(rotatorProvider).value == null)
         entry(EquipmentDeviceType.rotator, l10n.shellRotator, rotatorProvider),
       if (ref.watch(flatPanelProvider).value == null)
-        entry(
-          EquipmentDeviceType.flatPanel,
-          l10n.shellFlatPanel,
-          flatPanelProvider,
-        ),
+        entry(EquipmentDeviceType.flatPanel, l10n.shellFlatPanel, flatPanelProvider),
       if (ref.watch(domeProvider).value == null)
         entry(EquipmentDeviceType.dome, l10n.shellDome, domeProvider),
       if (ref.watch(weatherProvider).value == null)
         entry(EquipmentDeviceType.weather, l10n.shellWeather, weatherProvider),
       if (ref.watch(safetyMonitorProvider).value == null)
-        entry(
-          EquipmentDeviceType.safetyMonitor,
-          l10n.shellSafetyMonitor,
-          safetyMonitorProvider,
-        ),
+        entry(EquipmentDeviceType.safetyMonitor, l10n.shellSafetyMonitor, safetyMonitorProvider),
       if ((ref.watch(switchListProvider).value ?? const []).isEmpty)
         (
           EquipmentDeviceType.switchDevice,
@@ -4688,37 +4532,33 @@ class _GuiderGearRow extends ConsumerWidget {
 }
 
 /// What a device row's Choose opens under the row; [close] folds it again.
-typedef _GearChooser = Widget Function(
-  BuildContext context,
-  VoidCallback close,
-);
+typedef _GearChooser = Widget Function(BuildContext context, VoidCallback close);
 
 /// The Full UI's device chooser, in place; [connect] takes the picked device.
 _GearChooser _deviceChooser(
   EquipmentDeviceType type,
   String typeLabel,
   Future<bool> Function(DiscoveredDevice device) connect,
-) =>
-    (context, close) => SimpleHostedText(
-      child: AlpacaDeviceChooser(
-        type: type,
-        deviceTypeLabel: typeLabel,
-        onClose: close,
-        onPick: (device) async {
-          final notify = userNotifier(context);
-          final l10n = context.l10n;
-          try {
-            await connect(device);
-          } catch (e) {
-            notify(
-              l10n.shellGearActionFailed(l10n.shellConnect, device.name),
-              detail: failureReason(l10n, e),
-              error: true,
-            );
-          }
-        },
-      ),
-    );
+) => (context, close) => SimpleHostedText(
+  child: AlpacaDeviceChooser(
+  type: type,
+  deviceTypeLabel: typeLabel,
+  onClose: close,
+  onPick: (device) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    try {
+      await connect(device);
+    } catch (e) {
+      notify(
+        l10n.shellGearActionFailed(l10n.shellConnect, device.name),
+        detail: failureReason(l10n, e),
+        error: true,
+      );
+    }
+  },
+),
+);
 
 /// Add a device, in place: the types the rig has none of, then the chooser
 /// for the one tapped.
@@ -4742,10 +4582,11 @@ class _AddGearPanelState extends State<_AddGearPanel> {
   Widget build(BuildContext context) {
     final picked = widget.missing.where((m) => m.$1 == _type).firstOrNull;
     if (picked != null) {
-      return _deviceChooser(picked.$1, picked.$2, picked.$3)(
-        context,
-        widget.close,
-      );
+      return _deviceChooser(
+        picked.$1,
+        picked.$2,
+        picked.$3,
+      )(context, widget.close);
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -4921,12 +4762,7 @@ Widget _gearRow({
 /// A Settings › Rig value the rig finds out itself: its button, never
 /// enabled, read as text, in the same tile as the wheels above it.
 class _RigReadOnlyRow extends StatelessWidget {
-  const _RigReadOnlyRow({
-    required this.id,
-    required this.label,
-    required this.value,
-    this.hint,
-  });
+  const _RigReadOnlyRow({required this.id, required this.label, required this.value, this.hint});
 
   final String id;
   final String label;
@@ -5323,10 +5159,9 @@ class _ThisRig extends ConsumerWidget {
             id: 'guidefocal',
             label: l10n.shellGuideFocalLength,
             digits: 4,
-            value:
-                (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
-                    .guideFocalLength
-                    .toDouble(),
+            value: (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guideFocalLength
+                .toDouble(),
             onSet: (v) => _saveGuider(
               context,
               ref,
@@ -6086,92 +5921,88 @@ class _AraSheet extends ConsumerWidget {
       ),
       child: IntrinsicWidth(
         child: SimplePanel(
-          // The top and bottom 44 pt targets fill most of the usual inset.
-          padding: const EdgeInsets.fromLTRB(
-            AraSpace.s16,
-            AraSpace.s4,
-            AraSpace.s16,
-            0,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SimpleVersions(
-                title: kAppName,
-                titleAction: TextButton(
-                  key: const Key('simple-ara-licenses'),
-                  // A foreground builder turns clipping on, which cuts the tint's corners.
-                  clipBehavior: Clip.none,
-                  style: _linkStyle(),
-                  onPressed: () {
-                    showAppLicenses(context, version);
-                    onClose();
-                  },
-                  child: Text(
-                    l10n.shellLicenses,
-                    semanticsLabel: l10n.shellOpenSourceLicenses,
-                    style: const TextStyle(fontSize: 14),
-                  ),
-                ),
-                rows: [
-                  (l10n.shellThisApp, version ?? '—'),
-                  (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
-                  if (rig?.guiderVersion != null)
-                    (l10n.deviceGuider, rig!.guiderVersion!),
-                ],
-              ),
-              // #2093: a server from another release line. Wraps to the sheet's
-              // width rather than widening it.
-              _NoIntrinsicWidth(
-                child: VersionMismatchWarning(
-                  serverVersion: rig?.daemonVersion,
-                ),
-              ),
-              // Half of the version table's 4 px line gap on each side.
-              Padding(
-                padding: const EdgeInsets.only(bottom: AraSpace.s4 / 2),
-                child: _ChangeRow(
-                  buttonKey: const Key('simple-ara-change-rig'),
-                  label: l10n.shellSectionRig,
-                  value: server == null
-                      ? '—'
-                      : server.mdnsName ?? server.hostname,
-                  change: l10n.shellChangeRig,
-                  wrapValue: true,
-                  linePlace: CrossAxisAlignment.end,
-                  onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.only(top: AraSpace.s4 / 2),
-                child: _ChangeRow(
-                  buttonKey: const Key('simple-ara-change-profile'),
-                  label: l10n.shellProfile,
-                  value: profile ?? '—',
-                  change: l10n.shellChangeProfile,
-                  wrapValue: true,
-                  linePlace: CrossAxisAlignment.start,
-                  onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
-                ),
-              ),
-              if (running)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: AraSpace.s16),
-                  // Wraps to the sheet's width rather than widening it (user,
-                  // 2026-11-11).
-                  child: _NoIntrinsicWidth(
-                    child: Text(
-                      l10n.shellPlanRunning,
-                      style: AraText.caption.copyWith(
-                        color: AraColors.accentBusy,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
+        // The top and bottom 44 pt targets fill most of the usual inset.
+        padding: const EdgeInsets.fromLTRB(
+          AraSpace.s16,
+          AraSpace.s4,
+          AraSpace.s16,
+          0,
         ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SimpleVersions(
+              title: kAppName,
+              titleAction: TextButton(
+                key: const Key('simple-ara-licenses'),
+                // A foreground builder turns clipping on, which cuts the tint's corners.
+                clipBehavior: Clip.none,
+                style: _linkStyle(),
+                onPressed: () {
+                  showAppLicenses(context, version);
+                  onClose();
+                },
+                child: Text(
+                  l10n.shellLicenses,
+                  semanticsLabel: l10n.shellOpenSourceLicenses,
+                  style: const TextStyle(fontSize: 14),
+                ),
+              ),
+              rows: [
+                (l10n.shellThisApp, version ?? '—'),
+                (l10n.shellAraServer, rig?.daemonVersion ?? '—'),
+                if (rig?.guiderVersion != null)
+                  (l10n.deviceGuider, rig!.guiderVersion!),
+              ],
+            ),
+            // #2093: a server from another release line. Wraps to the sheet's
+            // width rather than widening it.
+            _NoIntrinsicWidth(
+              child: VersionMismatchWarning(serverVersion: rig?.daemonVersion),
+            ),
+            // Half of the version table's 4 px line gap on each side.
+            Padding(
+              padding: const EdgeInsets.only(bottom: AraSpace.s4 / 2),
+              child: _ChangeRow(
+                buttonKey: const Key('simple-ara-change-rig'),
+                label: l10n.shellSectionRig,
+                value: server == null
+                    ? '—'
+                    : server.mdnsName ?? server.hostname,
+                change: l10n.shellChangeRig,
+                wrapValue: true,
+                linePlace: CrossAxisAlignment.end,
+                onTap: () => _changeRigOrProfile(ref, onClose, rig: true),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(top: AraSpace.s4 / 2),
+              child: _ChangeRow(
+                buttonKey: const Key('simple-ara-change-profile'),
+                label: l10n.shellProfile,
+                value: profile ?? '—',
+                change: l10n.shellChangeProfile,
+                wrapValue: true,
+                linePlace: CrossAxisAlignment.start,
+                onTap: () => _changeRigOrProfile(ref, onClose, rig: false),
+              ),
+            ),
+            if (running)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AraSpace.s16),
+                // Wraps to the sheet's width rather than widening it (user,
+                // 2026-11-11).
+                child: _NoIntrinsicWidth(
+                  child: Text(
+                    l10n.shellPlanRunning,
+                    style: AraText.caption.copyWith(color: AraColors.accentBusy),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
       ),
     );
   }
@@ -6184,8 +6015,7 @@ class _NoIntrinsicWidth extends SingleChildRenderObjectWidget {
   const _NoIntrinsicWidth({required super.child});
 
   @override
-  RenderObject createRenderObject(BuildContext context) =>
-      _RenderNoIntrinsicWidth();
+  RenderObject createRenderObject(BuildContext context) => _RenderNoIntrinsicWidth();
 }
 
 class _RenderNoIntrinsicWidth extends RenderProxyBox {
