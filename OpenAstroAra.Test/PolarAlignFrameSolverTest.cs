@@ -110,6 +110,31 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_solved_frame_carries_the_plate_solves_position_angle() {
+            // #2067 ARA-13 — the field check between frames runs only on solves that carry the angle: one dropped here
+            // would switch the pier-flip check off for every real run.
+            var store = new InMemoryProfileStore();
+            store.PutPhd2Settings(store.GetPhd2Settings() with { GuideFocalLength = 200, GuidePixelSize = 3.75 });
+            var imageSolver = new Mock<IImageSolver>();
+            imageSolver.Setup(s => s.Solve(It.IsAny<IImageData>(), It.IsAny<PlateSolveParameter>(),
+                    It.IsAny<IProgress<ApplicationStatus>?>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult {
+                    Success = true,
+                    Coordinates = new Coordinates(40.0, 85.0, Epoch.J2000, Coordinates.RAType.Degrees),
+                    PositionAngle = 123.4,
+                });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetImageSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>())).Returns(imageSolver.Object);
+            var sut = new PolarAlignFrameSolver(new HeadlessProfileService(), store, factory.Object);
+
+            var outcome = await sut.SolveAsync(WriteFrame(), 1, null, null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(outcome.Success, Is.True);
+            Assert.That(outcome.PositionAngleDeg, Is.EqualTo(123.4).Within(1e-9));
+        }
+
+        [Test]
         public async Task A_solved_frame_carries_the_guide_pixel_scale_it_was_solved_at() {
             // #2072: the fit's precision floor scales with it. 200 mm, 3.75 µm, 2×2: 206.265 × 7.5 / 200 = 7.73″/px.
             var store = new InMemoryProfileStore();

@@ -968,6 +968,35 @@ void main() {
     expect(find.text(en.polarReadoutCautionAltitudeWeak), findsOneWidget);
   });
 
+  testWidgets('a Dec that moved across the three points is warned about while adjusting (#2081)', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final en = lookupAppLocalizations(const Locale('en'));
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-dec-spread')), findsNothing);
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    live.frame(_adjusting.copyWith(decSpreadArcsec: 2.6));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-dec-spread')), findsOneWidget);
+    expect(find.text(en.polarDecSpreadWarning('2.6')), findsOneWidget);
+  });
+
+  test('the Dec-spread warning is the verdict one once checked, the seed one only while the readout runs (#2081)', () {
+    const verdict = PolarAlignCheckResult(altErrorArcmin: 0, azErrorArcmin: 0, totalErrorArcmin: 0.5, decSpreadArcsec: 3.0);
+    expect(
+      simplePolarDecSpread(
+          const PolarAlignLive(phase: PolarAlignStates.checked, checkResult: verdict, decSpreadArcsec: 9.0),
+          verifying: true),
+      3.0,
+    );
+    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.adjusting, decSpreadArcsec: 2.5), verifying: false), 2.5);
+    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.paused, decSpreadArcsec: 2.5), verifying: false), 2.5);
+    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.checking, decSpreadArcsec: 2.5), verifying: true), isNull);
+    expect(simplePolarDecSpread(const PolarAlignLive(phase: PolarAlignStates.stopped, decSpreadArcsec: 2.5), verifying: false), isNull);
+  });
+
   testWidgets('failed solves say so', (tester) async {
     await _pump(tester, _adjusting.copyWith(consecutiveSolveFailures: 2));
     expect(find.text('No solve (2 in a row). Check the sky.'), findsOneWidget);

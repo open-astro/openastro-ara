@@ -130,8 +130,8 @@ namespace OpenAstroAra.Test {
             Assert.That(fit, Does.EndWith("σ floor 0.15 px × 8.00″/px = 1.20″ per axis"), fit);
             Assert.That(fit.Split("±1.20″ (floor)").Length - 1, Is.EqualTo(3), fit);
             // Four times the scale, four times a point's floor (a mean of three solves, here).
-            Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, 0.0, 3, PixelScaleArcsec: 8.0)),
-                Is.EqualTo(4 * PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, 0.0, 3, PixelScaleArcsec: 2.0))).Within(1e-12));
+            Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, SigmaArcsec: 0.0, Solves: 3, PixelScaleArcsec: 8.0)),
+                Is.EqualTo(4 * PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0, 85, SigmaArcsec: 0.0, Solves: 3, PixelScaleArcsec: 2.0))).Within(1e-12));
         }
 
         [Test]
@@ -209,7 +209,7 @@ namespace OpenAstroAra.Test {
             var fit = logger.Entries.Single(e => e.EventId == 4528).Message;
             Assert.That(fit.Split("±0.58″ (floor)").Length - 1, Is.EqualTo(3), fit);
             // A measured scatter over the floor stands as measured.
-            Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, 85.0, 0.9, 3)), Is.EqualTo(0.9));
+            Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, 85.0, SigmaArcsec: 0.9, Solves: 3)), Is.EqualTo(0.9));
             Assert.That(PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, 85.0)), Is.EqualTo(1.0), "one solve: the floor");
         }
 
@@ -241,7 +241,7 @@ namespace OpenAstroAra.Test {
             // the error.
             var defaults = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto());
             var at = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero);
-            var floor = PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, PoleMountDecDeg, 0.0, defaults.FramesPerPoint));
+            var floor = PolarAlignService.PointSigmaArcsec(new PolarAlignSolveOutcome(true, 0.0, PoleMountDecDeg, SigmaArcsec: 0.0, Solves: defaults.FramesPerPoint));
             double SigmaAt(double stepDeg) => PolarAlignGeometry.AxisErrorSigma(
                 (30.0, PoleMountDecDeg, floor), (30.0 + stepDeg, PoleMountDecDeg, floor), (30.0 + 2 * stepDeg, PoleMountDecDeg, floor),
                 northernHemisphere: true, SiteLatDeg, SiteLonDeg, at).TotalSigmaArcmin;

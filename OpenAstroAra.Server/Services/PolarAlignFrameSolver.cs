@@ -53,15 +53,22 @@ public interface IPolarAlignFrameSolver {
 }
 
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
-/// when <see cref="Success"/> is true. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
+/// when <see cref="Success"/> is true. <see cref="PositionAngleDeg"/> (#2067 ARA-13) is the solve's position angle (the
+/// image's rotation from celestial north, degrees), null when the solver gave none: an RA turn of an equatorial mount
+/// keeps it, a pier flip turns it by 180°. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
 /// 1σ of its mean per axis on the sky, from their scatter (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>);
 /// null on a single solve, which has no scatter to measure. <c>Solves</c> is how many solves the point averages (1 for a
 /// single solve): the fit never counts a point surer than the solver's own precision of that mean
 /// (<see cref="PolarAlignService.PointSigmaArcsec"/>). <c>PixelScaleArcsec</c> (#2072) is the arcsec per (binned) pixel of
 /// the frame, from the optics the solver was given (the guide camera's or the main camera's, whichever took it); it
 /// scales that precision floor. Null when unknown.</summary>
-public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow, double? SigmaArcsec = null, int Solves = 1,
-    double? PixelScaleArcsec = null);
+public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow, double? PositionAngleDeg = null,
+    double? SigmaArcsec = null, int Solves = 1, double? PixelScaleArcsec = null) {
+
+    /// <summary>The position angle of a solver's result, or null when it is not a finite number.</summary>
+    public static double? PositionAngleOf(PlateSolveResult result) =>
+        double.IsFinite(result.PositionAngle) ? result.PositionAngle : null;
+}
 
 /// <summary>
 /// §45 — the real frame solver: read the guider's 16-bit FITS, wrap it as <c>IImageData</c>, and run
@@ -120,7 +127,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         }
         var apparent = result.Coordinates.Transform(Epoch.JNOW);
         // #2072 — the scale the solver was told (guide optics × binning), for the fit's precision floor.
-        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec,
+        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result),
             PixelScaleArcsec: PixelScaleArcsecOrNull(binnedPixelSizeUm, focalLengthMm));
     }
 

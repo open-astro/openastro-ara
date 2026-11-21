@@ -14,6 +14,7 @@
 
 using ASCOM.Common.DeviceInterfaces;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,14 +31,51 @@ public sealed partial class TelescopeService {
     /// read leaves the old session's number on a reading the old client answered. The frame is the session's equatorial
     /// system once the refresh read it; until then the driver is asked with the position (its answer is not kept: the
     /// refresh owns that state). Pier side is not asked of a mount that does not implement it (<c>pierUnknown</c>).</remarks>
-    public Task<MountReading?> ReadNowAsync(CancellationToken ct) => ReadAsync(positionOnly: false, ct);
+    public Task<MountReading?> ReadNowAsync(CancellationToken ct) => ReadAsync(readSlewing: true, readSide: true, ct);
 
     /// <inheritdoc />
-    public Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadAsync(positionOnly: true, ct);
+    public Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadAsync(readSlewing: false, readSide: false, ct);
+
+    /// <inheritdoc />
+    public Task<MountReading?> ReadPoseNowAsync(CancellationToken ct) => ReadAsync(readSlewing: false, readSide: true, ct);
+
+    /// <inheritdoc />
+    public double? MatchMoveAxisRate(int axis, double requested) {
+        IReadOnlyList<(double Min, double Max)>? bands;
+        lock (_gate) {
+            bands = BandsForAxis(_axisBands, axis, out _);
+        }
+        return MatchMoveAxisRateAtOrBelow(requested, bands);
+    }
+
+    /// <summary>#2067, #2083 — the fastest rate within <paramref name="bands"/> at or below |<paramref name="requested"/>|,
+    /// sign kept: a rate inside a band is kept, one between two bands takes the top of the band below, and one under every
+    /// band has none (null). Never rounds up, unlike the pad's <see cref="SnapMoveAxisRate"/> (which raises a slow press
+    /// to the nearest band): a routine's time bound is planned on the rate it sends. 0 (and NaN) is a stop: 0. Null when no
+    /// bands are known. Internal static so the rule is unit-testable.</summary>
+    internal static double? MatchMoveAxisRateAtOrBelow(double requested, IReadOnlyList<(double Min, double Max)>? bands) {
+        if (requested == 0 || double.IsNaN(requested)) {
+            return 0;
+        }
+        if (bands is not { Count: > 0 }) {
+            return null;
+        }
+        var magnitude = Math.Abs(requested);
+        double? best = null;
+        foreach (var (min, max) in bands) {
+            if (min <= magnitude && max > 0) {
+                var candidate = Math.Min(max, magnitude);
+                if (best is not double b || candidate > b) {
+                    best = candidate;
+                }
+            }
+        }
+        return best is double r && r > 0 ? Math.CopySign(r, requested) : null;
+    }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "A failed read is 'no fresh reading' (null) by contract; the routine fails or reads again its own way.")]
-    private async Task<MountReading?> ReadAsync(bool positionOnly, CancellationToken ct) {
+    private async Task<MountReading?> ReadAsync(bool readSlewing, bool readSide, CancellationToken ct) {
         ITelescopeDevice? client;
         long session;
         EquatorialCoordinateType? knownSystem;
@@ -46,7 +84,7 @@ public sealed partial class TelescopeService {
             client = _lifecycle.Live;
             session = SessionEpoch;
             knownSystem = _equatorialSystemKnown ? _equatorialSystemRaw : null;
-            readPierSide = !positionOnly && !_sideOfPierUnsupported;
+            readPierSide = readSide && !_sideOfPierUnsupported;
         }
         if (client is null) {
             return null;
@@ -56,7 +94,7 @@ public sealed partial class TelescopeService {
             var (ra, dec, slewing, side, system) = await Task.Run(() => (
                 client.RightAscension,
                 client.Declination,
-                positionOnly ? null : ReadOrNull(() => client.Slewing),
+                readSlewing ? ReadOrNull(() => client.Slewing) : null,
                 readPierSide ? ReadSideOfPier(client).SideOfPier : PierSide.pierUnknown,
                 knownSystem ?? ReadEquatorialSystem(client) ?? EquatorialCoordinateType.Other), ct).ConfigureAwait(false);
             if (!double.IsFinite(ra) || !double.IsFinite(dec)) {

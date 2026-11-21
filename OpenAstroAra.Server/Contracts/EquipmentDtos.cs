@@ -1000,7 +1000,9 @@ public static class PolarAlignDirections {
 /// each error, from the scatter of each point's frames (a single-frame point counts a floor of 0.15 px at the solving
 /// camera's pixel scale, 1″ when that is unknown); the total's is the rms length of the error vector, √(alt² + az²) of
 /// the two. Null from an older daemon. With them, the verdict band rates the total plus twice its 1σ (#2072), so a
-/// noisy check does not read <c>excellent</c>.</summary>
+/// noisy check does not read <c>excellent</c>.
+/// <c>DecSpreadArcsec</c> (#2081): how far the mount's Dec reading spread across the check's three points, when that is
+/// over 2″ (NINA's warning: the mount moved in Dec, so the result may be off); null otherwise.</summary>
 public sealed record PolarAlignCheckResultDto(
     double AltitudeErrorArcmin,
     double AzimuthErrorArcmin,
@@ -1016,7 +1018,9 @@ public sealed record PolarAlignCheckResultDto(
     // #2072 — the fit's 1σ on each error (arcmin).
     double? AltitudeSigmaArcmin = null,
     double? AzimuthSigmaArcmin = null,
-    double? TotalSigmaArcmin = null);
+    double? TotalSigmaArcmin = null,
+    // #2081 — the mount's Dec spread across the check's three points (arcseconds) when over 2″; null otherwise.
+    double? DecSpreadArcsec = null);
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (retired by #2048, never published), seeding (3-point axis measurement: two RA-motor turns),
@@ -1063,7 +1067,10 @@ public sealed record PolarAlignStateDto(
     // The clients show "aligned" only when error + 2σ is inside the tolerance (Done is not held by it).
     double? CurrentSigmaArcmin = null,
     double? AzimuthSigmaArcmin = null,
-    double? AltitudeSigmaArcmin = null);
+    double? AltitudeSigmaArcmin = null,
+    // #2081 — the mount's Dec spread across the seed's three points (arcseconds) when over 2″ (NINA's warning: the
+    // readout may be off), also on each polar_align.progress event; null otherwise and outside adjusting/paused.
+    double? DecSpreadArcsec = null);
 
 /// <summary>#2072 — the tokens of <see cref="PolarAlignStateDto.ReadoutCaution"/>.</summary>
 public static class PolarAlignReadoutCautions {

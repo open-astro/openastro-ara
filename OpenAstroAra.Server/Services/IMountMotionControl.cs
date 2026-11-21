@@ -75,6 +75,17 @@ public interface IMountMotionControl {
     /// stretch the poll, and the stop on the reading would land further past its target.</summary>
     Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadNowAsync(ct);
 
+    /// <summary>#2067 — <see cref="ReadNowAsync"/> with the position and the pier side, and no Slewing (null): what a
+    /// routine checks on every poll of its own motor move (a pier side that changes mid-turn ends it). One driver round
+    /// trip more than <see cref="ReadPositionNowAsync"/>; a failed or unsupported pier-side read is <c>pierUnknown</c>.</summary>
+    Task<MountReading?> ReadPoseNowAsync(CancellationToken ct) => ReadNowAsync(ct);
+
+    /// <summary>#2067, #2083 — the rate <see cref="MoveAxisAsync"/> runs <paramref name="axis"/> at for a routine that asks
+    /// for <paramref name="requested"/> degrees per second: the fastest rate the mount offers at or below it, sign kept,
+    /// never one above it (NINA's rule: a rate is never rounded up). Null when the mount offers no rate at or below it, or
+    /// its rates are not known yet. A routine sends the matched rate and bounds its move by the time the move takes at it.</summary>
+    double? MatchMoveAxisRate(int axis, double requested) => requested;
+
     /// <summary>#2066 (ARA-2) — the routine that holds the mount's single motion owner (<see cref="MotionOwners"/>), or
     /// null. While one holds it, a GoTo (the REST one, Center, the sequencer's and every other mediator GoTo), a sync, a
     /// Park and a Home (REST or mediator) are refused. A stop never is: Emergency Stop, Stop Mount, AbortSlew, a pad stop

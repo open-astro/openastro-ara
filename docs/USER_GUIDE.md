@@ -359,6 +359,21 @@ framing/focus loop when you need to point or focus by eye.
   reads the mount twice, a second apart: if the mount slews or moved in between (the hand controller,
   another program), or the guider started guiding, the run ends before the motor starts and the card
   says why.
+- **Polar Align stops a turn the moment it goes wrong (#2067).** Each turn runs at the fastest speed
+  the mount offers at or below 3°/s (1°/s for its last 3°), never faster than that. While it turns,
+  Ara reads the mount four times a second and stops the motor and ends the run when: the position
+  stops changing for 2 s (*stopped changing*); the turn takes more than twice as long as it should at
+  its speed (*turned only … in … s*); the Dec reading moves more than 0.1° (*Dec reading moved*: an
+  RA turn should not move it; check the Dec clutch); the mount reports the other side of the pier;
+  or the RA reading jumps further than the motor can turn. After the motor stops, Ara waits until the
+  mount stands still. A mount that runs on more than 2° past the turn is stopped again at once (if
+  that stop cannot be confirmed either, cut the mount's power). The turn must end within 2° (or 10%)
+  of its size. The plate solves check the mount too: if one frame is turned about 180° from the one
+  before, the mount flipped to the other side of the pier; the run ends with tracking off. A run where
+  you turn RA by hand gets this frame check too (Ara moves nothing in it, so the turn checks above do
+  not apply). If the
+  mount's Dec reading moved more than 2″ across the three points, the readout (or the Check's verdict)
+  warns that the measurement may be off: check the Dec clutch is tight and measure again.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

@@ -745,8 +745,8 @@ namespace OpenAstroAra.Test {
 
             var (reason, message) = await FailureAfterStopAsync(svc, mount, ws, abort: true).ConfigureAwait(false);
 
-            Assert.That(reason, Is.EqualTo("slew_failed"));
-            Assert.That(message, Does.Contain("stopped moving"));
+            Assert.That(reason, Is.EqualTo(PolarAlignService.SlewStalled));
+            Assert.That(message, Does.Contain("stopped changing"));
         }
 
         [Test]

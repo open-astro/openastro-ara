@@ -107,6 +107,10 @@ class PolarAlignLive {
   /// huge-error warnings; null before it and after a hydrate.
   final double? initialErrorArcmin;
 
+  /// #2081 the mount's Dec spread across the seed's three points (arcsec)
+  /// when over 2″, from the last progress event; null when it held.
+  final double? decSpreadArcsec;
+
   const PolarAlignLive({
     this.phase = PolarAlignStates.idle,
     this.iteration = 0,
@@ -135,6 +139,7 @@ class PolarAlignLive {
     this.handTurn = false,
     this.handTurnWait,
     this.initialErrorArcmin,
+    this.decSpreadArcsec,
   });
 
   /// #2082 the run shoots the main camera (Rough first, or the profile's
@@ -182,6 +187,8 @@ class PolarAlignLive {
     PolarAlignHandTurn? handTurnWait,
     bool clearHandTurnWait = false,
     double? initialErrorArcmin,
+    double? decSpreadArcsec,
+    bool clearDecSpread = false,
   }) =>
       PolarAlignLive(
         phase: phase ?? this.phase,
@@ -220,6 +227,7 @@ class PolarAlignLive {
         handTurnWait: clearHandTurnWait ? null : handTurnWait ?? this.handTurnWait,
         // A new stage's readout starts afresh: so does its first readout.
         initialErrorArcmin: clearReadout ? null : initialErrorArcmin ?? this.initialErrorArcmin,
+        decSpreadArcsec: clearReadout || clearDecSpread ? null : decSpreadArcsec ?? this.decSpreadArcsec,
       );
 }
 
@@ -320,6 +328,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         readoutCaution: _str(event.payload, 'readout_caution'),
         clearReadoutCaution: _str(event.payload, 'readout_caution') == null,
         measurementNoisy: event.payload['measurement_noisy'] == true,
+        // #2081 the same for the Dec-spread warning.
+        decSpreadArcsec: _num(event.payload, 'dec_spread_arcsec'),
+        clearDecSpread: _num(event.payload, 'dec_spread_arcsec') == null,
       );
     case PolarAlignWsEvents.frameStarted:
       return current.copyWith(
@@ -442,6 +453,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       measurementNoisy: status.measurementNoisy,
       handTurn: status.handTurn,
       handTurnWait: status.handTurnWait,
+      decSpreadArcsec: status.decSpreadArcsec,
     );
 
 /// The zone for a total error, by the daemon's own rule (PolarAlignService

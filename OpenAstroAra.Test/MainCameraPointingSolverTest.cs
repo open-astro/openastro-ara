@@ -128,7 +128,7 @@ namespace OpenAstroAra.Test {
                     It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
                 .Callback<CaptureSequence, CaptureSolverParameter, IProgress<PlateSolveProgress>?, IProgress<ApplicationStatus>?, CancellationToken>(
                     (_, p, _, _, _) => param = p)
-                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = new Coordinates(45.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees) });
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = new Coordinates(45.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees), PositionAngle = 77.0 });
             var factory = new Mock<IPlateSolverFactory>();
             factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
             factory.Setup(f => f.GetBlindSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
@@ -139,6 +139,7 @@ namespace OpenAstroAra.Test {
             var outcome = await solver.CaptureAndSolveAsync(3.0, (45.0, 85.0), blindFailover, CancellationToken.None);
 
             Assert.That(outcome.Success, Is.True);
+            Assert.That(outcome.PositionAngleDeg, Is.EqualTo(77.0).Within(1e-9), "#2067 ARA-13 — the solve's position angle reaches the field check");
             Assert.That(param, Is.Not.Null);
             Assert.That(param!.BlindFailoverEnabled, Is.EqualTo(blindFailover));
             Assert.That(param.StagedSearchEnabled, Is.EqualTo(blindFailover));

@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Logging;
 using OpenAstroAra.Astrometry;
 using TelescopeAxes = OpenAstroAra.Core.Enums.TelescopeAxes;
+using PierSide = OpenAstroAra.Core.Enums.PierSide;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
@@ -176,11 +177,14 @@ namespace OpenAstroAra.Server.Services {
             var mountTurn1 = FoldTolerantSignedTurnDeg(p1.RaDeg - ra0);
             var (b, bTime) = await SolveSeedFrameAsync(capture, "seed-b", p1, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-b", b.RaDegJnow, b.DecDegJnow);
+            CheckFieldRotation(a, b, mountTurn1, "seed-b"); // #2067 ARA-13 — before the next turn: a flipped mount turns no further
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * settings.SeedRotationDeg, gen, ct).ConfigureAwait(false);
             var mountTurn2 = FoldTolerantSignedTurnDeg(p2.RaDeg - p1.RaDeg);
             var (c, cTime) = await SolveSeedFrameAsync(capture, "seed-c", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("seed-c", c.RaDegJnow, c.DecDegJnow);
+            CheckFieldRotation(b, c, mountTurn2, "seed-c");
+            NoteDecSpread(gen, "seed", dec0, p1.DecDeg, p2.DecDeg); // #2081 — NINA's 2″ Dec-spread warning
 
             var (axis, _) = FitThreePointOrFail((a, aTime), (b, bTime), (c, cTime), mountTurn1, mountTurn2, north);
             var sigma = FitUncertaintyFor((a, aTime), (b, bTime), (c, cTime), north, site); // #2072
@@ -271,6 +275,7 @@ namespace OpenAstroAra.Server.Services {
             var mountTurn1 = FoldTolerantSignedTurnDeg(p1.RaDeg - ra0);
             var (s2, t2) = await SolveSeedFrameAsync(capture, "check-2", p1, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-2", s2.RaDegJnow, s2.DecDegJnow);
+            CheckFieldRotation(s1, s2, mountTurn1, "check-2"); // #2067 ARA-13
             await NoteCheckSolveAsync(gen, 2).ConfigureAwait(false);
 
             var p2 = await TurnRaAsync(p1.RaDeg, dirSign * step, gen, ct).ConfigureAwait(false);
@@ -278,6 +283,8 @@ namespace OpenAstroAra.Server.Services {
             // The point's mean time: the fit and the axis error are referred to it.
             var (s3, at) = await SolveSeedFrameAsync(capture, "check-3", p2, settings, gen, ct).ConfigureAwait(false);
             LogSeedSolve("check-3", s3.RaDegJnow, s3.DecDegJnow);
+            CheckFieldRotation(s2, s3, mountTurn2, "check-3");
+            NoteDecSpread(gen, "check", dec0, p1.DecDeg, p2.DecDeg); // #2081 — NINA's 2″ Dec-spread warning
             await NoteCheckSolveAsync(gen, 3).ConfigureAwait(false);
 
             var (axis, mismatch) = FitThreePointOrFail((s1, t1), (s2, t2), (s3, at), mountTurn1, mountTurn2, north);
@@ -373,6 +380,8 @@ namespace OpenAstroAra.Server.Services {
         /// <summary>The check's end: state <c>checked</c>, the result on the status, its event, the
         /// §45.13 row (outcome <c>checked</c>) and the lease released — the run is over.</summary>
         private async Task FinishCheckedAsync(int gen, PolarAlignCheckResultDto result) {
+            // #2081 — the mount's Dec spread across the check's three points, when over 2″: the verdict says so.
+            result = result with { DecSpreadArcsec = RunDecSpreadArcsec(gen) };
             lock (_gate) {
                 if (_generation != gen) {
                     return;
@@ -395,6 +404,7 @@ namespace OpenAstroAra.Server.Services {
                 ["fine_error_arcmin"] = result.FineErrorArcmin,
                 ["fine_delta_arcmin"] = result.FineDeltaArcmin,
                 ["verdict"] = result.Verdict,
+                ["dec_spread_arcsec"] = result.DecSpreadArcsec,
                 ["noisy"] = result.Noisy,
                 ["altitude_sigma_arcmin"] = result.AltitudeSigmaArcmin,
                 ["azimuth_sigma_arcmin"] = result.AzimuthSigmaArcmin,
@@ -498,8 +508,9 @@ namespace OpenAstroAra.Server.Services {
             return after;
         }
 
-        /// <summary>The motor speeds of the routine's moves (°/s): NINA's 3°/s for the bulk of a move, then 1°/s
-        /// for its last <see cref="AxisSlowZoneDeg"/>, so the stop on the mount's reading lands within about a degree.</summary>
+        /// <summary>The motor speeds the routine asks for (°/s): NINA's 3°/s for the bulk of a move, then 1°/s for its last
+        /// <see cref="AxisSlowZoneDeg"/>, so the stop on the mount's reading lands within about a degree. #2083 — each is
+        /// matched to the fastest rate the mount offers at or below it (<see cref="MatchTurnRates"/>), never rounded up.</summary>
         internal double AxisFastRateDegPerSec { get; set; } = 3.0;
         /// <summary>−1 once a turn of this run found the driver's RA motor sign inverted; reset per run.</summary>
         private double _raMotorSign = 1.0;
@@ -507,21 +518,29 @@ namespace OpenAstroAra.Server.Services {
         internal const double AxisSlowZoneDeg = 3.0;
         /// <summary>The motor runs on a lease: a daemon that stops renewing it (hung, crashed run) stops the axis.</summary>
         private const int AxisMoveLeaseMs = 3000;
-        internal TimeSpan AxisMoveStall { get; set; } = TimeSpan.FromSeconds(10);
-        /// <summary>Added to a move's time bound (three times its travel at the slow speed): start-up and settle.</summary>
-        internal TimeSpan AxisMoveBoundSlack { get; set; } = TimeSpan.FromSeconds(15);
+        /// <summary>#2081 — a turn whose reading makes no 0.05° of progress for this long fails (<see cref="SlewStalled"/>):
+        /// one poll more than AlpacaBridge iOptron's 1 s position cache, so a frozen reading costs about 4°, not 21°.</summary>
+        internal TimeSpan AxisMoveStall { get; set; } = TimeSpan.FromSeconds(2);
+        /// <summary>Added to a turn's time bound (twice its travel at the matched rates, <see cref="TurnTimeBound"/>): the
+        /// stop lands on a reading that may trail the mount by up to <see cref="FreshReadMaxAge"/>.</summary>
+        internal TimeSpan AxisMoveBoundSlack { get; set; } = TimeSpan.FromSeconds(2);
         /// <summary>How often a move reads the mount's position from the driver (fresh, not the 2 s refresh).</summary>
         internal TimeSpan AxisMovePoll { get; set; } = TimeSpan.FromMilliseconds(250);
-        /// <summary>After the stop, how long the mount is left to settle before its final reading.</summary>
-        internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(1);
+        /// <summary>After the stop, how long two still readings must be apart before the turn counts as ended
+        /// (<see cref="SettleAfterTurnAsync"/>): longer than AlpacaBridge iOptron's 1 s status and position cache, as the
+        /// stop's own confirmation (<see cref="StopVerifyStillFor"/>).</summary>
+        internal TimeSpan AxisSettle { get; set; } = TimeSpan.FromSeconds(1.5);
 
         /// <summary>Run one axis's motor until <paramref name="progress"/> (start reading, current reading) reaches
         /// <paramref name="degrees"/> by the mount's own position, read from the driver four times a second; fast
-        /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest. Then stop, settle, and return the fresh
-        /// reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below −0.5°)
-        /// is stopped and reversed once — a driver's sign for "positive" is not standard; a move that then runs
-        /// back past its start again does not reverse a second time, it stalls and fails. Every exit stops the
-        /// motor: Stop, failure, stall (no progress for 10 s) and a time bound of three times the slow travel time.</summary>
+        /// until the last <see cref="AxisSlowZoneDeg"/>, slow for the rest, at the rates the mount offers at or below the
+        /// routine's (never above, #2083). Then stop, wait for the mount to stand still, check the turn arrived, and return
+        /// the fresh reading. With <paramref name="checkDirection"/>, a move that runs the wrong way (progress below −0.5°)
+        /// is stopped and reversed once — a driver's sign for "positive" is not standard; a move that then runs back past
+        /// its start again does not reverse a second time, it stalls and fails. #2067 (<see cref="SlewStalled"/> and the
+        /// other move guards, PolarAlignService.MoveGuards.cs) — every exit stops the motor: Stop, failure, a stall (no
+        /// progress for 2 s), a time bound of twice the planned travel time, a Dec reading that moves, a pier side that
+        /// changes, a reading that jumps, and a mount that runs on past the step after its stop.</summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "A refused motor command is this routine's slew_failed with the mount's message, never internal_error.")]
         private async Task<(double RaDeg, double DecDeg)> MoveAxisUntilAsync(
@@ -536,6 +555,8 @@ namespace OpenAstroAra.Server.Services {
             // (mount_busy otherwise). The second is where the turn starts.
             var (startRa, startDec, startSide) = await EnsureMountSteadyAsync(gen, ct).ConfigureAwait(false);
             var start = (startRa, startDec);
+            // #2083 — the rates the mount really runs at, at or below the routine's: the time bound is planned on them.
+            var (fastRate, slowRate) = MatchTurnRates(axis);
             // The caller's check of the move from the reading it starts at, before the motor runs (a turn's sweep limit).
             beforeMove?.Invoke(start);
             // A reversal learned on an earlier turn of this run applies from the start (the driver's sign is fixed).
@@ -550,17 +571,22 @@ namespace OpenAstroAra.Server.Services {
             // stop too, and the next move must not start under a count read after it.
             var abortEpoch = RunAbortEpoch(gen);
             var fast = degrees > AxisSlowZoneDeg;
-            double Rate() => direction * (fast ? AxisFastRateDegPerSec : AxisSlowRateDegPerSec);
-            var began = Stopwatch.GetTimestamp();
-            var bound = TimeSpan.FromSeconds(degrees / AxisSlowRateDegPerSec * 3.0) + AxisMoveBoundSlack;
+            double Rate() => direction * (fast ? fastRate : slowRate);
+            var bound = TurnTimeBound(degrees, fastRate, slowRate);
             var best = 0.0;
-            var bestAt = Stopwatch.GetTimestamp();
             var reversed = false;
+            var settled = false;
             var startRate = Rate();
             LogAxisMove(axis, degrees, startRate);
+            (double RaDeg, double DecDeg, PierSide Side) after;
             BeginMotion(MountMotion.AxisMove, gen, ct);
             try {
                 await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
+                // Timed from when the mount took the motor command: a slow round trip is not a stall. On the monotonic
+                // clock: a wall clock that steps back (chrony, a UTCDate write) must not hold the stall and the bound off.
+                var began = Clock.GetTimestamp();
+                var bestAt = began;
+                var last = (Ra: startRa, At: began);
                 while (true) {
                     await Task.Delay(AxisMovePoll, ct).ConfigureAwait(false);
                     if (!IsCurrent(gen)) {
@@ -568,9 +594,19 @@ namespace OpenAstroAra.Server.Services {
                     }
                     ThrowIfStoppedFromOutside(gen);
                     // #2089 — noted as Polar Align's own move, so the next start does not read it as "moved by other means".
-                    // The poll reads the position only: the pier side is the turn's start reading's until its end reading.
-                    var now = await RunPointingJnowAsync(gen, ct, positionOnly: true).ConfigureAwait(false);
-                    NoteMountLeft(now, startSide);
+                    // #2067 — the poll reads the position and the pier side (no Slewing round trip): a turn that changes
+                    // the pier side, or moves the Dec reading, stops at that reading.
+                    var (nowRa, nowDec, nowSide) = await RunPoseJnowAsync(gen, ct, MountReadKind.Pose).ConfigureAwait(false);
+                    var at = Clock.GetTimestamp();
+                    var now = (nowRa, nowDec);
+                    NoteMountLeft(now, nowSide is PierSide.pierUnknown ? startSide : nowSide);
+                    // A reading that jumped is checked first: its Dec and pier side are no more to be trusted than its RA.
+                    var change = Wrap180(nowRa - last.Ra);
+                    if (change != 0) {
+                        ThrowIfReadingJumped(change, fastRate, Clock.GetElapsedTime(last.At, at));
+                        last = (nowRa, at);
+                    }
+                    ThrowIfTurnLeftItsAxis(startDec, startSide, nowDec, nowSide);
                     var p = progress(start, now);
                     if (p >= degrees - 1e-9) {
                         break;
@@ -598,19 +634,21 @@ namespace OpenAstroAra.Server.Services {
                         }
                         await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false);
                         best = p;
-                        bestAt = Stopwatch.GetTimestamp();
+                        bestAt = Clock.GetTimestamp();
                         continue;
                     }
                     if (p > best + 0.05) {
                         best = p;
-                        bestAt = Stopwatch.GetTimestamp();
-                    } else if (Stopwatch.GetElapsedTime(bestAt) > AxisMoveStall) {
-                        throw new RoutineFailedException("slew_failed",
-                            $"the mount stopped moving after {Math.Max(best, 0):F1}° of the {degrees:F0}° move — check it can turn freely, then start again");
+                        bestAt = at;
+                    } else if (Clock.GetElapsedTime(bestAt, at) > AxisMoveStall) {
+                        LogAxisMoveStalled(axis, Math.Max(best, 0), degrees, AxisMoveStall.TotalSeconds);
+                        throw new RoutineFailedException(SlewStalled, string.Create(CultureInfo.InvariantCulture,
+                            $"the mount's reading stopped changing after {Math.Max(best, 0):F1}° of the {degrees:F0}° turn (no progress for {AxisMoveStall.TotalSeconds:F0} s) — check it can turn freely and its connection, then start again"));
                     }
-                    if (Stopwatch.GetElapsedTime(began) > bound) {
-                        throw new RoutineFailedException("slew_failed",
-                            $"the mount moved only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s — check it, then start again");
+                    if (Clock.GetElapsedTime(began, at) > bound) {
+                        LogAxisMoveTimedOut(axis, Math.Max(best, 0), degrees, bound.TotalSeconds);
+                        throw new RoutineFailedException(SlewTimeout, string.Create(CultureInfo.InvariantCulture,
+                            $"the mount turned only {Math.Max(best, 0):F1}° of {degrees:F0}° in {bound.TotalSeconds:F0} s, twice the time the turn takes at its speed — check it, then start again"));
                     }
                     if (fast && degrees - p <= AxisSlowZoneDeg) {
                         fast = false; // the last few degrees at the slow speed: the stop lands close to the target
@@ -621,6 +659,15 @@ namespace OpenAstroAra.Server.Services {
                     }
                     await RunAxisAsync(axis, Rate(), abortEpoch).ConfigureAwait(false); // a new speed, or the lease renewed
                 }
+                // Arrived on the reading: stop the motor, then see the mount stand still. The motion stays marked until it
+                // does (ARA-3): a Stop meanwhile still sends AbortSlew, whatever an early "not slewing" says.
+                if (RunStopsFenced(gen)) {
+                    // #2066 — the arriving read hung past a takeover's bound: the mount is someone else's, no stop from here.
+                    throw new OperationCanceledException("the run was fenced as the turn arrived");
+                }
+                await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
+                settled = true;
+                after = await SettleAfterTurnAsync(start, startSide, degrees, progress, gen, ct).ConfigureAwait(false);
             } catch (OperationCanceledException) {
                 throw;
             } catch (Exception) when (!IsCurrent(gen)) {
@@ -641,20 +688,18 @@ namespace OpenAstroAra.Server.Services {
                     "the mount refused to turn its motor for the measurement — check it is unparked and free to move, then start again");
             } finally {
                 // #2066 — not once a takeover or an end gave up on this run and fenced it: a late MoveAxis 0 (a read that
-                // hung past the takeover's bound) would land on the park or the move that came after.
-                if (!RunStopsFenced(gen)) {
+                // hung past the takeover's bound) would land on the park or the move that came after. #2067 — nor after the
+                // arrival stop: the settle's confirmed stop owns any stop from there.
+                if (!settled && !RunStopsFenced(gen)) {
                     await StopAxisBestEffortAsync(axis).ConfigureAwait(false);
                 }
             }
-            // Ended normally and stopped on the reading. A move that threw keeps the motion set: the exit stops it again.
+            // Ended normally and stood still. A move that threw keeps the motion set: the exit stops it again.
             EndMotion();
-            await Task.Delay(AxisSettle, ct).ConfigureAwait(false);
-            var (afterRa, afterDec, afterSide) = await RunPoseJnowAsync(gen, ct).ConfigureAwait(false);
-            var after = (afterRa, afterDec);
-            NoteMountLeft(after, afterSide);
-            var moved = progress(start, after);
+            var moved = progress(start, (after.RaDeg, after.DecDeg));
+            ThrowIfTurnDidNotArrive(degrees, moved, startDec, after.DecDeg);
             LogAxisMoveDone(axis, moved);
-            return after;
+            return (after.RaDeg, after.DecDeg);
         }
 
         /// <summary>The daemon's leased motor command (the same one the app's direction pad uses), through the seam
@@ -686,6 +731,12 @@ namespace OpenAstroAra.Server.Services {
 
         [LoggerMessage(EventId = 4554, Level = LogLevel.Warning, Message = "§45 polar-align: the mount refused the {Axis} motor move")]
         private partial void LogAxisMoveRefused(TelescopeAxes axis, Exception exception);
+
+        [LoggerMessage(EventId = 4630, Level = LogLevel.Warning, Message = "§45 polar-align: the {Axis} turn stalled after {BestDeg:F2}° of {Degrees:F1}° (no progress for {Seconds:F1} s) — slew_stalled")]
+        private partial void LogAxisMoveStalled(TelescopeAxes axis, double bestDeg, double degrees, double seconds);
+
+        [LoggerMessage(EventId = 4631, Level = LogLevel.Warning, Message = "§45 polar-align: the {Axis} turn made {BestDeg:F2}° of {Degrees:F1}° within its {Seconds:F1} s bound — slew_timeout")]
+        private partial void LogAxisMoveTimedOut(TelescopeAxes axis, double bestDeg, double degrees, double seconds);
 
         [LoggerMessage(EventId = 4553, Level = LogLevel.Warning, Message = "§45 polar-align: stopping the {Axis} motor failed (its lease stops it)")]
         private partial void LogAxisStopFailed(TelescopeAxes axis, Exception exception);
@@ -719,6 +770,7 @@ namespace OpenAstroAra.Server.Services {
                 _altErrorArcmin = null;
                 _azErrorArcmin = null;
                 _lastFrame = null;
+                _decSpreadArcsec = null; // #2081 — the warning is the measurement's own
                 _measurementNoisy = false;
             }
             LogStage(stage, state);

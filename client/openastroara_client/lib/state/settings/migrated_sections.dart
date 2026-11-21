@@ -32,9 +32,10 @@ import 'unguided_settings_state.dart';
 /// migrated section to [migratedSections]; panels do not reset on their own.
 ///
 /// [read] is a `ref.read`, so a widget's `WidgetRef` can reset after a wizard
-/// save and a replay: they write sections from this device without a version
-/// and outside the section notifier, so a section loaded before would keep a
-/// stale tag until live sync lands (a false 412 on the next Save).
+/// save and a replay: they write sections from this device outside the section
+/// notifier (each with the tag of the copy it loaded itself), so a section
+/// loaded before would keep a stale tag until live sync lands (a false 412 on
+/// the next Save).
 void resetMigratedSections(T Function<T>(ProviderListenable<T>) read) {
   for (final section in migratedSections) {
     read(section.provider.notifier).reset();

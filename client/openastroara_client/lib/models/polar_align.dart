@@ -95,6 +95,10 @@ class PolarAlignCheckResult {
   /// #2072 the fit's 1σ on the total error (arcmin); null from an older daemon.
   final double? totalSigmaArcmin;
 
+  /// #2081 the mount's Dec spread across the check's three points (arcsec)
+  /// when over 2″ (NINA's warning: the result may be off); null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -106,6 +110,7 @@ class PolarAlignCheckResult {
     this.verdict = '',
     this.noisy = false,
     this.totalSigmaArcmin,
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -120,6 +125,7 @@ class PolarAlignCheckResult {
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
         noisy: json['noisy'] == true,
         totalSigmaArcmin: (json['total_sigma_arcmin'] as num?)?.toDouble(),
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 }
 
@@ -400,6 +406,10 @@ class PolarAlignStatus {
   /// rests on; null with no error and from an older daemon.
   final double? currentSigmaArcmin;
 
+  /// #2081 the mount's Dec spread across the seed's three points (arcsec)
+  /// when over 2″, while the live readout runs; null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -421,6 +431,7 @@ class PolarAlignStatus {
     this.handTurn = false,
     this.handTurnWait,
     this.currentSigmaArcmin,
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -449,6 +460,7 @@ class PolarAlignStatus {
         handTurn: json['hand_turn'] == true,
         handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
         currentSigmaArcmin: (json['current_sigma_arcmin'] as num?)?.toDouble(),
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 
   /// True while the server is running any phase of the routine.

@@ -329,7 +329,7 @@ namespace OpenAstroAra.Server.Services {
         /// run's start ends the run (<see cref="ThrowIfMountReconnected"/>), and a Dec past the pole fails it as a motor
         /// run's turn does (<see cref="PoseAmbiguous"/>).</summary>
         private async Task<(double RaDeg, double DecDeg)?> HandTurnReadingAsync(int gen, CancellationToken ct) {
-            var read = ReadFreshPointingAsync(RunSessionEpoch(gen), ct, positionOnly: true);
+            var read = ReadFreshPointingAsync(RunSessionEpoch(gen), ct, MountReadKind.Position);
             try {
                 var p = await read.WaitAsync(HandTurnReadTimeout, ct).ConfigureAwait(false);
                 if (p.DecPastPoleDeg is double dec) {
@@ -380,6 +380,26 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A solved turn about the fitted axis under this is no turn: the fit has nothing to stand on.</summary>
         internal const double MinHandTurnAboutAxisDeg = 1.0;
+
+        /// <summary>#2067 ARA-13 in a hand-turn run: the field check of a motor run (<see cref="CheckFieldRotation"/>) between
+        /// each two of the three frames, after the fit. A hand turn has no mount turn to predict the field's rotation from
+        /// (with the clutch open the reading stands), so each step's solved turn about the fitted axis stands in for it,
+        /// signed as an RA turn about the north pole (the fitted axis is the hemisphere's own end). Nothing moves the mount
+        /// in such a run, so the check waits for the fit; a frame turned about 180° (the tube swung over) is still
+        /// <see cref="PierFlip"/>, any other turn an RA turn does not make <see cref="TurnMismatch"/>.</summary>
+        private void CheckFieldRotationByHand((double RaDeg, double DecDeg, double ConeDeg) axis,
+                PolarAlignSolveOutcome a, PolarAlignSolveOutcome b, PolarAlignSolveOutcome c, bool north, string bId, string cId) {
+            CheckFieldRotation(a, b, HandStepRaTurnDeg(axis, a, b, north), bId);
+            CheckFieldRotation(b, c, HandStepRaTurnDeg(axis, b, c, north), cId);
+        }
+
+        /// <summary>The solved turn from <paramref name="from"/> to <paramref name="to"/> about the fitted axis, signed as an
+        /// RA turn (positive = RA increasing, right-handed about the north pole). Pure, for the tests.</summary>
+        internal static double HandStepRaTurnDeg((double RaDeg, double DecDeg, double ConeDeg) axis,
+                PolarAlignSolveOutcome from, PolarAlignSolveOutcome to, bool north) {
+            var turn = PolarAlignGeometry.TurnAboutAxisDeg(axis.RaDeg, axis.DecDeg, from.RaDegJnow, from.DecDegJnow, to.RaDegJnow, to.DecDegJnow);
+            return north ? turn : -turn;
+        }
 
         // ── a clutch turn leaves the mount's reading wrong ───────────────────────────────────
 
@@ -448,6 +468,7 @@ namespace OpenAstroAra.Server.Services {
             var (a, b, c) = await ThreePointsByHandAsync(capture, ["seed-a", "seed-b", "seed-c"], settings.SeedRotationDeg, band,
                 renewLeaseIfDue, settings, gen, ct).ConfigureAwait(false);
             var (axis, turnDeg) = FitThreePointByHandOrFail(a, b, c, north);
+            CheckFieldRotationByHand(axis, a.S, b.S, c.S, north, "seed-b", "seed-c");
             await AdjustFromSeedAsync(axis, FitUncertaintyFor(a, b, c, north, site), c.S, c.At, turnDeg, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
         }
 
@@ -463,6 +484,7 @@ namespace OpenAstroAra.Server.Services {
             var (p1, p2, p3) = await ThreePointsByHandAsync(capture, ["check-1", "check-2", "check-3"], settings.CheckStepDeg, band,
                 () => RenewLeaseAsync(ct), settings, gen, ct, noteSolve: done => NoteCheckSolveAsync(gen, done)).ConfigureAwait(false);
             var (axis, _) = FitThreePointByHandOrFail(p1, p2, p3, site.LatitudeDeg > 0);
+            CheckFieldRotationByHand(axis, p1.S, p2.S, p3.S, site.LatitudeDeg > 0, "check-2", "check-3");
             return CheckResultFor(axis, FitUncertaintyFor(p1, p2, p3, site.LatitudeDeg > 0, site), mismatch: 0.0, site, p3.At);
         }
 

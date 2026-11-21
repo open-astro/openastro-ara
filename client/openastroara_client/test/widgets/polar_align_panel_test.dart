@@ -313,6 +313,37 @@ void main() {
       expect(find.text(_en.polarReadoutCautionAltitudeWeak), findsOneWidget);
     });
 
+    testWidgets('the live readout and the check warn when the Dec of the mount moved across the three points (#2081)', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const live = PolarAlignLive(
+        phase: PolarAlignStates.adjusting,
+        azErrorArcmin: 2.0,
+        altErrorArcmin: -1.0,
+        totalErrorArcmin: 2.24,
+      );
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), live));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-dec-spread')), findsNothing, reason: 'the Dec held');
+
+      final notifier = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)))
+          .read(polarAlignLiveProvider.notifier) as _StubLiveNotifier;
+      notifier.set(live.copyWith(decSpreadArcsec: 3.14));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-dec-spread')), findsOneWidget);
+      expect(find.text(_en.polarDecSpreadWarning('3.1')), findsOneWidget);
+
+      notifier.set(const PolarAlignLive(
+        phase: PolarAlignStates.checked, stage: PolarAlignStages.check, checkSolvesDone: 3, totalErrorArcmin: 1.0,
+        checkResult: PolarAlignCheckResult(altErrorArcmin: 0.6, azErrorArcmin: 0.8, totalErrorArcmin: 1.0, verdict: 'excellent',
+            decSpreadArcsec: 4.0),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-check-dec-spread')), findsOneWidget);
+      expect(find.text(_en.polarDecSpreadWarning('4.0')), findsOneWidget);
+    });
+
     testWidgets('adjusting explains the error in arcseconds and plain English', (tester) async {
       // A tall window: a short one drops this card for the one-row readout.
       tester.view.physicalSize = const Size(1400, 1000);

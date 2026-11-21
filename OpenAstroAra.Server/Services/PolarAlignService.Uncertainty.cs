@@ -108,7 +108,7 @@ namespace OpenAstroAra.Server.Services {
             var sigma = PolarAlignGeometry.MeanStandardErrorArcsec(scatter, solves.Count);
             // The point's frames come from one camera: its pixel scale sets the point's floor.
             var scale = solves.Select(p => p.S.PixelScaleArcsec).FirstOrDefault(v => v is double x && double.IsFinite(x) && x > 0);
-            return (new PolarAlignSolveOutcome(true, ra, dec, sigma, solves.Count, scale), meanAt, scatter);
+            return (new PolarAlignSolveOutcome(true, ra, dec, SigmaArcsec: sigma, Solves: solves.Count, PixelScaleArcsec: scale), meanAt, scatter);
         }
 
         /// <summary>The uncertainty of the three-point fit of <see cref="FitThreePointOrFail"/> (and its hand-turn twin):

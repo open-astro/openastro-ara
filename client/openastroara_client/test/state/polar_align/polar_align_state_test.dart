@@ -460,6 +460,25 @@ void main() {
       expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting'})).readoutCaution, isNull);
     });
 
+    test('each progress event says the Dec-spread warning afresh; a snapshot and a verdict carry it too (#2081)', () {
+      final spread = foldPolarAlignEvent(
+        const PolarAlignLive(phase: PolarAlignStates.seeding),
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 4.0, 'dec_spread_arcsec': 3.1}),
+      )!;
+      expect(spread.decSpreadArcsec, 3.1);
+      final held = foldPolarAlignEvent(
+        spread,
+        _event(PolarAlignWsEvents.progress, {'total_error_arcmin': 2.0, 'dec_spread_arcsec': null}),
+      )!;
+      expect(held.decSpreadArcsec, isNull, reason: 'a new seed whose Dec held clears it');
+      expect(liveFromStatus(PolarAlignStatus.fromJson(const {'state': 'adjusting', 'dec_spread_arcsec': 2.6})).decSpreadArcsec, 2.6);
+      expect(
+        PolarAlignCheckResult.fromJson(const {'total_error_arcmin': 1.0, 'dec_spread_arcsec': 4.2}).decSpreadArcsec,
+        4.2,
+      );
+      expect(PolarAlignCheckResult.fromJson(const {'total_error_arcmin': 1.0}).decSpreadArcsec, isNull);
+    });
+
     test('the status snapshot hydrates stage, home wait, solves and the check result', () {
       final live = liveFromStatus(PolarAlignStatus.fromJson(const {
         'state': 'checked',
