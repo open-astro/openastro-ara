@@ -17,6 +17,9 @@ void main() {
       (l) => l.simpleLiveStackLeftOut(2),
       (l) => l.simpleLiveStackNotColour,
       (l) => l.simpleLiveStackTooLarge,
+      (l) => l.simpleLiveStackCouldntStart,
+      (l) => l.simpleLiveStackCouldntStop,
+      (l) => l.simpleLiveStackCouldntReset,
     ];
     for (final s in strings) {
       expect(s(pt), isNot(s(en)));

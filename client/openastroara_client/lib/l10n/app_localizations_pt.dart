@@ -7021,6 +7021,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get simpleLiveStackTooLarge => 'Frame too large to stack';
 
   @override
+  String get simpleLiveStackCouldntStart => 'Couldn\'t start Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntStop => 'Couldn\'t stop Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntReset => 'Couldn\'t reset Live Stack';
+
+  @override
   String get limitsTitle => 'Limits';
 
   @override
@@ -14416,6 +14425,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get simpleLiveStackTooLarge => 'Quadro grande demais para empilhar';
+
+  @override
+  String get simpleLiveStackCouldntStart =>
+      'Não foi possível iniciar o Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntStop =>
+      'Não foi possível parar o Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntReset =>
+      'Não foi possível zerar o Live Stack';
 
   @override
   String get limitsTitle => 'Limites';

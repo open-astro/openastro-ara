@@ -8907,6 +8907,18 @@
   "@simpleLiveStackTooLarge": {
     "description": "Run panel, Live Stack row: why it is unavailable when the sensor frame is above the stack's size limit"
   },
+  "simpleLiveStackCouldntStart": "Couldn't start Live Stack",
+  "@simpleLiveStackCouldntStart": {
+    "description": "Error pill title when the rig refuses or fails to turn Live Stack on"
+  },
+  "simpleLiveStackCouldntStop": "Couldn't stop Live Stack",
+  "@simpleLiveStackCouldntStop": {
+    "description": "Error pill title when the rig refuses or fails to turn Live Stack off"
+  },
+  "simpleLiveStackCouldntReset": "Couldn't reset Live Stack",
+  "@simpleLiveStackCouldntReset": {
+    "description": "Error pill title when the rig refuses or fails to empty the Live Stack"
+  },
   "limitsTitle": "Limits",
   "@limitsTitle": {
     "description": "Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch"

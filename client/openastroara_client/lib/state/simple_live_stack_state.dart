@@ -78,6 +78,7 @@ class SimpleLiveStackController extends Notifier<SimpleLiveStack> {
   Timer? _timer;
   Duration? _armed;
   bool _inFlight = false;
+  int _gen = 0;
   bool _disposed = false;
   bool _viewTouched = false;
 
@@ -117,27 +118,35 @@ class SimpleLiveStackController extends Notifier<SimpleLiveStack> {
         .save(v == SimpleLiveStackView.lastLight);
   }
 
-  Future<void> setOn(bool on) => _control(on ? _client!.start : _client!.stop);
+  /// The error of a failed call, or null once it went through.
+  Future<Object?> setOn(bool on) => _control((c) => on ? c.start() : c.stop());
 
-  Future<void> reset() => _control(_client!.reset);
+  Future<Object?> reset() => _control((c) => c.reset());
 
   /// A control call, then the daemon's next status: a failed call leaves the
-  /// state as the daemon last reported it and records the error.
-  Future<void> _control(Future<void> Function() call) async {
-    if (_client == null) return;
+  /// state as the daemon last reported it, records the error and returns it
+  /// for the row's pill (a failed poll stays silent).
+  Future<Object?> _control(
+    Future<void> Function(SessionLiveStackClient) call,
+  ) async {
+    final client = _client;
+    if (client == null) return null;
     try {
-      await call();
+      await call(client);
     } catch (e) {
       if (!_disposed) state = state.copyWith(error: () => e);
-      return;
+      return e;
     }
     await _poll();
+    return null;
   }
 
-  /// One status read; a timer tick skips while the previous one is in flight.
+  /// One status read; a timer tick skips while the previous one is in flight,
+  /// and a read that a later one overtook (a control call's) is dropped.
   Future<void> _poll({bool tick = false}) async {
     final client = _client;
     if (client == null || _disposed || (tick && _inFlight)) return;
+    final gen = ++_gen;
     _inFlight = true;
     try {
       final status = await client.status();
@@ -147,16 +156,17 @@ class SimpleLiveStackController extends Notifier<SimpleLiveStack> {
       } else if (frame == null || frame.seq != status.stackSeq) {
         frame = await client.frame() ?? frame;
       }
-      if (_disposed) return;
+      if (_disposed || gen != _gen) return;
       state = state.copyWith(
         status: status,
         frame: () => frame,
         error: () => null,
       );
     } catch (e) {
-      if (!_disposed) state = state.copyWith(error: () => e);
+      if (_disposed || gen != _gen) return;
+      state = state.copyWith(error: () => e);
     } finally {
-      _inFlight = false;
+      if (gen == _gen) _inFlight = false;
     }
     if (!_disposed) _arm();
   }

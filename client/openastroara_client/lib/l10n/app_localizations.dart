@@ -11707,6 +11707,24 @@ abstract class AppLocalizations {
   /// **'Frame too large to stack'**
   String get simpleLiveStackTooLarge;
 
+  /// Error pill title when the rig refuses or fails to turn Live Stack on
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t start Live Stack'**
+  String get simpleLiveStackCouldntStart;
+
+  /// Error pill title when the rig refuses or fails to turn Live Stack off
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t stop Live Stack'**
+  String get simpleLiveStackCouldntStop;
+
+  /// Error pill title when the rig refuses or fails to empty the Live Stack
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t reset Live Stack'**
+  String get simpleLiveStackCouldntReset;
+
   /// Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch
   ///
   /// In en, this message translates to:

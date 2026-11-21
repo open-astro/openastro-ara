@@ -4,8 +4,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../services/session_live_stack_api.dart';
 import '../../state/simple_live_stack_state.dart';
+import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
+import '../../util/friendly_error.dart';
 
 /// "Live Stack · 3 lights", then "· 2 left out" for the lights the stack could
 /// not add (not registered, or the stacker was busy).
@@ -23,6 +25,28 @@ String? simpleLiveStackReason(AppLocalizations l10n, String? token) =>
       'too_large' => l10n.simpleLiveStackTooLarge,
       _ => null,
     };
+
+/// A failed start, stop or reset shows as one error pill (DESIGN.md
+/// "Errors": a Queue failure after a rig round-trip).
+Future<void> _sayIfFailed(
+  BuildContext context,
+  Future<Object?> call,
+  String title,
+) async {
+  final l10n = context.l10n;
+  // Read before the await: this row may be gone when it returns.
+  final container = ProviderScope.containerOf(context, listen: false);
+  final e = await call;
+  if (e == null) return;
+  container
+      .read(simpleMessagesProvider.notifier)
+      .show(
+        SimpleMessageKind.error,
+        title,
+        detail: failureReason(l10n, e),
+        origin: SimpleStatusOrigin.plan,
+      );
+}
 
 /// The Live Stack switch in the run panel: the switch, Reset, and (while on)
 /// the choice between the stack and the last light. Hidden until the daemon
@@ -43,6 +67,39 @@ class SimpleLiveStackRow extends ConsumerWidget {
     final outcome = s.supported
         ? simpleLiveStackReason(l10n, status.lastOutcome)
         : null;
+    // The Simple Mode choice: selection-tint and link-text words when chosen
+    // (DESIGN.md "Panels"), not Material chips, the brightest fill at night.
+    Widget option(String id, String label, SimpleLiveStackView v) {
+      final selected = s.view == v;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: Material(
+            color: selected ? AraColors.selectionTint : AraColors.tileFill,
+            borderRadius: BorderRadius.circular(AraRadius.container),
+            child: InkWell(
+              key: Key('simple-live-stack-view-$id'),
+              borderRadius: BorderRadius.circular(AraRadius.container),
+              onTap: () => stack.setView(v),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Center(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: selected
+                        ? kSimpleText.copyWith(color: AraColors.linkText)
+                        : kSimpleText,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
     return Column(
       key: const Key('simple-live-stack-row'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -58,7 +115,13 @@ class SimpleLiveStackRow extends ConsumerWidget {
                 child: Switch(
                   key: const Key('simple-live-stack-switch'),
                   value: s.on,
-                  onChanged: stack.setOn,
+                  onChanged: (on) => _sayIfFailed(
+                    context,
+                    stack.setOn(on),
+                    on
+                        ? l10n.simpleLiveStackCouldntStart
+                        : l10n.simpleLiveStackCouldntStop,
+                  ),
                 ),
               ),
           ],
@@ -77,24 +140,19 @@ class SimpleLiveStackRow extends ConsumerWidget {
           ),
         if (s.supported) ...[
           if (s.on)
-            Wrap(
+            Row(
               key: const Key('simple-live-stack-view'),
               spacing: AraSpace.s8,
               children: [
-                ChoiceChip(
-                  key: const Key('simple-live-stack-view-stack'),
-                  label: Text(l10n.simpleLiveStackViewStack),
-                  selected: s.view == SimpleLiveStackView.stack,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  onSelected: (_) => stack.setView(SimpleLiveStackView.stack),
+                option(
+                  'stack',
+                  l10n.simpleLiveStackViewStack,
+                  SimpleLiveStackView.stack,
                 ),
-                ChoiceChip(
-                  key: const Key('simple-live-stack-view-last'),
-                  label: Text(l10n.simpleLiveStackViewLastLight),
-                  selected: s.view == SimpleLiveStackView.lastLight,
-                  materialTapTargetSize: MaterialTapTargetSize.padded,
-                  onSelected: (_) =>
-                      stack.setView(SimpleLiveStackView.lastLight),
+                option(
+                  'last',
+                  l10n.simpleLiveStackViewLastLight,
+                  SimpleLiveStackView.lastLight,
                 ),
               ],
             ),
@@ -102,7 +160,13 @@ class SimpleLiveStackRow extends ConsumerWidget {
             alignment: Alignment.centerLeft,
             child: TextButton(
               key: const Key('simple-live-stack-reset'),
-              onPressed: s.on ? stack.reset : null,
+              onPressed: s.on
+                  ? () => _sayIfFailed(
+                      context,
+                      stack.reset(),
+                      l10n.simpleLiveStackCouldntReset,
+                    )
+                  : null,
               child: Text(l10n.simpleLiveStackReset),
             ),
           ),
