@@ -50,6 +50,21 @@
   .bare #frame .dial { width: 110px; height: 110px; }
   .bare #frame .dial-hand { height: 46px; }
   .bare #f-bare, .bare #frame #f-snap { min-height: 44px; font-size: 14px; }
+  /* An upright phone (the shell's #1775 deck: under 600 px wide, portrait) has
+     no right rail, and the deck and the bottom row (16 + 192 + 8 + 56 + 8 px)
+     leave no room under the box. The card docks as a strip under the status
+     card (88 + 48 + 8 px): the angle beside its title, Snap beside the dial; it
+     stops 16 px short of the view centre, where the box sits. */
+  @media (max-width: 599px) and (orientation: portrait) {
+    .bare #frame { top: 144px; left: 16px; right: 16px; width: auto; max-height: calc(50% - 160px); padding: 4px 12px 10px; }
+    .bare #frame .card-title { margin-bottom: 4px; }
+    .bare #frame .frow { position: absolute; top: 4px; right: 64px; height: 44px; padding: 0; gap: 8px; }
+    .bare #frame .frot { float: left; gap: 8px; padding: 0; }
+    .bare #frame .dial { width: 66px; height: 66px; }
+    .bare #frame .dial-hand { height: 27px; }
+    .bare #frame #f-snap { float: right; width: calc(100% - 178px); min-height: 66px; margin: 0; padding: 8px 10px; }
+    .bare #frame #f-msg { clear: both; }
+  }
   #f-bare { display: none; left: auto; right: 104px; top: 88px; padding: 8px 14px; background: var(--mat);
     backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 0.5px solid var(--hair);
     border-radius: 10px; box-shadow: var(--shadow); }
