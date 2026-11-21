@@ -53,7 +53,7 @@ lib/screens/tabs/support_tab.dart 10
 lib/screens/wizard/screens/screen_guiding.dart 41
 lib/screens/wizard/screens/screen_your_equipment.dart 49
 lib/services/target_resolve_api.dart 1
-lib/settings/registry.dart 404
+lib/settings/registry.dart 408
 lib/state/diagnostics/diagnostics_state.dart 2
 lib/state/sequencer/create_imaging_run.dart 7
 lib/state/settings/settings_nav.dart 41
