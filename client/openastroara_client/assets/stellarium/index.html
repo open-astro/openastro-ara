@@ -49,7 +49,7 @@
   .bare #frame .frot button { width: 44px; height: 44px; }
   .bare #frame .dial { width: 110px; height: 110px; }
   .bare #frame .dial-hand { height: 46px; }
-  .bare #f-bare, .bare #frame #f-snap, .bare #frame #f-add { min-height: 44px; font-size: 14px; }
+  .bare #f-bare, .bare #frame #f-snap { min-height: 44px; font-size: 14px; }
   #f-bare { display: none; left: auto; right: 104px; top: 88px; padding: 8px 14px; background: var(--mat);
     backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 0.5px solid var(--hair);
     border-radius: 10px; box-shadow: var(--shadow); }
@@ -268,7 +268,9 @@
 
 <!-- Framing overlay controls: draws the connected camera's field of view (from
      your optics profile) on the selected target, with a position-angle rotation
-     and an N×M mosaic, then adds it to the sequence. -->
+     and an N×M mosaic, then adds it to the sequence. Simple Mode (?bare=1)
+     shows the angle controls only (.full-only hides the rest); its own Add to
+     queue takes the framing. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
   <div class="frow full-only"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
@@ -290,7 +292,7 @@
     <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
   </div>
   <div class="frow full-only"><span class="k">Field</span><span id="f-fov">—</span></div>
-  <button id="f-add">Create Run</button>
+  <button id="f-add" class="full-only">Create Run</button>
   <button id="f-rotcam" class="full-only" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
   <div id="f-msg" class="full-only"></div>
   <div id="f-dss" class="full-only" hidden></div>
@@ -1539,7 +1541,8 @@ function updateFrame() {
 
 // Tell Flutter about the framing box (on/off, centre, dialed angle, name) so
 // the Rotate-camera panel measures the camera against the SAME angle the dial
-// shows. updateFrame runs on every view move while the frame follows the sky,
+// shows, and Simple Mode's Add to queue frames its Target with it (#1899).
+// updateFrame runs on every view move while the frame follows the sky,
 // so coalesce: post only when something the panel cares about changed, and at
 // most a few times a second.
 var _framingPosted = '', _framingTimer = null;
@@ -1552,9 +1555,7 @@ function framingPayload() {
   };
 }
 function postFraming() {
-  // Simple Mode keeps its framing in the page: Flutter's planFramingProvider
-  // is the Full UI's plan (#1899, ADR 0009).
-  if (CHART || _framingTimer) return;
+  if (_framingTimer) return;
   _framingTimer = setTimeout(function () {
     _framingTimer = null;
     var payload = framingPayload(), key = JSON.stringify(payload);
@@ -1623,7 +1624,7 @@ function renderFramePanel() {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
-  document.getElementById('f-add').textContent = CHART ? 'Add to queue' : API ? 'Create Run' : 'Create Run (draft)';
+  document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
   var snapBtn = document.getElementById('f-snap');
   snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + frameCatPaDeg + '°)');
   snapBtn.disabled = !snapEnabled();
@@ -1757,7 +1758,9 @@ function wireFrame() {
 // sequence DOM itself, so it hands the target back to Flutter (which owns the
 // sequence builder) through the loopback server's reverse event channel.
 function addFrameToSequence() {
-  if (frameRaDeg == null) return;
+  // Simple Mode queues through its own Add to queue (one block per Target,
+  // ADR 0010), which reads the framing postFraming sends.
+  if (CHART || frameRaDeg == null) return;
   var btn = document.getElementById('f-add');
   btn.disabled = true; btn.textContent = 'Creating…';
   // Per-panel J2000 centres (row-major), same grid + gnomonic deprojection as
