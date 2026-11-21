@@ -880,7 +880,8 @@ void main() {
       // must move with the position on the page, and the Dart search path
       // must send it.
       final page = File('assets/stellarium/index.html').readAsStringSync();
-      expect(page, contains("frameTargetName = name || '';"));
+      expect(page, contains("var next = name || '';"));
+      expect(page, contains('frameTargetName = next;'));
       expect(page, isNot(contains('if (name) frameTargetName = name;')));
       expect(page, contains('pointRaDec(c.ra, c.dec, c.name);'));
       // The decision moved into routeSearch (#1267): the view must route

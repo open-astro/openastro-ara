@@ -34,8 +34,15 @@
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
   #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .ui { position: absolute; z-index: 10; }
-  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. */
-  .bare .ui { display: none !important; }
+  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. The
+     one exception is the framing box's own controls (#f-bare, #frame). */
+  .bare .ui:not(#frame):not(#f-bare) { display: none !important; }
+  .bare #frame { left: auto; right: 14px; top: 64px; }
+  .bare #frame .full-only { display: none; }
+  #f-bare { display: none; left: auto; right: 14px; top: 14px; padding: 8px 14px; background: var(--mat);
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 0.5px solid var(--hair);
+    border-radius: 10px; box-shadow: var(--shadow); }
+  #f-bare.on { color: var(--accent); }
   button { font: inherit; font-size: 13px; font-weight: 500; color: var(--txt); background: transparent;
     border: none; border-radius: 8px; padding: 6px 11px; cursor: pointer;
     transition: background .15s ease, color .15s ease; }
@@ -197,6 +204,9 @@
 
 <div id="searchmsg" class="ui"></div>
 
+<!-- Simple Mode (?bare=1) only: Framing Off/On for the picked Target (#1899). -->
+<button id="f-bare" class="ui" title="Camera box on the picked Target" aria-pressed="false">Framing</button>
+
 <div id="timebar" class="ui" style="display:none; top: 10px;">
   <button id="t-1h">−1h</button>
   <button id="t+1h">+1h</button>
@@ -243,28 +253,28 @@
      and an N×M mosaic, then adds it to the sequence. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
-  <div class="frow"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
-  <div class="frow"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
+  <div class="frow full-only"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
+  <div class="frow full-only"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
   <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
   <div class="frot">
     <button id="f-rot-" title="−1°">−</button>
     <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
     <button id="f-rot+" title="+1°">+</button>
   </div>
-  <div class="frow"><span class="k">Columns</span>
+  <div class="frow full-only"><span class="k">Columns</span>
     <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Rows</span>
+  <div class="frow full-only"><span class="k">Rows</span>
     <div class="stp"><button id="f-row-">−</button><span class="val" id="f-row">1</span><button id="f-row+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Overlap</span>
+  <div class="frow full-only"><span class="k">Overlap</span>
     <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
+  <div class="frow full-only"><span class="k">Field</span><span id="f-fov">—</span></div>
   <button id="f-add">Create Run</button>
-  <button id="f-rotcam" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
-  <div id="f-msg"></div>
-  <div id="f-dss" hidden></div>
+  <button id="f-rotcam" class="full-only" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
+  <div id="f-msg" class="full-only"></div>
+  <div id="f-dss" class="full-only" hidden></div>
 </div>
 
 
@@ -1318,9 +1328,16 @@ function loadOptics() {
 // a goto that brings none (raw coordinates) clears it, so Create Run falls
 // back to "Target" instead of naming the run after whatever was selected
 // before — "Moon" at NGC 7000's coordinates, night of 2026-10-02.
+// Simple Mode (CHART): a new target name sets Framing Off and the angle to 0°,
+// the same name keeps both (#1899 decision B).
 function setFrameTarget(raDeg, decDeg, name) {
-  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = name || '';
-  if (frameOn) updateFrame();
+  var next = name || '';
+  if (CHART && next !== frameTargetName) {
+    frameRotDeg = 0;
+    if (frameOn) toggleFrame(false);
+  }
+  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = next;
+  if (frameOn) updateFrame(); else if (CHART) renderFramePanel();
 }
 
 // The view's centre in J2000 RA/Dec — lets the frame follow the view so you can
@@ -1494,7 +1511,9 @@ function framingPayload() {
   };
 }
 function postFraming() {
-  if (_framingTimer) return;
+  // Simple Mode keeps its framing in the page: Flutter's planFramingProvider
+  // is the Full UI's plan (#1899, ADR 0009).
+  if (CHART || _framingTimer) return;
   _framingTimer = setTimeout(function () {
     _framingTimer = null;
     var payload = framingPayload(), key = JSON.stringify(payload);
@@ -1563,7 +1582,11 @@ function renderFramePanel() {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
-  document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
+  document.getElementById('f-add').textContent = CHART ? 'Add to queue' : API ? 'Create Run' : 'Create Run (draft)';
+  var bareBtn = document.getElementById('f-bare');
+  bareBtn.style.display = CHART && frameRaDeg != null ? 'block' : 'none';
+  bareBtn.classList.toggle('on', frameOn);
+  bareBtn.setAttribute('aria-pressed', frameOn ? 'true' : 'false');
   document.getElementById('f-add').disabled = !(frameRaDeg != null && optics && optics.ok);
   // The readout needs the daemon (camera + solver): offline the button stays quiet.
   document.getElementById('f-rotcam').disabled = !(API && frameRaDeg != null);
@@ -1639,6 +1662,7 @@ function toggleFrame(on) {
 function wireFrame() {
   document.getElementById('frame-btn').onclick = function () { toggleFrame(); };
   document.getElementById('f-close').onclick = function () { toggleFrame(false); };
+  document.getElementById('f-bare').onclick = function () { toggleFrame(); };
 
   // Press-and-hold to repeat (accelerating), so 1° rotation steps don't mean a
   // hundred clicks. One tap = one step.
