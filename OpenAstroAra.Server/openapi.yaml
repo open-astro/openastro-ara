@@ -2356,6 +2356,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: hand_turn
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
@@ -2371,6 +2375,34 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '409':
           description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/polaralign/preflight:
+    get:
+      tags:
+        - Equipment
+      summary: 'Polar Align''s pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.'
+      operationId: GetPolarAlignPreflight
+      parameters:
+        - name: stage
+          in: query
+          schema:
+            type: string
+        - name: hand_turn
+          in: query
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignPreflightDto'
+        '400':
+          description: Bad Request
           content:
             application/problem+json:
               schema:
@@ -2487,8 +2519,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/correction/resume:
     post:
       tags:
@@ -2499,8 +2541,18 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaraligner:
     get:
       tags:
@@ -14230,6 +14282,13 @@ components:
           type:
             - 'null'
             - boolean
+        align_sigma_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     ParkRequestDto:
       type: object
       properties:
@@ -14754,6 +14813,143 @@ components:
           type:
             - 'null'
             - boolean
+    PolarAlignMountClearanceDto:
+      type: object
+      properties:
+        max_cw_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 60
+        clearance_confirmed:
+          type: boolean
+          default: false
+        confirmed_max_cw_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+    PolarAlignPreflightCheckDto:
+      required:
+        - id
+        - status
+        - detail
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        detail:
+          type: string
+    PolarAlignPreflightDto:
+      required:
+        - ready
+        - checks
+        - planned
+        - mount_key
+      type: object
+      properties:
+        ready:
+          type: boolean
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/PolarAlignPreflightCheckDto'
+        planned:
+          $ref: '#/components/schemas/PolarAlignPreflightPlannedDto'
+        mount_key:
+          type:
+            - 'null'
+            - string
+    PolarAlignPreflightPlannedDto:
+      required:
+        - stage
+        - direction
+        - turn_step_deg
+        - check_step_deg
+        - turns
+        - max_sweep_deg
+        - new_origin
+        - origin_offset_deg
+        - sweep_limit_deg
+        - max_cw_angle_deg
+        - start_cw_angle_deg
+        - min_altitude_deg
+      type: object
+      properties:
+        stage:
+          type: string
+        direction:
+          type:
+            - 'null'
+            - string
+        turn_step_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        check_step_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        turns:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        max_sweep_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        new_origin:
+          type:
+            - 'null'
+            - boolean
+        origin_offset_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        sweep_limit_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        max_cw_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        start_cw_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
+        min_altitude_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     PolarAlignSettingsDto:
       type: object
       properties:
@@ -14836,6 +15032,12 @@ components:
           type:
             - 'null'
             - boolean
+        mount_clearance:
+          type:
+            - 'null'
+            - object
+          additionalProperties:
+            $ref: '#/components/schemas/PolarAlignMountClearanceDto'
     PolarAlignStartPlanDto:
       required:
         - stage
@@ -15457,6 +15659,7 @@ components:
         - mount-clock-not-verified
         - polar-align-already-running
         - polar-align-clutch-turned
+        - polar-align-clearance-not-confirmed
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

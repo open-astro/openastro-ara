@@ -16,10 +16,13 @@ import 'package:openastroara/widgets/imaging/polar_aligner_block.dart';
 import 'package:openastroara/widgets/status_indicator.dart';
 
 import '../support/polar_align_section.dart';
+import '../support/settings_values.dart';
 
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
@@ -71,7 +74,7 @@ class _Site extends SiteSettingsNotifier {
   final double lat;
   @override
   LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: SiteSettings(latitudeDeg: lat), source: SectionSource.rig);
+      LoadedSection(value: TestSiteSettings(latitudeDeg: lat), source: SectionSource.rig);
 }
 
 const _base = PolarAligner(
@@ -220,6 +223,21 @@ void main() {
     expect(find.byType(ButtonStyleButton), findsNothing);
   });
 
+  testWidgets("converged inside the tolerance but not with twice its 1σ: the line says it can't confirm the alignment (#2072)", (tester) async {
+    await _pump(tester,
+        live: const PolarAlignLive(
+            phase: PolarAlignStates.adjusting,
+            totalErrorArcmin: 1.5,
+            totalSigmaArcmin: 0.4,
+            correction: PolarAlignerRun(state: 'converged', moves: 4)));
+    expect(
+        find.text("The motors stopped inside your 2′ tolerance, but at ± 0.4′ this measurement can't confirm the "
+            'alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four '
+            'times), so run Check with a larger Check step.'),
+        findsOneWidget);
+    expect(find.textContaining('Inside your 2′ tolerance after'), findsNothing, reason: 'no claim of alignment');
+  });
+
   testWidgets(
       'the profile not loaded from the rig: no made-up tolerance, and a correction the motors make still reads as theirs (ADR 0015)',
       (tester) async {
@@ -237,9 +255,9 @@ void main() {
 
   const causes = {
     'wrong_direction': ('azimuth', null,
-        'The test move on azimuth went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'),
+        'A move on azimuth went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'),
     'wrong_scale': ('altitude', null,
-        "The test move on altitude didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting."),
+        "A move on altitude didn't go the distance asked, so Ara stopped the motors. Check the Polar Aligner's step setting."),
     'device_fault': ('azimuth', 'Azimuth: end of travel', 'The Polar Aligner reported a fault: “Azimuth: end of travel”.'),
     'not_calibrated': (null, 'Not calibrated',
         "The Polar Aligner isn't calibrated, so it refused to move: “Not calibrated”. Calibrate it in its own app, then Resume."),
@@ -251,6 +269,14 @@ void main() {
         "The Polar Aligner can't move while the mount tracks. Turn tracking off in the Mount window, then Resume."),
     'mount_slewing': (null, null, "The Polar Aligner can't move while the mount slews. Resume once the mount stops."),
     'stopped_by_user': (null, null, 'You stopped the motors.'),
+    'stop_not_confirmed': (null, null,
+        "Ara sent Stop, but the Polar Aligner didn't confirm its motors stopped. Cut its power if it still moves. "
+            'Ara sends Stop again at each measurement.'),
+    'stop_confirmed': (null, null,
+        "The Polar Aligner has now confirmed its motors stopped. Ara won't move them again until you Resume."),
+    'travel_limit': ('azimuth', null,
+        'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.'),
+    'move_limit': (null, null, 'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.'),
   };
 
   test('every stop cause has its own sentence in English and pt-BR', () {
@@ -272,7 +298,9 @@ void main() {
         'Ara stopped the motors: “Overheated”.');
   });
 
-  for (final MapEntry(key: cause, value: (axis, text, sentence)) in causes.entries) {
+  // stop_not_confirmed has its own test below: Stop in place of Resume.
+  for (final MapEntry(key: cause, value: (axis, text, sentence))
+      in causes.entries.where((e) => e.key != 'stop_not_confirmed')) {
     testWidgets('stopped ($cause): its sentence, carry on by hand, Home and Resume', (tester) async {
       final c = await _pump(tester,
           live: _run(PolarAlignerRun(state: 'stopped', cause: cause, axis: axis, deviceText: text, moves: 2)));
@@ -292,6 +320,18 @@ void main() {
       expect(c.calls, contains('resumeInRoutine'));
     });
   }
+
+  testWidgets('stopped (stop_not_confirmed): Stop to send again in place of Resume, no Home', (tester) async {
+    // The daemon refuses Resume and Home until a Stop is confirmed.
+    final c = await _pump(tester,
+        live: _run(const PolarAlignerRun(state: 'stopped', cause: 'stop_not_confirmed', moves: 2)));
+    expect(find.text(causes['stop_not_confirmed']!.$3), findsOneWidget);
+    expect(_key('polar-aligner-resume'), findsNothing);
+    expect(tester.widget<OutlinedButton>(_key('polar-aligner-home')).onPressed, isNull);
+    await tester.tap(_key('polar-aligner-stop'));
+    await tester.pumpAndSettle();
+    expect(c.calls, contains('stopInRoutine'));
+  });
 
   testWidgets('stopped: a screen reader is told why the motors stopped', (tester) async {
     final handle = tester.ensureSemantics();

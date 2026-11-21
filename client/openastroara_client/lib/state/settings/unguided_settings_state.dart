@@ -7,7 +7,7 @@ import 'loaded_section.dart';
 /// the Tracking Probe, the Unguided Exposure Guard and Center After Drift on a
 /// rig without a guider. The run builder reads it when it cooks the nodes; the
 /// daemon reads the tolerance basis when it turns the mount's spec sheet into
-/// a prior. Defaults ARE the shipped behaviour.
+/// a prior. The daemon's section defaults are the shipped behaviour.
 class UnguidedSettings {
   final bool guardEnabled;
   final double eccentricityTolerance;
@@ -24,16 +24,18 @@ class UnguidedSettings {
   /// `max` (1 px or half the seeing, whichever is larger), `pixel`, `seeing`.
   final String priorToleranceBasis;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const UnguidedSettings({
-    this.guardEnabled = true,
-    this.eccentricityTolerance = 0.5,
-    this.goodEccentricity = 0.3,
-    this.stepDownAfter = 2,
-    this.stepUpAfter = 10,
-    this.probeRungsSeconds = defaultProbeRungsSeconds,
-    this.recentreDriftArcmin = 10,
-    this.recentreSolveEveryN = 1,
-    this.priorToleranceBasis = 'max',
+    required this.guardEnabled,
+    required this.eccentricityTolerance,
+    required this.goodEccentricity,
+    required this.stepDownAfter,
+    required this.stepUpAfter,
+    required this.probeRungsSeconds,
+    required this.recentreDriftArcmin,
+    required this.recentreSolveEveryN,
+    required this.priorToleranceBasis,
   });
 
   static const List<double> defaultProbeRungsSeconds = [10, 30, 60, 120];

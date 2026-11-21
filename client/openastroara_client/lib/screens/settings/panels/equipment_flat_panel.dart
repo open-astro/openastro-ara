@@ -10,6 +10,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -26,9 +27,8 @@ class EquipmentFlatPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
-    final policies =
-        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
+    // Read only: the rig's copy once it loads (ADR 0015); not loaded until.
+    final policies = ref.watch(safetyPoliciesProvider).value;
     final status = ref.watch(flatPanelProvider);
     final notifier = ref.read(flatPanelProvider.notifier);
 
@@ -50,24 +50,28 @@ class EquipmentFlatPanel extends ConsumerWidget {
         ),
         AutoConnectRow(EquipmentDeviceType.flatPanel),
         const SettingsSectionHeader('Flat capture'),
-        SettingsRow(
-          label: 'Auto-brightness target',
-          helpKey: 'eq.flat.auto_brightness_target',
-          value: '${policies.flatTargetPercent.toStringAsFixed(0)}% of the camera\'s range',
-          hint: 'Edit in Settings → Your night → Calibration',
-        ),
-        SettingsRow(
-          label: 'Target tolerance (%)',
-          helpKey: 'eq.flat.target_tolerance',
-          value: policies.flatTargetAduTolerancePct.toString(),
-          hint: 'Edit in Settings → Your night → Calibration',
-        ),
-        SettingsRow(
-          label: 'Frames per filter',
-          helpKey: 'eq.flat.frames_per_filter',
-          value: policies.flatFramesPerFilter.toString(),
-          hint: 'Edit in Settings → Your night → Calibration',
-        ),
+        if (policies == null)
+          SectionNotLoadedRows(safetyPoliciesProvider)
+        else ...[
+          SettingsRow(
+            label: 'Auto-brightness target',
+            helpKey: 'eq.flat.auto_brightness_target',
+            value: '${policies.flatTargetPercent.toStringAsFixed(0)}% of the camera\'s range',
+            hint: 'Edit in Settings → Your night → Calibration',
+          ),
+          SettingsRow(
+            label: 'Target tolerance (%)',
+            helpKey: 'eq.flat.target_tolerance',
+            value: policies.flatTargetAduTolerancePct.toString(),
+            hint: 'Edit in Settings → Your night → Calibration',
+          ),
+          SettingsRow(
+            label: 'Frames per filter',
+            helpKey: 'eq.flat.frames_per_filter',
+            value: policies.flatFramesPerFilter.toString(),
+            hint: 'Edit in Settings → Your night → Calibration',
+          ),
+        ],
       ],
     );
   }

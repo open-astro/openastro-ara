@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/fake_section_rig.dart';
 
 void main() {
-  test('the polar-align section reads east_direction, an older rig without it is by hemisphere, and a save sends it (#2081)', () async {
+  test('the polar-align section reads east_direction, a rig reply without the key fails the read, and a save sends it (#2081)', () async {
     final rig = FakeSectionRig({
       'polar-align': {...rigDefaults['polar-align']!, 'east_direction': false},
     });
@@ -19,10 +19,13 @@ void main() {
     expect(sent.containsKey('east_direction'), isTrue);
     expect(sent['east_direction'], isNull);
 
-    final older = FakeSectionRig({'polar-align': rigDefaults['polar-align']!});
-    expect(
-      (await older.api().getPolarAlignSection()).value.eastDirection,
-      isNull,
+    // Strict like the other keys (#1807): a missing key is not "by hemisphere".
+    final older = FakeSectionRig({
+      'polar-align': {...rigDefaults['polar-align']!}..remove('east_direction'),
+    });
+    await expectLater(
+      older.api().getPolarAlignSection(),
+      throwsA(isA<FormatException>()),
     );
   });
 }

@@ -48,6 +48,7 @@ import '../../theme/ara_metrics.dart';
 import '../../l10n/l10n.dart';
 import '../../util/tonight_sky_local.dart'
     show altitudeDegAt, darkStart, hoursAboveInSpan, nightEnd;
+import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/platform_context_menu.dart';
 import '../../widgets/sequencer/target_plan_dialog.dart'
     show suggestedSubSeconds;
@@ -202,13 +203,16 @@ PlanetariumSelection simplePickDso(
   PlanningDso d, {
   String? designation,
 }) {
-  final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
+  // A site not loaded reads as the unset 0, 0 (ADR 0015: no client default).
+  final site = ref.read(siteSettingsProvider).value;
+  final unset =
+      site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0);
   return simpleSelectionOfDso(
     d,
     ref.read(tonightSkyProvider).value ?? const [],
-    latitudeDeg: site.latitudeDeg,
+    latitudeDeg: site?.latitudeDeg ?? 0,
     // 0, 0 is the unset site (as tonight_sky_state reads it): no altitude from a made-up position.
-    longitudeDeg: site.latitudeDeg == 0 && site.longitudeDeg == 0 ? null : site.longitudeDeg,
+    longitudeDeg: unset ? null : site.longitudeDeg,
     utc: ref.read(clockProvider)().toUtc(),
     designation: designation,
   );
@@ -783,9 +787,9 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   // #1560 — the dawn of the night a start at [start] runs into (local), and
   // whether it starts in the dark; a minute-by-minute sun scan, so worked out
   // once per minute and site (Start now is a new instant on every rebuild).
-  (DateTime, SiteSettings, DateTime?, bool)? _night;
+  (DateTime, SiteSettings?, DateTime?, bool)? _night;
   (DateTime?, bool) _nightOf(DateTime start) {
-    final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
+    final site = ref.read(siteSettingsProvider).value;
     final minute = DateTime(
       start.year,
       start.month,
@@ -913,11 +917,14 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                     : s.filterName,
                 raDeg: sel.raJ2000Hours * 15,
                 decDeg: sel.decJ2000Deg,
+                // Not loaded: the row's own sub (ADR 0015).
                 defaultExposure:
-                    (ref.watch(imagingDefaultsProvider).value ??
-                                const ImagingDefaults())
-                            .defaultExposure
-                            .inMilliseconds /
+                    (ref
+                                .watch(imagingDefaultsProvider)
+                                .value
+                                ?.defaultExposure
+                                .inMilliseconds ??
+                            s.exposureSeconds * 1000) /
                         1000,
                 skyCalibrationK: k,
               ),
@@ -981,12 +988,15 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           _ => r.name,
         },
     ];
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    final site = ref.watch(siteSettingsProvider).value;
     final span = ref.watch(simpleRestOfNightProvider);
-    // Null: unknown (no site set, or no night ahead), never zero hours.
-    double? hoursOf(double raDeg, double decDeg) =>
-        span == null ? null : hoursAboveInSpan(span, raDeg, decDeg, site);
-    final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;
+    // Null: unknown (no site set or loaded, or no night ahead), never zero
+    // hours.
+    double? hoursOf(double raDeg, double decDeg) => span == null || site == null
+        ? null
+        : hoursAboveInSpan(span, raDeg, decDeg, site);
+    final siteSet =
+        site != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0);
     final selHours = sel == null
         ? null
         : hoursOf(sel.raJ2000Hours * 15, sel.decJ2000Deg);
@@ -1179,9 +1189,13 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
             ),
         ],
         const Divider(height: 1),
+        // No rows while the imaging defaults are not loaded (ADR 0015: no
+        // client default sub): say so, with Retry.
+        if (steps.isEmpty)
+          SectionNotLoadedRows(imagingDefaultsProvider, padding: EdgeInsets.zero)
         // The filters as chips: a tap adds a row, another takes it out (the
         // last one stays: a run needs something to take).
-        if (steps.first.filterName.isNotEmpty)
+        else if (steps.first.filterName.isNotEmpty)
           Wrap(
             spacing: AraSpace.s8,
             runSpacing: AraSpace.s8,
@@ -1974,7 +1988,7 @@ class _NightDone extends ConsumerWidget {
     // frame that would end after dawn, so such a run ends up to a sub early (2
     // min more for the client's sun model and the park). A run waiting for
     // dark started in daylight, so its night begins at dark.
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    final site = ref.watch(siteSettingsProvider).value;
     final dawn = start == null || run.dawnStop == null
         ? null
         : nightEnd(

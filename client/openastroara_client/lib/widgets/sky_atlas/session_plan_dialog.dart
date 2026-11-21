@@ -109,15 +109,23 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // Charge the night's REAL overheads from the user's own settings, so the
     // sub counts describe a session with dithering, guiding settles, plate
     // solving and autofocus in it — not an idealized shutter-open number.
-    final phd2 = ref.read(phd2SettingsProvider).value ?? const Phd2Settings();
-    final af =
-        ref.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
+    // A section not loaded charges nothing for what it would set, and the
+    // plan says so: never an assumed cadence standing in for the rig's
+    // (ADR 0015).
+    final phd2 = ref.read(phd2SettingsProvider).value;
+    final af = ref.read(autofocusSettingsProvider).value;
     final overheads = SessionOverheads(
-      ditherEnabled: phd2.ditherEnabled,
-      ditherEveryNFrames: phd2.ditherEveryNFrames,
-      ditherSettleSec: phd2.settleTimeSec.toDouble(),
-      autofocusEveryHours: af.everyNHours.toDouble(),
+      ditherEnabled: phd2?.ditherEnabled ?? false,
+      ditherEveryNFrames: phd2?.ditherEveryNFrames ?? 0,
+      ditherSettleSec: phd2?.settleTimeSec.toDouble() ?? 0,
+      autofocusEveryHours: af?.everyNHours.toDouble() ?? 0,
     );
+    final notLoaded = [
+      if (phd2 == null)
+        'Guider settings not loaded: dither settles are not counted.',
+      if (af == null)
+        'Autofocus settings not loaded: refocus runs are not counted.',
+    ];
     // §Integration Budget P5 — what the library already holds, so the plan
     // favours finishing a tier tonight over re-shooting a done one. Awaited
     // (bounded) rather than read: the dialog may open before anything else
@@ -125,14 +133,19 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final banked = bankedHoursByObjectId(await _statsBestEffort(), ranked);
     if (!mounted) return;
     setState(() => _planning = false);
+    final plan = planImagingSession(
+      ranked: ranked,
+      windowStartUtc: start.toUtc(),
+      windowEndUtc: end.toUtc(),
+      targetCount: s.targetCount,
+      overheads: overheads,
+      bankedHours: banked,
+    );
     ref.read(sessionPlanProvider.notifier).setPlan(
-          planImagingSession(
-            ranked: ranked,
-            windowStartUtc: start.toUtc(),
-            windowEndUtc: end.toUtc(),
-            targetCount: s.targetCount,
-            overheads: overheads,
-            bankedHours: banked,
+          SessionPlan(
+            targets: plan.targets,
+            plannedHours: plan.plannedHours,
+            notes: [...plan.notes, ...notLoaded],
           ),
           ranked: ranked,
           overheads: overheads,
@@ -191,9 +204,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // A mosaic becomes one target block per panel, on the same grid the
     // preview drew (mosaic_geometry ports the overlay's math). Each panel
     // gets its share of the slot so the run finishes inside it.
-    final fov = opticsFovArcmin(
-      ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
-    );
+    final fov = opticsFovArcmin(ref.read(opticsSettingsProvider).value);
     final aim = t.aim;
     final panels = t.mosaic.isMosaic && fov != null
         ? mosaicPanelCentres(
@@ -286,9 +297,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final theme = Theme.of(context);
     final s = ref.watch(sessionPlanProvider);
     final plan = s.plan;
-    final frameFov = opticsFovArcmin(
-      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings(),
-    );
+    final frameFov = opticsFovArcmin(ref.watch(opticsSettingsProvider).value);
 
     return AlertDialog(
       backgroundColor: AraColors.bgPanel,

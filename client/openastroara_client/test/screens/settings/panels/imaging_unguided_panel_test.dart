@@ -18,6 +18,7 @@ import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/fake_section_rig.dart';
+import '../../../support/settings_values.dart';
 
 /// #1264 Imaging → Unguided: the stored ceiling, its ladder and Recalibrate.
 class _Fixed extends TrackingCalibrationNotifier {
@@ -72,6 +73,8 @@ Future<_Fixed> _pump(
           FakeSectionRig({
             'unguided': rigDefaults['unguided'],
             'optics': rigDefaults['optics'],
+            // The site loads itself (its seeing feeds the basis hint).
+            'site': rigDefaults['site'],
           }).api(),
         ),
         trackingCalibrationProvider.overrideWith(() => notifier),
@@ -246,8 +249,8 @@ void main() {
   });
 
   test('#1264 basisGapFor names the missing figure, and only then', () {
-    const noOptics = OpticsSettings();
-    const optics = OpticsSettings(focalLengthMm: 447, pixelSizeUm: 3.76);
+    const noOptics = TestOpticsSettings();
+    const optics = TestOpticsSettings(focalLengthMm: 447, pixelSizeUm: 3.76);
     expect(basisGapFor('max', optics: noOptics, seeingArcsec: 0), isNull);
     expect(basisGapFor('pixel', optics: noOptics, seeingArcsec: 3), contains('optics'));
     expect(basisGapFor('pixel', optics: optics, seeingArcsec: 0), isNull);

@@ -32,6 +32,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using OpenAstroAra.Test.PolarAlign;
 
 namespace OpenAstroAra.Test {
 
@@ -114,7 +115,7 @@ namespace OpenAstroAra.Test {
             var store = new InMemoryProfileStore();
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1));
+                ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1).Confirmed());
             // #2081 — the mount's RA motor direction is already saved for its driver: no 0.5° test before the turns.
             store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, string.Empty, string.Empty, DateTimeOffset.UtcNow));
             var mount = NewMount().Object;

@@ -140,20 +140,22 @@ class _ReferenceDialog extends ConsumerWidget {
 
   /// Keyword → the user's own value, for the headers that come straight from
   /// settings (already hydrated by the panel that opens this sheet). Anything
-  /// unset stays on the catalog's generic example.
+  /// unset, or not loaded, stays on the catalog's generic example.
   Map<String, String> _liveValues(WidgetRef ref) {
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
-    final optics =
-        ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
+    final site = ref.watch(siteSettingsProvider).value;
+    final optics = ref.watch(opticsSettingsProvider).value;
     final live = <String, String>{};
-    if (site.observerName.isNotEmpty) live['OBSERVER'] = site.observerName;
+    if (site != null) {
+      if (site.observerName.isNotEmpty) live['OBSERVER'] = site.observerName;
+      if (site.latitudeDeg != 0 || site.longitudeDeg != 0) {
+        live['SITELAT'] = site.latitudeDeg.toStringAsFixed(6);
+        live['SITELONG'] = site.longitudeDeg.toStringAsFixed(6);
+        live['SITEELEV'] = site.elevationM.toStringAsFixed(1);
+      }
+    }
+    if (optics == null) return live;
     if (optics.telescopeName.isNotEmpty) {
       live['TELESCOP'] = optics.telescopeName;
-    }
-    if (site.latitudeDeg != 0 || site.longitudeDeg != 0) {
-      live['SITELAT'] = site.latitudeDeg.toStringAsFixed(6);
-      live['SITELONG'] = site.longitudeDeg.toStringAsFixed(6);
-      live['SITEELEV'] = site.elevationM.toStringAsFixed(1);
     }
     if (optics.focalLengthMm > 0) {
       final reducer = optics.reducerFactor > 0 ? optics.reducerFactor : 1.0;
@@ -170,10 +172,12 @@ class _ReferenceDialog extends ConsumerWidget {
   }
 
   /// Group title → whether its switch is currently on. The essentials
-  /// (controlledBy == null) are always on.
-  bool _groupEnabled(FilenamesSettings fs, FitsHeaderGroup group) =>
+  /// (controlledBy == null) are always on. Not loaded ([fs] null): no group
+  /// is shown as switched off, since nothing says it is (ADR 0015).
+  bool _groupEnabled(FilenamesSettings? fs, FitsHeaderGroup group) =>
       switch (group.controlledBy) {
         null => true,
+        _ when fs == null => true,
         'Who took it' => fs.headerIdentity,
         'Your site' => fs.headerSite,
         'Optics' => fs.headerOptics,
@@ -189,9 +193,8 @@ class _ReferenceDialog extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final live = _liveValues(ref);
-    // Not loaded from the rig yet: show the groups as the daemon defaults them.
-    final fs =
-        ref.watch(filenamesSettingsProvider).value ?? const FilenamesSettings();
+    // Not loaded from the rig yet: no switch is known (ADR 0015).
+    final fs = ref.watch(filenamesSettingsProvider).value;
     return Dialog(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 620),

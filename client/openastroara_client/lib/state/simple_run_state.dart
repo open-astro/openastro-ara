@@ -141,7 +141,7 @@ DateTime simpleNextAt(DateTime t, DateTime now) {
 final simpleDarkStartProvider = Provider<DateTime?>((ref) {
   ref.watch(skyClockProvider);
   return darkStart(
-    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
+    ref.watch(siteSettingsProvider).value,
     ref.watch(clockProvider)().toUtc(),
   )?.toLocal();
 });
@@ -151,7 +151,7 @@ final simpleDarkStartProvider = Provider<DateTime?>((ref) {
 final simpleScheduleAllowedProvider = Provider<bool>((ref) {
   ref.watch(skyClockProvider);
   return scheduleAllowed(
-    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
+    ref.watch(siteSettingsProvider).value,
     ref.watch(clockProvider)().toUtc(),
   );
 });
@@ -206,17 +206,19 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     return _defaults();
   }
 
-  List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
-    ref.read(filterSetProvider).value?.filters ?? const [],
-    // Not loaded yet: the class's 5 s, until the rig's copy reseeds the rows.
-    (ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults())
-            .defaultExposure
-            .inMilliseconds /
-        1000,
-    remainingDarkHours: _darkHours,
-    // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
-    canChangeFilters: ref.read(filterWheelProvider).value != null,
-  );
+  // No rows while the imaging defaults are not loaded (ADR 0015: no client
+  // default sub); the rig's copy seeds them when it lands.
+  List<FilterPlanStep> _defaults() {
+    final defaults = ref.read(imagingDefaultsProvider).value;
+    if (defaults == null) return const [];
+    return simpleRunDefaultPlan(
+      ref.read(filterSetProvider).value?.filters ?? const [],
+      defaults.defaultExposure.inMilliseconds / 1000,
+      remainingDarkHours: _darkHours,
+      // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
+      canChangeFilters: ref.read(filterWheelProvider).value != null,
+    );
+  }
 
   void _reseed() {
     if (!_loaded) state = _defaults();
@@ -264,7 +266,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
     if (state.length > 1) state = [...state]..removeAt(i);
   }
 
-  void add(String filterName) => state = [
+  void add(String filterName) => state = state.isEmpty ? state : [
     ...state,
     FilterPlanStep(
       filterName: filterName,
@@ -541,6 +543,14 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final flats = ref.read(simpleRunFlatsProvider);
     final framing = ref.read(planFramingProvider);
     if (sel == null || state.busy) return false;
+    // No rows: the imaging defaults are not loaded, so there is no sub to
+    // plan with (ADR 0015).
+    if (steps.isEmpty) {
+      state = state.copyWith(
+        error: l10nFor(ref.read(appLocaleProvider)).settingsSectionNotLoaded,
+      );
+      return false;
+    }
     final framed = simpleFramingFits(framing, sel) ? framing : null;
     // One block per name (the rig finds a target's block by it): a queued
     // target isn't added again; Start now moves it to the front instead.
@@ -559,7 +569,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final dawn = queue != null
         ? state.dawnStop
         : dawnStopFor(
-            ref.read(siteSettingsProvider).value ?? const SiteSettings(),
+            ref.read(siteSettingsProvider).value,
             (startsAt ??
                     (ref.read(simpleScheduleAllowedProvider)
                         ? ref.read(simpleDarkStartProvider)
@@ -686,7 +696,11 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   }) async {
     final api = ref.read(sequenceApiProvider);
     final id = state.sequenceId;
-    if (api == null || id == null || i >= state.targets.length || state.busy) {
+    if (api == null ||
+        id == null ||
+        i >= state.targets.length ||
+        state.busy ||
+        steps.isEmpty) {
       return false;
     }
     final t = state.targets[i];
@@ -695,6 +709,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         : null;
     state = state.copyWith(busy: true);
     try {
+      // A run refused for a section not loaded must not cost the block it
+      // would replace: ask before the removal.
+      await requireRunSections(ref.container);
       await _removeBlock(api, id, t.name);
       ref.read(selectedSequenceIdProvider.notifier).select(id);
       final r = await createImagingRun(
@@ -1169,7 +1186,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     if (api == null || id == null || active || state.busy) return true;
     final dawn = dawnStopFor(
-      ref.read(siteSettingsProvider).value ?? const SiteSettings(),
+      ref.read(siteSettingsProvider).value,
       (state.startAt ?? ref.read(clockProvider)()).toUtc(),
     );
     if (dawn == state.dawnStop) return true;

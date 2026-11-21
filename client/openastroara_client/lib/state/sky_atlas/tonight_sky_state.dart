@@ -90,23 +90,21 @@ Future<List<TonightSkyObject>> _rankAt(
   // Ensure the settings this ranker reads are actually loaded from the daemon
   // (fresh launch: nothing else hydrates them until an Options panel mounts).
   await ref.watch(planningSettingsBootstrapProvider.future);
-  // Planning reads what is loaded (the rig, or the offline cache); a site not
-  // loaded reads as unset (0/0, the empty state below), never saved from here.
-  final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
-  // An unset site (the constructor's 0,0) would silently rank for a spot in
-  // the Gulf of Guinea — return empty instead; the panel's empty state
-  // explains how to get a site (Settings → Site, or a cached profile).
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) {
+  // Planning reads what is loaded (the rig, or the offline cache); never
+  // saved from here. A site not loaded, or an unset one (0,0, which would
+  // silently rank for a spot in the Gulf of Guinea), ranks nothing: the
+  // panel's empty state explains how to get a site (Settings → Site, or a
+  // cached profile).
+  final site = ref.watch(siteSettingsProvider).value;
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) {
     return const <TonightSkyObject>[];
   }
-  // Planning reads what is loaded (the rig, or the offline cache); a section
-  // not loaded plans with the unset values, and is never saved from here.
-  final optics =
-      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings();
+  // ADR 0015: optics or electronics not loaded rank with no FOV and no sub
+  // advice (null), never with client defaults.
+  final optics = ref.watch(opticsSettingsProvider).value;
   final filterSet =
       ref.watch(filterSetProvider).value ?? const FilterSetSettings();
-  final electronics =
-      ref.watch(cameraElectronicsProvider).value ?? const CameraElectronics();
+  final electronics = ref.watch(cameraElectronicsProvider).value;
   // The bundled planning catalog (culled, plus any mirrored daemon rows the
   // bundle lacks) — never empty, so the ranker's starter-list fallback is
   // only reached by callers that pass no catalog at all.
@@ -196,8 +194,10 @@ class TonightSkyUpNowNotifier extends Notifier<bool> {
     // must flip on once it is actually dark (review #1105 — the first build
     // used to be the only one).
     ref.watch(skyClockProvider);
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    final site = ref.watch(siteSettingsProvider).value;
     if (_pinned) return state;
+    // A site not loaded is never "dark" (as an unset one, [isDarkNow]).
+    if (site == null) return false;
     // The site's own twilight line: the list's dark windows open there, so a
     // nautical -12 turned it on with nothing yet open (NM, 18:17 MST).
     return isDarkNow(site, nowUtc: ref.read(clockProvider)(),
@@ -226,10 +226,12 @@ final skyClockProvider = StreamProvider<int>(
 );
 
 /// True when the sun is below [belowDeg] (default −12°, nautical dark) at
-/// [site] right now; an unset site (0, 0) is never "dark" so the filter stays
-/// off there.
-bool isDarkNow(SiteSettings site, {DateTime? nowUtc, double belowDeg = -12}) {
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return false;
+/// [site] right now; an unset site (0, 0), or one not loaded (null), is never
+/// "dark" so the filter stays off there.
+bool isDarkNow(SiteSettings? site, {DateTime? nowUtc, double belowDeg = -12}) {
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) {
+    return false;
+  }
   final sun = sunMoonAltitudeDeg(
     (nowUtc ?? DateTime.now()).toUtc(),
     site.latitudeDeg,

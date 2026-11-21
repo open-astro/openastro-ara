@@ -92,6 +92,9 @@ class PolarAlignCheckResult {
   /// #2082 a point of the check stayed scattered over 3″ after its retake.
   final bool noisy;
 
+  /// #2072 the fit's 1σ on the total error (arcmin); null from an older daemon.
+  final double? totalSigmaArcmin;
+
   /// #2081 the mount's Dec spread across the check's three points (arcsec)
   /// when over 2″ (NINA's warning: the result may be off); null otherwise.
   final double? decSpreadArcsec;
@@ -106,6 +109,7 @@ class PolarAlignCheckResult {
     this.fineDeltaArcmin,
     this.verdict = '',
     this.noisy = false,
+    this.totalSigmaArcmin,
     this.decSpreadArcsec,
   });
 
@@ -120,6 +124,7 @@ class PolarAlignCheckResult {
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
         noisy: json['noisy'] == true,
+        totalSigmaArcmin: (json['total_sigma_arcmin'] as num?)?.toDouble(),
         decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 }
@@ -171,10 +176,17 @@ abstract final class PolarAlignerCauses {
   static const mountTracking = 'mount_tracking';
   static const mountSlewing = 'mount_slewing';
   static const stoppedByUser = 'stopped_by_user';
+  // #2069 (ARA-19): the verified stop and the run's caps.
+  static const stopNotConfirmed = 'stop_not_confirmed';
+  // A Stop owed from before the run, confirmed later in it: the run waits for Resume.
+  static const stopConfirmed = 'stop_confirmed';
+  static const travelLimit = 'travel_limit';
+  static const moveLimit = 'move_limit';
 
   static const all = [
     wrongDirection, wrongScale, deviceFault, notCalibrated, deviceRefused, diverging,
     timeout, linkLost, mountTracking, mountSlewing, stoppedByUser,
+    stopNotConfirmed, stopConfirmed, travelLimit, moveLimit,
   ];
 }
 
@@ -397,6 +409,10 @@ class PolarAlignStatus {
   /// #2083 a hand-turn run waiting for the user's turn; null otherwise.
   final PolarAlignHandTurn? handTurnWait;
 
+  /// #2072 the 1σ of [currentErrorArcmin] (arcmin), from the fit the readout
+  /// rests on; null with no error and from an older daemon.
+  final double? currentSigmaArcmin;
+
   /// #2081 the mount's Dec spread across the seed's three points (arcsec)
   /// when over 2″, while the live readout runs; null otherwise.
   final double? decSpreadArcsec;
@@ -421,6 +437,7 @@ class PolarAlignStatus {
     this.measurementNoisy = false,
     this.handTurn = false,
     this.handTurnWait,
+    this.currentSigmaArcmin,
     this.decSpreadArcsec,
   });
 
@@ -449,6 +466,7 @@ class PolarAlignStatus {
         measurementNoisy: json['measurement_noisy'] == true,
         handTurn: json['hand_turn'] == true,
         handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
+        currentSigmaArcmin: (json['current_sigma_arcmin'] as num?)?.toDouble(),
         decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 
@@ -494,6 +512,12 @@ class PolarAlignSettings {
   /// #2082 frames averaged at each of a measurement's three points (1–5).
   final int framesPerPoint;
 
+  /// #2068 the counterweight limit and the clearance confirmation per mount,
+  /// keyed by the mount's identity (the rig's [PolarAlignPreflight.mountKey]).
+  /// A mount with no entry has the rig's defaults: the pre-flight list shows
+  /// them ([PolarAlignPreflightPlanned.maxCwAngleDeg]).
+  final Map<String, PolarAlignMountClearance> mountClearance;
+
   /// #2081 the RA turn direction of a run that starts a new sweep origin
   /// (NINA's EastDirection): true east, false west, null by the site's
   /// hemisphere (east in the north, west in the south). Later starts of the
@@ -514,7 +538,8 @@ class PolarAlignSettings {
     required this.stopTrackingWhenDone,
     required this.camera,
     required this.framesPerPoint,
-    this.eastDirection,
+    required this.mountClearance,
+    required this.eastDirection,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -531,6 +556,9 @@ class PolarAlignSettings {
         'stop_tracking_when_done': stopTrackingWhenDone,
         'camera': camera,
         'frames_per_point': framesPerPoint,
+        'mount_clearance': {
+          for (final e in mountClearance.entries) e.key: e.value.toJson(),
+        },
         'east_direction': eastDirection,
       };
 
@@ -548,6 +576,7 @@ class PolarAlignSettings {
     bool? stopTrackingWhenDone,
     String? camera,
     int? framesPerPoint,
+    Map<String, PolarAlignMountClearance>? mountClearance,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -565,6 +594,7 @@ class PolarAlignSettings {
         stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
         camera: camera ?? this.camera,
         framesPerPoint: framesPerPoint ?? this.framesPerPoint,
+        mountClearance: mountClearance ?? this.mountClearance,
         eastDirection: eastDirection,
       );
 
@@ -584,7 +614,204 @@ class PolarAlignSettings {
         stopTrackingWhenDone: stopTrackingWhenDone,
         camera: camera,
         framesPerPoint: framesPerPoint,
+        mountClearance: mountClearance,
         eastDirection: value,
+      );
+
+  /// This section with [mountKey]'s entry set to [clearance], the other
+  /// mounts' entries kept.
+  PolarAlignSettings withMountClearance(
+    String mountKey,
+    PolarAlignMountClearance clearance,
+  ) => copyWith(mountClearance: {...mountClearance, mountKey: clearance});
+}
+
+/// #2068 one mount's entry in [PolarAlignSettings.mountClearance]: how far the
+/// RA axis may turn the counterweight up from counterweight-down
+/// ([maxCwAngleDeg]: 0° Home, 90° horizontal; the rig holds it at 10–75°), and
+/// whether the user checked with the hand controller that the counterweight,
+/// tube and cables clear the pier and tripod up to it. A confirmation is for
+/// one limit ([confirmedMaxCwAngleDeg], null while not confirmed): the rig
+/// keeps the entry confirmed only while it equals [maxCwAngleDeg], so a limit
+/// changed without a new confirmation is not confirmed (Joey, 2026-11-21).
+class PolarAlignMountClearance {
+  final double maxCwAngleDeg;
+  final bool clearanceConfirmed;
+  final double? confirmedMaxCwAngleDeg;
+
+  const PolarAlignMountClearance({
+    required this.maxCwAngleDeg,
+    required this.clearanceConfirmed,
+    required this.confirmedMaxCwAngleDeg,
+  });
+
+  /// The user confirmed the clearance up to [limitDeg].
+  const PolarAlignMountClearance.confirmedAt(double limitDeg)
+    : maxCwAngleDeg = limitDeg,
+      clearanceConfirmed = true,
+      confirmedMaxCwAngleDeg = limitDeg;
+
+  /// Not confirmed (taken back), the limit kept.
+  const PolarAlignMountClearance.notConfirmed(double limitDeg)
+    : maxCwAngleDeg = limitDeg,
+      clearanceConfirmed = false,
+      confirmedMaxCwAngleDeg = null;
+
+  /// The limit the rig accepts ([maxCwAngleDeg] is clamped to it).
+  static const double minMaxCwAngleDeg = 10;
+  static const double maxMaxCwAngleDeg = 75;
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    'max_cw_angle_deg': maxCwAngleDeg,
+    'clearance_confirmed': clearanceConfirmed,
+    'confirmed_max_cw_angle_deg': confirmedMaxCwAngleDeg,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is PolarAlignMountClearance &&
+      other.maxCwAngleDeg == maxCwAngleDeg &&
+      other.clearanceConfirmed == clearanceConfirmed &&
+      other.confirmedMaxCwAngleDeg == confirmedMaxCwAngleDeg;
+
+  @override
+  int get hashCode =>
+      Object.hash(maxCwAngleDeg, clearanceConfirmed, confirmedMaxCwAngleDeg);
+}
+
+/// #2068 the statuses of a [PolarAlignPreflightCheck].
+abstract final class PolarAlignPreflightStatuses {
+  static const ok = 'ok';
+  static const warn = 'warn';
+
+  /// The rig refuses a start on it.
+  static const fail = 'fail';
+
+  /// Not checked by the rig yet; never refuses a start.
+  static const unknown = 'unknown';
+}
+
+/// #2068 the ids of the pre-flight checks the app acts on.
+abstract final class PolarAlignPreflightChecks {
+  static const clearanceConfirmed = 'clearance_confirmed';
+  static const startPointing = 'start_pointing';
+  static const startCwAngle = 'start_cw_angle';
+  static const turnStep = 'turn_step';
+
+  /// The checks that depend on the measurement's turn step. The list is read
+  /// for the fine stage; a Check plans with its own step, so the rig judges
+  /// these for it when it starts.
+  static const stageDependent = {startPointing, startCwAngle, turnStep};
+}
+
+/// #2068 one check of the pre-flight list: its id, status and the rig's
+/// sentence for it.
+class PolarAlignPreflightCheck {
+  final String id;
+  final String status;
+  final String detail;
+
+  const PolarAlignPreflightCheck({
+    required this.id,
+    required this.status,
+    required this.detail,
+  });
+
+  bool get fails => status == PolarAlignPreflightStatuses.fail;
+
+  bool get passes => status == PolarAlignPreflightStatuses.ok;
+
+  factory PolarAlignPreflightCheck.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflightCheck(
+        id: json['id'] as String? ?? '',
+        status: json['status'] as String? ?? PolarAlignPreflightStatuses.unknown,
+        detail: json['detail'] as String? ?? '',
+      );
+}
+
+/// #2068 what the next Start would do, from the pre-flight list: the RA turn
+/// direction (null when the rig could not plan it), each turn's step, the most
+/// it turns, and the mount's counterweight limit.
+class PolarAlignPreflightPlanned {
+  final String? direction;
+  final double turnStepDeg;
+  final double checkStepDeg;
+  final int turns;
+  final double maxSweepDeg;
+  final double maxCwAngleDeg;
+  final double? startCwAngleDeg;
+  final double? minAltitudeDeg;
+
+  const PolarAlignPreflightPlanned({
+    this.direction,
+    required this.turnStepDeg,
+    required this.checkStepDeg,
+    required this.turns,
+    required this.maxSweepDeg,
+    required this.maxCwAngleDeg,
+    this.startCwAngleDeg,
+    this.minAltitudeDeg,
+  });
+
+  factory PolarAlignPreflightPlanned.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflightPlanned(
+        direction: json['direction'] as String?,
+        turnStepDeg: (json['turn_step_deg'] as num).toDouble(),
+        checkStepDeg: (json['check_step_deg'] as num).toDouble(),
+        turns: (json['turns'] as num).toInt(),
+        maxSweepDeg: (json['max_sweep_deg'] as num).toDouble(),
+        maxCwAngleDeg: (json['max_cw_angle_deg'] as num).toDouble(),
+        startCwAngleDeg: (json['start_cw_angle_deg'] as num?)?.toDouble(),
+        minAltitudeDeg: (json['min_altitude_deg'] as num?)?.toDouble(),
+      );
+}
+
+/// #2068 (ARA-18) Polar Align's pre-flight list
+/// (`GET /api/v1/equipment/polaralign/preflight`): every check a start makes,
+/// in its order. The rig refuses a start on the first that [fails]; a warn or
+/// unknown check never refuses. [mountKey] is the connected mount's key in
+/// [PolarAlignSettings.mountClearance] (null with no mount).
+class PolarAlignPreflight {
+  final bool ready;
+  final List<PolarAlignPreflightCheck> checks;
+  final PolarAlignPreflightPlanned planned;
+  final String? mountKey;
+
+  const PolarAlignPreflight({
+    required this.ready,
+    required this.checks,
+    required this.planned,
+    this.mountKey,
+  });
+
+  /// A check fails: the rig would refuse a start.
+  bool get blocksStart => !ready || checks.any((c) => c.fails);
+
+  /// A check that does not depend on the turn step fails: the rig would
+  /// refuse a Check too ([PolarAlignPreflightChecks.stageDependent] are the
+  /// fine stage's, and a Check turns by its own step).
+  bool get blocksCheck => checks.any(
+    (c) => c.fails && !PolarAlignPreflightChecks.stageDependent.contains(c.id),
+  );
+
+  PolarAlignPreflightCheck? check(String id) {
+    for (final c in checks) {
+      if (c.id == id) return c;
+    }
+    return null;
+  }
+
+  factory PolarAlignPreflight.fromJson(Map<String, dynamic> json) =>
+      PolarAlignPreflight(
+        ready: json['ready'] == true,
+        checks: [
+          for (final c in json['checks'] as List<dynamic>? ?? const [])
+            if (c is Map<String, dynamic>) PolarAlignPreflightCheck.fromJson(c),
+        ],
+        planned: PolarAlignPreflightPlanned.fromJson(
+          json['planned'] as Map<String, dynamic>,
+        ),
+        mountKey: json['mount_key'] as String?,
       );
 }
 

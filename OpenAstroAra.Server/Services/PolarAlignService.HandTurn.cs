@@ -125,13 +125,18 @@ namespace OpenAstroAra.Server.Services {
                 LiveCapture capture, string[] names, double stepDeg, RunBand band, Func<Task> renew,
                 PolarAlignSettingsDto settings, int gen, CancellationToken ct, Func<int, Task>? noteSolve = null) {
             var hint = await StartPointingOffTheAxisAsync(gen, ct).ConfigureAwait(false);
-            var (a, aAt) = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct).ConfigureAwait(false);
+            var hintAt = DateTimeOffset.UtcNow;
+            // #2072 review — the first point's frames are averaged as points 2 and 3 are: moved to their mean time when the
+            // mount does not track (a hand-turn run never turns tracking on, and the live loop leaves it off).
+            var tracking = _mount.GetInfo().TrackingEnabled;
+            var (a, aAt) = await SolveSeedFrameAsync(capture, names[0], hint, settings, gen, ct, tracking: tracking).ConfigureAwait(false);
             LogSeedSolve(names[0], a.RaDegJnow, a.DecDegJnow);
             LogHandTurnMeasurement(band.AwaySign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, stepDeg);
             if (noteSolve is not null) {
                 await noteSolve(1).ConfigureAwait(false);
             }
-            var start = new HandPoint(a, aAt, hint);
+            // The reading was read before the frames: with tracking off it runs on to the point's mean time (#2082).
+            var start = new HandPoint(a, aAt, ReadingAt(hint, hintAt, aAt, tracking));
             var b = await WaitForHandTurnAsync(capture, names[1], start, start, point: 2, band, stepDeg, renew, settings, gen, ct).ConfigureAwait(false);
             if (noteSolve is not null) {
                 await noteSolve(2).ConfigureAwait(false);
@@ -293,7 +298,7 @@ namespace OpenAstroAra.Server.Services {
                             // polar_align.frames_per_point frames averaged (retaken once when scattered, else flagged
                             // noisy), its frame ids going on from the wait's.
                             var (mean, meanAt) = await SolveSeedFrameAsync(capture, frameId, (s.RaDegJnow, s.DecDegJnow), settings, gen, ct,
-                                attemptsBefore: frame).ConfigureAwait(false);
+                                attemptsBefore: frame, tracking: tracking).ConfigureAwait(false);
                             LogSeedSolve(frameId, mean.RaDegJnow, mean.DecDegJnow);
                             return new HandPoint(mean, meanAt, ReadingAt(now.Reading, at, meanAt, tracking));
                         }
@@ -464,7 +469,7 @@ namespace OpenAstroAra.Server.Services {
                 renewLeaseIfDue, settings, gen, ct).ConfigureAwait(false);
             var (axis, turnDeg) = FitThreePointByHandOrFail(a, b, c, north);
             CheckFieldRotationByHand(axis, a.S, b.S, c.S, north, "seed-b", "seed-c");
-            await AdjustFromSeedAsync(axis, c.S, c.At, turnDeg, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
+            await AdjustFromSeedAsync(axis, FitUncertaintyFor(a, b, c, north, site), c.S, c.At, turnDeg, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
         }
 
         /// <summary>The check by hand: three guide-camera solves around two hand turns of <c>CheckStepDeg</c>, the fit,
@@ -480,7 +485,7 @@ namespace OpenAstroAra.Server.Services {
                 () => RenewLeaseAsync(ct), settings, gen, ct, noteSolve: done => NoteCheckSolveAsync(gen, done)).ConfigureAwait(false);
             var (axis, _) = FitThreePointByHandOrFail(p1, p2, p3, site.LatitudeDeg > 0);
             CheckFieldRotationByHand(axis, p1.S, p2.S, p3.S, site.LatitudeDeg > 0, "check-2", "check-3");
-            return CheckResultFor(axis, mismatch: 0.0, site, p3.At);
+            return CheckResultFor(axis, FitUncertaintyFor(p1, p2, p3, site.LatitudeDeg > 0, site), mismatch: 0.0, site, p3.At);
         }
 
         private Task PublishHandTurnAsync(int gen, PolarAlignHandTurnDto wait) {

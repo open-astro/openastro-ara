@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
+import '../../support/fake_section_rig.dart';
 import '../../support/section_load.dart';
 
 void main() {
@@ -64,7 +65,7 @@ void main() {
       expect(container.read(siteSettingsProvider).value!.elevationM, 71);
       n.setElevationM(-2.5);
       expect(container.read(siteSettingsProvider).value!.elevationM, -3);
-      expect(ProfileApi.siteSettingsFromJson({'elevation_m': 71.6}).elevationM, 72);
+      expect(ProfileApi.siteSettingsFromJson({...rigDefaults['site']!, 'elevation_m': 71.6}).elevationM, 72);
     });
 
     test('setSkyBortle rejects out-of-range and clears the SQM', () {

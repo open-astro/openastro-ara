@@ -20,15 +20,17 @@ class ImagingDefaults {
   final double coolerRampRatePerMin;
   final bool warmupAtSessionEnd;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const ImagingDefaults({
-    this.defaultExposure = const Duration(seconds: 5),
-    this.defaultGain = 100,
-    this.defaultOffset = 50,
-    this.defaultBin = 1,
-    this.defaultFrameKind = FrameKind.light,
-    this.coolerTargetC = -10,
-    this.coolerRampRatePerMin = 1.0,
-    this.warmupAtSessionEnd = false,
+    required this.defaultExposure,
+    required this.defaultGain,
+    required this.defaultOffset,
+    required this.defaultBin,
+    required this.defaultFrameKind,
+    required this.coolerTargetC,
+    required this.coolerRampRatePerMin,
+    required this.warmupAtSessionEnd,
   });
 
   ImagingDefaults copyWith({

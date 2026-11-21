@@ -12,6 +12,7 @@ import 'package:openastroara/state/guider/guider_choice_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 
 import '../../support/phd2_section.dart';
+import '../../support/settings_values.dart';
 
 /// The rig the app talks to, switchable from a test.
 class _Rig extends Notifier<AraServer?> {
@@ -148,7 +149,7 @@ void main() {
       return c;
     }
 
-    const stored = Phd2Settings(
+    const stored = TestPhd2Settings(
       guiderCamera: 'Alpaca Camera [old.lan:11111/0]',
       guiderCameraAlpacaUniqueId: 'old-cam',
       guiderAlpacaHost: 'old.lan',
@@ -221,7 +222,7 @@ void main() {
       n.applyPick(pick);
       expect(
         c.read(phd2SettingsProvider).value!.guiderCameraAlpacaUniqueId,
-        applyGuiderPick(const Phd2Settings(), pick).guiderCameraAlpacaUniqueId,
+        applyGuiderPick(const TestPhd2Settings(), pick).guiderCameraAlpacaUniqueId,
       );
       expect(c.read(phd2SettingsProvider).value!.guiderAlpacaPort, 6800);
     });

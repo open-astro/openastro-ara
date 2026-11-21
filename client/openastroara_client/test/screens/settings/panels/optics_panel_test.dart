@@ -9,6 +9,7 @@ import 'package:openastroara/state/settings/panel_save_registry.dart';
 
 import '../../../support/fake_section_rig.dart';
 import '../../../support/imaging_sections.dart';
+import '../../../support/settings_values.dart';
 
 // ADR 0015: the Optics panel edits the rig's copy of the optics section.
 
@@ -22,7 +23,7 @@ void main() {
     addTearDown(tester.view.reset);
     final section = FakeOpticsSection(
       initial: loaded
-          ? const OpticsSettings(focalLengthMm: 382, pixelSizeUm: 3.76)
+          ? const TestOpticsSettings(focalLengthMm: 382, pixelSizeUm: 3.76)
           : null,
     );
     await tester.pumpWidget(

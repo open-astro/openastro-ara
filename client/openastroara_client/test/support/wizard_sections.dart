@@ -8,6 +8,7 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'settings_values.dart';
 
 /// The sections the setup wizard writes, other than Storage, served from
 /// memory with a tag and taken back with any tag (ADR 0015), for a fake
@@ -23,10 +24,10 @@ mixin WizardSectionsInMemory on ProfileApi {
       (value: v, etag: ifMatch);
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() =>
-      _get(const SiteSettings());
+      _get(const TestSiteSettings());
   @override
   Future<({SiteSettings value, String? etag})> putSiteSection(
     SiteSettings v, {
@@ -34,7 +35,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
-      _get(const OpticsSettings());
+      _get(const TestOpticsSettings());
   @override
   Future<({OpticsSettings value, String? etag})> putOpticsSection(
     OpticsSettings v, {
@@ -42,7 +43,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
-      _get(const ImagingDefaults());
+      _get(const TestImagingDefaults());
   @override
   Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
     ImagingDefaults v, {
@@ -50,7 +51,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
-      _get(const Phd2Settings());
+      _get(const TestPhd2Settings());
   @override
   Future<({Phd2Settings value, String? etag})> putPhd2Section(
     Phd2Settings v, {
@@ -62,7 +63,7 @@ mixin WizardSectionsInMemory on ProfileApi {
 
   @override
   Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
-      _get(const PlateSolveSettings());
+      _get(const TestPlateSolveSettings());
   @override
   Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
     PlateSolveSettings v, {
@@ -70,7 +71,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
-      _get(const AutofocusSettings());
+      _get(const TestAutofocusSettings());
   @override
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
     AutofocusSettings v, {
@@ -78,7 +79,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({CameraElectronics value, String? etag})>
-  getCameraElectronicsSection() => _get(const CameraElectronics());
+  getCameraElectronicsSection() => _get(const TestCameraElectronics());
   @override
   Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
     CameraElectronics v, {
@@ -94,7 +95,7 @@ mixin WizardSectionsInMemory on ProfileApi {
   }) => _put(v, ifMatch);
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
-      _get(const SafetyPolicies());
+      _get(const TestSafetyPolicies());
   @override
   Future<({SafetyPolicies value, String? etag})> putSafetySection(
     SafetyPolicies v, {

@@ -42,7 +42,9 @@ class _Section extends FakePolarAlignSection {
 
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   late final section = _Section(calls);
@@ -80,7 +82,7 @@ class _FailingApi extends _Api {
 /// A rig whose mount is parked: the start plan is refused (#2048), so no confirm step opens.
 class _ParkedApi extends _Api {
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async => throw const Refusal(
+  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async => throw const Refusal(
         cause: RefusalCause.polarAlignMountParked,
         reason: 'polar-align-mount-parked',
         detail: 'Mount is parked — unpark it and point near the pole first',
@@ -610,6 +612,109 @@ void main() {
       );
       expect(find.byKey(const Key('simple-polar-bullseye')), findsNothing);
       expect(find.byKey(const Key('simple-polar-setup')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    "Simple Mode shows the total with its 1σ; inside the tolerance but not with twice it, Done is allowed and the panel says it can't confirm (#2072)",
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.4,
+          totalErrorArcmin: 0.5,
+          totalSigmaArcmin: 0.4,
+          zone: 'green',
+        ),
+        tolerance: 1.0,
+      );
+      expect(find.text('0.5′ ± 0.4′'), findsOneWidget);
+      expect(tester.widget<FilledButton>(find.byKey(const Key('simple-polar-done'))).onPressed, isNotNull,
+          reason: 'Done is not held by the σ (Joey, 2026-11-21)');
+      final line = tester.widget<Text>(find.byKey(const Key('simple-polar-unconfirmed')));
+      expect(line.data, startsWith("Inside your 1′ tolerance, but at ± 0.4′ this measurement can't confirm the alignment."));
+      expect(tester.widget<OutlinedButton>(find.byKey(const Key('simple-polar-check'))).onPressed, isNotNull,
+          reason: 'Check measures afresh');
+    },
+  );
+
+  testWidgets(
+    'Simple Mode: with the error plus 2σ inside the tolerance the panel does not call it unconfirmed (#2072)',
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.fine,
+          altErrorArcmin: 0.3,
+          azErrorArcmin: 0.4,
+          totalErrorArcmin: 0.5,
+          totalSigmaArcmin: 0.25,
+          zone: 'green',
+        ),
+        tolerance: 1.0,
+      );
+      expect(find.byKey(const Key('simple-polar-unconfirmed')), findsNothing, reason: '0.5 + 2 × 0.25 is exactly the 1′ tolerance');
+      await tester.tap(find.byKey(const Key('simple-polar-done')));
+      await tester.pump();
+      expect(api!.calls, ['complete']);
+    },
+  );
+
+  testWidgets(
+    "the rough stage offers Done inside the tolerance; its caption says inside only once the error plus 2σ is, and can't confirm before (#2072)",
+    (tester) async {
+      // The noisy test's window: a caution line takes room.
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.adjusting,
+          stage: PolarAlignStages.coarse,
+          altErrorArcmin: 0.6,
+          azErrorArcmin: 1.4,
+          totalErrorArcmin: 1.5,
+          totalSigmaArcmin: 0.4,
+          zone: 'green',
+        ),
+        tolerance: 2.0,
+      );
+      expect(find.byKey(const Key('simple-polar-done-rough')), findsOneWidget, reason: 'Done is not held by the σ');
+      final caption = tester.widget<Text>(find.byKey(const Key('simple-polar-tolerance-caption')));
+      expect(caption.data, startsWith("Inside your 2′ tolerance, but at ± 0.4′ this measurement can't confirm the alignment."));
+      expect(caption.data, isNot(startsWith('Inside your 2′ tolerance. Done keeps')));
+    },
+  );
+
+  testWidgets(
+    "Simple Mode's checked line rates the error plus twice its 1σ: 0.2′ ± 1.3′ does not read Excellent (#2072)",
+    (tester) async {
+      await _pump(
+        tester,
+        const PolarAlignLive(
+          phase: PolarAlignStates.checked,
+          stage: PolarAlignStages.check,
+          totalErrorArcmin: 0.2,
+          totalSigmaArcmin: 1.3,
+          checkResult: PolarAlignCheckResult(
+              altErrorArcmin: 0.1, azErrorArcmin: 0.17, totalErrorArcmin: 0.2, verdict: 'excellent', totalSigmaArcmin: 1.3),
+        ),
+      );
+      final line = tester.widget<Text>(find.byKey(const Key('simple-polar-checked')));
+      expect(line.data, 'Three-point check: Very good');
     },
   );
 

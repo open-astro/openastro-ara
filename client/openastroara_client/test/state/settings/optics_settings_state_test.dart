@@ -3,11 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 
 import '../../support/section_load.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('OpticsSettings geometry', () {
     test('an unset profile is not configured and yields null geometry', () {
-      const o = OpticsSettings();
+      const o = TestOpticsSettings();
       expect(o.isConfigured, isFalse);
       expect(o.effectiveFocalLengthMm, isNull);
       expect(o.pixelScaleArcsecPerPx, isNull);
@@ -17,7 +18,7 @@ void main() {
 
     test('pixel scale + FOV match the 206.265 formula (ASI2600 @ 1000mm)', () {
       // 3.76µm pixels, 6248×4176 sensor, 1000mm f/l, no reducer.
-      const o = OpticsSettings(
+      const o = TestOpticsSettings(
         focalLengthMm: 1000,
         reducerFactor: 1.0,
         sensorWidthPx: 6248,
@@ -31,7 +32,7 @@ void main() {
     });
 
     test('a reducer shortens the effective focal length and widens the FOV', () {
-      const base = OpticsSettings(
+      const base = TestOpticsSettings(
         focalLengthMm: 1000,
         sensorWidthPx: 6248,
         sensorHeightPx: 4176,
@@ -46,9 +47,9 @@ void main() {
     });
 
     test('any zero input (except the 1.0 reducer default) leaves it unconfigured', () {
-      const noFocal = OpticsSettings(sensorWidthPx: 100, sensorHeightPx: 100, pixelSizeUm: 3);
-      const noPixel = OpticsSettings(focalLengthMm: 500, sensorWidthPx: 100, sensorHeightPx: 100);
-      const noSensor = OpticsSettings(focalLengthMm: 500, pixelSizeUm: 3);
+      const noFocal = TestOpticsSettings(sensorWidthPx: 100, sensorHeightPx: 100, pixelSizeUm: 3);
+      const noPixel = TestOpticsSettings(focalLengthMm: 500, sensorWidthPx: 100, sensorHeightPx: 100);
+      const noSensor = TestOpticsSettings(focalLengthMm: 500, pixelSizeUm: 3);
       expect(noFocal.isConfigured, isFalse);
       expect(noPixel.isConfigured, isFalse);
       expect(noSensor.isConfigured, isFalse);

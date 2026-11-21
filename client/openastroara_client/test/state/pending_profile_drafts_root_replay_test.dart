@@ -23,6 +23,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import '../support/settings_values.dart';
 
 /// §2 / #1137 — the root listener: the WebSocket reaching `connected` applies
 /// the drafts waiting on this device and posts one notice.
@@ -47,10 +48,10 @@ class _Api extends FakeStorageApi {
   // Each section is served with a tag and written back with it; Storage is
   // the fixture's, whose tag moves on the write.
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() async =>
-      (value: const SiteSettings(), etag: '"t"');
+      (value: const TestSiteSettings(), etag: '"t"');
   @override
   Future<({SiteSettings value, String? etag})> putSiteSection(
     SiteSettings v, {
@@ -58,7 +59,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: const OpticsSettings(), etag: '"t"');
+      (value: const TestOpticsSettings(), etag: '"t"');
   @override
   Future<({OpticsSettings value, String? etag})> putOpticsSection(
     OpticsSettings v, {
@@ -66,7 +67,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() async =>
-      (value: const ImagingDefaults(), etag: '"t"');
+      (value: const TestImagingDefaults(), etag: '"t"');
   @override
   Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
     ImagingDefaults v, {
@@ -74,7 +75,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
-      (value: const Phd2Settings(), etag: '"t"');
+      (value: const TestPhd2Settings(), etag: '"t"');
   @override
   Future<({Phd2Settings value, String? etag})> putPhd2Section(
     Phd2Settings v, {
@@ -82,7 +83,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() async =>
-      (value: const PlateSolveSettings(), etag: '"t"');
+      (value: const TestPlateSolveSettings(), etag: '"t"');
   @override
   Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
     PlateSolveSettings v, {
@@ -90,7 +91,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() async =>
-      (value: const AutofocusSettings(), etag: '"t"');
+      (value: const TestAutofocusSettings(), etag: '"t"');
   @override
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
     AutofocusSettings v, {
@@ -98,7 +99,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({CameraElectronics value, String? etag})> getCameraElectronicsSection() async =>
-      (value: const CameraElectronics(), etag: '"t"');
+      (value: const TestCameraElectronics(), etag: '"t"');
   @override
   Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
     CameraElectronics v, {
@@ -114,7 +115,7 @@ class _Api extends FakeStorageApi {
   }) async => (value: v, etag: ifMatch);
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
-      (value: const SafetyPolicies(), etag: '"t"');
+      (value: const TestSafetyPolicies(), etag: '"t"');
   @override
   Future<({SafetyPolicies value, String? etag})> putSafetySection(
     SafetyPolicies v, {

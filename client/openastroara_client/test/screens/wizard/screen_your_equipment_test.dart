@@ -25,6 +25,7 @@ import 'package:openastroara/state/settings/equipment_connection_state.dart';
 import 'package:openastroara/models/switch_device.dart' show CoolingFan, SwitchConnectionState, SwitchDevice;
 import 'package:openastroara/state/wizard/equipment_readiness_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import '../../support/settings_values.dart';
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
@@ -264,7 +265,7 @@ void main() {
       ],
     };
     final container = await _pump(tester, byType: byType, mount: const MountProps(),
-        baseOptics: const OpticsSettings(reducerFactor: 0.8));
+        baseOptics: const TestOpticsSettings(reducerFactor: 0.8));
     final draft = container.read(wizardControllerProvider).draft;
     draft.telescope.focalLengthMm = 2032;
     expect(draft.telescope.reducerFactor, 0.8,

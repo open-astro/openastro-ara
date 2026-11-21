@@ -78,7 +78,9 @@ import 'package:openastroara/state/library/live_library_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import 'selection_tint_contrast.dart';
+import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -255,7 +257,7 @@ void _whole(WidgetTester tester, Finder text) {
 class _Optics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() => const LoadedSection(
-    value: OpticsSettings(
+    value: TestOpticsSettings(
       focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91),
     source: SectionSource.rig,
   );
@@ -264,7 +266,7 @@ class _Optics extends OpticsSettingsNotifier {
 class _Electronics extends CameraElectronicsNotifier {
   @override
   LoadedSection<CameraElectronics> build() => const LoadedSection(
-        value: CameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8),
+        value: TestCameraElectronics(readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8),
         source: SectionSource.rig,
       );
 }
@@ -272,7 +274,7 @@ class _Electronics extends CameraElectronicsNotifier {
 class _Site extends SiteSettingsNotifier {
   @override
   LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: SiteSettings(bortleClass: 6), source: SectionSource.rig);
+      LoadedSection(value: TestSiteSettings(bortleClass: 6), source: SectionSource.rig);
 }
 
 /// A filter wheel the daemon retains, or none.
@@ -510,8 +512,8 @@ void main() {
       return sel;
     }
 
-    expect((await pick(const SiteSettings())).altDeg, isNull);
-    expect((await pick(const SiteSettings(latitudeDeg: -33, longitudeDeg: 10))).altDeg, isNotNull);
+    expect((await pick(const TestSiteSettings())).altDeg, isNull);
+    expect((await pick(const TestSiteSettings(latitudeDeg: -33, longitudeDeg: 10))).altDeg, isNotNull);
   });
 
   group('frames fill the dark window', () {
@@ -538,6 +540,7 @@ void main() {
           tonightSkyProvider.overrideWith((ref) async => tonight),
           planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
           if (filtersLoaded) filterSetProvider.overrideWith(() => _Filters()),
+          imagingDefaultsFromRig(),
         ],
       );
       addTearDown(c.dispose);
@@ -877,14 +880,14 @@ void main() {
   }
 
   group('the Queue, through its own interface (no sheet)', () {
-    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale}) async {
+    Future<(ProviderContainer, _Seq)> queue({bool createFails = false, bool api = true, Locale? locale, bool defaults = true}) async {
       final seq = _Seq()..createFails = createFails;
       final c = ProviderContainer(overrides: [
         ..._rig.cast(),
         if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
         tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
-        ...imagingSectionsFromRig(),
+        if (defaults) ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
@@ -898,6 +901,16 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       return (c, seq);
     }
+
+    test('the imaging defaults not loaded: no rows, and Add to queue says why with nothing sent', () async {
+      // ADR 0015 rule 3: no client default sub stands in for the profile's.
+      final (c, seq) = await queue(defaults: false);
+      expect(c.read(imagingDefaultsProvider).value, isNull, reason: 'precondition: not loaded');
+      expect(c.read(simpleRunPlanProvider), isEmpty);
+      expect(await c.read(simpleRunProvider.notifier).create(), isFalse);
+      expect(seq.calls, isEmpty);
+      expect(c.read(simpleRunProvider).error, contains('Not loaded'));
+    });
 
     test('every path that writes a Simple Mode target asks the Guider to calibrate (#1716)', () async {
       final (c, seq) = await queue();
@@ -1030,7 +1043,7 @@ void main() {
 
   group('the plan window (#1875 slice 6)', () {
     // Greenwich night, 20:00 UTC: M31 stands above 30° for hours.
-    const atl = SiteSettings(
+    const atl = TestSiteSettings(
       latitudeDeg: 51.477833,
       longitudeDeg: -0.0015,
       twilightDefinition: TwilightDefinition.astronomical,
@@ -1147,7 +1160,7 @@ void main() {
           overrides: [
             siteSettingsProvider.overrideWith(
               () =>
-                  _SiteAt(const SiteSettings(latitudeDeg: 0, longitudeDeg: 0)),
+                  _SiteAt(const TestSiteSettings(latitudeDeg: 0, longitudeDeg: 0)),
             ),
             clockProvider.overrideWithValue(() => night),
             simpleRecentProvider.overrideWith(
@@ -1838,7 +1851,7 @@ void main() {
     group('a scheduled start', () {
       // 20:00 UTC on Jan 14 at the Sydney site (07:00 on Jan 15 there): daylight, dark falls that evening.
       final nowUtc = DateTime.utc(2026, 1, 14, 20);
-      const site = SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical);
+      const site = TestSiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical);
       final dark = darkStart(site, nowUtc)!.toLocal();
       String hhmm(DateTime t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
       final overrides = <Object>[
@@ -2011,7 +2024,7 @@ void main() {
           SimpleRunSheet(onShowSky: () {}, onPickInSky: () {}, onCreated: () {}),
           overrides: [
             siteSettingsProvider.overrideWith(() => _SiteAt(
-                const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical))),
+                const TestSiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical))),
             clockProvider.overrideWithValue(() => morning.toLocal()),
           ]);
       expect((tester.widget<FilledButton>(find.byKey(const Key('simple-run-start'))).child! as Text).data, 'Create and start');
@@ -2279,7 +2292,7 @@ void main() {
   });
 
   testWidgets('Night done: a plan that dawn ended says so (#1560)', (tester) async {
-    const sydney = SiteSettings(
+    const sydney = TestSiteSettings(
         latitudeDeg: -33.856784, longitudeDeg: 151.215297, twilightDefinition: TwilightDefinition.astronomical);
     // 07:00 in Sydney: queued before dark, so the queue stops at dawn.
     final morning = DateTime.utc(2026, 1, 14, 20);

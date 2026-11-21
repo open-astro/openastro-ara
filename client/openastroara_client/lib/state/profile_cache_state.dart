@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/profile_list.dart';
 import '../services/profile_api.dart';
 import '../services/profile_cache_service.dart';
+import 'settings/loaded_section.dart';
 import 'settings/autofocus_settings_state.dart';
 import 'settings/unguided_settings_state.dart';
 import 'settings/camera_electronics_state.dart';
@@ -83,120 +84,105 @@ Future<void> captureProfileCache(
     if (activeId == null) return;
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
     // Parallel (like hydratePlanningSettings): this fires on every list load
-    // AND after every mutation, so serializing 6 round-trips adds up.
-    final (optics, imaging, autofocus, site, filters, electronics, horizon, unguided) = await (
-      api.getOptics(),
-      api.getImagingDefaults(),
-      api.getAutofocusSettings(),
-      api.getSiteSettings(),
-      api.getFilterSet(),
-      api.getCameraElectronics(),
-      // #1137 — the §36 terrain skyline: the offline Tonight's Sky ranker
-      // honours it, so it must come from the cache too, not only the server.
-      // Best-effort: a daemon without the endpoint must not fail the whole
-      // capture (null = not captured; the seed then leaves the notifier alone).
-      _tryHorizon(api),
-      // #1264 — the offline run builder cooks the probe / guard from it too.
-      // Best-effort like the horizon: a failed read of this one section must
-      // not fail the whole capture (null = not captured; the seed then keeps
-      // the notifier's defaults).
-      _tryUnguided(api),
-    ).wait;
-    await cache.saveSections(activeId, {
-      'optics': ProfileApi.opticsToJson(optics),
-      'imaging_defaults': ProfileApi.imagingDefaultsToJson(imaging),
-      'autofocus': ProfileApi.autofocusSettingsToJson(autofocus),
-      if (unguided != null)
-        'unguided': ProfileApi.unguidedSettingsToJson(unguided),
-      'site': ProfileApi.siteSettingsToJson(site),
-      'filter_set': ProfileApi.filterSetToJson(filters),
-      'camera_electronics': ProfileApi.cameraElectronicsToJson(electronics),
-      if (horizon != null)
-        'custom_horizon': ProfileApi.customHorizonToJson(horizon),
-    });
+    // AND after every mutation, so serializing the round-trips adds up.
+    // Each section on its own (ADR 0015 rule 3): the strict readers refuse a
+    // reply with a key missing or a value this client doesn't know, and one
+    // refused (or failed) section keeps the copy the cache already holds
+    // instead of costing the others their refresh. #1137 the §36 skyline and
+    // #1264 the unguided knobs are captured the same way: a daemon without
+    // the endpoint leaves them as cached.
+    final reads = await Future.wait([
+      _section('optics', () async => ProfileApi.opticsToJson(await api.getOptics())),
+      _section('imaging_defaults',
+          () async => ProfileApi.imagingDefaultsToJson(await api.getImagingDefaults())),
+      _section('autofocus',
+          () async => ProfileApi.autofocusSettingsToJson(await api.getAutofocusSettings())),
+      _section('unguided',
+          () async => ProfileApi.unguidedSettingsToJson(await api.getUnguidedSettings())),
+      _section('site',
+          () async => ProfileApi.siteSettingsToJson(await api.getSiteSettings())),
+      _section('filter_set',
+          () async => ProfileApi.filterSetToJson(await api.getFilterSet())),
+      _section('camera_electronics',
+          () async => ProfileApi.cameraElectronicsToJson(await api.getCameraElectronics())),
+      _section('custom_horizon',
+          () async => ProfileApi.customHorizonToJson(await api.getCustomHorizon())),
+    ]);
+    await cache.saveSections(
+      activeId,
+      {
+        for (final r in reads)
+          if (r.json != null) r.key: r.json,
+      },
+      keep: {
+        for (final r in reads)
+          if (r.json == null) r.key,
+      },
+    );
   } catch (e) {
     debugPrint('[profile-cache] capture failed (offline cache stays stale): $e');
   }
 }
 
-Future<UnguidedSettings?> _tryUnguided(ProfileApi api) async {
+/// One section's wire JSON for the cache, or null when the read failed (the
+/// cache then keeps the copy it holds).
+Future<({String key, Map<String, dynamic>? json})> _section(
+  String key,
+  Future<Map<String, dynamic>> Function() read,
+) async {
   try {
-    return await api.getUnguidedSettings();
+    return (key: key, json: await read());
   } catch (e) {
-    debugPrint('[profile-cache] unguided settings not captured: $e');
-    return null;
-  }
-}
-
-Future<List<CustomHorizonPoint>?> _tryHorizon(ProfileApi api) async {
-  try {
-    return await api.getCustomHorizon();
-  } catch (e) {
-    debugPrint('[profile-cache] custom horizon not captured: $e');
-    return null;
+    debugPrint('[profile-cache] $key not captured (the cached copy stays): $e');
+    return (key: key, json: null);
   }
 }
 
 /// Seed the planning settings notifiers from [profileId]'s cached sections so
-/// an offline session plans with the user's real gear instead of constructor
-/// defaults. Returns false when no snapshot exists for that profile (the
-/// notifiers keep what they hold). Each section is seeded as a cache copy
-/// (ADR 0015): readable for planning, never saved, and replaced by the rig's
-/// copy once it loads.
+/// an offline session plans with the user's real gear. Returns false when no
+/// snapshot exists for that profile (the notifiers keep what they hold). Each
+/// section is seeded as a cache copy (ADR 0015): readable for planning, never
+/// saved, and replaced by the rig's copy once it loads. Each is read with the
+/// same strict reader as the rig's copy (rule 3): a snapshot with no key for
+/// a section, or one from before a field existed, leaves that section not
+/// loaded, never a client default that planning would take for the rig's.
 Future<bool> seedPlanningFromCache(
     ProviderContainer container, String profileId) async {
   final cache = await container.read(profileCacheServiceProvider).load();
   final sections = cache['sections'];
   final snap = sections is Map ? sections[profileId] : null;
   if (snap is! Map) return false;
-  Map<String, dynamic> sec(String key) {
+  void seed<T>(
+    String key,
+    SectionNotifier<T> section,
+    T Function(Map<String, dynamic>) read,
+  ) {
     final v = snap[key];
-    return v is Map ? Map<String, dynamic>.from(v) : const {};
+    if (v is! Map) return;
+    try {
+      section.seed(read(Map<String, dynamic>.from(v)));
+    } catch (e) {
+      debugPrint('[profile-cache] cached $key not readable (stays not loaded): $e');
+    }
   }
 
-  // ADR 0015: a snapshot with no key for a section leaves it not loaded,
-  // never a default that a Save could send. A cache copy is for planning only.
-  if (snap['optics'] is Map) {
-    container
-        .read(opticsSettingsProvider.notifier)
-        .seed(ProfileApi.opticsFromJson(sec('optics')));
-  }
-  if (snap['imaging_defaults'] is Map) {
-    container
-        .read(imagingDefaultsProvider.notifier)
-        .seed(ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
-  }
-  if (snap['autofocus'] is Map) {
-    container
-        .read(autofocusSettingsProvider.notifier)
-        .seed(ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
-  }
-  if (snap['unguided'] is Map) {
-    container
-        .read(unguidedSettingsProvider.notifier)
-        .seed(ProfileApi.unguidedSettingsFromJson(sec('unguided')));
-  }
-  if (snap['site'] is Map) {
-    container
-        .read(siteSettingsProvider.notifier)
-        .seed(ProfileApi.siteSettingsFromJson(sec('site')));
-  }
-  if (snap['filter_set'] is Map) {
-    container
-        .read(filterSetProvider.notifier)
-        .seed(ProfileApi.filterSetFromJson(sec('filter_set')));
-  }
-  if (snap['camera_electronics'] is Map) {
-    container
-        .read(cameraElectronicsProvider.notifier)
-        .seed(ProfileApi.cameraElectronicsFromJson(sec('camera_electronics')));
-  }
-  // #1137 — a snapshot taken before the horizon was cached has no key: leave
-  // the notifier alone rather than wiping a skyline the user may have staged.
-  if (snap['custom_horizon'] is Map) {
-    container
-        .read(customHorizonProvider.notifier)
-        .seed(ProfileApi.customHorizonFromJson(sec('custom_horizon')));
-  }
+  seed('optics', container.read(opticsSettingsProvider.notifier),
+      ProfileApi.opticsFromJson);
+  seed('imaging_defaults', container.read(imagingDefaultsProvider.notifier),
+      ProfileApi.imagingDefaultsFromJson);
+  seed('autofocus', container.read(autofocusSettingsProvider.notifier),
+      ProfileApi.autofocusSettingsFromJson);
+  seed('unguided', container.read(unguidedSettingsProvider.notifier),
+      ProfileApi.unguidedSettingsFromJson);
+  seed('site', container.read(siteSettingsProvider.notifier),
+      ProfileApi.siteSettingsFromJson);
+  seed('filter_set', container.read(filterSetProvider.notifier),
+      ProfileApi.filterSetFromJson);
+  seed('camera_electronics', container.read(cameraElectronicsProvider.notifier),
+      ProfileApi.cameraElectronicsFromJson);
+  // #1137 — a snapshot taken before the horizon was cached has no key: the
+  // skyline stays as it is.
+  seed('custom_horizon', container.read(customHorizonProvider.notifier),
+      ProfileApi.customHorizonFromJson);
   return true;
 }

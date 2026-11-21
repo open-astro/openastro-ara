@@ -3,9 +3,7 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -13,11 +11,12 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
     show clockProvider, isDarkNow, skyClockProvider, tonightSkyUpNowProvider;
 import 'package:openastroara/util/imaging_regions.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
+import '../support/settings_values.dart';
 
 void main() {
   // A mid-northern winter night: Atlanta-ish site, 03:00 UTC on Jan 15
   // (≈ 22:00 local the evening of Jan 14) — Orion territory.
-  const site = SiteSettings(
+  const site = TestSiteSettings(
     siteName: 'test',
     latitudeDeg: 34.0,
     longitudeDeg: -84.0,
@@ -71,7 +70,7 @@ void main() {
     List<TonightSkyObject> rank(DateTime at, {bool rest = true}) =>
         computeTonightSkyLocal(
           site: site,
-          optics: const OpticsSettings(),
+          optics: const TestOpticsSettings(),
           atUtc: at,
           catalog: catalog,
           restOfNight: rest,
@@ -122,7 +121,7 @@ void main() {
       final h = hoursAboveInSpan(span, 135.0, 41.3, site);
       expect((h * 12) % 1, 0, reason: 'whole 5-minute slots');
       expect(
-        restOfNightSpan(const SiteSettings(), now),
+        restOfNightSpan(const TestSiteSettings(), now),
         isNull,
         reason: 'no site',
       );
@@ -160,7 +159,7 @@ void main() {
     });
 
     test('follows the twilight definition', () {
-      SiteSettings at(TwilightDefinition d) => SiteSettings(
+      SiteSettings at(TwilightDefinition d) => TestSiteSettings(
           latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, twilightDefinition: d);
       final night = DateTime.utc(2026, 1, 15, 3);
       expect(dawnStopFor(at(TwilightDefinition.civil), night), 'Civil Dawn');
@@ -168,10 +167,10 @@ void main() {
     });
 
     test('no dawn to stop at: a site never astronomically dark (high-latitude summer), or no site', () {
-      const north = SiteSettings(
+      const north = TestSiteSettings(
           latitudeDeg: 51.477833, longitudeDeg: -0.001500, twilightDefinition: TwilightDefinition.astronomical);
       expect(dawnStopFor(north, DateTime.utc(2026, 6, 21, 23)), isNull);
-      expect(dawnStopFor(const SiteSettings(), DateTime.utc(2026, 1, 15, 3)), isNull);
+      expect(dawnStopFor(const TestSiteSettings(), DateTime.utc(2026, 1, 15, 3)), isNull);
     });
   });
 
@@ -187,7 +186,7 @@ void main() {
   });
 
   // RedCat-51-ish train on an APS-C-ish sensor.
-  const optics = OpticsSettings(
+  const optics = TestOpticsSettings(
     focalLengthMm: 250,
     reducerFactor: 1.0,
     sensorWidthPx: 6248,
@@ -372,7 +371,7 @@ void main() {
     // From lat −35°, M81 (dec +69°) culminates at 90 − |−35−69| = −14° — it
     // can never clear a 20° horizon.
     final southern = rank(
-      s: const SiteSettings(
+      s: const TestSiteSettings(
         siteName: 'south',
         latitudeDeg: -35.0,
         longitudeDeg: 149.0,
@@ -403,7 +402,7 @@ void main() {
     // NGC 7000 (~120' major axis) on a 1000 mm train with a small sensor:
     // single-frame min dimension ≈ 4176·(206.265·3.76/1000)/60 ≈ 54' →
     // ratio ≈ 2.2 → overflows. A 3×3 mosaic triples it → ratio ≈ 0.74 → good.
-    const longFl = OpticsSettings(
+    const longFl = TestOpticsSettings(
       focalLengthMm: 1000,
       reducerFactor: 1.0,
       sensorWidthPx: 6248,
@@ -1234,7 +1233,7 @@ void main() {
     // it; a low southern skyline must keep it.
     final night = DateTime.utc(2026, 10, 15, 5);
     final southern = dso('south', 60, raDeg: 340.0, decDeg: 0.0);
-    const siteWithSkyline = SiteSettings(
+    const siteWithSkyline = TestSiteSettings(
       siteName: 'test',
       latitudeDeg: 34.0,
       longitudeDeg: -84.0,
@@ -1375,14 +1374,14 @@ void main() {
   });
 
   test('isDarkNow follows the sun at the site, never for an unset site', () {
-    const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+    const belen = TestSiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
     // 22:43 MDT on 2026-09-25 = 04:43 UTC on the 26th: well after dusk.
     expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 26, 4, 43)), isTrue);
     // 15:00 MDT = 21:00 UTC: broad daylight.
     expect(isDarkNow(belen, nowUtc: DateTime.utc(2026, 9, 25, 21, 0)), isFalse);
     // The (0, 0) "not set" sentinel is never dark.
     expect(
-      isDarkNow(const SiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
+      isDarkNow(const TestSiteSettings(), nowUtc: DateTime.utc(2026, 9, 26, 4, 43)),
       isFalse,
     );
   });
@@ -1407,7 +1406,7 @@ void main() {
   test(
     'Up now switches itself on when the clock crosses into dark, until pinned',
     () {
-      const belen = SiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
+      const belen = TestSiteSettings(latitudeDeg: 34.67, longitudeDeg: -106.79);
       var now = DateTime.utc(2026, 9, 25, 21, 0); // 15:00 MDT, daylight
       final ticks = StreamController<int>.broadcast();
       addTearDown(ticks.close);
@@ -1447,7 +1446,7 @@ void main() {
       final c = ProviderContainer(
         overrides: [
           clockProvider.overrideWithValue(() => now),
-          siteSettingsProvider.overrideWith(() => _SeededSite(SiteSettings(
+          siteSettingsProvider.overrideWith(() => _SeededSite(TestSiteSettings(
               latitudeDeg: 35.08, longitudeDeg: -106.65, twilightDefinition: twilight))),
         ],
       );
@@ -1497,7 +1496,7 @@ void main() {
   });
 
   test('#1140 the row carries the whole budget, and the noise-tolerance knob moves the sub', () {
-    const electronics = CameraElectronics(
+    const electronics = TestCameraElectronics(
       readNoiseE: 1.5,
       fullWellE: 50000,
       electronsPerAdu: 0.8,

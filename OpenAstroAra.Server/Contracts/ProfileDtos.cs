@@ -569,7 +569,23 @@ public sealed record PolarAlignSettingsDto(
     // #2081: the way a run's RA turns go when it starts a NEW sweep origin (NINA's EastDirection): true = east (the
     // mount's RA reading rises), false = west, null = by the site's hemisphere (east in the north, west in the south).
     // Later runs of the same session keep turning back toward the origin (#2089), whatever this says.
-    bool? EastDirection = null);
+    bool? EastDirection = null,
+    // #2068 (ARA-8, ARA-18): the counterweight limit and the user's clearance confirmation, per mount, keyed by the
+    // mount's identity (PolarAlignPreflightEvaluator.MountKey: its Alpaca UniqueID). No Polar Align motion until the
+    // connected mount's entry says clearance_confirmed. Null reads as empty (PolarAlignSettingsClamp).
+    IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? MountClearance = null);
+
+/// <summary>#2068 — one mount's entry in <see cref="PolarAlignSettingsDto.MountClearance"/>: how far the RA axis may
+/// turn the counterweight up from counterweight-down (<c>MaxCwAngleDeg</c>, 0 = Home, 90 = horizontal; held at 10–75°,
+/// default 60°), and whether the user checked with the hand controller that the counterweight, the tube and the cables
+/// clear the pier and tripod up to it (<c>ClearanceConfirmed</c>). A confirmation is for one limit (Joey, 2026-11-21):
+/// <c>ConfirmedMaxCwAngleDeg</c> is the limit the user confirmed, and an entry is confirmed only while it equals
+/// <c>MaxCwAngleDeg</c> (<see cref="Services.PolarAlignSettingsClamp"/> clears it otherwise, on every read and write), so a
+/// limit changed without a new confirmation in the same request is not confirmed. Null while not confirmed.</summary>
+public sealed record PolarAlignMountClearanceDto(
+    double MaxCwAngleDeg = 60.0,
+    bool ClearanceConfirmed = false,
+    double? ConfirmedMaxCwAngleDeg = null);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

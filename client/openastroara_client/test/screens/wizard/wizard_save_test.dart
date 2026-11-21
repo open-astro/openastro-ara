@@ -10,16 +10,11 @@ import 'package:openastroara/models/profile_draft.dart'
 import 'package:openastroara/screens/wizard/wizard_save.dart';
 import 'package:openastroara/util/guide_optics.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart' show FrameKind;
-import 'package:openastroara/state/settings/autofocus_settings_state.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
-import 'package:openastroara/state/settings/imaging_defaults_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/phd2_settings_state.dart';
-import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('wizard draft → section mappers', () {
@@ -30,7 +25,7 @@ void main() {
         ..longitudeDeg = -97.7
         ..altitudeMeters = 200
         ..timezone = 'America/Chicago';
-      const base = SiteSettings(
+      const base = TestSiteSettings(
         bortleClass: 4,
       ); // a field the wizard doesn't set
       final out = applyDraftToSite(base, d);
@@ -52,13 +47,13 @@ void main() {
       d.site
         ..hardMinAltitudeDeg = 25
         ..twilight = TwilightOption.nautical;
-      final out = applyDraftToSite(const SiteSettings(), d);
+      final out = applyDraftToSite(const TestSiteSettings(), d);
       expect(out.defaultHorizonAltitudeDeg, 25);
       expect(out.twilightDefinition, TwilightDefinition.nautical);
     });
 
     test('applyDraftToSite keeps base horizon/twilight on a blank draft', () {
-      final base = const SiteSettings().copyWith(
+      final base = const TestSiteSettings().copyWith(
         defaultHorizonAltitudeDeg: 35,
         twilightDefinition: TwilightDefinition.civil,
       );
@@ -74,11 +69,11 @@ void main() {
         d.site
           ..bortleClass = 3
           ..sqmMagPerArcsec2 = 21.4;
-        final out = applyDraftToSite(const SiteSettings(), d);
+        final out = applyDraftToSite(const TestSiteSettings(), d);
         expect(out.bortleClass, 3);
         expect(out.sqmMagPerArcsec2, 21.4);
 
-        const base = SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 20.5);
+        const base = TestSiteSettings(bortleClass: 4, sqmMagPerArcsec2: 20.5);
         final kept = applyDraftToSite(base, ProfileDraft());
         expect(kept.bortleClass, 4);
         expect(kept.sqmMagPerArcsec2, 20.5);
@@ -92,7 +87,7 @@ void main() {
     );
 
     test('applyDraftToSite leaves base untouched when the draft is empty', () {
-      const base = SiteSettings(siteName: 'Existing', latitudeDeg: 12.0);
+      const base = TestSiteSettings(siteName: 'Existing', latitudeDeg: 12.0);
       final out = applyDraftToSite(base, ProfileDraft());
       expect(out.siteName, 'Existing');
       expect(out.latitudeDeg, 12.0);
@@ -102,7 +97,7 @@ void main() {
       final d = ProfileDraft();
       d.telescope.focalLengthMm = 714;
       d.camera.pixelSizeMicrons = 3.76;
-      const base = OpticsSettings(reducerFactor: 0.8);
+      const base = TestOpticsSettings(reducerFactor: 0.8);
       final out = applyDraftToOptics(base, d);
       expect(out.focalLengthMm, 714);
       expect(out.pixelSizeUm, 3.76);
@@ -119,7 +114,7 @@ void main() {
       d.telescope.reducerFactor = 0.63;
       d.camera.sensorWidthPx = 1280;
       d.camera.sensorHeightPx = 960;
-      const base = OpticsSettings(reducerFactor: 1.0);
+      const base = TestOpticsSettings(reducerFactor: 1.0);
       final out = applyDraftToOptics(base, d);
       expect(out.reducerFactor, 0.63);
       expect(out.sensorWidthPx, 1280);
@@ -136,7 +131,7 @@ void main() {
         ..defaultOffset = 30
         ..defaultBin = 2
         ..warmupMode = CoolerWarmupMode.ramp;
-      final out = applyDraftToImaging(const ImagingDefaults(), d);
+      final out = applyDraftToImaging(const TestImagingDefaults(), d);
       expect(out.coolerTargetC, -15);
       expect(out.coolerRampRatePerMin, 2);
       expect(out.defaultGain, 120);
@@ -150,7 +145,7 @@ void main() {
       d.imagingDefaults
         ..exposure = const Duration(seconds: 90)
         ..frameType = FrameType.flat;
-      final out = applyDraftToImaging(const ImagingDefaults(), d);
+      final out = applyDraftToImaging(const TestImagingDefaults(), d);
       expect(out.defaultExposure, const Duration(seconds: 90));
       expect(out.defaultFrameKind, FrameKind.flat);
     });
@@ -158,7 +153,7 @@ void main() {
     test(
       'applyDraftToImaging keeps base exposure/frame kind on a blank draft',
       () {
-        final base = const ImagingDefaults().copyWith(
+        final base = const TestImagingDefaults().copyWith(
           defaultExposure: const Duration(seconds: 300),
           defaultFrameKind: FrameKind.dark,
         );
@@ -171,7 +166,7 @@ void main() {
     test('applyDraftToImaging maps warmup "off" to false', () {
       final d = ProfileDraft();
       d.camera.warmupMode = CoolerWarmupMode.off;
-      final out = applyDraftToImaging(const ImagingDefaults(), d);
+      final out = applyDraftToImaging(const TestImagingDefaults(), d);
       expect(out.warmupAtSessionEnd, isFalse);
     });
 
@@ -183,7 +178,7 @@ void main() {
         ..settleThresholdPx = 1.2
         ..settleDuration = const Duration(seconds: 12)
         ..calibrationCadence = CalibrationCadence.onceReuse;
-      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      final out = applyDraftToPhd2(const TestPhd2Settings(), d);
       expect(out.host, 'guidepi');
       expect(out.port, 4401);
       expect(out.ditherPixels, 4);
@@ -196,7 +191,7 @@ void main() {
       final d = ProfileDraft();
       d.guider.guiderCamera = 'Alpaca Camera [rig.lan:6800/2]';
       final out = applyDraftToPhd2(
-        const Phd2Settings(
+        const TestPhd2Settings(
           guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
           guiderCameraAlpacaUniqueId: 'old-camera',
         ),
@@ -210,7 +205,7 @@ void main() {
       'applyDraftToPhd2 #1308: an untouched guide camera keeps its UniqueID',
       () {
         final out = applyDraftToPhd2(
-          const Phd2Settings(
+          const TestPhd2Settings(
             guiderCamera: 'Alpaca Camera [rig.lan:6800/1]',
             guiderCameraAlpacaUniqueId: 'cam-1',
           ),
@@ -225,7 +220,7 @@ void main() {
       final d = ProfileDraft();
       d.camera.pixelSizeMicrons = 2.4;
       d.telescope.focalLengthMm = 2000; // 0.25″/px: used to seed 4
-      final out = applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      final out = applyDraftToPlateSolve(const TestPlateSolveSettings(), d);
       expect(
         out.downsampleFactor,
         0,
@@ -233,7 +228,7 @@ void main() {
       );
       // Search radius is pointing-uncertainty-driven, never derived — the
       // §37.8 default survives untouched.
-      expect(out.searchRadiusDeg, const PlateSolveSettings().searchRadiusDeg);
+      expect(out.searchRadiusDeg, const TestPlateSolveSettings().searchRadiusDeg);
     });
 
     test('#1541 — applyDraftToAutofocus carries the focuser backlash and keeps the base when unset', () {
@@ -241,12 +236,12 @@ void main() {
       d.focuser
         ..backlashInSteps = 30
         ..backlashOutSteps = 50;
-      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      final out = applyDraftToAutofocus(const TestAutofocusSettings(), d);
       expect(out.backlashInSteps, 30);
       expect(out.backlashOutSteps, 50);
 
       final kept = applyDraftToAutofocus(
-        const AutofocusSettings(backlashInSteps: 7, backlashOutSteps: 9),
+        const TestAutofocusSettings(backlashInSteps: 7, backlashOutSteps: 9),
         ProfileDraft(),
       );
       expect(kept.backlashInSteps, 7);
@@ -260,7 +255,7 @@ void main() {
         ..focalLengthMm = 530
         ..apertureMm = 106; // f/5
       d.focuser.stepSizeMicrons = 1.2; // → 23 steps, ≠ default 50
-      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      final out = applyDraftToAutofocus(const TestAutofocusSettings(), d);
       expect(
         out.stepSize,
         23,
@@ -280,12 +275,12 @@ void main() {
         // Base carries explicit non-default customizations (cloned profile) —
         // the derivations must not clobber them.
         final ps = applyDraftToPlateSolve(
-          const PlateSolveSettings().copyWith(downsampleFactor: 3),
+          const TestPlateSolveSettings().copyWith(downsampleFactor: 3),
           d,
         );
         expect(ps.downsampleFactor, 3);
         final af = applyDraftToAutofocus(
-          const AutofocusSettings().copyWith(stepSize: 80),
+          const TestAutofocusSettings().copyWith(stepSize: 80),
           d,
         );
         expect(af.stepSize, 80);
@@ -327,7 +322,7 @@ void main() {
       d.guider
         ..darkMinExposureMs = 500
         ..darkMaxExposureMs = 2000;
-      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      final out = applyDraftToPhd2(const TestPhd2Settings(), d);
       expect(out.guideExposureMinMs, 500);
       expect(out.guideExposureMaxMs, 2000);
     });
@@ -338,13 +333,13 @@ void main() {
         ..setupType = 'guide_scope'
         ..guideFocalLengthMm = 240
         ..guidePixelSizeUm = 2.9;
-      final out = applyDraftToPhd2(const Phd2Settings(), d);
+      final out = applyDraftToPhd2(const TestPhd2Settings(), d);
       expect(out.guiderSetupType, 'guide_scope');
       expect(out.guideFocalLength, 240);
       expect(out.guidePixelSize, 2.9);
 
       // Untouched draft keeps the base values.
-      final base = const Phd2Settings(
+      final base = const TestPhd2Settings(
         guiderSetupType: 'oag',
         guideFocalLength: 999,
         guidePixelSize: 3.8,
@@ -358,7 +353,7 @@ void main() {
       final d = ProfileDraft();
       d.guider.setupType = 'guide_scope';
       final out = applyDraftToPhd2(
-        const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
+        const TestPhd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
         d,
       );
       expect(out.guiderSetupType, 'guide_scope');
@@ -367,7 +362,7 @@ void main() {
       d.guider.guideFocalLengthMm = 128;
       expect(
         applyDraftToPhd2(
-          const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
+          const TestPhd2Settings(guiderSetupType: 'oag', guideFocalLength: 375),
           d,
         ).guideFocalLength,
         128,
@@ -385,9 +380,9 @@ void main() {
               240 // ignored for OAG
           ..guidePixelSizeUm = 2.9;
         final out = applyDraftToPhd2(
-          const Phd2Settings(guideFocalLength: 111),
+          const TestPhd2Settings(guideFocalLength: 111),
           d,
-          baseOptics: const OpticsSettings(reducerFactor: 0.8),
+          baseOptics: const TestOpticsSettings(reducerFactor: 0.8),
         );
         expect(out.guiderSetupType, 'oag');
         expect(out.guideFocalLength, 1184); // 1480 × 0.8
@@ -402,9 +397,9 @@ void main() {
         ..reducerFactor = 0.63;
       d.guider.setupType = 'oag';
       final out = applyDraftToPhd2(
-        const Phd2Settings(),
+        const TestPhd2Settings(),
         d,
-        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+        baseOptics: const TestOpticsSettings(reducerFactor: 0.8),
       );
       expect(
         out.guideFocalLength,
@@ -421,12 +416,12 @@ void main() {
         d.guider.setupType = 'oag';
         // Invalid/unset reducer (≤ 0) → 1.0; missing baseOptics entirely → 1.0.
         final invalid = applyDraftToPhd2(
-          const Phd2Settings(),
+          const TestPhd2Settings(),
           d,
-          baseOptics: const OpticsSettings(reducerFactor: 0),
+          baseOptics: const TestOpticsSettings(reducerFactor: 0),
         );
         expect(invalid.guideFocalLength, 1480);
-        final absent = applyDraftToPhd2(const Phd2Settings(), d);
+        final absent = applyDraftToPhd2(const TestPhd2Settings(), d);
         expect(absent.guideFocalLength, 1480);
       },
     );
@@ -453,9 +448,9 @@ void main() {
         d.telescope.focalLengthMm = 1480;
         d.guider.guideFocalLengthMm = 240; // typed but mode is OAG via the base
         final out = applyDraftToPhd2(
-          const Phd2Settings(guiderSetupType: 'oag'),
+          const TestPhd2Settings(guiderSetupType: 'oag'),
           d,
-          baseOptics: const OpticsSettings(reducerFactor: 0.8),
+          baseOptics: const TestOpticsSettings(reducerFactor: 0.8),
         );
         expect(out.guiderSetupType, 'oag'); // null draft keeps the base
         expect(out.guideFocalLength, 1184); // derived, matching the UI branch
@@ -468,7 +463,7 @@ void main() {
         // The wizard preview computes derivedOagGuideFocalLength(fl,
         // effectiveOagReducerFactor(baseReducer)) — assert it equals what
         // applyDraftToPhd2 persists for the same inputs.
-        const baseOptics = OpticsSettings(reducerFactor: 0.8);
+        const baseOptics = TestOpticsSettings(reducerFactor: 0.8);
         final preview = derivedOagGuideFocalLength(
           1480,
           effectiveOagReducerFactor(baseOptics.reducerFactor),
@@ -477,7 +472,7 @@ void main() {
         d.telescope.focalLengthMm = 1480;
         d.guider.setupType = 'oag';
         final saved = applyDraftToPhd2(
-          const Phd2Settings(),
+          const TestPhd2Settings(),
           d,
           baseOptics: baseOptics,
         );
@@ -493,7 +488,7 @@ void main() {
           ),
         );
         final savedDraft = applyDraftToPhd2(
-          const Phd2Settings(),
+          const TestPhd2Settings(),
           d,
           baseOptics: baseOptics,
         );
@@ -511,7 +506,7 @@ void main() {
         final d = ProfileDraft();
         d.guider.setupType = 'oag';
         final out = applyDraftToPhd2(
-          const Phd2Settings(guideFocalLength: 350),
+          const TestPhd2Settings(guideFocalLength: 350),
           d,
         );
         expect(out.guiderSetupType, 'oag');
@@ -526,7 +521,7 @@ void main() {
         ..starDatabasePath = '/opt/astap/d50'
         ..searchRadiusDeg = 15
         ..downsampleFactor = 4;
-      final out = applyDraftToPlateSolve(const PlateSolveSettings(), d);
+      final out = applyDraftToPlateSolve(const TestPlateSolveSettings(), d);
       expect(out.pathOrEndpoint, '/usr/local/bin/astap');
       expect(out.indexDownloadPath, '/opt/astap/d50');
       expect(out.searchRadiusDeg, 15);
@@ -536,7 +531,7 @@ void main() {
     test(
       'applyDraftToPlateSolve preserves base values when the draft is blank',
       () {
-        final base = const PlateSolveSettings().copyWith(
+        final base = const TestPlateSolveSettings().copyWith(
           pathOrEndpoint: '/keep/astap',
           indexDownloadPath: '/keep/db',
           searchRadiusDeg: 12,
@@ -556,7 +551,7 @@ void main() {
       () {
         // §37 clear-field affordance: the new profile clones the active one, so
         // blank alone keeps the OLD rig's path — a cleared field must shed it.
-        final base = const PlateSolveSettings().copyWith(
+        final base = const TestPlateSolveSettings().copyWith(
           pathOrEndpoint: '/old-rig/astap',
           indexDownloadPath: '/old-rig/db',
         );
@@ -565,8 +560,9 @@ void main() {
         final out = applyDraftToPlateSolve(base, d);
         expect(
           out.pathOrEndpoint,
-          const PlateSolveSettings().pathOrEndpoint,
-          reason: 'the cleared path resets to the section default',
+          '',
+          reason: 'the cleared path goes blank, which the daemon reads as its '
+              'own default (the client holds none, ADR 0015)',
         );
         expect(
           out.indexDownloadPath,
@@ -583,7 +579,7 @@ void main() {
       final d = ProfileDraft();
       d.plateSolve.astapBinaryPath = '/new-rig/astap';
       final out = applyDraftToPlateSolve(
-        const PlateSolveSettings().copyWith(pathOrEndpoint: '/old-rig/astap'),
+        const TestPlateSolveSettings().copyWith(pathOrEndpoint: '/old-rig/astap'),
         d,
       );
       expect(out.pathOrEndpoint, '/new-rig/astap');
@@ -672,7 +668,7 @@ void main() {
     test('applyDraftToCameraElectronics converts QE percent and preserves ASCOM fields', () {
       // The wizard collects the two user-owned values; the ASCOM-auto-captured
       // fields (sensor, full well, e-/ADU, gain) must survive the merge.
-      const base = CameraElectronics(
+      const base = TestCameraElectronics(
         sensorName: 'IMX571',
         fullWellE: 51000,
         electronsPerAdu: 0.78,
@@ -693,7 +689,7 @@ void main() {
     });
 
     test('applyDraftToCameraElectronics preserves base on a blank draft', () {
-      const base = CameraElectronics(
+      const base = TestCameraElectronics(
         readNoiseE: 2.2,
         quantumEfficiencyPeak: 0.6,
       );
@@ -705,7 +701,7 @@ void main() {
     test(
       'applyDraftToCameraElectronics rejects an out-of-range QE percent',
       () {
-        const base = CameraElectronics(quantumEfficiencyPeak: 0.6);
+        const base = TestCameraElectronics(quantumEfficiencyPeak: 0.6);
         final d = ProfileDraft()
           ..camera.qePeakPct = 250; // typo'd fraction-vs-percent
         final out = applyDraftToCameraElectronics(base, d);
@@ -724,7 +720,7 @@ void main() {
         ..steps = 9
         ..stepSize = 40
         ..runAfterFilterChange = false;
-      final out = applyDraftToAutofocus(const AutofocusSettings(), d);
+      final out = applyDraftToAutofocus(const TestAutofocusSettings(), d);
       expect(out.exposureSeconds, 8);
       expect(out.steps, 9);
       expect(out.stepSize, 40);
@@ -732,7 +728,7 @@ void main() {
     });
 
     test('applyDraftToAutofocus preserves base on a blank draft', () {
-      final base = const AutofocusSettings().copyWith(
+      final base = const TestAutofocusSettings().copyWith(
         exposureSeconds: 11,
         steps: 5,
         runAfterFilterChange: false,
@@ -805,7 +801,7 @@ void main() {
         ..onUnsafe = UnsafeConditionAction.abortAndPark
         ..autoResumeWhenSafe = false
         ..resumeDelayMin = 3;
-      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      final out = applyDraftToSafety(const TestSafetyPolicies(), d);
       expect(out.onUnsafe, UnsafeAction.abortAndPark);
       expect(out.autoResumeWhenSafe, isFalse);
       expect(out.resumeDelayMin, 3);
@@ -816,11 +812,11 @@ void main() {
       d.safety
         ..unattendedShutdownEnabled = false
         ..unattendedShutdownWaitMin = 25;
-      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      final out = applyDraftToSafety(const TestSafetyPolicies(), d);
       expect(out.unattendedShutdownEnabled, isFalse);
       expect(out.unattendedShutdownWaitMinutes, 25);
       // Untouched draft keeps the base (the section defaults: on / 30 min).
-      final kept = applyDraftToSafety(const SafetyPolicies(), ProfileDraft());
+      final kept = applyDraftToSafety(const TestSafetyPolicies(), ProfileDraft());
       expect(kept.unattendedShutdownEnabled, isTrue);
       expect(kept.unattendedShutdownWaitMinutes, 30);
     });
@@ -832,7 +828,7 @@ void main() {
         ..maxWindKmh = 25
         ..maxHumidityPct = 90
         ..minDewDeltaC = 3.5;
-      final out = applyDraftToSafety(const SafetyPolicies(), d);
+      final out = applyDraftToSafety(const TestSafetyPolicies(), d);
       expect(out.weatherTriggersEnabled, isTrue);
       expect(out.maxWindKmh, 25);
       expect(out.maxHumidityPct, 90);
@@ -842,7 +838,7 @@ void main() {
     test(
       'applyDraftToSafety keeps base weather thresholds on a blank draft',
       () {
-        final base = const SafetyPolicies().copyWith(
+        final base = const TestSafetyPolicies().copyWith(
           weatherTriggersEnabled: true,
           maxWindKmh: 50,
           minDewDeltaC: 1.0,
@@ -855,7 +851,7 @@ void main() {
     );
 
     test('applyDraftToSafety preserves base on a blank draft', () {
-      final base = const SafetyPolicies().copyWith(
+      final base = const TestSafetyPolicies().copyWith(
         onUnsafe: UnsafeAction.ignore,
         resumeDelayMin: 20,
       );
@@ -869,7 +865,7 @@ void main() {
       () {
         final d = ProfileDraft();
         d.guider.calibrationCadence = CalibrationCadence.eachSession;
-        final out = applyDraftToPhd2(const Phd2Settings(), d);
+        final out = applyDraftToPhd2(const TestPhd2Settings(), d);
         expect(out.forceCalibrationEachSession, isTrue);
       },
     );
@@ -879,7 +875,7 @@ void main() {
       () {
         final d = ProfileDraft();
         d.guider.hostPort = '[::1]:4401';
-        final out = applyDraftToPhd2(const Phd2Settings(), d);
+        final out = applyDraftToPhd2(const TestPhd2Settings(), d);
         expect(out.host, '[::1]');
         expect(out.port, 4401);
       },
@@ -890,7 +886,7 @@ void main() {
       () {
         final d = ProfileDraft();
         d.guider.hostPort = '[::1]';
-        const base = Phd2Settings(port: 4400);
+        const base = TestPhd2Settings(port: 4400);
         final out = applyDraftToPhd2(base, d);
         expect(out.host, '[::1]');
         expect(out.port, 4400, reason: 'no port appended → keep the base port');
@@ -902,7 +898,7 @@ void main() {
       () {
         final d = ProfileDraft();
         d.guider.hostPort = 'guidepi';
-        const base = Phd2Settings(port: 4400);
+        const base = TestPhd2Settings(port: 4400);
         final out = applyDraftToPhd2(base, d);
         expect(out.host, 'guidepi');
         expect(out.port, 4400);
@@ -912,7 +908,7 @@ void main() {
     test('applyDraftToPhd2 treats a bare (unbracketed) IPv6 as host-only', () {
       final d = ProfileDraft();
       d.guider.hostPort = '::1';
-      const base = Phd2Settings(port: 4400);
+      const base = TestPhd2Settings(port: 4400);
       final out = applyDraftToPhd2(base, d);
       expect(
         out.host,
@@ -929,7 +925,7 @@ void main() {
     test('applyDraftToPhd2 keeps a longer bare IPv6 literal intact', () {
       final d = ProfileDraft();
       d.guider.hostPort = 'fe80::1';
-      const base = Phd2Settings(port: 4400);
+      const base = TestPhd2Settings(port: 4400);
       final out = applyDraftToPhd2(base, d);
       expect(out.host, 'fe80::1');
       expect(out.port, 4400);

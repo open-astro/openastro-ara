@@ -763,6 +763,10 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// Polar Align result in the 12 h before, for comparison. <c>AboveAlign</c> (#2072) is that second rule on its own:
 /// the two numbers disagree (Dec lost motion inflated the guiding figure, or the mount shifted or the alignment was
 /// wrong); null with no Polar Align result to compare. Hour angle / Dec are the mount's at the end.
+/// <c>AlignSigmaArcmin</c> (#2072) is that Polar Align result's own 1σ; with it, the two disagree when the value is
+/// above the result by more than twice their combined 1σ, √(<c>UncertaintyArcmin</c>² + <c>AlignSigmaArcmin</c>²)
+/// (without it, an older row, the fixed 2′ margin stands in for the result's error). Stored with the row
+/// (<c>pa_residuals.align_sigma_arcmin</c>), so a listed row is judged as the live one was; null on a row stored before it.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,
@@ -782,7 +786,8 @@ public sealed record PaResidualDto(
     DateTimeOffset? AlignEndedUtc = null,
     Guid? SessionId = null,
     string? Reason = null,
-    bool? AboveAlign = null);
+    bool? AboveAlign = null,
+    double? AlignSigmaArcmin = null);
 
 /// <summary>Null host/port mean "use the ACTIVE PROFILE's phd2 host/port" — an
 /// omitted field must not silently repoint a remote-PHD2 profile (e.g. an SBC at
@@ -972,6 +977,84 @@ public sealed record PolarAlignStartPlanDto(string? Stage, string Direction, dou
     bool NewOrigin = true, double OriginOffsetDeg = 0.0, double SweepLimitDeg = 30.0, string Camera = PolarAlignCameras.Guide,
     bool HandTurnAvailable = true, double DirectionTestDeg = 0.0);
 
+/// <summary>#2068 (ARA-18) — Polar Align's pre-flight list (<c>GET /polaralign/preflight</c>): every safety check a start
+/// makes, in the order a start makes them, with what the next Start would do. <c>Ready</c> is true when no check
+/// fails; a start (<c>POST /polaralign/start</c>, <c>GET /polaralign/start-plan</c>) refuses on the first check that
+/// fails, with that check's cause. A <c>warn</c> or <c>unknown</c> check never refuses: <c>unknown</c> is a check this
+/// daemon does not make yet (its detail names the issue that adds it). <c>MountKey</c> is the connected mount's key in
+/// the polar-align section's <c>mount_clearance</c> (null with no mount connected): the clearance confirmation writes
+/// there.</summary>
+public sealed record PolarAlignPreflightDto(
+    bool Ready,
+    IReadOnlyList<PolarAlignPreflightCheckDto> Checks,
+    PolarAlignPreflightPlannedDto Planned,
+    string? MountKey);
+
+/// <summary>One check of <see cref="PolarAlignPreflightDto"/>: its id (<see cref="PolarAlignPreflightChecks"/>), its
+/// status (<see cref="PolarAlignPreflightStatuses"/>) and a sentence for people (English).</summary>
+public sealed record PolarAlignPreflightCheckDto(string Id, string Status, string Detail);
+
+/// <summary>What the next Start at <c>Stage</c> would do (the confirm step's plan where the mount could be read):
+/// <c>Direction</c> (<c>east</c> | <c>west</c>, null when the plan could not be made), <c>TurnStepDeg</c> each of the
+/// measurement's two turns (<c>CheckStepDeg</c> a Check's), <c>MaxSweepDeg</c> the most it turns from where it starts,
+/// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and the mount's
+/// counterweight limit (<c>MaxCwAngleDeg</c>, the connected mount's entry or the default). <c>StartCwAngleDeg</c> and
+/// <c>MinAltitudeDeg</c> are null until the counterweight model and the pose envelope land (#2065).</summary>
+public sealed record PolarAlignPreflightPlannedDto(
+    string Stage,
+    string? Direction,
+    double TurnStepDeg,
+    double CheckStepDeg,
+    int Turns,
+    double MaxSweepDeg,
+    bool? NewOrigin,
+    double? OriginOffsetDeg,
+    double? SweepLimitDeg,
+    double MaxCwAngleDeg,
+    double? StartCwAngleDeg,
+    double? MinAltitudeDeg);
+
+/// <summary>The statuses of a <see cref="PolarAlignPreflightCheckDto"/>.</summary>
+public static class PolarAlignPreflightStatuses {
+    public const string Ok = "ok";
+    /// <summary>Worth reading; never refuses a start.</summary>
+    public const string Warn = "warn";
+    /// <summary>A start refuses on it.</summary>
+    public const string Fail = "fail";
+    /// <summary>Not checked by this daemon yet, or its input could not be read for an informational check; never
+    /// refuses a start.</summary>
+    public const string Unknown = "unknown";
+}
+
+/// <summary>The ids of the <see cref="PolarAlignPreflightCheckDto"/> rows (ARA-18), in the order a start checks
+/// them.</summary>
+public static class PolarAlignPreflightChecks {
+    public const string MountConnected = "mount_connected";
+    public const string MountParked = "mount_parked";
+    public const string SiteLatitude = "site_latitude";
+    public const string SiteLongitudeLst = "site_longitude_lst";
+    public const string MountClockOrSite = "mount_clock_or_site";
+    public const string PoseVerified = "pose_verified";
+    public const string ClearanceConfirmed = "clearance_confirmed";
+    public const string StartPointing = "start_pointing";
+    public const string MountType = "mount_type";
+    public const string CanMoveAxis = "can_move_axis";
+    public const string MotionSafety = "motionsafety";
+    public const string PierSide = "pier_side";
+    public const string PoseEnvelope = "pose_envelope";
+    public const string StartCwAngle = "start_cw_angle";
+    public const string TurnStep = "turn_step";
+    public const string Aligner = "aligner";
+    public const string MountLimits = "mount_limits";
+
+    /// <summary>Every id, in order.</summary>
+    public static readonly IReadOnlyList<string> All = [
+        MountConnected, MountParked, SiteLatitude, SiteLongitudeLst, MountClockOrSite, PoseVerified, ClearanceConfirmed,
+        StartPointing, MountType, CanMoveAxis, MotionSafety, PierSide, PoseEnvelope, StartCwAngle, TurnStep, Aligner,
+        MountLimits,
+    ];
+}
+
 /// <summary>#2048 — the user's answer to the confirm step: they were shown the plan and the RA turn direction
 /// (<see cref="PolarAlignStartPlanDto.Direction"/>), and agreed the mount may move. <c>NewOrigin</c> (#2089): the plan
 /// they saw made this pose Polar Align's new origin. <c>HandTurn</c> (#2083): the user turns RA by hand, so the run
@@ -1002,7 +1085,11 @@ public static class PolarAlignDirections {
 /// when none did since the daemon started. <c>FineDeltaArcmin</c> is the distance between the two measured axes — alt
 /// and az both — so a readout of the same size on the other side of the pole still reads as a disagreement), the verdict band
 /// (<c>excellent</c> ≤1′, <c>very_good</c> ≤3′, <c>good</c> ≤10′, <c>rough</c> ≤30′, else <c>far_off</c>), and whether a
-/// point stayed noisy after its retake (#2082, <c>Noisy</c>).
+/// point stayed noisy after its retake (#2082, <c>Noisy</c>). The <c>*SigmaArcmin</c> fields (#2072) are the fit's 1σ on
+/// each error, from the scatter of each point's frames (a single-frame point counts a floor of 0.15 px at the solving
+/// camera's pixel scale, 1″ when that is unknown); the total's is the rms length of the error vector, √(alt² + az²) of
+/// the two. Null from an older daemon. With them, the verdict band rates the total plus twice its 1σ (#2072), so a
+/// noisy check does not read <c>excellent</c>.
 /// <c>DecSpreadArcsec</c> (#2081): how far the mount's Dec reading spread across the check's three points, when that is
 /// over 2″ (NINA's warning: the mount moved in Dec, so the result may be off); null otherwise.</summary>
 public sealed record PolarAlignCheckResultDto(
@@ -1017,6 +1104,10 @@ public sealed record PolarAlignCheckResultDto(
     DateTimeOffset MeasuredAt,
     // #2082 — a point of the check stayed scattered over 3″ after its retake (polar_align.frames_per_point).
     bool Noisy = false,
+    // #2072 — the fit's 1σ on each error (arcmin).
+    double? AltitudeSigmaArcmin = null,
+    double? AzimuthSigmaArcmin = null,
+    double? TotalSigmaArcmin = null,
     // #2081 — the mount's Dec spread across the check's three points (arcseconds) when over 2″; null otherwise.
     double? DecSpreadArcsec = null);
 
@@ -1060,6 +1151,12 @@ public sealed record PolarAlignStateDto(
     bool HandTurn = false,
     // #2083 — a hand-turn run waiting for the user's turn; null otherwise.
     PolarAlignHandTurnDto? HandTurnWait = null,
+    // #2072 — the 1σ of CurrentErrorArcmin, AzimuthAdjustmentArcmin and AltitudeAdjustmentArcmin (arcmin): the fit the
+    // readout rests on (the seed's in the live loop, the verdict's once checked). Null whenever the error is null.
+    // The clients show "aligned" only when error + 2σ is inside the tolerance (Done is not held by it).
+    double? CurrentSigmaArcmin = null,
+    double? AzimuthSigmaArcmin = null,
+    double? AltitudeSigmaArcmin = null,
     // #2081 — the mount's Dec spread across the seed's three points (arcseconds) when over 2″ (NINA's warning: the
     // readout may be off), also on each polar_align.progress event; null otherwise and outside adjusting/paused.
     double? DecSpreadArcsec = null);

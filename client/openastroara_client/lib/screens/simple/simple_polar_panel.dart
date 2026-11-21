@@ -11,6 +11,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../util/polar_align_error_text.dart';
+import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../state/profile_management_state.dart';
@@ -19,6 +20,7 @@ import '../../state/settings/polar_align_settings_state.dart';
 import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
 import '../../widgets/imaging/polar_aligner_block.dart';
+import '../../widgets/imaging/polar_preflight_checklist.dart';
 import '../../widgets/imaging/polar_start_confirm.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
@@ -62,6 +64,8 @@ class SimplePolarShutter extends ConsumerWidget {
     // Busy while any panel's call runs: a second press would send a start
     // twice. Stop never waits, as it halts a routine that moves the mount.
     final busy = ref.watch(polarAlignActionProvider).busy;
+    // #2068 — a pre-flight check that fails: the rig would refuse the start.
+    final blocked = !active && polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider));
     final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
     final action = ref.read(polarAlignActionProvider.notifier);
@@ -80,9 +84,13 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
-      whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
+      whyOff: api == null
+          ? l10n.shellRigNotConnected
+          : blocked
+          ? l10n.polarPreflightBlocked
+          : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed: api == null || (!active && (busy || ref.watch(mainCameraBusyProvider)))
+      onPressed: api == null || blocked || (!active && (busy || ref.watch(mainCameraBusyProvider)))
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
@@ -137,10 +145,12 @@ double? simplePolarDecSpread(PolarAlignLive live, {required bool verifying}) {
       : null;
 }
 
-/// The checked verdict's word in the user's language: the daemon's own verdict
-/// token, or the local bands on the total for a token this build does not know.
+/// The checked verdict's word in the user's language: #2072 with the result's
+/// 1σ, the bands on the error plus twice it (so a noisy check never reads
+/// Excellent); without one, the daemon's own verdict token, or the local bands
+/// on the total for a token this build does not know.
 String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
-  final token = polarRatingForVerdict(r.verdict) == null ? polarVerdictFor(r.totalErrorArcmin) : r.verdict;
+  final token = polarCheckVerdict(r);
   return switch (token) {
     'excellent' => l10n.polarVerdictExcellent,
     'very_good' => l10n.polarVerdictVeryGood,
@@ -275,6 +285,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         total != null &&
         settings != null &&
         total <= settings.targetToleranceArcmin;
+    // #2072 "inside your tolerance" only when the error plus twice its 1σ is;
+    // inside on the error alone, the panel says the measurement cannot confirm
+    // it. Done stays available inside the tolerance (Joey, 2026-11-21).
+    final aligned = polarAligned(total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
+    final unconfirmed = polarUnconfirmedText(l10n, total, live.totalSigmaArcmin, settings?.targetToleranceArcmin);
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
@@ -401,7 +416,9 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   if ((active || live.phase == PolarAlignStates.checked) && total != null) ...[
                     Icon(Icons.circle, size: 12, color: color),
                     Text(
-                      '${total.toStringAsFixed(1)}′',
+                      // #2072 the total with its 1σ: "0.2′ ± 1.1′".
+                      polarErrorWithSigmaText(l10n, '${total.toStringAsFixed(1)}′', live.totalSigmaArcmin),
+                      key: const Key('simple-polar-total'),
                       style: kSimpleText.copyWith(
                         fontSize: AraFontSize.simpleReadingLarge,
                         fontWeight: FontWeight.w300,
@@ -480,6 +497,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               // Its own fixed slot between Setup and Error (user, 2026-11-16).
               if (aligner) const PolarAlignerBlock(),
+              // #2068 the checks the rig makes before a start; the shutter is off while one fails.
+              if (!active) const PolarPreflightChecklist(),
             ],
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)
@@ -605,16 +624,17 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               // #2082 — no Next: fine; the guide camera is a new Start.
               if (total != null && settings != null)
                 Text(
-                  inTolerance
+                  aligned
                       ? l10n.polarInsideTolerance(
                           polarToleranceText(settings.targetToleranceArcmin),
                         )
-                      : l10n.polarOutsideTolerance(
-                          polarToleranceText(settings.targetToleranceArcmin),
-                        ),
+                      : unconfirmed ??
+                          l10n.polarOutsideTolerance(
+                            polarToleranceText(settings.targetToleranceArcmin),
+                          ),
                   key: const Key('simple-polar-tolerance-caption'),
                   style: AraText.caption,
-                  maxLines: 3,
+                  maxLines: 4,
                 ),
               if (inTolerance && !motorsBusy)
                 OutlinedButton(
@@ -642,7 +662,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               OutlinedButton(
                 key: const Key('simple-polar-check-again'),
-                onPressed: busy ? null : _check,
+                // #2068 — off while a check that does not depend on the turn step fails.
+                onPressed: busy || polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider)) ? null : _check,
                 child: Text(l10n.polarCheck),
               ),
             ],
@@ -664,10 +685,25 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               OutlinedButton(
                 key: const Key('simple-polar-rough-first'),
-                onPressed: busy ? null : _roughFirst,
+                // #2068 — a start like the shutter's: off while a check fails.
+                onPressed: busy || polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider)) ? null : _roughFirst,
                 child: Text(l10n.polarRoughFirst),
               ),
             ],
+            // #2072 inside the tolerance, but not with twice its uncertainty:
+            // the measurement cannot confirm it.
+            if (unconfirmed != null &&
+                active &&
+                !motorsBusy &&
+                live.stage != PolarAlignStages.coarse &&
+                (live.phase == PolarAlignStates.adjusting ||
+                    live.phase == PolarAlignStates.paused))
+              Text(
+                unconfirmed,
+                key: const Key('simple-polar-unconfirmed'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
             if (checkCaption != null &&
                 active &&
                 !motorsBusy &&
@@ -706,7 +742,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
-                      onPressed: !busy && inTolerance ? _check : null,
+                      onPressed: !busy &&
+                              inTolerance &&
+                              !polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider))
+                          ? _check
+                          : null,
                       child: Text(l10n.polarCheck),
                     ),
                   ),

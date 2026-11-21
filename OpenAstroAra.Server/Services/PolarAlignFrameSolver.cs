@@ -55,8 +55,15 @@ public interface IPolarAlignFrameSolver {
 /// <summary>One solved (or unsolved) §45 frame. Coordinates are apparent-of-date degrees, valid only
 /// when <see cref="Success"/> is true. <see cref="PositionAngleDeg"/> (#2067 ARA-13) is the solve's position angle (the
 /// image's rotation from celestial north, degrees), null when the solver gave none: an RA turn of an equatorial mount
-/// keeps it, a pier flip turns it by 180°.</summary>
-public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow, double? PositionAngleDeg = null) {
+/// keeps it, a pier flip turns it by 180°. <c>SigmaArcsec</c> (#2072) is set on a point averaged from several solves: the
+/// 1σ of its mean per axis on the sky, from their scatter (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>);
+/// null on a single solve, which has no scatter to measure. <c>Solves</c> is how many solves the point averages (1 for a
+/// single solve): the fit never counts a point surer than the solver's own precision of that mean
+/// (<see cref="PolarAlignService.PointSigmaArcsec"/>). <c>PixelScaleArcsec</c> (#2072) is the arcsec per (binned) pixel of
+/// the frame, from the optics the solver was given (the guide camera's or the main camera's, whichever took it); it
+/// scales that precision floor. Null when unknown.</summary>
+public sealed record PolarAlignSolveOutcome(bool Success, double RaDegJnow, double DecDegJnow, double? PositionAngleDeg = null,
+    double? SigmaArcsec = null, int Solves = 1, double? PixelScaleArcsec = null) {
 
     /// <summary>The position angle of a solver's result, or null when it is not a finite number.</summary>
     public static double? PositionAngleOf(PlateSolveResult result) =>
@@ -114,23 +121,32 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
 
     public async Task<PolarAlignSolveOutcome> SolveAsync(
             string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
-        var (result, _) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: false, ct).ConfigureAwait(false);
+        var (result, binnedPixelSizeUm, focalLengthMm) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: false, ct).ConfigureAwait(false);
         if (result?.Success != true || result.Coordinates is null) {
             return new PolarAlignSolveOutcome(false, 0, 0);
         }
         var apparent = result.Coordinates.Transform(Epoch.JNOW);
-        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result));
+        // #2072 — the scale the solver was told (guide optics × binning), for the fit's precision floor.
+        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result),
+            PixelScaleArcsec: PixelScaleArcsecOrNull(binnedPixelSizeUm, focalLengthMm));
+    }
+
+    /// <summary>#2072 — the arcsec per pixel of a frame from its (binned) pixel size and focal length; null when the
+    /// optics give no finite, positive scale (a focal length of 0, say), so no reader sees an infinite or NaN scale.</summary>
+    internal static double? PixelScaleArcsecOrNull(double binnedPixelSizeUm, double focalLengthMm) {
+        var scale = 206.265 * binnedPixelSizeUm / focalLengthMm;
+        return double.IsFinite(scale) && scale > 0 ? scale : null;
     }
 
     public async Task<double?> MeasureFocalLengthAsync(
             string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
-        var (result, binnedPixelSizeUm) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: true, ct).ConfigureAwait(false);
+        var (result, binnedPixelSizeUm, _) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: true, ct).ConfigureAwait(false);
         var focalLength = result?.Success == true ? SolveTuning.FocalLengthFromScale(binnedPixelSizeUm, result.Pixscale) : double.NaN;
         return double.IsFinite(focalLength) ? focalLength : null;
     }
 
     // searchScale: ask the solver to find the pixel scale itself (ASTAP -fov 0) instead of trusting the profile's.
-    private async Task<(PlateSolveResult? Result, double BinnedPixelSizeUm)> SolveCoreAsync(
+    private async Task<(PlateSolveResult? Result, double BinnedPixelSizeUm, double FocalLengthMm)> SolveCoreAsync(
             string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool searchScale, CancellationToken ct) {
         ArgumentException.ThrowIfNullOrWhiteSpace(fitsPath);
         ArgumentOutOfRangeException.ThrowIfLessThan(binning, 1);
@@ -199,7 +215,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         };
 
         var result = await imageSolver.Solve(image, parameter, progress: null, ct).ConfigureAwait(false);
-        return (result, pixelSize * binning);
+        return (result, pixelSize * binning, focalLength);
     }
 
     // The guider writes 16-bit unsigned FITS (openastro-guider POLAR_ALIGNMENT_DESIGN.md §12.1 spike

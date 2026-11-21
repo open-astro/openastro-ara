@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import 'settings_values.dart';
 
 /// The profile's guider settings for a widget test, with no HTTP (a Dio
 /// request leaves a timer pending in a test that only pumps). The section
@@ -10,7 +11,7 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 /// rig" is in [puts] with its `If-Match` in [ifMatches]; [refuse] fails each
 /// save instead (nothing written).
 class FakePhd2Section extends Phd2SettingsNotifier {
-  FakePhd2Section({this.initial = const Phd2Settings()});
+  FakePhd2Section({this.initial = const TestPhd2Settings()});
 
   Phd2Settings? initial;
   final List<Phd2Settings> puts = [];
@@ -43,7 +44,7 @@ class FakePhd2Section extends Phd2SettingsNotifier {
 
 /// The guider settings as the rig's copy from the start (no load, no HTTP),
 /// for a test that reads or edits them with no rig to load them from.
-Override phd2FromRig([Phd2Settings settings = const Phd2Settings()]) =>
+Override phd2FromRig([Phd2Settings settings = const TestPhd2Settings()]) =>
     phd2SettingsProvider.overrideWith(() => _RigPhd2(settings));
 
 class _RigPhd2 extends Phd2SettingsNotifier {

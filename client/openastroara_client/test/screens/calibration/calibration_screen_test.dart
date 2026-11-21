@@ -16,6 +16,8 @@ import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/safety_section.dart';
+import '../../support/settings_values.dart';
 
 class _Camera extends CameraStatusNotifier {
   _Camera(this.status);
@@ -138,6 +140,8 @@ Future<ProviderContainer> _pump(WidgetTester tester,
     _FakeCalibrationClient fake) async {
   final container = ProviderContainer(overrides: [
     calibrationApiProvider.overrideWithValue(fake),
+    // The flats dialog seeds its frames per filter from the rig's copy.
+    safetyFromRig(),
   ]);
   addTearDown(container.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -460,7 +464,7 @@ void main() {
     expect(tester.widget<TextField>(temps).controller!.text, '',
         reason: 'no client default while the rig has not answered');
 
-    defaults.initial = const ImagingDefaults(coolerTargetC: -15);
+    defaults.initial = const TestImagingDefaults(coolerTargetC: -15);
     await container
         .read(imagingDefaultsProvider.notifier)
         .load(container.read(profileApiProvider)!);

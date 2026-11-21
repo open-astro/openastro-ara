@@ -22,6 +22,7 @@ import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/guider/guiding_assistant_state.dart';
 import 'package:openastroara/widgets/imaging/guide_camera_panel.dart';
 import 'package:openastroara/widgets/imaging/guiding_assistant_dialog.dart';
+import '../../support/settings_values.dart';
 
 /// What the daemon's profile holds after an Apply: the guider's North (#1448).
 class _Profile extends ProfileApi {
@@ -31,7 +32,7 @@ class _Profile extends ProfileApi {
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async {
     reads++;
     return (
-      value: const Phd2Settings(decGuideMode: 'north', guideExposureMs: 2000),
+      value: const TestPhd2Settings(decGuideMode: 'north', guideExposureMs: 2000),
       etag: '"v$reads"',
     );
   }

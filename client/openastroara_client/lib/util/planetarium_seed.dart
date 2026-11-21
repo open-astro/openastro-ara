@@ -13,10 +13,12 @@ import '../state/sky_atlas/site_location_state.dart';
 /// The observer to seed: the daemon's site when it answered, else the
 /// client's own site settings (hydrated from the cached profile offline),
 /// else null when neither knows a location — the (0, 0) sentinel is never
-/// treated as a real site.
-SiteLocation? planetariumSiteFor(SiteLocation? fromServer, SiteSettings local) {
+/// treated as a real site, and a site not loaded ([local] null) is none.
+SiteLocation? planetariumSiteFor(SiteLocation? fromServer, SiteSettings? local) {
   if (fromServer != null) return fromServer;
-  if (local.latitudeDeg == 0 && local.longitudeDeg == 0) return null;
+  if (local == null || (local.latitudeDeg == 0 && local.longitudeDeg == 0)) {
+    return null;
+  }
   return SiteLocation(
     latitudeDeg: local.latitudeDeg,
     longitudeDeg: local.longitudeDeg,
@@ -27,9 +29,10 @@ SiteLocation? planetariumSiteFor(SiteLocation? fromServer, SiteSettings local) {
 /// The optics the framing overlay draws its box from, as the page's
 /// `applyOptics` wire fields — the same shape `GET /api/v1/profile/optics`
 /// returns, so the page uses one code path online and off. Null when the
-/// train isn't configured enough to know a FOV.
-Map<String, num>? planetariumOpticsFor(OpticsSettings o) {
-  if (o.focalLengthMm <= 0 ||
+/// train isn't configured enough to know a FOV, or not loaded ([o] null).
+Map<String, num>? planetariumOpticsFor(OpticsSettings? o) {
+  if (o == null ||
+      o.focalLengthMm <= 0 ||
       o.sensorWidthPx <= 0 ||
       o.sensorHeightPx <= 0 ||
       o.pixelSizeUm <= 0) {

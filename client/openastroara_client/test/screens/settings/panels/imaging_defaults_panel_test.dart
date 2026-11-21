@@ -15,6 +15,7 @@ import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/fake_section_rig.dart';
 import '../../../support/imaging_sections.dart';
+import '../../../support/settings_values.dart';
 
 /// #1140 — the Planning row writes the noise-tolerance knob (client-local).
 class _MemPrefs extends PlanningPrefsService {
@@ -220,7 +221,7 @@ void main() {
     };
     addTearDown(() => FlutterError.onError = prior);
     final section = FakeImagingDefaultsSection(
-      initial: loaded ? const ImagingDefaults() : null,
+      initial: loaded ? const TestImagingDefaults() : null,
     );
     await tester.pumpWidget(
       ProviderScope(

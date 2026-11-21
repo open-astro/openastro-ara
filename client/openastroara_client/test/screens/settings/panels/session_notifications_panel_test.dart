@@ -11,7 +11,8 @@ import 'package:openastroara/state/profile_management_state.dart';
 import '../../../support/fake_section_rig.dart';
 import '../../../support/storage_fixture.dart';
 
-FakeSectionRig _rig() => FakeSectionRig({'notifications': <String, Object?>{}});
+FakeSectionRig _rig() =>
+    FakeSectionRig({'notifications': rigDefaults['notifications']});
 
 void main() {
   // #1189: nothing shows a banner or posts an OS notification, so both

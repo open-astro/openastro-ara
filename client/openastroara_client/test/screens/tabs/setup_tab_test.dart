@@ -15,6 +15,7 @@ import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 
 import '../../support/phd2_section.dart';
+import '../../support/settings_values.dart';
 
 /// Overridable live-state stub — same shape the polar align panel tests use.
 class _StubLiveNotifier extends PolarAlignLiveNotifier {
@@ -55,7 +56,7 @@ class _StubChecklist extends PreflightChecklistNotifier {
 
 class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
   @override
-  LoadedSection<Phd2Settings> build() => LoadedSection(value: const Phd2Settings(
+  LoadedSection<Phd2Settings> build() => LoadedSection(value: const TestPhd2Settings(
       guiderCamera: 'Alpaca Camera [rc91.lan:6800/0]',
       guideFocalLength: 240,
       guidePixelSize: 2.9),
@@ -67,7 +68,7 @@ class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
 class _OpticsOnlyPhd2Notifier extends Phd2SettingsNotifier {
   @override
   LoadedSection<Phd2Settings> build() => LoadedSection(
-      value: const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9),
+      value: const TestPhd2Settings(guideFocalLength: 200, guidePixelSize: 2.9),
       source: SectionSource.rig);
 }
 

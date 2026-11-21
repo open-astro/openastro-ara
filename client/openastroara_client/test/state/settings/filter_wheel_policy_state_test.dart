@@ -9,6 +9,7 @@ import '../../support/fake_section_rig.dart';
 
 import 'package:openastroara/state/settings/filter_wheel_policy_state.dart';
 import 'package:openastroara/state/settings/migrated_sections.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('FilterWheelPolicyNotifier (#1075)', () {
@@ -83,7 +84,7 @@ void main() {
     test(
       'wire shape is home_on_first_connect and use_filter_wheel_offsets',
       () {
-        expect(const FilterWheelPolicy(homeOnFirstConnect: false).toJson(), {
+        expect(const TestFilterWheelPolicy(homeOnFirstConnect: false).toJson(), {
           'home_on_first_connect': false,
           'use_filter_wheel_offsets': false,
         });
@@ -91,7 +92,7 @@ void main() {
     );
 
     test('per-filter focus offsets write through the policy', () {
-      expect(const FilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
+      expect(const TestFilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
     });
   });
 

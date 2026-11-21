@@ -10,6 +10,7 @@ import '../../../state/settings/polar_align_settings_state.dart';
 import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_panel.dart';
+import '../../../widgets/imaging/polar_preflight_checklist.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../theme/ara_colors.dart';
 
@@ -211,6 +212,8 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
         ),
         // #2081 the RA motor direction the 0.5° test saved, and its retest.
         const PolarMotorDirectionRow(),
+        // #2068 per mount: the connected mount's counterweight limit and clearance.
+        const PolarClearanceSettingsRow(),
       ],
     );
   }

@@ -35,6 +35,10 @@ class PolarAlignLive {
   final double? azErrorArcmin;
   final double? totalErrorArcmin;
 
+  /// #2072 the 1σ of [totalErrorArcmin] (arcmin): the fit the readout rests
+  /// on. Null with no readout and from an older daemon.
+  final double? totalSigmaArcmin;
+
   /// `red` | `yellow` | `green` from the last progress event.
   final String? zone;
 
@@ -113,6 +117,7 @@ class PolarAlignLive {
     this.altErrorArcmin,
     this.azErrorArcmin,
     this.totalErrorArcmin,
+    this.totalSigmaArcmin,
     this.zone,
     this.consecutiveSolveFailures = 0,
     this.errorReason,
@@ -154,6 +159,8 @@ class PolarAlignLive {
     double? altErrorArcmin,
     double? azErrorArcmin,
     double? totalErrorArcmin,
+    double? totalSigmaArcmin,
+    bool clearSigma = false,
     String? zone,
     int? consecutiveSolveFailures,
     String? errorReason,
@@ -189,6 +196,7 @@ class PolarAlignLive {
         altErrorArcmin: clearReadout ? null : altErrorArcmin ?? this.altErrorArcmin,
         azErrorArcmin: clearReadout ? null : azErrorArcmin ?? this.azErrorArcmin,
         totalErrorArcmin: clearReadout ? null : totalErrorArcmin ?? this.totalErrorArcmin,
+        totalSigmaArcmin: clearReadout || clearSigma ? null : totalSigmaArcmin ?? this.totalSigmaArcmin,
         zone: clearReadout ? null : zone ?? this.zone,
         consecutiveSolveFailures:
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
@@ -288,6 +296,10 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
+        totalSigmaArcmin: _num(event.payload, 'total_sigma_arcmin'),
+        // #2072 review — each readout says its σ afresh: one without (an older
+        // daemon) shows none rather than an earlier fit's.
+        clearSigma: _num(event.payload, 'total_sigma_arcmin') == null,
         zone: polarAlignZone(_num(event.payload, 'total_error_arcmin')),
         clearFrameInProgress: true,
       );
@@ -306,6 +318,10 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         altErrorArcmin: _num(event.payload, 'altitude_error_arcmin'),
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
+        totalSigmaArcmin: _num(event.payload, 'total_sigma_arcmin'),
+        // #2072 review — each readout says its σ afresh: one without (an older
+        // daemon) shows none rather than an earlier fit's.
+        clearSigma: _num(event.payload, 'total_sigma_arcmin') == null,
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
         // Every progress event says the readout's caution afresh (absent = sound).
@@ -424,6 +440,7 @@ PolarAlignLive liveFromStatus(PolarAlignStatus status) => PolarAlignLive(
       altErrorArcmin: status.altitudeAdjustmentArcmin,
       azErrorArcmin: status.azimuthAdjustmentArcmin,
       totalErrorArcmin: status.currentErrorArcmin,
+      totalSigmaArcmin: status.currentSigmaArcmin,
       zone: polarAlignZone(status.currentErrorArcmin),
       lastFrame: status.lastFrame,
       stage: status.stage,

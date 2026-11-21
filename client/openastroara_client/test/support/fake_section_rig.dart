@@ -227,6 +227,7 @@ const rigDefaults = <String, Map<String, Object?>>{
     'synchronize_during_mount_slew': false,
     'dome_sync_timeout_seconds': 120,
   },
+  'diagnostics-mode': {'mode': 'notify_only'},
   'equipment-connection': {
     'camera': true,
     'mount': true,
@@ -239,6 +240,16 @@ const rigDefaults = <String, Map<String, Object?>>{
     'weather': true,
     'safety_monitor': true,
     'switch': true,
+  },
+  'filenames': {
+    'date_separator': 'forward_slash',
+    'compress_darks_and_bias': true,
+    'header_site': true,
+    'header_optics': true,
+    'header_temperature': true,
+    'header_weather': true,
+    'header_identity': true,
+    'header_ephemeris': true,
   },
   'filter-set': {'filters': []},
   'filter-wheel/labels': {
@@ -257,6 +268,22 @@ const rigDefaults = <String, Map<String, Object?>>{
     'cooler_target_c': -10.0,
     'cooler_ramp_c_per_min': 1.0,
     'warmup_at_session_end': false,
+  },
+  'notifications': {
+    'in_app_banner': true,
+    'os_desktop': true,
+    'sound_alert': true,
+    'pushover_token': '',
+    'telegram_bot_token': '',
+    'on_sequence_complete': true,
+    'on_sequence_paused': true,
+    'on_critical_diagnostic': true,
+    'on_safety_event': true,
+    'on_autofocus_failed': true,
+    'on_plate_solve_failed': true,
+    'on_disk_space_low': true,
+    'pushover_user_key': '',
+    'telegram_chat_id': '',
   },
   'optics': {
     'focal_length_mm': 0,
@@ -329,6 +356,8 @@ const rigDefaults = <String, Map<String, Object?>>{
     'stop_tracking_when_done': true,
     'camera': 'guide',
     'frames_per_point': 3,
+    'mount_clearance': null,
+    'east_direction': null,
   },
   // The daemon sends null for a profile's unset guider mode and a blank
   // unattended window; the keys are there.

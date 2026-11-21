@@ -6087,6 +6087,31 @@ class AppLocalizationsPt extends AppLocalizations {
       'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
 
   @override
+  String polarErrorWithSigma(String value, String sigma) {
+    return '$value ± $sigma';
+  }
+
+  @override
+  String polarUnconfirmedBySigma(String tolerance, String sigma) {
+    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).';
+  }
+
+  @override
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
+    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.';
+  }
+
+  @override
+  String paResidualDetailDisagreeSigma(
+    String align,
+    String alignSigma,
+    String guiding,
+    String guidingSigma,
+  ) {
+    return 'Polar Align and guiding disagree ($align ± $alignSigma vs at least $guiding ± $guidingSigma), by more than their combined uncertainty. Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about $align again points at backlash, much more points at the mount or the alignment.';
+  }
+
+  @override
   String get polarKnobCamera => 'Camera';
 
   @override
@@ -6244,12 +6269,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String polarAlignerStopWrongDirection(String axis) {
-    return 'The test move on $axis went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.';
+    return 'A move on $axis went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.';
   }
 
   @override
   String polarAlignerStopWrongScale(String axis) {
-    return 'The test move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.';
+    return 'A move on $axis didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.';
   }
 
   @override
@@ -6289,6 +6314,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarAlignerStopByUser => 'You stopped the motors.';
+
+  @override
+  String get polarAlignerStopNotConfirmed =>
+      'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.';
+
+  @override
+  String get polarAlignerStopConfirmed =>
+      'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.';
+
+  @override
+  String get polarAlignerStopTravelLimit =>
+      'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.';
+
+  @override
+  String get polarAlignerStopMoveLimit =>
+      'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.';
 
   @override
   String get polarAlignerStopUnknown => 'Ara stopped the motors.';
@@ -7110,6 +7151,170 @@ class AppLocalizationsPt extends AppLocalizations {
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
+
+  @override
+  String get polarPreflightTitle => 'Pre-flight checks';
+
+  @override
+  String get polarPreflightChecking => 'Checking the rig…';
+
+  @override
+  String get polarPreflightReadFailed =>
+      'Couldn\'t read the pre-flight checks. The rig still checks them when you start.';
+
+  @override
+  String get polarPreflightRetry => 'Retry';
+
+  @override
+  String get polarPreflightRefresh => 'Check again';
+
+  @override
+  String polarPreflightSummary(int passed, int notYet) {
+    return '$passed passed · $notYet not checked yet';
+  }
+
+  @override
+  String get polarPreflightShowAll => 'Show all checks';
+
+  @override
+  String get polarPreflightShowFewer => 'Show fewer';
+
+  @override
+  String get polarPreflightStatusOk => 'passed';
+
+  @override
+  String get polarPreflightStatusWarn => 'note';
+
+  @override
+  String get polarPreflightStatusFail => 'fails, Start is off';
+
+  @override
+  String get polarPreflightStatusUnknown => 'not checked yet';
+
+  @override
+  String get polarPreflightBlocked =>
+      'A pre-flight check fails: see the list in Polar align';
+
+  @override
+  String get polarPreflightCheckMountConnected => 'Mount connected';
+
+  @override
+  String get polarPreflightCheckMountParked => 'Mount not parked';
+
+  @override
+  String get polarPreflightCheckSiteLatitude => 'Site latitude';
+
+  @override
+  String get polarPreflightCheckSiteLongitude =>
+      'Site longitude and sidereal time';
+
+  @override
+  String get polarPreflightCheckMountClock => 'Mount clock';
+
+  @override
+  String get polarPreflightCheckPoseVerified => 'Mount position trusted';
+
+  @override
+  String get polarPreflightCheckClearance =>
+      'Counterweight and cable clearance';
+
+  @override
+  String get polarPreflightCheckStartPointing => 'Where the scope points';
+
+  @override
+  String get polarPreflightCheckMountType => 'Mount type';
+
+  @override
+  String get polarPreflightCheckCanMoveAxis => 'RA motor control';
+
+  @override
+  String get polarPreflightCheckMotionSafety => 'AlpacaBridge motion safety';
+
+  @override
+  String get polarPreflightCheckPierSide => 'Pier side';
+
+  @override
+  String get polarPreflightCheckPoseEnvelope =>
+      'Start near the pole and above the horizon';
+
+  @override
+  String get polarPreflightCheckStartCwAngle =>
+      'Counterweight angle at the start';
+
+  @override
+  String get polarPreflightCheckTurnStep =>
+      'Turn step within the counterweight limit';
+
+  @override
+  String get polarPreflightCheckAligner => 'Polar Aligner';
+
+  @override
+  String get polarPreflightCheckMountLimits => 'The mount\'s own limits';
+
+  @override
+  String get polarClearanceButton => 'Confirm clearance…';
+
+  @override
+  String get polarClearanceChange => 'Change clearance…';
+
+  @override
+  String get polarClearanceTitle => 'Check the mount\'s clearance';
+
+  @override
+  String get polarClearanceExplain =>
+      'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.';
+
+  @override
+  String get polarClearanceHow =>
+      'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.';
+
+  @override
+  String polarClearanceLimit(String deg) {
+    return 'Counterweight limit: $deg° from counterweight-down';
+  }
+
+  @override
+  String get polarClearanceTick =>
+      'I checked this mount\'s clearance with its hand controller';
+
+  @override
+  String get polarClearanceConfirm => 'Confirm';
+
+  @override
+  String get polarClearanceTakeBack => 'Take back';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.';
+
+  @override
+  String get polarActionClearance => 'save the mount\'s clearance';
+
+  @override
+  String refusalPolarAlignClearanceNotConfirmed(String limit) {
+    return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
+  }
+
+  @override
+  String get polarKnobClearance => 'Counterweight limit and clearance';
+
+  @override
+  String polarKnobClearanceConfirmed(String deg) {
+    return '$deg° from counterweight-down, confirmed for this mount';
+  }
+
+  @override
+  String polarKnobClearanceNotConfirmed(String deg) {
+    return '$deg° from counterweight-down, not confirmed: Polar align does not move this mount';
+  }
+
+  @override
+  String get polarKnobClearanceNoMount =>
+      'Connect the mount to see and confirm its clearance';
+
+  @override
+  String get polarKnobClearanceHint =>
+      'Kept for each mount. Measure it with the hand controller.';
 
   @override
   String get polarKnobEastDirection => 'Turn direction';
@@ -13303,6 +13508,31 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Medição ruidosa: os plate solves de um ponto se espalharam mais de 3″, mesmo depois de refeitos. Verifique o foco e o seeing, ou use mais quadros por ponto.';
 
   @override
+  String polarErrorWithSigma(String value, String sigma) {
+    return '$value ± $sigma';
+  }
+
+  @override
+  String polarUnconfirmedBySigma(String tolerance, String sigma) {
+    return 'Dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Giros maiores ajudam mais: 20° no lugar de 10° cortam a incerteza cerca de quatro vezes (giro e passo do Verificar nas configurações do alinhamento polar).';
+  }
+
+  @override
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
+    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas com ± $sigma esta medição não consegue confirmar o alinhamento. Mais movimentos não ajudam; giros maiores sim (20° no lugar de 10° cortam a incerteza cerca de quatro vezes), então rode o Verificar com um passo maior.';
+  }
+
+  @override
+  String paResidualDetailDisagreeSigma(
+    String align,
+    String alignSigma,
+    String guiding,
+    String guidingSigma,
+  ) {
+    return 'Polar Align e guiagem divergem ($align ± $alignSigma contra pelo menos $guiding ± $guidingSigma), mais do que a incerteza combinada dos dois. Ou a folga em Dec engoliu pulsos de guiagem, e o número da guiagem está alto demais, ou a montagem se moveu desde o alinhamento ou a referência dele estava errada, e o número do Polar Align está baixo demais. Rode o Polar Align de novo: cerca de $align outra vez aponta para a folga, muito mais aponta para a montagem ou o alinhamento.';
+  }
+
+  @override
   String get polarKnobCamera => 'Câmera';
 
   @override
@@ -13462,12 +13692,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String polarAlignerStopWrongDirection(String axis) {
-    return 'O movimento de teste no $axis foi para o lado errado, então o Ara parou os motores. O alinhador polar pode estar configurado invertido nesse eixo.';
+    return 'Um movimento no $axis foi para o lado errado, então o Ara parou os motores. O alinhador polar pode estar configurado invertido nesse eixo.';
   }
 
   @override
   String polarAlignerStopWrongScale(String axis) {
-    return 'O movimento de teste no $axis não percorreu a distância pedida, então o Ara parou os motores. Confira o ajuste de passo do alinhador polar.';
+    return 'Um movimento no $axis não percorreu a distância pedida, então o Ara parou os motores. Confira o ajuste de passo do alinhador polar.';
   }
 
   @override
@@ -13507,6 +13737,22 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarAlignerStopByUser => 'Você parou os motores.';
+
+  @override
+  String get polarAlignerStopNotConfirmed =>
+      'O Ara enviou Parar, mas o alinhador polar não confirmou que os motores pararam. Corte a energia dele se ainda estiver se movendo. O Ara envia Parar de novo a cada medição.';
+
+  @override
+  String get polarAlignerStopConfirmed =>
+      'O alinhador polar agora confirmou que os motores pararam. O Ara só vai movê-los de novo quando você tocar em Retomar.';
+
+  @override
+  String get polarAlignerStopTravelLimit =>
+      'O alinhador polar já se moveu o máximo permitido em uma execução, então o Ara parou os motores. Confira o alinhamento manualmente.';
+
+  @override
+  String get polarAlignerStopMoveLimit =>
+      'O alinhador polar fez 40 movimentos sem chegar à sua tolerância, então o Ara parou os motores.';
 
   @override
   String get polarAlignerStopUnknown => 'O Ara parou os motores.';
@@ -14334,6 +14580,171 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String versionMismatchWarning(String server, String app) {
     return 'O servidor $server e o app $app são de versões diferentes; atualize os dois a partir da mesma versão.';
   }
+
+  @override
+  String get polarPreflightTitle => 'Verificações antes de iniciar';
+
+  @override
+  String get polarPreflightChecking => 'Verificando o setup…';
+
+  @override
+  String get polarPreflightReadFailed =>
+      'Não foi possível ler as verificações. O setup ainda as faz quando você inicia.';
+
+  @override
+  String get polarPreflightRetry => 'Tentar de novo';
+
+  @override
+  String get polarPreflightRefresh => 'Verificar de novo';
+
+  @override
+  String polarPreflightSummary(int passed, int notYet) {
+    return '$passed aprovadas · $notYet ainda não verificadas';
+  }
+
+  @override
+  String get polarPreflightShowAll => 'Mostrar todas as verificações';
+
+  @override
+  String get polarPreflightShowFewer => 'Mostrar menos';
+
+  @override
+  String get polarPreflightStatusOk => 'aprovada';
+
+  @override
+  String get polarPreflightStatusWarn => 'aviso';
+
+  @override
+  String get polarPreflightStatusFail => 'falha, Iniciar desativado';
+
+  @override
+  String get polarPreflightStatusUnknown => 'ainda não verificada';
+
+  @override
+  String get polarPreflightBlocked =>
+      'Uma verificação falhou: veja a lista no alinhamento polar';
+
+  @override
+  String get polarPreflightCheckMountConnected => 'Montagem conectada';
+
+  @override
+  String get polarPreflightCheckMountParked => 'Montagem não estacionada';
+
+  @override
+  String get polarPreflightCheckSiteLatitude => 'Latitude do local';
+
+  @override
+  String get polarPreflightCheckSiteLongitude =>
+      'Longitude do local e tempo sideral';
+
+  @override
+  String get polarPreflightCheckMountClock => 'Relógio da montagem';
+
+  @override
+  String get polarPreflightCheckPoseVerified => 'Posição da montagem confiável';
+
+  @override
+  String get polarPreflightCheckClearance => 'Folga do contrapeso e dos cabos';
+
+  @override
+  String get polarPreflightCheckStartPointing =>
+      'Para onde o telescópio aponta';
+
+  @override
+  String get polarPreflightCheckMountType => 'Tipo de montagem';
+
+  @override
+  String get polarPreflightCheckCanMoveAxis => 'Controle do motor de AR';
+
+  @override
+  String get polarPreflightCheckMotionSafety =>
+      'Segurança de movimento do AlpacaBridge';
+
+  @override
+  String get polarPreflightCheckPierSide => 'Lado do pilar';
+
+  @override
+  String get polarPreflightCheckPoseEnvelope =>
+      'Início perto do polo e acima do horizonte';
+
+  @override
+  String get polarPreflightCheckStartCwAngle =>
+      'Ângulo do contrapeso no início';
+
+  @override
+  String get polarPreflightCheckTurnStep =>
+      'Passo de giro dentro do limite do contrapeso';
+
+  @override
+  String get polarPreflightCheckAligner => 'Alinhador polar';
+
+  @override
+  String get polarPreflightCheckMountLimits => 'Os limites da própria montagem';
+
+  @override
+  String get polarClearanceButton => 'Confirmar folga…';
+
+  @override
+  String get polarClearanceChange => 'Alterar folga…';
+
+  @override
+  String get polarClearanceTitle => 'Verifique a folga da montagem';
+
+  @override
+  String get polarClearanceExplain =>
+      'O alinhamento polar gira o eixo de AR com o motor da montagem. Antes disso, gire o eixo de AR com o controle de mão a partir do contrapeso para baixo e veja até onde ele vai antes que o contrapeso, o tubo ou um cabo toque no pilar, no tripé ou em qualquer outra coisa.';
+
+  @override
+  String get polarClearanceHow =>
+      'Ajuste o limite abaixo para o que você mediu e confirme. O alinhamento polar não move esta montagem até você confirmar. Mantenha a mão no interruptor de energia da montagem na primeira vez.';
+
+  @override
+  String polarClearanceLimit(String deg) {
+    return 'Limite do contrapeso: $deg° a partir do contrapeso para baixo';
+  }
+
+  @override
+  String get polarClearanceTick =>
+      'Verifiquei a folga desta montagem com o controle de mão';
+
+  @override
+  String get polarClearanceConfirm => 'Confirmar';
+
+  @override
+  String get polarClearanceTakeBack => 'Retirar';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'A folga desta montagem não está confirmada, então o motor não a gira: Mover a montagem fica desativado. Girar a AR à mão não move nada, então pode começar. Para usar o motor, confirme a folga no cartão de alinhamento polar primeiro.';
+
+  @override
+  String get polarActionClearance => 'salvar a folga da montagem';
+
+  @override
+  String refusalPolarAlignClearanceNotConfirmed(String limit) {
+    return 'Confirme antes a folga desta montagem: verifique com o controle de mão que o contrapeso, o tubo e os cabos não tocam o pilar nem o tripé até $limit° a partir do contrapeso para baixo, depois toque em Confirmar folga no alinhamento polar.';
+  }
+
+  @override
+  String get polarKnobClearance => 'Limite do contrapeso e folga';
+
+  @override
+  String polarKnobClearanceConfirmed(String deg) {
+    return '$deg° a partir do contrapeso para baixo, confirmado para esta montagem';
+  }
+
+  @override
+  String polarKnobClearanceNotConfirmed(String deg) {
+    return '$deg° a partir do contrapeso para baixo, não confirmado: o alinhamento polar não move esta montagem';
+  }
+
+  @override
+  String get polarKnobClearanceNoMount =>
+      'Conecte a montagem para ver e confirmar a folga';
+
+  @override
+  String get polarKnobClearanceHint =>
+      'Guardado para cada montagem. Meça com o controle de mão.';
 
   @override
   String get polarKnobEastDirection => 'Direção do giro';

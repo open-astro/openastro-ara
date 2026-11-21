@@ -13,6 +13,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
+import '../../support/settings_values.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -97,7 +98,7 @@ class _Phd2ProfileApi extends ProfileApi {
   _Phd2ProfileApi() : super(const AraServer(hostname: 'test', port: 1));
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
-      (value: const Phd2Settings(host: 'sbc.local', port: 8080), etag: '"v1"');
+      (value: const TestPhd2Settings(host: 'sbc.local', port: 8080), etag: '"v1"');
 }
 
 ProviderContainer _container(List<AraServer> servers, GuiderClient api, {Stream<WsEvent>? ws}) {

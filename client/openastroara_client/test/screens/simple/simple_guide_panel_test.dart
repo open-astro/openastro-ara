@@ -36,6 +36,7 @@ import 'package:openastroara/state/simple_mode_state.dart' show simpleModeActive
 import 'package:openastroara/widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink, StatusDot, StatusLevel;
+import '../../support/settings_values.dart';
 
 /// The Queue's run state, as the rig last said it.
 class _Run extends SequenceRunStateNotifier {
@@ -123,7 +124,7 @@ late _Guider _g;
 /// The rig's profile store: the guider section loads as the rig's copy
 /// ([phd2], or a failed load when null); a PUT answers with what was sent.
 class _Profile implements ProfileApi {
-  _Profile([this.phd2 = const Phd2Settings()]);
+  _Profile([this.phd2 = const TestPhd2Settings()]);
   Phd2Settings? phd2;
   final puts = <Phd2Settings>[];
   @override
@@ -931,7 +932,7 @@ void main() {
     final eq = _GuiderEquipment();
     final rig = [profileApiProvider.overrideWithValue(_Profile()), guiderEquipmentApiProvider.overrideWithValue(eq)];
     await _pump(tester, _wire(), rig: rig);
-    tester.widget<SimplePresetTile<int>>(find.byKey(const Key('simple-guide-exposure'))).onSelected!(2000);
+    tester.widget<SimplePresetTile<int?>>(find.byKey(const Key('simple-guide-exposure'))).onSelected!(2000);
     await tester.pump();
     await tester.pump();
     expect(eq.pushes, [true], reason: 'the exposure, tuning only');
@@ -1045,7 +1046,9 @@ void main() {
       profileApiProvider.overrideWithValue(profile),
       guiderEquipmentApiProvider.overrideWithValue(eq),
     ]);
-    tester.widget<Slider>(find.byKey(const Key('simple-guide-aggressiveness-ra'))).onChangeEnd!(0.55);
+    // Not loaded: no slider (it has no value to show); a stepper shows "—".
+    expect(find.byKey(const Key('simple-guide-aggressiveness-ra')), findsNothing);
+    await tester.tap(find.byKey(const Key('simple-guider-dither-up')));
     for (var i = 0; i < 5; i++) {
       await tester.pump(); // the load tried once more first, and failed
     }
@@ -1072,7 +1075,7 @@ void main() {
 
   testWidgets('Guider: a Simple Mode step taken while the class values show steps from the rig\'s copy the load '
       'brings in, never from the shown value (ADR 0015)', (tester) async {
-    const rigCopy = Phd2Settings(
+    const rigCopy = TestPhd2Settings(
       ditherEveryNFrames: 4,
       ditherPixels: 12,
       settlePixels: 3,

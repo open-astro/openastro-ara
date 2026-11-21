@@ -11,6 +11,7 @@ import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../../support/fake_section_rig.dart';
+import '../../support/settings_values.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -160,7 +161,7 @@ void main() {
     ]);
     container
         .read(siteSettingsProvider.notifier)
-        .seed(const SiteSettings(useCustomHorizon: true));
+        .seed(const TestSiteSettings(useCustomHorizon: true));
     await tester.pump();
     expect(find.text('Rig not connected'), findsOneWidget);
     expect(find.byKey(const ValueKey('horizon_point_0')), findsNothing);

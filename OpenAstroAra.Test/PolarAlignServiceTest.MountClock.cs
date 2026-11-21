@@ -89,14 +89,24 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_Start_during_a_mount_clock_push_waits_for_it_and_without_one_is_refused_at_once() {
             var fake = NewFake(answerCaptures: false);
-            string? refusalNow = "Mount clock not verified: Ara is setting and checking the mount's clock. Try again in a moment.";
+            const string pushing = "Mount clock not verified: Ara is setting and checking the mount's clock. Try again in a moment.";
+            string? refusalNow = pushing;
             var push = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var gate = new Mock<IMountClockGate>();
             gate.Setup(g => g.MountClockMotionRefusal()).Returns(() => refusalNow);
             gate.Setup(g => g.MountClockRefusalAfterPushAsync(It.IsAny<CancellationToken>())).Returns(() => push.Task);
             var ws = new WsRecorder();
             using var svc = NewService(fake, new ScriptedSolver(), ws: ws, mountClock: gate.Object);
-            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            // #2068 — the app reads the plan before Start, and the plan checks the clock (the pre-flight list): it waits
+            // for the push in flight too, or the confirm step is refused before Start could wait.
+            var planRead = svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None);
+            Assert.That(planRead.IsCompleted, Is.False, "the plan waits for the push in flight");
+            refusalNow = null;
+            push.SetResult(null);
+            var plan = await planRead.WaitAsync(SignalTimeout).ConfigureAwait(false);
+            // A second push starts (a host clock step) before the user taps Start.
+            refusalNow = pushing;
+            push = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             var start = svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None);
 

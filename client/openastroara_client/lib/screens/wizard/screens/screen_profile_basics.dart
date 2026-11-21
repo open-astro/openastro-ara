@@ -35,7 +35,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   void initState() {
     super.initState();
     _draft = ref.read(wizardControllerProvider).draft;
-    _sqmMode = _sky().isSqm;
+    _sqmMode = _sky()?.isSqm ?? false;
   }
 
   /// Fill the observing site from GPS (§31.3) — a USB GPS dongle on this
@@ -105,12 +105,17 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
   /// flip the mode to the saved settings' one.
   late bool _sqmMode;
 
-  /// The sky in effect: what the draft holds, else the saved site settings.
-  SkyState _sky() {
-    final saved = ref.read(siteSettingsProvider).value ?? const SiteSettings();
+  /// The sky in effect: what the draft holds, else the saved site settings;
+  /// null when neither has one (the site not loaded, ADR 0015: the fields
+  /// start empty rather than at a client default).
+  SkyState? _sky() {
+    final saved = ref.read(siteSettingsProvider).value;
+    final bortle = _draft.site.bortleClass ?? saved?.bortleClass;
+    if (bortle == null) return null;
     return SkyState(
-      bortleClass: _draft.site.bortleClass ?? saved.bortleClass,
-      sqmMagPerArcsec2: _draft.site.sqmMagPerArcsec2 ?? saved.sqmMagPerArcsec2,
+      bortleClass: bortle,
+      sqmMagPerArcsec2:
+          _draft.site.sqmMagPerArcsec2 ?? saved?.sqmMagPerArcsec2 ?? 0,
     );
   }
 
@@ -122,6 +127,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
     _sqmMode = sqm;
     _bortleError = null;
     _sqmError = null;
+    if (sky == null) return;
     if (sqm) {
       _draft.site.sqmMagPerArcsec2 = sky.skyMag;
       _draft.site.bortleClass = bortleFromSkyMag(sky.skyMag);
@@ -159,11 +165,13 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           WizardTextField(
             key: ValueKey('wiz-sqm-$modeKey'),
             label: l10n.wizardBasicsSqm,
-            initialValue: sky.skyMag.toString(),
+            initialValue: sky?.skyMag.toString() ?? '',
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: WizardInput.unsignedDecimal,
             errorText: _sqmError,
-            helperText: l10n.wizardBasicsSqmHelper(sky.bortle),
+            helperText: sky == null
+                ? null
+                : l10n.wizardBasicsSqmHelper(sky.bortle),
             onChanged: (v) => setState(() {
               final n = double.tryParse(v.trim());
               _sqmError = n == null || !isSqmReading(n)
@@ -180,7 +188,7 @@ class _ScreenProfileBasicsState extends ConsumerState<ScreenProfileBasics> {
           WizardTextField(
             key: ValueKey('wiz-bortle-$modeKey'),
             label: l10n.wizardBasicsBortle,
-            initialValue: sky.bortle.toString(),
+            initialValue: sky?.bortle.toString() ?? '',
             keyboardType: TextInputType.number,
             inputFormatters: WizardInput.unsignedInt,
             errorText: _bortleError,

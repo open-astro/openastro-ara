@@ -161,10 +161,11 @@ final List<PlanningDso> starterTonightCatalog = [
 /// highest-worth first, capped at [limit]; id breaks exact ties.
 List<TonightSkyObject> computeTonightSkyLocal({
   required SiteSettings site,
-  required OpticsSettings optics,
+  // ADR 0015: null when the section is not loaded (no FOV, no sub advice).
+  required OpticsSettings? optics,
   required DateTime atUtc,
   FilterSetSettings filterSet = const FilterSetSettings(filters: []),
-  CameraElectronics electronics = const CameraElectronics(),
+  CameraElectronics? electronics,
   List<PlanningDso>? catalog,
 
   /// §36 custom terrain skyline as (azimuthDeg, altitudeDeg) vertices —
@@ -300,6 +301,8 @@ List<TonightSkyObject> computeTonightSkyLocal({
   // electronics/aperture → no optimal-sub figure (deliberately NO Tier-0
   // fallback here, matching the tonight list's stricter contract).
   final exposureConfigured =
+      electronics != null &&
+      optics != null &&
       electronics.readNoiseE > 0 &&
       electronics.fullWellE > 0 &&
       optics.apertureMm > 0 &&
@@ -313,12 +316,15 @@ List<TonightSkyObject> computeTonightSkyLocal({
   final skyMag = sky.skyMag;
   // Per-approach memo: (rounded floor for display, unrounded recommendation,
   // the assembled input for the star-count tag).
+  final electronicsLoaded = electronics, opticsLoaded = optics;
   final adviceMemo =
       <TonightFilterAdvice, (double?, double, OptimalSubInput?)>{};
   (double?, double, OptimalSubInput?) adviceFor(TonightFilterAdvice approach) {
     return adviceMemo.putIfAbsent(approach, () {
       final filter = representativeFilter(filterSet, approach);
       if (!exposureConfigured || filter == null) return (null, 0, null);
+      // Both loaded: exposureConfigured checks them.
+      final electronics = electronicsLoaded!, optics = opticsLoaded!;
       final input = OptimalSubInput(
         readNoiseE: electronics.readNoiseE,
         fullWellE: electronics.fullWellE,
@@ -887,19 +893,21 @@ TonightFraming _classifyFraming(
 
 /// The single-frame FOV (width, height arcmin) of the configured optical
 /// train, or null when the train isn't configured enough to know. Public
-/// for the framing overlays drawn on target previews.
-(double, double)? opticsFovArcmin(OpticsSettings optics) {
+/// for the framing overlays drawn on target previews. Null too while the
+/// optics are not loaded ([optics] null).
+(double, double)? opticsFovArcmin(OpticsSettings? optics) {
   final (w, h) = _fovArcmin(optics);
   return w.isNaN || h.isNaN ? null : (w, h);
 }
 
 /// FOV (arcmin) of the optical train, enlarged by the mosaic tile count per
-/// axis; (NaN, NaN) when unconfigured.
+/// axis; (NaN, NaN) when unconfigured or not loaded.
 (double, double) _fovArcmin(
-  OpticsSettings optics, [
+  OpticsSettings? optics, [
   int mosaicTilesX = 1,
   int mosaicTilesY = 1,
 ]) {
+  if (optics == null) return (double.nan, double.nan);
   final effectiveFocalMm = optics.focalLengthMm * optics.reducerFactor;
   if (effectiveFocalMm <= 0 ||
       optics.pixelSizeUm <= 0 ||
@@ -918,9 +926,10 @@ TonightFraming _classifyFraming(
 
 /// When it gets dark tonight at [site] (the sun below its twilight line), to
 /// the minute; null when it is dark already, the site is unset, or it doesn't
-/// get dark in the next day (a polar summer).
-DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return null;
+/// get dark in the next day (a polar summer). A site not loaded (null) is
+/// unset (ADR 0015: no client default stands in for it).
+DateTime? darkStart(SiteSettings? site, DateTime nowUtc) {
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) return null;
   final line = twilightSunAltitudeDeg(site.twilightDefinition);
   bool dark(DateTime t) =>
       sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
@@ -943,8 +952,8 @@ DateTime? darkStart(SiteSettings site, DateTime nowUtc) {
 /// Whether a start later today can be scheduled: not while the sun is below
 /// the horizon and rising (the night's end, until sunrise), when the daemon's
 /// clock rolls over at sunrise and reads an evening time as yesterday's.
-bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return true;
+bool scheduleAllowed(SiteSettings? site, DateTime nowUtc) {
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) return true;
   double sun(DateTime t) => sunMoonAltitudeDeg(
     t.toUtc(),
     site.latitudeDeg,
@@ -957,8 +966,8 @@ bool scheduleAllowed(SiteSettings site, DateTime nowUtc) {
 /// When the dark that [startUtc] falls in ends at [site] (the sun back above
 /// its twilight line), to the minute; null when [startUtc] isn't dark, the
 /// site is unset, or the dark doesn't end within a day (a polar winter).
-DateTime? nightEnd(SiteSettings site, DateTime startUtc) {
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return null;
+DateTime? nightEnd(SiteSettings? site, DateTime startUtc) {
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) return null;
   final line = twilightSunAltitudeDeg(site.twilightDefinition);
   bool dark(DateTime t) =>
       sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg <
@@ -979,7 +988,7 @@ const double kRankMinAltDeg = 30;
 /// dawn of the site's twilight line (the same dawn the plan stops at, #1560).
 /// Null with no site, or when there is no night to run into.
 ({DateTime from, DateTime to})? restOfNightSpan(
-  SiteSettings site,
+  SiteSettings? site,
   DateTime nowUtc,
 ) {
   final from = darkStart(site, nowUtc) ?? nowUtc.toUtc();
@@ -1019,8 +1028,8 @@ double hoursAboveInSpan(
 /// a `TimeCondition` provider label ('Civil Dawn' …), or null for none: a
 /// start in daylight (an indoor test runs on), or a night with no dawn for the
 /// daemon's provider to find.
-String? dawnStopFor(SiteSettings site, DateTime startUtc) {
-  if (nightEnd(site, startUtc) == null) return null;
+String? dawnStopFor(SiteSettings? site, DateTime startUtc) {
+  if (site == null || nightEnd(site, startUtc) == null) return null;
   return switch (site.twilightDefinition) {
     TwilightDefinition.civil => 'Civil Dawn',
     TwilightDefinition.nautical => 'Nautical Dawn',

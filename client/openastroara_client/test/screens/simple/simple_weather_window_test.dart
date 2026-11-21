@@ -20,6 +20,7 @@ import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/equipment/equipment_glyphs.dart';
+import '../../support/settings_values.dart';
 
 class _Weather extends WeatherNotifier {
   _Weather(this.json);
@@ -67,7 +68,7 @@ Future<void> _pump(
   Map<String, dynamic> wire, {
   bool inSettings = false,
   DeviceDriver? driver,
-  SafetyPolicies policies = const SafetyPolicies(
+  SafetyPolicies policies = const TestSafetyPolicies(
     weatherTriggersEnabled: true,
     maxWindKmh: 30,
     maxHumidityPct: 85,
@@ -505,7 +506,7 @@ void main() {
   testWidgets('nothing is marked while weather does not trigger safety', (
     tester,
   ) async {
-    await _pump(tester, _wire(), policies: const SafetyPolicies());
+    await _pump(tester, _wire(), policies: const TestSafetyPolicies());
     expect(find.textContaining('past the safety limit'), findsNothing);
     expect(find.textContaining('limit 85 %'), findsNothing);
   });

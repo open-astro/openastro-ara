@@ -20,6 +20,7 @@ import 'package:openastroara/widgets/focus/guide_focus_card.dart';
 import 'package:openastroara/widgets/focus/v_curve_chart.dart';
 import 'package:openastroara/widgets/focus/focus_section.dart';
 import 'package:openastroara/l10n/l10n.dart';
+import '../../support/settings_values.dart';
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   final AutofocusLive initial;
@@ -60,7 +61,7 @@ class _Reading extends BahtinovFocusNotifier {
 
 class _OagPhd2 extends Phd2SettingsNotifier {
   @override
-  LoadedSection<Phd2Settings> build() => LoadedSection(value: const Phd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+  LoadedSection<Phd2Settings> build() => LoadedSection(value: const TestPhd2Settings(guiderSetupType: 'oag', guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
       source: SectionSource.rig);
 }
 
