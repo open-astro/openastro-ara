@@ -34,6 +34,8 @@ import 'package:openastroara/state/settings/settings_nav.dart'
 import 'package:openastroara/state/simple_calibration_state.dart'
     show simpleLibraryNeedProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/simple_preflight_state.dart'
+    show simpleShowingProvider;
 
 // #2038: the right rail keeps one size on every mode. Calibration's shutter
 // adds a caption when it has a job, and the rail (content-sized, centred)
@@ -110,18 +112,21 @@ class _EmptyLibrary extends DarkLibraryStatusNotifier {
   );
 }
 
-Future<void> _pump(
+Future<ProviderContainer> _pump(
   WidgetTester tester,
   List<Override> extra, {
   Size size = const Size(1280, 720),
   double text = 1,
+  bool phone = false,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
     overrides: [
-      companionPlatformProvider.overrideWithValue(TargetPlatform.linux),
+      companionPlatformProvider.overrideWithValue(
+        phone ? TargetPlatform.iOS : TargetPlatform.linux,
+      ),
       simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
       discoveredServersProvider.overrideWith(
         (ref) => const Stream<AraServer>.empty(),
@@ -146,6 +151,7 @@ Future<void> _pump(
     ),
   );
   await tester.pump();
+  return container;
 }
 
 // The rail is the panel round the shutter: the tab list on a tablet or
@@ -239,6 +245,27 @@ void main() {
       caption,
     );
     handle.dispose();
+  });
+
+  // The phone's deck keeps the caption under the shutter; an idle shutter has
+  // none, so the deck keeps Preview's size and its top stays put.
+  testWidgets('the phone deck is the same size on Preview and on an idle '
+      'Calibration (#2038)', (tester) async {
+    final container = await _pump(
+      tester,
+      const [],
+      size: const Size(390, 844),
+      phone: true,
+    );
+    final deck = find.byKey(const Key('companion-deck'));
+    Future<Rect> open(SimpleModeScreen mode) async {
+      container.read(simpleShowingProvider.notifier).pick(mode);
+      await tester.pumpAndSettle();
+      return tester.getRect(deck);
+    }
+
+    final preview = await open(SimpleModeScreen.preview);
+    expect(await open(SimpleModeScreen.calibration), preview);
   });
 
   // The test font draws every glyph as a square; the caption's fit is measured
