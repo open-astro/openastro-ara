@@ -82,6 +82,12 @@ internal static class PolarAlignPreflightEvaluator {
     /// <summary>A mount's key in <see cref="PolarAlignSettingsDto.MountClearance"/>: the identity the daemon already keeps
     /// per device (its Alpaca UniqueID, <see cref="TelescopeInfo.DeviceId"/>: the pose store, #1362's equipment
     /// identity), else its name, else <see cref="UnidentifiedMountKey"/>. Null with no mount connected.</summary>
+    /// <summary>
+    /// #2083 — whether a run drives the Polar Aligner's motors: auto on and not a hand turn. A hand-turn run moves
+    /// nothing, so the person turns the bolts, as with auto off. The run and the pre-flight list share this rule.
+    /// </summary>
+    public static bool DrivesAlignerMotors(bool polarAlignerAuto, bool handTurn) => polarAlignerAuto && !handTurn;
+
     public static string? MountKey(TelescopeInfo? info) {
         if (info?.Connected != true) {
             return null;
@@ -281,7 +287,7 @@ internal static class PolarAlignPreflightEvaluator {
         try {
             if (inputs.AlignerPresent?.Invoke() != true) {
                 alignerRow.Ok("No Polar Aligner: you turn the altitude and azimuth bolts.");
-            } else if (!settings.PolarAlignerAuto) {
+            } else if (!DrivesAlignerMotors(settings.PolarAlignerAuto, inputs.HandTurn)) {
                 alignerRow.Ok("The Polar Aligner's motors are off: you turn the bolts.");
             } else {
                 alignerRow.Ok("The Polar Aligner's Stop is checked and its turns are capped.");

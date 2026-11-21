@@ -136,6 +136,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_hand_turn_says_the_polar_aligner_motors_are_off_even_with_auto_on() {
+            var settings = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(PolarAlignerAuto: true).Confirmed(MountId));
+
+            var handTurn = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => settings) with { AlignerPresent = () => true, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Detail,
+                    Is.EqualTo("The Polar Aligner's motors are off: you turn the bolts."),
+                    "a hand-turn run never drives the aligner's motors, so the row must not claim its Stop");
+            });
+        }
+
+        [Test]
         public async Task No_check_says_a_later_issue_will_fill_it() {
             var ready = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
             var aligner = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with {
