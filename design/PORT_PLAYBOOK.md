@@ -6654,7 +6654,8 @@ opt-in, the pier-side checks, the `motionsafety` marker). Their pre-flight rows 
 refuse.
 
 **No flag lifts a guard.** `force` on `POST /equipment/telescope/slew` lifts only `run_in_progress`;
-`polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` are checked before it. A
+`polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` (the GoTo refusal of #2073,
+not the dropped #2065 limit) are checked before it. A
 Polar Align start has no `force`. `hand_turn` turns a motor-only pre-flight row into a warning, because
 a hand-turn run sends no move.
 

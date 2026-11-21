@@ -389,7 +389,7 @@ framing/focus loop when you need to point or focus by eye.
   failing check.
 - **A Polar Aligner's motors stop when Ara says stop.** With a motorised Polar Aligner that Ara can
   drive, Ara turns its bolts for you. Every Stop is checked: Ara sends Stop and watches for up to 3 s
-  until neither motor moves, sending Stop again up to three times. If the device never confirms it,
+  until neither motor moves, sending Stop at most three times in all. If the device never confirms it,
   the card says so (cut its power if it still moves), **Stop** sends it again, and **Resume** and
   **Home** stay off until a Stop is confirmed; then Ara waits for you to tap **Resume**. Each move
   must change the device's reported position by about the amount sent, in the right direction, or
