@@ -369,6 +369,24 @@ abstract class AppLocalizations {
   /// **'Meridian flip'**
   String get deviceMeridianFlip;
 
+  /// Simple Mode Mount window: the row that shows the profile's clearance limit (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Clearance limit'**
+  String get deviceClearanceLimit;
+
+  /// Simple Mode Mount window: the clearance limit is on; limit is in degrees, whole or with one decimal rounded down (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Stops at {limit}°'**
+  String deviceClearanceLimitAt(String limit);
+
+  /// Simple Mode Mount window: where the clearance limit is set (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Set in the full app: Settings › Unattended running › When to stop.'**
+  String get deviceClearanceLimitHint;
+
   /// Mount window segment in the Meridian flip row: flip automatically
   ///
   /// In en, this message translates to:
@@ -11178,6 +11196,12 @@ abstract class AppLocalizations {
     String limit,
   );
 
+  /// Refusal (above-clearance-limit, #1589): a GoTo to a target at or above the profile's clearance limit; altitude and limit are degrees with one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'That target is at {altitude}°, at or above your {limit}° clearance limit, where the camera can reach the mount. Pick a lower target, or try again when it is lower.'**
+  String refusalAboveClearanceLimit(String altitude, String limit);
+
   /// Refusal (end-night-in-progress): End Night was started while it is already running
   ///
   /// In en, this message translates to:
@@ -11321,6 +11345,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.'**
   String get safetyFirstFlipConfirmedStatus;
+
+  /// Settings > Unattended running > When to stop: the switch of the profile's clearance limit (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Clearance limit'**
+  String get safetyClearanceLimitLabel;
+
+  /// Settings: the hint under the clearance limit switch (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Stops the mount before the camera or rotator can reach the pier or tripod. While on, Ara refuses a GoTo or a flip to a target at or above the highest safe altitude, and stops tracking and guiding and pauses the run when the mount tracks up to it. It never moves the mount.'**
+  String get safetyClearanceLimitHint;
+
+  /// Settings: the clearance limit's altitude in degrees, above 0 and under 90 (#1589)
+  ///
+  /// In en, this message translates to:
+  /// **'Highest safe altitude (°)'**
+  String get safetyClearanceMaxAltitudeLabel;
 
   /// Settings → Unattended running → When to stop, first-flip row (#1589): no flip confirmed and none completed since the last re-arm
   ///

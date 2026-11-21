@@ -7026,6 +7026,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '412':
           description: Precondition Failed
           content:
@@ -15585,6 +15591,7 @@ components:
         - polar-align-already-running
         - polar-align-clutch-turned
         - polar-align-clearance-not-confirmed
+        - above-clearance-limit
         - polar-align-site-not-set
         - polar-align-alt-az-mount
         - polar-align-cannot-move-axis
@@ -16182,6 +16189,16 @@ components:
         first_flip_pier_side_changed:
           type: boolean
           default: false
+        clearance_limit_enabled:
+          type: boolean
+          default: false
+        clearance_max_altitude_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 80
     SavedTargetDto:
       required:
         - name

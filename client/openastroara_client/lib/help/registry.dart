@@ -502,6 +502,27 @@ const Map<String, Help> helpRegistry = {
         'On a mount where the scope or camera can touch the pier, set this to the time the target takes to get from a safe angle to the meridian, and leave a little extra. 0 turns the early stop off: the flip then runs inside the after-meridian window.',
     relatedSettings: ['safety.policies.meridian_flip_auto'],
   ),
+  'safety.policies.clearance_limit_enabled': Help(
+    key: 'safety.policies.clearance_limit_enabled',
+    title: 'Clearance limit',
+    body:
+        'A per-rig limit for where the camera, rotator or tube can reach the pier or tripod, most often near the zenith. It is off until you turn it on.\n\n'
+        'While it is on:\n\n'
+        '* A GoTo (from the app or a plan, a Center step or a meridian flip) to a target at or above the highest safe altitude is refused, and nothing moves.\n'
+        '* When the mount tracks up to it, Ara stops tracking and guiding, pauses the run and tells you why. It never slews, parks or unparks the mount.\n\n'
+        'One value covers the whole profile: it does not follow the rotator angle, so set it for the angle where the camera comes closest.',
+    relatedSettings: [
+      'safety.policies.clearance_max_altitude_deg',
+      'safety.policies.meridian_pause_min',
+    ],
+  ),
+  'safety.policies.clearance_max_altitude_deg': Help(
+    key: 'safety.policies.clearance_max_altitude_deg',
+    title: 'Highest safe altitude',
+    body:
+        'The altitude, in degrees, at which Ara stops: above 0 and under 90. To measure it, point the scope higher by hand with the stop controls ready, using the rotator angle and imaging train you image with, until the camera comes close to the pier or tripod. Read the altitude there and set a few degrees less.',
+    relatedSettings: ['safety.policies.clearance_limit_enabled'],
+  ),
   'safety.policies.on_guider_lost': Help(
     key: 'safety.policies.on_guider_lost',
     title: 'On guider lost',
