@@ -341,6 +341,13 @@ void main() {
       expect(kept(w('A', at(17, 22), null), evening, one), isEmpty);
     });
 
+    test(
+      'a window ending at midnight touches a range starting at midnight',
+      () {
+        expect(kept(w('A', at(17, 22), at(18, 0)), 0, one), ['A']);
+      },
+    );
+
     test('equal ends mean the whole day', () {
       expect(kept(w('A', at(17, 3), at(17, 4)), 600, 600), ['A']);
     });

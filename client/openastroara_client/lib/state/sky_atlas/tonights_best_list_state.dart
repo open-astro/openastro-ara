@@ -154,7 +154,7 @@ bool windowOverlapsRange(
   // The range that began the day before the window may still run into it.
   for (
     var d = -1;
-    d <= 0 || DateTime(s.year, s.month, s.day + d).isBefore(e);
+    d <= 0 || !DateTime(s.year, s.month, s.day + d).isAfter(e);
     d++
   ) {
     final day = DateTime(s.year, s.month, s.day + d);

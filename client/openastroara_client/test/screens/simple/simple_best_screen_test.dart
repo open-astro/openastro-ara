@@ -608,6 +608,30 @@ void main() {
     );
   });
 
+  testWidgets('the Imaging hours chips sit on one row at 390 px', (
+    tester,
+  ) async {
+    await _pump(tester, [a, c, b], size: const Size(390, 844));
+    final any = tester.getRect(find.byKey(const Key('best-window-any')));
+    final pick = tester.getRect(find.byKey(const Key('best-window-pick')));
+    expect(pick.top, any.top);
+    expect(any.width, lessThan(195));
+    expect(pick.width, lessThan(195));
+  });
+
+  testWidgets('the Imaging hours picker shows 24-hour times', (tester) async {
+    await _pump(tester, [a, c, b]);
+    await _tap(tester, 'best-window-pick');
+    expect(
+      MediaQuery.of(tester.element(find.byType(TimePickerDialog)))
+          .alwaysUse24HourFormat,
+      isTrue,
+    );
+    expect(find.text('PM'), findsNothing);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets('on a wide window Sort and Show sit side by side', (
     tester,
   ) async {

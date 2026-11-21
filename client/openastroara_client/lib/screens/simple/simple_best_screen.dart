@@ -370,28 +370,30 @@ class _Controls extends ConsumerWidget {
         ),
         group(
           l10n.bestHours,
-          Wrap(
-            spacing: AraSpace.s8,
-            runSpacing: AraSpace.s8,
-            children: [
-              _Chip(
-                key: const Key('best-window-any'),
-                label: l10n.bestHoursAny,
-                selected: choices.windowFromMin == null,
-                onTap: n.clearWindow,
-              ),
-              _Chip(
-                key: const Key('best-window-pick'),
-                label: choices.windowFromMin == null
-                    ? l10n.bestHoursPick
-                    : l10n.bestHoursRange(
-                        _minHhmm(choices.windowFromMin!),
-                        _minHhmm(choices.windowToMin!),
-                      ),
-                selected: choices.windowFromMin != null,
-                onTap: () => _pickWindow(context, choices, n),
-              ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              spacing: AraSpace.s8,
+              children: [
+                _Chip(
+                  key: const Key('best-window-any'),
+                  label: l10n.bestHoursAny,
+                  selected: choices.windowFromMin == null,
+                  onTap: n.clearWindow,
+                ),
+                _Chip(
+                  key: const Key('best-window-pick'),
+                  label: choices.windowFromMin == null
+                      ? l10n.bestHoursPick
+                      : l10n.bestHoursRange(
+                          _minHhmm(choices.windowFromMin!),
+                          _minHhmm(choices.windowToMin!),
+                        ),
+                  selected: choices.windowFromMin != null,
+                  onTap: () => _pickWindow(context, choices, n),
+                ),
+              ],
+            ),
           ),
         ),
         group(
@@ -428,7 +430,8 @@ class _Controls extends ConsumerWidget {
 }
 
 /// From, then To, in the system time picker; backing out of either keeps
-/// the range as it was. Hours are the device's local day, as the rows show.
+/// the range as it was. Hours are the device's local day, as the rows show,
+/// and read 24-hour like the chip and the rows.
 Future<void> _pickWindow(
   BuildContext context,
   BestChoices choices,
@@ -437,16 +440,22 @@ Future<void> _pickWindow(
   final l10n = context.l10n;
   TimeOfDay of(int? m, int fallback) =>
       TimeOfDay(hour: (m ?? fallback) ~/ 60, minute: (m ?? fallback) % 60);
+  Widget twentyFour(BuildContext context, Widget? child) => MediaQuery(
+    data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+    child: child!,
+  );
   final from = await showTimePicker(
     context: context,
     initialTime: of(choices.windowFromMin, 21 * 60),
     helpText: l10n.bestHoursFromHelp,
+    builder: twentyFour,
   );
   if (from == null || !context.mounted) return;
   final to = await showTimePicker(
     context: context,
     initialTime: of(choices.windowToMin, 60),
     helpText: l10n.bestHoursToHelp,
+    builder: twentyFour,
   );
   if (to == null) return;
   n.setWindow(from.hour * 60 + from.minute, to.hour * 60 + to.minute);
