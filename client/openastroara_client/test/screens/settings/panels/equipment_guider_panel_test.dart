@@ -50,6 +50,7 @@ class _FakeProfileApi extends ProfileApi {
   Phd2Settings? lastPut;
   int puts = 0;
   bool failGet = false;
+  bool failOpticsGet = false;
   @override
   Future<Phd2Settings> getPhd2Settings() async =>
       failGet ? throw DioException(requestOptions: RequestOptions(path: "/profile/phd2")) : stored.copyWith();
@@ -64,7 +65,9 @@ class _FakeProfileApi extends ProfileApi {
 
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: const OpticsSettings(), etag: null);
+      failOpticsGet
+          ? throw DioException(requestOptions: RequestOptions(path: '/profile/optics'))
+          : (value: const OpticsSettings(), etag: null);
   @override
   Future<({EquipmentConnectionSettings value, String? etag})>
   getEquipmentConnectionSection() async =>
@@ -162,10 +165,13 @@ typedef _Harness = ({
   _FakeGuiderApi guider,
 });
 
-Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored, {ValueListenable<bool>? show, bool failLoad = false}) async {
+Future<_Harness> _pump(WidgetTester tester, Phd2Settings stored,
+    {ValueListenable<bool>? show, bool failLoad = false, bool failOpticsLoad = false}) async {
   await tester.binding.setSurfaceSize(const Size(1600, 2400));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  final profile = _FakeProfileApi(stored)..failGet = failLoad;
+  final profile = _FakeProfileApi(stored)
+    ..failGet = failLoad
+    ..failOpticsGet = failOpticsLoad;
   final equipment = _FakeEquipmentApi();
   final names = _FakeAlpacaNames();
   final guider = _FakeGuiderApi();
@@ -388,6 +394,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(h.profile.lastPut, isNull, reason: 'the flushed save must not run on settings that did not load');
     expect(h.profile.puts, 0);
+  });
+
+  testWidgets('#1807 an OAG guide focal length is never saved as 0 when the optics did not load',
+      (tester) async {
+    final h = await _pump(
+        tester, const Phd2Settings(guiderSetupType: 'oag', guideFocalLength: 800, ditherEnabled: true),
+        failOpticsLoad: true);
+    final toggle = find.descendant(
+        of: find.widgetWithText(SettingsSwitchRow, 'Enable dithering'), matching: find.byType(Switch));
+    await tester.ensureVisible(toggle);
+    await tester.tap(toggle);
+    await tester.pump(const Duration(seconds: 1));
+    await tester.pumpAndSettle();
+    expect(h.profile.puts, 0,
+        reason: 'the derived guide focal length needs the optics: without them nothing is saved');
+    expect(find.textContaining('Not saved'), findsWidgets);
   });
 
   testWidgets('a mount on another server than the camera gets a cross-server warning',

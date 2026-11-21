@@ -97,6 +97,13 @@ class _MemAutofocus extends AutofocusSettingsNotifier {
   }
 }
 
+/// A rig whose autofocus section never loads.
+class _FailingAutofocus extends _MemAutofocus {
+  @override
+  Future<Tagged<AutofocusSettings>> fetch(ProfileApi api) async =>
+      throw StateError('no autofocus section');
+}
+
 class _Wheel extends FilterWheelNotifier {
   _Wheel(this._v);
   final FilterWheelStatus _v;
@@ -115,6 +122,7 @@ Future<_Focuser> _pump(
   bool scrolling = false,
   bool inSettings = false,
   List<String>? wheel,
+  bool autofocusFails = false,
 }) async {
   // Tall: the window's Simple settings (#1544) make it taller than the default surface; the shell scrolls it.
   tester.view.physicalSize = const Size(800, 1600);
@@ -130,7 +138,9 @@ Future<_Focuser> _pump(
       profileApiProvider.overrideWithValue(
         ProfileApi(const AraServer(hostname: 'test', port: 1)),
       ),
-      autofocusSettingsProvider.overrideWith(_MemAutofocus.new),
+      autofocusSettingsProvider.overrideWith(
+        autofocusFails ? _FailingAutofocus.new : _MemAutofocus.new,
+      ),
       deviceDriverProvider.overrideWith((ref, type) async => null),
       if (wheel != null)
         filterWheelProvider.overrideWith(
@@ -771,6 +781,22 @@ void main() {
         (2.0, 15.0, 2),
       );
       expect(find.text('Keep focus sharp'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'with autofocus not loaded the window does not say plans never refocus (#1807)',
+    (tester) async {
+      await _pump(tester, _wire(), autofocusFails: true);
+      expect(_c.read(autofocusSettingsProvider).value, isNull);
+      expect(find.byKey(const Key('simple-focuser-plans-hint')), findsNothing);
+      expect(
+        find.text(
+          'Plans never refocus by themselves. The Autofocus button still works.',
+        ),
+        findsNothing,
+        reason: 'the rig may have autofocus on',
+      );
     },
   );
 
