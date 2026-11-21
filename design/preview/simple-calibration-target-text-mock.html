@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Ara calibration leg text: "11.9 of 25 px" (#1895)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+  /* Single dark look on purpose: DESIGN.md tokens, copied from design/preview/simple-guider-status-mock.html.
+     Layout: one block per surface that shows the calibration text, each with the two cases (target known, target unknown). */
+  :root { color-scheme: dark; --page:#0E0E0E; --panel:rgba(30,30,30,.94); --border:#404040; --text:#E0E0E0; --text2:#A0A0A0;
+          --busy:#FFB300; --ok:#4CAF50; --info:#42A5F5; --sel:#1976D2; --sys:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  * { box-sizing: border-box; }
+  body { background:var(--page); color:var(--text); font:14px/1.45 var(--sys); margin:0; padding-block:28px 64px;
+         padding-left:max(16px,env(safe-area-inset-left,0px)); padding-right:max(16px,env(safe-area-inset-right,0px)); }
+  .page { max-width:960px; margin:0 auto; display:flex; flex-direction:column; gap:22px; }
+  h1 { font-size:22px; font-weight:600; margin:0; text-wrap:balance; }
+  h2 { font-size:13px; font-weight:600; color:var(--text2); margin:0 0 8px; }
+  p.note { color:var(--text2); margin:0; max-width:72ch; }
+  .row { display:flex; flex-wrap:wrap; gap:14px; align-items:center; }
+  .case { color:var(--text2); font-size:12px; width:150px; flex:none; }
+  .pill { display:inline-flex; align-items:center; gap:8px; background:var(--panel); border:1px solid #3a3a3a; border-radius:999px;
+          padding:8px 14px; min-height:44px; max-width:100%; }
+  .pill b { font-weight:600; } .pill span { min-width:0; }
+  .dot { width:10px; height:10px; border-radius:50%; flex:none; background:var(--busy); }
+  .strip { display:flex; gap:10px; align-items:center; background:var(--panel); border:1px solid #3a3a3a; border-radius:10px; padding:8px 12px; min-height:44px; }
+  .line { background:var(--panel); border:1px solid #3a3a3a; border-radius:10px; padding:8px 12px; color:var(--text2); }
+  .on { color:var(--text); }
+</style>
+<div class="page">
+  <h1>Calibration leg text: how far the star has moved, and how far it has to go</h1>
+  <p class="note">One text builder feeds all four. With the daemon's <code>calibration_target_px</code> the leg reads "West step 3 · 11.9 of 25 px"; without it, today's "West step 3 · 11.9 px". Colour, placement and the step wording do not change. In Portuguese the middle word is "de": "Oeste passo 3 · 11.9 de 25 px".</p>
+
+  <section aria-labelledby="a"><h2 id="a">Simple Mode pill (Guider) and the Plan pill's leg</h2>
+    <div class="row"><span class="case">Target known</span><div class="pill"><i class="dot"></i><b>Guider</b><span>Calibrating · West step 3 · 11.9 of 25 px</span></div></div>
+    <div class="row"><span class="case">Plan, target known</span><div class="pill"><i class="dot"></i><b>Plan</b><span>Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px</span></div></div>
+    <div class="row"><span class="case">Target unknown</span><div class="pill"><i class="dot"></i><b>Guider</b><span>Calibrating · West step 3 · 11.9 px</span></div></div>
+  </section>
+
+  <section aria-labelledby="b"><h2 id="b">Advanced Mode guiding strip</h2>
+    <div class="row"><span class="case">Target known</span><div class="strip"><i class="dot"></i><span>Calibrating · North step 7 · 11.9 of 25 px</span></div></div>
+    <div class="row"><span class="case">Target unknown</span><div class="strip"><i class="dot"></i><span>Calibrating · North step 7 · 11.9 px</span></div></div>
+  </section>
+
+  <section aria-labelledby="c"><h2 id="c">Run dashboard, Guider line</h2>
+    <div class="row"><span class="case">Target known</span><div class="line">Guider · <span class="on">Calibrating · West step 3 · 11.9 of 25 px</span></div></div>
+    <div class="row"><span class="case">Target unknown</span><div class="line">Guider · <span class="on">Calibrating · West step 3 · 11.9 px</span></div></div>
+  </section>
+
+  <section aria-labelledby="d"><h2 id="d">Simple Mode preview panel, Guider line</h2>
+    <div class="row"><span class="case">Target known</span><div class="line">Guider · <span class="on">Calibrating · East step 4 · 6.0 of 25 px</span></div></div>
+  </section>
+</div>
