@@ -34,8 +34,42 @@
     color: var(--txt); -webkit-font-smoothing: antialiased; font-size: 13px; }
   #stel-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
   .ui { position: absolute; z-index: 10; }
-  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. */
-  .bare .ui { display: none !important; }
+  /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. The
+     one exception is the framing box's own controls (#f-bare, #frame). */
+  .bare .ui:not(#frame):not(#f-bare) { display: none !important; }
+  /* Clear of Simple Mode's own chrome: the device strip (16 + 56 px from the top)
+     and the right rail (16 + 72 px from the right), each plus a 16 px gap. */
+  .bare #frame { left: auto; right: 104px; top: 136px; }
+  .bare #frame .full-only { display: none; }
+  /* Simple Mode density (DESIGN.md): 44 px targets and 14 px type; the card,
+     padding and border included, stops above the bottom row (16 + 56 px plus
+     a 16 px gap). */
+  .bare #frame { box-sizing: border-box; width: 274px; max-height: calc(100% - 224px); }
+  .bare #frame .card-title, .bare #frame .frow .k, .bare #frame .frow .val, .bare #frame #f-msg { font-size: 14px; }
+  .bare #frame .card-title .close { min-width: 44px; min-height: 44px; }
+  .bare #frame .frot button { width: 44px; height: 44px; }
+  .bare #frame .dial { width: 110px; height: 110px; }
+  .bare #frame .dial-hand { height: 46px; }
+  .bare #f-bare, .bare #frame #f-snap { min-height: 44px; font-size: 14px; }
+  /* An upright phone (the shell's #1775 deck: under 600 px wide, portrait) has
+     no right rail, and the deck and the bottom row (16 + 192 + 8 + 56 + 8 px)
+     leave no room under the box. The card docks as a strip under the status
+     card (88 + 48 + 8 px): the angle beside its title, Snap beside the dial; it
+     stops 16 px short of the view centre, where the box sits. */
+  @media (max-width: 599px) and (orientation: portrait) {
+    .bare #frame { top: 144px; left: 16px; right: 16px; width: auto; max-height: calc(50% - 160px); padding: 4px 12px 10px; }
+    .bare #frame .card-title { margin-bottom: 4px; }
+    .bare #frame .frow { position: absolute; top: 4px; right: 64px; height: 44px; padding: 0; gap: 8px; }
+    .bare #frame .frot { float: left; gap: 8px; padding: 0; }
+    .bare #frame .dial { width: 66px; height: 66px; }
+    .bare #frame .dial-hand { height: 27px; }
+    .bare #frame #f-snap { float: right; width: calc(100% - 178px); min-height: 66px; margin: 0; padding: 8px 10px; }
+    .bare #frame #f-msg { clear: both; }
+  }
+  #f-bare { display: none; left: auto; right: 104px; top: 88px; padding: 8px 14px; background: var(--mat);
+    backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 0.5px solid var(--hair);
+    border-radius: 10px; box-shadow: var(--shadow); }
+  #f-bare.on { color: var(--accent); }
   button { font: inherit; font-size: 13px; font-weight: 500; color: var(--txt); background: transparent;
     border: none; border-radius: 8px; padding: 6px 11px; cursor: pointer;
     transition: background .15s ease, color .15s ease; }
@@ -119,9 +153,9 @@
   #frame .frow .val { font-size: 12.5px; font-variant-numeric: tabular-nums; color: var(--txt); }
   /* Rotation dial (Keynote-style angle knob) + 1° nudges */
   #frame .frot { display: flex; align-items: center; justify-content: center; gap: 16px; padding: 6px 0 10px; }
-  #frame .frot button { width: 28px; height: 28px; padding: 0; font-size: 17px; border-radius: 8px; background: rgba(255,255,255,0.07); }
+  #frame .frot button { width: 28px; height: 28px; padding: 0; font-size: 17px; border-radius: 8px; background: rgba(255,255,255,0.07); touch-action: none; }
   #frame .frot button:hover { background: rgba(255,255,255,0.14); }
-  #frame .dial { position: relative; width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto; cursor: grab;
+  #frame .dial { position: relative; width: 66px; height: 66px; border-radius: 50%; flex: 0 0 auto; cursor: grab; touch-action: none;
     background: radial-gradient(circle at 50% 36%, rgba(255,255,255,0.12), rgba(255,255,255,0.02));
     border: 0.5px solid var(--hair); box-shadow: inset 0 1px 7px rgba(0,0,0,0.45), 0 1px 2px rgba(0,0,0,0.3); }
   #frame .dial:active { cursor: grabbing; }
@@ -140,6 +174,11 @@
     background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
   #frame #f-rotcam:hover { background: rgba(255,255,255,0.14); }
   #frame #f-rotcam:disabled { opacity: .4; cursor: default; }
+  #frame #f-snap { display: none; width: 100%; margin-top: 8px; font-size: 12.5px; font-weight: 600; padding: 8px 0;
+    border-radius: 10px; background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
+  .bare #frame #f-snap { display: block; }
+  #frame #f-snap:hover { background: rgba(255,255,255,0.14); }
+  #frame #f-snap:disabled { opacity: .4; cursor: default; }
   /* A short view (a laptop window): tighter rows and a smaller dial so the
      card fits without scrolling. */
   @media (max-height: 560px) {
@@ -149,6 +188,8 @@
     #frame .frot { padding: 0 0 2px; }
     #frame .dial { width: 44px; height: 44px; }
     #frame .dial-hand { height: 17px; }
+    .bare #frame .dial { width: 66px; height: 66px; }
+    .bare #frame .dial-hand { height: 27px; }
     #frame #f-msg, #frame #f-dss { margin-top: 6px; }
     #frame #f-add { margin-top: 8px; padding: 7px 0; }
     #frame #f-rotcam { margin-top: 6px; padding: 6px 0; }
@@ -197,6 +238,9 @@
 
 <div id="searchmsg" class="ui"></div>
 
+<!-- Simple Mode (?bare=1) only: Framing Off/On for the picked Target (#1899). -->
+<button id="f-bare" class="ui" title="Camera box on the picked Target" aria-pressed="false">Framing</button>
+
 <div id="timebar" class="ui" style="display:none; top: 10px;">
   <button id="t-1h">−1h</button>
   <button id="t+1h">+1h</button>
@@ -240,31 +284,33 @@
 
 <!-- Framing overlay controls: draws the connected camera's field of view (from
      your optics profile) on the selected target, with a position-angle rotation
-     and an N×M mosaic, then adds it to the sequence. -->
+     and an N×M mosaic, then adds it to the sequence. Simple Mode (?bare=1)
+     hides the .full-only parts; its own Add to queue takes the framing. -->
 <div id="frame" class="ui">
   <div class="card-title">Framing<button class="close" id="f-close" title="Hide">✕</button></div>
-  <div class="frow"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
-  <div class="frow"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
+  <div class="frow full-only"><span class="k">RA</span><span class="val" id="f-ra">—</span></div>
+  <div class="frow full-only"><span class="k">Dec</span><span class="val" id="f-dec">—</span></div>
   <div class="frow"><span class="k">Rotation</span><span class="val" id="f-rot">0°</span></div>
   <div class="frot">
     <button id="f-rot-" title="−1°">−</button>
     <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
     <button id="f-rot+" title="+1°">+</button>
   </div>
-  <div class="frow"><span class="k">Columns</span>
+  <button id="f-snap" title="Turn the box so its long side lies along this object's catalogue position angle">Snap to catalogue angle</button>
+  <div class="frow full-only"><span class="k">Columns</span>
     <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Rows</span>
+  <div class="frow full-only"><span class="k">Rows</span>
     <div class="stp"><button id="f-row-">−</button><span class="val" id="f-row">1</span><button id="f-row+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Overlap</span>
+  <div class="frow full-only"><span class="k">Overlap</span>
     <div class="stp"><button id="f-ov-">−</button><span class="val" id="f-ov">10%</span><button id="f-ov+">+</button></div>
   </div>
-  <div class="frow"><span class="k">Field</span><span id="f-fov">—</span></div>
-  <button id="f-add">Create Run</button>
-  <button id="f-rotcam" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
+  <div class="frow full-only"><span class="k">Field</span><span id="f-fov">—</span></div>
+  <button id="f-add" class="full-only">Create Run</button>
+  <button id="f-rotcam" class="full-only" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
   <div id="f-msg"></div>
-  <div id="f-dss" hidden></div>
+  <div id="f-dss" class="full-only" hidden></div>
 </div>
 
 
@@ -530,7 +576,7 @@ function renderInfo(sel) {
     var icrf = stel.c2s(radec);
     selRaJ2000Hours = stel.anp(icrf[0]) * 12 / Math.PI;
     selDecJ2000Deg = stel.anpm(icrf[1]) * 180 / Math.PI;
-    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
+    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target', catalogueAngle(sel));
     var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
     var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
     selRaHours = ra * 12 / Math.PI;
@@ -1268,6 +1314,7 @@ function wireCatalogs() {
 var frameOn = false;
 var frameRotDeg = 0, frameCols = 1, frameRows = 1, frameOverlap = 10;
 var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
+var frameCatPaDeg = null;   // catalogue position angle of the Target, deg east of north, or null
 var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
@@ -1318,9 +1365,47 @@ function loadOptics() {
 // a goto that brings none (raw coordinates) clears it, so Create Run falls
 // back to "Target" instead of naming the run after whatever was selected
 // before — "Moon" at NGC 7000's coordinates, night of 2026-10-02.
-function setFrameTarget(raDeg, decDeg, name) {
-  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = name || '';
-  if (frameOn) updateFrame();
+// Simple Mode (CHART): a new target name sets Framing Off and the angle to 0°,
+// the same name keeps both (#1899 decision B).
+function setFrameTarget(raDeg, decDeg, name, catPaDeg) {
+  var next = name || '';
+  frameCatPaDeg = catPaDeg == null ? null : catPaDeg;
+  if (CHART && next !== frameTargetName) {
+    frameRotDeg = 0;
+    if (frameOn) toggleFrame(false);
+  }
+  frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = next;
+  if (frameOn) updateFrame(); else if (CHART) renderFramePanel();
+}
+
+// The catalogue position angle of a selected object (degrees east of north,
+// 0 to 359), or null when the survey data carries none (stars, planets).
+function catalogueAngle(sel) {
+  try {
+    var a = sel.jsonData.model_data.angle;
+    if (typeof a !== 'number' || !isFinite(a)) return null;
+    return ((Math.round(a) % 360) + 360) % 360;
+  } catch (e) { return null; }
+}
+
+// The dial angle that lays the box's long side along the catalogue position
+// angle, 0 to 179, or null without one. mosaicData puts the box's width axis
+// at position angle 90 − dial and its height axis at −dial.
+function snapDialDeg() {
+  if (frameCatPaDeg == null) return null;
+  var portrait = !!(optics && optics.ok && optics.fovHDeg > optics.fovWDeg);
+  var turn = (portrait ? 0 : 90) - frameCatPaDeg;
+  return ((turn % 180) + 180) % 180;
+}
+
+function snapEnabled() {
+  return !!frameOn && frameCatPaDeg != null && frameRotDeg !== snapDialDeg();
+}
+
+function snapToCatalogueAngle() {
+  if (frameCatPaDeg == null) return;
+  frameRotDeg = snapDialDeg();
+  updateFrame();
 }
 
 // The view's centre in J2000 RA/Dec — lets the frame follow the view so you can
@@ -1481,7 +1566,8 @@ function updateFrame() {
 
 // Tell Flutter about the framing box (on/off, centre, dialed angle, name) so
 // the Rotate-camera panel measures the camera against the SAME angle the dial
-// shows. updateFrame runs on every view move while the frame follows the sky,
+// shows, and Simple Mode's Add to queue frames its Target with it (#1899).
+// updateFrame runs on every view move while the frame follows the sky,
 // so coalesce: post only when something the panel cares about changed, and at
 // most a few times a second.
 var _framingPosted = '', _framingTimer = null;
@@ -1552,7 +1638,9 @@ function renderFramePanel() {
   // the warn styling rides on the element's class, so a future dynamic message here
   // can't become an injection point.
   if (!optics || !optics.ok) {
-    msg.textContent = 'Set your camera + focal length in Options → Imaging → Optics.';
+    // Simple Mode never sends the user to the Full UI: its optics are in Settings › Rig.
+    msg.textContent = CHART ? 'The sensor or the focal length is not set: set them in Settings › Rig.'
+      : 'Set your camera + focal length in Options → Imaging → Optics.';
     msg.classList.add('warn');
   } else if (!API) {
     // No daemon: the app still takes the frame — it saves a local draft run
@@ -1563,7 +1651,16 @@ function renderFramePanel() {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
+  // Simple Mode has no Create Run: its card shows only the optics warning.
+  msg.hidden = !!(CHART && optics && optics.ok);
   document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
+  var snapBtn = document.getElementById('f-snap');
+  snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + snapDialDeg() + '°)');
+  snapBtn.disabled = !snapEnabled();
+  var bareBtn = document.getElementById('f-bare');
+  bareBtn.style.display = CHART && frameRaDeg != null ? 'block' : 'none';
+  bareBtn.classList.toggle('on', frameOn);
+  bareBtn.setAttribute('aria-pressed', frameOn ? 'true' : 'false');
   document.getElementById('f-add').disabled = !(frameRaDeg != null && optics && optics.ok);
   // The readout needs the daemon (camera + solver): offline the button stays quiet.
   document.getElementById('f-rotcam').disabled = !(API && frameRaDeg != null);
@@ -1639,6 +1736,7 @@ function toggleFrame(on) {
 function wireFrame() {
   document.getElementById('frame-btn').onclick = function () { toggleFrame(); };
   document.getElementById('f-close').onclick = function () { toggleFrame(false); };
+  document.getElementById('f-bare').onclick = function () { toggleFrame(); };
 
   // Press-and-hold to repeat (accelerating), so 1° rotation steps don't mean a
   // hundred clicks. One tap = one step.
@@ -1647,8 +1745,9 @@ function wireFrame() {
     function tick() { fn(); delay = Math.max(45, delay * 0.82); timer = setTimeout(tick, delay); }
     function start(e) { e.preventDefault(); stop(); fn(); delay = 340; timer = setTimeout(tick, delay); }
     function stop() { if (timer) { clearTimeout(timer); timer = null; } }
-    btn.addEventListener('mousedown', start);
-    ['mouseup', 'mouseleave'].forEach(function (ev) { btn.addEventListener(ev, stop); });
+    // Pointer events, so a finger on Simple Mode's iPad repeats like a mouse.
+    btn.addEventListener('pointerdown', start);
+    ['pointerup', 'pointerleave', 'pointercancel'].forEach(function (ev) { btn.addEventListener(ev, stop); });
   }
 
   // Rotation dial — drag the knob to spin (0° = up); 1° nudges for precision.
@@ -1662,9 +1761,13 @@ function wireFrame() {
     var r = dial.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
     return Math.atan2(e.clientX - cx, -(e.clientY - cy)) * 180 / Math.PI;   // 0 = up, clockwise +
   }
-  dial.addEventListener('mousedown', function (e) { dialing = true; setRot(dialAngle(e)); e.preventDefault(); });
-  window.addEventListener('mousemove', function (e) { if (dialing) setRot(dialAngle(e)); });
-  window.addEventListener('mouseup', function () { dialing = false; });
+  // Pointer events with capture: a finger drag works, and the drag keeps
+  // turning the dial when it leaves it.
+  dial.addEventListener('pointerdown', function (e) {
+    dialing = true; dial.setPointerCapture(e.pointerId); setRot(dialAngle(e)); e.preventDefault();
+  });
+  dial.addEventListener('pointermove', function (e) { if (dialing) setRot(dialAngle(e)); });
+  ['pointerup', 'pointercancel'].forEach(function (ev) { dial.addEventListener(ev, function () { dialing = false; }); });
   holdRepeat('f-rot-', function () { setRot(frameRotDeg - 1); });
   holdRepeat('f-rot+', function () { setRot(frameRotDeg + 1); });
   document.getElementById('f-col-').onclick = function () { frameCols = Math.max(1, frameCols - 1); updateFrame(); };
@@ -1675,6 +1778,7 @@ function wireFrame() {
   holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
   document.getElementById('f-add').onclick = addFrameToSequence;
   document.getElementById('f-rotcam').onclick = openRotateCamera;
+  document.getElementById('f-snap').onclick = snapToCatalogueAngle;
   // Pick up optics edited in Options → Imaging → Optics without reopening Frame.
   setInterval(function () { if (frameOn) loadOptics(); }, 3000);
 }
@@ -1683,7 +1787,9 @@ function wireFrame() {
 // sequence DOM itself, so it hands the target back to Flutter (which owns the
 // sequence builder) through the loopback server's reverse event channel.
 function addFrameToSequence() {
-  if (frameRaDeg == null) return;
+  // Simple Mode queues through its own Add to queue (one block per Target,
+  // ADR 0010), which reads the framing postFraming sends.
+  if (CHART || frameRaDeg == null) return;
   var btn = document.getElementById('f-add');
   btn.disabled = true; btn.textContent = 'Creating…';
   // Per-panel J2000 centres (row-major), same grid + gnomonic deprojection as
