@@ -5,22 +5,31 @@ import 'package:openastroara/screens/settings/panels/imaging_autofocus_panel.dar
 import 'package:openastroara/services/autofocus_api.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/settings/registry.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/focus/focus_presets.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
+import 'package:openastroara/state/settings/panel_save_registry.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
+import '../../../support/fake_section_rig.dart';
+import '../../../support/imaging_sections.dart';
+
+/// The profile's autofocus section the last pump loaded (no HTTP).
+late FakeAutofocusSection _af;
+
 // §59.8 — the Automatic step size switch; #1544 — the rows the Advanced
-// toggle and a settings search hit show. No server: the panel keeps the
-// notifier's defaults instead of hydrating.
+// toggle and a settings search hit show. The section loads the rig's copy
+// ([loaded] false: a rig that does not answer).
 Future<void> _pump(
   WidgetTester tester, {
   AutofocusApi? api,
   bool advanced = true,
   String? searchHit,
+  bool loaded = true,
 }) async {
   // Wide desktop surface + half text scale, as the sibling panel tests do:
   // Ahem renders every glyph at full point size and the fixed labels overflow.
@@ -38,6 +47,12 @@ Future<void> _pump(
     ProviderScope(
       overrides: [
         activeServerProvider.overrideWithValue(null),
+        profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+        autofocusSettingsProvider.overrideWith(
+          () => _af = FakeAutofocusSection(
+            initial: loaded ? const AutofocusSettings() : null,
+          ),
+        ),
         autofocusApiProvider.overrideWithValue(api),
         // #2036: the switch rules in Simple Mode only.
         simpleModeActiveProvider.overrideWithValue(true),
@@ -244,6 +259,7 @@ void main() {
       expect(
         ProviderScope.containerOf(element)
             .read(autofocusSettingsProvider)
+            .value!
             .stepSizeAuto,
         isFalse,
       );
@@ -252,4 +268,43 @@ void main() {
       expect(find.text('First-sweep step size (focuser steps)'), findsNothing);
     },
   );
+
+  testWidgets(
+    'Save with the section not loaded from the rig writes nothing and says so (ADR 0015)',
+    (tester) async {
+      await _pump(tester, api: _RecalibrateApi(), loaded: false);
+      expect(find.textContaining('Not loaded'), findsOneWidget);
+      expect(find.text('Method'), findsNothing, reason: 'no default shows');
+      expect(
+        find.byKey(const Key('af-reset-calibration')),
+        findsOneWidget,
+        reason: 'the reset is not the profile section',
+      );
+      final panel =
+          tester.state(find.byType(ImagingAutofocusPanel))
+              as PanelSaveRegistration;
+      await panel.panelSave();
+      await tester.pump();
+      expect(_af.puts, isEmpty);
+      expect(
+        find.textContaining('Settings not loaded from the rig'),
+        findsWidgets,
+      );
+    },
+  );
+
+  testWidgets('Autofocus: Save sends the edit made on the rig copy (ADR 0015)', (
+    tester,
+  ) async {
+    await _pump(tester);
+    await tester.tap(_autoSwitch());
+    await tester.pump();
+    final panel =
+        tester.state(find.byType(ImagingAutofocusPanel))
+            as PanelSaveRegistration;
+    await panel.panelSave();
+    await tester.pump();
+    expect(_af.puts.single.stepSizeAuto, isFalse);
+    expect(find.text('Saved.'), findsOneWidget);
+  });
 }

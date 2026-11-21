@@ -26,10 +26,13 @@ class _MemPrefs extends SimpleModePrefsService {
 class _RefusingRig extends ProfileApi {
   _RefusingRig() : super(const AraServer(hostname: '192.0.2.10', port: 5000));
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(permanentPier: true);
+  Future<({SiteSettings value, String? etag})> getSiteSection() async =>
+      (value: const SiteSettings(permanentPier: true), etag: '"v1"');
   @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async {
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings value, {
+    String? ifMatch,
+  }) async {
     final at = RequestOptions(path: '/api/v1/profile/site');
     throw DioException(
       requestOptions: at,

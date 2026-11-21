@@ -18,12 +18,15 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>
 /// §35.3 emergency stop — the one-button "make everything stop moving NOW"
-/// path behind <c>POST /api/v1/server/emergency-stop</c>. Rungs, in order:
+/// path behind <c>POST /api/v1/server/emergency-stop</c>. First, before any rung, the stop is latched in the mount's
+/// stop count (#2066): Polar Align and every queued GoTo or Park that read it before treat it as a stop at once, so none
+/// can start a move or turn tracking on while the rungs below run. Rungs, in order:
 /// turn the dome's follow-the-mount off (#1689), then abort active sequence runs (so a still-running instruction can't
 /// start a fresh exposure or slew behind the stop), then stop the mount where it is, stop the Polar Aligner, halt the rotator
 /// where it is (aborting a run only stops the sequencer waiting on its move,
 /// #1671), abort the in-flight exposure, stop the guide-camera focus loop, the Bahtinov readout,
-/// a running autofocus and polar alignment, stop guiding, stop the mount again if a polar alignment
+/// a running autofocus and polar alignment (told to leave the mount to this ladder: it confirms no stop of its own, which
+/// could outlast its rung), stop guiding, stop the mount and the Polar Aligner again if a polar alignment
 /// was running, switch the flat panel's light off, and switch the camera's cooler off. Every rung is best-effort — a
 /// dead device must never block the remaining rungs — and the result reports honestly what each rung did.
 /// The <c>safety.emergency_stop</c> WS event fires up-front so WILMA can
@@ -58,8 +61,8 @@ public sealed partial class EmergencyStopService {
     // instead of stalling the ladder behind it and wedging the single-flight
     // gate for the rest of the session — abort_exposure in particular blocks
     // on the real Alpaca HTTP call, unlike the 202-style rungs. 10 s per rung
-    // puts the worst-case ladder at 16 rungs (abort runs, 11 single rungs, two
-    // mount passes of two), 160 s on a healthy pool.
+    // puts the worst-case ladder at 17 rungs (abort runs, 12 single rungs, two
+    // mount passes of two), 170 s on a healthy pool.
     // #1985 — the window covers the connected probe and the action's synchronous prefix too.
     // Both run on a dedicated thread, so a probe that never completes or a prefix that blocks
     // holds neither the caller nor the ladder, and a rung whose work completes synchronously
@@ -127,6 +130,9 @@ public sealed partial class EmergencyStopService {
 
     private async Task<EmergencyStopResultDto> ExecuteCoreAsync() {
         LogTriggered();
+        // #2066 — step 0, before the event and every rung: latch the stop. A rung below can take up to 10 s (the dome, the
+        // run abort); a polar alignment between two turns would otherwise start its next turn, or turn tracking on, meanwhile.
+        FenceMountQuietly();
         // Fires BEFORE the rungs so the client can alarm while the daemon works
         // — same contract as the §35.4 safety.unsafe event.
         await PublishAsync(WsEventCatalog.SafetyEmergencyStop, new JsonObject()).ConfigureAwait(false);
@@ -190,14 +196,21 @@ public sealed partial class EmergencyStopService {
         // alignment's result.
         var polarOutcome = await RungAsync("stop polar alignment",
             _polarAlign is null ? null : () => Task.FromResult(_polarAlign.IsActive),
-            _polarAlign is null ? null : async ct => await _polarAlign.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+            _polarAlign is null ? null : async ct => await _polarAlign.StopForTakeoverAsync(MountStopReasons.EmergencyStop, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (polarOutcome is RungOutcome.Failed) { failedRungs.Add("stop_polar_align"); }
         var guidingOutcome = await RungAsync("stop guiding",
             _guider is null ? null : async () => (await _guider.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
             _guider is null ? null : async ct => await _guider.StopGuidingAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
         if (guidingOutcome is RungOutcome.Failed) { failedRungs.Add("stop_guiding"); }
-        // Polar alignment can move the mount and turn tracking on until its Stop lands.
-        if (polarOutcome is not RungOutcome.NotAvailable) { await StopMountAsync("again").ConfigureAwait(false); }
+        // Polar alignment can move the mount and turn tracking on until its Stop lands, and it drives the Polar Aligner: both
+        // are stopped again (#2066 — the routine leaves the mount's stop to this ladder).
+        if (polarOutcome is not RungOutcome.NotAvailable) {
+            await StopMountAsync("again").ConfigureAwait(false);
+            var alignerAgain = await RungAsync("stop polar aligner (again)",
+                _polarAligner is null ? null : () => Task.FromResult(_polarAligner.IsPresent),
+                _polarAligner is null ? null : async ct => await _polarAligner.StopAsync(null, ct).ConfigureAwait(false)).ConfigureAwait(false);
+            if (alignerAgain is RungOutcome.Failed && !failedRungs.Contains("stop_polar_aligner")) { failedRungs.Add("stop_polar_aligner"); }
+        }
         if (mountFaulted) { failedRungs.Add("stop_mount"); }
         var flatOutcome = await RungAsync("flat panel light off",
             _flatDevice is null ? null : async () => (await _flatDevice.GetAsync(CancellationToken.None).ConfigureAwait(false))?.State == EquipmentConnectionState.Connected,
@@ -251,6 +264,17 @@ public sealed partial class EmergencyStopService {
             FlatPanelLightOff: flatLightOff,
             FailedRungs: failedRungs,
             CoolerOff: coolerOff);
+    }
+
+    /// <summary>#2066 — step 0: counts the stop in the mount's stop count, in memory, with no device call (nothing here can hang).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort latch: a fault must never block the rungs; the first mount pass still aborts the slew. Logged, never rethrown.")]
+    private void FenceMountQuietly() {
+        try {
+            _telescope?.FenceMotion(MountStopReasons.EmergencyStop);
+        } catch (Exception ex) {
+            LogRungFailed("latch the stop", ex);
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",

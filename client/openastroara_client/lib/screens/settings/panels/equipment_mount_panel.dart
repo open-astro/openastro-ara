@@ -6,7 +6,6 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/mount_status.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
-import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -31,24 +30,6 @@ class EquipmentMountPanel extends ConsumerStatefulWidget {
 }
 
 class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
-  @override
-  void initState() {
-    super.initState();
-    // Hydrate the profile's site (lat/long rows) on mount — the same explicit
-    // round-trip pattern the Safety → Site panel uses (§37.12).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateSite());
-  }
-
-  Future<void> _hydrateSite() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (_) {
-      // Offline / bad response — keep the defaults; the rows stay hidden.
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final status = ref.watch(mountProvider);
@@ -114,8 +95,10 @@ class _MountBody extends ConsumerWidget {
       );
     }
     final caps = s.capabilities;
-    final site = ref.watch(siteSettingsProvider);
-    final hasSite = site.latitudeDeg != 0 || site.longitudeDeg != 0;
+    // The site loads itself from the rig (ADR 0015); not loaded, no rows.
+    final site = ref.watch(siteSettingsProvider).value;
+    final hasSite =
+        site != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -349,7 +332,11 @@ class _PositionUnverified extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 4),
-          Text(l10n.mountPositionUnverifiedBody),
+          Text(
+            status.positionUnverifiedByStop
+                ? l10n.mountPositionStopUnconfirmedBody
+                : l10n.mountPositionUnverifiedBody,
+          ),
           const SizedBox(height: 4),
           if (status.atHome)
             OutlinedButton(

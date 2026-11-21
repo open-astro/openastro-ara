@@ -124,6 +124,9 @@ public sealed partial class GuiderService : IGuiderEpisodeListener {
     // re-centres for them only. Nothing paused (no run, or another episode holds them) arms nothing.
     void IGuiderEpisodeListener.Paused(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds) {
         lock (_gate) {
+            if (NoteDecRunawayPausedLocked(fault, runIds)) {
+                return; // #1589 — a Dec runaway's pause: no star-lost recovery
+            }
             if (!_starLostReacted || !ReferenceEquals(fault, _starLostFault)) {
                 return; // a link or camera fault, or the star is back already
             }

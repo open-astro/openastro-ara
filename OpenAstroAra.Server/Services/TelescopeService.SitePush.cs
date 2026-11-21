@@ -128,27 +128,32 @@ public sealed partial class TelescopeService {
         _ = RunSitePush(async () => {
             await _sitePushGate.WaitAsync().ConfigureAwait(false);
             try {
-                // Read under the gate, so of two close saves the later push writes the newer site.
-                var site = store.GetSiteSettings();
-                var wanted = new SiteValue(site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
-                if (!HasSite(wanted.Lat, wanted.Lng) || (!force && _sitePushed == wanted)) {
-                    return; // no site yet must not overwrite the mount's real one; an unchanged one is there
-                }
-                if (!await WaitOutSlewAsync(mount).ConfigureAwait(false)) {
-                    return; // still slewing: the next save or connect tries again
-                }
-                // A push begun for a mount that has since disconnected can still set this after
-                // ForgetPushedSite(); harmless while every connect forces a push (keep that force).
-                if (PushSite(mount, wanted.Lat, wanted.Lng, wanted.Elev)) {
-                    _sitePushed = wanted;
-                } else {
-                    _sitePushed = null;
-                    LogSitePushIncomplete(wanted.Lat, wanted.Lng, wanted.Elev);
-                }
+                await PushSiteCoreAsync(store, mount, force).ConfigureAwait(false);
             } finally {
                 _sitePushGate.Release();
             }
         });
+    }
+
+    /// <summary>The site push itself; the caller holds <see cref="_sitePushGate"/>.</summary>
+    private async Task PushSiteCoreAsync(OpenAstroAra.Server.Services.IProfileStore store, IMountSite mount, bool force) {
+        // Read under the gate, so of two close saves the later push writes the newer site.
+        var site = store.GetSiteSettings();
+        var wanted = new SiteValue(site.LatitudeDeg, site.LongitudeDeg, site.ElevationM);
+        if (!HasSite(wanted.Lat, wanted.Lng) || (!force && _sitePushed == wanted)) {
+            return; // no site yet must not overwrite the mount's real one; an unchanged one is there
+        }
+        if (!await WaitOutSlewAsync(mount).ConfigureAwait(false)) {
+            return; // still slewing: the next save or connect tries again
+        }
+        // A push begun for a mount that has since disconnected can still set this after
+        // ForgetPushedSite(); harmless while every connect forces a push (keep that force).
+        if (PushSite(mount, wanted.Lat, wanted.Lng, wanted.Elev)) {
+            _sitePushed = wanted;
+        } else {
+            _sitePushed = null;
+            LogSitePushIncomplete(wanted.Lat, wanted.Lng, wanted.Elev);
+        }
     }
 
     /// <summary>#1710 — a switch changes the profile before it swaps the devices, so until it is done a
@@ -170,18 +175,26 @@ public sealed partial class TelescopeService {
         }
     }
 
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "A mount that can't report Slewing is treated as not slewing: the push's own per-value error handling covers a refused write.")]
     private async Task<bool> WaitOutSlewAsync(IMountSite mount) {
+        if (await SlewEndedAsync(() => mount.Slewing).ConfigureAwait(false)) {
+            return true;
+        }
+        LogSitePushSlewing();
+        return false;
+    }
+
+    // Up to about three minutes for a slew to end; false when the mount is still slewing.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A mount that can't report Slewing is treated as not slewing: each push handles a refused write itself.")]
+    private async Task<bool> SlewEndedAsync(Func<bool> slewing) {
         for (var i = 0; i < SitePushSlewPolls; i++) {
-            bool slewing;
-            try { slewing = mount.Slewing; } catch (Exception) { slewing = false; }
-            if (!slewing) {
+            bool moving;
+            try { moving = slewing(); } catch (Exception) { moving = false; }
+            if (!moving) {
                 return true;
             }
             await SitePushWait(SitePushSlewPoll).ConfigureAwait(false);
         }
-        LogSitePushSlewing();
         return false;
     }
 

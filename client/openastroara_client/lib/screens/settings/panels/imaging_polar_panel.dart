@@ -4,12 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../l10n/l10n.dart';
 import '../../../models/polar_align.dart';
 import '../../../state/polar_align/polar_align_routine_state.dart';
-import '../../../state/polar_align/polar_align_state.dart'
-    show polarAlignApiProvider;
 import '../../../state/settings/loaded_section.dart';
+import '../../../state/settings/polar_align_settings_state.dart';
 import '../../../util/friendly_error.dart';
 import '../../../widgets/settings/editable_field.dart';
-import '../../../widgets/settings/section_load_state.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// #1736 Imaging → Polar align: the routine's knobs (profile section
@@ -17,29 +16,37 @@ import '../../../widgets/settings/settings_row.dart';
 /// [polarAlignSettingsProvider]. Nothing shows, and nothing saves, until the
 /// rig's copy is loaded (ADR 0015 rule 1); a value outside the registry's
 /// range snaps back unsaved, and the label names the range.
-class ImagingPolarPanel extends ConsumerWidget {
+class ImagingPolarPanel extends ConsumerStatefulWidget {
   const ImagingPolarPanel({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final loaded = ref.watch(polarAlignSettingsProvider);
-    final s = loaded.value;
-    // No rig: the provider's defaults are not the rig's values.
-    if (s == null || ref.watch(polarAlignApiProvider) == null) {
-      return SectionNotLoaded(
-        section: LoadedSection(lastFailure: loaded.error),
-        onRetry: () => ref.invalidate(polarAlignSettingsProvider),
-      );
-    }
+  ConsumerState<ImagingPolarPanel> createState() => _ImagingPolarPanelState();
+}
+
+class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
+    with SectionPanel {
+  @override
+  List<PanelSection> get sections => [polarAlignSettingsProvider];
+
+  @override
+  Widget build(BuildContext context) {
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final s = ref.watch(polarAlignSettingsProvider).value!;
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
-    Future<void> save(PolarAlignSettings next) async {
+    // On the rig's copy as it is when the edit lands (ADR 0015).
+    Future<void> save(PolarAlignSettings Function(PolarAlignSettings) change) async {
       try {
-        await ref.read(polarAlignSettingsProvider.notifier).save(next);
+        await ref.read(polarAlignSettingsProvider.notifier).saveKnob(change);
       } catch (e) {
         messenger.showSnackBar(
           SnackBar(
-            content: Text(friendlyError(l10n, e, action: l10n.polarActionSave)),
+            content: Text(
+              e is SectionNotLoadedException || e is SectionConflictException
+                  ? e.toString()
+                  : friendlyError(l10n, e, action: l10n.polarActionSave),
+            ),
           ),
         );
       }
@@ -49,7 +56,7 @@ class ImagingPolarPanel extends ConsumerWidget {
       String label,
       double current,
       double Function(PolarAlignSettings) read,
-      PolarAlignSettings Function(double) apply, {
+      PolarAlignSettings Function(PolarAlignSettings, double) apply, {
       required String helpKey,
       required PolarKnobRange range,
       String? hint,
@@ -64,7 +71,7 @@ class ImagingPolarPanel extends ConsumerWidget {
         final v = double.tryParse(text);
         final now = ref.read(polarAlignSettingsProvider).value ?? s;
         if (v != null && v >= range.min && v <= range.max && v != read(now)) {
-          save(apply(v));
+          save((x) => apply(x, v));
         }
       },
     );
@@ -72,29 +79,23 @@ class ImagingPolarPanel extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         SettingsSectionHeader(l10n.polarKnobSection),
         number(
           l10n.polarKnobTolerance,
           s.targetToleranceArcmin,
           (x) => x.targetToleranceArcmin,
-          (v) => s.copyWith(targetToleranceArcmin: v),
+          (x, v) => x.copyWith(targetToleranceArcmin: v),
           helpKey: 'img.polar.target_tolerance_arcmin',
           range: (min: 0.1, max: 10),
           hint: l10n.polarKnobToleranceHint,
-        ),
-        SettingsSwitchRow(
-          label: l10n.polarKnobUseHome,
-          helpKey: 'img.polar.use_home',
-          value: s.useHome,
-          onChanged: (v) => save(s.copyWith(useHome: v)),
-          hint: s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
         ),
         // #1971 a profile setting: shown with or without a Polar Aligner connected.
         SettingsSwitchRow(
           label: l10n.polarKnobAlignerAuto,
           helpKey: 'img.polar.polar_aligner_auto',
           value: s.polarAlignerAuto,
-          onChanged: (v) => save(s.copyWith(polarAlignerAuto: v)),
+          onChanged: (v) => save((x) => x.copyWith(polarAlignerAuto: v)),
           hint: s.polarAlignerAuto ? l10n.polarKnobAlignerAutoOn : l10n.polarKnobAlignerAutoOff,
         ),
         // #2048 NINA's StopTrackingWhenDone: on by default.
@@ -102,14 +103,14 @@ class ImagingPolarPanel extends ConsumerWidget {
           label: l10n.polarKnobStopTracking,
           helpKey: 'img.polar.stop_tracking_when_done',
           value: s.stopTrackingWhenDone,
-          onChanged: (v) => save(s.copyWith(stopTrackingWhenDone: v)),
+          onChanged: (v) => save((x) => x.copyWith(stopTrackingWhenDone: v)),
           hint: s.stopTrackingWhenDone ? l10n.polarKnobStopTrackingOn : l10n.polarKnobStopTrackingOff,
         ),
         number(
           l10n.polarKnobTurn,
           s.seedRotationDeg,
           (x) => x.seedRotationDeg,
-          (v) => s.copyWith(seedRotationDeg: v),
+          (x, v) => x.copyWith(seedRotationDeg: v),
           helpKey: 'img.polar.seed_rotation_deg',
           range: polarSeedRotationRange,
           hint: l10n.polarKnobTurnHint,
@@ -118,7 +119,7 @@ class ImagingPolarPanel extends ConsumerWidget {
           l10n.polarKnobVerifyStep,
           s.checkStepDeg,
           (x) => x.checkStepDeg,
-          (v) => s.copyWith(checkStepDeg: v),
+          (x, v) => x.copyWith(checkStepDeg: v),
           helpKey: 'img.polar.check_step_deg',
           range: polarCheckStepRange,
           hint: l10n.polarKnobVerifyStepHint,
@@ -127,9 +128,44 @@ class ImagingPolarPanel extends ConsumerWidget {
           l10n.polarKnobRoughExposure,
           s.coarseExposureSeconds,
           (x) => x.coarseExposureSeconds,
-          (v) => s.copyWith(coarseExposureSeconds: v),
+          (x, v) => x.copyWith(coarseExposureSeconds: v),
           helpKey: 'img.polar.coarse_exposure_seconds',
           range: polarCoarseExposureRange,
+        ),
+        // #2082 the measurement's camera; Rough first is always the main one.
+        SettingsDropdownRow<String>(
+          key: const Key('polar-knob-camera'),
+          label: l10n.polarKnobCamera,
+          helpKey: 'img.polar.camera',
+          value: s.camera,
+          items: {
+            PolarAlignCameras.guide: l10n.polarKnobCameraGuide,
+            PolarAlignCameras.main: l10n.polarKnobCameraMain,
+          },
+          onChanged: (v) {
+            final now = ref.read(polarAlignSettingsProvider).value ?? s;
+            if (v != null && v != now.camera) save((x) => x.copyWith(camera: v));
+          },
+        ),
+        // #2082 frames averaged at each point: a whole number, 1 to 5.
+        EditableNumberRow(
+          key: const Key('polar-knob-frames-per-point'),
+          label: l10n.polarKnobFramesPerPoint,
+          helpKey: 'img.polar.frames_per_point',
+          hint: l10n.polarKnobFramesPerPointHint,
+          currentValue: '${s.framesPerPoint}',
+          getCanonical: () =>
+              '${(ref.read(polarAlignSettingsProvider).value ?? s).framesPerPoint}',
+          parse: (text) {
+            final v = int.tryParse(text.trim());
+            final now = ref.read(polarAlignSettingsProvider).value ?? s;
+            if (v != null &&
+                v >= polarFramesPerPointRange.min &&
+                v <= polarFramesPerPointRange.max &&
+                v != now.framesPerPoint) {
+              save((x) => x.copyWith(framesPerPoint: v));
+            }
+          },
         ),
       ],
     );

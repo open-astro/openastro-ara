@@ -60,36 +60,9 @@ internal sealed class PaResidualTracker {
     private bool _paused;
     private double _nextProgressAt;
 
-    // A runaway: this many steps in a row on one axis with the pulse at (within 5 % of) the largest
-    // one the run has sent and the distance never shrinking, ending at least 3x and 1 px above where
-    // the streak began. A steady drift also sits at one pulse length with a flat distance, so the
-    // growth is what tells them apart. 10 frames is ~20 s at PHD2's usual 2 s exposure: a gust or a
-    // bad frame recovers well inside it, a mount that is not tracking never does (rig night
-    // 2026-11-14: RA ran 0.5 to 37 px with every pulse at 2500 ms).
-    internal const int RunawaySteps = 10;
-    private const double PinnedFraction = 0.95, GrowthFactor = 3, GrowthMinPx = 1;
-    private readonly Axis _ra = new(), _dec = new();
-
-    private sealed class Axis {
-        public double MaxPulse, LastDistance, StartDistance;
-        public int Run;
-
-        public bool Step(double distance, double durationMs) {
-            var pulse = System.Math.Abs(durationMs);
-            MaxPulse = System.Math.Max(MaxPulse, pulse);
-            var pinned = pulse > 0 && pulse >= PinnedFraction * MaxPulse;
-            var growing = System.Math.Abs(distance) >= System.Math.Abs(LastDistance);
-            LastDistance = distance;
-            Run = pinned && growing ? Run + 1 : 0;
-            var now = System.Math.Abs(distance);
-            if (Run == 1) {
-                StartDistance = now;
-            }
-            return Run >= RunawaySteps && now >= GrowthFactor * StartDistance && now - StartDistance >= GrowthMinPx;
-        }
-
-        public void Clear() => (MaxPulse, LastDistance, StartDistance, Run) = (0, 0, 0, 0);
-    }
+    // A runaway on either axis (the rule is GuideAxisRunaway's, shared with the Dec runaway watch, #1589).
+    internal const int RunawaySteps = GuideAxisRunaway.Steps;
+    private readonly GuideAxisRunaway _ra = new(), _dec = new();
 
     public PaResidualAction OnStep(double timeSec, double decRawPx, double decDurationMs, double raRawPx = 0, double raDurationMs = 0) {
         if (_runDone) {

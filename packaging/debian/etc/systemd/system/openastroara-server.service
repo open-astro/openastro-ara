@@ -5,7 +5,7 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-# Type=simple for v0.0.1-ara.1 — Type=notify + WatchdogSec=60 from the
+# Type=simple for now — Type=notify + WatchdogSec=60 from the
 # §13 spec require the sd_notify watchdog implementation tracked as
 # Phase 4 / §66 work. Will switch to Type=notify + WatchdogSec once
 # the IHostedService heartbeat lands in OpenAstroAra.Server.

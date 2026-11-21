@@ -5,8 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lat_lng_to_timezone/lat_lng_to_timezone.dart' as tz_map;
 
 import '../l10n/l10n.dart';
-import '../services/profile_api.dart';
 import '../state/profile_management_state.dart' show profileApiProvider;
+import '../state/settings/loaded_section.dart';
 import '../state/settings/site_settings_state.dart';
 import '../state/simple_messages_state.dart';
 import '../state/simple_mode_state.dart';
@@ -111,13 +111,7 @@ class _CompanionTimeOfferListenerState
       notify(l10n.companionTimeOfferNoGps, detail: r.message, error: true);
       return;
     }
-    final site = ref.read(siteSettingsProvider.notifier);
-    site.setLatitudeDeg(r.lat);
-    site.setLongitudeDeg(r.lng);
-    if (r.alt != null) site.setElevationM(r.alt!);
-    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
-    final ProfileApi? api = ref.read(profileApiProvider);
-    if (api == null) {
+    if (ref.read(profileApiProvider) == null) {
       notify(
         l10n.shellCouldntSaveSite,
         detail: l10n.shellRigNotConnected,
@@ -125,12 +119,27 @@ class _CompanionTimeOfferListenerState
       );
       return;
     }
+    // The fix goes onto the rig's copy of the site (loaded once more first
+    // when it isn't in) and is saved whole; not loaded, refused or stale:
+    // nothing is sent and it says why (ADR 0015).
     try {
-      await site.persistToServer(api);
+      await ref
+          .read(siteSettingsProvider.notifier)
+          .changeAndSave(
+            (c) => SiteSettingsNotifier.withFix(
+              c,
+              lat: r.lat,
+              lng: r.lng,
+              alt: r.alt,
+              timeZone: tz_map.latLngToTimezoneString(r.lat, r.lng),
+            ),
+          );
     } catch (e) {
       notify(
         l10n.shellCouldntSaveSite,
-        detail: friendlyError(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
         error: true,
       );
       return;

@@ -10,10 +10,16 @@ import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import '../../util/polar_align_error_text.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
+import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
+import '../../state/settings/polar_align_settings_state.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
 import '../../widgets/imaging/polar_aligner_block.dart';
+import '../../widgets/imaging/polar_start_confirm.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
 import 'simple_preview_panel.dart'
@@ -36,9 +42,10 @@ Duration _exposure(PolarAlignSettings s) =>
 bool _single(PolarAlignSettings s) => s.loopMode == PolarAlignLoopModes.single;
 
 /// "45 s" over "Single": the rail chip's caption in Polar align, the
-/// routine's setup on two lines (one doesn't fit the 60 px chip). Pure —
-/// unit-tested.
-String simplePolarSummary(PolarAlignSettings s, AppLocalizations l10n) {
+/// routine's setup on two lines (one doesn't fit the 60 px chip). Empty while
+/// the profile's copy is not in from the rig (ADR 0015). Pure — unit-tested.
+String simplePolarSummary(PolarAlignSettings? s, AppLocalizations l10n) {
+  if (s == null) return '';
   return '${formatExposure(_exposure(s))}\n'
       '${_single(s) ? l10n.polarSingle : l10n.polarLoop}';
 }
@@ -79,7 +86,8 @@ class SimplePolarShutter extends ConsumerWidget {
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
-          : () => run(l10n.polarActionStart, (api) => api.start()),
+          // #2048 — through the confirm step: nothing moves until the user says so.
+          : () => run(l10n.polarActionStart, (api) => confirmAndStartPolarAlign(context, api)),
     );
   }
 }
@@ -100,8 +108,9 @@ String simplePolarPhase(PolarAlignLive live, AppLocalizations l10n) =>
       _ => l10n.polarPhaseReady,
     };
 
-/// Which stepper step the routine is on: 0 Rough, 1 Fine, 2 Verify. Null when
-/// nothing runs and there is no verdict to show. A null stage is an older
+/// Which stepper step the routine is on: 0 Rough, 1 Fine, 2 Check. Null when
+/// nothing runs and there is no verdict to show. Each is its own Start
+/// (#2082): none leads into another. A null stage is an older
 /// daemon's one-stage routine: the fine step. Pure — unit-tested.
 int? simplePolarStep(PolarAlignLive live) {
   if (live.phase == PolarAlignStates.checking ||
@@ -132,9 +141,9 @@ String simplePolarVerdictLabel(PolarAlignCheckResult r, AppLocalizations l10n) {
 
 /// Polar align's panel beside the right rail: the routine's settings
 /// (exposure, Loop/Single); while it runs, the phase, the total error with its
-/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single) and
-/// Done (once inside the profile's tolerance). The rail's shutter starts and
-/// stops it.
+/// zone, the bullseye, the altitude and azimuth turns, Take frame (Single),
+/// Check and Done (once inside the profile's tolerance); after Done (or a
+/// Stop), Check again. The rail's shutter starts and stops it.
 class SimplePolarPanel extends ConsumerStatefulWidget {
   const SimplePolarPanel({super.key});
 
@@ -171,10 +180,44 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
         .run(op, describe: (e) => friendlyError(l10n, e, action: action));
   }
 
-  void _save(PolarAlignSettings next) => _run(
-    context.l10n.polarActionSave,
-    (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
-  );
+  /// [change] on the rig's copy of the profile section (ADR 0015): refused,
+  /// nothing sent, when it is not loaded; a failed save rolls back, and a 412
+  /// reloads the rig's copy (this screen has no Reload of its own).
+  void _save(PolarAlignSettings Function(PolarAlignSettings) change) {
+    final l10n = context.l10n;
+    ref
+        .read(polarAlignActionProvider.notifier)
+        .run(
+          (_) => ref
+              .read(polarAlignSettingsProvider.notifier)
+              .changeAndSave(change),
+          describe: (e) =>
+              e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : friendlyError(l10n, e, action: l10n.polarActionSave),
+        );
+  }
+
+  /// #2082 — Check: a confirmed Start(check) through the rig's sweep plan. From
+  /// the adjust loop the rig ends the loop first (like Stop), then measures.
+  Future<void> _check() {
+    final l10n = context.l10n;
+    return _run(
+      l10n.polarActionCheck,
+      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.check),
+    );
+  }
+
+  /// #2082 — Rough first: the main camera's measurement, a confirmed Start
+  /// through the rig's sweep plan, offered after the guide camera could not
+  /// solve the pole field (Joey, 2026-11-20).
+  Future<void> _roughFirst() {
+    final l10n = context.l10n;
+    return _run(
+      l10n.polarActionStart,
+      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.coarse),
+    );
+  }
 
   /// Finish the routine. In Preflight, Done moves on (the routine is complete:
   /// nothing to stop).
@@ -205,28 +248,39 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       polarAlignLiveProvider,
       (_, next) => setState(() => _bolt.track(next)),
     );
-    final settings =
-        ref.watch(polarAlignSettingsProvider).value ??
-        const PolarAlignSettings();
+    // Null until the profile's copy is in from the rig (ADR 0015): Setup
+    // says so, with Retry, and nothing is judged against a made-up tolerance.
+    final loaded = ref.watch(polarAlignSettingsProvider);
+    final settings = loaded.value;
     final command = ref.watch(polarAlignActionProvider);
     final busy = command.busy;
-    final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
+    final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
     final active = simplePolarActive(live);
     final total = live.totalErrorArcmin;
     final step = simplePolarStep(live);
     // Verifying and Verified show only the phase line and the verdict.
     final verifying = step == 2;
     final inTolerance =
-        total != null && total <= settings.targetToleranceArcmin;
+        total != null &&
+        settings != null &&
+        total <= settings.targetToleranceArcmin;
     final color = zoneColor(total);
     // #1971 while the Polar Aligner's motors work, the arrows dim and
     // Verify and Done step aside (user, 2026-11-16).
     final motorsBusy = polarAlignerMotorsBusy(live);
     final aligner = polarAlignerShown(ref.watch(polarAlignerProvider));
+    // How far Check turns the mount, said before it moves (#2082); only the
+    // rig's own step, so none until its settings are in (ADR 0015).
+    final checkCaption = settings == null
+        ? null
+        : l10n.polarCheckCaption(settings.checkStepDeg.toStringAsFixed(0));
+    // After Done or a Stop, and beside a verdict: a new Check from where the mount is.
+    final checkAgain = !active &&
+        (live.phase == PolarAlignStates.stopped || live.phase == PolarAlignStates.checked);
     final error =
         command.error ??
         (live.phase == PolarAlignStates.failed
-            ? live.errorMessage ?? live.errorReason
+            ? polarAlignErrorText(context.l10n, live)
             : null);
 
     // A turn as a tile: the axis, a big arrow and the move, read at arm's
@@ -256,7 +310,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(axis, style: AraText.caption, maxLines: 1),
+                // One line, scaled down when the convention (#2083) makes it long.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(axis, key: Key('simple-polar-turn-$id-axis'), style: AraText.caption, maxLines: 1),
+                ),
                 Text(
                   value == null
                       ? hint.$2
@@ -301,7 +360,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       ),
       turn(
         'az',
-        l10n.polarAzimuth,
+        // #2083 the azimuth's convention: a true arc, not NINA's angle.
+        '${l10n.polarAzimuth} · ${l10n.polarAzimuthArc}',
         live.azErrorArcmin,
         polarAzHint(l10n, live.azErrorArcmin, southern: southern),
       ),
@@ -343,6 +403,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               _PolarStepper(
                 key: const Key('simple-polar-stepper'),
                 step: step,
+                done: live.phase == PolarAlignStates.checked,
                 doneLabel: l10n.polarStepDone,
                 labels: [
                   l10n.polarStepRough,
@@ -355,44 +416,57 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               // The settings for the next frame: a row each like the Focus
               // panel's choices (user, 2026-11-04: one row read oddly); side by
               // side while it runs, so the bullseye panel still fits an iPad.
-              Flex(
-                key: const Key('simple-polar-setup'),
-                direction: active && !stack ? Axis.horizontal : Axis.vertical,
-                crossAxisAlignment: active && !stack
-                    ? CrossAxisAlignment.center
-                    : CrossAxisAlignment.stretch,
-                spacing: AraSpace.s8,
-                children: [
-                  for (final w in <Widget>[
-                    SimpleSegments<String>(
-                      options: [
-                        (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
-                        (
-                          PolarAlignLoopModes.single,
-                          l10n.polarSingle,
-                          'single',
-                        ),
-                      ],
-                      selected: settings.loopMode,
-                      onPick: (mode) =>
-                          _save(settings.copyWith(loopMode: mode)),
-                    ),
-                    SimplePresetTile<Duration>(
-                      key: const Key('simple-polar-exposure'),
-                      label: l10n.polarExposure,
-                      value: _exposure(settings),
-                      options: exposurePresets(minSec: 0, maxSec: 60),
-                      format: formatExposure,
-                      onSelected: (d) => _save(
-                        settings.copyWith(
-                          exposureSeconds: d.inMilliseconds / 1000,
+              if (settings == null)
+                SectionNotLoaded(
+                  key: const Key('simple-polar-setup-not-loaded'),
+                  section: loaded,
+                  padding: EdgeInsets.zero,
+                  onRetry: () {
+                    final api = ref.read(profileApiProvider);
+                    if (api != null) {
+                      ref.read(polarAlignSettingsProvider.notifier).load(api);
+                    }
+                  },
+                )
+              else
+                Flex(
+                  key: const Key('simple-polar-setup'),
+                  direction: active && !stack ? Axis.horizontal : Axis.vertical,
+                  crossAxisAlignment: active && !stack
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.stretch,
+                  spacing: AraSpace.s8,
+                  children: [
+                    for (final w in <Widget>[
+                      SimpleSegments<String>(
+                        options: [
+                          (PolarAlignLoopModes.loop, l10n.polarLoop, 'loop'),
+                          (
+                            PolarAlignLoopModes.single,
+                            l10n.polarSingle,
+                            'single',
+                          ),
+                        ],
+                        selected: settings.loopMode,
+                        onPick: (mode) =>
+                            _save((s) => s.copyWith(loopMode: mode)),
+                      ),
+                      SimplePresetTile<Duration>(
+                        key: const Key('simple-polar-exposure'),
+                        label: l10n.polarExposure,
+                        value: _exposure(settings),
+                        options: exposurePresets(minSec: 0, maxSec: 60),
+                        format: formatExposure,
+                        onSelected: (d) => _save(
+                          (s) => s.copyWith(
+                            exposureSeconds: d.inMilliseconds / 1000,
+                          ),
                         ),
                       ),
-                    ),
-                  ])
-                    active && !stack ? Expanded(child: w) : w,
-                ],
-              ),
+                    ])
+                      active && !stack ? Expanded(child: w) : w,
+                  ],
+                ),
               // Its own fixed slot between Setup and Error (user, 2026-11-16).
               if (aligner) const PolarAlignerBlock(),
             ],
@@ -404,15 +478,39 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
-            // Waiting for the user to put the mount at Home.
-            if (active && live.waitingForHome)
+            // #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
+            if (active &&
+                live.handTurn &&
+                (live.phase == PolarAlignStates.seeding || live.phase == PolarAlignStates.checking))
               Text(
-                l10n.polarNeedsHomeHint,
-                key: const Key('simple-polar-needs-home'),
-                style: kSimpleText,
+                polarHandTurnText(l10n, live.handTurnWait) ?? l10n.polarHandTurnRunNote,
+                key: const Key('simple-polar-hand-turn'),
+                style: kSimpleText.copyWith(
+                  color: live.handTurnWait == null ? null : AraColors.accentBusy,
+                ),
                 maxLines: 4,
               ),
-            // The check's verdict beside the fine readout.
+            // #2072 the camera sits where the readout reads the altitude bolt poorly.
+            if (active &&
+                !verifying &&
+                live.readoutCaution == PolarAlignReadoutCautions.altitudeWeak)
+              Text(
+                l10n.polarReadoutCautionAltitudeWeak,
+                key: const Key('simple-polar-readout-caution'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
+            // #2082 a point's frames stayed scattered after their retake: the
+            // readout, or the check's verdict, rests on noisy solves.
+            if ((active && !verifying && live.measurementNoisy) ||
+                (live.phase == PolarAlignStates.checked && live.checkResult?.noisy == true))
+              Text(
+                l10n.polarNoisyMeasurement,
+                key: const Key('simple-polar-noisy'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
+            // The check's verdict beside the last run's readout (#2082).
             if (live.phase == PolarAlignStates.checked && live.checkResult != null)
               Text(
                 live.checkResult!.fineDeltaArcmin == null
@@ -453,6 +551,13 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     ),
                 ],
               ),
+              if (polarInitialErrorText(l10n, live.initialErrorArcmin) case final warning?)
+                Text(
+                  warning,
+                  key: const Key('simple-polar-initial-error'),
+                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                  maxLines: 4,
+                ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
             if (active && _bolt.nudge != null)
@@ -474,21 +579,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 maxLines: 4,
                 overflow: TextOverflow.ellipsis,
               ),
-            if (active && live.waitingForHome)
-              FilledButton(
-                key: const Key('simple-polar-continue'),
-                style: kSimpleGoStyle,
-                onPressed: busy
-                    ? null
-                    : () => _run(l10n.polarActionContinue, (api) => api.next()),
-                child: Text(l10n.polarContinue),
-              ),
             if (active &&
                 live.stage == PolarAlignStages.coarse &&
                 !live.waitingForHome) ...[
               // Inside the tolerance (#1875): the rough alignment may be enough.
-              // Fine stays the green primary, Done is outlined.
-              if (total != null)
+              // #2082 — no Next: fine; the guide camera is a new Start.
+              if (total != null && settings != null)
                 Text(
                   inTolerance
                       ? l10n.polarInsideTolerance(
@@ -501,32 +597,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   style: AraText.caption,
                   maxLines: 3,
                 ),
-              Row(
-                spacing: AraSpace.s8,
-                children: [
-                  if (inTolerance && !motorsBusy)
-                    Expanded(
-                      child: OutlinedButton(
-                        key: const Key('simple-polar-done-rough'),
-                        onPressed: busy ? null : () => _done(inSimplePreflight),
-                        child: Text(_doneLabel(l10n, inSimplePreflight)),
-                      ),
-                    ),
-                  Expanded(
-                    child: FilledButton(
-                      key: const Key('simple-polar-next-fine'),
-                      style: kSimpleGoStyle,
-                      onPressed: busy || total == null
-                          ? null
-                          : () => _run(
-                              l10n.polarActionNextFine,
-                              (api) => api.next(),
-                            ),
-                      child: Text(l10n.polarNextFine),
-                    ),
-                  ),
-                ],
-              ),
+              if (inTolerance && !motorsBusy)
+                OutlinedButton(
+                  key: const Key('simple-polar-done-rough'),
+                  onPressed: busy ? null : () => _done(inSimplePreflight),
+                  child: Text(_doneLabel(l10n, inSimplePreflight)),
+                ),
             ],
             if (live.phase == PolarAlignStates.checked)
               FilledButton(
@@ -535,13 +611,52 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 onPressed: busy ? null : () => _done(inSimplePreflight),
                 child: Text(_doneLabel(l10n, inSimplePreflight)),
               ),
-            if (active &&
+            // #2082 — after Done (or a Stop), and beside a verdict: Check again,
+            // a confirmed new measurement that says how far it turns.
+            if (checkAgain) ...[
+              if (checkCaption != null)
+                Text(
+                  checkCaption,
+                  key: const Key('simple-polar-check-again-caption'),
+                  style: AraText.caption,
+                  maxLines: 3,
+                ),
+              OutlinedButton(
+                key: const Key('simple-polar-check-again'),
+                onPressed: busy ? null : _check,
+                child: Text(l10n.polarCheck),
+              ),
+            ],
+            // #2082 — after the guide camera could not solve the pole field:
+            // the main camera's measurement, which says how far it turns. Not
+            // after a run on the main camera, which just failed.
+            if (!active &&
+                live.phase == PolarAlignStates.failed &&
+                live.errorReason == 'seed_solve_failed' &&
+                !live.usesMainCamera) ...[
+              if (settings != null)
+                Text(
+                  l10n.polarRoughFirstCaption(
+                    settings.seedRotationDeg.toStringAsFixed(0),
+                  ),
+                  key: const Key('simple-polar-rough-caption'),
+                  style: AraText.caption,
+                  maxLines: 3,
+                ),
+              OutlinedButton(
+                key: const Key('simple-polar-rough-first'),
+                onPressed: busy ? null : _roughFirst,
+                child: Text(l10n.polarRoughFirst),
+              ),
+            ],
+            if (checkCaption != null &&
+                active &&
                 !motorsBusy &&
                 live.stage != PolarAlignStages.coarse &&
                 (live.phase == PolarAlignStates.adjusting ||
                     live.phase == PolarAlignStates.paused))
               Text(
-                l10n.polarVerifyCaption,
+                checkCaption,
                 key: const Key('simple-polar-verify-caption'),
                 style: AraText.caption,
                 maxLines: 3,
@@ -555,7 +670,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 children: [
                   // Single waits for a tap before each frame; Loop shoots on
                   // its own.
-                  if (_single(settings))
+                  if (settings != null && _single(settings))
                     Expanded(
                       child: FilledButton.tonal(
                         key: const Key('simple-polar-capture'),
@@ -572,10 +687,7 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
-                      onPressed: !busy && inTolerance
-                          ? () =>
-                                _run(l10n.polarActionCheck, (api) => api.next())
-                          : null,
+                      onPressed: !busy && inTolerance ? _check : null,
                       child: Text(l10n.polarCheck),
                     ),
                   ),
@@ -606,12 +718,13 @@ class SimplePolarFrame extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The rough stage's frames are the main camera's: the guider has no picture.
-    final coarse = ref.watch(
-      polarAlignLiveProvider.select((l) => l.stage == PolarAlignStages.coarse),
+    // The main camera's frames (the rough stage, or the profile's camera,
+    // #2082): the guider has no picture.
+    final mainCamera = ref.watch(
+      polarAlignLiveProvider.select((l) => l.usesMainCamera),
     );
     final frame = ref.watch(polarAlignFrameProvider);
-    final jpeg = coarse ? null : frame;
+    final jpeg = mainCamera ? null : frame;
     return ColoredBox(
       color: AraColors.imageBackdrop,
       child: jpeg == null
@@ -621,17 +734,22 @@ class SimplePolarFrame extends ConsumerWidget {
   }
 }
 
-/// Rough → Fine → Verify: the step the routine is on is filled, the steps
-/// before it carry a tick.
+/// Rough · Fine · Check: the step the routine is on is filled, with a tick
+/// once a check finished. Each is its own Start (#2082), so no step before it
+/// carries a tick.
 class _PolarStepper extends StatelessWidget {
   const _PolarStepper({
     super.key,
     required this.step,
+    required this.done,
     required this.doneLabel,
     required this.labels,
   });
 
   final int step;
+
+  /// The step the routine is on has finished (a check's verdict).
+  final bool done;
   final String doneLabel;
   final List<String> labels;
 
@@ -657,7 +775,7 @@ class _PolarStepper extends StatelessWidget {
                 spacing: AraSpace.s4,
                 children: [
                   // An icon, not U+2713: the glyph falls back to a box in Roboto.
-                  if (i < step)
+                  if (i == step && done)
                     Icon(
                       Icons.check,
                       size: AraText.caption.fontSize,
@@ -668,9 +786,7 @@ class _PolarStepper extends StatelessWidget {
                     child: Text(
                       labels[i],
                       style: AraText.caption.copyWith(
-                        color: i < step
-                            ? AraColors.accentConnected
-                            : i == step
+                        color: i == step
                             ? AraColors.selectionFg
                             : AraColors.textSecondary,
                       ),

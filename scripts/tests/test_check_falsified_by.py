@@ -22,6 +22,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SCRIPT = REPO_ROOT / "scripts" / "check-falsified-by.py"
+MERGE_DOWN = REPO_ROOT / "scripts" / "merge-down.py"
 
 DART = "client/openastroara_client/test/album_test.dart"
 CS = "OpenAstroAra.Test/AlbumTests.cs"
@@ -49,11 +50,14 @@ class FalsifiedByTest(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.repo = Path(tmp.name) / "repo"
         self.repo.mkdir()
-        self.env = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        # A CI run on a merge-down PR sets GITHUB_HEAD_REF; keep it out of these repositories.
+        self.env = {k: v for k, v in os.environ.items()
+                    if not k.startswith(("GIT_", "MERGE_DOWN_")) and k not in ("GITHUB_HEAD_REF", "GITHUB_BASE_REF")}
         self.env.update(GIT_ENV)
         self.git("init", "-q", "-b", "master")
         (self.repo / "scripts").mkdir()
         shutil.copy(SCRIPT, self.repo / "scripts" / "check-falsified-by.py")
+        shutil.copy(MERGE_DOWN, self.repo / "scripts" / "merge-down.py")
         for p in (LIB, DAEMON):
             self.write(p, "// production\n")
 
@@ -76,13 +80,13 @@ class FalsifiedByTest(unittest.TestCase):
         self.commit("base")
         self.git("checkout", "-q", "-b", "pr")
 
-    def run_check(self, body="", base=None):
+    def run_check(self, body="", base=None, env=None):
         bf = self.repo.parent / "body.md"
         bf.write_text(body, encoding="utf-8")
         cmd = [sys.executable, str(self.repo / "scripts" / "check-falsified-by.py"), "--body-file", str(bf)]
         if base:
             cmd += ["--base", base]
-        return subprocess.run(cmd, capture_output=True, text=True, env=self.env)
+        return subprocess.run(cmd, capture_output=True, text=True, env=dict(self.env, **(env or {})))
 
     def body(self, *cases, path=LIB):
         return "Falsified by:\n" + "".join('- "%s": %s:1 %s\n' % (c, path, CHANGE) for c in cases)
@@ -325,6 +329,67 @@ class FalsifiedByTest(unittest.TestCase):
         r = self.run_check(self.body("mine"), base="merge-parent")
         self.assertEqual(r.returncode, 0, r.stdout)
         self.assertEqual(self.run_check(self.body("mine")).returncode, 2)
+
+    # --- merge downs (scripts/merge-down.py) ---------------------------------
+
+    def start_merge_down(self):
+        """master, a stable/1.0 fix that adds a case, and merge-down/1.0-to-master carrying it back."""
+        self.write(DART, "void main() { test('old', () {}); }\n")
+        self.commit("base")
+        self.git("checkout", "-q", "-b", "stable/1.0")
+        self.write(DART, "void main() { test('old', () {}); test('stable fix', () {}); }\n")
+        self.commit("fix on stable/1.0")
+        self.git("checkout", "-q", "master")
+        self.write("README.md", "docs\n")
+        self.commit("master moves on")
+        self.git("remote", "add", "origin", str(self.repo))
+        self.git("update-ref", "refs/remotes/origin/stable/1.0", "stable/1.0")
+        self.git("update-ref", "refs/remotes/origin/master", "master")
+        self.git("checkout", "-q", "-b", "merge-down/1.0-to-master", "stable/1.0")
+        self.git("merge", "-q", "--no-edit", "master")
+        return {"MERGE_DOWN_HEAD_REF": "merge-down/1.0-to-master", "MERGE_DOWN_BASE_REF": "master",
+                "MERGE_DOWN_BASE_SHA": self.git("rev-parse", "master"), "MERGE_DOWN_SAME_REPO": "true"}
+
+    def test_a_merge_down_of_stable_commits_is_exempt(self):
+        env = self.start_merge_down()
+        self.assertEqual(self.run_check().returncode, 1)  # without the merge-down facts, the case reads as new
+        r = self.run_check(env=env)
+        self.assertEqual(r.returncode, 0, r.stdout)
+        self.assertIn("falsified-by: exempt, merge down of stable/1.0 into master", r.stdout)
+
+    def test_a_merge_down_head_with_its_own_commit_is_checked(self):
+        env = self.start_merge_down()
+        self.write("client/openastroara_client/test/extra_test.dart", "void main() { test('extra', () {}); }\n")
+        self.commit("not on stable/1.0")
+        r = self.run_check(env=env)
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("not exempt as a merge down", r.stdout)
+        self.assertIn("new test case has no `Falsified by:` line: 'extra'", r.stdout)
+
+    def test_a_merge_down_from_a_fork_is_checked(self):
+        env = self.start_merge_down()
+        r = self.run_check(env=dict(env, MERGE_DOWN_SAME_REPO="false"))
+        self.assertEqual(r.returncode, 1, r.stdout)
+        self.assertIn("the head is not a branch of this repository", r.stdout)
+
+
+class PrBodyWorkflowTest(unittest.TestCase):
+    """pr-body.yml hands check-falsified-by.py the merge-down facts it reads."""
+
+    def test_the_falsified_by_step_passes_every_merge_down_fact(self):
+        text = (REPO_ROOT / ".github" / "workflows" / "pr-body.yml").read_text()
+        job = text.split("\n  falsified-by:\n", 1)[1].split("\n  pr-template:\n", 1)[0]
+        step = job.split("- name: Check Falsified by lines", 1)[1]
+        expected = {
+            "MERGE_DOWN_HEAD_REF": "${{ github.head_ref }}",
+            "MERGE_DOWN_BASE_REF": "${{ github.base_ref }}",
+            "MERGE_DOWN_BASE_SHA": "${{ github.event.pull_request.base.sha }}",
+            "MERGE_DOWN_HEAD_SHA": "${{ github.event.pull_request.head.sha }}",
+            "MERGE_DOWN_SAME_REPO": "${{ github.event.pull_request.head.repo.full_name == github.repository }}",
+        }
+        for name, value in expected.items():
+            self.assertIn("%s: %s" % (name, value), step, name)
+        self.assertNotIn("MERGE_DOWN", step.split("\n        run:", 1)[1])  # env only, never expanded in run:
 
 
 if __name__ == "__main__":

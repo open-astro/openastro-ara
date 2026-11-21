@@ -18,6 +18,32 @@ The tracker is **`open-astro/openastro-ara`** (the `origin` remote). Clones also
 
 File issues only into the user's own repo. Never file into `mattpocock/skills` (the repo these skills come from) unless the user owns it. In a fork, `gh` can default to the upstream parent, so before the first `gh issue create` of a session, check the target with `gh repo view --json nameWithOwner` and confirm it with the user if it is not their repo.
 
+## Labels every issue carries
+
+Every open issue carries one label from each of three groups. The `Issue labels` workflow (`.github/workflows/issue-labels.yml`, `scripts/check-issue-labels.py`) runs when an issue is opened, reopened, labelled or unlabelled. While a group is missing it keeps **one** comment on the issue naming the missing groups, and deletes the comment once all three are set. It never adds a label or closes an issue. Issues opened by a bot, or labelled `dependencies` or `github_actions`, are exempt.
+
+- **Type**: `bug`, `enhancement`, `documentation` or `question`.
+- **Priority**: `P1` (show-stopper: blocks the next release or breaks a real install or night), `P2` (important: correctness or safety before people rely on it), `P3` (should do: product completeness), `P4` (nice to have), `P5` (parked: needs a maintainer decision, or speculative), `P6` (deferred until the end).
+- **Size**, as the estimated work for one agent:
+  - `XS`: under 250k Opus tokens. A docs change or one-liner, one pass.
+  - `S`: 250k to 1M tokens. One file and its test, one CI round.
+  - `M`: 1M to 3M tokens. A few files, one or two CI or review rounds.
+  - `L`: 3M to 8M tokens. Several subsystems, rig or review loops.
+  - `XL`: over 8M tokens. Epic-sized; split it.
+
+When you file an issue, set all three groups. Triage state labels (`needs-triage`, `ready-for-agent`, ...) are separate; see `triage-labels.md`.
+
+## Milestones
+
+A release has one open milestone at a time, named for the next tag: `vX.Y.Z-beta.N`, then `vX.Y.Z` (the process is in `docs/RELEASES.md`). It holds everything that tag waits on: P1 and P2 fixes, one issue per hardware check, regressions found during the betas, and any fix a maintainer admits to `stable/X.Y` by name. The tag is pushed only when it has no open items; then it closes and the milestone for the next tag opens.
+
+Rules:
+
+- A regression found in a beta goes on the open milestone. Its fix PR targets `stable/X.Y` only when the defect is new since the previous stable release (the admission test in `docs/RELEASES.md`; for 1.0 every defect qualifies); otherwise it targets `master` and the issue leaves the milestone.
+- Do not put feature work on a release milestone. Features ship from `master` in the next minor.
+- Add an issue with `gh issue edit <n> -R open-astro/openastro-ara --milestone "v1.0.0-beta.1"`. List what is left with `gh issue list -R open-astro/openastro-ara --milestone "v1.0.0-beta.1" --state open`.
+- A PR merged into `stable/**` does not close its issues through GitHub; `.github/workflows/close-linked-issues.yml` closes the ones it names with `Closes`, `Fixes` or `Resolves`.
+
 ## Pull requests as a triage surface
 
 **PRs as a request surface: no.** _(Set to `yes` if this repo treats external PRs as feature requests; `/triage` reads this flag.)_

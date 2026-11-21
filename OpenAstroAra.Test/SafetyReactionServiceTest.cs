@@ -194,6 +194,59 @@ namespace OpenAstroAra.Test {
             Assert.That(postedNotifications[0].Severity, Is.EqualTo(NotificationSeverity.Critical));
         }
 
+        private static readonly string[] PolarAlignThenAlignerThenPark = { "polar safety_park", "aligner", "park" };
+
+        // #2066 — a polar alignment turning the RA motor when the sky turns unsafe: it is stopped, and its Polar Aligner too,
+        // before the park goes out, and it is told to leave the mount to the park (no stop confirmation of its own).
+        [Test]
+        public async Task Safety_park_during_turn_stops_PA_first() {
+            var calls = new List<string>();
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.IsMovingMount).Returns(true);
+            polar.Setup(p => p.StopForTakeoverAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .Callback<string, CancellationToken>((by, _) => { lock (calls) { calls.Add("polar " + by); } }).ReturnsAsync(Accepted);
+            var aligner = new Mock<IPolarAlignerService>();
+            aligner.Setup(a => a.IsPresent).Returns(true);
+            aligner.Setup(a => a.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("aligner"); } }).ReturnsAsync(Accepted);
+            telescope.Setup(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                .Callback(() => { lock (calls) { calls.Add("park"); } }).ReturnsAsync(Accepted);
+            service.Dispose();
+            service = new SafetyReactionService(
+                monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
+                guider.Object, telescope.Object, notifications.Object, ws.Object,
+                polarAlignResolver: () => polar.Object, polarAligner: aligner.Object);
+            SetMonitor(safe: false);
+
+            await service.TickAsync();
+
+            Assert.That(calls, Is.EqualTo(PolarAlignThenAlignerThenPark));
+            polar.Verify(p => p.StopAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "not the Stop that confirms its own stop first");
+        }
+
+        // #2066 — a polar alignment that hangs on its stop must not hold the safety park back.
+        [Test]
+        public async Task A_polar_alignment_that_hangs_on_its_stop_does_not_hold_the_safety_park_back() {
+            var never = new TaskCompletionSource<OperationAcceptedDto>();
+            var polar = new Mock<IPolarAlignService>();
+            polar.Setup(p => p.IsActive).Returns(true);
+            polar.Setup(p => p.StopForTakeoverAsync(It.IsAny<string>(), It.IsAny<CancellationToken>())).Returns(never.Task);
+            service.Dispose();
+            service = new SafetyReactionService(
+                monitor.Object, weather.Object, profiles.Object, () => sequencer.Object,
+                guider.Object, telescope.Object, notifications.Object, ws.Object,
+                polarAlignResolver: () => polar.Object) {
+                StopPolarAlignBeforeParkTimeout = TimeSpan.FromMilliseconds(50),
+            };
+            SetMonitor(safe: false);
+
+            await service.TickAsync().WaitAsync(TimeSpan.FromSeconds(10));
+
+            telescope.Verify(t => t.ParkAsync(It.IsAny<ParkRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+            never.TrySetResult(Accepted);
+        }
+
         [Test]
         public async Task Unsafe_with_ignore_notifies_but_touches_nothing() {
             SetPolicy("ignore", autoResume: true, delayMin: 1);
@@ -827,8 +880,9 @@ namespace OpenAstroAra.Test {
 
             await service.TickAsync();
 
-            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Once,
-                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends)");
+            telescope.Verify(t => t.AbortSlewAsync(MountStopReasons.PoseUnverified, It.IsAny<CancellationToken>()), Times.Once,
+                "the mount's motion stops instead of parking (a pad lease the refused park no longer ends), under its own name (#2107)");
+            telescope.Verify(t => t.AbortSlewAsync(It.IsAny<CancellationToken>()), Times.Never, "never counted as Stop Mount");
             telescope.Verify(t => t.SetTrackingAsync(false, It.IsAny<CancellationToken>()), Times.Once,
                 "the mount stops tracking instead of parking");
             Assert.That(postedNotifications.Count(n => n.Severity == NotificationSeverity.Critical

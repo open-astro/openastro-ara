@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import '../l10n/l10n.dart';
+import '../models/mount_status.dart' show MountStatus;
 import '../services/guider_api.dart' show GuideStartFailed;
 import '../services/refusal.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
@@ -104,9 +105,26 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     ),
     RefusalCause.endNightInProgress => l.refusalEndNightInProgress,
     RefusalCause.mountPositionUnverified =>
-      r.parameters['position_unverified_reason'] == 'not_read_yet'
-          ? l.refusalMountPositionNotReadYet
-          : l.refusalMountPositionUnverified,
+      switch (r.parameters['position_unverified_reason']) {
+        'not_read_yet' => l.refusalMountPositionNotReadYet,
+        MountStatus.stopUnconfirmedReason =>
+          l.refusalMountPositionStopUnconfirmed,
+        _ => l.refusalMountPositionUnverified,
+      },
+    RefusalCause.polarAlignMountParked => l.refusalPolarAlignMountParked,
+    RefusalCause.polarAlignUnconfirmed => l.refusalPolarAlignUnconfirmed,
+    RefusalCause.polarAlignSweepLimit => l.refusalPolarAlignSweepLimit(
+      _unsignedWholeDegrees(r.parameters['offset_deg']),
+    ),
+    RefusalCause.polarAlignMovingMount => l.refusalPolarAlignMovingMount,
+    RefusalCause.polarAlignOnAxis => l.refusalPolarAlignOnAxis,
+    RefusalCause.polarAlignPointingUnknown => l.refusalPolarAlignPointingUnknown,
+    RefusalCause.polarAlignPoseAmbiguous => l.refusalPolarAlignPoseAmbiguous,
+    RefusalCause.polarAlignMountBusy => l.refusalPolarAlignMountBusy,
+    RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
+    RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
+    RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
+    RefusalCause.polarAlignClutchTurned => l.refusalPolarAlignClutchTurned,
     null => _firstLine(r.detail),
   };
 }
@@ -120,6 +138,10 @@ String _wholeDegrees(Object? value) =>
 
 /// A refusal's hour angle in hours, one decimal; "?" when absent.
 String _hours(Object? value) => value is num ? value.toStringAsFixed(1) : '?';
+
+/// A refusal's angle in whole degrees, unsigned; "?" when absent.
+String _unsignedWholeDegrees(Object? value) =>
+    value is num ? value.abs().toStringAsFixed(0) : '?';
 
 String? _firstLine(String? text) {
   final line = text?.trim().split('\n').first.trim();

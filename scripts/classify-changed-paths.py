@@ -109,6 +109,10 @@ DOTNET_ROOT_FILES = frozenset(
         ".editorconfig",  # dotnet_diagnostic.* severities feed the analyzer
         "CommonAssemblyInfo.cs",
         "Directory.Build.props",
+        # #2093: the version attributes for the NINA library projects.
+        "Directory.Build.targets",
+        # #2093: Directory.Build.props reads the release version from it.
+        "VERSION",
         "Dockerfile",
         "OpenAstroAra.sln",
         "OpenAstroAra.sln.licenseheader",
@@ -149,6 +153,21 @@ SCRIPT_RULES = {
     "scripts/merge-gate.sh": NONE,
     # Run by auto-queue.yml after a review run only.
     "scripts/auto-queue.sh": NONE,
+    # Release tooling (#2093, docs/RELEASES.md): run by release.yml,
+    # issue-labels.yml, close-linked-issues.yml, pr-body.yml (merge-down.py via
+    # check-falsified-by.py) and the Sanity job's tests. version.py and
+    # nightly-version.py (which reads changelog-fragments.py) also name
+    # server-build's .deb; server-build is gated on docs_only, not dotnet, so
+    # it runs for them regardless. No job gated on dotnet or client reads them.
+    "scripts/version.py": NONE,
+    "scripts/release-tag.py": NONE,
+    "scripts/release-tag-cases.txt": NONE,
+    "scripts/changelog-section.py": NONE,
+    "scripts/nightly-version.py": NONE,
+    "scripts/merge-down.py": NONE,
+    "scripts/close-linked-issues.py": NONE,
+    "scripts/check-issue-labels.py": NONE,
+    "scripts/source-archive.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -168,6 +187,10 @@ GITHUB_RULES = {
     ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/workflows/merge-queue.yml": NONE,
     ".github/workflows/auto-queue.yml": NONE,
+    # #2093 release workflows: tag pushes, issue events and merged stable PRs only.
+    ".github/workflows/release.yml": NONE,
+    ".github/workflows/issue-labels.yml": NONE,
+    ".github/workflows/close-linked-issues.yml": NONE,
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,

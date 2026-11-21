@@ -44,7 +44,8 @@ namespace OpenAstroAra.Server.Services;
 /// <list type="number">
 ///   <item>Stop guiding (if a guider is connected).</item>
 ///   <item>Pass meridian — stop tracking, wait out <c>timeToFlip</c>, resume tracking.</item>
-///   <item>Flip slew — <see cref="ITelescopeMediator.MeridianFlip"/> → settle → best-effort dome sync.</item>
+///   <item>Flip slew — <see cref="ITelescopeMediator.MeridianFlip"/> → §58.5 side-of-pier check (#1589: right
+///         after the slew, before anything re-centres or guides) → settle → best-effort dome sync.</item>
 ///   <item>Re-focus — <em>deferred</em>: the live focuser V-curve AF sweep is unbuilt (focuser-gated). When
 ///         <c>AutoFocusAfterFlip</c> is set we log that it was skipped rather than fail the flip (re-focus is
 ///         best-effort per §58.7).</item>
@@ -52,7 +53,8 @@ namespace OpenAstroAra.Server.Services;
 ///         a failed centre logs + continues (matches NINA), it does not fail the flip.</item>
 ///   <item>Resume guiding — auto-select a new guide star, then start guiding (if a guider is connected).</item>
 ///   <item>Settle.</item>
-///   <item>§58.5 side-of-pier verification — log a warning if the mount didn't report a pier-side change.</item>
+///   <item>§58.8 (#1589) — on a profile with no confirmed flip, record the completed flip for the user to
+///         confirm. The executor never confirms a flip itself.</item>
 /// </list>
 ///
 /// Mount-gated to live-validate (it slews/flips the mount); the orchestration is unit-testable with mocked
@@ -95,9 +97,19 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     internal sealed class WaitStatus : ApplicationStatus {
         public int SecondsLeft { get; init; }
     }
-    // §58.8 — the first-flip proceed-on-timeout window (spec: ~60 s).
+    // §58.8 — the unconfirmed-flip proceed-on-timeout window (spec: ~60 s).
     internal TimeSpan FirstFlipConfirmWait { get; set; } = TimeSpan.FromSeconds(60);
-    internal const string FirstFlipWaitText = "Meridian flip — first flip, starting in";
+    internal const string FirstFlipWaitText = "Meridian flip — not confirmed yet, starting in";
+
+    /// <summary>#1589 — what the §58.5 side-of-pier check read right after the flip slew.</summary>
+    internal enum PierSideCheck {
+        /// <summary>The mount reported a different pier side after the slew.</summary>
+        Changed,
+        /// <summary>The mount reported an unknown pier side, before or after: nothing to verify.</summary>
+        Unknown,
+        /// <summary>The mount reported the same pier side: it likely did not flip.</summary>
+        Unchanged,
+    }
     // Injectable clock for the Layer-1 altitude prediction (tests pin the instant).
     internal Func<DateTimeOffset> UtcNow { get; set; } = () => DateTimeOffset.UtcNow;
 
@@ -195,13 +207,13 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             return false;
         }
 
-        // §58.8 — first-flip confirmation safety net: the very first flip on this profile
-        // announces itself and gives the user a proceed-on-timeout window instead of flipping
-        // silently. Runs AFTER the flight check (announcing a flip that Layer 1 would refuse is
-        // noise) and BEFORE any state is touched, so a user who stops the sequence during the
-        // window leaves the mount exactly as it was. A cancel during the wait propagates as
-        // CANCELLED (the flag stays false — the next attempt announces again).
-        await ConfirmFirstFlip(safety, progress, token);
+        // §58.8 — first-flip confirmation safety net: every flip on a profile with no confirmed
+        // flip announces itself and gives the user a proceed-on-timeout window instead of
+        // flipping silently. Runs AFTER the flight check (announcing a flip that Layer 1 would
+        // refuse is noise) and BEFORE any state is touched, so a user who stops the sequence
+        // during the window leaves the mount exactly as it was. The window is no consent (#1589):
+        // only the user confirms, after a flip completed.
+        await AnnounceUnconfirmedFlip(safety, progress, token);
 
         // Track what we actually touched so the catch blocks only undo real state changes: don't resume a
         // guider we never stopped, don't "restore" tracking we never disabled (either would log a misleading
@@ -223,7 +235,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // mount that reports the same (non-unknown) pier side after the slew likely didn't flip.
             var pierSideBeforeFlip = telescopeMediator.GetInfo().SideOfPier;
 
-            await DoFlip(targetCoordinates, settings.SettleTime, safety, progress, token);
+            var pierSide = await DoFlip(targetCoordinates, settings.SettleTime, pierSideBeforeFlip, safety, progress, token);
 
             if (settings.Recenter) {
                 await Recenter(targetCoordinates, safety, progress, token);
@@ -275,7 +287,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             // resumes. Both use the same SettleTime (matching NINA's two-settle DoMeridianFlip).
             await Settle(settings.SettleTime, progress, token);
 
-            VerifySideOfPier(pierSideBeforeFlip, safety);
+            // #1589 — the flip ran to the end: an unconfirmed profile records it for the user to
+            // confirm. An unchanged pier side reaches here only with flip safety off (a driver that
+            // misreports pier side), so it is recorded too, for the user to check by eye: otherwise
+            // such a rig could never confirm a flip and every flip would alert and wait for good.
+            await RecordCompletedFlip(safety, pierSide);
 
             Logger.Info("Meridian Flip - Completed successfully.");
             return true;
@@ -372,10 +388,11 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         telescopeMediator.SetTrackingEnabled(true);
     }
 
-    private async Task DoFlip(Coordinates target, int settleSeconds, SafetyPoliciesDto? safety,
-            IProgress<ApplicationStatus> progress, CancellationToken token) {
+    private async Task<PierSideCheck> DoFlip(Coordinates target, int settleSeconds, PierSide pierSideBeforeFlip,
+            SafetyPoliciesDto? safety, IProgress<ApplicationStatus> progress, CancellationToken token) {
         progress.Report(new ApplicationStatus { Source = "MeridianFlip", Status = "Flipping scope" });
         Logger.Info($"Meridian Flip - Flipping to RA: {target.RAString} Dec: {target.DecString} Epoch: {target.Epoch}");
+        LogGuiderDecFlipSetting();
         // §58.9 Layer 2 — with the safety layers on, the flip slew runs under the watchdog (stall
         // detection + hard timeout + mid-slew fault detection); otherwise the plain awaited call.
         var flipSuccess = safety is { FlipSafetyEnabled: true }
@@ -387,11 +404,30 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             throw new InvalidOperationException("Meridian flip aborted: the mount reported the flip slew did not succeed.");
         }
 
+        // §58.5 (#1589) — check the pier side as soon as the slew returns (the mediator refreshes its
+        // cache before it returns), before anything re-centres, re-focuses or guides the mount.
+        var pierSide = await VerifySideOfPier(pierSideBeforeFlip, safety);
+
         // Post-flip-slew settle — let the mount mechanically settle before the recenter plate-solve. Distinct
         // from the final settle in the main body (which waits for guiding to re-converge); both use SettleTime.
         await Settle(settleSeconds, progress, token);
 
         await SynchronizeDome(progress, token);
+        return pierSide;
+    }
+
+    /// <summary>#1589 — the guider flips its own calibration from the mount's pier side; the profile's
+    /// "Meridian flip reverses Dec" (pushed to the guider) decides the Dec sign. Logged at each flip so a
+    /// Dec runaway after a flip can be traced to it. Null = the guider keeps its own value.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A log line only: a profile-store fault while reading it must never fail the flip.")]
+    private void LogGuiderDecFlipSetting() {
+        try {
+            var decFlip = profileStore?.GetGuiderAdvancedSettings()?.CalFlipRequiresDecFlip;
+            Logger.Info($"Meridian Flip - The guider flips its calibration from the pier side; \"Meridian flip reverses Dec\" = {(decFlip is { } v ? v.ToString() : "the guider's own value")}.");
+        } catch (Exception ex) {
+            Logger.Warning($"Meridian Flip - Could not read the guider's Dec flip setting: {ex.Message}");
+        }
     }
 
     // Best-effort dome sync after the flip slew (§58.4). No-ops when no dome is connected (the common case);
@@ -537,26 +573,32 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         }
     }
 
-    // §58.5 — verify the flip via side-of-pier by comparing the post-flip pier side against the snapshot taken
-    // before the slew. An unknown pier side (before or after) can't verify anything and always just warns.
-    // An unchanged KNOWN pier side means the mount likely didn't actually flip: with the §58.9 safety layers
-    // ON this is the Layer-2 HARD fail (never resume imaging on a possibly-still-on-the-wrong-side mount);
-    // with them off it stays the §58.5 warn-and-continue (some Alpaca drivers lie about pier side — the
-    // toggle exists exactly for those rigs).
-    private void VerifySideOfPier(PierSide pierSideBeforeFlip, SafetyPoliciesDto? safety) {
+    // §58.5 — verify the flip via side-of-pier by comparing the pier side read right after the flip slew
+    // against the snapshot taken before it. An unknown pier side (before or after) can't verify anything and
+    // only warns. An unchanged KNOWN pier side means the mount likely didn't actually flip: with the §58.9
+    // safety layers ON this is the Layer-2 HARD fail, before anything re-centres or guides the mount; with
+    // them off the user is warned at once and the flip continues (some Alpaca drivers lie about pier side —
+    // the toggle exists exactly for those rigs).
+    private async Task<PierSideCheck> VerifySideOfPier(PierSide pierSideBeforeFlip, SafetyPoliciesDto? safety) {
         var sideOfPier = telescopeMediator.GetInfo().SideOfPier;
         if (sideOfPier == PierSide.pierUnknown || pierSideBeforeFlip == PierSide.pierUnknown) {
             Logger.Warning("Meridian Flip - The mount reports an unknown pier side; cannot verify the flip via side-of-pier. Continuing.");
-        } else if (sideOfPier == pierSideBeforeFlip) {
-            if (safety is { FlipSafetyEnabled: true }) {
-                throw new InvalidOperationException(
-                    $"The mount reports the same pier side ({sideOfPier}) after the flip as before it — the flip likely did not happen. " +
-                    "Imaging will not resume on a possibly-unflipped mount (disable flip safety if this mount misreports pier side).");
-            }
-            Logger.Warning($"Meridian Flip - The mount reports the same pier side ({sideOfPier}) after the flip as before it; the flip may not have actually happened. Continuing (some drivers misreport pier side).");
-        } else {
-            Logger.Info($"Meridian Flip - Side-of-pier verified: {pierSideBeforeFlip} → {sideOfPier}.");
+            return PierSideCheck.Unknown;
         }
+        if (sideOfPier != pierSideBeforeFlip) {
+            Logger.Info($"Meridian Flip - Side-of-pier verified: {pierSideBeforeFlip} → {sideOfPier}.");
+            return PierSideCheck.Changed;
+        }
+        if (safety is { FlipSafetyEnabled: true }) {
+            throw new InvalidOperationException(
+                $"The mount reports the same pier side ({sideOfPier}) after the flip slew as before it — the flip likely did not happen. " +
+                "Ara did not re-center or restart guiding (disable flip safety if this mount misreports pier side).");
+        }
+        Logger.Warning($"Meridian Flip - The mount reports the same pier side ({sideOfPier}) after the flip slew as before it; the flip may not have actually happened. Continuing (some drivers misreport pier side).");
+        await Notify(NotificationSeverity.Warning, "The mount may not have flipped",
+            $"After the meridian flip slew the mount still reports the same pier side ({sideOfPier}). "
+            + "Flip safety is off, so Ara continues; check that the scope is on the other side of the mount.");
+        return PierSideCheck.Unchanged;
     }
 
     // ─── §58.9 Layer 1 — pre-flip flight check ─────────────────────────────────────────────────
@@ -671,7 +713,7 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
     /// (StopSlew + cancel) on a position stall (&#8805; <see cref="WatchdogStallWindow"/> with no
     /// RA/Dec movement), a mid-slew fault (mount drops Connected), or the hard timeout
     /// (min(3 × expected, <see cref="WatchdogHardCap"/>)). The pier-side-changed assertion runs
-    /// separately in <see cref="VerifySideOfPier"/> after the settle.</summary>
+    /// separately in <see cref="VerifySideOfPier"/> as soon as the slew returns.</summary>
     private async Task<bool> FlipWithWatchdog(Coordinates target, int expectedSlewSeconds, CancellationToken token) {
         var expected = TimeSpan.FromSeconds(Math.Max(1, expectedSlewSeconds));
         var hardTimeout = TimeSpan.FromTicks(Math.Min(expected.Ticks * 3, WatchdogHardCap.Ticks));
@@ -750,9 +792,9 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         Justification = "The safe-rest path runs from the failure handler: a park/tracking-stop fault must degrade to the next-safest action and a truthful message, never mask the original flip fault. CA1031's fail-safe boundary applies.")]
     private async Task<string> SafeRest(IProgress<ApplicationStatus> progress) {
         // Stop the guider FIRST, unconditionally — the failure may have landed after the resume
-        // step (the pier-side hard fail does exactly that), and PHD2 corrections on a mount that
-        // may not have actually flipped drift it further. Spec Layer 4 lists "guider stopped" as
-        // part of the rest state, so this must hold for every path into it.
+        // step (a failure in the final settle does), and PHD2 corrections on a mis-aimed scope
+        // drift it further. Spec Layer 4 lists "guider stopped" as part of the rest state, so this
+        // must hold for every path into it.
         try {
             if (guiderMediator.GetInfo().Connected) {
                 Logger.Info("Meridian Flip - Safe rest: stopping the guider.");
@@ -804,23 +846,20 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         }
     }
 
-    /// <summary>§58.8 — announce the profile's FIRST flip and wait out the proceed-on-timeout
-    /// window, then persist <c>first_flip_confirmed</c> so subsequent flips run silently. The
-    /// user's "no" is stopping the sequence during the window (cancellation propagates and the
-    /// flag stays false, so the next attempt announces again). No-ops without the profile store
-    /// (legacy construction) or once confirmed. The flag is re-read at persist time so a policy
-    /// edit made during the wait isn't clobbered by a stale snapshot.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Persisting the confirmation flag is best-effort: a briefly-unwritable profile file must not fail an otherwise-good flip — the only cost of a swallowed persist fault is announcing again before the next flip. CA1031's log-and-recover boundary applies.")]
-    private async Task ConfirmFirstFlip(SafetyPoliciesDto? safety, IProgress<ApplicationStatus> progress, CancellationToken token) {
+    /// <summary>§58.8 — on a profile with no confirmed flip, announce the flip and wait out the
+    /// proceed-on-timeout window. The user's "no" is stopping the sequence during the window
+    /// (cancellation propagates). It writes nothing (#1589): the window is no consent, so every
+    /// flip announces until the user confirms a completed one. No-ops without the profile store
+    /// (legacy construction) or once confirmed.</summary>
+    private async Task AnnounceUnconfirmedFlip(SafetyPoliciesDto? safety, IProgress<ApplicationStatus> progress, CancellationToken token) {
         if (profileStore is null || safety is null || safety.FirstFlipConfirmed) {
             return;
         }
-        Logger.Info($"Meridian Flip - First flip on this profile (§58.8): announcing, then proceeding in {FirstFlipConfirmWait.TotalSeconds:0}s unless the sequence is stopped.");
-        await NotifyCritical("First meridian flip on this profile",
-            $"About to run this profile's FIRST meridian flip in {FirstFlipConfirmWait.TotalSeconds:0} seconds. "
-            + "Verify the flip pause settings are safe for this rig — stop the sequence now if you want to check. "
-            + "Later flips will run without this wait.");
+        Logger.Info($"Meridian Flip - This profile's flips are not confirmed (§58.8): announcing, then proceeding in {FirstFlipConfirmWait.TotalSeconds:0}s unless the sequence is stopped.");
+        await NotifyCritical("Meridian flip not confirmed on this profile",
+            $"This profile's meridian flips are not confirmed yet. A flip starts in {FirstFlipConfirmWait.TotalSeconds:0} s. "
+            + "Stop the run if the scope could hit the mount. "
+            + "Confirm a completed flip in Settings → Unattended running → When to stop.");
         // #1783 — report the countdown so the run status shows the wait, not the last exposure.
         var remaining = FirstFlipConfirmWait;
         while (remaining > TimeSpan.Zero) {
@@ -829,13 +868,44 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
             await Task.Delay(step, token);
             remaining -= step;
         }
-        try {
-            // Atomic read-modify-write under the store lock (a Get→Put pair could lose a
-            // concurrent policy edit made during the 60 s wait to a stale snapshot).
-            profileStore.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = true });
-        } catch (Exception ex) {
-            Logger.Error("Meridian Flip - Persisting first_flip_confirmed failed; the next flip will announce again.", ex);
+    }
+
+    /// <summary>#1589 — record a flip that ran to the end on a profile with no confirmed flip, so the
+    /// user can confirm it (POST /profile/safety/first-flip/confirm), and ask them to. Never confirms.
+    /// <paramref name="pierSide"/> is what the side-of-pier check read: only <c>Changed</c> records a
+    /// pier-side change; unknown or unchanged (flip safety off) asks the user to check by eye.
+    /// Re-checked under the store lock, so a confirm made during the flip is not undone.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Recording the completed flip is best-effort: a briefly-unwritable profile file must not fail a flip that worked — the only cost is that the user has no flip to confirm until the next one. CA1031's log-and-recover boundary applies.")]
+    private async Task RecordCompletedFlip(SafetyPoliciesDto? safety, PierSideCheck pierSide) {
+        if (profileStore is null || safety is null || safety.FirstFlipConfirmed) {
+            return;
         }
+        var pierSideChanged = pierSide == PierSideCheck.Changed;
+        SafetyPoliciesDto recorded;
+        try {
+            var completed = UtcNow();
+            recorded = profileStore.UpdateSafetyPolicies(current => current.FirstFlipConfirmed
+                ? null
+                : current with { FirstFlipCompletedUtc = completed, FirstFlipPierSideChanged = pierSideChanged });
+        } catch (Exception ex) {
+            Logger.Error("Meridian Flip - Recording the completed flip failed; there is no flip to confirm until the next one.", ex);
+            return;
+        }
+        if (recorded is not { FirstFlipConfirmed: false, FirstFlipCompletedUtc: not null }) {
+            return;
+        }
+        Logger.Info($"Meridian Flip - Recorded the completed flip for the user to confirm (pier side: {pierSide}).");
+        await Notify(NotificationSeverity.Warning, "Confirm this profile's meridian flip",
+            "The meridian flip completed. "
+            + (pierSide switch {
+                PierSideCheck.Changed => "The mount reported its pier side changed. ",
+                PierSideCheck.Unchanged => "The mount reported the same pier side as before the flip, so check by eye. ",
+                _ => "The mount did not report its pier side, so check by eye. ",
+            })
+            + "If the scope cleared the mount and the tripod, and frames and guiding came back, confirm the flip in "
+            + "Settings → Unattended running → When to stop. Until you do, every flip alerts and waits 60 s. "
+            + "If Dec ran away after the flip, change the guider's \"Meridian flip reverses Dec\" for this mount and watch the next flip.");
     }
 
     /// <summary>Best-effort critical notification (§58.9 → §35.5 alarm on connected WILMA

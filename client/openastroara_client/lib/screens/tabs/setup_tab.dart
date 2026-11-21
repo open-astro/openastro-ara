@@ -7,7 +7,6 @@ import '../../state/equipment/mount_state.dart';
 import '../../state/focus/autofocus_live_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/preflight/preflight_state.dart';
-import '../../state/profile_management_state.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../state/settings/settings_nav.dart';
 import '../../state/setup/setup_readiness.dart';
@@ -317,33 +316,13 @@ class _GuiderSection extends ConsumerStatefulWidget {
 
 class _GuiderSectionState extends ConsumerState<_GuiderSection> {
   @override
-  void initState() {
-    super.initState();
-    // The un/configured verdict reads the SHARED phd2 provider, which sits at
-    // client defaults on a fresh launch until some surface hydrates it — the
-    // Settings panel does, but this section can render first and would then
-    // claim "not set up yet" about a fully configured guider. Hydrating here
-    // is safe by design (shared providers carry no unapplied edits;
-    // hydrateGuarded is generation-fenced). Listen rather than one-shot: the
-    // active-server providers hydrate async, so the API can appear late.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final api = ref.read(profileApiProvider);
-      if (api != null) {
-        ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api).ignore();
-      }
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
-    ref.listen(profileApiProvider, (prev, next) {
-      if (prev == null && next != null) {
-        ref.read(phd2SettingsProvider.notifier).hydrateFromServer(next).ignore();
-      }
-    });
-    final phd2 = ref.watch(phd2SettingsProvider);
-    final unconfigured = _GuiderSection.looksUnconfigured(phd2);
+    // The guider settings load themselves from the rig (ADR 0015); until
+    // they are in, the verdict waits rather than claim "not set up yet"
+    // about a fully configured guider.
+    final phd2 = ref.watch(phd2SettingsProvider).value;
+    final unconfigured =
+        phd2 != null && _GuiderSection.looksUnconfigured(phd2);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

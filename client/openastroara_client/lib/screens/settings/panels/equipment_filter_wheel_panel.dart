@@ -547,7 +547,7 @@ class _FocusOffsetsSection extends ConsumerWidget {
     final running = live.isRunning;
     final picks = defaultOffsetPicks(slots);
     final reference = offsetReference(
-        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)));
+        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ?? '');
     final all = {...picks, ?reference}.toList()..sort();
     final theme = Theme.of(context).textTheme;
     final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);

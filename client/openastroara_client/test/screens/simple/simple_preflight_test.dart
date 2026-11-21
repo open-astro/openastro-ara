@@ -18,7 +18,6 @@ import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
     show nightFocusStateProvider, nightPolarAlignStateProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
-import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 
 /// The checklist's focus and polar-align states, set by the test.
@@ -34,16 +33,12 @@ final _focus = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepStat
 final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
 
 class _PolarApi implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
-  /// What start throws instead (no guide camera, say).
-  Object? startError;
   @override
-  Future<void> start({String? stage}) async {
-    if (startError case final e?) throw e;
-    calls.add('start');
-  }
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -239,14 +234,15 @@ void main() {
     expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
   });
 
-  test('a finished autofocus moves on to polar align and starts its routine', () async {
+  test('a finished autofocus moves on to polar align, whose routine waits for the shutter and its confirm step (#2048)', () async {
     final (c, api) = await _container();
     c.read(simplePreflightProvider.notifier).start();
     c.read(simplePreflightProvider.notifier).next();
     expect(api.calls, isEmpty);
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-    expect(api.calls, ['start'], reason: 'entering polar align starts it');
+    await Future<void>.delayed(Duration.zero);
+    expect(api.calls, isEmpty, reason: 'the routine turns the mount from where it points: the user starts it');
   });
 
   test("on a permanent pier a finished autofocus waits for its Done: nothing starts on its own", () async {
@@ -326,27 +322,12 @@ void main() {
       pilot.next();
       c.read(_focus.notifier).set(SetupStepState.done);
       expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-      expect(api.calls, ['start']);
-      (c.read(polarAlignLiveProvider.notifier) as _Live).run();
+      (c.read(polarAlignLiveProvider.notifier) as _Live).run(); // started from the shutter
       leave(pilot);
       await Future<void>.value();
-      expect(api.calls, ['start', 'stop']);
+      expect(api.calls, ['stop']);
     });
   }
-
-  test('a polar routine that fails to start says why in a pill, not a step that never started', () async {
-    final (c, api) = await _container();
-    api.startError = StateError('No guide camera is connected');
-    final pilot = c.read(simplePreflightProvider.notifier);
-    pilot.start();
-    pilot.next();
-    c.read(_focus.notifier).set(SetupStepState.done);
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-    await Future<void>.delayed(Duration.zero);
-    final m = c.read(simpleMessagesProvider).single;
-    expect(m.kind, SimpleMessageKind.error);
-    expect(m.title, contains('No guide camera is connected'), reason: 'the same words the polar shutter shows');
-  });
 
   test("the polar step's Done completes the routine: moving on stops nothing", () async {
     final (c, api) = await _container();
@@ -360,7 +341,7 @@ void main() {
     (c.read(polarAlignLiveProvider.notifier) as _Live).run(); // complete sent, the rig not caught up yet
     pilot.polarDone();
     await Future<void>.value();
-    expect(api.calls, ['start']);
+    expect(api.calls, isNot(contains('stop')));
     expect(plan.starts, hasLength(1));
   });
 
@@ -372,7 +353,7 @@ void main() {
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     pilot.back();
-    expect(api.calls, ['start'], reason: 'nothing running: no stop');
+    expect(api.calls, isEmpty, reason: 'nothing running: no stop');
   });
 
   testWidgets('the strip shows Plan, Focus, Polar align, the current one lit; Skip and Back move', (tester) async {

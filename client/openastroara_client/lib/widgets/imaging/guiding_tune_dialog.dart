@@ -8,6 +8,7 @@ import '../../services/profile_api.dart';
 import '../../state/guider/guider_equipment_state.dart';
 import '../../state/guider/guider_state.dart';
 import '../../state/profile_management_state.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
@@ -45,29 +46,23 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   String? _status;
   List<GuiderNotApplied> _notApplied = const [];
 
-  // Hydrate gate for Apply: persistToServer PUTs the WHOLE Phd2Settings object
-  // (host/port/profile and the §63.17 equipment slots included), so applying
-  // before the daemon's saved values have been loaded would clobber the
-  // daemon-side profile with client defaults. Apply stays disabled until the
-  // initial hydrate has succeeded; a failure is surfaced, not swallowed.
+  // Hydrate gate for Apply: the PUT carries the WHOLE section (host/port/
+  // profile and the §63.17 equipment slots included), so Apply waits until
+  // the rig's copy is in (ADR 0015); a failed load is surfaced, not
+  // swallowed.
   bool _hydrated = false;
   bool _hydrating = false;
   String? _hydrateError;
 
   // The dialog edits a LOCAL draft, not the shared provider: unapplied edits
-  // must never sit in phd2SettingsProvider, where any other surface's hydrate
-  // (Settings → Guider, the sequencer's planning hydrate) could clobber them
-  // — or worse, where Settings' Save could persist a never-confirmed edit.
-  // Apply commits the tuning fields; Done discards the draft. Null until the
-  // hydrate seeds it.
+  // must never sit in phd2SettingsProvider, where any other surface's load
+  // (a live-sync reload, the sequencer's planning load) could clobber them
+  // — or worse, where Settings' auto-save could persist a never-confirmed
+  // edit. Apply saves the eight tuning fields over the rig's copy (the
+  // module's saveOnRigCopy, with its tag), so an edit staged in the shared
+  // section is neither sent nor lost; Done discards the draft. Null until
+  // the hydrate seeds it.
   Phd2Settings? _draft;
-
-  // The daemon's copy as fetched at open. The dialog's hydrate deliberately
-  // does NOT go through the shared notifier: Settings → Guider stages its own
-  // unsaved edits in the shared provider (pre-Save), and a provider hydrate
-  // here would silently revert them. Apply PUTs _serverCopy + the eight tuning
-  // fields, so nothing unconfirmed is persisted and nothing staged is lost.
-  Phd2Settings? _serverCopy;
 
   // listenManual subscriptions are NOT auto-cancelled with the widget — kept
   // so dispose() can close it. The retry matters even for an on-demand dialog:
@@ -97,15 +92,19 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     if (api == null || _hydrating || _hydrated) return;
     _hydrating = true;
     try {
-      final fresh = await api.getPhd2Settings();
-      if (mounted) {
-        setState(() {
-          _hydrated = true;
-          _hydrateError = null;
-          _serverCopy = fresh;
-          _draft = fresh;
-        });
+      // The section loads itself; one more load when it isn't in from the rig
+      // (a load over a copy that is in would drop edits staged elsewhere).
+      final fresh = await ref.read(phd2SettingsProvider.notifier).rigCopy();
+      if (!mounted) return;
+      if (fresh == null) {
+        throw ref.read(phd2SettingsProvider).lastFailure ??
+            const SectionNotLoadedException(null);
       }
+      setState(() {
+        _hydrated = true;
+        _hydrateError = null;
+        _draft = fresh;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _hydrateError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings));
@@ -125,40 +124,32 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       return;
     }
     final draft = _draft;
-    final serverCopy = _serverCopy;
-    if (draft == null || serverCopy == null) return;
+    if (draft == null) return;
     setState(() {
       _applying = true;
       _status = null;
       _notApplied = const [];
     });
     try {
-      // PUT the daemon's own copy + ONLY the eight runtime-safe tuning fields
-      // from the draft — never the shared provider's object, which may hold
-      // Settings → Guider edits the user hasn't confirmed with Save.
-      final toSave = serverCopy.copyWith(
-        raAggressiveness: draft.raAggressiveness,
-        decAggressiveness: draft.decAggressiveness,
-        minimumMove: draft.minimumMove,
-        decMinimumMove: draft.decMinimumMove,
-        decGuideMode: draft.decGuideMode,
-        ditherPixels: draft.ditherPixels,
-        guideExposureMs: draft.guideExposureMs,
-        guideCameraGain: draft.guideCameraGain,
-      );
-      final echoed = await api.putPhd2Settings(toSave);
-      _serverCopy = echoed;
-      // Reflect the now-persisted tuning values in the shared provider (the
-      // setters touch only these eight fields — staged Settings edits survive).
-      final n = ref.read(phd2SettingsProvider.notifier);
-      n.setRaAggressiveness(draft.raAggressiveness);
-      n.setDecAggressiveness(draft.decAggressiveness);
-      n.setMinimumMove(draft.minimumMove);
-      n.setDecMinimumMove(draft.decMinimumMove);
-      n.setDecGuideMode(draft.decGuideMode);
-      n.setDitherPixels(draft.ditherPixels);
-      n.setGuideExposureMs(draft.guideExposureMs);
-      n.setGuideCameraGain(draft.guideCameraGain);
+      // Save ONLY the eight runtime-safe tuning fields from the draft over
+      // the rig's copy, with its tag — never the shared provider's object,
+      // which may hold edits not saved yet. They show in the shared section
+      // too; its other staged edits stay. A copy another device saved since
+      // is refused, nothing written (ADR 0015).
+      await ref
+          .read(phd2SettingsProvider.notifier)
+          .saveOnRigCopy(
+            (c) => c.copyWith(
+              raAggressiveness: draft.raAggressiveness,
+              decAggressiveness: draft.decAggressiveness,
+              minimumMove: draft.minimumMove,
+              decMinimumMove: draft.decMinimumMove,
+              decGuideMode: draft.decGuideMode,
+              ditherPixels: draft.ditherPixels,
+              guideExposureMs: draft.guideExposureMs,
+              guideCameraGain: draft.guideCameraGain,
+            ),
+          );
       // Tuning-only: the full push re-sends the equipment selections inside a
       // stop_capture / disconnect window and ends the guide session.
       await ref
@@ -181,7 +172,11 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     } catch (e) {
       if (!mounted) return;
       setState(
-          () => _status = friendlyDaemonError(e, fallback: "Couldn't apply the tuning"));
+        () => _status =
+            e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyDaemonError(e, fallback: "Couldn't apply the tuning"),
+      );
     } finally {
       if (mounted) setState(() => _applying = false);
     }
@@ -193,7 +188,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         ref.watch(guiderStatusProvider).asData?.value?.isConnected ?? false;
     // Fall back to the provider's values for display while the draft is
     // unseeded (pre-hydrate); edits are only possible once the draft exists.
-    final Phd2Settings phd2 = _draft ?? ref.watch(phd2SettingsProvider);
+    final Phd2Settings phd2 =
+        _draft ?? ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
 
     return Dialog(
       backgroundColor: AraColors.bgPanel,
@@ -432,7 +428,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   }
 
   /// The values the controls show: the draft once seeded, else the provider.
-  Phd2Settings get _current => _draft ?? ref.read(phd2SettingsProvider);
+  Phd2Settings get _current =>
+      _draft ?? ref.read(phd2SettingsProvider).value ?? const Phd2Settings();
 
   /// Apply an edit to the local draft (no-op until the hydrate seeds it).
   void _edit(Phd2Settings Function(Phd2Settings) change) {

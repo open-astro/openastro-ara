@@ -60,6 +60,15 @@ AutofocusSettings withKeepFocusSharp(AutofocusSettings s, KeepFocusSharp p) =>
         everyNHours: p.hours,
       );
 
+/// #1544 — "Autofocus during plans" set to [on]: unchanged when it already
+/// reads so, the Normal preset when switched on, every trigger off when off.
+AutofocusSettings withAutofocusDuringPlans(AutofocusSettings s, bool on) {
+  if (on == autofocusDuringPlans(s)) return s;
+  return on
+      ? withKeepFocusSharp(s, KeepFocusSharp.onDefault)
+      : withAutofocusDuringPlansOff(s);
+}
+
 /// [s] with every trigger off.
 AutofocusSettings withAutofocusDuringPlansOff(AutofocusSettings s) =>
     s.copyWith(

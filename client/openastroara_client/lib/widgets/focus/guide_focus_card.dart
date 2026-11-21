@@ -77,8 +77,7 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
   Widget build(BuildContext context) {
     final live = ref.watch(guideFocusProvider);
     final guider = ref.watch(guiderStatusProvider).asData?.value;
-    final phd2 = ref.watch(phd2SettingsProvider);
-    final isOag = phd2.guiderSetupType == 'oag';
+    final isOag = ref.watch(phd2SettingsProvider).value?.guiderSetupType == 'oag';
     final mainFocused =
         ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     final status = live.status;
