@@ -95,20 +95,17 @@ public static partial class EquipmentEndpoints {
                 $"Polar alignment is turning the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it).");
         }
         if (mount?.MotionOwner is { } owner) {
-            var message = TelescopeService.MotionOwnedMessage(owner, what);
-            if (owner == MotionOwners.PolarAlign) {
-                throw new RefusalException(RefusalCatalog.PolarAlignMovingMount, message);
-            }
-            throw new InvalidOperationException(message);
+            throw TelescopeService.MotionOwnedRefusal(owner, what);
         }
     }
 
     /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
-    /// runs (#2066), else the 202 the telescope service answers. The safety and fault parks call the service, not this.</summary>
+    /// runs (#2066), else the 202 the telescope service answers. The service checks the owner again when the park's checks end
+    /// (<see cref="ITelescopeService.ParkUnlessMotionOwnedAsync"/>). The safety and fault parks call its ParkAsync, not this.</summary>
     internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
         ThrowIfPolarAlignMovesTheMount(polarAlign, "park", telescope);
-        return Results.Accepted(value: await telescope.ParkAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+        return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
     }
 
     /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align

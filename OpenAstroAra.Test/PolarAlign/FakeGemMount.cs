@@ -1056,6 +1056,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public Task<bool> ForgetAsync(CancellationToken ct) => throw Unmodelled(nameof(ForgetAsync));
         public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(SlewAsync));
         public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(ParkAsync));
+        public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(ParkUnlessMotionOwnedAsync));
         public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(UnparkAsync));
         public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(FindHomeAsync));
         public Task SetTrackingAsync(bool enabled, CancellationToken ct) => throw Unmodelled(nameof(SetTrackingAsync));

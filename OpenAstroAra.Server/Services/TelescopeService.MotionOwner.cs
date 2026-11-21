@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Server.Contracts.Refusals;
 using System;
 using System.Threading;
 
@@ -25,9 +26,11 @@ namespace OpenAstroAra.Server.Services;
 /// routine steers and measures by), and the REST GoTo, sync, Center, Park and Home endpoints refuse with
 /// <c>polar-align-moving-mount</c> (<c>EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount</c>). The owner check and the
 /// send are one step: a move is counted while it is being sent (<see cref="TryBeginMotionDispatch"/>), so a REST GoTo or
-/// sync accepted just before the routine took the owner is dropped when it would go out, and the routine cannot take the
-/// owner while one is on its way. Nothing that stops the mount is refused: AbortSlew (Stop Mount, Emergency Stop), a pad
-/// stop and tracking off. The safety and fault parks call <see cref="ParkAsync"/>, which never checks the owner; they, and
+/// sync accepted just before the routine took the owner is dropped when it would go out, a REST Park or Find Home is
+/// refused when its checks end, and the routine cannot take the owner while one is on its way. Nothing that stops the
+/// mount is refused: AbortSlew (Stop Mount, Emergency Stop), a pad stop and tracking off. The safety and fault parks call
+/// <see cref="ParkAsync(OpenAstroAra.Server.Contracts.ParkRequestDto, string, System.Threading.CancellationToken)"/>, which
+/// never checks the owner (the user's park is <see cref="ParkUnlessMotionOwnedAsync"/>); they, and
 /// the shutdown ladder before its mediator Find Home and park (End Night, the unattended shutdown), end the routine
 /// through its takeover first, so the routine gives the mount back before they move it.
 /// </summary>
@@ -84,6 +87,15 @@ public sealed partial class TelescopeService {
         ? $"Polar alignment is running and holds the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it)."
         : $"{owner} holds the mount, so the {what} was not sent.";
 
+    /// <summary>The refusal a REST GoTo, sync, Center, Park or Home answers while <paramref name="owner"/> holds the mount:
+    /// <c>polar-align-moving-mount</c> for Polar Align, else a plain 409.</summary>
+    internal static InvalidOperationException MotionOwnedRefusal(string owner, string what) {
+        var message = MotionOwnedMessage(owner, what);
+        return owner == MotionOwners.PolarAlign
+            ? new RefusalException(RefusalCatalog.PolarAlignMovingMount, message)
+            : new InvalidOperationException(message);
+    }
+
     /// <summary>A mediator move whose first command is not a GoTo (the meridian flip's pier-side write) while a routine
     /// holds the mount: refused before anything reaches the mount. <paramref name="what"/> names the refused command.</summary>
     private void ThrowIfMotionOwned(string op, string what) {
@@ -116,6 +128,19 @@ public sealed partial class TelescopeService {
         }
         LogMountOpRejectedOwned(op, owner!);
         throw new OpenAstroAra.Core.Model.SequenceEntityFailedException(MotionOwnedMessage(owner!, what));
+    }
+
+    /// <summary><see cref="TryBeginMotionDispatch"/> for the user's park or Find Home, once its checks are done: refused
+    /// (<see cref="MotionOwnedRefusal"/>) when a routine took the mount during them; its move <paramref name="motion"/> is
+    /// settled as failed then, as it moved nothing.</summary>
+    private Dispatch BeginRestMotionDispatchOrRefuse(string op, string what, long motion, ITelescopeDevice client) {
+        var dispatch = TryBeginMotionDispatch(out var owner);
+        if (dispatch is not null) {
+            return dispatch;
+        }
+        NoteMotionFailed(motion, client);
+        LogMountOpRejectedOwned(op, owner!);
+        throw MotionOwnedRefusal(owner!, what);
     }
 
     private void EndDispatch() {
