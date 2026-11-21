@@ -397,13 +397,10 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             [typeof(OpenFlatPanelCover)] = () => new OpenFlatPanelCover(flatCaptureExecutor),
             // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
             [typeof(CloseFlatPanelCover)] = () => new CloseFlatPanelCover(flatCaptureExecutor),
-            // §38k-22 — Connect dir. ConnectEquipment (and the ReconnectTrigger below) take only the
-            // connections port (#1545); the rest still take the full 11 device mediators;
-            // ConnectAll/SwitchProfile also take IProfileService (profile-first),
-            // Disconnect* do not (camera-first). The Disconnect* classes were
-            // flipped internal→public in this PR so the factory can construct
-            // them. Real connect/disconnect orchestration runs at execution
-            // time (none today); these register so saved bodies resolve.
+            // §38k-22 — Connect dir. ConnectEquipment, DisconnectEquipment, DisconnectAllEquipment (and the
+            // ReconnectTrigger below) take only the connections port (#1545); ConnectAll/SwitchProfile still
+            // take the full 11 device mediators and IProfileService (profile-first). Real connect/disconnect
+            // orchestration runs at execution time; these register so saved bodies resolve.
             [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(
                 profileService, cameraMediator, filterWheelMediator, focuserMediator,
                 rotatorMediator, telescopeMediator, guiderMediator, switchMediator,

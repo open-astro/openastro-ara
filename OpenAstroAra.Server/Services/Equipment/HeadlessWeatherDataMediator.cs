@@ -29,8 +29,8 @@ namespace OpenAstroAra.Server.Services.Equipment;
 /// Same pattern as the §38k-9 … §38k-18 stubs. <see cref="IWeatherDataMediator"/>
 /// adds nothing beyond the <c>IDeviceMediator</c> base. Completes the
 /// device-mediator stub set together with <see cref="HeadlessFlatDeviceMediator"/>;
-/// both are dependencies of the disconnect instruction prototypes
-/// (<c>DisconnectAllEquipment</c>, <c>DisconnectEquipment</c>).
+/// both are dependencies of the connect instruction prototypes
+/// (<c>ConnectAllEquipment</c>, <c>SwitchProfile</c>).
 /// </summary>
 public sealed class HeadlessWeatherDataMediator : IWeatherDataMediator {
 
