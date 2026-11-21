@@ -1957,5 +1957,6 @@
   "polarReadoutMeasures": "Número do Polar Align: o eixo de AR contra o polo refratado, por plate solve, ao vivo enquanto você gira os parafusos. O azimute é o arco real no céu (cos alt aplicado).",
   "polarCheckMeasures": "Número da verificação: uma nova medição em três pontos do eixo de AR contra o polo refratado. O azimute é o arco real no céu (cos alt aplicado).",
   "polarReadoutCautionAltitudeWeak": "A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo.",
+  "polarDecSpreadWarning": "A leitura de Dec da montagem variou {arcsec}″ entre os três pontos (mais de 2″), então esta medição pode estar errada. Verifique se a trava de Dec está firme e meça de novo.",
   "versionMismatchWarning": "O servidor {server} e o app {app} são de versões diferentes; atualize os dois a partir da mesma versão."
 }

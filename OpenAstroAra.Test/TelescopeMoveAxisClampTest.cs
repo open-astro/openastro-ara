@@ -90,6 +90,22 @@ namespace OpenAstroAra.Test {
             Assert.That(TelescopeService.SnapMoveAxisRate(0.003, Discrete), Is.EqualTo(0.002));
         }
 
+        // #2067, #2083 — a routine's rate is matched at or below what it asks, never rounded up: its time bound is planned
+        // on the rate it sends. NINA picks the fastest band at or below the request too.
+        [Test]
+        public void A_routine_rate_is_matched_to_the_fastest_band_rate_at_or_below_it_never_above() {
+            IReadOnlyList<(double Min, double Max)> ioptron = [(0.53, 0.53), (1.07, 1.07), (2.13, 2.13)];
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(1.0, ioptron), Is.EqualTo(0.53), "the band below, never 1.07");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(-3.0, ioptron), Is.EqualTo(-2.13), "sign kept");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(1.07, ioptron), Is.EqualTo(1.07), "a band rate itself");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(1.5, OneBand), Is.EqualTo(1.5), "inside a band: kept");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(50, OneBand), Is.EqualTo(6.016), "over the top: its max");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(0.0005, OneBand), Is.Null, "under every band: none (the pad would raise it)");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(0.4, ioptron), Is.Null);
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(1.0, null), Is.Null, "no bands known");
+            Assert.That(TelescopeService.MatchMoveAxisRateAtOrBelow(0, null), Is.EqualTo(0), "a stop is a stop");
+        }
+
         [Test]
         public void Nonzero_rate_with_no_known_bands_is_refused() {
             Assert.Throws<System.InvalidOperationException>(() => TelescopeService.SnapMoveAxisRate(1.0, null));

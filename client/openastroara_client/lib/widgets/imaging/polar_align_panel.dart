@@ -690,6 +690,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                     key: const Key('polar-align-check-disagree'),
                   ),
                 ],
+                if (r?.decSpreadArcsec != null) ...[
+                  const SizedBox(height: 12),
+                  _callout(context.l10n.polarDecSpreadWarning(r!.decSpreadArcsec!.toStringAsFixed(1)), AraColors.accentBusy,
+                      Icons.warning_amber_outlined,
+                      key: const Key('polar-align-check-dec-spread')),
+                ],
                 // A hand-turn check has no mount turn to compare with (#2083).
                 if (r != null && !live.handTurn) ...[
                   const SizedBox(height: 14),
@@ -1241,6 +1247,14 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
           const SizedBox(height: 12),
           _callout(context.l10n.polarReadoutCautionAltitudeWeak, AraColors.accentBusy, Icons.warning_amber_outlined,
               key: const Key('polar-align-readout-caution')),
+        ],
+        // #2081 NINA's warning: the mount's Dec moved across the seed's three points.
+        if (live.decSpreadArcsec != null &&
+            (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[
+          const SizedBox(height: 12),
+          _callout(context.l10n.polarDecSpreadWarning(live.decSpreadArcsec!.toStringAsFixed(1)), AraColors.accentBusy,
+              Icons.warning_amber_outlined,
+              key: const Key('polar-align-dec-spread')),
         ],
         if (live.measurementNoisy &&
             (live.phase == PolarAlignStates.adjusting || live.phase == PolarAlignStates.paused)) ...[

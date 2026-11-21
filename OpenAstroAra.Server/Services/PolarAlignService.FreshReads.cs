@@ -47,7 +47,8 @@ namespace OpenAstroAra.Server.Services {
         internal static readonly TimeSpan FreshReadMaxAge = TimeSpan.FromSeconds(2);
 
         /// <summary>The clock a reading's age is measured on: the telescope service stamps its readings on the system clock;
-        /// a test on a fake mount's own clock sets it to that.</summary>
+        /// a test on a fake mount's own clock sets it to that. A turn's stall, time bound and settle are timed on its
+        /// monotonic timestamp (<see cref="TimeProvider.GetTimestamp"/>), never its wall clock, which can step.</summary>
         internal TimeProvider Clock { get; set; } = TimeProvider.System;
 
         // The mount session the run of this generation started in (its confirmed plan's reading). Guarded by _gate.
@@ -55,9 +56,13 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A reading of the mount checked as above: the pointing in JNOW (degrees) and its mount session, or why it
         /// cannot be trusted. <paramref name="runSession"/>: the session the reading must come from; null takes any.</summary>
-        private async Task<FreshPointing> ReadFreshPointingAsync(long? runSession, CancellationToken ct, bool positionOnly = false) {
+        private async Task<FreshPointing> ReadFreshPointingAsync(long? runSession, CancellationToken ct, MountReadKind kind = MountReadKind.Full) {
             var askedAt = Clock.GetUtcNow();
-            var reading = await (positionOnly ? _motionControl.ReadPositionNowAsync(ct) : _motionControl.ReadNowAsync(ct)).ConfigureAwait(false);
+            var reading = await (kind switch {
+                MountReadKind.Position => _motionControl.ReadPositionNowAsync(ct),
+                MountReadKind.Pose => _motionControl.ReadPoseNowAsync(ct),
+                _ => _motionControl.ReadNowAsync(ct),
+            }).ConfigureAwait(false);
             var answeredAt = Clock.GetUtcNow();
             if (reading is null) {
                 return FreshPointing.Unknown("the mount gave no reading");
@@ -100,24 +105,24 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>A run's reading: one it cannot trust fails the run (<see cref="PointingUnknown"/>,
-        /// <see cref="PoseAmbiguous"/>), so a turn neither starts nor goes on from it. <paramref name="positionOnly"/>: RA and
-        /// Dec only (<see cref="IMountMotionControl.ReadPositionNowAsync"/>), for the polls of a turn.</summary>
-        private async Task<(double RaDeg, double DecDeg)> RunPointingJnowAsync(int gen, CancellationToken ct, bool positionOnly = false) {
-            var (ra, dec, _) = await RunPoseJnowAsync(gen, ct, positionOnly).ConfigureAwait(false);
+        /// <see cref="PoseAmbiguous"/>), so a turn neither starts nor goes on from it. <paramref name="kind"/>: what is read
+        /// (<see cref="MountReadKind"/>; a turn's polls read the position and the pier side).</summary>
+        private async Task<(double RaDeg, double DecDeg)> RunPointingJnowAsync(int gen, CancellationToken ct, MountReadKind kind = MountReadKind.Full) {
+            var (ra, dec, _) = await RunPoseJnowAsync(gen, ct, kind).ConfigureAwait(false);
             return (ra, dec);
         }
 
         /// <summary><see cref="RunPointingJnowAsync"/> with the reading's pier side (<c>pierUnknown</c> for a position-only
-        /// read).</summary>
-        private async Task<(double RaDeg, double DecDeg, PierSide Side)> RunPoseJnowAsync(int gen, CancellationToken ct, bool positionOnly = false) {
-            var p = await RunReadingAsync(gen, positionOnly, ct).ConfigureAwait(false);
+        /// read, or when the mount does not say).</summary>
+        private async Task<(double RaDeg, double DecDeg, PierSide Side)> RunPoseJnowAsync(int gen, CancellationToken ct, MountReadKind kind = MountReadKind.Full) {
+            var p = await RunReadingAsync(gen, kind, ct).ConfigureAwait(false);
             return (p.RaDeg, p.DecDeg, p.Side);
         }
 
         /// <summary>A run's checked reading, its Slewing included (null for a position-only read, or a failed Slewing
         /// read): one it cannot trust fails the run as <see cref="RunPointingJnowAsync"/> says.</summary>
-        private async Task<FreshPointing> RunReadingAsync(int gen, bool positionOnly, CancellationToken ct) {
-            var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct, positionOnly).ConfigureAwait(false);
+        private async Task<FreshPointing> RunReadingAsync(int gen, MountReadKind kind, CancellationToken ct) {
+            var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct, kind).ConfigureAwait(false);
             if (p.Why is not null || p.DecPastPoleDeg is not null) {
                 ThrowIfAbortedFromOutside(gen); // a park or Emergency Stop meanwhile owns the mount: its failure wins
             }
@@ -177,6 +182,11 @@ namespace OpenAstroAra.Server.Services {
 
         internal static string PoseAmbiguousMessage(double decDeg) => string.Create(CultureInfo.InvariantCulture,
             $"The mount reports Dec {decDeg:F1}°, past the pole, so its pier side is not known and Polar Align moves nothing — point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again");
+
+        /// <summary>What a run reading asks the mount: everything (<see cref="IMountMotionControl.ReadNowAsync"/>), the
+        /// position only (<see cref="IMountMotionControl.ReadPositionNowAsync"/>), or the position and the pier side (#2067,
+        /// <see cref="IMountMotionControl.ReadPoseNowAsync"/>: a turn's polls).</summary>
+        private enum MountReadKind { Full, Position, Pose }
 
         /// <summary>A checked reading: the pointing (JNOW), session, pier side and Slewing (null when not read or the read
         /// failed), or <see cref="Why"/> it cannot be trusted, or the Dec past the pole it reported.</summary>

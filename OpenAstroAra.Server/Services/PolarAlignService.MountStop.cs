@@ -122,6 +122,17 @@ namespace OpenAstroAra.Server.Services {
             return StopsFenced(fence);
         }
 
+        /// <summary>#2067 — the stop fence the run of generation <paramref name="gen"/> was launched under, for a stop it sends
+        /// mid-run (a turn's runaway); the current fence when it keeps no record.</summary>
+        private long RunStopFence(int gen) {
+            lock (_gate) {
+                if (_runFence is { } f && f.Gen == gen) {
+                    return f.Fence;
+                }
+            }
+            return StopFence;
+        }
+
         /// <summary>The run's AbortEpoch reading (taken when its Start was called), for the leased motor commands; null for
         /// a superseded run or a mount that keeps no count.</summary>
         private long? RunAbortEpoch(int gen) {

@@ -92,6 +92,10 @@ class PolarAlignCheckResult {
   /// #2082 a point of the check stayed scattered over 3″ after its retake.
   final bool noisy;
 
+  /// #2081 the mount's Dec spread across the check's three points (arcsec)
+  /// when over 2″ (NINA's warning: the result may be off); null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -102,6 +106,7 @@ class PolarAlignCheckResult {
     this.fineDeltaArcmin,
     this.verdict = '',
     this.noisy = false,
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -115,6 +120,7 @@ class PolarAlignCheckResult {
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
         noisy: json['noisy'] == true,
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 }
 
@@ -391,6 +397,10 @@ class PolarAlignStatus {
   /// #2083 a hand-turn run waiting for the user's turn; null otherwise.
   final PolarAlignHandTurn? handTurnWait;
 
+  /// #2081 the mount's Dec spread across the seed's three points (arcsec)
+  /// when over 2″, while the live readout runs; null otherwise.
+  final double? decSpreadArcsec;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -411,6 +421,7 @@ class PolarAlignStatus {
     this.measurementNoisy = false,
     this.handTurn = false,
     this.handTurnWait,
+    this.decSpreadArcsec,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -438,6 +449,7 @@ class PolarAlignStatus {
         measurementNoisy: json['measurement_noisy'] == true,
         handTurn: json['hand_turn'] == true,
         handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
+        decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
 
   /// True while the server is running any phase of the routine.

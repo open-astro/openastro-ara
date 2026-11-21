@@ -444,70 +444,77 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     d.savedProfileId = meta.id;
   }
 
-  // Each section is an independent GET-overlay-PUT against the active profile, so
-  // run them concurrently rather than serially (4 round-trips → ~1 round-trip of
-  // latency). Collect every failure (rather than letting Future.wait drop all but
+  // Each section is a GET-overlay-PUT against the active profile; run them
+  // concurrently rather than serially (safety alone waits for optics, below).
+  // Collect every failure (rather than letting Future.wait drop all but
   // the first) so a partial save reports exactly which sections didn't apply.
-  // The sections are disjoint (no section's GET reads another's PUT target),
-  // and the caller (_saveAndExit) runs this under a non-dismissible spinner that
-  // blocks a second Save, so there is no GET-after-PUT overlap to worry about.
+  // ADR 0015 — each PUT sends the `ETag` of the copy its GET loaded; the rig
+  // refuses a section PUT without one (428) and one over a newer copy (412),
+  // and either counts as a section that did not apply. So a section whose copy
+  // another section's PUT changes on the rig is read only after that PUT. The
+  // one such link: an optics write that changes the optics clears the
+  // first-flip state in safety (§58.8, `FileProfileStore.WithOptics` /
+  // `ProfileSections.WithoutFirstFlip`), which moves the safety tag, so the
+  // safety GET waits for the optics PUT. Every other section PUT writes only
+  // its own section, and the caller (_saveAndExit) runs this under a
+  // non-dismissible spinner that blocks a second Save.
+  final opticsSaved = _trySave(
+    () => _overlay(api.getOpticsSection, api.putOpticsSection,
+        (base) => applyDraftToOptics(base, d)),
+  );
   final errors = (await Future.wait([
     _trySave(
-      () async =>
-          api.putSiteSettings(applyDraftToSite(await api.getSiteSettings(), d)),
+      () => _overlay(api.getSiteSection, api.putSiteSection,
+          (base) => applyDraftToSite(base, d)),
     ),
+    opticsSaved,
     _trySave(
-      () async => api.putOptics(applyDraftToOptics(await api.getOptics(), d)),
-    ),
-    _trySave(
-      () async => api.putImagingDefaults(
-        applyDraftToImaging(await api.getImagingDefaults(), d),
-      ),
+      () => _overlay(api.getImagingDefaultsSection,
+          api.putImagingDefaultsSection, (base) => applyDraftToImaging(base, d)),
     ),
     // §63.19 — the OAG derivation needs the base optics reducer factor only
     // when the draft has none (§36.10: a set draft reducer wins), so reading
     // it concurrently with the optics-section save above is race-free either
     // way.
+    _trySave(() async {
+      final baseOptics = await api.getOptics();
+      await _overlay(api.getPhd2Section, api.putPhd2Section,
+          (base) => applyDraftToPhd2(base, d, baseOptics: baseOptics));
+    }),
     _trySave(
-      () async => api.putPhd2Settings(
-        applyDraftToPhd2(
-          await api.getPhd2Settings(),
-          d,
-          baseOptics: await api.getOptics(),
-        ),
+      () => _overlay(api.getPlateSolveSection, api.putPlateSolveSection,
+          (base) => applyDraftToPlateSolve(base, d)),
+    ),
+    _trySave(
+      () => _overlay(api.getAutofocusSection, api.putAutofocusSection,
+          (base) => applyDraftToAutofocus(base, d)),
+    ),
+    _trySave(
+      () => _overlay(api.getCameraElectronicsSection,
+          api.putCameraElectronicsSection,
+          (base) => applyDraftToCameraElectronics(base, d)),
+    ),
+    _trySave(
+      () => _overlay(api.getFilterSetSection, api.putFilterSetSection,
+          (base) => applyDraftToFilterSet(base, d)),
+    ),
+    _trySave(
+      () => _overlay(api.getStorageSection, api.putStorageSection,
+          (base) => applyDraftToStorage(base, d)),
+    ),
+    // After the optics PUT, landed or not (see above); _trySave never throws.
+    opticsSaved.then(
+      (_) => _trySave(
+        () => _overlay(api.getSafetySection, api.putSafetySection,
+            (base) => applyDraftToSafety(base, d)),
       ),
     ),
-    _trySave(
-      () async => api.putPlateSolveSettings(
-        applyDraftToPlateSolve(await api.getPlateSolveSettings(), d),
-      ),
-    ),
-    _trySave(
-      () async => api.putAutofocusSettings(
-        applyDraftToAutofocus(await api.getAutofocusSettings(), d),
-      ),
-    ),
-    _trySave(
-      () async => api.putCameraElectronics(
-        applyDraftToCameraElectronics(await api.getCameraElectronics(), d),
-      ),
-    ),
-    _trySave(
-      () async =>
-          api.putFilterSet(applyDraftToFilterSet(await api.getFilterSet(), d)),
-    ),
-    _trySave(
-      () async => api.putStorageSettings(
-        applyDraftToStorage(await api.getStorageSettings(), d),
-      ),
-    ),
-    _trySave(
-      () async => api.putSafetyPolicies(
-        applyDraftToSafety(await api.getSafetyPolicies(), d),
-      ),
-    ),
+    // The fan replaces the section whole; the GET is for its tag.
     if (d.coolingFan case final fan?)
-      _trySave(() async => api.putCoolingFan(fan)),
+      _trySave(
+        () => _overlay(api.getCoolingFanSection, api.putCoolingFanSection,
+            (_) => fan),
+      ),
   ])).whereType<Object>().toList();
   if (errors.isNotEmpty) {
     // #1137 — every FAILED section died in transit (no response at all): the
@@ -518,11 +525,19 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     if (errors.every((e) => e is DioException && e.response == null)) {
       throw ProfileSaveTransportFailure(errors.length);
     }
-    throw Exception(
-      'Failed to save ${errors.length} profile section(s): '
-      '${errors.map((e) => e.toString()).join('; ')}',
-    );
+    throw ProfileSaveFailure(errors);
   }
+}
+
+/// One wizard section write: GET the rig's copy with its `ETag`, overlay the
+/// draft, PUT it back with that tag as `If-Match` (ADR 0015).
+Future<void> _overlay<T>(
+  Future<({T value, String? etag})> Function() get,
+  Future<Object?> Function(T value, {String? ifMatch}) put,
+  T Function(T base) apply,
+) async {
+  final loaded = await get();
+  await put(apply(loaded.value), ifMatch: loaded.etag);
 }
 
 /// Every section PUT that FAILED did so without a response from the daemon
@@ -536,6 +551,16 @@ class ProfileSaveTransportFailure implements Exception {
   @override
   String toString() =>
       'The rig stopped answering while saving $sections profile section(s).';
+}
+
+/// Some profile sections did not apply; [errors] holds each one's failure.
+class ProfileSaveFailure implements Exception {
+  final List<Object> errors;
+  const ProfileSaveFailure(this.errors);
+  @override
+  String toString() =>
+      'Failed to save ${errors.length} profile section(s): '
+      '${errors.map((e) => e.toString()).join('; ')}';
 }
 
 /// Runs a section save and captures its error (null = success) so a concurrent

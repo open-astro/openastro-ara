@@ -7129,6 +7129,11 @@ class AppLocalizationsPt extends AppLocalizations {
       'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.';
 
   @override
+  String polarDecSpreadWarning(String arcsec) {
+    return 'The mount\'s Dec reading moved $arcsec″ across the three points (more than 2″), so this measurement may be off. Check the Dec clutch is tight, then measure again.';
+  }
+
+  @override
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
@@ -14312,6 +14317,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarReadoutCautionAltitudeWeak =>
       'A câmera aponta quase a leste ou a oeste do polo, onde esta leitura mede mal o parafuso de altitude. Use o Verificar, ou comece de novo com o telescópio mais perto do polo.';
+
+  @override
+  String polarDecSpreadWarning(String arcsec) {
+    return 'A leitura de Dec da montagem variou $arcsec″ entre os três pontos (mais de 2″), então esta medição pode estar errada. Verifique se a trava de Dec está firme e meça de novo.';
+  }
 
   @override
   String versionMismatchWarning(String server, String app) {

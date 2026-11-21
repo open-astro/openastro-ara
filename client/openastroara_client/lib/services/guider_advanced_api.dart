@@ -2,13 +2,15 @@ import 'package:dio/dio.dart';
 
 import '../models/guider_advanced_settings.dart';
 import '../models/server.dart';
+import 'profile_api.dart' show SectionVersionMissingException;
 
 /// #1364 item 3 — the guider-advanced profile block and the guider's current
 /// values. An interface so the dialog can be tested with a fake.
 ///
 /// ADR 0015 — the block is read with the rig's `ETag` and written back with
 /// the loaded one as `If-Match`, so a copy another device saved since is
-/// refused (412) instead of written over.
+/// refused (412) instead of written over. With no loaded tag the write is
+/// refused before it goes out ([SectionVersionMissingException]).
 abstract interface class GuiderAdvancedClient {
   Future<({GuiderAdvancedSettings value, String? etag})> getProfile();
   Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
@@ -55,10 +57,16 @@ class GuiderAdvancedApi implements GuiderAdvancedClient {
     GuiderAdvancedSettings settings, {
     String? ifMatch,
   }) async {
+    // As ProfileApi's section writes: with no tag of a loaded copy (a rig
+    // from before section versions sends none) nothing is sent, so a copy
+    // nobody saw is never written over.
+    if (ifMatch == null || ifMatch.isEmpty) {
+      throw const SectionVersionMissingException('guider-advanced');
+    }
     final res = await _dio.put<dynamic>(
       '/api/v1/profile/guider-advanced',
       data: settings.toJson(),
-      options: Options(headers: {'If-Match': ?ifMatch}),
+      options: Options(headers: {'If-Match': ifMatch}),
     );
     final data = res.data;
     return (
