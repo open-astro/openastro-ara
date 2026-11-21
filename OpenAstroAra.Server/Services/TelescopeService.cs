@@ -383,9 +383,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
         // workaround executes fine from a stationary state — verified on-device, the mount moves
         // to home with tracking off — so homing doesn't need the motors pre-engaged.
-        // Park semantics for the watch (matching the mediator's RunMountOpAsync): homing ends
-        // idle-not-parked with tracking off, so a motion note would leave the old expectation
-        // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
+        // Park semantics for the watch (matching the mediator's park and find home requests, which
+        // note NoteParkCommanded before dispatch): homing ends idle-not-parked with tracking off,
+        // so a motion note would leave the old expectation armed and fire a spurious TrackingLost
+        // ~6 s after a normal Find Home (review finding).
         NoteMountCommand(w => w.NoteParkCommanded());
         _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
         return Accepted("telescope.findhome", idempotencyKey);

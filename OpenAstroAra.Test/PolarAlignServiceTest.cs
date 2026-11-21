@@ -1125,6 +1125,40 @@ namespace OpenAstroAra.Test {
             Assert.That(await SeedFailureReasonAsync(mount).ConfigureAwait(false), Is.EqualTo("slew_failed"));
         }
 
+        // #1808 — WaitForSlew throws when the mount is still moving at the slew bound. Like the slew itself
+        // (#1536), that is this routine's slew_failed, and its stall must not count toward abort-and-park.
+        // The seed turns are motor moves (#2063); the GoTo is the fine stage's return to the run's start.
+        [Test]
+        public async Task A_WaitForSlew_that_throws_fails_as_slew_failed_and_runs_without_op_faults() {
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { UseHome = false });
+            var mount = NewMount();
+            var position = new Coordinates(0.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
+            mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
+            mount.Setup(m => m.SlewToCoordinatesAsync(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()))
+                .Callback<Coordinates, CancellationToken>((target, _) => position = target)
+                .ReturnsAsync(true);
+            SimulateMotors(mount, () => position, c => position = c);
+            var suppressed = new List<bool>();
+            mount.Setup(m => m.WaitForSlew(It.IsAny<CancellationToken>())).Returns(() => {
+                lock (suppressed) { suppressed.Add(TelescopeService.OpFaultsSuppressed); }
+                return Task.FromException(new SequenceEntityFailedException("telescope.slew was not confirmed settled within the 600s bound"));
+            });
+            var ws = new WsRecorder();
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount, ws, mainCamera: new FakeMainCamera(), store: store);
+
+            await svc.StartAsync(PolarAlignStages.Coarse, null, CancellationToken.None).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            await svc.NextAsync(null, CancellationToken.None).ConfigureAwait(false);
+            await ws.WhenCountAsync(WsEventCatalog.PolarAlignError, 1).WaitAsync(SignalTimeout).ConfigureAwait(false);
+
+            var error = ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload;
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("slew_failed"));
+            lock (suppressed) {
+                Assert.That(suppressed, Has.Count.EqualTo(1).And.All.True, "WaitForSlew ran once, inside RunWithoutOpFaultsAsync");
+            }
+        }
+
         [Test]
         public async Task A_mount_with_no_pointing_after_the_seed_slew_fails_as_mount_fault() {
             var mount = NewMount();

@@ -759,18 +759,23 @@ namespace OpenAstroAra.Server.Services {
             BeginMotion(MountMotion.GoTo, gen, ct);
             try {
                 // #1536 — the failure is this routine's to report; as a mount-op fault it would count toward abort-and-park.
-                slewed = await TelescopeService.RunWithoutOpFaultsAsync(() => _mount.SlewToCoordinatesAsync(target, ct)).ConfigureAwait(false);
+                slewed = await TelescopeService.RunWithoutOpFaultsAsync(async () => {
+                    if (!await _mount.SlewToCoordinatesAsync(target, ct).ConfigureAwait(false)) {
+                        return false;
+                    }
+                    await _mount.WaitForSlew(ct).ConfigureAwait(false);
+                    return true;
+                }).ConfigureAwait(false);
             } catch (SequenceEntityFailedException ex) {
                 // #1222 — the mediator refuses a slew it cannot frame (#1124: equatorial system
                 // unknown) or that the mount rejected by throwing; that is a slew failure, not
-                // internal_error.
+                // internal_error. So is a mount still slewing at the bound (#1808: WaitForSlew throws).
                 LogSeedSlewRefused(ex.Message);
                 throw new RoutineFailedException("slew_failed", refusedMessage);
             }
             if (!slewed) {
                 throw new RoutineFailedException("slew_failed", refusedMessage);
             }
-            await _mount.WaitForSlew(ct).ConfigureAwait(false);
             if (!IsCurrent(gen)) {
                 throw new OperationCanceledException("the run was stopped while the mount slewed");
             }
