@@ -362,7 +362,7 @@ void main() {
   );
 
   testWidgets(
-    'the motor direction reads again when a run ends, so a first run\'s test shows without reopening the panel (#2081)',
+    'the motor direction reads again when a run ends, so the test a first run saved shows without reopening the panel (#2081)',
     (tester) async {
       final direction = _DirectionRig(const PolarAlignMotorDirectionState(matchesConnectedMount: true));
       final live = _FakeLive();
