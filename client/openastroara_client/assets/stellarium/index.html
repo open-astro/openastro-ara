@@ -294,7 +294,7 @@
   <div class="frow full-only"><span class="k">Field</span><span id="f-fov">—</span></div>
   <button id="f-add" class="full-only">Create Run</button>
   <button id="f-rotcam" class="full-only" title="Plate-solve the camera against this framing angle so you can turn it by hand">Rotate camera by hand</button>
-  <div id="f-msg" class="full-only"></div>
+  <div id="f-msg"></div>
   <div id="f-dss" class="full-only" hidden></div>
 </div>
 
@@ -1624,6 +1624,8 @@ function renderFramePanel() {
     msg.textContent = 'Drag the sky to position the frame, then “Create Run”.';
     msg.classList.remove('warn');
   }
+  // Simple Mode has no Create Run: its card shows only the optics warning.
+  msg.hidden = !!(CHART && optics && optics.ok);
   document.getElementById('f-add').textContent = API ? 'Create Run' : 'Create Run (draft)';
   var snapBtn = document.getElementById('f-snap');
   snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + frameCatPaDeg + '°)');
