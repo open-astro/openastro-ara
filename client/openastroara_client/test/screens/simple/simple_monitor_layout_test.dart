@@ -10,10 +10,10 @@ import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
+import 'package:openastroara/widgets/emergency_stop_button.dart';
 
-// Monitor's graphs (#1875 slice 7a): what the graph tiles say and flag, the
-// tile header's corner (Tonight's dark-span line there only when it fits
-// whole, read out once), and painters that keep inside their canvas.
+// Monitor's grid (#2014): which tiles it builds for the rig, how a
+// tap enlarges one, and what the graph tiles say.
 
 class _KeepAwake extends KeepAwake {
   const _KeepAwake();
@@ -45,9 +45,10 @@ final _drifting = _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36]);
 
 MonitorSnapshot _snap({
   bool gear = true,
+  bool guider = true,
+  MonitorConditions? conditions,
   List<MonitorFrame> frames = const [],
   bool frozen = false,
-  MonitorConditions? conditions,
   List<MonitorUpNext>? upNext,
   MonitorVerdict? verdict,
 }) => MonitorSnapshot(
@@ -98,6 +99,7 @@ MonitorSnapshot _snap({
   safety: gear
       ? const MonitorSafety(status: MonitorStatus.normal, safe: true)
       : null,
+
   conditions:
       conditions ??
       (gear
@@ -117,18 +119,20 @@ MonitorSnapshot _snap({
               ),
             )
           : null),
-  guider: MonitorGuider(
-    status: MonitorStatus.working,
-    word: MonitorGuiderWord.guiding,
-    rms: 0.62,
-    ra: 0.41,
-    dec: 0.46,
-    trace: [
-      for (var i = 0; i < 50; i++)
-        (ra: 0.4 * (i % 5 - 2), dec: 0.3 * (i % 3 - 1)),
-    ],
-    rmsPerFrame: [for (var i = 0; i < frames.length; i++) 1.1 + i * 0.01],
-  ),
+  guider: guider
+      ? MonitorGuider(
+          status: MonitorStatus.working,
+          word: MonitorGuiderWord.guiding,
+          rms: 0.62,
+          ra: 0.41,
+          dec: 0.46,
+          trace: [
+            for (var i = 0; i < 50; i++)
+              (ra: 0.4 * (i % 5 - 2), dec: 0.3 * (i % 3 - 1)),
+          ],
+          rmsPerFrame: [for (var i = 0; i < frames.length; i++) 1.1 + i * 0.01],
+        )
+      : null,
   lastFrame: MonitorLastFrame(frames: frames),
   night: MonitorNight(
     darkStart: DateTime(2026, 11, 14, 21, 50),
@@ -138,7 +142,7 @@ MonitorSnapshot _snap({
   ),
 );
 
-Future<void> _pump(
+Future<List<MonitorDestination>> _pump(
   WidgetTester tester,
   MonitorSnapshot snap, {
   Size size = const Size(1288, 780),
@@ -148,6 +152,7 @@ Future<void> _pump(
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
+  final opened = <MonitorDestination>[];
   await tester.pumpWidget(
     ProviderScope(
       // A fresh scope each pump: a kept one would keep the first snapshot.
@@ -160,7 +165,13 @@ Future<void> _pump(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: SimpleMonitorScreen(onOpen: onOpen ?? (_) {}),
+
+        home: SimpleMonitorScreen(
+          onOpen: (d) {
+            opened.add(d);
+            onOpen?.call(d);
+          },
+        ),
       ),
     ),
   );
@@ -172,6 +183,7 @@ Future<void> _pump(
     column.jumpTo(column.maxScrollExtent);
     await tester.pump();
   }
+  return opened;
 }
 
 /// Records where each painted paragraph (while it is still alive), line and
@@ -226,6 +238,319 @@ bool _cut(WidgetTester tester, String line) =>
     tester.renderObject<RenderParagraph>(_in('night', line)).didExceedMaxLines;
 
 void main() {
+  testWidgets('all gear: every tile is drawn at 1288x780', (tester) async {
+    await _pump(tester, _snap());
+    for (final id in [
+      'now',
+      'safety',
+      'target',
+      'conditions',
+      'guider',
+      'hfr',
+      'stars',
+      'flip',
+      'night',
+    ]) {
+      expect(_k(id), findsOneWidget, reason: id);
+    }
+    expect(_k('title'), findsOneWidget);
+  });
+
+  testWidgets(
+    'no Safety and no weather: their tiles are not built and the grid reflows',
+    (tester) async {
+      await _pump(tester, _snap(gear: false));
+      expect(_k('safety'), findsNothing);
+      expect(_k('conditions'), findsNothing);
+      final alt = tester.getRect(_k('target')),
+          hfr = tester.getRect(_k('hfr')),
+          stars = tester.getRect(_k('stars'));
+      // Target altitude takes two columns, HFR and Stars one each under it.
+      expect(alt.width, closeTo(hfr.width + stars.width + 8, 1));
+      expect(alt.left, hfr.left);
+      // The flip sits beside Tonight.
+      expect(tester.getRect(_k('flip')).top, tester.getRect(_k('night')).top);
+    },
+  );
+
+  testWidgets(
+    'a tap enlarges a tile inside Monitor, a second tap restores the grid',
+    (tester) async {
+      final opened = await _pump(tester, _snap());
+      await tester.tap(_k('hfr'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
+      expect(_k('stars'), findsNothing);
+      expect(opened, isEmpty, reason: 'a tile tap no longer leaves Monitor');
+      await tester.tap(_k('hfr'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
+      expect(_k('stars'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a long press opens the tile\'s window, enlarged or not', (
+    tester,
+  ) async {
+    final opened = await _pump(tester, _snap());
+    await tester.longPress(_k('flip'));
+    expect(opened, [MonitorDestination.mount]);
+    expect(
+      _k('stars'),
+      findsOneWidget,
+      reason: 'a long press does not enlarge',
+    );
+    await tester.tap(_k('hfr'));
+    await tester.pump();
+    await tester.longPress(_k('hfr'));
+    expect(opened.last, MonitorDestination.frameInfo);
+    expect(
+      find.byKey(const Key('simple-monitor-tile-open')),
+      findsNothing,
+      reason: 'no visible Open button',
+    );
+  });
+
+  testWidgets('the Safety strip does not enlarge: a tap opens its window', (
+    tester,
+  ) async {
+    final opened = await _pump(tester, _snap());
+    await tester.tap(_k('safety'));
+    await tester.pump();
+    expect(opened, [MonitorDestination.safety]);
+    expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
+    await tester.longPress(_k('safety'));
+    expect(opened.last, MonitorDestination.safety);
+  });
+
+  testWidgets('an enlarged tile leaves Emergency Stop on screen beside it', (
+    tester,
+  ) async {
+    await _pump(tester, _snap());
+    final stop = find.byType(EmergencyStopButton);
+    for (final id in ['guider', 'hfr', 'conditions']) {
+      await tester.tap(_k(id));
+      await tester.pump();
+      expect(stop, findsOneWidget);
+      final big = tester.getRect(
+        find.byKey(const Key('simple-monitor-enlarged')),
+      );
+      final tile = tester.getRect(_k(id));
+      final s = tester.getRect(stop);
+      expect(tile.overlaps(s), isFalse, reason: id);
+      expect(tile.width, greaterThan(500), reason: id);
+      expect(big.contains(tile.center), isTrue);
+      await tester.tap(_k(id));
+      await tester.pump();
+    }
+  });
+
+  testWidgets(
+    'a screen reader is offered Enlarge or Shrink and, apart, Open <window>',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      final opened = await _pump(tester, _snap());
+      List<CustomSemanticsAction> actions() => [
+        for (final id
+            in tester
+                .getSemantics(_k('flip'))
+                .getSemanticsData()
+                .customSemanticsActionIds!)
+          CustomSemanticsAction.getAction(id)!,
+      ];
+      var node = tester.getSemantics(_k('flip'));
+      expect(node.getSemanticsData().hasAction(SemanticsAction.tap), isTrue);
+      expect([
+        for (final a in actions()) a.hint ?? a.label,
+      ], unorderedEquals(['Enlarge', 'Open Mount']));
+      expect(node.label, isNot(contains('enlarged')));
+      final open = actions().firstWhere((a) => a.label == 'Open Mount');
+      tester.semantics.performAction(
+        find.semantics.byLabel(RegExp('^Meridian flip')),
+        SemanticsAction.customAction,
+        args: CustomSemanticsAction.getIdentifier(open),
+      );
+      expect(opened, [MonitorDestination.mount]);
+      tester.semantics.tap(find.semantics.byLabel(RegExp('^Meridian flip')));
+      await tester.pump();
+      node = tester.getSemantics(_k('flip'));
+      expect(node.label, contains('enlarged'));
+      expect([
+        for (final a in actions()) a.hint ?? a.label,
+      ], unorderedEquals(['Shrink', 'Open Mount']));
+      semantics.dispose();
+    },
+  );
+
+  testWidgets('the title is a heading with its icon', (tester) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _snap());
+    expect(find.text('Monitor'), findsOneWidget);
+    expect(find.byIcon(Icons.monitor_heart_outlined), findsOneWidget);
+    expect(
+      tester.getSemantics(find.text('Monitor')).flagsCollection.isHeader,
+      isTrue,
+    );
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'a phone: a tap enlarges a tile in the one column, a long press opens it',
+    (tester) async {
+      final opened = await _pump(tester, _snap(), size: const Size(390, 844));
+      expect(_k('night'), findsOneWidget);
+      await tester.tap(_k('night'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
+      await tester.longPress(_k('night'));
+      expect(opened, [MonitorDestination.queue]);
+    },
+  );
+
+  for (final (name, snap) in [
+    ('full rig', _snap()),
+    ('no Safety, no Conditions', _snap(gear: false)),
+    ('no Guider', _snap(guider: false)),
+    ('no Guider, no Safety, no Conditions', _snap(gear: false, guider: false)),
+    (
+      'Conditions with no weather station, no Safety',
+      _snap(
+        conditions: const MonitorConditions(
+          rig: MonitorRigTemps(sensorC: -9.6),
+        ),
+      ).copyWithoutSafety(),
+    ),
+  ]) {
+    testWidgets(
+      '$name: tiles are inside the grid, none overlaps, none is zero',
+      (tester) async {
+        await _pump(tester, snap);
+        final ids = [
+          'now',
+          if (snap.safety != null) 'safety',
+          'target',
+          if (snap.conditions != null) 'conditions',
+          if (snap.guider != null) 'guider',
+          'hfr',
+          'stars',
+          'flip',
+          'night',
+        ];
+        final rects = {for (final id in ids) id: tester.getRect(_k(id))};
+        final screen = Offset.zero & const Size(1288, 780);
+        for (final MapEntry(:key, :value) in rects.entries) {
+          expect(
+            screen.contains(value.topLeft) &&
+                screen.contains(value.bottomRight),
+            isTrue,
+            reason: key,
+          );
+          expect(value.width, greaterThan(100), reason: key);
+          expect(value.height, greaterThan(50), reason: key);
+          for (final other in rects.entries.where((e) => e.key != key)) {
+            expect(
+              value.deflate(1).overlaps(other.value.deflate(1)),
+              isFalse,
+              reason: '$key and ${other.key}',
+            );
+          }
+        }
+      },
+    );
+  }
+
+  testWidgets('no Guider: HFR and Stars take its place beside Now', (
+    tester,
+  ) async {
+    await _pump(tester, _snap(guider: false));
+    expect(_k('guider'), findsNothing);
+    final now = tester.getRect(_k('now'));
+    final hfr = tester.getRect(_k('hfr'));
+    final stars = tester.getRect(_k('stars'));
+    expect(hfr.left, now.left);
+    expect(stars.right, closeTo(now.right, 1));
+    expect(hfr.top, greaterThan(now.bottom - 1));
+  });
+
+  testWidgets(
+    'Conditions with no weather station shows the camera and focuser group alone',
+    (tester) async {
+      await _pump(
+        tester,
+        _snap(
+          conditions: const MonitorConditions(
+            rig: MonitorRigTemps(
+              sensorC: -9.6,
+              sensorTargetC: -10,
+              coolerPowerPct: 62,
+              focuserC: 7.5,
+            ),
+          ),
+        ),
+      );
+      expect(_in('conditions', 'Camera and focuser'), findsOneWidget);
+      for (final text in ['Sensor · -10', 'Cooler power', 'Focuser']) {
+        expect(_in('conditions', text), findsOneWidget, reason: text);
+      }
+      expect(_in('conditions', 'Cloud'), findsNothing);
+    },
+  );
+
+  testWidgets('Conditions with weather and rig shows both groups', (
+    tester,
+  ) async {
+    await _pump(tester, _snap());
+    expect(_in('conditions', 'Cloud'), findsOneWidget);
+    expect(_in('conditions', 'Camera and focuser'), findsOneWidget);
+  });
+
+  testWidgets('Conditions at 2x text does not overflow', (tester) async {
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(tester, _snap(), size: const Size(1280, 800));
+    final wide = tester.takeException();
+    expect(wide, isNull);
+  });
+
+  testWidgets('an enlarged tile whose gear leaves the profile is shrunk', (
+    tester,
+  ) async {
+    await _pump(tester, _snap());
+    await tester.tap(_k('guider'));
+    await tester.pump();
+    expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
+    await _pump(tester, _snap(guider: false));
+    expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
+    expect(_k('hfr'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Now has no blank band at 1288x780: Up next takes what the countdown leaves',
+    (tester) async {
+      await _pump(tester, _snap());
+      final now = tester.getRect(_k('now'));
+      final upNext = tester.getRect(
+        find.descendant(
+          of: _k('now'),
+          matching: find.byKey(const Key('simple-monitor-up-next')),
+        ),
+      );
+      expect(now.right - upNext.right, lessThan(AraSpace.s12 + 2));
+      final countdown = tester.getRect(
+        find.byKey(const Key('simple-monitor-countdown')),
+      );
+      expect(upNext.left - countdown.right, lessThan(80));
+    },
+  );
+
+  testWidgets('a rig with neither source has no Conditions tile', (
+    tester,
+  ) async {
+    await _pump(tester, _snap(gear: false));
+    expect(_k('conditions'), findsNothing);
+  });
+
   testWidgets('HFR flags a rise of 15 % or more against the session start', (
     tester,
   ) async {
@@ -300,9 +625,16 @@ void main() {
   testWidgets('a long tile name and the status word keep a gap between them', (
     tester,
   ) async {
-    await _pump(tester, _snap(frames: _drifting));
-    final name = tester.getRect(_in('last-frame', 'Last frame'));
-    final word = tester.getRect(_in('last-frame', 'Drifting'));
+    await _pump(
+      tester,
+      _snap(frames: _frames([2.0, 2.0, 2.0, 2.2, 2.3, 2.36, 2.36, 2.36])),
+    );
+    final name = tester.getRect(
+      find.descendant(of: _k('hfr'), matching: find.text('HFR')),
+    );
+    final word = tester.getRect(
+      find.descendant(of: _k('hfr'), matching: find.text('Drifting')),
+    );
     expect(word.left - name.right, greaterThanOrEqualTo(6));
   });
 
@@ -385,6 +717,7 @@ void main() {
     },
   );
 
+
   testWidgets('Conditions holds the weather and a Camera and focuser group', (
     tester,
   ) async {
@@ -417,17 +750,17 @@ void main() {
   });
 
   testWidgets(
-    'a tap on Conditions opens the weather window when a station reports',
+    'a long press on Conditions opens the weather window when a station reports',
     (tester) async {
       final opened = <MonitorDestination>[];
       await _pump(tester, _snap(), onOpen: opened.add);
-      await tester.tap(_k('conditions'));
+      await tester.longPress(_k('conditions'));
       expect(opened, [MonitorDestination.weather]);
     },
   );
 
   testWidgets(
-    'a tap on Conditions with no weather station opens the camera window',
+    'a long press on Conditions with no weather station opens the camera window',
     (tester) async {
       final opened = <MonitorDestination>[];
       await _pump(
@@ -439,8 +772,26 @@ void main() {
         ),
         onOpen: opened.add,
       );
-      await tester.tap(_k('conditions'));
+      await tester.longPress(_k('conditions'));
       expect(opened, [MonitorDestination.camera]);
+    },
+  );
+
+  testWidgets(
+    'a long press on Conditions with only a focuser temperature opens the focuser window',
+    (tester) async {
+      final opened = <MonitorDestination>[];
+      await _pump(
+        tester,
+        _snap(
+          conditions: const MonitorConditions(
+            rig: MonitorRigTemps(focuserC: 7.5),
+          ),
+        ),
+        onOpen: opened.add,
+      );
+      await tester.longPress(_k('conditions'));
+      expect(opened, [MonitorDestination.focuser]);
     },
   );
 
@@ -500,4 +851,19 @@ void main() {
     await _pump(tester, _snap());
     expect(_k('title'), findsNothing);
   });
+}
+
+extension on MonitorSnapshot {
+  MonitorSnapshot copyWithoutSafety() => MonitorSnapshot(
+    asOf: asOf,
+    verdict: verdict,
+    now: now,
+    upNext: upNext,
+    target: target,
+    flip: flip,
+    conditions: conditions,
+    guider: guider,
+    lastFrame: lastFrame,
+    night: night,
+  );
 }

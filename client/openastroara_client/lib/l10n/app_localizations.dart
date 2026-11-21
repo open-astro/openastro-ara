@@ -7557,12 +7557,6 @@ abstract class AppLocalizations {
   /// **'Last dither {time}'**
   String monitorLastDither(String time);
 
-  /// Monitor tile: the last saved frame's quality
-  ///
-  /// In en, this message translates to:
-  /// **'Last frame'**
-  String get monitorLastFrame;
-
   /// Monitor Last frame reading
   ///
   /// In en, this message translates to:
@@ -7599,7 +7593,31 @@ abstract class AppLocalizations {
   /// **'{n} saved'**
   String monitorSaved(int n);
 
-  /// Monitor Last frame tile: the HFR the session started at
+  /// Monitor tile, screen reader action (the long press): opens the window the tile belongs to
+  ///
+  /// In en, this message translates to:
+  /// **'Open {window}'**
+  String monitorOpenWindow(String window);
+
+  /// Monitor tile, screen reader action (the tap): fills the grid with the tile
+  ///
+  /// In en, this message translates to:
+  /// **'Enlarge'**
+  String get monitorEnlarge;
+
+  /// Monitor tile, screen reader action (the tap on the enlarged tile): back to the grid
+  ///
+  /// In en, this message translates to:
+  /// **'Shrink'**
+  String get monitorShrink;
+
+  /// Monitor tile, screen reader state: the tile fills the grid
+  ///
+  /// In en, this message translates to:
+  /// **'enlarged'**
+  String get monitorEnlarged;
+
+  /// Monitor graph tile: the reading the session started at
   ///
   /// In en, this message translates to:
   /// **'session start {value}'**
@@ -7611,7 +7629,7 @@ abstract class AppLocalizations {
   /// **'{metric} {pct} % since session start'**
   String monitorChangeSinceStart(String metric, String pct);
 
-  /// Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start
+  /// Monitor graph tile status word: a reading moved 15 % or more the wrong way since session start
   ///
   /// In en, this message translates to:
   /// **'Drifting'**
@@ -7652,6 +7670,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Imaging {start} to {end}'**
   String monitorImagingSpan(String start, String end);
+
+  /// Monitor tile: stars and sky background per saved frame
+  ///
+  /// In en, this message translates to:
+  /// **'Stars · sky background'**
+  String get monitorStarsAndSky;
 
   /// Monitor stars graph key: the sky background line has its own scale
   ///

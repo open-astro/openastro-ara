@@ -128,11 +128,11 @@ void main() {
     },
   );
 
-  testWidgets('the rail button is there at a width where Monitor is not', (
+  testWidgets('the rail offers Best and Monitor at 820 pt wide', (
     tester,
   ) async {
     await _pump(tester, const Size(820, 700), phone: false);
-    expect(find.byKey(const Key('simple-monitor-open')), findsNothing);
+    expect(find.byKey(const Key('simple-monitor-open')), findsOneWidget);
     expect(find.byKey(const Key('simple-best-open')), findsOneWidget);
   });
 

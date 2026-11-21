@@ -7729,10 +7729,49 @@ void main() {
       expect(monitor, findsNothing);
     });
 
-    testWidgets('not offered below 900 pt wide', (tester) async {
-      await _pump(tester, const Size(860, 768), linkUp: true);
-      expect(find.byKey(const Key('simple-monitor-open')), findsNothing);
-    });
+    testWidgets(
+      'a phone in landscape reaches Monitor from the left rail (#2014)',
+      (tester) async {
+        final awake = _Awake();
+        await _pump(
+          tester,
+          const Size(844, 390),
+          linkUp: true,
+          gear: [
+            keepAwakeProvider.overrideWithValue(awake),
+            deviceBatteryProvider.overrideWith(
+              (ref) => Stream.value((level: 64, charging: false)),
+            ),
+          ],
+        );
+        tester.takeException(); // the 2 px the right rail is short, #1775
+        // The rail scrolls on a short window: scroll Monitor into view, as a thumb would.
+        await tester.ensureVisible(
+          find.byKey(const Key('simple-monitor-open')),
+        );
+        await tester.pump();
+        await tester.tap(find.byKey(const Key('simple-monitor-open')));
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
+        await close(tester);
+      },
+    );
+
+    for (final w in [600.0, 860.0, 1200.0]) {
+      testWidgets(
+        "the left rail offers Monitor at ${w.round()} pt wide (#2014)",
+        (tester) async {
+          await openMonitor(tester, size: Size(w, 768));
+          expect(find.byKey(const Key('simple-monitor')), findsOneWidget);
+          expect(
+            find.byKey(const Key('simple-monitor-column')),
+            w < 900 ? findsOneWidget : findsNothing,
+          );
+          await close(tester);
+        },
+      );
+    }
 
     testWidgets('Emergency Stop is on screen, the shared button at 108 pt', (tester) async {
       await openMonitor(tester);
@@ -7742,10 +7781,40 @@ void main() {
       await close(tester);
     });
 
-    testWidgets('a tile tap closes Monitor and opens the window that owns it', (tester) async {
-      await openMonitor(tester, gear: [
-        safetyMonitorProvider.overrideWith(() => _SafetyMon()),
-      ]);
+    testWidgets(
+      'a long press on a tile closes Monitor and opens the window that owns it; a tap only enlarges',
+      (tester) async {
+        await openMonitor(
+          tester,
+          gear: [weatherProvider.overrideWith(() => _WeatherAll())],
+        );
+        await tester.tap(find.byKey(const Key('simple-monitor-conditions')));
+        await tester.pump();
+        expect(
+          find.byKey(const Key('simple-monitor')),
+          findsOneWidget,
+          reason: 'the tap stays in Monitor',
+        );
+        expect(
+          find.byKey(const Key('simple-monitor-enlarged')),
+          findsOneWidget,
+        );
+        await tester.longPress(
+          find.byKey(const Key('simple-monitor-conditions')),
+        );
+        await tester.pump();
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      },
+    );
+
+    testWidgets('the Safety strip opens the Safety monitor window on a tap', (
+      tester,
+    ) async {
+      await openMonitor(
+        tester,
+        gear: [safetyMonitorProvider.overrideWith(() => _SafetyMon())],
+      );
       await tester.tap(find.byKey(const Key('simple-monitor-safety')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
@@ -7753,9 +7822,9 @@ void main() {
       expect(find.byKey(const Key('simple-device-safety')), findsOneWidget);
     });
 
-    testWidgets('with no weather station, a Conditions tap closes Monitor and opens the Camera window', (tester) async {
+    testWidgets('with no weather station, a Conditions long press closes Monitor and opens the Camera window', (tester) async {
       await openMonitor(tester, gear: [cameraStatusProvider.overrideWith(() => _CoolingCamera(-10))]);
-      await tester.tap(find.byKey(const Key('simple-monitor-conditions')));
+      await tester.longPress(find.byKey(const Key('simple-monitor-conditions')));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byKey(const Key('simple-monitor')), findsNothing);
@@ -7772,16 +7841,43 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
-      await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
-      final tile = find.byKey(const Key('simple-monitor-conditions'));
-      expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
-      for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
-        expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');
-      }
-      expect(find.descendant(of: tile, matching: find.byType(EquipmentGlyph)), findsOneWidget, reason: 'the dew mark');
-      await close(tester);
-    });
+    testWidgets(
+      "the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)",
+      (tester) async {
+        await openMonitor(
+          tester,
+          gear: [weatherProvider.overrideWith(() => _WeatherAll())],
+        );
+        final tile = find.byKey(const Key('simple-monitor-conditions'));
+        expect(
+          find.descendant(
+            of: tile,
+            matching: find.byIcon(Icons.cloud_outlined),
+          ),
+          findsNWidgets(2),
+          reason: 'the header and Cloud',
+        );
+        for (final icon in [
+          Icons.auto_awesome_outlined,
+          Icons.thermostat,
+          Icons.water_drop_outlined,
+          CupertinoIcons.cloud_rain,
+          Icons.air,
+        ]) {
+          expect(
+            find.descendant(of: tile, matching: find.byIcon(icon)),
+            findsOneWidget,
+            reason: '$icon',
+          );
+        }
+        expect(
+          find.descendant(of: tile, matching: find.byType(EquipmentGlyph)),
+          findsOneWidget,
+          reason: 'the dew mark',
+        );
+        await close(tester);
+      },
+    );
 
     const fullPlan = SimpleRun(sequenceId: 'seq-1', started: true, targets: [
       SimpleTarget(name: 'Orion Nebula', tag: 'M 42', steps: [

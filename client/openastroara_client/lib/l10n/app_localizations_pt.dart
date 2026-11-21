@@ -4464,9 +4464,6 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get monitorLastFrame => 'Last frame';
-
-  @override
   String get monitorHfr => 'HFR';
 
   @override
@@ -4487,6 +4484,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String monitorSaved(int n) {
     return '$n saved';
   }
+
+  @override
+  String monitorOpenWindow(String window) {
+    return 'Open $window';
+  }
+
+  @override
+  String get monitorEnlarge => 'Enlarge';
+
+  @override
+  String get monitorShrink => 'Shrink';
+
+  @override
+  String get monitorEnlarged => 'enlarged';
 
   @override
   String monitorStartedAt(String value) {
@@ -4520,6 +4531,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String monitorImagingSpan(String start, String end) {
     return 'Imaging $start to $end';
   }
+
+  @override
+  String get monitorStarsAndSky => 'Stars · sky background';
 
   @override
   String get monitorSkyOwnScale => 'Sky (own scale)';
@@ -11738,7 +11752,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorAir => 'Ar';
 
   @override
-  String get monitorDewMargin => 'Acima do ponto de orvalho';
+  String get monitorDewMargin => 'Acima do orvalho';
 
   @override
   String get monitorHumidity => 'Umidade';
@@ -11765,9 +11779,6 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   }
 
   @override
-  String get monitorLastFrame => 'Último quadro';
-
-  @override
   String get monitorHfr => 'HFR';
 
   @override
@@ -11781,13 +11792,27 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String monitorAutofocusAt(String time) {
-    return 'Foco automático $time';
+    return 'Autofoco $time';
   }
 
   @override
   String monitorSaved(int n) {
     return '$n salvos';
   }
+
+  @override
+  String monitorOpenWindow(String window) {
+    return 'Abrir $window';
+  }
+
+  @override
+  String get monitorEnlarge => 'Ampliar';
+
+  @override
+  String get monitorShrink => 'Reduzir';
+
+  @override
+  String get monitorEnlarged => 'ampliado';
 
   @override
   String monitorStartedAt(String value) {
@@ -11812,7 +11837,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get monitorSensor => 'Sensor';
 
   @override
-  String get monitorCoolerPower => 'Potência do resfriador';
+  String get monitorCoolerPower => 'Resfriador';
 
   @override
   String get monitorFocuserTemp => 'Focalizador';
@@ -11821,6 +11846,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String monitorImagingSpan(String start, String end) {
     return 'Captura $start a $end';
   }
+
+  @override
+  String get monitorStarsAndSky => 'Estrelas · fundo do céu';
 
   @override
   String get monitorSkyOwnScale => 'Céu (escala própria)';
