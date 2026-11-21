@@ -6,6 +6,7 @@ import 'package:openastroara/l10n/app_localizations_en.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_live_stack_row.dart';
 import 'package:openastroara/screens/simple/simple_queue_screen.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart';
 import 'package:openastroara/services/session_live_stack_api.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
@@ -144,8 +145,8 @@ void main() {
     expect(_row, findsOneWidget);
     expect(
       tester
-          .widget<Switch>(find.byKey(const Key('simple-live-stack-switch')))
-          .value,
+          .widget<SimpleSegment>(find.byKey(const Key('simple-live-stack-on')))
+          .selected,
       isFalse,
     );
     expect(
@@ -165,7 +166,7 @@ void main() {
       'stays on', (tester) async {
     final daemon = FakeSessionLiveStackClient();
     final c = await _pump(tester, daemon);
-    await tester.tap(find.byKey(const Key('simple-live-stack-switch')));
+    await tester.tap(find.byKey(const Key('simple-live-stack-on')));
     await tester.pump();
     await tester.pump();
     expect(daemon.count('start'), 1);
@@ -175,8 +176,8 @@ void main() {
     expect(daemon.count('reset'), 1);
     expect(
       tester
-          .widget<Switch>(find.byKey(const Key('simple-live-stack-switch')))
-          .value,
+          .widget<SimpleSegment>(find.byKey(const Key('simple-live-stack-on')))
+          .selected,
       isTrue,
     );
   });
@@ -184,7 +185,7 @@ void main() {
   testWidgets('switching off posts stop', (tester) async {
     final daemon = FakeSessionLiveStackClient()..enabled = true;
     await _pump(tester, daemon);
-    await tester.tap(find.byKey(const Key('simple-live-stack-switch')));
+    await tester.tap(find.byKey(const Key('simple-live-stack-off')));
     await tester.pump();
     expect(daemon.count('stop'), 1);
   });

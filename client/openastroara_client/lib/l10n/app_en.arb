@@ -8867,7 +8867,7 @@
   },
   "simpleLiveStackTitle": "Live Stack",
   "@simpleLiveStackTitle": {
-    "description": "Run panel: the switch that stacks the session's lights into one growing picture"
+    "description": "Run panel: the row whose On / Off stacks the session's lights into one growing picture"
   },
   "simpleLiveStackReset": "Reset",
   "@simpleLiveStackReset": {

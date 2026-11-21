@@ -11659,7 +11659,7 @@ abstract class AppLocalizations {
   /// **'Start anyway'**
   String get clockWrongStartAnyway;
 
-  /// Run panel: the switch that stacks the session's lights into one growing picture
+  /// Run panel: the row whose On / Off stacks the session's lights into one growing picture
   ///
   /// In en, this message translates to:
   /// **'Live Stack'**

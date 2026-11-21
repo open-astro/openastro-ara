@@ -8,6 +8,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
+import 'simple_shell.dart';
 
 /// "Live Stack · 3 lights", then "· 2 left out" for the lights the stack could
 /// not add (not registered, or the stacker was busy).
@@ -48,7 +49,7 @@ Future<void> _sayIfFailed(
       );
 }
 
-/// The Live Stack switch in the run panel: the switch, Reset, and (while on)
+/// The Live Stack row in the run panel: On / Off, Reset, and (while on)
 /// the choice between the stack and the last light. Hidden until the daemon
 /// says the stack can run, or says why it cannot (`not_colour`, `too_large`).
 class SimpleLiveStackRow extends ConsumerWidget {
@@ -100,32 +101,43 @@ class SimpleLiveStackRow extends ConsumerWidget {
       );
     }
 
+    final title = Text(l10n.simpleLiveStackTitle, style: kSimpleText);
+    // On / Off as named segments, never a bare toggle, over the image
+    // (DESIGN.md "Switches and Segmented Controls").
+    final onOff = SimpleSegments<bool>(
+      key: const Key('simple-live-stack-switch'),
+      keyPrefix: 'simple-live-stack',
+      expand: simpleStackText(context),
+      group: l10n.simpleLiveStackTitle,
+      options: [(true, l10n.deviceOn, 'on'), (false, l10n.deviceOff, 'off')],
+      selected: s.on,
+      onPick: (on) => _sayIfFailed(
+        context,
+        stack.setOn(on),
+        on ? l10n.simpleLiveStackCouldntStart : l10n.simpleLiveStackCouldntStop,
+      ),
+    );
     return Column(
       key: const Key('simple-live-stack-row'),
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(l10n.simpleLiveStackTitle, style: kSimpleText),
-            ),
-            if (s.supported)
-              Semantics(
-                label: l10n.simpleLiveStackTitle,
-                child: Switch(
-                  key: const Key('simple-live-stack-switch'),
-                  value: s.on,
-                  onChanged: (on) => _sayIfFailed(
-                    context,
-                    stack.setOn(on),
-                    on
-                        ? l10n.simpleLiveStackCouldntStart
-                        : l10n.simpleLiveStackCouldntStop,
-                  ),
-                ),
-              ),
-          ],
-        ),
+        if (!s.supported)
+          title
+        // Large text: the segments go under the title, sharing its width.
+        else if (simpleStackText(context))
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s4,
+            children: [title, onOff],
+          )
+        else
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(child: title),
+              onOff,
+            ],
+          ),
         if (!s.supported)
           Text(
             reason!,
