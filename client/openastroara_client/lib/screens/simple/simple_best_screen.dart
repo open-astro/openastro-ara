@@ -20,6 +20,9 @@ import 'simple_plan_panel.dart' show simpleSelectionOf;
 import 'simple_shell.dart'
     show SimpleSegments, kSimpleStopSize, simpleRailScale;
 
+String _minHhmm(int m) =>
+    '${(m ~/ 60).toString().padLeft(2, '0')}:${(m % 60).toString().padLeft(2, '0')}';
+
 String _hhmm(DateTime t) {
   final l = t.toLocal();
   return '${l.hour.toString().padLeft(2, '0')}:${l.minute.toString().padLeft(2, '0')}';
@@ -366,6 +369,32 @@ class _Controls extends ConsumerWidget {
           ),
         ),
         group(
+          l10n.bestHours,
+          Wrap(
+            spacing: AraSpace.s8,
+            runSpacing: AraSpace.s8,
+            children: [
+              _Chip(
+                key: const Key('best-window-any'),
+                label: l10n.bestHoursAny,
+                selected: choices.windowFromMin == null,
+                onTap: n.clearWindow,
+              ),
+              _Chip(
+                key: const Key('best-window-pick'),
+                label: choices.windowFromMin == null
+                    ? l10n.bestHoursPick
+                    : l10n.bestHoursRange(
+                        _minHhmm(choices.windowFromMin!),
+                        _minHhmm(choices.windowToMin!),
+                      ),
+                selected: choices.windowFromMin != null,
+                onTap: () => _pickWindow(context, choices, n),
+              ),
+            ],
+          ),
+        ),
+        group(
           l10n.bestType,
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -396,6 +425,31 @@ class _Controls extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// From, then To, in the system time picker; backing out of either keeps
+/// the range as it was. Hours are the device's local day, as the rows show.
+Future<void> _pickWindow(
+  BuildContext context,
+  BestChoices choices,
+  TonightsBestChoicesNotifier n,
+) async {
+  final l10n = context.l10n;
+  TimeOfDay of(int? m, int fallback) =>
+      TimeOfDay(hour: (m ?? fallback) ~/ 60, minute: (m ?? fallback) % 60);
+  final from = await showTimePicker(
+    context: context,
+    initialTime: of(choices.windowFromMin, 21 * 60),
+    helpText: l10n.bestHoursFromHelp,
+  );
+  if (from == null || !context.mounted) return;
+  final to = await showTimePicker(
+    context: context,
+    initialTime: of(choices.windowToMin, 60),
+    helpText: l10n.bestHoursToHelp,
+  );
+  if (to == null) return;
+  n.setWindow(from.hour * 60 + from.minute, to.hour * 60 + to.minute);
 }
 
 class _Chip extends StatelessWidget {

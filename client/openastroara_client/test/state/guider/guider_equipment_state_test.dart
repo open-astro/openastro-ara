@@ -51,9 +51,11 @@ class _FakeEquipmentClient implements GuiderEquipmentClient {
   }
 
   @override
-  Future<double?> getAlpacaCameraPixelSize(
-          {String? host, int? port, int? device}) async =>
-      null;
+  Future<double?> getAlpacaCameraPixelSize({
+    String? host,
+    int? port,
+    int? device,
+  }) async => null;
 
   bool? lastTuningOnly;
 
@@ -68,11 +70,18 @@ class _FakeEquipmentClient implements GuiderEquipmentClient {
   void close() {}
 }
 
-ProviderContainer _container(List<AraServer> servers, GuiderEquipmentClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    guiderEquipmentApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+ProviderContainer _container(
+  List<AraServer> servers,
+  GuiderEquipmentClient api,
+) {
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      guiderEquipmentApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -118,21 +127,24 @@ void main() {
       expect(c.read(guiderEquipmentProvider).value!.connected, isTrue);
     });
 
-    test('discoverAlpaca forwards the bounds and returns the servers', () async {
-      final api = _FakeEquipmentClient(_resp());
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(guiderEquipmentProvider.future);
+    test(
+      'discoverAlpaca forwards the bounds and returns the servers',
+      () async {
+        final api = _FakeEquipmentClient(_resp());
+        final c = _container(const [server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(guiderEquipmentProvider.future);
 
-      final servers = await c
-          .read(guiderEquipmentProvider.notifier)
-          .discoverAlpaca(numQueries: 3, timeoutSeconds: 5);
+        final servers = await c
+            .read(guiderEquipmentProvider.notifier)
+            .discoverAlpaca(numQueries: 3, timeoutSeconds: 5);
 
-      expect(servers, ['192.168.1.20:11111']);
-      expect(api.discoveries, 1);
-      expect(api.lastNumQueries, 3);
-      expect(api.lastTimeoutSeconds, 5);
-    });
+        expect(servers, ['192.168.1.20:11111']);
+        expect(api.discoveries, 1);
+        expect(api.lastNumQueries, 3);
+        expect(api.lastTimeoutSeconds, 5);
+      },
+    );
 
     test('discoverAlpaca surfaces the client error to the caller', () async {
       final api = _FakeEquipmentClient(_resp())..throwOnDiscover = true;
@@ -160,22 +172,25 @@ void main() {
       expect(api.lastTuningOnly, isFalse);
     });
 
-    test('pushProfile(tuningOnly: true) asks for the runtime-safe push', () async {
-      // Tune Guiding's Apply must never trigger the full push: that one
-      // re-sends the equipment selections inside a disconnect window and
-      // stops guiding.
-      final api = _FakeEquipmentClient(_resp());
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(guiderEquipmentProvider.future);
+    test(
+      'pushProfile(tuningOnly: true) asks for the runtime-safe push',
+      () async {
+        // Tune Guiding's Apply must never trigger the full push: that one
+        // re-sends the equipment selections inside a disconnect window and
+        // stops guiding.
+        final api = _FakeEquipmentClient(_resp());
+        final c = _container(const [server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(guiderEquipmentProvider.future);
 
-      await c
-          .read(guiderEquipmentProvider.notifier)
-          .pushProfile(tuningOnly: true);
+        await c
+            .read(guiderEquipmentProvider.notifier)
+            .pushProfile(tuningOnly: true);
 
-      expect(api.pushes, 1);
-      expect(api.lastTuningOnly, isTrue);
-    });
+        expect(api.pushes, 1);
+        expect(api.lastTuningOnly, isTrue);
+      },
+    );
 
     test('pushProfile surfaces the client error to the caller', () async {
       final api = _FakeEquipmentClient(_resp())..throwOnPush = true;

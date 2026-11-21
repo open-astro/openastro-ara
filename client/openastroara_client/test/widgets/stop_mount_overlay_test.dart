@@ -30,8 +30,9 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   @override
-  Future<List<AraServer>> loadAll() async =>
-      const [AraServer(hostname: 'h', port: 5555)];
+  Future<List<AraServer>> loadAll() async => const [
+    AraServer(hostname: 'h', port: 5555),
+  ];
   @override
   Future<void> saveAll(List<AraServer> s) async {}
   @override
@@ -73,26 +74,36 @@ class _FakeSolveApi extends PlateSolveApi {
   int calls = 0;
   Object? error;
   VerifyPositionResult answer = const VerifyPositionResult(
-    success: true, solvedRaHours: 9.93, solvedDecDegrees: 69.07,
-    mountRaHours: 9.93, mountDecDegrees: 69.57, intendedRaHours: 9.93, intendedDecDegrees: 69.07,
-    solvedToMountArcmin: 30.0, solvedToIntendedArcmin: 0.4, exposureSeconds: 2);
+    success: true,
+    solvedRaHours: 9.93,
+    solvedDecDegrees: 69.07,
+    mountRaHours: 9.93,
+    mountDecDegrees: 69.57,
+    intendedRaHours: 9.93,
+    intendedDecDegrees: 69.07,
+    solvedToMountArcmin: 30.0,
+    solvedToIntendedArcmin: 0.4,
+    exposureSeconds: 2,
+  );
   @override
   Future<VerifyPositionResult> verifyPosition({double? exposureSeconds}) async {
     calls++;
     if (error case final e?) throw e;
     return answer;
   }
+
   @override
   Future<PlateSolveResult> solve(String id) => throw UnimplementedError();
 }
 
 class _FakeSeqClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(String id,
-          {required List<int> parentPath,
-          int? index,
-          required Map<String, dynamic> item}) =>
-      throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) => throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -103,8 +114,11 @@ class _FakeSeqClient implements SequenceClient {
   final List<String> lifecycle = [];
 
   @override
-  Future<String> resume(String id,
-          {bool recenter = true, bool refocus = false}) async {
+  Future<String> resume(
+    String id, {
+    bool recenter = true,
+    bool refocus = false,
+  }) async {
     lifecycle.add('resume:$id');
     return 'op';
   }
@@ -130,7 +144,12 @@ class _FakeSeqClient implements SequenceClient {
 }
 
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
-    WsEvent(type: type, ts: DateTime.utc(2026, 7, 11), seq: 1, payload: payload);
+    WsEvent(
+      type: type,
+      ts: DateTime.utc(2026, 7, 11),
+      seq: 1,
+      payload: payload,
+    );
 
 /// #1111 — a child that reports how often it was (re)mounted.
 class _Probe extends StatefulWidget {
@@ -166,7 +185,12 @@ void main() {
   late _FakeSolveApi solveApi;
   late ProviderContainer container;
 
-  Future<void> pump(WidgetTester tester, {Widget child = const Text('tab content'), bool quiet = false, List<Override> extra = const []}) async {
+  Future<void> pump(
+    WidgetTester tester, {
+    Widget child = const Text('tab content'),
+    bool quiet = false,
+    List<Override> extra = const [],
+  }) async {
     ws = StreamController<WsEvent>.broadcast();
     addTearDown(ws.close);
     mountApi = _FakeMountApi();
@@ -175,8 +199,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          savedServerServiceProvider
-              .overrideWithValue(_FakeSavedServerService()),
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(),
+          ),
           wsEventsProvider.overrideWith((ref) => ws.stream),
           serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
           mountApiFactoryProvider.overrideWithValue((_) => mountApi),
@@ -265,46 +290,74 @@ void main() {
     expect(find.textContaining('RA 9.57h'), findsOneWidget);
   });
 
-  testWidgets('on iOS the post-stop window is an iOS alert with Close as its default action', (tester) async {
-    await pump(tester);
-    await fire(tester, _event(SlewWsEvents.started));
-    await fire(tester, _event(SlewWsEvents.aborted, {'reason': 'user_request'}));
-    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    final close = tester.widget<CupertinoDialogAction>(find.byKey(const ValueKey('stop_modal_close')));
-    expect(close.isDefaultAction, isTrue);
-    await tester.ensureVisible(find.byKey(const ValueKey('stop_modal_close')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const ValueKey('stop_modal_close')));
-    await tester.pumpAndSettle();
-    expect(find.text('Mount stopped at user request'), findsNothing);
-  }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
+  testWidgets(
+    'on iOS the post-stop window is an iOS alert with Close as its default action',
+    (tester) async {
+      await pump(tester);
+      await fire(tester, _event(SlewWsEvents.started));
+      await fire(
+        tester,
+        _event(SlewWsEvents.aborted, {'reason': 'user_request'}),
+      );
+      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      final close = tester.widget<CupertinoDialogAction>(
+        find.byKey(const ValueKey('stop_modal_close')),
+      );
+      expect(close.isDefaultAction, isTrue);
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('stop_modal_close')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('stop_modal_close')));
+      await tester.pumpAndSettle();
+      expect(find.text('Mount stopped at user request'), findsNothing);
+    },
+    variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+  );
 
-  testWidgets('quiet (Simple Mode, no popups): no slewing banner and no stopped dialog', (tester) async {
-    await pump(tester, quiet: true);
-    await fire(tester, _event(SlewWsEvents.started, {'target_ra_hours': 9.92, 'target_dec_degrees': 69.1}));
-    expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
-    await fire(tester, _event(SlewWsEvents.aborted, {'reason': 'user_request'}));
-    expect(find.text('Mount stopped at user request'), findsNothing);
-    expect(find.byType(AlertDialog), findsNothing);
-  });
+  testWidgets(
+    'quiet (Simple Mode, no popups): no slewing banner and no stopped dialog',
+    (tester) async {
+      await pump(tester, quiet: true);
+      await fire(
+        tester,
+        _event(SlewWsEvents.started, {
+          'target_ra_hours': 9.92,
+          'target_dec_degrees': 69.1,
+        }),
+      );
+      expect(find.byKey(const ValueKey('stop_mount_button')), findsNothing);
+      await fire(
+        tester,
+        _event(SlewWsEvents.aborted, {'reason': 'user_request'}),
+      );
+      expect(find.text('Mount stopped at user request'), findsNothing);
+      expect(find.byType(AlertDialog), findsNothing);
+    },
+  );
 
-  testWidgets('quiet: Space during a slew with the server unreachable says so in a pill, no snackbar (#1556)', (tester) async {
-    await pump(
-      tester,
-      quiet: true,
-      child: const Focus(autofocus: true, child: Text('tab content')),
-      extra: [simpleModeActiveProvider.overrideWithValue(true)],
-    );
-    await fire(tester, _event(SlewWsEvents.started));
-    mountApi.failCommands = true;
-    await tester.sendKeyEvent(LogicalKeyboardKey.space);
-    await tester.pump();
-    await tester.pump();
-    expect(container.read(simpleMessagesProvider).map((m) => m.title),
+  testWidgets(
+    'quiet: Space during a slew with the server unreachable says so in a pill, no snackbar (#1556)',
+    (tester) async {
+      await pump(
+        tester,
+        quiet: true,
+        child: const Focus(autofocus: true, child: Text('tab content')),
+        extra: [simpleModeActiveProvider.overrideWithValue(true)],
+      );
+      await fire(tester, _event(SlewWsEvents.started));
+      mountApi.failCommands = true;
+      await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pump();
+      await tester.pump();
+      expect(
+        container.read(simpleMessagesProvider).map((m) => m.title),
         contains("Couldn't stop the mount. Try Stop Mount again."),
-        reason: 'friendly and localised, never the raw exception');
-    expect(find.byType(SnackBar), findsNothing);
-  });
+        reason: 'friendly and localised, never the raw exception',
+      );
+      expect(find.byType(SnackBar), findsNothing);
+    },
+  );
 
   testWidgets('resume acts on the run the daemon paused for this stop', (
     tester,
@@ -383,27 +436,31 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('stop_mount_button')));
     await tester.pump();
 
-    expect(mountApi.commands, contains('abort'),
-        reason: 'the STOP must never wait behind (or be dropped by) the guard');
+    expect(
+      mountApi.commands,
+      contains('abort'),
+      reason: 'the STOP must never wait behind (or be dropped by) the guard',
+    );
 
     parkGate.complete();
     await park;
     await tester.pumpAndSettle();
   });
 
-  testWidgets('with no paused run the modal actions explain instead of throwing', (
-    tester,
-  ) async {
-    await pump(tester);
-    await fire(tester, _event(SlewWsEvents.started));
-    await fire(tester, _event(SlewWsEvents.aborted));
+  testWidgets(
+    'with no paused run the modal actions explain instead of throwing',
+    (tester) async {
+      await pump(tester);
+      await fire(tester, _event(SlewWsEvents.started));
+      await fire(tester, _event(SlewWsEvents.aborted));
 
-    await tester.tap(find.byKey(const ValueKey('stop_modal_end')));
-    await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('stop_modal_end')));
+      await tester.pumpAndSettle();
 
-    expect(seqApi.lifecycle, isEmpty);
-    expect(find.textContaining('No paused run to act on'), findsOneWidget);
-  });
+      expect(seqApi.lifecycle, isEmpty);
+      expect(find.textContaining('No paused run to act on'), findsOneWidget);
+    },
+  );
 
   testWidgets('a dropped server link clears a stale overlay', (tester) async {
     await pump(tester);
@@ -495,18 +552,25 @@ void main() {
     await tester.pumpAndSettle();
 
     await fire(tester, _event(SlewWsEvents.started));
-    await fire(tester, _event(SlewWsEvents.aborted)); // cycle 2, pause not landed
+    await fire(
+      tester,
+      _event(SlewWsEvents.aborted),
+    ); // cycle 2, pause not landed
     await tester.tap(find.byKey(const ValueKey('stop_modal_resume')));
     await tester.pumpAndSettle();
 
-    expect(seqApi.lifecycle, isEmpty,
-        reason: 'acting on stale run-7 would resume the wrong run');
+    expect(
+      seqApi.lifecycle,
+      isEmpty,
+      reason: 'acting on stale run-7 would resume the wrong run',
+    );
     expect(find.textContaining('No paused run to act on'), findsOneWidget);
   });
 
   group('#1111 the shell under the listener keeps its State', () {
-    testWidgets('across slew started, complete, aborted and a link drop',
-        (tester) async {
+    testWidgets('across slew started, complete, aborted and a link drop', (
+      tester,
+    ) async {
       _Probe.initCount = 0;
       await pump(tester, child: const _Probe());
       expect(_Probe.initCount, 1);
@@ -536,7 +600,9 @@ void main() {
       expect(_Probe.initCount, 1, reason: 'the child must never be remounted');
     });
 
-    testWidgets('Space aborts only while a slew is in progress', (tester) async {
+    testWidgets('Space aborts only while a slew is in progress', (
+      tester,
+    ) async {
       await pump(tester);
       // Give the shortcut scope focus, as the shell's autofocus would.
       final focus = FocusNode();
@@ -544,8 +610,9 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
-            savedServerServiceProvider
-                .overrideWithValue(_FakeSavedServerService()),
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(),
+            ),
             wsEventsProvider.overrideWith((ref) => ws.stream),
             serverLinkUpProvider.overrideWith((ref) => ref.watch(_linkUp)),
             mountApiFactoryProvider.overrideWithValue((_) => mountApi),
@@ -574,8 +641,11 @@ void main() {
 
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
       await tester.pumpAndSettle();
-      expect(mountApi.commands, isNot(contains('abort')),
-          reason: 'idle: Space must not reach the mount');
+      expect(
+        mountApi.commands,
+        isNot(contains('abort')),
+        reason: 'idle: Space must not reach the mount',
+      );
 
       await fire(tester, _event(SlewWsEvents.started));
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
@@ -584,33 +654,81 @@ void main() {
     });
   });
 
-  testWidgets('§57.4 Verify Position takes one image through the daemon and shows the three positions', (tester) async {
-    await pump(tester);
-    await fire(tester, _event(SlewWsEvents.started, {'target_ra_hours': 9.93, 'target_dec_degrees': 69.07}));
-    await fire(tester, _event(SlewWsEvents.aborted, {'halted_ra_hours': 9.93, 'halted_dec_degrees': 69.57}));
-    expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget);
+  testWidgets(
+    '§57.4 Verify Position takes one image through the daemon and shows the three positions',
+    (tester) async {
+      await pump(tester);
+      await fire(
+        tester,
+        _event(SlewWsEvents.started, {
+          'target_ra_hours': 9.93,
+          'target_dec_degrees': 69.07,
+        }),
+      );
+      await fire(
+        tester,
+        _event(SlewWsEvents.aborted, {
+          'halted_ra_hours': 9.93,
+          'halted_dec_degrees': 69.57,
+        }),
+      );
+      expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget);
 
-    await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
-    await tester.pumpAndSettle();
-    expect(solveApi.calls, 1, reason: 'one quick snapshot + solve on the daemon');
-    expect(find.text('Image solved: RA 9.93h, Dec +69.07°'), findsOneWidget);
-    expect(find.text('Mount reports: RA 9.93h, Dec +69.57° (30.0′ off)'), findsOneWidget);
-    expect(find.text('Slew was aimed at: RA 9.93h, Dec +69.07° (24″ off)'), findsOneWidget);
-    expect(find.byKey(const ValueKey('stop_modal_resume')), findsOneWidget, reason: 'the choices stay; verify only looks');
-    expect(mountApi.commands, isEmpty, reason: 'no slew, no sync');
-  });
+      await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
+      await tester.pumpAndSettle();
+      expect(
+        solveApi.calls,
+        1,
+        reason: 'one quick snapshot + solve on the daemon',
+      );
+      expect(find.text('Image solved: RA 9.93h, Dec +69.07°'), findsOneWidget);
+      expect(
+        find.text('Mount reports: RA 9.93h, Dec +69.57° (30.0′ off)'),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Slew was aimed at: RA 9.93h, Dec +69.07° (24″ off)'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const ValueKey('stop_modal_resume')),
+        findsOneWidget,
+        reason: 'the choices stay; verify only looks',
+      );
+      expect(mountApi.commands, isEmpty, reason: 'no slew, no sync');
+    },
+  );
 
-  testWidgets('§57.4 a daemon refusal (no camera / solver unconfigured) is shown in the modal, not thrown', (tester) async {
-    await pump(tester);
-    solveApi.error = const Refusal(
-        cause: RefusalCause.noCamera, reason: 'no-camera', detail: 'The daemon\'s own English sentence.', status: 409);
-    await fire(tester, _event(SlewWsEvents.started));
-    await fire(tester, _event(SlewWsEvents.aborted));
-    await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const ValueKey('stop_modal_verify_error')), findsOneWidget);
-    expect(find.text('No camera is connected. Connect one in Camera settings, then try again.'), findsOneWidget,
-        reason: 'the app words a known cause, not the daemon detail');
-    expect(find.byKey(const ValueKey('stop_modal_verify')), findsOneWidget, reason: 'the user can try again');
-  });
+  testWidgets(
+    '§57.4 a daemon refusal (no camera / solver unconfigured) is shown in the modal, not thrown',
+    (tester) async {
+      await pump(tester);
+      solveApi.error = const Refusal(
+        cause: RefusalCause.noCamera,
+        reason: 'no-camera',
+        detail: 'The daemon\'s own English sentence.',
+        status: 409,
+      );
+      await fire(tester, _event(SlewWsEvents.started));
+      await fire(tester, _event(SlewWsEvents.aborted));
+      await tester.tap(find.byKey(const ValueKey('stop_modal_verify')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey('stop_modal_verify_error')),
+        findsOneWidget,
+      );
+      expect(
+        find.text(
+          'No camera is connected. Connect one in Camera settings, then try again.',
+        ),
+        findsOneWidget,
+        reason: 'the app words a known cause, not the daemon detail',
+      );
+      expect(
+        find.byKey(const ValueKey('stop_modal_verify')),
+        findsOneWidget,
+        reason: 'the user can try again',
+      );
+    },
+  );
 }

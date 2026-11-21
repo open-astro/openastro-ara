@@ -65,24 +65,22 @@ class NotificationsSettings {
     bool? onAutofocusFailed,
     bool? onPlateSolveFailed,
     bool? onDiskSpaceLow,
-  }) =>
-      NotificationsSettings(
-        inAppBanner: inAppBanner ?? this.inAppBanner,
-        osDesktop: osDesktop ?? this.osDesktop,
-        soundAlert: soundAlert ?? this.soundAlert,
-        pushoverToken: pushoverToken ?? this.pushoverToken,
-        pushoverUserKey: pushoverUserKey ?? this.pushoverUserKey,
-        telegramChatId: telegramChatId ?? this.telegramChatId,
-        telegramBotToken: telegramBotToken ?? this.telegramBotToken,
-        onSequenceComplete: onSequenceComplete ?? this.onSequenceComplete,
-        onSequencePaused: onSequencePaused ?? this.onSequencePaused,
-        onCriticalDiagnostic:
-            onCriticalDiagnostic ?? this.onCriticalDiagnostic,
-        onSafetyEvent: onSafetyEvent ?? this.onSafetyEvent,
-        onAutofocusFailed: onAutofocusFailed ?? this.onAutofocusFailed,
-        onPlateSolveFailed: onPlateSolveFailed ?? this.onPlateSolveFailed,
-        onDiskSpaceLow: onDiskSpaceLow ?? this.onDiskSpaceLow,
-      );
+  }) => NotificationsSettings(
+    inAppBanner: inAppBanner ?? this.inAppBanner,
+    osDesktop: osDesktop ?? this.osDesktop,
+    soundAlert: soundAlert ?? this.soundAlert,
+    pushoverToken: pushoverToken ?? this.pushoverToken,
+    pushoverUserKey: pushoverUserKey ?? this.pushoverUserKey,
+    telegramChatId: telegramChatId ?? this.telegramChatId,
+    telegramBotToken: telegramBotToken ?? this.telegramBotToken,
+    onSequenceComplete: onSequenceComplete ?? this.onSequenceComplete,
+    onSequencePaused: onSequencePaused ?? this.onSequencePaused,
+    onCriticalDiagnostic: onCriticalDiagnostic ?? this.onCriticalDiagnostic,
+    onSafetyEvent: onSafetyEvent ?? this.onSafetyEvent,
+    onAutofocusFailed: onAutofocusFailed ?? this.onAutofocusFailed,
+    onPlateSolveFailed: onPlateSolveFailed ?? this.onPlateSolveFailed,
+    onDiskSpaceLow: onDiskSpaceLow ?? this.onDiskSpaceLow,
+  );
 }
 
 class NotificationsSettingsNotifier

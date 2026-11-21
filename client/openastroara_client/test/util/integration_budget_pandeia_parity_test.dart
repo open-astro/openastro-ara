@@ -63,7 +63,10 @@ void main() {
       );
       // The same equation solved for SNR at Pandeia's time.
       final snr = stackSnr(
-          seconds: c.seconds, targetRate: c.source, skyRate: c.sky);
+        seconds: c.seconds,
+        targetRate: c.source,
+        skyRate: c.sky,
+      );
       expect(
         snr / c.pandeiaSnr,
         closeTo(1.0, 0.0025),

@@ -14,16 +14,17 @@ import 'package:path_provider/path_provider.dart';
 /// dark-site Wi-Fi with no internet degrades to null (the widget shows a
 /// "no preview cached" placeholder), never an error or a spinner that hangs.
 class TargetPreviewService {
-  TargetPreviewService({
-    Future<Directory> Function()? supportDir,
-    Dio? dio,
-  })  : _supportDir = supportDir ?? getApplicationSupportDirectory,
-        _dio = dio ??
-            Dio(BaseOptions(
+  TargetPreviewService({Future<Directory> Function()? supportDir, Dio? dio})
+    : _supportDir = supportDir ?? getApplicationSupportDirectory,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               connectTimeout: const Duration(seconds: 6),
               receiveTimeout: const Duration(seconds: 12),
               responseType: ResponseType.bytes,
-            ));
+            ),
+          );
 
   final Future<Directory> Function() _supportDir;
   final Dio _dio;
@@ -68,20 +69,22 @@ class TargetPreviewService {
   /// held for the session — for every fractional change (review #1105).
   static double ladder(double deg) => (deg / 0.25).ceil() * 0.25;
 
-  static Uri cutoutUri(
-      {required double raDeg,
-      required double decDeg,
-      required double fovDeg}) =>
-      Uri.parse(cutoutBase).replace(queryParameters: {
-        'hips': hips,
-        'ra': raDeg.toStringAsFixed(5),
-        'dec': decDeg.toStringAsFixed(5),
-        'fov': fovDeg.toStringAsFixed(3),
-        'width': '$widthPx',
-        'height': '$heightPx',
-        'projection': 'TAN',
-        'format': 'jpg',
-      });
+  static Uri cutoutUri({
+    required double raDeg,
+    required double decDeg,
+    required double fovDeg,
+  }) => Uri.parse(cutoutBase).replace(
+    queryParameters: {
+      'hips': hips,
+      'ra': raDeg.toStringAsFixed(5),
+      'dec': decDeg.toStringAsFixed(5),
+      'fov': fovDeg.toStringAsFixed(3),
+      'width': '$widthPx',
+      'height': '$heightPx',
+      'projection': 'TAN',
+      'format': 'jpg',
+    },
+  );
 
   /// Cache key: the catalog id with anything that isn't filename-safe
   /// replaced, plus the FOV so a changed framing rule doesn't serve stale
@@ -121,8 +124,9 @@ class TargetPreviewService {
     if (hit != null) return hit;
     try {
       final r = await _dio.getUri<List<int>>(
-          cutoutUri(raDeg: raDeg, decDeg: decDeg, fovDeg: fov),
-          options: Options(responseType: ResponseType.bytes));
+        cutoutUri(raDeg: raDeg, decDeg: decDeg, fovDeg: fov),
+        options: Options(responseType: ResponseType.bytes),
+      );
       final data = r.data;
       if (r.statusCode != 200 || data == null || data.isEmpty) return null;
       final bytes = Uint8List.fromList(data);

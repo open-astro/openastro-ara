@@ -30,43 +30,47 @@ class AlpacaDeviceRow extends ConsumerWidget {
     final selected = ref.watch(alpacaSelectionProvider)[deviceType];
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text('Alpaca device',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: AraColors.textSecondary,
-                      )),
-              if (hint != null)
-                Text(hint!,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        )),
-            ],
-          ),
-        ),
-        Expanded(
-          child: Text(
-            selected?.name ?? 'Not selected',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: selected == null ? AraColors.textDisabled : null,
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Alpaca device',
+                  style: Theme.of(context).textTheme.bodyMedium
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
+                if (hint != null)
+                  Text(
+                    hint!,
+                    style: Theme.of(context).textTheme.labelSmall
+                        ?.copyWith(color: AraColors.textDisabled),
+                  ),
+              ],
+            ),
           ),
-        ),
-        TextButton.icon(
-          onPressed: () => showAlpacaChooserDialog(
-            context,
-            deviceType,
-            deviceTypeLabel: deviceTypeLabel,
+          Expanded(
+            child: Text(
+              selected?.name ?? 'Not selected',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: selected == null ? AraColors.textDisabled : null,
+              ),
+            ),
           ),
-          icon: const Icon(Icons.search, size: 16),
-          label: const Text('Choose…'),
-        ),
-      ]),
+          TextButton.icon(
+            onPressed: () => showAlpacaChooserDialog(
+              context,
+              deviceType,
+              deviceTypeLabel: deviceTypeLabel,
+            ),
+            icon: const Icon(Icons.search, size: 16),
+            label: const Text('Choose…'),
+          ),
+        ],
+      ),
     );
   }
 }

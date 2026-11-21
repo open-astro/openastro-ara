@@ -140,7 +140,10 @@ void main() {
 
     await applyProfileUpdated(c, 'site');
 
-    expect(c.read(siteSettingsProvider).value!.siteName, 'Seen on the other device');
+    expect(
+      c.read(siteSettingsProvider).value!.siteName,
+      'Seen on the other device',
+    );
     expect(
       cache.listSaves,
       1,
@@ -161,7 +164,10 @@ void main() {
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing after the save');
+      expect(
+        c.read(siteSettingsProvider).value!.siteName,
+        'Typing after the save',
+      );
     },
   );
 
@@ -183,7 +189,10 @@ void main() {
       await put;
       await event;
 
-      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing while it saves');
+      expect(
+        c.read(siteSettingsProvider).value!.siteName,
+        'Typing while it saves',
+      );
     },
   );
 
@@ -201,7 +210,10 @@ void main() {
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).value!.siteName, 'Set on the other device');
+      expect(
+        c.read(siteSettingsProvider).value!.siteName,
+        'Set on the other device',
+      );
     },
   );
 
@@ -279,12 +291,18 @@ void main() {
     () async {
       const path = '/api/v1/profile/polar-align';
       final rig = _Rig()
-        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
+        ..stored[path] = {
+          ...rigDefaults['polar-align']!,
+          'exposure_seconds': 2,
+        };
       final c = _container(rig);
       c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
       await settleLoaded(c, polarAlignSettingsProvider);
       expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 2);
-      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
+      rig.stored[path] = {
+        ...rigDefaults['polar-align']!,
+        'exposure_seconds': 5,
+      };
 
       await applyProfileUpdated(c, 'polar-align');
 
@@ -297,7 +315,10 @@ void main() {
     () async {
       const path = '/api/v1/profile/polar-align';
       final rig = _Rig()
-        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
+        ..stored[path] = {
+          ...rigDefaults['polar-align']!,
+          'exposure_seconds': 2,
+        };
       final c = _container(rig);
       c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
       await settleLoaded(c, polarAlignSettingsProvider);
@@ -307,12 +328,19 @@ void main() {
           .saveKnob((s) => s.copyWith(exposureSeconds: 5));
       await _sent(rig, 1); // the answer is still held
       // The daemon wrote it and announced it before answering the PUT.
-      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
+      rig.stored[path] = {
+        ...rigDefaults['polar-align']!,
+        'exposure_seconds': 5,
+      };
       final reads = rig.reads[path];
 
       final event = applyProfileUpdated(c, 'polar-align');
       await Future<void>.delayed(const Duration(milliseconds: 10));
-      expect(rig.reads[path], reads, reason: 'nothing is read over a save in flight');
+      expect(
+        rig.reads[path],
+        reads,
+        reason: 'nothing is read over a save in flight',
+      );
       rig.holdWrites!.complete();
       await save;
       await event;

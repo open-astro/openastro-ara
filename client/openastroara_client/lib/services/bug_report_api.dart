@@ -43,19 +43,24 @@ class BugReportApi implements BugReportClient {
   /// [dio] is injectable so tests can supply a stub adapter; production passes
   /// nothing and a server-bound Dio is built.
   BugReportApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
-          baseUrl: server.baseUrl,
-          connectTimeout: const Duration(seconds: 3),
-          sendTimeout: const Duration(seconds: 10),
-          // Staging the ZIP (logs + profile) and streaming it back can take a
-          // little while on a busy daemon / slow LAN.
-          receiveTimeout: const Duration(seconds: 60),
-        ));
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              sendTimeout: const Duration(seconds: 10),
+              // Staging the ZIP (logs + profile) and streaming it back can take a
+              // little while on a busy daemon / slow LAN.
+              receiveTimeout: const Duration(seconds: 60),
+            ),
+          );
 
   @override
-  Future<BugReportPreparation> prepare(
-      {String mode = 'full', DateTime? since}) async {
+  Future<BugReportPreparation> prepare({
+    String mode = 'full',
+    DateTime? since,
+  }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/v1/bugreport/prepare',
       data: <String, dynamic>{
@@ -73,7 +78,8 @@ class BugReportApi implements BugReportClient {
   @override
   Future<BugReportPreparation> status(String preparationId) async {
     final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/bugreport/${Uri.encodeComponent(preparationId)}');
+      '/api/v1/bugreport/${Uri.encodeComponent(preparationId)}',
+    );
     final data = res.data;
     if (data == null) {
       throw StateError('Bug-report status returned an empty response.');
@@ -105,7 +111,8 @@ class BugReportApi implements BugReportClient {
       throw StateError('Bug-report download returned an empty body.');
     }
     return fileNameFromContentDisposition(
-            res.headers.value('content-disposition')) ??
+          res.headers.value('content-disposition'),
+        ) ??
         'openastroara-bug-report.zip';
   }
 

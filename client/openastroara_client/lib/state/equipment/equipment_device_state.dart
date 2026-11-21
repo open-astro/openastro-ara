@@ -293,7 +293,8 @@ abstract class EquipmentDeviceNotifier<T extends EquipmentDeviceStatus>
           // connected, surface an error (one good read restores the live
           // status).
           final last = state.value;
-          final wasConnected = last != null &&
+          final wasConnected =
+              last != null &&
               last.connectionState == EquipmentConnectionState.connected;
           if (wasConnected) {
             _consecutiveReadFailures++;

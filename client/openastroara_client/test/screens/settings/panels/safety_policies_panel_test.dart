@@ -75,9 +75,10 @@ void main() {
     (tester) async {
       final section = await pumpOnRig(tester, const SafetyPoliciesPanel());
       expect(find.text('12'), findsOneWidget, reason: 'the rig\'s pause');
-      containerOf(tester, SafetyPoliciesPanel)
-          .read(safetyPoliciesProvider.notifier)
-          .setMeridianFlipAuto(false);
+      containerOf(
+        tester,
+        SafetyPoliciesPanel,
+      ).read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(false);
       await save(tester, SafetyPoliciesPanel);
       expect(section.puts.single.meridianFlipAuto, isFalse);
       expect(
@@ -117,9 +118,10 @@ void main() {
     (tester) async {
       final section = await pumpOnRig(tester, const SessionCalibrationPanel());
       expect(find.text('40'), findsOneWidget, reason: 'the rig\'s frames');
-      containerOf(tester, SessionCalibrationPanel)
-          .read(safetyPoliciesProvider.notifier)
-          .setPostFlatParkMount(true);
+      containerOf(
+        tester,
+        SessionCalibrationPanel,
+      ).read(safetyPoliciesProvider.notifier).setPostFlatParkMount(true);
       await save(tester, SessionCalibrationPanel);
       expect(section.puts.single.postFlatParkMount, isTrue);
       expect(

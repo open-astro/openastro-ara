@@ -27,7 +27,8 @@ class SolverDatabasePick {
     this.reason = '',
   });
 
-  factory SolverDatabasePick.fromJson(Map<String, dynamic> json) => SolverDatabasePick(
+  factory SolverDatabasePick.fromJson(Map<String, dynamic> json) =>
+      SolverDatabasePick(
         role: json['role'] as String? ?? 'camera',
         fovDeg: (json['fov_deg'] as num?)?.toDouble() ?? 0,
         band: json['band'] as String? ?? 'unknown',
@@ -70,7 +71,8 @@ class SolverRecommendation {
       guideFovDeg: d('guide_fov_deg'),
       narrowestFovDeg: d('narrowest_fov_deg'),
       band: json['band'] as String? ?? 'unknown',
-      packages: (json['packages'] as List?)
+      packages:
+          (json['packages'] as List?)
               ?.whereType<Map<String, dynamic>>()
               .map(SolverDatabasePick.fromJson)
               .toList() ??
@@ -111,17 +113,19 @@ class SolverRecommendationRequest {
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        if (focalLengthMm != null) 'focal_length_mm': focalLengthMm,
-        if (reducerFactor != null) 'reducer_factor': reducerFactor,
-        if (sensorWidthPx != null) 'sensor_width_px': sensorWidthPx,
-        if (sensorHeightPx != null) 'sensor_height_px': sensorHeightPx,
-        if (pixelSizeUm != null) 'pixel_size_um': pixelSizeUm,
-        if (guideFocalLengthMm != null) 'guide_focal_length_mm': guideFocalLengthMm,
-        if (guidePixelSizeUm != null) 'guide_pixel_size_um': guidePixelSizeUm,
-        if (guideSensorWidthPx != null) 'guide_sensor_width_px': guideSensorWidthPx,
-        if (guideSensorHeightPx != null) 'guide_sensor_height_px': guideSensorHeightPx,
-        if (guideSetupType != null && guideSetupType!.isNotEmpty) 'guide_setup_type': guideSetupType,
-      };
+    if (focalLengthMm != null) 'focal_length_mm': focalLengthMm,
+    if (reducerFactor != null) 'reducer_factor': reducerFactor,
+    if (sensorWidthPx != null) 'sensor_width_px': sensorWidthPx,
+    if (sensorHeightPx != null) 'sensor_height_px': sensorHeightPx,
+    if (pixelSizeUm != null) 'pixel_size_um': pixelSizeUm,
+    if (guideFocalLengthMm != null) 'guide_focal_length_mm': guideFocalLengthMm,
+    if (guidePixelSizeUm != null) 'guide_pixel_size_um': guidePixelSizeUm,
+    if (guideSensorWidthPx != null) 'guide_sensor_width_px': guideSensorWidthPx,
+    if (guideSensorHeightPx != null)
+      'guide_sensor_height_px': guideSensorHeightPx,
+    if (guideSetupType != null && guideSetupType!.isNotEmpty)
+      'guide_setup_type': guideSetupType,
+  };
 }
 
 /// Frame height in degrees for a sensor [heightPx] tall of [pixelSizeUm]
@@ -137,7 +141,10 @@ double? fieldOfViewHeightDeg({
   if (focalLengthMm == null || focalLengthMm <= 0) return null;
   if (heightPx == null || heightPx <= 0) return null;
   if (pixelSizeUm == null || pixelSizeUm <= 0) return null;
-  final reducer = (reducerFactor != null && reducerFactor > 0) ? reducerFactor : 1.0;
-  final deg = 206.265 * pixelSizeUm / (focalLengthMm * reducer) * heightPx / 3600.0;
+  final reducer = (reducerFactor != null && reducerFactor > 0)
+      ? reducerFactor
+      : 1.0;
+  final deg =
+      206.265 * pixelSizeUm / (focalLengthMm * reducer) * heightPx / 3600.0;
   return deg.isFinite && deg > 0 ? deg : null;
 }

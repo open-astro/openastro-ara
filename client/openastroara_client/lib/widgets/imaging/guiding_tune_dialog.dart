@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/guider_advanced_settings.dart';
@@ -21,9 +23,9 @@ import '../adaptive_controls.dart';
 /// per the macOS quick-settings idiom: the main view keeps live telemetry,
 /// adjustments happen in a transient surface).
 Future<void> showGuidingTuneDialog(BuildContext context) => showDialog<void>(
-      context: context,
-      builder: (_) => const GuidingTuneDialog(),
-    );
+  context: context,
+  builder: (_) => const GuidingTuneDialog(),
+);
 
 /// The RUNTIME-SAFE §63.5 tuning params only (aggressiveness, minimum move,
 /// dec guide mode, dither pixels, guide exposure, guide camera gain) — they map
@@ -107,7 +109,13 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       });
     } catch (e) {
       if (mounted) {
-        setState(() => _hydrateError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings));
+        setState(
+          () => _hydrateError = friendlyError(
+            context.l10n,
+            e,
+            action: context.l10n.actionLoadSettings,
+          ),
+        );
       }
     } finally {
       _hydrating = false;
@@ -120,7 +128,9 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
   Future<void> _apply() async {
     final api = ref.read(profileApiProvider);
     if (api == null) {
-      setState(() => _status = 'Not connected — connect to your rig to save this.');
+      setState(
+        () => _status = 'Not connected — connect to your rig to save this.',
+      );
       return;
     }
     final draft = _draft;
@@ -158,7 +168,12 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
       // #1748 — a setting the Guider's algorithm does not have shows here, where it was changed.
       var notApplied = const <GuiderNotApplied>[];
       try {
-        notApplied = await ref.read(guiderAdvancedApiProvider)?.getGuider().then((v) => v.notApplied) ?? notApplied;
+        notApplied =
+            await ref
+                .read(guiderAdvancedApiProvider)
+                ?.getGuider()
+                .then((v) => v.notApplied) ??
+            notApplied;
       } catch (_) {
         // The list is a hint; the Apply itself succeeded.
       }
@@ -205,10 +220,16 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.tune, size: 18, color: AraColors.textSecondary),
+                  const Icon(
+                    Icons.tune,
+                    size: 18,
+                    color: AraColors.textSecondary,
+                  ),
                   const SizedBox(width: 8),
-                  Text('Tune Guiding',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text(
+                    'Tune Guiding',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                   const Spacer(),
                   IconButton(
                     tooltip: 'Close',
@@ -219,9 +240,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
               ),
               Text(
                 'Applies live — guiding is not interrupted.',
-                style: Theme.of(context)
-                    .textTheme
-                    .labelSmall
+                style: Theme.of(context).textTheme.labelSmall
                     ?.copyWith(color: AraColors.textDisabled),
               ),
               const SizedBox(height: 12),
@@ -231,9 +250,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                   child: Text(
                     'Guider disconnected — connect the guider (equipment chip) '
                     'to tune guiding.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: AraColors.textDisabled),
                   ),
                 ),
@@ -250,13 +267,15 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                         context,
                         label: 'RA aggressiveness',
                         value: phd2.raAggressiveness,
-                        onChanged: (v) => _edit((d) => d.copyWith(raAggressiveness: v)),
+                        onChanged: (v) =>
+                            _edit((d) => d.copyWith(raAggressiveness: v)),
                       ),
                       _slider(
                         context,
                         label: 'Dec aggressiveness',
                         value: phd2.decAggressiveness,
-                        onChanged: (v) => _edit((d) => d.copyWith(decAggressiveness: v)),
+                        onChanged: (v) =>
+                            _edit((d) => d.copyWith(decAggressiveness: v)),
                       ),
                       EditableNumberRow(
                         label: 'RA minimum move (px)',
@@ -298,13 +317,16 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           for (final ms in guideExposureChoicesMs)
                             ms: formatGuideExposure(ms),
                           if (phd2.guideExposureMs > 0 &&
-                              !guideExposureChoicesMs
-                                  .contains(phd2.guideExposureMs))
-                            phd2.guideExposureMs:
-                                formatGuideExposure(phd2.guideExposureMs),
+                              !guideExposureChoicesMs.contains(
+                                phd2.guideExposureMs,
+                              ))
+                            phd2.guideExposureMs: formatGuideExposure(
+                              phd2.guideExposureMs,
+                            ),
                         },
                         onChanged: (v) {
-                          if (v != null) _edit((d) => d.copyWith(guideExposureMs: v));
+                          if (v != null)
+                            _edit((d) => d.copyWith(guideExposureMs: v));
                         },
                       ),
                       if (phd2.guideExposureMs > 0 &&
@@ -318,9 +340,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                             '${formatGuideExposure(phd2.guideExposureMaxMs)}): '
                             'guide frames at this exposure get no dark. Rebuild '
                             'the dark library from Settings → Guider to cover it.',
-                            style: Theme.of(context)
-                                .textTheme
-                                .labelSmall
+                            style: Theme.of(context).textTheme.labelSmall
                                 ?.copyWith(color: AraColors.textDisabled),
                           ),
                         ),
@@ -347,7 +367,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                           'off': 'Off',
                         },
                         onChanged: (v) {
-                          if (v != null) _edit((d) => d.copyWith(decGuideMode: v));
+                          if (v != null)
+                            _edit((d) => d.copyWith(decGuideMode: v));
                         },
                       ),
                       EditableNumberRow(
@@ -371,17 +392,17 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
                     _hydrateError!,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
+                    style: Theme.of(context).textTheme.bodySmall
                         ?.copyWith(color: Theme.of(context).colorScheme.error),
                   ),
                 ),
               if (_status != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child:
-                      Text(_status!, style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    _status!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               const SizedBox(height: 12),
               if (_notApplied.isNotEmpty) GuiderNotAppliedList(_notApplied),
@@ -395,8 +416,14 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       child: TextButton.icon(
                         key: const Key('tune-advanced'),
                         onPressed: () => showGuiderAdvancedDialog(context),
-                        icon: const Icon(Icons.settings_suggest_outlined, size: 16),
-                        label: const Text('More…', overflow: TextOverflow.ellipsis),
+                        icon: const Icon(
+                          Icons.settings_suggest_outlined,
+                          size: 16,
+                        ),
+                        label: const Text(
+                          'More…',
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                     ),
                   ),
@@ -408,13 +435,15 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                   FilledButton.icon(
                     // Gated on the hydrate (see the field comment): Apply PUTs
                     // the full settings object, so it must never run from defaults.
-                    onPressed:
-                        (_applying || !_hydrated || !connected) ? null : _apply,
+                    onPressed: (_applying || !_hydrated || !connected)
+                        ? null
+                        : _apply,
                     icon: _applying
                         ? const SizedBox(
                             width: 16,
                             height: 16,
-                            child: AdaptiveProgressIndicator(strokeWidth: 2))
+                            child: AdaptiveProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.send, size: 18),
                     label: const Text('Apply'),
                   ),

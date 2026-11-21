@@ -46,7 +46,9 @@ final _hourMarkerRe = RegExp(r'\d\s*h', caseSensitive: false);
 String _tokensOf(String s) => s
     .replaceAll('−', '-')
     .replaceAllMapped(
-        RegExp(r'''(\d)\s*[hHmMsSdD°º′’'″”":]'''), (m) => '${m[1]} ')
+      RegExp(r'''(\d)\s*[hHmMsSdD°º′’'″”":]'''),
+      (m) => '${m[1]} ',
+    )
     .replaceAll(RegExp(r'''[°º′’'″”":]'''), ' ')
     .trim();
 
@@ -159,10 +161,7 @@ double? parseDec(String text) {
   final fields = t.split(RegExp(r'\s+'));
   if (fields.length.isOdd || fields.isEmpty) return null;
   final half = fields.length ~/ 2;
-  return (
-    fields.sublist(0, half).join(' '),
-    fields.sublist(half).join(' '),
-  );
+  return (fields.sublist(0, half).join(' '), fields.sublist(half).join(' '));
 }
 
 /// Parse a full RA/Dec line; see [splitRaDec] and [parseRa].

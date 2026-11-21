@@ -139,8 +139,8 @@ class DiagnosticsAccumulator {
     final message = autoTaken && autoDesc != null
         ? '$description — $autoDesc'
         : recommended != null
-            ? '$description — $recommended'
-            : description;
+        ? '$description — $recommended'
+        : description;
     // Only identifiable issues enter the open roll-up. An event_type-less issue
     // is unclearable (see _applyCleared), so tracking it would permanently
     // inflate the count and grow _open without bound under a misbehaving server
@@ -159,16 +159,20 @@ class DiagnosticsAccumulator {
       if (_open.length > maxEvents) {
         final evicted = _open.keys.first;
         _open.remove(evicted);
-        debugPrint('DiagnosticsAccumulator: open-issue cap ($maxEvents) hit — '
-            'evicted least-recently-seen type "$evicted"');
+        debugPrint(
+          'DiagnosticsAccumulator: open-issue cap ($maxEvents) hit — '
+          'evicted least-recently-seen type "$evicted"',
+        );
       }
     }
-    _append(DiagnosticEvent(
-      timestamp: event.ts,
-      level: level,
-      source: source,
-      message: message,
-    ));
+    _append(
+      DiagnosticEvent(
+        timestamp: event.ts,
+        level: level,
+        source: source,
+        message: message,
+      ),
+    );
   }
 
   /// Returns whether the clear changed state (a matching open issue was
@@ -183,12 +187,14 @@ class DiagnosticsAccumulator {
     if (eventType == null || _open.remove(eventType) == null) {
       return false;
     }
-    _append(DiagnosticEvent(
-      timestamp: event.ts,
-      level: StatusLevel.connected,
-      source: eventType,
-      message: 'Cleared',
-    ));
+    _append(
+      DiagnosticEvent(
+        timestamp: event.ts,
+        level: StatusLevel.connected,
+        source: eventType,
+        message: 'Cleared',
+      ),
+    );
     return true;
   }
 
@@ -347,4 +353,5 @@ class DiagnosticsNotifier extends Notifier<DiagnosticsSnapshot> {
 /// mounted. Rebuilds (fresh roll-up) when the active server's stream changes.
 final diagnosticsStateProvider =
     NotifierProvider<DiagnosticsNotifier, DiagnosticsSnapshot>(
-        DiagnosticsNotifier.new);
+      DiagnosticsNotifier.new,
+    );

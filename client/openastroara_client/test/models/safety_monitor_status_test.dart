@@ -19,25 +19,34 @@ void main() {
     expect(s.lastTransitionAt, DateTime.utc(2026, 6, 22, 4, 0, 0));
   });
 
-  test('last_transition_at is normalized to UTC so format variants are equal', () {
-    final z = SafetyMonitorStatus.fromJson(
-        const {'last_transition_at': '2026-06-22T04:00:00Z'});
-    final offset = SafetyMonitorStatus.fromJson(
-        const {'last_transition_at': '2026-06-22T04:00:00+00:00'});
-    expect(z.lastTransitionAt, offset.lastTransitionAt); // same instant
-    expect(z.lastTransitionAt!.isUtc, isTrue);
-    final unparseable =
-        SafetyMonitorStatus.fromJson(const {'last_transition_at': 'nope'});
-    expect(unparseable.lastTransitionAt, isNull);
-  });
+  test(
+    'last_transition_at is normalized to UTC so format variants are equal',
+    () {
+      final z = SafetyMonitorStatus.fromJson(const {
+        'last_transition_at': '2026-06-22T04:00:00Z',
+      });
+      final offset = SafetyMonitorStatus.fromJson(const {
+        'last_transition_at': '2026-06-22T04:00:00+00:00',
+      });
+      expect(z.lastTransitionAt, offset.lastTransitionAt); // same instant
+      expect(z.lastTransitionAt!.isUtc, isTrue);
+      final unparseable = SafetyMonitorStatus.fromJson(const {
+        'last_transition_at': 'nope',
+      });
+      expect(unparseable.lastTransitionAt, isNull);
+    },
+  );
 
-  test('an unrecognized / missing state token degrades to unknown, not a throw', () {
-    final s = SafetyMonitorStatus.fromJson(const {'state': 'bogus'});
-    expect(s.connectionState, EquipmentConnectionState.unknown);
-    expect(s.isConnecting, isFalse);
-    expect(s.safe, isFalse); // default when absent
-    expect(s.name, '');
-  });
+  test(
+    'an unrecognized / missing state token degrades to unknown, not a throw',
+    () {
+      final s = SafetyMonitorStatus.fromJson(const {'state': 'bogus'});
+      expect(s.connectionState, EquipmentConnectionState.unknown);
+      expect(s.isConnecting, isFalse);
+      expect(s.safe, isFalse); // default when absent
+      expect(s.name, '');
+    },
+  );
 
   test('connecting maps through and is reported as isConnecting', () {
     final s = SafetyMonitorStatus.fromJson(const {'state': 'connecting'});
@@ -48,12 +57,12 @@ void main() {
 
   test('value equality holds (so a same-content re-read does not rebuild)', () {
     SafetyMonitorStatus mk() => SafetyMonitorStatus.fromJson(const {
-          'device_id': 'sm-0',
-          'name': 'CloudWatcher',
-          'state': 'connected',
-          'safe': false,
-          'last_transition_at': 't',
-        });
+      'device_id': 'sm-0',
+      'name': 'CloudWatcher',
+      'state': 'connected',
+      'safe': false,
+      'last_transition_at': 't',
+    });
     expect(mk(), equals(mk()));
     expect(mk().hashCode, equals(mk().hashCode));
   });

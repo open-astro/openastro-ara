@@ -15,20 +15,23 @@ class _MemCache extends ProfileCacheService {
 
 void main() {
   Future<ProviderContainer> pump(WidgetTester tester, _MemCache cache) async {
-    final container = ProviderContainer(overrides: [
-      profileCacheServiceProvider.overrideWithValue(cache),
-    ]);
+    final container = ProviderContainer(
+      overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: PlanOfflineButton())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: PlanOfflineButton())),
+      ),
+    );
     await tester.pumpAndSettle();
     return container;
   }
 
-  testWidgets('disabled with no cached profile — offline mode stays off',
-      (tester) async {
+  testWidgets('disabled with no cached profile — offline mode stays off', (
+    tester,
+  ) async {
     final container = await pump(tester, _MemCache());
     final button = tester.widget<TextButton>(find.byType(TextButton));
     expect(button.onPressed, isNull);
@@ -38,8 +41,9 @@ void main() {
     expect(container.read(offlineModeProvider), isFalse);
   });
 
-  testWidgets('enabled once a profile is cached — tap enters offline mode',
-      (tester) async {
+  testWidgets('enabled once a profile is cached — tap enters offline mode', (
+    tester,
+  ) async {
     final cache = _MemCache()
       ..store = {
         'active_id': 'p1',

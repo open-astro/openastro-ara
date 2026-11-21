@@ -49,7 +49,9 @@ class FrameNamingModel {
 
   FrameNamingModel copyWith({FolderScheme? folders, Set<NamePart>? parts}) =>
       FrameNamingModel(
-          folders: folders ?? this.folders, parts: parts ?? this.parts);
+        folders: folders ?? this.folders,
+        parts: parts ?? this.parts,
+      );
 
   FrameNamingModel toggle(NamePart part, bool on) {
     final next = Set<NamePart>.from(parts);
@@ -146,8 +148,11 @@ class NamingPreviewContext {
 /// Mirror of the server's expander, for the preview only — the server's
 /// expansion is the one that names real files. [extension] follows the
 /// profile's file format (#1148: `.xisf` for XISF).
-List<String> previewSegments(String template, NamingPreviewContext ctx,
-    {String extension = '.fits'}) {
+List<String> previewSegments(
+  String template,
+  NamingPreviewContext ctx, {
+  String extension = '.fits',
+}) {
   String two(int n) => n.toString().padLeft(2, '0');
   String date(DateTime t) => '${t.year}-${two(t.month)}-${two(t.day)}';
   final t = ctx.captured;
@@ -164,15 +169,18 @@ List<String> previewSegments(String template, NamingPreviewContext ctx,
         return '{$tok}';
       })
       .replaceAll('{night}', date(night))
-      .replaceAll('{datetime}',
-          '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
+      .replaceAll(
+        '{datetime}',
+        '${date(t)}_${two(t.hour)}-${two(t.minute)}-${two(t.second)}',
+      )
       .replaceAll('{date}', date(t))
       .replaceAll('{time}', '${two(t.hour)}-${two(t.minute)}-${two(t.second)}')
       .replaceAll('{dateutc}', date(t.toUtc()))
       .replaceAll(
-          '{timeutc}',
-          '${two(t.toUtc().hour)}-${two(t.toUtc().minute)}-'
-              '${two(t.toUtc().second)}')
+        '{timeutc}',
+        '${two(t.toUtc().hour)}-${two(t.toUtc().minute)}-'
+            '${two(t.toUtc().second)}',
+      )
       .replaceAll('{type}', 'Light')
       // A '/' inside a token VALUE is data, not a folder boundary — the
       // server sanitizes it to '-' within the segment; splicing it raw here
@@ -180,10 +188,11 @@ List<String> previewSegments(String template, NamingPreviewContext ctx,
       .replaceAll('{target}', ctx.target.replaceAll('/', '-'))
       .replaceAll('{filter}', ctx.filter.replaceAll('/', '-'))
       .replaceAll(
-          '{exposure}',
-          ctx.exposureSec == ctx.exposureSec.roundToDouble()
-              ? ctx.exposureSec.round().toString()
-              : ctx.exposureSec.toString())
+        '{exposure}',
+        ctx.exposureSec == ctx.exposureSec.roundToDouble()
+            ? ctx.exposureSec.round().toString()
+            : ctx.exposureSec.toString(),
+      )
       .replaceAll('{temp}', '${ctx.sensorTemp}C')
       .replaceAll('{gain}', '${ctx.gain}')
       .replaceAll('{offset}', '30')
@@ -213,7 +222,8 @@ List<String> previewSegments(String template, NamingPreviewContext ctx,
         // its minus sign, "M31_-L" loses the dash).
         final scar = StringBuffer();
         for (var i = 0; i < v.length; i++) {
-          final isScarDash = v[i] == '-' &&
+          final isScarDash =
+              v[i] == '-' &&
               i > 0 &&
               (v[i - 1] == '_' || v[i - 1] == '-') &&
               (i + 1 >= v.length || !RegExp(r'[0-9]').hasMatch(v[i + 1]));
@@ -231,8 +241,7 @@ List<String> previewSegments(String template, NamingPreviewContext ctx,
                 v.startsWith('.') ||
                 v.startsWith(' ') ||
                 (v.startsWith('-') &&
-                    (v.length == 1 ||
-                        !RegExp(r'[0-9]').hasMatch(v[1]))))) {
+                    (v.length == 1 || !RegExp(r'[0-9]').hasMatch(v[1]))))) {
           v = v.substring(1);
         }
         return v;

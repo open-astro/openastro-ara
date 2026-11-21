@@ -18,18 +18,23 @@ void main() {
 
     test('null when no wheel is connected', () {
       expect(
-          FilterWheelSlots.fromFilterWheelJson(const {'state': 'disconnected'}),
-          isNull);
+        FilterWheelSlots.fromFilterWheelJson(const {'state': 'disconnected'}),
+        isNull,
+      );
     });
 
     test('null when connected but the body has no slots list', () {
-      expect(FilterWheelSlots.fromFilterWheelJson(const {'state': 'connected'}),
-          isNull);
+      expect(
+        FilterWheelSlots.fromFilterWheelJson(const {'state': 'connected'}),
+        isNull,
+      );
     });
 
     test('connected with an empty slots list → empty (not null)', () {
-      final w = FilterWheelSlots.fromFilterWheelJson(
-          const {'state': 'connected', 'slots': []});
+      final w = FilterWheelSlots.fromFilterWheelJson(const {
+        'state': 'connected',
+        'slots': [],
+      });
       expect(w, isNotNull);
       expect(w!.slots, isEmpty);
     });

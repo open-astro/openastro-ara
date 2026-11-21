@@ -25,19 +25,24 @@ class WsConnectionIndicator extends ConsumerWidget {
 
 /// Pure mapping (so the label/colour choice is unit-testable without a widget):
 /// WS link state → the status-bar [StatusLevel] + label.
-(StatusLevel, String) describeWsConnection(
-  WsConnectionState state,
-) => switch (state) {
-  WsConnectionState.connecting => (StatusLevel.info, 'Server connecting…'),
-  WsConnectionState.connected => (StatusLevel.connected, 'Server connected'),
-  WsConnectionState.reconnecting => (StatusLevel.changing, 'Server reconnecting…'),
-  WsConnectionState.disconnected => (
-    StatusLevel.disconnected,
-    'Server disconnected',
-  ),
-  // §27 — another client took the control slot; deliberate, not a fault.
-  WsConnectionState.takenOver => (
-    StatusLevel.disconnected,
-    'Session transferred',
-  ),
-};
+(StatusLevel, String) describeWsConnection(WsConnectionState state) =>
+    switch (state) {
+      WsConnectionState.connecting => (StatusLevel.info, 'Server connecting…'),
+      WsConnectionState.connected => (
+        StatusLevel.connected,
+        'Server connected',
+      ),
+      WsConnectionState.reconnecting => (
+        StatusLevel.changing,
+        'Server reconnecting…',
+      ),
+      WsConnectionState.disconnected => (
+        StatusLevel.disconnected,
+        'Server disconnected',
+      ),
+      // §27 — another client took the control slot; deliberate, not a fault.
+      WsConnectionState.takenOver => (
+        StatusLevel.disconnected,
+        'Session transferred',
+      ),
+    };

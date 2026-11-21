@@ -8,9 +8,7 @@ import 'stats_refresh_mixin.dart';
 
 /// Builds a [FocusTempClient] for a server. Overridable in tests.
 final focusTempApiFactoryProvider =
-    Provider<FocusTempClient Function(AraServer)>(
-  (ref) => FocusTempApi.new,
-);
+    Provider<FocusTempClient Function(AraServer)>((ref) => FocusTempApi.new);
 
 /// [FocusTempClient] bound to the active server ([activeServerProvider]), or `null`
 /// when no server is saved. Closes the old Dio on a server change.
@@ -37,11 +35,12 @@ class FocusTempNotifier extends AsyncNotifier<FocusTempSeries?>
   /// Re-reads the scatter, keeping the previous series on screen if the read
   /// fails (the chart shows a stale chip). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-        final api = ref.read(focusTempApiProvider);
-        return api?.fetch();
-      });
+    final api = ref.read(focusTempApiProvider);
+    return api?.fetch();
+  });
 }
 
 final focusTempProvider =
     AsyncNotifierProvider<FocusTempNotifier, FocusTempSeries?>(
-        FocusTempNotifier.new);
+      FocusTempNotifier.new,
+    );

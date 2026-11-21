@@ -43,7 +43,10 @@ class ProfileActivePanel extends ConsumerWidget {
               label: 'Profiles',
               helpKey: 'profile.active.available',
               value: 'Unavailable',
-              hint: friendlyDaemonError(e, fallback: "Couldn't load the active profile"),
+              hint: friendlyDaemonError(
+                e,
+                fallback: "Couldn't load the active profile",
+              ),
             ),
           ],
           data: (list) {
@@ -102,9 +105,8 @@ class ProfileActivePanel extends ConsumerWidget {
             Flexible(
               child: Text(
                 'Add, select, rename, delete, import and export profiles.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
               ),
             ),
           ],

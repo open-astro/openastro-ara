@@ -43,7 +43,10 @@ class CalendarDay {
       frameCount: _int(json['frame_count']),
       integrationHours: _dbl(json['integration_hours']),
       targetsImaged: targets is List
-          ? [for (final t in targets) if (t is String) t]
+          ? [
+              for (final t in targets)
+                if (t is String) t,
+            ]
           : const [],
     );
   }
@@ -59,8 +62,8 @@ class CalendarStats {
 
   /// Integration minutes per `yyyy-MM-dd` key, for shading heatmap cells.
   Map<String, int> get minutesByDay => {
-        for (final d in days) dayKey(d.date): d.integrationMinutes,
-      };
+    for (final d in days) dayKey(d.date): d.integrationMinutes,
+  };
 
   /// Canonical `yyyy-MM-dd` key — also the wire format `CalendarApi` sends for
   /// the `fromDate`/`toDate` query, so both sides format dates identically.

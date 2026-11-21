@@ -72,7 +72,9 @@ List<Map<String, dynamic>> childrenOf(Map<String, dynamic> node) {
 /// A node with no map wrapper (a leaf, or a plain-array `Items`) gets a fresh
 /// wrapper typed [itemsWrapperType].
 Map<String, dynamic> withChildren(
-    Map<String, dynamic> node, List<Map<String, dynamic>> children) {
+  Map<String, dynamic> node,
+  List<Map<String, dynamic>> children,
+) {
   final existing = node['Items'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
@@ -106,7 +108,9 @@ List<Map<String, dynamic>> conditionsOf(Map<String, dynamic> node) {
 /// with no map wrapper gets a fresh one typed [conditionsWrapperType]. Mirrors
 /// [withChildren].
 Map<String, dynamic> withConditions(
-    Map<String, dynamic> node, List<Map<String, dynamic>> conditions) {
+  Map<String, dynamic> node,
+  List<Map<String, dynamic>> conditions,
+) {
   final existing = node['Conditions'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
@@ -118,39 +122,47 @@ Map<String, dynamic> withConditions(
 
 /// Append [condition] to the `Conditions` of the container at [containerPath];
 /// returns a new root. Parallels [insertChild] for the conditions collection.
-Map<String, dynamic> addCondition(Map<String, dynamic> root,
-        NodePath containerPath, Map<String, dynamic> condition) =>
-    _rebuild(root, containerPath, (container) {
-      final conditions = conditionsOf(container)..add(condition);
-      return withConditions(container, conditions);
-    });
+Map<String, dynamic> addCondition(
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  Map<String, dynamic> condition,
+) => _rebuild(root, containerPath, (container) {
+  final conditions = conditionsOf(container)..add(condition);
+  return withConditions(container, conditions);
+});
 
 /// Remove the condition at [index] from the container at [containerPath];
 /// returns a new root. Throws [RangeError] if [index] is out of range.
 Map<String, dynamic> removeConditionAt(
-        Map<String, dynamic> root, NodePath containerPath, int index) =>
-    _rebuild(root, containerPath, (container) {
-      final conditions = conditionsOf(container);
-      if (index < 0 || index >= conditions.length) {
-        throw RangeError('removeConditionAt index $index out of range');
-      }
-      conditions.removeAt(index);
-      return withConditions(container, conditions);
-    });
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  int index,
+) => _rebuild(root, containerPath, (container) {
+  final conditions = conditionsOf(container);
+  if (index < 0 || index >= conditions.length) {
+    throw RangeError('removeConditionAt index $index out of range');
+  }
+  conditions.removeAt(index);
+  return withConditions(container, conditions);
+});
 
 /// Set scalar field [key] to [value] on the condition at [index] of the
 /// container at [containerPath]; returns a new root. Throws [RangeError] if
 /// [index] is out of range.
-Map<String, dynamic> setConditionField(Map<String, dynamic> root,
-        NodePath containerPath, int index, String key, Object? value) =>
-    _rebuild(root, containerPath, (container) {
-      final conditions = conditionsOf(container);
-      if (index < 0 || index >= conditions.length) {
-        throw RangeError('setConditionField index $index out of range');
-      }
-      conditions[index] = Map<String, dynamic>.of(conditions[index])..[key] = value;
-      return withConditions(container, conditions);
-    });
+Map<String, dynamic> setConditionField(
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  int index,
+  String key,
+  Object? value,
+) => _rebuild(root, containerPath, (container) {
+  final conditions = conditionsOf(container);
+  if (index < 0 || index >= conditions.length) {
+    throw RangeError('setConditionField index $index out of range');
+  }
+  conditions[index] = Map<String, dynamic>.of(conditions[index])..[key] = value;
+  return withConditions(container, conditions);
+});
 
 /// The triggers of [node] — a container wraps `Triggers` as
 /// `{ $type: ObservableCollection, $values: [...] }` exactly like `Items` /
@@ -175,7 +187,9 @@ List<Map<String, dynamic>> triggersOf(Map<String, dynamic> node) {
 /// node with no map wrapper gets a fresh one typed [triggersWrapperType]). Mirrors
 /// [withConditions].
 Map<String, dynamic> withTriggers(
-    Map<String, dynamic> node, List<Map<String, dynamic>> triggers) {
+  Map<String, dynamic> node,
+  List<Map<String, dynamic>> triggers,
+) {
   final existing = node['Triggers'];
   final wrapper = existing is Map
       ? Map<String, dynamic>.from(existing.cast<String, dynamic>())
@@ -187,39 +201,47 @@ Map<String, dynamic> withTriggers(
 
 /// Append [trigger] to the `Triggers` of the container at [containerPath];
 /// returns a new root. Parallels [addCondition] for the triggers collection.
-Map<String, dynamic> addTrigger(Map<String, dynamic> root,
-        NodePath containerPath, Map<String, dynamic> trigger) =>
-    _rebuild(root, containerPath, (container) {
-      final triggers = triggersOf(container)..add(trigger);
-      return withTriggers(container, triggers);
-    });
+Map<String, dynamic> addTrigger(
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  Map<String, dynamic> trigger,
+) => _rebuild(root, containerPath, (container) {
+  final triggers = triggersOf(container)..add(trigger);
+  return withTriggers(container, triggers);
+});
 
 /// Remove the trigger at [index] from the container at [containerPath]; returns a
 /// new root. Throws [RangeError] if [index] is out of range.
 Map<String, dynamic> removeTriggerAt(
-        Map<String, dynamic> root, NodePath containerPath, int index) =>
-    _rebuild(root, containerPath, (container) {
-      final triggers = triggersOf(container);
-      if (index < 0 || index >= triggers.length) {
-        throw RangeError('removeTriggerAt index $index out of range');
-      }
-      triggers.removeAt(index);
-      return withTriggers(container, triggers);
-    });
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  int index,
+) => _rebuild(root, containerPath, (container) {
+  final triggers = triggersOf(container);
+  if (index < 0 || index >= triggers.length) {
+    throw RangeError('removeTriggerAt index $index out of range');
+  }
+  triggers.removeAt(index);
+  return withTriggers(container, triggers);
+});
 
 /// Set scalar field [key] to [value] on the trigger at [index] of the container
 /// at [containerPath]; returns a new root. Throws [RangeError] if [index] is out
 /// of range.
-Map<String, dynamic> setTriggerField(Map<String, dynamic> root,
-        NodePath containerPath, int index, String key, Object? value) =>
-    _rebuild(root, containerPath, (container) {
-      final triggers = triggersOf(container);
-      if (index < 0 || index >= triggers.length) {
-        throw RangeError('setTriggerField index $index out of range');
-      }
-      triggers[index] = Map<String, dynamic>.of(triggers[index])..[key] = value;
-      return withTriggers(container, triggers);
-    });
+Map<String, dynamic> setTriggerField(
+  Map<String, dynamic> root,
+  NodePath containerPath,
+  int index,
+  String key,
+  Object? value,
+) => _rebuild(root, containerPath, (container) {
+  final triggers = triggersOf(container);
+  if (index < 0 || index >= triggers.length) {
+    throw RangeError('setTriggerField index $index out of range');
+  }
+  triggers[index] = Map<String, dynamic>.of(triggers[index])..[key] = value;
+  return withTriggers(container, triggers);
+});
 
 /// Whether [node] can hold child instructions (a container) rather than being a
 /// leaf instruction. Containers carry an `Items` collection and/or a
@@ -249,14 +271,19 @@ Map<String, dynamic>? nodeAt(Map<String, dynamic> root, NodePath path) {
 /// copied). Throws [RangeError] if [path] addresses a missing child. [depth] is
 /// the recursion cursor into [path] (an index instead of repeated
 /// `sublist` allocation — O(depth) total, not O(depth²)).
-Map<String, dynamic> _rebuild(Map<String, dynamic> node, NodePath path,
-    Map<String, dynamic> Function(Map<String, dynamic>) op,
-    [int depth = 0]) {
+Map<String, dynamic> _rebuild(
+  Map<String, dynamic> node,
+  NodePath path,
+  Map<String, dynamic> Function(Map<String, dynamic>) op, [
+  int depth = 0,
+]) {
   if (depth == path.length) return op(node);
   final kids = childrenOf(node);
   final i = path[depth];
   if (i < 0 || i >= kids.length) {
-    throw RangeError('node path index $i out of range (${kids.length} children)');
+    throw RangeError(
+      'node path index $i out of range (${kids.length} children)',
+    );
   }
   kids[i] = _rebuild(kids[i], path, op, depth + 1);
   return withChildren(node, kids);
@@ -264,20 +291,26 @@ Map<String, dynamic> _rebuild(Map<String, dynamic> node, NodePath path,
 
 /// Set scalar field [key] to [value] on the node at [path]; returns a new root.
 Map<String, dynamic> setField(
-        Map<String, dynamic> root, NodePath path, String key, Object? value) =>
-    _rebuild(root, path, (n) => Map<String, dynamic>.of(n)..[key] = value);
+  Map<String, dynamic> root,
+  NodePath path,
+  String key,
+  Object? value,
+) => _rebuild(root, path, (n) => Map<String, dynamic>.of(n)..[key] = value);
 
 /// Insert [newNode] as a child of the container at [parentPath] at [index];
 /// returns a new root. [index] is a *destination* slot, so it's clamped to
 /// `0..childCount` (a buggy out-of-range index lands at the nearest end rather
 /// than throwing) — consistent with [reorderChild]'s `newIndex`.
-Map<String, dynamic> insertChild(Map<String, dynamic> root, NodePath parentPath,
-        int index, Map<String, dynamic> newNode) =>
-    _rebuild(root, parentPath, (parent) {
-      final kids = childrenOf(parent);
-      kids.insert(index.clamp(0, kids.length), newNode);
-      return withChildren(parent, kids);
-    });
+Map<String, dynamic> insertChild(
+  Map<String, dynamic> root,
+  NodePath parentPath,
+  int index,
+  Map<String, dynamic> newNode,
+) => _rebuild(root, parentPath, (parent) {
+  final kids = childrenOf(parent);
+  kids.insert(index.clamp(0, kids.length), newNode);
+  return withChildren(parent, kids);
+});
 
 /// Remove the node at [path] from its parent; returns a new root. [path] must be
 /// non-empty (the root can't be removed).
@@ -307,20 +340,23 @@ Map<String, dynamic> removeAt(Map<String, dynamic> root, NodePath path) {
 /// here, then [newIndex] is clamped to `0..N` (post-removal count), so a drop at
 /// the end lands last. [oldIndex] *selects an existing child* and throws
 /// [RangeError] when out of range.
-Map<String, dynamic> reorderChild(Map<String, dynamic> root, NodePath parentPath,
-        int oldIndex, int newIndex) =>
-    _rebuild(root, parentPath, (parent) {
-      final kids = childrenOf(parent);
-      if (oldIndex < 0 || oldIndex >= kids.length) {
-        throw RangeError('reorderChild oldIndex $oldIndex out of range');
-      }
-      // Flutter delivers newIndex against the pre-removal list; once oldIndex is
-      // pulled out, every slot after it shifts down by one.
-      final target = oldIndex < newIndex ? newIndex - 1 : newIndex;
-      final node = kids.removeAt(oldIndex);
-      kids.insert(target.clamp(0, kids.length), node);
-      return withChildren(parent, kids);
-    });
+Map<String, dynamic> reorderChild(
+  Map<String, dynamic> root,
+  NodePath parentPath,
+  int oldIndex,
+  int newIndex,
+) => _rebuild(root, parentPath, (parent) {
+  final kids = childrenOf(parent);
+  if (oldIndex < 0 || oldIndex >= kids.length) {
+    throw RangeError('reorderChild oldIndex $oldIndex out of range');
+  }
+  // Flutter delivers newIndex against the pre-removal list; once oldIndex is
+  // pulled out, every slot after it shifts down by one.
+  final target = oldIndex < newIndex ? newIndex - 1 : newIndex;
+  final node = kids.removeAt(oldIndex);
+  kids.insert(target.clamp(0, kids.length), node);
+  return withChildren(parent, kids);
+});
 
 /// Whether [ancestor] is [path] itself or one of its ancestors — i.e. [ancestor]
 /// is a prefix of [path]. Used to reject dropping a subtree into itself or a
@@ -356,8 +392,12 @@ bool isAncestorOrSelf(NodePath ancestor, NodePath path) {
 /// [fromPath]'s parent prefix and sat after the removed index. That single index
 /// is decremented before the insert; deeper indices address lists the removal
 /// never touched.
-Map<String, dynamic> moveSubtree(Map<String, dynamic> root, NodePath fromPath,
-    NodePath toParentPath, int toIndex) {
+Map<String, dynamic> moveSubtree(
+  Map<String, dynamic> root,
+  NodePath fromPath,
+  NodePath toParentPath,
+  int toIndex,
+) {
   if (fromPath.isEmpty) {
     throw ArgumentError('moveSubtree cannot move the root (empty fromPath)');
   }
@@ -367,7 +407,8 @@ Map<String, dynamic> moveSubtree(Map<String, dynamic> root, NodePath fromPath,
   }
   if (isAncestorOrSelf(fromPath, toParentPath)) {
     throw ArgumentError(
-        'moveSubtree cannot move a node into itself or one of its descendants');
+      'moveSubtree cannot move a node into itself or one of its descendants',
+    );
   }
   final removed = removeAt(root, fromPath);
   final p = fromPath.length - 1;

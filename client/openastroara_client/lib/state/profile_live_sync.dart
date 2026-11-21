@@ -48,11 +48,8 @@ Future<void> applyProfileUpdated(
 // `migratedSections` and it syncs by tag.
 final Set<String> _migratedRoutes = {for (final s in migratedSections) s.route};
 
-Future<void> _syncMigrated(
-  ProviderContainer c,
-  ProfileApi api,
-  String route,
-) => Future.wait([
-  for (final s in migratedSections)
-    if (s.route == route) c.read(s.provider.notifier).syncFromServer(api),
-]);
+Future<void> _syncMigrated(ProviderContainer c, ProfileApi api, String route) =>
+    Future.wait([
+      for (final s in migratedSections)
+        if (s.route == route) c.read(s.provider.notifier).syncFromServer(api),
+    ]);

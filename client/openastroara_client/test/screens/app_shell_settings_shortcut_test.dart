@@ -26,14 +26,16 @@ void main() {
       // The test font is taller than the real one and overflows the top-bar chips.
       tester.platformDispatcher.textScaleFactorTestValue = 0.5;
       addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-      final container = ProviderContainer(overrides: [
-        selectedTabIndexProvider.overrideWith(_StartOnRun.new),
-      ]);
+      final container = ProviderContainer(
+        overrides: [selectedTabIndexProvider.overrideWith(_StartOnRun.new)],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: NightHotkey(child: AppShell())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: NightHotkey(child: AppShell())),
+        ),
+      );
       await tester.pump();
 
       await tester.sendKeyDownEvent(modifier);

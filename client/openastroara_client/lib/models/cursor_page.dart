@@ -3,6 +3,9 @@ class CursorPage<T> {
   final List<T> items;
   final String? nextCursor;
   final bool hasMore;
-  const CursorPage(
-      {required this.items, required this.nextCursor, required this.hasMore});
+  const CursorPage({
+    required this.items,
+    required this.nextCursor,
+    required this.hasMore,
+  });
 }

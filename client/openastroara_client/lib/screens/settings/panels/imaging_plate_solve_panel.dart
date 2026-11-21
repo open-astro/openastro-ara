@@ -221,9 +221,7 @@ class _StarDatabaseStatus extends ConsumerWidget {
         if (s == null) {
           return const SettingsRow(label: _label, value: _unknown);
         }
-        final errorStyle = Theme.of(context)
-            .textTheme
-            .bodySmall
+        final errorStyle = Theme.of(context).textTheme.bodySmall
             ?.copyWith(color: Theme.of(context).colorScheme.error);
         final names = s.databases.map((d) => d.toUpperCase()).join(', ');
         return Column(
@@ -232,7 +230,8 @@ class _StarDatabaseStatus extends ConsumerWidget {
             if (s.hasDatabase)
               SettingsRow(
                 label: _label,
-                value: '${s.fileCount} files found in ${s.effectivePath}'
+                value:
+                    '${s.fileCount} files found in ${s.effectivePath}'
                     '${names.isEmpty ? '' : ' ($names)'}',
               )
             else ...[

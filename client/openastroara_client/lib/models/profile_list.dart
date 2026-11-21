@@ -44,9 +44,6 @@ class ProfileList {
         }
       }
     }
-    return ProfileList(
-      activeId: json['active_id']?.toString(),
-      profiles: list,
-    );
+    return ProfileList(activeId: json['active_id']?.toString(), profiles: list);
   }
 }

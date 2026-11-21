@@ -80,8 +80,7 @@ const double _as2r = _d2r / 3600.0;
 /// (37 leap seconds + 32.184 s); the few seconds this could drift over the
 /// coming years move the result by microarcseconds.
 double _centuriesTt(DateTime atUtc) {
-  final jdUtc =
-      2440587.5 + atUtc.toUtc().millisecondsSinceEpoch / 86400000.0;
+  final jdUtc = 2440587.5 + atUtc.toUtc().millisecondsSinceEpoch / 86400000.0;
   final jdTt = jdUtc + 69.184 / 86400.0;
   return (jdTt - 2451545.0) / 36525.0;
 }
@@ -95,8 +94,7 @@ List<double> _unit(double raDeg, double decDeg) {
 ({double raDeg, double decDeg}) _sph(List<double> v) {
   var ra = math.atan2(v[1], v[0]) / _d2r;
   if (ra < 0) ra += 360;
-  final dec =
-      math.atan2(v[2], math.sqrt(v[0] * v[0] + v[1] * v[1])) / _d2r;
+  final dec = math.atan2(v[2], math.sqrt(v[0] * v[0] + v[1] * v[1])) / _d2r;
   return (raDeg: ra, decDeg: dec);
 }
 
@@ -116,7 +114,8 @@ List<double> _earthVelocity(double t) {
   final l0 = (280.46646 + 36000.76983 * t + 0.0003032 * t * t) * _d2r;
   final m = (357.52911 + 35999.05029 * t - 0.0001537 * t * t) * _d2r;
   final e = 0.016708634 - 0.000042037 * t - 0.0000001267 * t * t;
-  final c = (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m) +
+  final c =
+      (1.914602 - 0.004817 * t - 0.000014 * t * t) * math.sin(m) +
       (0.019993 - 0.000101 * t) * math.sin(2 * m) +
       0.000289 * math.sin(3 * m);
   // Refer the longitudes to the J2000 equinox (general precession in
@@ -140,18 +139,19 @@ List<double> _earthVelocity(double t) {
 }
 
 /// IAU 2006 mean obliquity, arcseconds (SOFA `iauObl06`).
-double _obliquityArcsec(double t) => 84381.406 +
+double _obliquityArcsec(double t) =>
+    84381.406 +
     (-46.836769 +
             (-0.0001831 +
-                    (0.00200340 + (-0.000000576 - 0.0000000434 * t) * t) *
-                        t) *
+                    (0.00200340 + (-0.000000576 - 0.0000000434 * t) * t) * t) *
                 t) *
         t;
 
 /// Bias–precession–nutation matrix (SOFA `iauPnm06a`): the IAU 2006
 /// Fukushima–Williams angles with the nutation folded in, then `iauFw2m`.
 List<List<double>> _matrix(double t) {
-  final gamb = (-0.052928 +
+  final gamb =
+      (-0.052928 +
           (10.556378 +
                   (0.4932044 +
                           (-0.00031238 +
@@ -160,16 +160,17 @@ List<List<double>> _matrix(double t) {
                       t) *
               t) *
       _as2r;
-  final phib = (84381.412819 +
+  final phib =
+      (84381.412819 +
           (-46.811016 +
                   (0.0511268 +
-                          (0.00053289 +
-                                  (-0.000000440 - 0.0000000176 * t) * t) *
+                          (0.00053289 + (-0.000000440 - 0.0000000176 * t) * t) *
                               t) *
                       t) *
               t) *
       _as2r;
-  final psib = (-0.041775 +
+  final psib =
+      (-0.041775 +
           (5038.481484 +
                   (1.5584175 +
                           (-0.00018522 +
@@ -201,7 +202,8 @@ List<List<double>> _matrix(double t) {
   final om = _norm(450160.398036 - 6962890.5431 * t);
   var dp = 0.0, de = 0.0;
   for (final row in _nutRows) {
-    final arg = row[0] * el + row[1] * elp + row[2] * f + row[3] * d + row[4] * om;
+    final arg =
+        row[0] * el + row[1] * elp + row[2] * f + row[3] * d + row[4] * om;
     final sa = math.sin(arg), ca = math.cos(arg);
     dp += (row[5] + row[6] * t) * sa + row[7] * ca;
     de += (row[8] + row[9] * t) * ca + row[10] * sa;
@@ -240,10 +242,10 @@ const List<List<double>> _nutRows = [
 ];
 
 List<List<double>> _identity() => [
-      [1, 0, 0],
-      [0, 1, 0],
-      [0, 0, 1],
-    ];
+  [1, 0, 0],
+  [0, 1, 0],
+  [0, 0, 1],
+];
 
 /// Rotate the frame about x by [a] (SOFA `iauRx` semantics: r ← Rx(a)·r).
 List<List<double>> _rx(double a, List<List<double>> r) {
@@ -280,4 +282,3 @@ List<List<double>> _rz(double a, List<List<double>> r) {
     r[2],
   ];
 }
-

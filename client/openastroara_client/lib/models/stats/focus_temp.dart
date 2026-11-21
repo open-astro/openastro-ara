@@ -25,10 +25,10 @@ class FocusTempPoint {
   });
 
   factory FocusTempPoint.fromJson(Map<String, dynamic> json) => FocusTempPoint(
-        temperatureC: _dbl(json['temperature_c']),
-        focuserPosition: _int(json['focuser_position']),
-        timestamp: parseStatsUtc(json['timestamp']),
-      );
+    temperatureC: _dbl(json['temperature_c']),
+    focuserPosition: _int(json['focuser_position']),
+    timestamp: parseStatsUtc(json['timestamp']),
+  );
 }
 
 /// The active profile's focus-vs-temperature scatter, with an optional Pearson
@@ -37,10 +37,7 @@ class FocusTempSeries {
   final List<FocusTempPoint> samples;
   final double? correlationR2;
 
-  const FocusTempSeries({
-    this.samples = const [],
-    this.correlationR2,
-  });
+  const FocusTempSeries({this.samples = const [], this.correlationR2});
 
   /// True when no positioned frame exists yet — the chart shows an empty state.
   bool get isEmpty => samples.isEmpty;

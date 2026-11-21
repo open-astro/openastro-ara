@@ -33,7 +33,8 @@ class LibrarySelectionNotifier extends Notifier<Set<String>> {
 
 final librarySelectionProvider =
     NotifierProvider<LibrarySelectionNotifier, Set<String>>(
-        LibrarySelectionNotifier.new);
+      LibrarySelectionNotifier.new,
+    );
 
 /// True when selection mode is active (one or more frames are selected).
 final librarySelectionActiveProvider = Provider<bool>(

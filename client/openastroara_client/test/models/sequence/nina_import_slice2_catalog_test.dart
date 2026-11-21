@@ -26,11 +26,18 @@ void main() {
     expect(def, isNotNull);
     expect(def!.label, 'Center and Rotate');
     final keys = def.fields.map((f) => f.key).toSet();
-    expect(keys, containsAll(<String>{'Coordinates', 'PositionAngle', 'Inherited'}));
-    expect(def.fields.firstWhere((f) => f.key == 'Coordinates').type,
-        InstructionFieldType.coordinates);
-    expect(def.fields.firstWhere((f) => f.key == 'PositionAngle').type,
-        InstructionFieldType.number);
+    expect(
+      keys,
+      containsAll(<String>{'Coordinates', 'PositionAngle', 'Inherited'}),
+    );
+    expect(
+      def.fields.firstWhere((f) => f.key == 'Coordinates').type,
+      InstructionFieldType.coordinates,
+    );
+    expect(
+      def.fields.firstWhere((f) => f.key == 'PositionAngle').type,
+      InstructionFieldType.number,
+    );
   });
 
   test('AutofocusAfterExposures is a catalogued trigger with an AfterExposures field', () {

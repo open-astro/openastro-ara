@@ -33,13 +33,20 @@ class GuideFocusCard extends ConsumerStatefulWidget {
   ConsumerState<GuideFocusCard> createState() => _GuideFocusCardState();
 
   /// The headline in words. Pure — unit-tested.
-  static (String, Color?) headlineFor(AppLocalizations l, GuideFocusStatus status, {required bool gated, required bool blocked}) {
+  static (String, Color?) headlineFor(
+    AppLocalizations l,
+    GuideFocusStatus status, {
+    required bool gated,
+    required bool blocked,
+  }) {
     final latest = status.latest;
     if (status.active) {
       if (latest == null) return (l.guideFocusStarting, AraColors.accentInfo);
-      if (latest.stars == 0) return (l.guideFocusNoStarsMeasured, AraColors.accentBusy);
+      if (latest.stars == 0)
+        return (l.guideFocusNoStarsMeasured, AraColors.accentBusy);
       final best = status.bestHfr;
-      final atBest = best != null && latest.hfr > 0 && latest.hfr <= best + 1e-9;
+      final atBest =
+          best != null && latest.hfr > 0 && latest.hfr <= best + 1e-9;
       final inFocus = status.hfrInFocus(latest.hfr);
       return (
         inFocus
@@ -50,16 +57,30 @@ class GuideFocusCard extends ConsumerStatefulWidget {
         inFocus || atBest ? AraColors.accentConnected : AraColors.accentBusy,
       );
     }
-    if (status.state == GuideFocusStates.error) return (l.guideFocusStoppedError, AraColors.accentError);
+    if (status.state == GuideFocusStates.error)
+      return (l.guideFocusStoppedError, AraColors.accentError);
     if (latest != null) {
       final best = status.bestHfr;
       if (status.stopReason == GuideFocusStates.stopReasonInFocus) {
-        return (best != null ? l.guideFocusHeldBest(best.toStringAsFixed(2)) : l.guideFocusHeld, AraColors.accentConnected);
+        return (
+          best != null
+              ? l.guideFocusHeldBest(best.toStringAsFixed(2))
+              : l.guideFocusHeld,
+          AraColors.accentConnected,
+        );
       }
       if (status.focusedThisSession) {
-        return (l.guideFocusInFocusBest(best!.toStringAsFixed(2)), AraColors.accentConnected);
+        return (
+          l.guideFocusInFocusBest(best!.toStringAsFixed(2)),
+          AraColors.accentConnected,
+        );
       }
-      return (best != null ? l.guideFocusStoppedBest(best.toStringAsFixed(2)) : l.guideFocusStopped, null);
+      return (
+        best != null
+            ? l.guideFocusStoppedBest(best.toStringAsFixed(2))
+            : l.guideFocusStopped,
+        null,
+      );
     }
     if (gated) return (l.guideFocusWaitingMain, null);
     if (blocked) return (l.guideFocusNotReady, null);
@@ -77,9 +98,11 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
   Widget build(BuildContext context) {
     final live = ref.watch(guideFocusProvider);
     final guider = ref.watch(guiderStatusProvider).asData?.value;
-    final isOag = ref.watch(phd2SettingsProvider).value?.guiderSetupType == 'oag';
-    final mainFocused =
-        ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
+    final isOag =
+        ref.watch(phd2SettingsProvider).value?.guiderSetupType == 'oag';
+    final mainFocused = ref.watch(
+      autofocusLiveProvider.select((s) => s.focusedThisSession),
+    );
     final status = live.status;
     final active = status.active;
     final guiderConnected =
@@ -87,25 +110,41 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
     final blocker = guideFocusBlocker(context.l10n, guider, active: active);
     final gated = isOag && !mainFocused;
 
-
     final latest = status.latest;
     final hasData = latest != null || live.frame != null;
-    final (headline, color) = GuideFocusCard.headlineFor(context.l10n, status, gated: gated, blocked: blocker != null);
+    final (headline, color) = GuideFocusCard.headlineFor(
+      context.l10n,
+      status,
+      gated: gated,
+      blocked: blocker != null,
+    );
 
     final action = active
         ? FilledButton.tonalIcon(
-            onPressed: live.busy ? null : () => ref.read(guideFocusProvider.notifier).stop(),
+            onPressed: live.busy
+                ? null
+                : () => ref.read(guideFocusProvider.notifier).stop(),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.stop_rounded, size: 18),
             label: const Text('Stop'),
           )
         : FilledButton.icon(
             onPressed: live.busy || gated || blocker != null
                 ? null
-                : () => ref.read(guideFocusProvider.notifier).start(exposureSec: _exposureSec),
+                : () => ref
+                      .read(guideFocusProvider.notifier)
+                      .start(exposureSec: _exposureSec),
             icon: live.busy
-                ? const SizedBox(width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.play_arrow_rounded, size: 18),
             label: Text(hasData ? 'Start again' : 'Start live focus'),
           );
@@ -128,7 +167,9 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
         emptySelectionAllowed: true,
         showSelectedIcon: false,
         style: const ButtonStyle(visualDensity: VisualDensity.compact),
-        onSelectionChanged: active ? null : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
+        onSelectionChanged: active
+            ? null
+            : (s) => setState(() => _exposureSec = s.isEmpty ? null : s.first),
       ),
       child: FitColumn(
         children: [
@@ -136,7 +177,9 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
             InlineNotice.warning(
               'Focus the main telescope first — an off-axis guider sees the same focal plane, so its HFR only means something once the main scope is in focus.',
               action: TextButton(
-                onPressed: () => ref.read(autofocusLiveProvider.notifier).markFocusedManually(),
+                onPressed: () => ref
+                    .read(autofocusLiveProvider.notifier)
+                    .markFocusedManually(),
                 child: const Text('Already in focus'),
               ),
             ),
@@ -160,96 +203,124 @@ class _GuideFocusCardState extends ConsumerState<GuideFocusCard> {
             ),
           if (live.error != null || status.error != null) ...[
             InlineNotice.error(
-                live.error == null ? status.error! : failureReason(context.l10n, live.error!)),
+              live.error == null
+                  ? status.error!
+                  : failureReason(context.l10n, live.error!),
+            ),
             const SizedBox(height: 16),
           ],
           if (!hasData)
-            const FitFill(child: EmptyState(
-              icon: Icons.filter_center_focus,
-              title: 'No live focus yet',
-              message: 'Start live focus to see the guide camera, its HFR and the trend while you turn the focuser.',
-            ))
+            const FitFill(
+              child: EmptyState(
+                icon: Icons.filter_center_focus,
+                title: 'No live focus yet',
+                message: 'Start live focus to see the guide camera, its HFR and the trend while you turn the focuser.',
+              ),
+            )
           else ...[
-            FitFill(child: FitBand(builder: (context, width, height) {
-              // The trend keeps a fixed strip; the picture and the readout
-              // take the rest of the height the window leaves.
-              final short = AraBreakpoints.isShort(context);
-              final trendHeight = short ? 100.0 : (width * 0.12).clamp(150.0, 220.0);
-              final trend = SizedBox(height: trendHeight, child: HfrTrendChart(samples: status.recent, bestHfr: status.bestHfr));
-              Widget frame(double h) => FocusFrameView(
-                frame: live.frame,
-                badge: active ? 'LIVE' : 'LAST',
-                badgeColor: active ? AraColors.accentConnected : AraColors.textSecondary,
-                caption: latest == null ? null : 'frame ${latest.seq}',
-                emptyText: 'Waiting for the first guide frame…',
-                height: h,
-              );
-              final hero = _Hero(status: status);
-              if (short && width >= AraBreakpoints.sideBySide(context)) {
-                // A laptop screen: the readout takes the full height on the
-                // right so its hint and facts stay in view; the picture and
-                // the trend share the left column.
-                final total = math.max(height, 240.0);
-                return SizedBox(
-                  height: total,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      SizedBox(
-                        width: (width - 16) * 5 / 8,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [frame(total - trendHeight - 12), const SizedBox(height: 12), trend],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(child: hero),
-                    ],
-                  ),
-                );
-              }
-              if (width >= AraBreakpoints.sideBySide(context)) {
-                // The frame stays 4:3 and takes up to 5/8 of the width; the
-                // readout gets the rest. Past that the band stops growing.
-                final band = math.max(height - trendHeight - 16, short ? 136.0 : 200.0);
-                final frameWidth = math.min(band * 4 / 3, (width - 16) * 5 / 8);
-                final h = math.min(band, frameWidth * 0.75);
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SizedBox(
-                      height: h,
+            FitFill(
+              child: FitBand(
+                builder: (context, width, height) {
+                  // The trend keeps a fixed strip; the picture and the readout
+                  // take the rest of the height the window leaves.
+                  final short = AraBreakpoints.isShort(context);
+                  final trendHeight = short
+                      ? 100.0
+                      : (width * 0.12).clamp(150.0, 220.0);
+                  final trend = SizedBox(
+                    height: trendHeight,
+                    child: HfrTrendChart(
+                      samples: status.recent,
+                      bestHfr: status.bestHfr,
+                    ),
+                  );
+                  Widget frame(double h) => FocusFrameView(
+                    frame: live.frame,
+                    badge: active ? 'LIVE' : 'LAST',
+                    badgeColor: active
+                        ? AraColors.accentConnected
+                        : AraColors.textSecondary,
+                    caption: latest == null ? null : 'frame ${latest.seq}',
+                    emptyText: 'Waiting for the first guide frame…',
+                    height: h,
+                  );
+                  final hero = _Hero(status: status);
+                  if (short && width >= AraBreakpoints.sideBySide(context)) {
+                    // A laptop screen: the readout takes the full height on the
+                    // right so its hint and facts stay in view; the picture and
+                    // the trend share the left column.
+                    final total = math.max(height, 240.0);
+                    return SizedBox(
+                      height: total,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          SizedBox(width: frameWidth, child: frame(h)),
+                          SizedBox(
+                            width: (width - 16) * 5 / 8,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                frame(total - trendHeight - 12),
+                                const SizedBox(height: 12),
+                                trend,
+                              ],
+                            ),
+                          ),
                           const SizedBox(width: 16),
                           Expanded(child: hero),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    trend,
-                  ],
-                );
-              }
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  frame((width * 0.75).clamp(220.0, 480.0)),
-                  const SizedBox(height: 12),
-                  hero,
-                  const SizedBox(height: 16),
-                  trend,
-                ],
-              );
-            })),
+                    );
+                  }
+                  if (width >= AraBreakpoints.sideBySide(context)) {
+                    // The frame stays 4:3 and takes up to 5/8 of the width; the
+                    // readout gets the rest. Past that the band stops growing.
+                    final band = math.max(
+                      height - trendHeight - 16,
+                      short ? 136.0 : 200.0,
+                    );
+                    final frameWidth = math.min(
+                      band * 4 / 3,
+                      (width - 16) * 5 / 8,
+                    );
+                    final h = math.min(band, frameWidth * 0.75);
+                    return Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          height: h,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              SizedBox(width: frameWidth, child: frame(h)),
+                              const SizedBox(width: 16),
+                              Expanded(child: hero),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        trend,
+                      ],
+                    );
+                  }
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      frame((width * 0.75).clamp(220.0, 480.0)),
+                      const SizedBox(height: 12),
+                      hero,
+                      const SizedBox(height: 16),
+                      trend,
+                    ],
+                  );
+                },
+              ),
+            ),
           ],
         ],
       ),
     );
   }
-
 }
 
 // Type scale shared with the polar-align panel: read from an arm's length or
@@ -277,10 +348,14 @@ class _Hero extends StatelessWidget {
     final hfr = latest?.hfr ?? 0.0;
     final atBest = best != null && hfr > 0 && hfr <= best + 1e-9;
     final hint = guideFocusHint(context.l10n, status);
-    final color = atBest || status.hfrInFocus(hfr) ? AraColors.accentConnected : AraColors.textPrimary;
+    final color = atBest || status.hfrInFocus(hfr)
+        ? AraColors.accentConnected
+        : AraColors.textPrimary;
     String f(double v, [int d = 2]) => v > 0 ? v.toStringAsFixed(d) : '—';
     final target = status.expectedHfr;
-    final bestLine = best == null ? 'px · best so far —' : 'px · best so far ${f(best)}';
+    final bestLine = best == null
+        ? 'px · best so far —'
+        : 'px · best so far ${f(best)}';
     // Centred when it fits, scrolls when the frame beside it is shorter than the
     // facts need (the stats row overflowed the panel by 18 px on a laptop window).
     // A short window tightens the spacing so the facts row stays in view.
@@ -294,49 +369,85 @@ class _Hero extends StatelessWidget {
       child: LayoutBuilder(
         builder: (context, constraints) => SingleChildScrollView(
           child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.hasBoundedHeight ? constraints.maxHeight : 0),
-            child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('HFR', textAlign: TextAlign.center,
-              style: TextStyle(fontSize: _textFont, color: AraColors.textSecondary, letterSpacing: 1.1)),
-          const SizedBox(height: 2),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            child: Text(
-              f(hfr),
-              style: TextStyle(
-                fontSize: short ? _heroFontShort : _heroFont,
-                fontWeight: FontWeight.w300,
-                height: 1.05,
-                color: color,
-                fontFeatures: _tabular,
-              ),
+            constraints: BoxConstraints(
+              minHeight: constraints.hasBoundedHeight
+                  ? constraints.maxHeight
+                  : 0,
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            target == null ? bestLine : '$bestLine · in focus ≤ ${f(target)}',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: short ? 14 : 16, color: AraColors.textSecondary, fontFeatures: _tabular),
-          ),
-          if (status.active) ...[
-            SizedBox(height: short ? 8 : 14),
-            TurnHint(hint: hint),
-          ],
-          SizedBox(height: short ? 10 : 18),
-          const Divider(height: 1, color: AraColors.frameDivider),
-          SizedBox(height: short ? 8 : 14),
-          Row(
-            children: [
-              Expanded(child: _Fact(label: 'Stars', value: latest == null ? '—' : '${latest.stars}')),
-              Expanded(child: _Fact(label: 'Peak', value: latest == null || latest.peakAdu <= 0 ? '—' : '${(latest.peakAdu / 1000).toStringAsFixed(1)}k')),
-              Expanded(child: _Fact(label: 'FWHM', value: latest == null ? '—' : f(latest.fwhm, 1))),
-              Expanded(child: _Fact(label: 'Frames', value: '${status.seq}')),
-            ],
-          ),
-        ],
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text(
+                  'HFR',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: _textFont,
+                    color: AraColors.textSecondary,
+                    letterSpacing: 1.1,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    f(hfr),
+                    style: TextStyle(
+                      fontSize: short ? _heroFontShort : _heroFont,
+                      fontWeight: FontWeight.w300,
+                      height: 1.05,
+                      color: color,
+                      fontFeatures: _tabular,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  target == null
+                      ? bestLine
+                      : '$bestLine · in focus ≤ ${f(target)}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: short ? 14 : 16,
+                    color: AraColors.textSecondary,
+                    fontFeatures: _tabular,
+                  ),
+                ),
+                if (status.active) ...[
+                  SizedBox(height: short ? 8 : 14),
+                  TurnHint(hint: hint),
+                ],
+                SizedBox(height: short ? 10 : 18),
+                const Divider(height: 1, color: AraColors.frameDivider),
+                SizedBox(height: short ? 8 : 14),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _Fact(
+                        label: 'Stars',
+                        value: latest == null ? '—' : '${latest.stars}',
+                      ),
+                    ),
+                    Expanded(
+                      child: _Fact(
+                        label: 'Peak',
+                        value: latest == null || latest.peakAdu <= 0
+                            ? '—'
+                            : '${(latest.peakAdu / 1000).toStringAsFixed(1)}k',
+                      ),
+                    ),
+                    Expanded(
+                      child: _Fact(
+                        label: 'FWHM',
+                        value: latest == null ? '—' : f(latest.fwhm, 1),
+                      ),
+                    ),
+                    Expanded(
+                      child: _Fact(label: 'Frames', value: '${status.seq}'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -354,15 +465,26 @@ class _Fact extends StatelessWidget {
   Widget build(BuildContext context) {
     return Column(
       children: [
-        Text(label, style: const TextStyle(fontSize: _textFont, color: AraColors.textSecondary)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: _textFont,
+            color: AraColors.textSecondary,
+          ),
+        ),
         const SizedBox(height: 2),
         FittedBox(
           fit: BoxFit.scaleDown,
-          child: Text(value,
-              style: TextStyle(
-                  fontSize: AraBreakpoints.isShort(context) ? _statFontShort : _statFont,
-                  fontWeight: FontWeight.w600,
-                  fontFeatures: _tabular)),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontSize: AraBreakpoints.isShort(context)
+                  ? _statFontShort
+                  : _statFont,
+              fontWeight: FontWeight.w600,
+              fontFeatures: _tabular,
+            ),
+          ),
         ),
       ],
     );
@@ -378,8 +500,10 @@ enum TurnAdvice { wait, keepGoing, turnBack, hold, atBest, noStars }
 
 class GuideFocusHint {
   final TurnAdvice advice;
+
   /// Short, for the capsule ("Keep going").
   final String title;
+
   /// One line under it ("Same way you just moved — small moves").
   final String detail;
   const GuideFocusHint(this.advice, this.title, this.detail);
@@ -389,9 +513,14 @@ class GuideFocusHint {
 /// can: the frames come through the guider, which owns its camera while it
 /// loops, guides, calibrates or pauses. The daemon is the authority on a
 /// running loop, so nothing blocks while [active]. Pure — unit-tested.
-String? guideFocusBlocker(AppLocalizations l, GuiderStatus? guider, {required bool active}) {
+String? guideFocusBlocker(
+  AppLocalizations l,
+  GuiderStatus? guider, {
+  required bool active,
+}) {
   if (active) return null;
-  if (guider?.connectionState != GuiderConnectionState.connected) return l.guideFocusConnectGuider;
+  if (guider?.connectionState != GuiderConnectionState.connected)
+    return l.guideFocusConnectGuider;
   return guideFocusBusy(guider!) ? l.guideFocusStopGuider : null;
 }
 
@@ -414,40 +543,78 @@ bool guideFocusBusy(GuiderStatus guider) => const {
 /// expected in-focus HFR (× [kGuideFocusTargetTolerance]) is "In focus", whatever
 /// the trend says. Otherwise compares a 3-frame median with the median [lookback]
 /// frames earlier, so a static focuser is not told to turn by frame-to-frame noise.
-GuideFocusHint guideFocusHint(AppLocalizations l, GuideFocusStatus status, {int lookback = 4}) {
+GuideFocusHint guideFocusHint(
+  AppLocalizations l,
+  GuideFocusStatus status, {
+  int lookback = 4,
+}) {
   final latest = status.latest;
   if (latest == null) {
-    return GuideFocusHint(TurnAdvice.wait, l.bahtinovWaiting, l.bahtinovWaitingDetail);
+    return GuideFocusHint(
+      TurnAdvice.wait,
+      l.bahtinovWaiting,
+      l.bahtinovWaitingDetail,
+    );
   }
   if (latest.stars == 0 || latest.hfr <= 0) {
-    return GuideFocusHint(TurnAdvice.noStars, l.guideFocusNoStars, l.guideFocusNoStarsDetail);
+    return GuideFocusHint(
+      TurnAdvice.noStars,
+      l.guideFocusNoStars,
+      l.guideFocusNoStarsDetail,
+    );
   }
   final best = status.bestHfr;
   final hfr = latest.hfr;
-  final measured = status.recent.where((s) => s.hfr > 0).toList(growable: false);
+  final measured = status.recent
+      .where((s) => s.hfr > 0)
+      .toList(growable: false);
   final target = status.expectedHfr;
   final far = best != null && hfr > best * 1.5;
   final size = far ? l.guideFocusBigMoves : l.guideFocusSmallMoves;
   if (target != null && status.hfrInFocus(hfr)) {
-    return GuideFocusHint(TurnAdvice.atBest, l.bahtinovInFocus, l.guideFocusInFocusDetail(target.toStringAsFixed(2)));
+    return GuideFocusHint(
+      TurnAdvice.atBest,
+      l.bahtinovInFocus,
+      l.guideFocusInFocusDetail(target.toStringAsFixed(2)),
+    );
   }
   if (best != null && hfr <= best * 1.04) {
-    return GuideFocusHint(TurnAdvice.atBest, l.guideFocusSharpest, l.guideFocusSharpestDetail);
+    return GuideFocusHint(
+      TurnAdvice.atBest,
+      l.guideFocusSharpest,
+      l.guideFocusSharpestDetail,
+    );
   }
   if (measured.length <= lookback) {
-    return GuideFocusHint(TurnAdvice.hold, l.bahtinovMakeMove, l.guideFocusMakeMoveDetail(size));
+    return GuideFocusHint(
+      TurnAdvice.hold,
+      l.bahtinovMakeMove,
+      l.guideFocusMakeMoveDetail(size),
+    );
   }
   final now = _medianEndingAt(measured, measured.length - 1);
   final earlier = _medianEndingAt(measured, measured.length - 1 - lookback);
   final delta = now - earlier;
   final tolerance = (earlier * 0.05).clamp(0.05, 0.3);
   if (delta < -tolerance) {
-    return GuideFocusHint(TurnAdvice.keepGoing, l.bahtinovKeepGoing, l.guideFocusKeepGoingDetail(size));
+    return GuideFocusHint(
+      TurnAdvice.keepGoing,
+      l.bahtinovKeepGoing,
+      l.guideFocusKeepGoingDetail(size),
+    );
   }
   if (delta > tolerance) {
-    return GuideFocusHint(TurnAdvice.turnBack, l.bahtinovGoBack, l.guideFocusGoBackDetail(size));
+    return GuideFocusHint(
+      TurnAdvice.turnBack,
+      l.bahtinovGoBack,
+      l.guideFocusGoBackDetail(size),
+    );
   }
-  return GuideFocusHint(TurnAdvice.hold, l.guideFocusHolding, far ? l.guideFocusHoldingFar : l.guideFocusHoldingNear);
+  return GuideFocusHint(
+    TurnAdvice.hold,
+    l.guideFocusHolding,
+    far ? l.guideFocusHoldingFar : l.guideFocusHoldingNear,
+  );
 }
 
 /// Median of the up-to-3 measurable HFRs ending at [end] (fewer at the start).
@@ -467,11 +634,26 @@ class TurnHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (icon, color) = switch (hint.advice) {
-      TurnAdvice.keepGoing => (Icons.arrow_forward_rounded, AraColors.accentConnected),
-      TurnAdvice.turnBack => (Icons.u_turn_left_rounded, AraColors.accentWarning),
-      TurnAdvice.atBest => (Icons.check_circle_outline, AraColors.accentConnected),
-      TurnAdvice.noStars => (Icons.visibility_off_outlined, AraColors.accentWarning),
-      TurnAdvice.wait => (Icons.hourglass_empty_rounded, AraColors.textSecondary),
+      TurnAdvice.keepGoing => (
+        Icons.arrow_forward_rounded,
+        AraColors.accentConnected,
+      ),
+      TurnAdvice.turnBack => (
+        Icons.u_turn_left_rounded,
+        AraColors.accentWarning,
+      ),
+      TurnAdvice.atBest => (
+        Icons.check_circle_outline,
+        AraColors.accentConnected,
+      ),
+      TurnAdvice.noStars => (
+        Icons.visibility_off_outlined,
+        AraColors.accentWarning,
+      ),
+      TurnAdvice.wait => (
+        Icons.hourglass_empty_rounded,
+        AraColors.textSecondary,
+      ),
       TurnAdvice.hold => (Icons.pause_circle_outline, AraColors.accentInfo),
     };
     // A short window: a smaller capsule so the facts under it stay in view.
@@ -481,7 +663,10 @@ class TurnHint extends StatelessWidget {
         FittedBox(
           fit: BoxFit.scaleDown,
           child: Container(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: hintFont < _hintFont ? 4 : 8),
+            padding: EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: hintFont < _hintFont ? 4 : 8,
+            ),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.16),
               borderRadius: BorderRadius.circular(14),
@@ -491,14 +676,28 @@ class TurnHint extends StatelessWidget {
               children: [
                 Icon(icon, size: hintFont + 4, color: color),
                 const SizedBox(width: 8),
-                Text(hint.title, style: TextStyle(fontSize: hintFont, fontWeight: FontWeight.w700, color: color)),
+                Text(
+                  hint.title,
+                  style: TextStyle(
+                    fontSize: hintFont,
+                    fontWeight: FontWeight.w700,
+                    color: color,
+                  ),
+                ),
               ],
             ),
           ),
         ),
         SizedBox(height: hintFont < _hintFont ? 4 : 8),
-        Text(hint.detail, textAlign: TextAlign.center,
-            style: TextStyle(fontSize: hintFont < _hintFont ? 14 : 16, color: AraColors.textSecondary, height: 1.3)),
+        Text(
+          hint.detail,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: hintFont < _hintFont ? 14 : 16,
+            color: AraColors.textSecondary,
+            height: 1.3,
+          ),
+        ),
       ],
     );
   }

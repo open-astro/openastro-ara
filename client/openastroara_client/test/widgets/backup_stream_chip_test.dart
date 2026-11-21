@@ -26,32 +26,47 @@ void main() {
   }
 
   group('BackupStreamChip (§44)', () {
-    testWidgets('hidden while the stream is disabled and healthy', (tester) async {
+    testWidgets('hidden while the stream is disabled and healthy', (
+      tester,
+    ) async {
       await pumpChip(tester, const BackupStreamState());
-      expect(find.textContaining('Backup'), findsNothing,
-          reason: 'a rig that never enabled backups must not carry a dead indicator');
+      expect(
+        find.textContaining('Backup'),
+        findsNothing,
+        reason:
+            'a rig that never enabled backups must not carry a dead indicator',
+      );
     });
 
-    testWidgets('a problem shows in error state even after an auto-disable',
-        (tester) async {
-      await pumpChip(tester,
-          const BackupStreamState(problem: 'another desktop took the slot'));
+    testWidgets('a problem shows in error state even after an auto-disable', (
+      tester,
+    ) async {
+      await pumpChip(
+        tester,
+        const BackupStreamState(problem: 'another desktop took the slot'),
+      );
       expect(find.text('Backup: attention'), findsOneWidget);
     });
 
-    testWidgets('active with a backlog shows the pending count', (tester) async {
+    testWidgets('active with a backlog shows the pending count', (
+      tester,
+    ) async {
       await pumpChip(
-          tester,
-          const BackupStreamState(
-              enabled: true, active: true, pendingCount: 3));
+        tester,
+        const BackupStreamState(enabled: true, active: true, pendingCount: 3),
+      );
       expect(find.text('Backup: 3 pending'), findsOneWidget);
     });
 
     testWidgets('active and drained shows up to date', (tester) async {
       await pumpChip(
-          tester,
-          const BackupStreamState(
-              enabled: true, active: true, syncedThisSession: 12));
+        tester,
+        const BackupStreamState(
+          enabled: true,
+          active: true,
+          syncedThisSession: 12,
+        ),
+      );
       expect(find.text('Backup: up to date'), findsOneWidget);
     });
   });

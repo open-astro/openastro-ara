@@ -34,12 +34,12 @@ class StatsOverview {
   bool get isEmpty => totalFrames == 0;
 
   factory StatsOverview.fromJson(Map<String, dynamic> json) => StatsOverview(
-        totalSessions: _int(json['total_sessions']),
-        totalFrames: _int(json['total_frames']),
-        totalLightFrames: _int(json['total_light_frames']),
-        totalIntegrationHours: _dbl(json['total_integration_hours']),
-        uniqueTargetsImaged: _int(json['unique_targets_imaged']),
-        firstImageUtc: parseStatsUtc(json['first_image_utc']),
-        lastImageUtc: parseStatsUtc(json['last_image_utc']),
-      );
+    totalSessions: _int(json['total_sessions']),
+    totalFrames: _int(json['total_frames']),
+    totalLightFrames: _int(json['total_light_frames']),
+    totalIntegrationHours: _dbl(json['total_integration_hours']),
+    uniqueTargetsImaged: _int(json['unique_targets_imaged']),
+    firstImageUtc: parseStatsUtc(json['first_image_utc']),
+    lastImageUtc: parseStatsUtc(json['last_image_utc']),
+  );
 }

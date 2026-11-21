@@ -23,10 +23,12 @@ void main() {
   setUp(() async {
     ws = StreamController<WsEvent>.broadcast();
     run = _PushableRun();
-    container = ProviderContainer(overrides: [
-      wsEventsProvider.overrideWith((ref) => ws.stream),
-      sequenceRunStateProvider.overrideWith(() => run),
-    ]);
+    container = ProviderContainer(
+      overrides: [
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+        sequenceRunStateProvider.overrideWith(() => run),
+      ],
+    );
     container.listen(runEventTickerProvider, (_, _) {});
     await container.read(sequenceRunStateProvider.future);
   });
@@ -36,17 +38,25 @@ void main() {
     await ws.close();
   });
 
-  SequenceRunStateInfo info(SequenceRunState s,
-          {String runId = 'r1', String? instruction}) =>
-      SequenceRunStateInfo(
-          runId: runId, state: s, currentInstructionDescription: instruction);
+  SequenceRunStateInfo info(
+    SequenceRunState s, {
+    String runId = 'r1',
+    String? instruction,
+  }) => SequenceRunStateInfo(
+    runId: runId,
+    state: s,
+    currentInstructionDescription: instruction,
+  );
 
   test('state transitions + instruction changes land, newest first', () {
     run.push(info(SequenceRunState.running, instruction: 'Slew'));
     run.push(info(SequenceRunState.running, instruction: 'Take Exposure'));
     final events = container.read(runEventTickerProvider);
-    expect(events.map((e) => e.label).toList(),
-        ['▶ Take Exposure', '▶ Slew', 'Run started']);
+    expect(events.map((e) => e.label).toList(), [
+      '▶ Take Exposure',
+      '▶ Slew',
+      'Run started',
+    ]);
   });
 
   test('pause then running reads Resumed; a new run clears the buffer', () {
@@ -63,32 +73,58 @@ void main() {
 
   test('#1264 tracking probe rungs and the chosen ceiling read like instruction lines', () async {
     run.push(info(SequenceRunState.running));
-    ws.add(WsEvent(
+    ws.add(
+      WsEvent(
         type: 'tracking_probe.rung_complete',
         ts: DateTime.now().toUtc(),
         seq: 1,
-        payload: const {'exposure_seconds': 30, 'eccentricity': 0.31, 'fwhm_px': 2.4, 'stars': 100, 'usable': true, 'passed': true}));
-    ws.add(WsEvent(
+        payload: const {
+          'exposure_seconds': 30,
+          'eccentricity': 0.31,
+          'fwhm_px': 2.4,
+          'stars': 100,
+          'usable': true,
+          'passed': true,
+        },
+      ),
+    );
+    ws.add(
+      WsEvent(
         type: 'tracking_probe.completed',
         ts: DateTime.now().toUtc(),
         seq: 2,
-        payload: const {'ceiling_seconds': 30, 'source': 'measured', 'usable_rungs': 2, 'summary': 's'}));
+        payload: const {
+          'ceiling_seconds': 30,
+          'source': 'measured',
+          'usable_rungs': 2,
+          'summary': 's',
+        },
+      ),
+    );
     await Future<void>.delayed(Duration.zero);
-    final labels = container.read(runEventTickerProvider).map((e) => e.label).toList();
+    final labels = container
+        .read(runEventTickerProvider)
+        .map((e) => e.label)
+        .toList();
     expect(labels.first, 'Unguided ceiling 30 s (measured)');
     expect(labels[1], 'Tracking probe 30 s · ecc 0.31 · FWHM 2.4 px · pass');
   });
 
   test('frame.complete during a run appends with its filter', () async {
     run.push(info(SequenceRunState.running));
-    ws.add(WsEvent(
+    ws.add(
+      WsEvent(
         type: 'frame.complete',
         ts: DateTime.now().toUtc(),
         seq: 1,
-        payload: const {'frame_id': 'f1', 'filter_name': 'OIII'}));
+        payload: const {'frame_id': 'f1', 'filter_name': 'OIII'},
+      ),
+    );
     await Future<void>.delayed(Duration.zero);
-    expect(container.read(runEventTickerProvider).first.label,
-        'Frame captured · OIII');
+    expect(
+      container.read(runEventTickerProvider).first.label,
+      'Frame captured · OIII',
+    );
   });
 
   test('ring buffer caps at 50', () {
@@ -96,7 +132,9 @@ void main() {
     for (var i = 0; i < 80; i++) {
       run.push(info(SequenceRunState.running, instruction: 'step $i'));
     }
-    expect(container.read(runEventTickerProvider).length,
-        RunEventTickerNotifier.cap);
+    expect(
+      container.read(runEventTickerProvider).length,
+      RunEventTickerNotifier.cap,
+    );
   });
 }

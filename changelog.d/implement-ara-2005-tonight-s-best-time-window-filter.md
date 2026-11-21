@@ -1,0 +1,2 @@
+### Added (Simple Mode)
+- **Tonight's Best can be limited to the hours you will image** (#2005): the new Imaging hours control (Any time, or Pick hours, which asks for a start and an end time) keeps the Targets whose dark window overlaps that range, in this device's local time; a range such as 21:00-01:00 may cross midnight, and a Target with no dark window is hidden while a range is set. The range is kept across restarts and Clear filters resets it. English and Brazilian Portuguese.

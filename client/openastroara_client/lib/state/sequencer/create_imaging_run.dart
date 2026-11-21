@@ -43,11 +43,18 @@ class ImagingRunResult {
   /// True when the user cancelled out of the plan chooser — nothing was
   /// created and no feedback should be shown.
   final bool cancelled;
-  const ImagingRunResult(this.sequenceId,
-      {required this.appended, this.draft = false, this.cancelled = false});
+  const ImagingRunResult(
+    this.sequenceId, {
+    required this.appended,
+    this.draft = false,
+    this.cancelled = false,
+  });
 
-  static const ImagingRunResult userCancelled =
-      ImagingRunResult('', appended: false, cancelled: true);
+  static const ImagingRunResult userCancelled = ImagingRunResult(
+    '',
+    appended: false,
+    cancelled: true,
+  );
 }
 
 /// §36 — the ONE feedback surface for [createImagingRun]'s outcome. The three
@@ -81,10 +88,12 @@ void showImagingRunFeedback(
   } else if (result.draft) {
     messenger.showSnackBar(
       SnackBar(
-        content: Text(result.appended
-            ? 'Added "$targetName" to the offline draft.'
-            : 'Saved "$targetName" as an offline draft — push it to '
-                'the server from Load sequence once connected.'),
+        content: Text(
+          result.appended
+              ? 'Added "$targetName" to the offline draft.'
+              : 'Saved "$targetName" as an offline draft — push it to '
+                    'the server from Load sequence once connected.',
+        ),
       ),
     );
   } else {
@@ -256,32 +265,37 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     // No daemon to ask what the rig has — settings are the best we know.
     final rig = rigCapabilitiesFromSettings(
       container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
-    )
-        .copyWith(pauseForFilterSwap: pauseForFilterSwap);
+    ).copyWith(pauseForFilterSwap: pauseForFilterSwap);
     final choice = filterPlan != null
         ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
         : await _choosePlan(
-      ref,
-      container,
-      targetName: targetName,
-      raDeg: raDeg,
-      decDeg: decDeg,
-      remainingDarkHours: remainingDarkHours,
-      rig: rig,
-    );
+            ref,
+            container,
+            targetName: targetName,
+            raDeg: raDeg,
+            decDeg: decDeg,
+            remainingDarkHours: remainingDarkHours,
+            rig: rig,
+          );
     if (choice == null) return ImagingRunResult.userCancelled;
     // Not loaded (no rig to load from): the classes' values, as with the
     // unguided options below. A run reads them; nothing saves them.
     final defaults =
-        container.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
+        container.read(imagingDefaultsProvider).value ??
+        const ImagingDefaults();
     final af =
         container.read(autofocusSettingsProvider).value ??
         const AutofocusSettings();
-    final exposureSeconds = exposureOverride ??
-        defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
-    final frameCount = frameCountOverride ??
-        defaultFrameCount(exposureSeconds,
-            remainingDarkHours: remainingDarkHours);
+    final exposureSeconds =
+        exposureOverride ??
+        defaults.defaultExposure.inMilliseconds /
+            Duration.millisecondsPerSecond;
+    final frameCount =
+        frameCountOverride ??
+        defaultFrameCount(
+          exposureSeconds,
+          remainingDarkHours: remainingDarkHours,
+        );
     final afEvery = af.everyNHours > 0 && exposureSeconds > 0
         ? math.max(1, ((af.everyNHours * 3600.0) / exposureSeconds).ceil())
         : null;
@@ -378,7 +392,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       ]);
       if (appended) {
         if (jumpToRun) {
-          container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
+          container
+              .read(selectedTabIndexProvider.notifier)
+              .select(kRunTabIndex);
         }
         return ImagingRunResult(selectedId, appended: true, draft: true);
       }
@@ -418,25 +434,28 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // §Run smart targets — offer the SHO / LRGB / single-filter plan chooser
   // when the filter set gives a real choice. Null = the user cancelled.
   final choice = filterPlan != null
-        ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
-        : await _choosePlan(
-    ref,
-    container,
-    targetName: targetName,
-    raDeg: raDeg,
-    decDeg: decDeg,
-    remainingDarkHours: remainingDarkHours,
-    rig: rig,
-  );
+      ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
+      : await _choosePlan(
+          ref,
+          container,
+          targetName: targetName,
+          raDeg: raDeg,
+          decDeg: decDeg,
+          remainingDarkHours: remainingDarkHours,
+          rig: rig,
+        );
   if (choice == null) return ImagingRunResult.userCancelled;
   final ditherEvery = _ditherCadence(container, choice);
 
-  final exposureSeconds = exposureOverride ??
+  final exposureSeconds =
+      exposureOverride ??
       defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
-  final frameCount = frameCountOverride ?? defaultFrameCount(
-    exposureSeconds,
-    remainingDarkHours: remainingDarkHours,
-  );
+  final frameCount =
+      frameCountOverride ??
+      defaultFrameCount(
+        exposureSeconds,
+        remainingDarkHours: remainingDarkHours,
+      );
   // The AF settings express cadence in hours; the daemon's trigger counts
   // exposures. Convert at the planned sub length (≥ 1 so a long sub can't
   // produce a zero cadence, which the daemon would reject).
@@ -484,7 +503,15 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     // creating a fresh run then would duplicate the target.
     final liveResult = await _tryLiveAppend(container, api, selectedId, blocks);
     if (liveResult != null) {
-      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
+      await _registerMosaicProject(
+        container,
+        targetName,
+        panels,
+        mosaicGrid,
+        positionAngleDeg,
+        frameCount,
+        choice.filterPlan,
+      );
       if (jumpToRun) {
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
       }
@@ -499,7 +526,15 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     if (newBody != null) {
       final detail = await api.updateSequence(selectedId, body: newBody);
       _syncAfterBodyChange(container, selectedId, detail);
-      await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
+      await _registerMosaicProject(
+        container,
+        targetName,
+        panels,
+        mosaicGrid,
+        positionAngleDeg,
+        frameCount,
+        choice.filterPlan,
+      );
       if (jumpToRun) {
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
       }
@@ -567,7 +602,8 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // One key per LOGICAL create: if the request dies in transit the daemon may
   // still have applied it — the degraded draft below carries this same key so
   // its eventual push dedupes on the daemon instead of duplicating the run.
-  final createKey = 'run-${DateTime.now().microsecondsSinceEpoch}-'
+  final createKey =
+      'run-${DateTime.now().microsecondsSinceEpoch}-'
       '${identityHashCode(body).toRadixString(16)}';
   final String id;
   try {
@@ -590,7 +626,15 @@ Future<ImagingRunResult?> _createImagingRunPinned(
     return ImagingRunResult(draftId, appended: false, draft: true);
   }
 
-  await _registerMosaicProject(container, targetName, panels, mosaicGrid, positionAngleDeg, frameCount, choice.filterPlan);
+  await _registerMosaicProject(
+    container,
+    targetName,
+    panels,
+    mosaicGrid,
+    positionAngleDeg,
+    frameCount,
+    choice.filterPlan,
+  );
 
   // Same post-create choreography as the NINA import flow: refresh the list,
   // select the new sequence (the Run tab listens and loads it), then bring the
@@ -602,7 +646,6 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   }
   return ImagingRunResult(id, appended: false);
 }
-
 
 /// Best-effort hydration of the planning-relevant settings sections from the
 /// active server's profile (imaging defaults + autofocus + the filter set and
@@ -723,8 +766,9 @@ Future<ImagingRunResult?> _tryLiveAppend(
       // panels are visible in the Run tree and can be re-added from Planning.
       if (added > 0) {
         debugPrint(
-            '[planning] live append landed $added/${targetBlocks.length} '
-            'blocks before failing: $e');
+          '[planning] live append landed $added/${targetBlocks.length} '
+          'blocks before failing: $e',
+        );
         _syncAfterBodyChange(container, id, detail!);
         return ImagingRunResult(id, appended: true);
       }
@@ -815,8 +859,9 @@ Future<bool> _appendToDraft(
   }
   if (draft == null) return false;
   final editor = container.read(sequenceEditorProvider);
-  Map<String, dynamic> body =
-      (editor != null && editor.id == id) ? editor.body : draft.body;
+  Map<String, dynamic> body = (editor != null && editor.id == id)
+      ? editor.body
+      : draft.body;
   try {
     for (final b in blocks) {
       body = appendTargetToRunBody(body, b);
@@ -869,7 +914,8 @@ Future<void> _registerMosaicProject(
   final rows = grid?.rows ?? 1;
   // On the circle: a mosaic straddling 0h must not average to 12h (§47.3).
   final centreRa = circularMeanRaDeg(panels.map((p) => p.raDeg));
-  final centreDec = panels.map((p) => p.decDeg).reduce((a, b) => a + b) / panels.length;
+  final centreDec =
+      panels.map((p) => p.decDeg).reduce((a, b) => a + b) / panels.length;
   try {
     await api.create(
       // buildTargetBlock trims the block name; the project must match it exactly.
@@ -888,7 +934,9 @@ Future<void> _registerMosaicProject(
     // The Library's Mosaics section, when it is on screen, picks the project up.
     unawaited(container.read(mosaicProjectsProvider.notifier).refresh());
   } catch (e) {
-    debugPrint('[planning] mosaic project registration failed (run is unaffected): $e');
+    debugPrint(
+      '[planning] mosaic project registration failed (run is unaffected): $e',
+    );
   }
 }
 

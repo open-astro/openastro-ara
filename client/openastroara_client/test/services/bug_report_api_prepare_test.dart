@@ -37,20 +37,29 @@ class _CapturingAdapter implements HttpClientAdapter {
 }
 
 void main() {
-  test('prepare sends the sharing mode in the body and reads it back', () async {
-    final adapter = _CapturingAdapter();
-    final api = BugReportApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = adapter);
+  test(
+    'prepare sends the sharing mode in the body and reads it back',
+    () async {
+      final adapter = _CapturingAdapter();
+      final api = BugReportApi(
+        const AraServer(hostname: 'x', port: 80),
+        dio: Dio()..httpClientAdapter = adapter,
+      );
 
-    final prep = await api.prepare(mode: 'redacted');
+      final prep = await api.prepare(mode: 'redacted');
 
-    expect(adapter.last!.path, '/api/v1/bugreport/prepare');
-    expect(adapter.last!.data, {'mode': 'redacted'});
-    expect(prep.sharingMode, 'redacted');
-  });
+      expect(adapter.last!.path, '/api/v1/bugreport/prepare');
+      expect(adapter.last!.data, {'mode': 'redacted'});
+      expect(prep.sharingMode, 'redacted');
+    },
+  );
 
   test('prepare defaults to full', () async {
     final adapter = _CapturingAdapter();
-    final api = BugReportApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = adapter);
+    final api = BugReportApi(
+      const AraServer(hostname: 'x', port: 80),
+      dio: Dio()..httpClientAdapter = adapter,
+    );
     await api.prepare();
     expect(adapter.last!.data, {'mode': 'full'});
   });

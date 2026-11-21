@@ -8,17 +8,18 @@ import 'package:openastroara/state/equipment/filter_wheel_command_state.dart';
 import 'package:openastroara/state/equipment/filter_wheel_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 
-FilterWheelStatus _wheel({int? slot = 0, String runtime = 'idle'}) => FilterWheelStatus(
-  deviceId: 'fw',
-  name: 'EFW',
-  connectionState: EquipmentConnectionState.connected,
-  runtimeState: runtime,
-  currentSlot: slot,
-  slots: const [
-    FilterSlot(position: 0, name: 'L', focusOffset: 0),
-    FilterSlot(position: 1, name: 'R', focusOffset: 0),
-  ],
-);
+FilterWheelStatus _wheel({int? slot = 0, String runtime = 'idle'}) =>
+    FilterWheelStatus(
+      deviceId: 'fw',
+      name: 'EFW',
+      connectionState: EquipmentConnectionState.connected,
+      runtimeState: runtime,
+      currentSlot: slot,
+      slots: const [
+        FilterSlot(position: 0, name: 'L', focusOffset: 0),
+        FilterSlot(position: 1, name: 'R', focusOffset: 0),
+      ],
+    );
 
 /// A wheel the test moves by hand; [answer] is what changeFilter returns.
 class _Wheel extends FilterWheelNotifier {
@@ -50,16 +51,29 @@ class _Run extends SequenceRunStateNotifier {
   @override
   Future<SequenceRunStateInfo?> build() async {
     if (delay > Duration.zero) await Future<void>.delayed(delay);
-    return running ? const SequenceRunStateInfo(runId: 'r', state: SequenceRunState.running) : null;
+    return running
+        ? const SequenceRunStateInfo(
+            runId: 'r',
+            state: SequenceRunState.running,
+          )
+        : null;
   }
 }
 
-(ProviderContainer, _Wheel) _rig(FakeAsync async, {bool planRunning = false, Duration runReadTakes = Duration.zero}) {
+(ProviderContainer, _Wheel) _rig(
+  FakeAsync async, {
+  bool planRunning = false,
+  Duration runReadTakes = Duration.zero,
+}) {
   final wheel = _Wheel();
-  final c = ProviderContainer(overrides: [
-    filterWheelProvider.overrideWith(() => wheel),
-    sequenceRunStateProvider.overrideWith(() => _Run(planRunning, delay: runReadTakes)),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      filterWheelProvider.overrideWith(() => wheel),
+      sequenceRunStateProvider.overrideWith(
+        () => _Run(planRunning, delay: runReadTakes),
+      ),
+    ],
+  );
   addTearDown(c.dispose);
   c.listen(sequenceRunStateProvider, (_, _) {});
   c.listen(filterWheelProvider, (_, _) {});
@@ -75,10 +89,16 @@ void main() {
       c.read(filterWheelCommandProvider.notifier).request(1);
       async.flushMicrotasks();
       expect(wheel.sent, [1]);
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.moving);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.moving,
+      );
       wheel.report(_wheel(slot: 0, runtime: 'moving'));
       wheel.report(_wheel(slot: 1));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.landed);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.landed,
+      );
     });
   });
 
@@ -87,7 +107,10 @@ void main() {
       final (c, wheel) = _rig(async, planRunning: true);
       final cmd = c.read(filterWheelCommandProvider.notifier);
       cmd.request(1);
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.asking);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.asking,
+      );
       cmd.cancel();
       async.flushMicrotasks();
       expect(wheel.sent, isEmpty);
@@ -103,9 +126,15 @@ void main() {
       final (c, _) = _rig(async);
       c.read(filterWheelCommandProvider.notifier).request(1);
       async.elapse(const Duration(seconds: 9));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.moving);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.moving,
+      );
       async.elapse(const Duration(seconds: 2));
-      expect(c.read(filterWheelCommandProvider).refusal, DeviceCommandRefusal.didntMove);
+      expect(
+        c.read(filterWheelCommandProvider).refusal,
+        DeviceCommandRefusal.didntMove,
+      );
       expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.idle);
     });
   });
@@ -117,22 +146,37 @@ void main() {
       async.flushMicrotasks();
       wheel.report(_wheel(slot: 0, runtime: 'moving'));
       async.elapse(const Duration(seconds: 50));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.moving);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.moving,
+      );
       async.elapse(const Duration(seconds: 6));
-      expect(c.read(filterWheelCommandProvider).refusal, DeviceCommandRefusal.didntMove);
+      expect(
+        c.read(filterWheelCommandProvider).refusal,
+        DeviceCommandRefusal.didntMove,
+      );
     });
   });
 
-  test('a move the wheel drops (its last command running) is refused as busy', () {
-    fakeAsync((async) {
-      final (c, wheel) = _rig(async);
-      wheel.answer = false;
-      c.read(filterWheelCommandProvider.notifier).request(1);
-      async.flushMicrotasks();
-      expect(c.read(filterWheelCommandProvider).refusal, DeviceCommandRefusal.busy);
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.idle);
-    });
-  });
+  test(
+    'a move the wheel drops (its last command running) is refused as busy',
+    () {
+      fakeAsync((async) {
+        final (c, wheel) = _rig(async);
+        wheel.answer = false;
+        c.read(filterWheelCommandProvider.notifier).request(1);
+        async.flushMicrotasks();
+        expect(
+          c.read(filterWheelCommandProvider).refusal,
+          DeviceCommandRefusal.busy,
+        );
+        expect(
+          c.read(filterWheelCommandProvider).phase,
+          DeviceCommandPhase.idle,
+        );
+      });
+    },
+  );
 
   test('a move that fails carries its error', () {
     fakeAsync((async) {
@@ -140,7 +184,10 @@ void main() {
       wheel.error = StateError('rig said no');
       c.read(filterWheelCommandProvider.notifier).request(1);
       async.flushMicrotasks();
-      expect(c.read(filterWheelCommandProvider).refusal, DeviceCommandRefusal.failed);
+      expect(
+        c.read(filterWheelCommandProvider).refusal,
+        DeviceCommandRefusal.failed,
+      );
       expect(c.read(filterWheelCommandProvider).error, isA<StateError>());
     });
   });
@@ -156,12 +203,23 @@ void main() {
 
   test('a tap before the run state is read waits for it, and asks while a plan runs', () {
     fakeAsync((async) {
-      final (c, wheel) = _rig(async, planRunning: true, runReadTakes: const Duration(seconds: 1));
+      final (c, wheel) = _rig(
+        async,
+        planRunning: true,
+        runReadTakes: const Duration(seconds: 1),
+      );
       c.read(filterWheelCommandProvider.notifier).request(1);
       async.flushMicrotasks();
-      expect(wheel.sent, isEmpty, reason: 'not sent before the run state is known');
+      expect(
+        wheel.sent,
+        isEmpty,
+        reason: 'not sent before the run state is known',
+      );
       async.elapse(const Duration(seconds: 2));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.asking);
+      expect(
+        c.read(filterWheelCommandProvider).phase,
+        DeviceCommandPhase.asking,
+      );
       expect(wheel.sent, isEmpty);
     });
   });
@@ -176,15 +234,28 @@ void main() {
     });
   });
 
-  test('a run state that never answers asks after 3 s instead of doing nothing', () {
-    fakeAsync((async) {
-      final (c, wheel) = _rig(async, planRunning: false, runReadTakes: const Duration(days: 1));
-      c.read(filterWheelCommandProvider.notifier).request(1);
-      async.elapse(const Duration(seconds: 2));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.idle);
-      async.elapse(const Duration(seconds: 2));
-      expect(c.read(filterWheelCommandProvider).phase, DeviceCommandPhase.asking);
-      expect(wheel.sent, isEmpty);
-    });
-  });
+  test(
+    'a run state that never answers asks after 3 s instead of doing nothing',
+    () {
+      fakeAsync((async) {
+        final (c, wheel) = _rig(
+          async,
+          planRunning: false,
+          runReadTakes: const Duration(days: 1),
+        );
+        c.read(filterWheelCommandProvider.notifier).request(1);
+        async.elapse(const Duration(seconds: 2));
+        expect(
+          c.read(filterWheelCommandProvider).phase,
+          DeviceCommandPhase.idle,
+        );
+        async.elapse(const Duration(seconds: 2));
+        expect(
+          c.read(filterWheelCommandProvider).phase,
+          DeviceCommandPhase.asking,
+        );
+        expect(wheel.sent, isEmpty);
+      });
+    },
+  );
 }

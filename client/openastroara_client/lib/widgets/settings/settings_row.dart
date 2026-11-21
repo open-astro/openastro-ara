@@ -36,12 +36,12 @@ class SettingsRow extends StatelessWidget {
                     // Ellipsize rather than overflow the fixed 280px column when the
                     // label is long (or rendered in a wide font).
                     Flexible(
-                      child: Text(label,
-                          overflow: TextOverflow.ellipsis,
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    color: AraColors.textSecondary,
-                                  )),
+                      child: Text(
+                        label,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AraColors.textSecondary),
+                      ),
                     ),
                     if (helpKey != null) HelpIcon(helpKey: helpKey!),
                   ],
@@ -51,9 +51,8 @@ class SettingsRow extends StatelessWidget {
                     padding: const EdgeInsets.only(top: 2),
                     child: Text(
                       hint!,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AraColors.textDisabled,
-                          ),
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AraColors.textDisabled),
                     ),
                   ),
               ],
@@ -82,10 +81,8 @@ class SettingsSectionHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Text(
       title,
-      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-            color: AraColors.textPrimary,
-            letterSpacing: 0.4,
-          ),
+      style: Theme.of(context).textTheme.titleSmall
+          ?.copyWith(color: AraColors.textPrimary, letterSpacing: 0.4),
     );
     return Padding(
       padding: const EdgeInsets.fromLTRB(0, 16, 0, 8),
@@ -100,7 +97,6 @@ class SettingsSectionHeader extends StatelessWidget {
     );
   }
 }
-
 
 /// Wrapper that adds a highlight border when its [settingId] is targetted by
 /// the search registry. Per §61.2, highlight is a yellow border that fades.
@@ -124,9 +120,7 @@ class SearchHighlight extends ConsumerWidget {
       duration: const Duration(milliseconds: 300),
       decoration: BoxDecoration(
         border: Border.all(
-          color: isHighlighted
-              ? AraColors.searchHighlight
-              : Colors.transparent,
+          color: isHighlighted ? AraColors.searchHighlight : Colors.transparent,
           width: 2,
         ),
         borderRadius: BorderRadius.circular(4),

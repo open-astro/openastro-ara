@@ -117,7 +117,15 @@ const Map<String, Help> helpRegistry = {
       'session.calibration.flat_target_adu_tolerance_pct',
       'session.calibration.flat_frames_per_filter',
     ],
-    keywords: ['flats', 'adu', 'target', 'brightness', 'auto exposure', 'percent', 'histogram'],
+    keywords: [
+      'flats',
+      'adu',
+      'target',
+      'brightness',
+      'auto exposure',
+      'percent',
+      'histogram',
+    ],
   ),
   'session.calibration.flat_target_adu_tolerance_pct': Help(
     key: 'session.calibration.flat_target_adu_tolerance_pct',
@@ -405,7 +413,10 @@ const Map<String, Help> helpRegistry = {
         'You are next to the mount during setup and polar alignment, so the '
         'fix is the rig\'s position for every purpose that matters. Desktop '
         'only; phones and tablets use their built-in GPS through Fill from GPS.',
-    relatedSettings: ['timesync.client_gps.enabled', 'timesync.client_gps.port'],
+    relatedSettings: [
+      'timesync.client_gps.enabled',
+      'timesync.client_gps.port',
+    ],
     keywords: ['gps', 'dongle', 'time sync', 'site'],
   ),
   'timesync.client_gps.port': Help(
@@ -419,7 +430,10 @@ const Map<String, Help> helpRegistry = {
         'receiver ships with. "No fix yet" with the port right just means the '
         'receiver has not found enough satellites — give it a clear view of the '
         'sky; a cold receiver can take a few minutes.',
-    relatedSettings: ['timesync.client_gps.port', 'timesync.client_gps.enabled'],
+    relatedSettings: [
+      'timesync.client_gps.port',
+      'timesync.client_gps.enabled',
+    ],
     keywords: ['gps', 'serial', 'port', 'nmea'],
   ),
   'safety.policies.auto_resume': Help(
@@ -471,8 +485,7 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.meridian_refocus_temp_threshold_c': Help(
     key: 'safety.policies.meridian_refocus_temp_threshold_c',
     title: 'Re-focus drift threshold',
-    body:
-        'How much the focuser temperature may move since the last autofocus before the flip re-focuses. 2 °C suits most refractors; a fast Newtonian or a carbon tube can go tighter, a long aluminium tube looser.',
+    body: 'How much the focuser temperature may move since the last autofocus before the flip re-focuses. 2 °C suits most refractors; a fast Newtonian or a carbon tube can go tighter, a long aluminium tube looser.',
     relatedSettings: ['safety.policies.meridian_refocus'],
   ),
   'safety.policies.meridian_guider_recal': Help(
@@ -516,8 +529,7 @@ const Map<String, Help> helpRegistry = {
   'safety.policies.max_minutes_after_meridian': Help(
     key: 'safety.policies.max_minutes_after_meridian',
     title: 'Latest flip after the meridian',
-    body:
-        'The end of the flip window: the latest the automatic flip may run, in minutes past the meridian. It is never below Flip after the meridian (min). Simple Mode sets it 5 min after that value.',
+    body: 'The end of the flip window: the latest the automatic flip may run, in minutes past the meridian. It is never below Flip after the meridian (min). Simple Mode sets it 5 min after that value.',
     relatedSettings: ['safety.policies.minutes_after_meridian'],
   ),
   'safety.policies.stop_before_meridian_min': Help(
@@ -1116,7 +1128,12 @@ const Map<String, Help> helpRegistry = {
         '* **Smart Focus** (after one good sweep) usually needs two or three shots: it reads how far off focus the stars are and moves there. If the first shot already reads in focus it still takes one shot either side as a check; both must be clearly worse, or it runs the full sweep instead of trusting the number. The V through those three shots then says where the bottom really is: if that is off the centre, a fourth shot goes there and stays only if it is sharper, and a fifth confirms the final position.\n'
         '* **Cancel** stops the run and puts the focuser back where it started when the profile says so. It also cancels a run a sequence started.\n\n'
         'A sequence\'s own refocus leaves the same record here, so you can check last night\'s run in the morning.',
-    relatedSettings: ['img.autofocus.method', 'img.autofocus.step_size_auto', 'img.autofocus.steps', 'img.autofocus.step_size'],
+    relatedSettings: [
+      'img.autofocus.method',
+      'img.autofocus.step_size_auto',
+      'img.autofocus.steps',
+      'img.autofocus.step_size',
+    ],
     keywords: ['autofocus', 'v-curve', 'hfr', 'focus', 'sweep', 'cancel'],
   ),
   'setup.focusing.bahtinov': Help(
@@ -1132,7 +1149,14 @@ const Map<String, Help> helpRegistry = {
         '* **Finish** asks you to take the mask off, and marks the telescope focused when the big number (the median of the last measured frames) was in the zone — one lucky or seeing-blown frame does not decide it. Autofocus and sequences will not start while the readout runs, so the mask can never end up on your images.\n'
         '* **Exposure**: well under a second for a bright star; lengthen it if the spikes are faint.',
     relatedSettings: [],
-    keywords: ['bahtinov', 'mask', 'focus', 'spikes', 'manual focuser', 'critical focus zone'],
+    keywords: [
+      'bahtinov',
+      'mask',
+      'focus',
+      'spikes',
+      'manual focuser',
+      'critical focus zone',
+    ],
   ),
   'setup.polar_align.stages': Help(
     key: 'setup.polar_align.stages',
@@ -1157,8 +1181,27 @@ const Map<String, Help> helpRegistry = {
       'img.polar.camera',
       'img.polar.frames_per_point',
     ],
-    relatedSettings: ['eq.guider.guide_focal_length', 'eq.guider.guide_pixel_size'],
-    keywords: ['polar', 'alignment', 'confirm', 'parked', 'three point', 'check', 'coarse', 'fine', 'pole', 'east', 'west', 'hand', 'manual', 'nina', 'azimuth'],
+    relatedSettings: [
+      'eq.guider.guide_focal_length',
+      'eq.guider.guide_pixel_size',
+    ],
+    keywords: [
+      'polar',
+      'alignment',
+      'confirm',
+      'parked',
+      'three point',
+      'check',
+      'coarse',
+      'fine',
+      'pole',
+      'east',
+      'west',
+      'hand',
+      'manual',
+      'nina',
+      'azimuth',
+    ],
   ),
   'setup.focusing.guide': Help(
     key: 'setup.focusing.guide',
@@ -1172,7 +1215,15 @@ const Map<String, Help> helpRegistry = {
         '* **Off-axis guider**: the OAG sees the same focal plane as the main camera, so its HFR only means something once the main telescope is focused. The card waits for that, or tick *Already in focus*.\n'
         '* **Exposure**: 1–3 s suits most guide cameras; lengthen it when few stars show.',
     relatedSettings: ['eq.guider.setup_type'],
-    keywords: ['guide camera', 'oag', 'guide scope', 'helical', 'focus', 'hfr', 'live'],
+    keywords: [
+      'guide camera',
+      'oag',
+      'guide scope',
+      'helical',
+      'focus',
+      'hfr',
+      'live',
+    ],
   ),
   'session.rotate_by_hand': Help(
     key: 'session.rotate_by_hand',
@@ -1186,7 +1237,17 @@ const Map<String, Help> helpRegistry = {
         '* A 180° turn gives the same framing, so the readout always shows the shorter way round.\n\n'
         'Rigs that cannot plate-solve (no solver installed or no optics in the profile) cannot use the readout; the run\'s *Center and Rotate* still centres the target.',
     relatedSettings: ['img.platesolve.engine', 'img.platesolve.solver_path'],
-    keywords: ['rotation', 'rotate', 'position angle', 'framing', 'rotator', 'by hand', 'plate solve', 'single', 'loop'],
+    keywords: [
+      'rotation',
+      'rotate',
+      'position angle',
+      'framing',
+      'rotator',
+      'by hand',
+      'plate solve',
+      'single',
+      'loop',
+    ],
   ),
   'img.autofocus.method': Help(
     key: 'img.autofocus.method',
@@ -1404,8 +1465,7 @@ const Map<String, Help> helpRegistry = {
   'eq.guider.dec_aggressiveness': Help(
     key: 'eq.guider.dec_aggressiveness',
     title: 'Dec aggressiveness',
-    body:
-        'Fraction (0–1) of each measured Dec error OpenAstro Guider corrects per cycle. Same idea as RA aggressiveness; Dec is often run a touch lower because of backlash near direction reversals.',
+    body: 'Fraction (0–1) of each measured Dec error OpenAstro Guider corrects per cycle. Same idea as RA aggressiveness; Dec is often run a touch lower because of backlash near direction reversals.',
     relatedSettings: [
       'eq.guider.ra_aggressiveness',
       'eq.guider.dec_guide_mode',
@@ -1417,7 +1477,10 @@ const Map<String, Help> helpRegistry = {
     body:
         'Smallest RA error (in guide pixels) OpenAstro Guider will react to. Errors below this are ignored, so the mount doesn\'t chase seeing noise.\n\n'
         '**~0.15 px** is typical. Raise it in poor seeing to calm the corrections; lower it only with a very stable mount + sky.',
-    relatedSettings: ['eq.guider.ra_aggressiveness', 'eq.guider.dec_minimum_move'],
+    relatedSettings: [
+      'eq.guider.ra_aggressiveness',
+      'eq.guider.dec_minimum_move',
+    ],
   ),
   'eq.guider.dec_minimum_move': Help(
     key: 'eq.guider.dec_minimum_move',
@@ -1425,7 +1488,11 @@ const Map<String, Help> helpRegistry = {
     body:
         'Smallest Dec error (in guide pixels) OpenAstro Guider will react to. Dec drifts slowly and most mounts have Dec backlash, so a dead band a little wider than RA\'s keeps the guider from reversing the worm for nothing.\n\n'
         '**0.15–0.3 px** is typical. If Dec corrections oscillate (overshoot, then correct back), raise it before lowering Dec aggressiveness.',
-    relatedSettings: ['eq.guider.minimum_move', 'eq.guider.dec_aggressiveness', 'eq.guider.dec_guide_mode'],
+    relatedSettings: [
+      'eq.guider.minimum_move',
+      'eq.guider.dec_aggressiveness',
+      'eq.guider.dec_guide_mode',
+    ],
   ),
   'eq.guider.dec_guide_mode': Help(
     key: 'eq.guider.dec_guide_mode',
@@ -2369,7 +2436,10 @@ const Map<String, Help> helpRegistry = {
         'appear with their inputs.\n\n'
         'It opens seeded from your profile and your rig\'s fitted sky-model k for the first filter\'s kind; '
         'picking another kind swaps in your profile\'s passband for that kind (else its default) and its k. Nothing here writes back to the profile.',
-    relatedHelpKeys: ['img.defaults.noise_tolerance_pct', 'img.defaults.sky_model_calibration'],
+    relatedHelpKeys: [
+      'img.defaults.noise_tolerance_pct',
+      'img.defaults.sky_model_calibration',
+    ],
   ),
   'img.defaults.sky_model_calibration': Help(
     key: 'img.defaults.sky_model_calibration',
@@ -2420,7 +2490,14 @@ const Map<String, Help> helpRegistry = {
         'and camera angle decide what that is at the eyepiece, so use it as a magnitude and a consistency check, '
         'and follow your scope\'s own collimation procedure for the adjustment. Refractors and in-focus fields '
         'produce no donut and get no verdict.',
-    keywords: ['collimation', 'donut', 'secondary mirror', 'tilt', 'sct', 'newtonian'],
+    keywords: [
+      'collimation',
+      'donut',
+      'secondary mirror',
+      'tilt',
+      'sct',
+      'newtonian',
+    ],
   ),
 
   // ── Unguided knobs (img.unguided, #1264) ───────────────────────────────
@@ -2432,13 +2509,16 @@ const Map<String, Help> helpRegistry = {
         'lights it shortens the exposure one rung (and tags those frames "trailed", with one notification); '
         'after a run of round lights it steps back up, never past the planned sub. Turn it off to keep the '
         'Tracking Probe\'s ceiling for the whole loop — the probe and the re-centre stay.',
-    relatedSettings: ['img.unguided.guard_enabled', 'img.unguided.step_down_after', 'img.unguided.step_up_after'],
+    relatedSettings: [
+      'img.unguided.guard_enabled',
+      'img.unguided.step_down_after',
+      'img.unguided.step_up_after',
+    ],
   ),
   'img.polar.target_tolerance_arcmin': Help(
     key: 'img.polar.target_tolerance_arcmin',
     title: 'Polar align tolerance',
-    body:
-        'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step too.',
+    body: 'How close to the pole counts as aligned. Done turns on once the error is inside it, in the rough step too.',
     relatedSettings: ['img.polar.target_tolerance_arcmin'],
   ),
   'img.polar.stop_tracking_when_done': Help(
@@ -2452,29 +2532,25 @@ const Map<String, Help> helpRegistry = {
   'img.polar.polar_aligner_auto': Help(
     key: 'img.polar.polar_aligner_auto',
     title: "Correct with the Polar Aligner's motors",
-    body:
-        'Only matters on a rig with a Polar Aligner. On, Polar align turns its motors after each measurement. Off, it shows the turns and you make them by hand.',
+    body: 'Only matters on a rig with a Polar Aligner. On, Polar align turns its motors after each measurement. Off, it shows the turns and you make them by hand.',
     relatedSettings: ['img.polar.polar_aligner_auto'],
   ),
   'img.polar.seed_rotation_deg': Help(
     key: 'img.polar.seed_rotation_deg',
     title: 'Polar align turn',
-    body:
-        'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). A Start turns twice by it and no further. The mount turns with its RA motor, never a GoTo.',
+    body: 'Each of the two RA turns between the three frames that measure the axis, from 5° to 30° (10° by default, as NINA). A Start turns twice by it and no further. The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.seed_rotation_deg'],
   ),
   'img.polar.check_step_deg': Help(
     key: 'img.polar.check_step_deg',
     title: 'Check step',
-    body:
-        'The RA turn between the three frames of a Check, from 5° to 30° (10° by default). The Check says how far it turns (2 × the step) before the mount moves. The mount turns with its RA motor, never a GoTo.',
+    body: 'The RA turn between the three frames of a Check, from 5° to 30° (10° by default). The Check says how far it turns (2 × the step) before the mount moves. The mount turns with its RA motor, never a GoTo.',
     relatedSettings: ['img.polar.check_step_deg'],
   ),
   'img.polar.coarse_exposure_seconds': Help(
     key: 'img.polar.coarse_exposure_seconds',
     title: 'Rough step exposure',
-    body:
-        'The main camera\'s exposure in the rough step, from 0.1 to 60 seconds, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so use a longer one for a slow camera.',
+    body: 'The main camera\'s exposure in the rough step, from 0.1 to 60 seconds, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so use a longer one for a slow camera.',
     relatedSettings: ['img.polar.coarse_exposure_seconds'],
   ),
   'img.polar.camera': Help(
@@ -2504,7 +2580,10 @@ const Map<String, Help> helpRegistry = {
         'rung, the guard counts a trailed light); one at or under the round bar counts for it (the guard may '
         'step up). Keep the round bar below the trailed bar; 0.5 / 0.3 are the shipped figures, 0.6 / 0.35 is '
         'lenient for a long focal length in poor seeing.',
-    relatedSettings: ['img.unguided.eccentricity_tolerance', 'img.unguided.good_eccentricity'],
+    relatedSettings: [
+      'img.unguided.eccentricity_tolerance',
+      'img.unguided.good_eccentricity',
+    ],
   ),
   'img.unguided.probe_rungs': Help(
     key: 'img.unguided.probe_rungs',
@@ -2524,7 +2603,10 @@ const Map<String, Help> helpRegistry = {
         'light and, once the field has drifted further than the threshold, slews and centres before the next '
         'one. A tighter threshold keeps the framing but costs the occasional re-centre; raise it for a wide '
         'field where a few arcminutes do not matter.',
-    relatedSettings: ['img.unguided.recentre_drift_arcmin', 'img.unguided.recentre_solve_every_n'],
+    relatedSettings: [
+      'img.unguided.recentre_drift_arcmin',
+      'img.unguided.recentre_solve_every_n',
+    ],
   ),
   'img.unguided.prior_tolerance': Help(
     key: 'img.unguided.prior_tolerance',
@@ -2551,6 +2633,9 @@ const Map<String, Help> helpRegistry = {
         'that will sound the alarm — the connected client — with whether its alarm sound is on.\n\n'
         'After dark, with a sequence running, Ara shows this once per night; "All good" or "Adjust" answers it '
         'on this device, and it stays here with Refresh. Failures veto "all good"; warnings are your call.',
-    relatedSettings: ['safety.policies.unattended_window_start', 'session.notifications.alarm_tone'],
+    relatedSettings: [
+      'safety.policies.unattended_window_start',
+      'session.notifications.alarm_tone',
+    ],
   ),
 };

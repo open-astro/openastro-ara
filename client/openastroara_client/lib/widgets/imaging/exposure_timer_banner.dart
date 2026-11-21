@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../status_indicator.dart' show StatusBlink;
+
 import 'package:clock/clock.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -77,7 +78,11 @@ class _ExposureTimerBannerState extends ConsumerState<ExposureTimerBanner> {
               else
                 const StatusBlink(
                   on: true,
-                  child: Icon(Icons.camera, size: 16, color: AraColors.accentConnected),
+                  child: Icon(
+                    Icons.camera,
+                    size: 16,
+                    color: AraColors.accentConnected,
+                  ),
                 ),
               const SizedBox(width: 8),
               Expanded(

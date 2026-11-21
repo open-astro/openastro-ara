@@ -3,15 +3,19 @@ import 'package:openastroara/models/sequence/condition_catalog.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
-import 'package:openastroara/models/sequence/nina_dom.dart' as dom show triggersOf;
+import 'package:openastroara/models/sequence/nina_dom.dart'
+    as dom
+    show triggersOf;
 import 'package:openastroara/models/sequence/rig_capabilities.dart';
 import 'package:openastroara/models/sequence/trigger_catalog.dart';
 import 'package:openastroara/util/input_coordinates.dart';
 import 'package:openastroara/models/sequence/slew_target_body.dart';
 
 /// The cadence triggers: every loop also carries the flip, pinned in its own group.
-List<Map<String, dynamic>> triggersOf(Map<String, dynamic> node) =>
-    [for (final t in dom.triggersOf(node)) if (t[r'$type'] != meridianFlipTriggerType) t];
+List<Map<String, dynamic>> triggersOf(Map<String, dynamic> node) => [
+  for (final t in dom.triggersOf(node))
+    if (t[r'$type'] != meridianFlipTriggerType) t,
+];
 
 void main() {
   group('buildImagingRunBody', () {
@@ -23,23 +27,22 @@ void main() {
       String? filterName,
       int binning = 1,
       double? positionAngleDeg,
-    }) =>
-        buildImagingRunBody(
-          raDeg: 83.8,
-          decDeg: -5.4,
-          targetName: 'M 42',
-          exposureSeconds: 120,
-          gain: 100,
-          offset: 30,
-          binning: binning,
-          frameCount: 48,
-          coolToC: coolToC,
-          warmAtEnd: warmAtEnd,
-          autofocusAtStart: autofocusAtStart,
-          autofocusEveryNExposures: afEvery,
-          filterName: filterName,
-          positionAngleDeg: positionAngleDeg,
-        );
+    }) => buildImagingRunBody(
+      raDeg: 83.8,
+      decDeg: -5.4,
+      targetName: 'M 42',
+      exposureSeconds: 120,
+      gain: 100,
+      offset: 30,
+      binning: binning,
+      frameCount: 48,
+      coolToC: coolToC,
+      warmAtEnd: warmAtEnd,
+      autofocusAtStart: autofocusAtStart,
+      autofocusEveryNExposures: afEvery,
+      filterName: filterName,
+      positionAngleDeg: positionAngleDeg,
+    );
 
     String type(Map<String, dynamic> node) => node[r'$type'] as String;
 
@@ -48,78 +51,96 @@ void main() {
     Map<String, dynamic> targetBlockOf(Map<String, dynamic> root) =>
         childrenOf(root).singleWhere((c) => c['Name'] == 'M 42');
 
-    test('assembles the full session in run order with the schema envelope',
-        () {
-      final root = build(coolToC: -10, warmAtEnd: true, afEvery: 60);
+    test(
+      'assembles the full session in run order with the schema envelope',
+      () {
+        final root = build(coolToC: -10, warmAtEnd: true, afEvery: 60);
 
-      expect(root['schemaVersion'], sequenceSchemaVersion);
-      expect(root['Name'], 'M 42');
-      expect(type(root), contains('.Container.SequentialContainer'));
+        expect(root['schemaVersion'], sequenceSchemaVersion);
+        expect(root['Name'], 'M 42');
+        expect(type(root), contains('.Container.SequentialContainer'));
 
-      final types = childrenOf(root).map(type).toList();
-      expect(types, hasLength(5));
-      expect(types[0], contains('.Camera.CoolCamera'));
-      expect(types[1], contains('.Telescope.UnparkScope'));
-      expect(types[2], contains('.Telescope.SetTracking'));
-      expect(types[3], contains('.Container.SequentialContainer'));
-      expect(types[4], contains('.Camera.WarmCamera'));
+        final types = childrenOf(root).map(type).toList();
+        expect(types, hasLength(5));
+        expect(types[0], contains('.Camera.CoolCamera'));
+        expect(types[1], contains('.Telescope.UnparkScope'));
+        expect(types[2], contains('.Telescope.SetTracking'));
+        expect(types[3], contains('.Container.SequentialContainer'));
+        expect(types[4], contains('.Camera.WarmCamera'));
 
-      // The per-target steps live in their own named container so further
-      // targets can be appended as siblings.
-      final target = targetBlockOf(root);
-      final targetTypes = childrenOf(target).map(type).toList();
-      expect(targetTypes, hasLength(5));
-      expect(targetTypes[0], contains('.Telescope.SlewScopeToRaDec')); // blind
-      // Waits for the session's cool, which ran during the slew; focus needs it cold (#1875).
-      expect(targetTypes[1], contains('.Camera.CoolCamera'));
-      expect(targetTypes[2], contains('.Autofocus.RunAutofocus'));
-      // #1892: a focus that still fails must skip the target,
-      // not image on out of focus.
-      expect(childrenOf(target)[2]['ErrorBehavior'], skipInstructionSetOnError);
-      expect(targetTypes[3], contains('.Telescope.SlewScopeToRaDec')); // centres on focused stars
-      expect(targetTypes[4], contains('.Container.SequentialContainer'));
-    });
-
-    test('the imaging loop carries the exposure, loop count and AF trigger',
-        () {
-      final root = build(afEvery: 60);
-      final imaging = childrenOf(targetBlockOf(root))
-          .singleWhere((c) => c['Name'] == 'Imaging');
-
-      final conditions = conditionsOf(imaging);
-      expect(conditions, hasLength(1));
-      expect(type(conditions.single), contains('LoopCondition'));
-      expect(conditions.single['Iterations'], 48);
-
-      final triggers = triggersOf(imaging);
-      expect(triggers, hasLength(1));
-      expect(type(triggers.single), contains('AutofocusAfterExposures'));
-      expect(triggers.single['AfterExposures'], 60);
-
-      final exposure = childrenOf(imaging).single;
-      expect(type(exposure), contains('.Imaging.TakeExposure'));
-      expect(exposure['ExposureTime'], 120);
-      expect(exposure['Gain'], 100);
-      expect(exposure['Offset'], 30);
-      expect(exposure['ImageType'], 'LIGHT');
-    });
-
-    test('slew coordinates are the sexagesimal InputCoordinates of the target',
-        () {
-      final root = build();
-      final slew = childrenOf(targetBlockOf(root))
-          .firstWhere((c) => type(c).contains('SlewScopeToRaDec'));
-      final coords = slew['Coordinates'] as Map<String, dynamic>;
-      // 83.8° = 5h 35m 12s; -5.4° = -5° 24' 0"
-      expect(coords['RAHours'], 5);
-      expect(coords['RAMinutes'], 35);
-      expect(coords['NegativeDec'], true);
-      expect(coords['DecDegrees'], -5, reason: 'NINA shape: the sign rides on DecDegrees');
-      expect(coords['DecMinutes'], 24);
-    });
+        // The per-target steps live in their own named container so further
+        // targets can be appended as siblings.
+        final target = targetBlockOf(root);
+        final targetTypes = childrenOf(target).map(type).toList();
+        expect(targetTypes, hasLength(5));
+        expect(
+          targetTypes[0],
+          contains('.Telescope.SlewScopeToRaDec'),
+        ); // blind
+        // Waits for the session's cool, which ran during the slew; focus needs it cold (#1875).
+        expect(targetTypes[1], contains('.Camera.CoolCamera'));
+        expect(targetTypes[2], contains('.Autofocus.RunAutofocus'));
+        // #1892: a focus that still fails must skip the target,
+        // not image on out of focus.
+        expect(
+          childrenOf(target)[2]['ErrorBehavior'],
+          skipInstructionSetOnError,
+        );
+        expect(
+          targetTypes[3],
+          contains('.Telescope.SlewScopeToRaDec'),
+        ); // centres on focused stars
+        expect(targetTypes[4], contains('.Container.SequentialContainer'));
+      },
+    );
 
     test(
-        'a framing position angle upgrades the slew to a Center and Rotate '
+      'the imaging loop carries the exposure, loop count and AF trigger',
+      () {
+        final root = build(afEvery: 60);
+        final imaging = childrenOf(targetBlockOf(root))
+            .singleWhere((c) => c['Name'] == 'Imaging');
+
+        final conditions = conditionsOf(imaging);
+        expect(conditions, hasLength(1));
+        expect(type(conditions.single), contains('LoopCondition'));
+        expect(conditions.single['Iterations'], 48);
+
+        final triggers = triggersOf(imaging);
+        expect(triggers, hasLength(1));
+        expect(type(triggers.single), contains('AutofocusAfterExposures'));
+        expect(triggers.single['AfterExposures'], 60);
+
+        final exposure = childrenOf(imaging).single;
+        expect(type(exposure), contains('.Imaging.TakeExposure'));
+        expect(exposure['ExposureTime'], 120);
+        expect(exposure['Gain'], 100);
+        expect(exposure['Offset'], 30);
+        expect(exposure['ImageType'], 'LIGHT');
+      },
+    );
+
+    test(
+      'slew coordinates are the sexagesimal InputCoordinates of the target',
+      () {
+        final root = build();
+        final slew = childrenOf(targetBlockOf(root))
+            .firstWhere((c) => type(c).contains('SlewScopeToRaDec'));
+        final coords = slew['Coordinates'] as Map<String, dynamic>;
+        // 83.8° = 5h 35m 12s; -5.4° = -5° 24' 0"
+        expect(coords['RAHours'], 5);
+        expect(coords['RAMinutes'], 35);
+        expect(coords['NegativeDec'], true);
+        expect(
+          coords['DecDegrees'],
+          -5,
+          reason: 'NINA shape: the sign rides on DecDegrees',
+        );
+        expect(coords['DecMinutes'], 24);
+      },
+    );
+
+    test('a framing position angle upgrades the slew to a Center and Rotate '
         'carrying it', () {
       final root = build(positionAngleDeg: 137.5);
       final target = targetBlockOf(root);
@@ -141,9 +162,13 @@ void main() {
       for (final pa in [null, 137.5]) {
         final goTo = childrenOf(targetBlockOf(build(positionAngleDeg: pa)))
             .first;
-        expect(goTo['ErrorBehavior'], skipInstructionSetOnError,
-            reason: 'filter/focus/frames after a failed go-to would shoot '
-                'the wrong sky (PA $pa)');
+        expect(
+          goTo['ErrorBehavior'],
+          skipInstructionSetOnError,
+          reason:
+              'filter/focus/frames after a failed go-to would shoot '
+              'the wrong sky (PA $pa)',
+        );
       }
     });
 
@@ -166,16 +191,19 @@ void main() {
 
     test('optional steps drop out when not configured', () {
       final root = build(
-          coolToC: null,
-          warmAtEnd: false,
-          autofocusAtStart: false,
-          afEvery: null);
+        coolToC: null,
+        warmAtEnd: false,
+        autofocusAtStart: false,
+        afEvery: null,
+      );
       final types = childrenOf(root).map(type).toList();
       expect(types.any((t) => t.contains('CoolCamera')), isFalse);
       expect(types.any((t) => t.contains('WarmCamera')), isFalse);
       final target = targetBlockOf(root);
-      expect(childrenOf(target).map(type).any((t) => t.contains('RunAutofocus')),
-          isFalse);
+      expect(
+        childrenOf(target).map(type).any((t) => t.contains('RunAutofocus')),
+        isFalse,
+      );
       final imaging = childrenOf(target)
           .singleWhere((c) => c['Name'] == 'Imaging');
       expect(triggersOf(imaging), isEmpty);
@@ -183,24 +211,60 @@ void main() {
 
     test('a refocus-after-temperature-change amount adds that trigger to each loop; none without a focuser', () {
       List<String> loopTriggers(Map<String, dynamic> b) => [
-            for (final l in childrenOf(b).where((c) => (c['Name'] as String? ?? '').endsWith('Imaging')))
-              for (final t in triggersOf(l)) t[r'$type'] as String,
-          ];
-      final b = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, autofocusAfterTempChangeC: 2);
+        for (final l in childrenOf(
+          b,
+        ).where((c) => (c['Name'] as String? ?? '').endsWith('Imaging')))
+          for (final t in triggersOf(l)) t[r'$type'] as String,
+      ];
+      final b = buildTargetBlock(
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 60,
+        frameCount: 10,
+        autofocusAfterTempChangeC: 2,
+      );
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      final temp = triggersOf(loop).singleWhere((t) => t[r'$type'] == autofocusAfterTempChangeType);
+      final temp = triggersOf(loop)
+          .singleWhere((t) => t[r'$type'] == autofocusAfterTempChangeType);
       expect(temp['Amount'], 2.0);
-      expect(loopTriggers(buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10)),
-          isNot(contains(autofocusAfterTempChangeType)), reason: 'off unless asked');
       expect(
-          loopTriggers(buildTargetBlock(
-              raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, autofocusAfterTempChangeC: 2,
-              rig: RigCapabilities.nothing)),
-          isNot(contains(autofocusAfterTempChangeType)),
-          reason: 'no focuser, nothing to refocus');
-      final run = buildImagingRunBody(raDeg: 1, decDeg: 2, targetName: 'T', exposureSeconds: 60, frameCount: 10,
-          autofocusAfterTempChangeC: 1.5);
-      expect(loopTriggers(childrenOf(run).singleWhere((c) => c['Name'] == 'T')), contains(autofocusAfterTempChangeType));
+        loopTriggers(
+          buildTargetBlock(
+            raDeg: 1,
+            decDeg: 2,
+            exposureSeconds: 60,
+            frameCount: 10,
+          ),
+        ),
+        isNot(contains(autofocusAfterTempChangeType)),
+        reason: 'off unless asked',
+      );
+      expect(
+        loopTriggers(
+          buildTargetBlock(
+            raDeg: 1,
+            decDeg: 2,
+            exposureSeconds: 60,
+            frameCount: 10,
+            autofocusAfterTempChangeC: 2,
+            rig: RigCapabilities.nothing,
+          ),
+        ),
+        isNot(contains(autofocusAfterTempChangeType)),
+        reason: 'no focuser, nothing to refocus',
+      );
+      final run = buildImagingRunBody(
+        raDeg: 1,
+        decDeg: 2,
+        targetName: 'T',
+        exposureSeconds: 60,
+        frameCount: 10,
+        autofocusAfterTempChangeC: 1.5,
+      );
+      expect(
+        loopTriggers(childrenOf(run).singleWhere((c) => c['Name'] == 'T')),
+        contains(autofocusAfterTempChangeType),
+      );
     });
 
     test('a chosen filter emits a SwitchFilter matched by name (slot -1)', () {
@@ -225,18 +289,29 @@ void main() {
 
     test('rejects a non-positive exposure or frame count', () {
       expect(
-          () => buildImagingRunBody(
-              raDeg: 0, decDeg: 0, exposureSeconds: 0, frameCount: 10),
-          throwsArgumentError);
+        () => buildImagingRunBody(
+          raDeg: 0,
+          decDeg: 0,
+          exposureSeconds: 0,
+          frameCount: 10,
+        ),
+        throwsArgumentError,
+      );
       expect(
-          () => buildImagingRunBody(
-              raDeg: 0, decDeg: 0, exposureSeconds: 1, frameCount: 0),
-          throwsArgumentError);
+        () => buildImagingRunBody(
+          raDeg: 0,
+          decDeg: 0,
+          exposureSeconds: 1,
+          frameCount: 0,
+        ),
+        throwsArgumentError,
+      );
     });
   });
 
   group('appendTargetToRunBody', () {
-    Map<String, dynamic> session({bool warmAtEnd = true}) => buildImagingRunBody(
+    Map<String, dynamic> session({bool warmAtEnd = true}) =>
+        buildImagingRunBody(
           raDeg: 83.8,
           decDeg: -5.4,
           targetName: 'M 42',
@@ -247,12 +322,12 @@ void main() {
         );
 
     Map<String, dynamic> block(String name) => buildTargetBlock(
-          raDeg: 10.7,
-          decDeg: 41.3,
-          targetName: name,
-          exposureSeconds: 120,
-          frameCount: 30,
-        );
+      raDeg: 10.7,
+      decDeg: 41.3,
+      targetName: name,
+      exposureSeconds: 120,
+      frameCount: 30,
+    );
 
     String type(Map<String, dynamic> node) => node[r'$type'] as String;
 
@@ -271,7 +346,10 @@ void main() {
     });
 
     test('appends at the end when the session has no warm-up step', () {
-      final grown = appendTargetToRunBody(session(warmAtEnd: false), block('M 31'));
+      final grown = appendTargetToRunBody(
+        session(warmAtEnd: false),
+        block('M 31'),
+      );
       expect(childrenOf(grown).last['Name'], 'M 31');
     });
 
@@ -284,8 +362,9 @@ void main() {
       final withPark = withChildren(base, [...childrenOf(base), park]);
 
       final grown = appendTargetToRunBody(withPark, block('M 31'));
-      final types =
-          childrenOf(grown).map((c) => c[r'$type'] as String).toList();
+      final types = childrenOf(grown)
+          .map((c) => c[r'$type'] as String)
+          .toList();
       final names = childrenOf(grown).map((c) => c['Name']).toList();
       expect(names[names.length - 3], 'M 31');
       expect(types[types.length - 2], contains('.Camera.WarmCamera'));
@@ -301,9 +380,11 @@ void main() {
 
     test('rejects a non-container root (caller falls back to a fresh run)', () {
       expect(
-          () => appendTargetToRunBody(
-              <String, dynamic>{r'$type': takeExposureType}, block('M 31')),
-          throwsArgumentError);
+        () => appendTargetToRunBody(<String, dynamic>{
+          r'$type': takeExposureType,
+        }, block('M 31')),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -319,14 +400,15 @@ void main() {
         warmAtEnd: true,
       );
       return appendTargetToRunBody(
-          base,
-          buildTargetBlock(
-            raDeg: 10.7,
-            decDeg: 41.3,
-            targetName: 'M 31',
-            exposureSeconds: 120,
-            frameCount: 30,
-          ));
+        base,
+        buildTargetBlock(
+          raDeg: 10.7,
+          decDeg: 41.3,
+          targetName: 'M 31',
+          exposureSeconds: 120,
+          frameCount: 30,
+        ),
+      );
     }
 
     test('finds a target block by name, case/whitespace-insensitively', () {
@@ -346,8 +428,9 @@ void main() {
       expect(names, contains('M 42'));
       expect(names, isNot(contains('M 31')));
       // The session frame (cool → … → warm) is intact.
-      final types =
-          childrenOf(pruned).map((c) => c[r'$type'] as String).toList();
+      final types = childrenOf(pruned)
+          .map((c) => c[r'$type'] as String)
+          .toList();
       expect(types.first, contains('.Camera.CoolCamera'));
       expect(types.last, contains('.Camera.WarmCamera'));
       expect(pruned['schemaVersion'], sequenceSchemaVersion);
@@ -366,10 +449,22 @@ void main() {
   });
 
   group('focus before centring', () {
-    List<Map<String, dynamic>> steps(Map<String, dynamic> b) => childrenOf(childrenOf(b).firstWhere((c) => c['Name'] == 'M31'));
-    Map<String, dynamic> body({bool alwaysCenter = false, double? pa, bool af = true}) => buildImagingRunBody(
-        raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
-        autofocusAtStart: af, positionAngleDeg: pa, alwaysCenter: alwaysCenter);
+    List<Map<String, dynamic>> steps(Map<String, dynamic> b) =>
+        childrenOf(childrenOf(b).firstWhere((c) => c['Name'] == 'M31'));
+    Map<String, dynamic> body({
+      bool alwaysCenter = false,
+      double? pa,
+      bool af = true,
+    }) => buildImagingRunBody(
+      raDeg: 10,
+      decDeg: 41,
+      targetName: 'M31',
+      exposureSeconds: 120,
+      frameCount: 10,
+      autofocusAtStart: af,
+      positionAngleDeg: pa,
+      alwaysCenter: alwaysCenter,
+    );
 
     test('the target slews blind, focuses, then centres on sharp stars', () {
       final t = steps(body());
@@ -378,23 +473,37 @@ void main() {
       final focus = types.indexOf(runAutofocusType);
       final centre = types.lastIndexOf(slewScopeToRaDecType);
       expect(slew, 0);
-      expect(t[slew]['Center'], false, reason: 'no solve on an out-of-focus field');
+      expect(
+        t[slew]['Center'],
+        false,
+        reason: 'no solve on an out-of-focus field',
+      );
       expect(focus, greaterThan(slew));
       expect(centre, greaterThan(focus));
-      expect(t[centre]['Center'], isNull, reason: 'the full UI follows Settings → Plate Solving');
+      expect(
+        t[centre]['Center'],
+        isNull,
+        reason: 'the full UI follows Settings → Plate Solving',
+      );
       expect(t[slew]['ErrorBehavior'], skipInstructionSetOnError);
       expect(t[centre]['ErrorBehavior'], skipInstructionSetOnError);
     });
 
     test('Simple Mode always centres', () {
       final t = steps(body(alwaysCenter: true));
-      expect(t.lastWhere((c) => c[r'$type'] == slewScopeToRaDecType)['Center'], true);
+      expect(
+        t.lastWhere((c) => c[r'$type'] == slewScopeToRaDecType)['Center'],
+        true,
+      );
     });
 
     test('a framing angle centres and rotates after the focus', () {
       final types = [for (final c in steps(body(pa: 30))) c[r'$type']];
       expect(types.first, slewScopeToRaDecType);
-      expect(types.indexOf(centerAndRotateType), greaterThan(types.indexOf(runAutofocusType)));
+      expect(
+        types.indexOf(centerAndRotateType),
+        greaterThan(types.indexOf(runAutofocusType)),
+      );
     });
 
     test('no autofocus: one go-to, as before', () {
@@ -409,15 +518,31 @@ void main() {
 
     test('gets no Cool Camera step, session or per-target', () {
       final b = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
-          coolToC: -10, rig: const RigCapabilities(focuser: true, filterWheel: true, guider: true));
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+        coolToC: -10,
+        rig: const RigCapabilities(
+          focuser: true,
+          filterWheel: true,
+          guider: true,
+        ),
+      );
       expect(hasCool(b), isFalse);
     });
 
     test('one that can keeps both', () {
       final b = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10,
-          coolToC: -10, rig: RigCapabilities.everything);
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+        coolToC: -10,
+        rig: RigCapabilities.everything,
+      );
       expect(hasCool(b), isTrue);
     });
   });
@@ -425,16 +550,32 @@ void main() {
   group('cooling while the plan gets ready', () {
     test('the session starts the cool without waiting; the target waits for it just before the first light', () {
       final b = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: -10);
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+        coolToC: -10,
+      );
       final cool = childrenOf(b).first;
       expect(cool[r'$type'], coolCameraType);
-      expect(cool['WaitForTemperature'], false, reason: 'unpark, slew, centre, focus go on meanwhile');
+      expect(
+        cool['WaitForTemperature'],
+        false,
+        reason: 'unpark, slew, centre, focus go on meanwhile',
+      );
       final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
       final steps = childrenOf(target);
       final wait = steps.indexWhere((c) => c[r'$type'] == coolCameraType);
-      final firstLight = steps.indexWhere((c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType));
+      final firstLight = steps.indexWhere(
+        (c) => childrenOf(c).any((x) => x[r'$type'] == takeExposureType),
+      );
       expect(wait, greaterThan(0), reason: 'after the go-to');
-      expect(wait, lessThan(firstLight), reason: 'before the first light frame');
+      expect(
+        wait,
+        lessThan(firstLight),
+        reason: 'before the first light frame',
+      );
       expect(steps[wait]['Temperature'], -10);
       expect(steps[wait]['WaitForTemperature'] ?? true, true);
       final focus = steps.indexWhere((c) => c[r'$type'] == runAutofocusType);
@@ -488,18 +629,39 @@ void main() {
     });
 
     test('no cooler target: no cooling steps anywhere', () {
-      final b = buildImagingRunBody(raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10);
+      final b = buildImagingRunBody(
+        raDeg: 10,
+        decDeg: 41,
+        targetName: 'M31',
+        exposureSeconds: 120,
+        frameCount: 10,
+      );
       final target = childrenOf(b).firstWhere((c) => c['Name'] == 'M31');
-      expect(childrenOf(b).where((c) => c[r'$type'] == coolCameraType), isEmpty);
-      expect(childrenOf(target).where((c) => c[r'$type'] == coolCameraType), isEmpty);
+      expect(
+        childrenOf(b).where((c) => c[r'$type'] == coolCameraType),
+        isEmpty,
+      );
+      expect(
+        childrenOf(target).where((c) => c[r'$type'] == coolCameraType),
+        isEmpty,
+      );
     });
   });
 
   group('scheduleRunBody', () {
     Map<String, dynamic> body({double? cool}) => buildImagingRunBody(
-        raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, coolToC: cool);
-    List<String> types(Map<String, dynamic> b) => [for (final c in childrenOf(b)) c[r'$type'] as String];
-    (int, int, int) clock(Map<String, dynamic> w) => (w['Hours'] as int, w['Minutes'] as int, w['Seconds'] as int);
+      raDeg: 10,
+      decDeg: 41,
+      targetName: 'M31',
+      exposureSeconds: 120,
+      frameCount: 10,
+      coolToC: cool,
+    );
+    List<String> types(Map<String, dynamic> b) => [
+      for (final c in childrenOf(b)) c[r'$type'] as String,
+    ];
+    (int, int, int) clock(Map<String, dynamic> w) =>
+        (w['Hours'] as int, w['Minutes'] as int, w['Seconds'] as int);
 
     test('with a cooler: wait until 15 min before, cool, wait until the start, then the rest', () {
       final b = scheduleRunBody(body(cool: -10), DateTime(2026, 11, 2, 21, 47));
@@ -517,7 +679,10 @@ void main() {
     });
 
     test('scheduling again replaces the waits; no start time removes them', () {
-      final once = scheduleRunBody(body(cool: -10), DateTime(2026, 11, 2, 21, 47));
+      final once = scheduleRunBody(
+        body(cool: -10),
+        DateTime(2026, 11, 2, 21, 47),
+      );
       final again = scheduleRunBody(once, DateTime(2026, 11, 2, 23, 0));
       expect(types(again).where((t) => t == waitForTimeType), hasLength(2));
       expect(clock(childrenOf(again)[2]), (23, 0, 0));
@@ -526,10 +691,18 @@ void main() {
 
     test("the waits are in the daemon's wall clock, not the client's", () {
       // Dark at 23:45 UTC; the daemon runs at UTC-4, so it waits for 19:45 on its own clock.
-      final b = scheduleRunBody(body(cool: -10), DateTime.utc(2026, 11, 2, 23, 45), daemonUtcOffsetMinutes: -240);
+      final b = scheduleRunBody(
+        body(cool: -10),
+        DateTime.utc(2026, 11, 2, 23, 45),
+        daemonUtcOffsetMinutes: -240,
+      );
       expect(clock(childrenOf(b)[0]), (19, 30, 0));
       expect(clock(childrenOf(b)[2]), (19, 45, 0));
-      final utc = scheduleRunBody(body(), DateTime.utc(2026, 11, 2, 23, 45).toLocal(), daemonUtcOffsetMinutes: 0);
+      final utc = scheduleRunBody(
+        body(),
+        DateTime.utc(2026, 11, 2, 23, 45).toLocal(),
+        daemonUtcOffsetMinutes: 0,
+      );
       expect(clock(childrenOf(utc)[0]), (23, 45, 0));
     });
   });
@@ -556,21 +729,23 @@ void main() {
     // Every device-bound step is gated on the rig, whatever the caller asks.
     List<String?> types(Map<String, dynamic> node) =>
         childrenOf(node).map((c) => c[r'$type'] as String?).toList();
-    Map<String, dynamic> block(RigCapabilities rig,
-            {List<FilterPlanStep>? plan, String? filter}) =>
-        buildTargetBlock(
-          raDeg: 1,
-          decDeg: 2,
-          targetName: 'Veil',
-          exposureSeconds: 60,
-          frameCount: 10,
-          filterName: filter,
-          filterPlan: plan,
-          startGuiding: true,
-          ditherEveryNExposures: 2,
-          autofocusEveryNExposures: 30,
-          rig: rig,
-        );
+    Map<String, dynamic> block(
+      RigCapabilities rig, {
+      List<FilterPlanStep>? plan,
+      String? filter,
+    }) => buildTargetBlock(
+      raDeg: 1,
+      decDeg: 2,
+      targetName: 'Veil',
+      exposureSeconds: 60,
+      frameCount: 10,
+      filterName: filter,
+      filterPlan: plan,
+      startGuiding: true,
+      ditherEveryNExposures: 2,
+      autofocusEveryNExposures: 30,
+      rig: rig,
+    );
 
     test('#1757 flats after the target: one set per filter after its last frame; a screen asked for with no panel', () {
       const plan = [
@@ -578,38 +753,92 @@ void main() {
         FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 20),
       ];
       List<String> kinds(RigCapabilities rig) => [
-        for (final k in childrenOf(buildTargetBlock(
-            raDeg: 1, decDeg: 2, exposureSeconds: 120, frameCount: 30, filterPlan: plan, rig: rig, flatsAfter: true)))
-          k[r'$type'] == sequentialContainerType ? k['Name'] as String : k[r'$type'] as String,
+        for (final k in childrenOf(
+          buildTargetBlock(
+            raDeg: 1,
+            decDeg: 2,
+            exposureSeconds: 120,
+            frameCount: 30,
+            filterPlan: plan,
+            rig: rig,
+            flatsAfter: true,
+          ),
+        ))
+          k[r'$type'] == sequentialContainerType
+              ? k['Name'] as String
+              : k[r'$type'] as String,
       ];
       final panel = kinds(RigCapabilities.everything);
       expect(panel.where((k) => k == flatPanelFlatsType), hasLength(2));
-      expect(panel.indexOf(flatPanelFlatsType), greaterThan(panel.indexOf('Ha Imaging')));
-      expect(panel, isNot(contains(waitForUserType)), reason: 'a panel lights itself');
-      final noPanel = kinds(RigCapabilities.everything.copyWith(flatPanel: false));
-      expect(noPanel.indexOf(waitForUserType), noPanel.indexOf(flatPanelFlatsType) - 2,
-          reason: 'asked once, before the first filter switch');
+      expect(
+        panel.indexOf(flatPanelFlatsType),
+        greaterThan(panel.indexOf('Ha Imaging')),
+      );
+      expect(
+        panel,
+        isNot(contains(waitForUserType)),
+        reason: 'a panel lights itself',
+      );
+      final noPanel = kinds(
+        RigCapabilities.everything.copyWith(flatPanel: false),
+      );
+      expect(
+        noPanel.indexOf(waitForUserType),
+        noPanel.indexOf(flatPanelFlatsType) - 2,
+        reason: 'asked once, before the first filter switch',
+      );
       final none = [
-        for (final k in childrenOf(buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 120, frameCount: 30, filterPlan: plan)))
+        for (final k in childrenOf(
+          buildTargetBlock(
+            raDeg: 1,
+            decDeg: 2,
+            exposureSeconds: 120,
+            frameCount: 30,
+            filterPlan: plan,
+          ),
+        ))
           k[r'$type'],
       ];
-      expect(none, isNot(contains(flatPanelFlatsType)), reason: 'no flats unless asked');
+      expect(
+        none,
+        isNot(contains(flatPanelFlatsType)),
+        reason: 'no flats unless asked',
+      );
     });
 
     test('#1264 the probe carries a SPEC-SHEET prior as PriorSeconds only when given (never the stored ceiling)', () {
       Map<String, dynamic> probeOf(Map<String, dynamic> b) =>
           childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
       final bare = buildTargetBlock(
-          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing);
-      expect(probeOf(bare)['PriorSeconds'], isNull, reason: 'catalog default stays null');
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 300,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+      );
+      expect(
+        probeOf(bare)['PriorSeconds'],
+        isNull,
+        reason: 'catalog default stays null',
+      );
       final primed = buildTargetBlock(
-          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10,
-          rig: RigCapabilities.nothing, trackingPriorSeconds: 45);
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 300,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+        trackingPriorSeconds: 45,
+      );
       expect(probeOf(primed)['PriorSeconds'], 45);
       expect(probeOf(primed)['MaxExposure'], 300);
       final viaRun = buildImagingRunBody(
-          raDeg: 1, decDeg: 2, exposureSeconds: 120, frameCount: 10,
-          rig: RigCapabilities.nothing, trackingPriorSeconds: 30);
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 120,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+        trackingPriorSeconds: 30,
+      );
       Map<String, dynamic>? findProbe(Map<String, dynamic> node) {
         if (node[r'$type'] == trackingProbeType) return node;
         for (final c in childrenOf(node)) {
@@ -618,45 +847,87 @@ void main() {
         }
         return null;
       }
+
       expect(findProbe(viaRun)!['PriorSeconds'], 30);
     });
 
     test('#1264 Imaging → Unguided knobs land on the probe, the guard and the re-centre; the guard can be switched off', () {
       const knobs = UnguidedOptions(
-        guardEnabled: true, eccentricityTolerance: 0.6, goodEccentricity: 0.35, stepDownAfter: 3, stepUpAfter: 8,
-        probeRungsSeconds: [5, 20, 80], recentreDriftArcmin: 4.5, recentreSolveEveryN: 2,
+        guardEnabled: true,
+        eccentricityTolerance: 0.6,
+        goodEccentricity: 0.35,
+        stepDownAfter: 3,
+        stepUpAfter: 8,
+        probeRungsSeconds: [5, 20, 80],
+        recentreDriftArcmin: 4.5,
+        recentreSolveEveryN: 2,
       );
       final b = buildTargetBlock(
-          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing, unguidedOptions: knobs);
-      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 300,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+        unguidedOptions: knobs,
+      );
+      final probe = childrenOf(b)
+          .singleWhere((c) => c[r'$type'] == trackingProbeType);
       expect(probe['Rungs'], [5, 20, 80]);
-      expect(probe['EccentricityTolerance'], 0.6, reason: 'the probe judges rungs with the same trailed bar as the guard');
+      expect(
+        probe['EccentricityTolerance'],
+        0.6,
+        reason: 'the probe judges rungs with the same trailed bar as the guard',
+      );
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      final guard = triggersOf(loop).singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
+      final guard = triggersOf(loop)
+          .singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
       expect(guard['EccentricityTolerance'], 0.6);
       expect(guard['GoodEccentricity'], 0.35);
       expect(guard['StepDownAfter'], 3);
       expect(guard['StepUpAfter'], 8);
       expect(guard['Rungs'], [5, 20, 80]);
       expect(guard['MaxExposure'], 300);
-      final drift = triggersOf(loop).singleWhere((t) => t[r'$type'] == centerAfterDriftType);
+      final drift = triggersOf(loop)
+          .singleWhere((t) => t[r'$type'] == centerAfterDriftType);
       expect(drift['DistanceArcMinutes'], 4.5);
       expect(drift['AfterExposures'], 2);
 
       final noGuard = buildTargetBlock(
-          raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing,
-          unguidedOptions: const UnguidedOptions(guardEnabled: false));
-      final loop2 = childrenOf(noGuard).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop2).map((t) => t[r'$type']), [centerAfterDriftType], reason: 'probe and re-centre stay');
-      expect(childrenOf(noGuard).map((c) => c[r'$type']), contains(trackingProbeType));
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 300,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+        unguidedOptions: const UnguidedOptions(guardEnabled: false),
+      );
+      final loop2 = childrenOf(noGuard)
+          .singleWhere((c) => c['Name'] == 'Imaging');
+      expect(triggersOf(loop2).map((t) => t[r'$type']), [
+        centerAfterDriftType,
+      ], reason: 'probe and re-centre stay');
+      expect(
+        childrenOf(noGuard).map((c) => c[r'$type']),
+        contains(trackingProbeType),
+      );
 
       // Defaults build the same body as before the knobs existed.
-      final plain = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 300, frameCount: 10, rig: RigCapabilities.nothing);
-      final plainGuard = triggersOf(childrenOf(plain).singleWhere((c) => c['Name'] == 'Imaging'))
-          .singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
+      final plain = buildTargetBlock(
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 300,
+        frameCount: 10,
+        rig: RigCapabilities.nothing,
+      );
+      final plainGuard = triggersOf(
+        childrenOf(plain).singleWhere((c) => c['Name'] == 'Imaging'),
+      ).singleWhere((t) => t[r'$type'] == unguidedExposureGuardType);
       expect(plainGuard['EccentricityTolerance'], 0.5);
       expect(plainGuard['StepDownAfter'], 2);
-      expect(childrenOf(plain).singleWhere((c) => c[r'$type'] == trackingProbeType)['Rungs'], [10, 30, 60, 120]);
+      expect(
+        childrenOf(plain)
+            .singleWhere((c) => c[r'$type'] == trackingProbeType)['Rungs'],
+        [10, 30, 60, 120],
+      );
     });
 
     test('a bare rig gets slew + tracking probe + loop: no AF, no guiding, no filter', () {
@@ -668,10 +939,17 @@ void main() {
       expect(t, isNot(contains(waitForUserType)));
       // #1264 — no guider is a real branch now: the mount's tracking is the
       // exposure ceiling, so the probe and the guard are the ONLY extras.
-      expect(t, [slewScopeToRaDecType, trackingProbeType, sequentialContainerType]);
+      expect(t, [
+        slewScopeToRaDecType,
+        trackingProbeType,
+        sequentialContainerType,
+      ]);
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop).map((x) => x[r'$type']), [unguidedExposureGuardType, centerAfterDriftType],
-          reason: 'no focuser → no AF trigger; no guider → no dither, but the exposure guard and the re-centre');
+      expect(
+        triggersOf(loop).map((x) => x[r'$type']),
+        [unguidedExposureGuardType, centerAfterDriftType],
+        reason: 'no focuser → no AF trigger; no guider → no dither, but the exposure guard and the re-centre',
+      );
     });
 
     test('the full rig gets everything the caller asked for', () {
@@ -681,24 +959,26 @@ void main() {
       expect(t, contains(startGuidingType));
       expect(t, contains(switchFilterType));
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop).map((x) => x[r'$type']),
-          containsAll([autofocusAfterExposuresType, ditherAfterExposuresType]));
+      expect(
+        triggersOf(loop).map((x) => x[r'$type']),
+        containsAll([autofocusAfterExposuresType, ditherAfterExposuresType]),
+      );
     });
 
     // #1716
     group('recalibrateGuider', () {
       Map<String, dynamic> calibrated(bool on) => buildTargetBlock(
-            raDeg: 1,
-            decDeg: 2,
-            targetName: 'Veil',
-            exposureSeconds: 60,
-            frameCount: 10,
-            startGuiding: true,
-            recalibrateGuider: on,
-          );
-      Map<String, dynamic> flipOf(Map<String, dynamic> b) => dom.triggersOf(
-            childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging'),
-          ).singleWhere((t) => t[r'$type'] == meridianFlipTriggerType);
+        raDeg: 1,
+        decDeg: 2,
+        targetName: 'Veil',
+        exposureSeconds: 60,
+        frameCount: 10,
+        startGuiding: true,
+        recalibrateGuider: on,
+      );
+      Map<String, dynamic> flipOf(Map<String, dynamic> b) => dom
+          .triggersOf(childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging'))
+          .singleWhere((t) => t[r'$type'] == meridianFlipTriggerType);
       Map<String, dynamic> startOf(Map<String, dynamic> b) =>
           childrenOf(b).singleWhere((c) => c[r'$type'] == startGuidingType);
 
@@ -720,12 +1000,17 @@ void main() {
       expect(types(b), contains(startGuidingType));
       expect(types(b), isNot(contains(runAutofocusType)));
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop).map((x) => x[r'$type']), [ditherAfterExposuresType]);
+      expect(triggersOf(loop).map((x) => x[r'$type']), [
+        ditherAfterExposuresType,
+      ]);
     });
 
     test('a framing angle without a rotator still centres — the turn by hand is the Plan screen\'s job', () {
       final b = buildTargetBlock(
-        raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10,
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 60,
+        frameCount: 10,
         positionAngleDeg: -61,
         rig: const RigCapabilities(focuser: true),
       );
@@ -743,35 +1028,59 @@ void main() {
     // #1264 — no guider → the mount's tracking is the exposure ceiling: a
     // Tracking Probe before the first loop and an Unguided Exposure Guard on
     // every loop. A guider makes both disappear.
-    test('a rig without a guider gets a tracking probe and an exposure guard', () {
-      final b = block(const RigCapabilities(focuser: true, filterWheel: true), filter: 'Ha');
-      final t = types(b);
-      expect(t, contains(trackingProbeType));
-      expect(t.indexOf(trackingProbeType), greaterThan(t.indexOf(runAutofocusType)),
-          reason: 'the probe judges FWHM growth, so it runs after focus');
-      final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(t.indexOf(trackingProbeType), lessThan(childrenOf(b).indexOf(loop)));
-      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
-      expect(probe['MaxExposure'], 60.0, reason: 'capped at the planned sub');
-      final guard = triggersOf(loop).singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
-      expect(guard['MaxExposure'], 60.0);
-      expect(guard['TriggerRunner'], isNotNull);
-    });
+    test(
+      'a rig without a guider gets a tracking probe and an exposure guard',
+      () {
+        final b = block(
+          const RigCapabilities(focuser: true, filterWheel: true),
+          filter: 'Ha',
+        );
+        final t = types(b);
+        expect(t, contains(trackingProbeType));
+        expect(
+          t.indexOf(trackingProbeType),
+          greaterThan(t.indexOf(runAutofocusType)),
+          reason: 'the probe judges FWHM growth, so it runs after focus',
+        );
+        final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
+        expect(
+          t.indexOf(trackingProbeType),
+          lessThan(childrenOf(b).indexOf(loop)),
+        );
+        final probe = childrenOf(b)
+            .singleWhere((c) => c[r'$type'] == trackingProbeType);
+        expect(probe['MaxExposure'], 60.0, reason: 'capped at the planned sub');
+        final guard = triggersOf(loop)
+            .singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
+        expect(guard['MaxExposure'], 60.0);
+        expect(guard['TriggerRunner'], isNotNull);
+      },
+    );
 
     test('a rig with a guider gets neither the probe nor the guard', () {
       final b = block(RigCapabilities.everything, filter: 'Ha');
       expect(types(b), isNot(contains(trackingProbeType)));
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(triggersOf(loop).map((x) => x[r'$type']), isNot(contains(unguidedExposureGuardType)));
-      expect(triggersOf(loop).map((x) => x[r'$type']), isNot(contains(centerAfterDriftType)));
+      expect(
+        triggersOf(loop).map((x) => x[r'$type']),
+        isNot(contains(unguidedExposureGuardType)),
+      );
+      expect(
+        triggersOf(loop).map((x) => x[r'$type']),
+        isNot(contains(centerAfterDriftType)),
+      );
     });
 
     // #1195 — unguided, nothing pulls the field back when drift walks it off
     // the framing: a Center After Drift on each loop, aimed at the target.
     test('a rig without a guider also gets a Center After Drift aimed at the target', () {
-      final b = block(const RigCapabilities(focuser: true, filterWheel: true), filter: 'Ha');
+      final b = block(
+        const RigCapabilities(focuser: true, filterWheel: true),
+        filter: 'Ha',
+      );
       final loop = childrenOf(b).singleWhere((c) => c['Name'] == 'Imaging');
-      final drift = triggersOf(loop).singleWhere((x) => x[r'$type'] == centerAfterDriftType);
+      final drift = triggersOf(loop)
+          .singleWhere((x) => x[r'$type'] == centerAfterDriftType);
       final target = degFromInputCoordinates(drift['Coordinates'])!;
       expect(target.raDeg, closeTo(1, 1e-6));
       expect(target.decDeg, closeTo(2, 1e-6));
@@ -784,13 +1093,23 @@ void main() {
         FilterPlanStep(filterName: 'Ha', exposureSeconds: 300, frameCount: 2),
         FilterPlanStep(filterName: 'OIII', exposureSeconds: 180, frameCount: 2),
       ];
-      final b = block(const RigCapabilities(focuser: true, filterWheel: true), plan: plan);
-      final probe = childrenOf(b).singleWhere((c) => c[r'$type'] == trackingProbeType);
+      final b = block(
+        const RigCapabilities(focuser: true, filterWheel: true),
+        plan: plan,
+      );
+      final probe = childrenOf(b)
+          .singleWhere((c) => c[r'$type'] == trackingProbeType);
       expect(probe['MaxExposure'], 300.0);
-      final oiii = childrenOf(b).singleWhere((c) => c['Name'] == 'OIII Imaging');
-      final guard = triggersOf(oiii).singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
+      final oiii = childrenOf(b)
+          .singleWhere((c) => c['Name'] == 'OIII Imaging');
+      final guard = triggersOf(oiii)
+          .singleWhere((x) => x[r'$type'] == unguidedExposureGuardType);
       expect(guard['MaxExposure'], 180.0);
-      expect(types(b).where((x) => x == trackingProbeType), hasLength(1), reason: 'one probe per block');
+      expect(
+        types(b).where((x) => x == trackingProbeType),
+        hasLength(1),
+        reason: 'one probe per block',
+      );
     });
 
     test('a multi-filter plan on a rig without a wheel swaps by hand', () {
@@ -811,39 +1130,41 @@ void main() {
     ];
 
     Map<String, dynamic> block() => buildTargetBlock(
-          raDeg: 10,
-          decDeg: 20,
-          targetName: 'Veil',
-          exposureSeconds: 60,
-          frameCount: 30,
-          filterPlan: plan,
-          startGuiding: true,
-          ditherEveryNExposures: 2,
-          autofocusEveryNExposures: 30, // 30 × 60 s = every 30 min
-        );
+      raDeg: 10,
+      decDeg: 20,
+      targetName: 'Veil',
+      exposureSeconds: 60,
+      frameCount: 30,
+      filterPlan: plan,
+      startGuiding: true,
+      ditherEveryNExposures: 2,
+      autofocusEveryNExposures: 30, // 30 × 60 s = every 30 min
+    );
 
     List<String?> types(Map<String, dynamic> node) =>
         childrenOf(node).map((c) => c[r'$type'] as String?).toList();
 
-    test('slew -> first-filter switch -> StartGuiding -> AF -> per-filter loops',
-        () {
-      final b = block();
-      final t = types(b);
-      expect(t, [
-        slewScopeToRaDecType, // centres before guiding starts
-        switchFilterType, // Ha, so autofocus runs through it
-        startGuidingType,
-        runAutofocusType, // the plan's one autofocus (#1875)
-        sequentialContainerType, // Ha Imaging
-        switchFilterType, // OIII
-        sequentialContainerType, // OIII Imaging
-      ]);
-      final kids = childrenOf(b);
-      expect((kids[1]['Filter'] as Map)['_name'], 'Ha');
-      expect(kids[4]['Name'], 'Ha Imaging');
-      expect((kids[5]['Filter'] as Map)['_name'], 'OIII');
-      expect(kids[6]['Name'], 'OIII Imaging');
-    });
+    test(
+      'slew -> first-filter switch -> StartGuiding -> AF -> per-filter loops',
+      () {
+        final b = block();
+        final t = types(b);
+        expect(t, [
+          slewScopeToRaDecType, // centres before guiding starts
+          switchFilterType, // Ha, so autofocus runs through it
+          startGuidingType,
+          runAutofocusType, // the plan's one autofocus (#1875)
+          sequentialContainerType, // Ha Imaging
+          switchFilterType, // OIII
+          sequentialContainerType, // OIII Imaging
+        ]);
+        final kids = childrenOf(b);
+        expect((kids[1]['Filter'] as Map)['_name'], 'Ha');
+        expect(kids[4]['Name'], 'Ha Imaging');
+        expect((kids[5]['Filter'] as Map)['_name'], 'OIII');
+        expect(kids[6]['Name'], 'OIII Imaging');
+      },
+    );
 
     test('each loop carries its own exposure, count, dither + scaled AF', () {
       final kids = childrenOf(block());
@@ -853,11 +1174,13 @@ void main() {
       expect(conditionsOf(ha).single['Iterations'], 20);
       final triggers = triggersOf(ha);
       expect(triggers, hasLength(2));
-      final dither = triggers
-          .firstWhere((t) => t[r'$type'] == ditherAfterExposuresType);
+      final dither = triggers.firstWhere(
+        (t) => t[r'$type'] == ditherAfterExposuresType,
+      );
       expect(dither['AfterExposures'], 2);
       final af = triggers.firstWhere(
-          (t) => t[r'$type'] == autofocusAfterExposuresType);
+        (t) => t[r'$type'] == autofocusAfterExposuresType,
+      );
       // 30 exposures at 60 s = every 30 min -> 6 exposures at 300 s.
       expect(af['AfterExposures'], 6);
     });
@@ -908,75 +1231,109 @@ void main() {
       expect(conditionsOf(loops.single).single['Iterations'], 10);
     });
 
-    test('a rig that does not pause for a filter swap gets no Wait-for-User',
-        () {
-      final b = buildTargetBlock(
-        raDeg: 10,
-        decDeg: 20,
-        exposureSeconds: 60,
-        frameCount: 10,
-        filterPlan: plan,
-        rig: const RigCapabilities(pauseForFilterSwap: false),
-      );
-      final types = childrenOf(b).map((c) => c[r'$type'] as String?).toList();
-      expect(types, isNot(contains(waitForUserType)));
-      expect(types, isNot(contains(switchFilterType)));
-    });
+    test(
+      'a rig that does not pause for a filter swap gets no Wait-for-User',
+      () {
+        final b = buildTargetBlock(
+          raDeg: 10,
+          decDeg: 20,
+          exposureSeconds: 60,
+          frameCount: 10,
+          filterPlan: plan,
+          rig: const RigCapabilities(pauseForFilterSwap: false),
+        );
+        final types = childrenOf(b).map((c) => c[r'$type'] as String?).toList();
+        expect(types, isNot(contains(waitForUserType)));
+        expect(types, isNot(contains(switchFilterType)));
+      },
+    );
 
-    test('manualFilterSwap emits Wait-for-User pauses instead of SwitchFilter',
-        () {
-      final b = buildTargetBlock(
-        raDeg: 10,
-        decDeg: 20,
-        exposureSeconds: 60,
-        frameCount: 10,
-        filterPlan: plan,
-        manualFilterSwap: true,
-      );
-      final kids = childrenOf(b);
-      final types = kids.map((c) => c[r'$type'] as String?).toList();
-      expect(types, isNot(contains(switchFilterType)));
-      final waits =
-          kids.where((c) => c[r'$type'] == waitForUserType).toList();
-      expect(waits, hasLength(2));
-      expect(waits[0]['Text'], contains('Ha'));
-      expect(waits[1]['Text'], contains('OIII'));
-      expect(waits[0]['Text'], contains('Resume'));
-    });
+    test(
+      'manualFilterSwap emits Wait-for-User pauses instead of SwitchFilter',
+      () {
+        final b = buildTargetBlock(
+          raDeg: 10,
+          decDeg: 20,
+          exposureSeconds: 60,
+          frameCount: 10,
+          filterPlan: plan,
+          manualFilterSwap: true,
+        );
+        final kids = childrenOf(b);
+        final types = kids.map((c) => c[r'$type'] as String?).toList();
+        expect(types, isNot(contains(switchFilterType)));
+        final waits = kids
+            .where((c) => c[r'$type'] == waitForUserType)
+            .toList();
+        expect(waits, hasLength(2));
+        expect(waits[0]['Text'], contains('Ha'));
+        expect(waits[1]['Text'], contains('OIII'));
+        expect(waits[0]['Text'], contains('Resume'));
+      },
+    );
   });
 
   // §38.10a — every generated target block carries an AboveHorizonCondition
   // with the TARGET's own coordinates, so a target that sets below the
   // profile's horizon ends its block instead of imaging the murk.
   group('the meridian flip', () {
-    List<String> flips(Map<String, dynamic> node) =>
-        [for (final t in (node['Triggers'] as Map<String, dynamic>?)?['\$values'] as List? ?? const []) (t as Map)['\$type'] as String];
+    List<String> flips(Map<String, dynamic> node) => [
+      for (final t
+          in (node['Triggers'] as Map<String, dynamic>?)?['\$values']
+                  as List? ??
+              const [])
+        (t as Map)['\$type'] as String,
+    ];
 
     // On the block it fired before the first slew, from wherever the mount
     // happened to be (simulator run, 2026-11-09).
-    test('the flip trigger is on the imaging loop, not the block that slews', () {
-      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10);
-      expect(flips(block).where((t) => t.contains('MeridianFlipTrigger')), isEmpty);
-      final loop = childrenOf(block).singleWhere((c) => c['Name'] == 'Imaging');
-      expect(flips(loop).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
-    });
+    test(
+      'the flip trigger is on the imaging loop, not the block that slews',
+      () {
+        final block = buildTargetBlock(
+          raDeg: 1,
+          decDeg: 2,
+          exposureSeconds: 60,
+          frameCount: 10,
+        );
+        expect(
+          flips(block).where((t) => t.contains('MeridianFlipTrigger')),
+          isEmpty,
+        );
+        final loop = childrenOf(block)
+            .singleWhere((c) => c['Name'] == 'Imaging');
+        expect(
+          flips(loop).where((t) => t.contains('MeridianFlipTrigger')),
+          hasLength(1),
+        );
+      },
+    );
 
     test('a filter plan has one on each loop', () {
-      final block = buildTargetBlock(raDeg: 1, decDeg: 2, exposureSeconds: 60, frameCount: 10, filterPlan: const [
-        FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 5),
-        FilterPlanStep(filterName: 'R', exposureSeconds: 60, frameCount: 5),
-      ]);
-      final loops = childrenOf(block).where((c) => (c['Name'] as String? ?? '').endsWith('Imaging'));
+      final block = buildTargetBlock(
+        raDeg: 1,
+        decDeg: 2,
+        exposureSeconds: 60,
+        frameCount: 10,
+        filterPlan: const [
+          FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 5),
+          FilterPlanStep(filterName: 'R', exposureSeconds: 60, frameCount: 5),
+        ],
+      );
+      final loops = childrenOf(block)
+          .where((c) => (c['Name'] as String? ?? '').endsWith('Imaging'));
       expect(loops, hasLength(2));
       for (final loop in loops) {
-        expect(flips(loop).where((t) => t.contains('MeridianFlipTrigger')), hasLength(1));
+        expect(
+          flips(loop).where((t) => t.contains('MeridianFlipTrigger')),
+          hasLength(1),
+        );
       }
     });
   });
 
   group('target block horizon condition', () {
-    test('buildTargetBlock attaches AboveHorizonCondition with the target coords',
-        () {
+    test('buildTargetBlock attaches AboveHorizonCondition with the target coords', () {
       final block = buildTargetBlock(
         raDeg: 83.8,
         decDeg: -5.4,
@@ -993,14 +1350,20 @@ void main() {
           .single;
       expect(loop['Iterations'], 1);
       final horizon = conditions
-          .where((c) => (c[r'$type'] as String).contains('AboveHorizonCondition'))
+          .where(
+            (c) => (c[r'$type'] as String).contains('AboveHorizonCondition'),
+          )
           .single;
       final data = horizon['Data'] as Map<String, dynamic>;
       final coords = data['Coordinates'] as Map<String, dynamic>;
       // 83.8° RA = 5h 35m 12s; dec −5.4° = −5° 24′ 0″.
       expect(coords['RAHours'], 5);
       expect(coords['NegativeDec'], isTrue);
-      expect(coords['DecDegrees'], -5, reason: 'NINA shape: the sign rides on DecDegrees');
+      expect(
+        coords['DecDegrees'],
+        -5,
+        reason: 'NINA shape: the sign rides on DecDegrees',
+      );
       expect(coords['DecMinutes'], 24);
     });
 
@@ -1013,36 +1376,41 @@ void main() {
         frameCount: 5,
         warmAtEnd: true,
       );
-      final target = childrenOf(body)
-          .where((c) => c['Name'] == 'M 31')
-          .single;
+      final target = childrenOf(body).where((c) => c['Name'] == 'M 31').single;
       expect(
-          conditionsOf(target)
-              .any((c) => (c[r'$type'] as String).contains('AboveHorizonCondition')),
-          isTrue);
+        conditionsOf(
+          target,
+        ).any((c) => (c[r'$type'] as String).contains('AboveHorizonCondition')),
+        isTrue,
+      );
     });
   });
 
   group('stop at dawn and park at the end (#1560)', () {
-    Map<String, dynamic> session({String? dawn, bool park = false, List<FilterPlanStep>? plan}) =>
-        buildImagingRunBody(
-          raDeg: 10,
-          decDeg: 41,
-          targetName: 'M31',
-          exposureSeconds: 120,
-          frameCount: 10,
-          warmAtEnd: true,
-          filterPlan: plan,
-          stopAtDawn: dawn,
-          parkAtEnd: park,
-        );
+    Map<String, dynamic> session({
+      String? dawn,
+      bool park = false,
+      List<FilterPlanStep>? plan,
+    }) => buildImagingRunBody(
+      raDeg: 10,
+      decDeg: 41,
+      targetName: 'M31',
+      exposureSeconds: 120,
+      frameCount: 10,
+      warmAtEnd: true,
+      filterPlan: plan,
+      stopAtDawn: dawn,
+      parkAtEnd: park,
+    );
     const lrgb = [
       FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 10),
       FilterPlanStep(filterName: 'R', exposureSeconds: 120, frameCount: 5),
     ];
     String type(Map<String, dynamic> n) => n[r'$type'] as String;
-    List<Map<String, dynamic>> dawnsOf(Map<String, dynamic> n) =>
-        [for (final c in conditionsOf(n)) if (type(c) == timeConditionType) c];
+    List<Map<String, dynamic>> dawnsOf(Map<String, dynamic> n) => [
+      for (final c in conditionsOf(n))
+        if (type(c) == timeConditionType) c,
+    ];
     // Every node in the tree, the root first.
     Iterable<Map<String, dynamic>> all(Map<String, dynamic> n) sync* {
       yield n;
@@ -1050,8 +1418,11 @@ void main() {
         yield* all(c);
       }
     }
-    List<Map<String, dynamic>> loopsOf(Map<String, dynamic> block) =>
-        [for (final c in childrenOf(block)) if ((c['Name'] as String? ?? '').endsWith('Imaging')) c];
+
+    List<Map<String, dynamic>> loopsOf(Map<String, dynamic> block) => [
+      for (final c in childrenOf(block))
+        if ((c['Name'] as String? ?? '').endsWith('Imaging')) c,
+    ];
 
     test('by default: no dawn condition and no park anywhere (the Full UI body stays as it is)', () {
       final b = session(plan: lrgb);
@@ -1060,57 +1431,92 @@ void main() {
     });
 
     for (final label in ['Civil Dawn', 'Nautical Dawn', 'Astronomical Dawn']) {
-      test('$label: one dawn condition on the target block and on each imaging loop', () {
-        final block = childrenOf(session(dawn: label, plan: lrgb)).singleWhere((c) => c['Name'] == 'M31');
-        final loops = loopsOf(block);
-        expect(loops, hasLength(2));
-        for (final n in [block, ...loops]) {
-          final d = dawnsOf(n);
-          expect(d, hasLength(1), reason: n['Name'] as String);
-          expect(d.single['SelectedProvider'], {r'$type': timeProviders[label]});
-        }
-      });
+      test(
+        '$label: one dawn condition on the target block and on each imaging loop',
+        () {
+          final block = childrenOf(session(dawn: label, plan: lrgb))
+              .singleWhere((c) => c['Name'] == 'M31');
+          final loops = loopsOf(block);
+          expect(loops, hasLength(2));
+          for (final n in [block, ...loops]) {
+            final d = dawnsOf(n);
+            expect(d, hasLength(1), reason: n['Name'] as String);
+            expect(d.single['SelectedProvider'], {
+              r'$type': timeProviders[label],
+            });
+          }
+        },
+      );
     }
 
-    test('park at the end: Park Scope after the targets, before Warm Camera', () {
-      final kids = childrenOf(session(park: true)).map(type).toList();
-      expect(kids.sublist(kids.length - 2), [parkScopeType, warmCameraType]);
-      expect(kids.where((t) => t == parkScopeType), hasLength(1));
-      final noWarm = buildImagingRunBody(
-          raDeg: 10, decDeg: 41, targetName: 'M31', exposureSeconds: 120, frameCount: 10, parkAtEnd: true);
-      expect(type(childrenOf(noWarm).last), parkScopeType);
-    });
+    test(
+      'park at the end: Park Scope after the targets, before Warm Camera',
+      () {
+        final kids = childrenOf(session(park: true)).map(type).toList();
+        expect(kids.sublist(kids.length - 2), [parkScopeType, warmCameraType]);
+        expect(kids.where((t) => t == parkScopeType), hasLength(1));
+        final noWarm = buildImagingRunBody(
+          raDeg: 10,
+          decDeg: 41,
+          targetName: 'M31',
+          exposureSeconds: 120,
+          frameCount: 10,
+          parkAtEnd: true,
+        );
+        expect(type(childrenOf(noWarm).last), parkScopeType);
+      },
+    );
 
     test('an appended target lands above the park and carries the dawn condition too', () {
       final grown = appendTargetToRunBody(
         session(dawn: 'Nautical Dawn', park: true),
         buildTargetBlock(
-            raDeg: 83.8, decDeg: -5.4, targetName: 'M42', exposureSeconds: 60, frameCount: 5,
-            stopAtDawn: 'Nautical Dawn'),
+          raDeg: 83.8,
+          decDeg: -5.4,
+          targetName: 'M42',
+          exposureSeconds: 60,
+          frameCount: 5,
+          stopAtDawn: 'Nautical Dawn',
+        ),
       );
       final kids = childrenOf(grown);
       final m42 = kids.indexWhere((c) => c['Name'] == 'M42');
       expect(m42, kids.indexWhere((c) => type(c) == parkScopeType) - 1);
       for (final n in [kids[m42], ...loopsOf(kids[m42])]) {
-        expect(dawnsOf(n).single['SelectedProvider'], {r'$type': timeProviders['Nautical Dawn']});
+        expect(dawnsOf(n).single['SelectedProvider'], {
+          r'$type': timeProviders['Nautical Dawn'],
+        });
       }
     });
 
     test('withDawnStop sets, switches and clears the dawn on every block and loop; the rest stays', () {
       final two = appendTargetToRunBody(
         session(park: true, plan: lrgb),
-        buildTargetBlock(raDeg: 83.8, decDeg: -5.4, targetName: 'M42', exposureSeconds: 60, frameCount: 5),
+        buildTargetBlock(
+          raDeg: 83.8,
+          decDeg: -5.4,
+          targetName: 'M42',
+          exposureSeconds: 60,
+          frameCount: 5,
+        ),
       );
       List<Object?> provs(Map<String, dynamic> b) => [
-            for (final c in childrenOf(b).where(isContainer))
-              for (final n in [c, ...childrenOf(c).where(isContainer)])
-                for (final d in dawnsOf(n)) d['SelectedProvider'],
-          ];
+        for (final c in childrenOf(b).where(isContainer))
+          for (final n in [c, ...childrenOf(c).where(isContainer)])
+            for (final d in dawnsOf(n)) d['SelectedProvider'],
+      ];
       final civil = withDawnStop(two, 'Civil Dawn');
       // M31's block and its two loops, M42's block and its loop.
-      expect(provs(civil), List.filled(5, {r'$type': timeProviders['Civil Dawn']}));
+      expect(
+        provs(civil),
+        List.filled(5, {r'$type': timeProviders['Civil Dawn']}),
+      );
       final nautical = withDawnStop(civil, 'Nautical Dawn');
-      expect(provs(nautical), List.filled(5, {r'$type': timeProviders['Nautical Dawn']}), reason: 'replaced, not added');
+      expect(
+        provs(nautical),
+        List.filled(5, {r'$type': timeProviders['Nautical Dawn']}),
+        reason: 'replaced, not added',
+      );
       final none = withDawnStop(nautical, null);
       expect(provs(none), isEmpty);
       expect(none, two, reason: 'clearing gives back the body it started from');

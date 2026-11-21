@@ -33,8 +33,9 @@ class SolveResult extends AsyncNotifier<PlateSolveResult?> {
     final gen = ++_generation;
     state = const AsyncLoading();
     try {
-      final result =
-          await ref.read(plateSolveApiFactoryProvider)(server).solve(frameId);
+      final result = await ref
+          .read(plateSolveApiFactoryProvider)(server)
+          .solve(frameId);
       if (gen == _generation) state = AsyncData(result);
     } catch (e, st) {
       if (gen == _generation) state = AsyncError(e, st);

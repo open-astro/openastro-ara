@@ -58,7 +58,9 @@ class _FakeSource implements DeviceFactsSource {
 
   @override
   Future<DiscoveredDevice?> resolve(
-      EquipmentDeviceType type, String assignedId) async {
+    EquipmentDeviceType type,
+    String assignedId,
+  ) async {
     if (resolveThrows) throw Exception('bridge unreachable');
     return devices[assignedId];
   }
@@ -77,6 +79,7 @@ class _FakeSource implements DeviceFactsSource {
     if (trackingThrows) throw Exception('500 from /tracking/calibration');
     return tracking;
   }
+
   @override
   Future<FilterWheelSlots?> filterWheelSlots() async => wheel;
   @override
@@ -89,9 +92,11 @@ class _FakeSource implements DeviceFactsSource {
 }
 
 ProviderContainer _container(DeviceFactsSource source) {
-  final c = ProviderContainer(overrides: [
-    deviceFactsSourceFactoryProvider.overrideWithValue((_) => source),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      deviceFactsSourceFactoryProvider.overrideWithValue((_) => source),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -105,7 +110,10 @@ void main() {
         'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70'),
       },
       camera: const CameraGeometry(
-          sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76),
+        sensorWidthPx: 6248,
+        sensorHeightPx: 4176,
+        pixelSizeUm: 3.76,
+      ),
       optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
       mount: const MountProps(name: 'iOptron CEM70'),
     );
@@ -119,8 +127,10 @@ void main() {
         .readAll(_server, slots);
 
     final map = c.read(wizardEquipmentReadinessProvider);
-    expect(map.keys,
-        unorderedEquals([EquipmentDeviceType.camera, EquipmentDeviceType.mount]));
+    expect(
+      map.keys,
+      unorderedEquals([EquipmentDeviceType.camera, EquipmentDeviceType.mount]),
+    );
     expect(map[EquipmentDeviceType.camera]!.state, ReadinessState.ready);
     expect(map[EquipmentDeviceType.camera]!.label, 'ASI2600MM');
     expect(map[EquipmentDeviceType.mount]!.state, ReadinessState.ready);
@@ -130,43 +140,75 @@ void main() {
     expect(source.closes, 1);
   });
 
-  test('#1264 a stored tracking ceiling lands on the mount card as a fact', () async {
-    final source = _FakeSource(
-      devices: {'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70')},
-      optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
-      mount: const MountProps(name: 'iOptron CEM70'),
-    )..tracking = TrackingCalibration(
-        ceilingSeconds: 45, measuredUtc: DateTime.utc(2026, 10, 11, 12), source: 'measured');
-    // The card shows the local date, so build the expectation the same way (#1512).
-    final local = DateTime.utc(2026, 10, 11, 12).toLocal();
-    final localDate = '${local.year}-${local.month.toString().padLeft(2, '0')}-'
-        '${local.day.toString().padLeft(2, '0')}';
-    final c = _container(source);
-    await c
-        .read(wizardEquipmentReadinessProvider.notifier)
-        .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
-    final mount = c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.mount]!;
-    expect(mount.state, ReadinessState.ready);
-    expect(mount.facts.map((f) => f.label), contains('Unguided ceiling'));
-    expect(mount.facts.singleWhere((f) => f.label == 'Unguided ceiling').value,
-        startsWith('45 s · measured $localDate'));
-  });
+  test(
+    '#1264 a stored tracking ceiling lands on the mount card as a fact',
+    () async {
+      final source =
+          _FakeSource(
+              devices: {
+                'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70'),
+              },
+              optics: const TelescopeOptics(
+                focalLengthMm: 530,
+                apertureMm: 106,
+              ),
+              mount: const MountProps(name: 'iOptron CEM70'),
+            )
+            ..tracking = TrackingCalibration(
+              ceilingSeconds: 45,
+              measuredUtc: DateTime.utc(2026, 10, 11, 12),
+              source: 'measured',
+            );
+      // The card shows the local date, so build the expectation the same way (#1512).
+      final local = DateTime.utc(2026, 10, 11, 12).toLocal();
+      final localDate =
+          '${local.year}-${local.month.toString().padLeft(2, '0')}-'
+          '${local.day.toString().padLeft(2, '0')}';
+      final c = _container(source);
+      await c
+          .read(wizardEquipmentReadinessProvider.notifier)
+          .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
+      final mount = c.read(
+        wizardEquipmentReadinessProvider,
+      )[EquipmentDeviceType.mount]!;
+      expect(mount.state, ReadinessState.ready);
+      expect(mount.facts.map((f) => f.label), contains('Unguided ceiling'));
+      expect(
+        mount.facts.singleWhere((f) => f.label == 'Unguided ceiling').value,
+        startsWith('45 s · measured $localDate'),
+      );
+    },
+  );
 
-  test('#1264 a failed tracking read never gaps or unreaches the mount card', () async {
-    final source = _FakeSource(
-      devices: {'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70')},
-      optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
-      mount: const MountProps(name: 'iOptron CEM70'),
-    )..trackingThrows = true;
-    final c = _container(source);
-    await c
-        .read(wizardEquipmentReadinessProvider.notifier)
-        .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
-    final mount = c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.mount]!;
-    expect(mount.state, ReadinessState.ready, reason: 'the ceiling is informational only');
-    expect(mount.gaps, isEmpty);
-    expect(mount.facts.map((f) => f.label), isNot(contains('Unguided ceiling')));
-  });
+  test(
+    '#1264 a failed tracking read never gaps or unreaches the mount card',
+    () async {
+      final source = _FakeSource(
+        devices: {
+          'mnt-1': _device(EquipmentDeviceType.mount, 'mnt-1', 'CEM70'),
+        },
+        optics: const TelescopeOptics(focalLengthMm: 530, apertureMm: 106),
+        mount: const MountProps(name: 'iOptron CEM70'),
+      )..trackingThrows = true;
+      final c = _container(source);
+      await c
+          .read(wizardEquipmentReadinessProvider.notifier)
+          .readAll(_server, EquipmentSlots()..mountDeviceId = 'mnt-1');
+      final mount = c.read(
+        wizardEquipmentReadinessProvider,
+      )[EquipmentDeviceType.mount]!;
+      expect(
+        mount.state,
+        ReadinessState.ready,
+        reason: 'the ceiling is informational only',
+      );
+      expect(mount.gaps, isEmpty);
+      expect(
+        mount.facts.map((f) => f.label),
+        isNot(contains('Unguided ceiling')),
+      );
+    },
+  );
 
   test('an assigned device missing from the bridge is unreachable with a '
       'blocking gap and no setup link', () async {
@@ -177,8 +219,9 @@ void main() {
         .read(wizardEquipmentReadinessProvider.notifier)
         .readAll(_server, slots);
 
-    final r =
-        c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.camera]!;
+    final r = c.read(
+      wizardEquipmentReadinessProvider,
+    )[EquipmentDeviceType.camera]!;
     expect(r.state, ReadinessState.unreachable);
     expect(r.hasBlockingGap, isTrue);
     expect(r.setupUri, isNull);
@@ -186,24 +229,29 @@ void main() {
 
   test('a connect that never completes is unreachable but keeps the setup '
       'deep link (the fix lives in AlpacaBridge)', () async {
-    final c = _container(_FakeSource(
-      devices: {
-        'foc-1': _device(EquipmentDeviceType.focuser, 'foc-1', 'ZWO EAF'),
-      },
-      connectSucceeds: false,
-    ));
+    final c = _container(
+      _FakeSource(
+        devices: {
+          'foc-1': _device(EquipmentDeviceType.focuser, 'foc-1', 'ZWO EAF'),
+        },
+        connectSucceeds: false,
+      ),
+    );
     final slots = EquipmentSlots()..focuserDeviceId = 'foc-1';
 
     await c
         .read(wizardEquipmentReadinessProvider.notifier)
         .readAll(_server, slots);
 
-    final r =
-        c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.focuser]!;
+    final r = c.read(
+      wizardEquipmentReadinessProvider,
+    )[EquipmentDeviceType.focuser]!;
     expect(r.state, ReadinessState.unreachable);
     expect(r.label, 'ZWO EAF');
-    expect(r.setupUri.toString(),
-        'http://10.0.0.9:11111/setup/v1/focuser/0/setup');
+    expect(
+      r.setupUri.toString(),
+      'http://10.0.0.9:11111/setup/v1/focuser/0/setup',
+    );
   });
 
   test('a transport failure lands as unreachable, never throws out of '
@@ -215,34 +263,41 @@ void main() {
         .read(wizardEquipmentReadinessProvider.notifier)
         .readAll(_server, slots);
 
-    final r =
-        c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.rotator]!;
+    final r = c.read(
+      wizardEquipmentReadinessProvider,
+    )[EquipmentDeviceType.rotator]!;
     expect(r.state, ReadinessState.unreachable);
     expect(r.gaps.single.hint, contains('Recheck to retry'));
   });
 
-  test('recheck replaces exactly one card and leaves the rest alone',
-      () async {
+  test('recheck replaces exactly one card and leaves the rest alone', () async {
     // First pass: wheel reports nothing → gap.
-    final c = _container(_FakeSource(
-      devices: {
-        'fw-1': _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
-        'cam-1': _device(EquipmentDeviceType.camera, 'cam-1', 'ASI2600MM'),
-      },
-      camera: const CameraGeometry(
-          sensorWidthPx: 100, sensorHeightPx: 100, pixelSizeUm: 2.9),
-    ));
+    final c = _container(
+      _FakeSource(
+        devices: {
+          'fw-1': _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+          'cam-1': _device(EquipmentDeviceType.camera, 'cam-1', 'ASI2600MM'),
+        },
+        camera: const CameraGeometry(
+          sensorWidthPx: 100,
+          sensorHeightPx: 100,
+          pixelSizeUm: 2.9,
+        ),
+      ),
+    );
     final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
     final slots = EquipmentSlots()
       ..cameraDeviceId = 'cam-1'
       ..filterWheelDeviceId = 'fw-1';
     await notifier.readAll(_server, slots);
     expect(
-        c
-            .read(wizardEquipmentReadinessProvider)[
-                EquipmentDeviceType.filterWheel]!
-            .state,
-        ReadinessState.gaps);
+      c
+          .read(
+            wizardEquipmentReadinessProvider,
+          )[EquipmentDeviceType.filterWheel]!
+          .state,
+      ReadinessState.gaps,
+    );
 
     // User names the filters in AlpacaBridge, hits Recheck on that card.
     // (recheck builds a fresh source through the factory — point it at the
@@ -274,42 +329,50 @@ void main() {
     // readAll's source parks (would eventually report the device missing);
     // the recheck fired mid-flight answers immediately with a ready wheel.
     final slow = _SlowSource();
-    final c = ProviderContainer(overrides: [
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => slow),
-    ]);
+    final c = ProviderContainer(
+      overrides: [
+        deviceFactsSourceFactoryProvider.overrideWithValue((_) => slow),
+      ],
+    );
     addTearDown(c.dispose);
     final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
     final slots = EquipmentSlots()..filterWheelDeviceId = 'fw-1';
 
     final readAll = notifier.readAll(_server, slots);
     c.updateOverrides([
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => _FakeSource(
-            devices: {
-              'fw-1':
-                  _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
-            },
-            wheel: const FilterWheelSlots(
-                [FilterWheelSlot(name: 'L', focusOffset: 0)]),
-          )),
+      deviceFactsSourceFactoryProvider.overrideWithValue(
+        (_) => _FakeSource(
+          devices: {
+            'fw-1': _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+          },
+          wheel: const FilterWheelSlots([
+            FilterWheelSlot(name: 'L', focusOffset: 0),
+          ]),
+        ),
+      ),
     ]);
     await notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
     expect(
-        c
-            .read(wizardEquipmentReadinessProvider)[
-                EquipmentDeviceType.filterWheel]!
-            .state,
-        ReadinessState.ready);
+      c
+          .read(
+            wizardEquipmentReadinessProvider,
+          )[EquipmentDeviceType.filterWheel]!
+          .state,
+      ReadinessState.ready,
+    );
 
     // The parked readAll now finishes with its stale unreachable result —
     // the recheck's newer card must survive.
     slow.release.complete();
     await readAll;
     expect(
-        c
-            .read(wizardEquipmentReadinessProvider)[
-                EquipmentDeviceType.filterWheel]!
-            .state,
-        ReadinessState.ready);
+      c
+          .read(
+            wizardEquipmentReadinessProvider,
+          )[EquipmentDeviceType.filterWheel]!
+          .state,
+      ReadinessState.ready,
+    );
   });
 
   test('a double-tapped recheck resolves by START order — the slow first '
@@ -317,81 +380,108 @@ void main() {
     // First recheck's source parks until released and would report a gap;
     // second recheck's source answers immediately with a ready wheel.
     final slowGap = _SlowSource();
-    final c = ProviderContainer(overrides: [
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => slowGap),
-    ]);
+    final c = ProviderContainer(
+      overrides: [
+        deviceFactsSourceFactoryProvider.overrideWithValue((_) => slowGap),
+      ],
+    );
     addTearDown(c.dispose);
     final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
 
-    final first =
-        notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
+    final first = notifier.recheck(
+      _server,
+      EquipmentDeviceType.filterWheel,
+      'fw-1',
+    );
     c.updateOverrides([
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => _FakeSource(
-            devices: {
-              'fw-1':
-                  _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
-            },
-            wheel: const FilterWheelSlots(
-                [FilterWheelSlot(name: 'L', focusOffset: 0)]),
-          )),
+      deviceFactsSourceFactoryProvider.overrideWithValue(
+        (_) => _FakeSource(
+          devices: {
+            'fw-1': _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+          },
+          wheel: const FilterWheelSlots([
+            FilterWheelSlot(name: 'L', focusOffset: 0),
+          ]),
+        ),
+      ),
     ]);
     await notifier.recheck(_server, EquipmentDeviceType.filterWheel, 'fw-1');
     expect(
-        c
-            .read(wizardEquipmentReadinessProvider)[
-                EquipmentDeviceType.filterWheel]!
-            .state,
-        ReadinessState.ready);
+      c
+          .read(
+            wizardEquipmentReadinessProvider,
+          )[EquipmentDeviceType.filterWheel]!
+          .state,
+      ReadinessState.ready,
+    );
 
     // The stale first tap finishes last — its unreachable result must be
     // dropped, not regress the card.
     slowGap.release.complete();
     await first;
     expect(
-        c
-            .read(wizardEquipmentReadinessProvider)[
-                EquipmentDeviceType.filterWheel]!
-            .state,
-        ReadinessState.ready);
+      c
+          .read(
+            wizardEquipmentReadinessProvider,
+          )[EquipmentDeviceType.filterWheel]!
+          .state,
+      ReadinessState.ready,
+    );
   });
 
-  test('a second readAll supersedes a stale in-flight one (generation guard)',
-      () async {
-    final slow = _SlowSource();
-    final c = ProviderContainer(overrides: [
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => slow),
-    ]);
-    addTearDown(c.dispose);
-    final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
-    final slots = EquipmentSlots()..cameraDeviceId = 'cam-1';
+  test(
+    'a second readAll supersedes a stale in-flight one (generation guard)',
+    () async {
+      final slow = _SlowSource();
+      final c = ProviderContainer(
+        overrides: [
+          deviceFactsSourceFactoryProvider.overrideWithValue((_) => slow),
+        ],
+      );
+      addTearDown(c.dispose);
+      final notifier = c.read(wizardEquipmentReadinessProvider.notifier);
+      final slots = EquipmentSlots()..cameraDeviceId = 'cam-1';
 
-    final first = notifier.readAll(_server, slots);
-    // Second run starts while the first's resolve is parked.
-    c.updateOverrides([
-      deviceFactsSourceFactoryProvider.overrideWithValue((_) => _FakeSource(
+      final first = notifier.readAll(_server, slots);
+      // Second run starts while the first's resolve is parked.
+      c.updateOverrides([
+        deviceFactsSourceFactoryProvider.overrideWithValue(
+          (_) => _FakeSource(
             devices: {
-              'cam-1':
-                  _device(EquipmentDeviceType.camera, 'cam-1', 'ASI2600MM'),
+              'cam-1': _device(
+                EquipmentDeviceType.camera,
+                'cam-1',
+                'ASI2600MM',
+              ),
             },
             camera: const CameraGeometry(
-                sensorWidthPx: 100, sensorHeightPx: 100, pixelSizeUm: 2.9),
-          )),
-    ]);
-    await notifier.readAll(_server, slots);
-    expect(
-        c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.camera]!
+              sensorWidthPx: 100,
+              sensorHeightPx: 100,
+              pixelSizeUm: 2.9,
+            ),
+          ),
+        ),
+      ]);
+      await notifier.readAll(_server, slots);
+      expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.camera]!
             .state,
-        ReadinessState.ready);
+        ReadinessState.ready,
+      );
 
-    // Now let the stale run finish — its unreachable result must NOT clobber
-    // the fresh ready card.
-    slow.release.complete();
-    await first;
-    expect(
-        c.read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.camera]!
+      // Now let the stale run finish — its unreachable result must NOT clobber
+      // the fresh ready card.
+      slow.release.complete();
+      await first;
+      expect(
+        c
+            .read(wizardEquipmentReadinessProvider)[EquipmentDeviceType.camera]!
             .state,
-        ReadinessState.ready);
-  });
+        ReadinessState.ready,
+      );
+    },
+  );
 }
 
 /// Resolve parks until [release] completes, then reports the device missing.
@@ -400,7 +490,9 @@ class _SlowSource implements DeviceFactsSource {
 
   @override
   Future<DiscoveredDevice?> resolve(
-      EquipmentDeviceType type, String assignedId) async {
+    EquipmentDeviceType type,
+    String assignedId,
+  ) async {
     await release.future;
     return null;
   }

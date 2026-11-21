@@ -32,10 +32,26 @@ void main() {
       {"id": "RCW53", "art": null}
     ]''');
     final row = rows[albumArtId('RCW 38')]!;
-    expect((row.asset, row.creditLine), ('assets/album/art/rcw038.webp', 'Jane Example (own capture) · CC BY 4.0'));
-    expect((row.licenceUrl, row.source), ('https://creativecommons.org/licenses/by/4.0/', 'https://example.invalid/rcw38'));
+    expect(
+      (row.asset, row.creditLine),
+      (
+        'assets/album/art/rcw038.webp',
+        'Jane Example (own capture) · CC BY 4.0',
+      ),
+    );
+    expect(
+      (row.licenceUrl, row.source),
+      (
+        'https://creativecommons.org/licenses/by/4.0/',
+        'https://example.invalid/rcw38',
+      ),
+    );
     expect(rows['M31']!.creditLine, 'ESO · CC BY 4.0');
-    expect(rows['RCW53']!.creditLine, isNull, reason: 'no Art: the Placeholder, no credit line');
+    expect(
+      rows['RCW53']!.creditLine,
+      isNull,
+      reason: 'no Art: the Placeholder, no credit line',
+    );
   });
 
   test('a row\'s Portuguese distance and trivia are used in Portuguese, English otherwise', () {
@@ -47,23 +63,36 @@ void main() {
     expect(rows['M31']!.distanceIn('pt'), '2,5 milhões de anos-luz');
     expect(rows['M31']!.triviaIn('pt'), 'Perto.');
     expect(rows['M31']!.triviaIn('en'), 'Close.');
-    expect(rows['M40']!.triviaIn('pt'), 'A double.', reason: 'no Portuguese: the English line');
+    expect(
+      rows['M40']!.triviaIn('pt'),
+      'A double.',
+      reason: 'no Portuguese: the English line',
+    );
   });
 
-  test('CC BY and CC0 Art links its licence deed; public domain needs none', () {
-    String? url(String? l) => AlbumArt(asset: 'a', credit: 'c', licence: l).licenceUrl;
-    expect(url('CC BY 4.0'), 'https://creativecommons.org/licenses/by/4.0/');
-    expect(url('CC BY 2.5'), 'https://creativecommons.org/licenses/by/2.5/');
-    // AstroBin's "Attribution" licence names no version: link the CC BY licence family, not a guessed version.
-    expect(url('CC BY'), 'https://creativecommons.org/licenses/by/');
-    expect(url('CC0'), 'https://creativecommons.org/publicdomain/zero/1.0/');
-    expect(url('Public domain'), isNull);
-    expect(url(null), isNull);
-  });
+  test(
+    'CC BY and CC0 Art links its licence deed; public domain needs none',
+    () {
+      String? url(String? l) =>
+          AlbumArt(asset: 'a', credit: 'c', licence: l).licenceUrl;
+      expect(url('CC BY 4.0'), 'https://creativecommons.org/licenses/by/4.0/');
+      expect(url('CC BY 2.5'), 'https://creativecommons.org/licenses/by/2.5/');
+      // AstroBin's "Attribution" licence names no version: link the CC BY licence family, not a guessed version.
+      expect(url('CC BY'), 'https://creativecommons.org/licenses/by/');
+      expect(url('CC0'), 'https://creativecommons.org/publicdomain/zero/1.0/');
+      expect(url('Public domain'), isNull);
+      expect(url(null), isNull);
+    },
+  );
 
   test('the bundled manifest covers both Books and every Art file it names is bundled', () async {
-    final rows = parseAlbumManifest(await rootBundle.loadString(albumManifestAsset));
-    expect(rows.keys, [for (var n = 1; n <= 110; n++) 'M$n', for (var n = 1; n <= 109; n++) 'C$n']);
+    final rows = parseAlbumManifest(
+      await rootBundle.loadString(albumManifestAsset),
+    );
+    expect(rows.keys, [
+      for (var n = 1; n <= 110; n++) 'M$n',
+      for (var n = 1; n <= 109; n++) 'C$n',
+    ]);
     var total = 0;
     for (final MapEntry(:key, :value) in rows.entries) {
       if (value.asset case final asset?) {
@@ -71,34 +100,48 @@ void main() {
         total += bytes;
         // About 31 KB a card; a dense star field (M7, M11) stays near 60 KB even at low quality.
         expect(bytes, lessThan(64000), reason: key);
-        expect(value.creditLine, isNotNull, reason: '$key: Art needs its credit');
+        expect(
+          value.creditLine,
+          isNotNull,
+          reason: '$key: Art needs its credit',
+        );
       }
     }
     expect(total, lessThan(8000000), reason: 'about 7 MB for the set');
     for (final MapEntry(:key, :value) in rows.entries) {
       expect(value.pt?.trivia, isNotNull, reason: '$key: Portuguese trivia');
-      expect(value.pt?.distance, isNotNull, reason: '$key: Portuguese distance');
+      expect(
+        value.pt?.distance,
+        isNotNull,
+        reason: '$key: Portuguese distance',
+      );
     }
   });
 
   test('every Art credit is in the licence registry', () async {
     registerAlbumArtLicenses();
-    final rows = parseAlbumManifest(await rootBundle.loadString(albumManifestAsset));
+    final rows = parseAlbumManifest(
+      await rootBundle.loadString(albumManifestAsset),
+    );
     final listed = [
       await for (final e in LicenseRegistry.licenses)
-        if (e.packages.contains('Sky Album art')) e.paragraphs.map((p) => p.text).join('\n'),
+        if (e.packages.contains('Sky Album art'))
+          e.paragraphs.map((p) => p.text).join('\n'),
     ];
     for (final MapEntry(:key, :value) in rows.entries) {
       if (value.creditLine case final credit?) {
         // CC BY asks for the licence link and a note that the Art was changed.
         expect(
-            listed.any((t) =>
+          listed.any(
+            (t) =>
                 t.contains('$key: $credit') &&
                 t.contains(value.source!) &&
                 t.contains(value.licenceUrl ?? '') &&
-                t.contains('Cropped and resized')),
-            isTrue,
-            reason: key);
+                t.contains('Cropped and resized'),
+          ),
+          isTrue,
+          reason: key,
+        );
       }
     }
   });

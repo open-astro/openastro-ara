@@ -52,7 +52,11 @@ class ImagingTab extends ConsumerWidget {
   }
 
   Widget _viewerAndRail(
-      BuildContext context, WidgetRef ref, bool liveViewOn, bool exposing) {
+    BuildContext context,
+    WidgetRef ref,
+    bool liveViewOn,
+    bool exposing,
+  ) {
     return Row(
       // Stretch, not the default center: the rail Container shrink-wraps its
       // content and would otherwise float vertically centered in the row.

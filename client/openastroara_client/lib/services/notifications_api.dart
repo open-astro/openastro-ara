@@ -8,7 +8,14 @@ import '../models/server.dart';
 enum NotificationSeverity { info, warning, error, critical }
 
 /// What part of the night a notification came from (§46.3 wire tokens).
-enum NotificationCategory { equipment, sequence, storage, software, safety, alarm }
+enum NotificationCategory {
+  equipment,
+  sequence,
+  storage,
+  software,
+  safety,
+  alarm,
+}
 
 T _parseEnum<T extends Enum>(List<T> values, Object? wire, T fallback) {
   final name = wire is String ? wire.toLowerCase() : '';
@@ -48,28 +55,34 @@ class AraNotification {
   final bool dismissed;
 
   AraNotification copyWith({bool? read, bool? dismissed}) => AraNotification(
-        id: id,
-        postedUtc: postedUtc,
-        severity: severity,
-        category: category,
-        title: title,
-        message: message,
-        read: read ?? this.read,
-        dismissed: dismissed ?? this.dismissed,
-        relatedEntityType: relatedEntityType,
-        relatedEntityId: relatedEntityId,
-      );
+    id: id,
+    postedUtc: postedUtc,
+    severity: severity,
+    category: category,
+    title: title,
+    message: message,
+    read: read ?? this.read,
+    dismissed: dismissed ?? this.dismissed,
+    relatedEntityType: relatedEntityType,
+    relatedEntityId: relatedEntityId,
+  );
 
   factory AraNotification.fromJson(Map<String, dynamic> json) =>
       AraNotification(
         id: json['id'] as String? ?? '',
         postedUtc:
             DateTime.tryParse(json['posted_utc'] as String? ?? '')?.toLocal() ??
-                DateTime.fromMillisecondsSinceEpoch(0),
-        severity: _parseEnum(NotificationSeverity.values, json['severity'],
-            NotificationSeverity.info),
-        category: _parseEnum(NotificationCategory.values, json['category'],
-            NotificationCategory.software),
+            DateTime.fromMillisecondsSinceEpoch(0),
+        severity: _parseEnum(
+          NotificationSeverity.values,
+          json['severity'],
+          NotificationSeverity.info,
+        ),
+        category: _parseEnum(
+          NotificationCategory.values,
+          json['category'],
+          NotificationCategory.software,
+        ),
         title: json['title'] as String? ?? '',
         message: json['message'] as String? ?? '',
         read: json['read'] == true,
@@ -100,13 +113,16 @@ abstract interface class NotificationsClient {
 
 class NotificationsApi implements NotificationsClient {
   NotificationsApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
-            ));
+            ),
+          );
 
   final Dio _dio;
 
@@ -127,7 +143,8 @@ class NotificationsApi implements NotificationsClient {
     final data = res.data;
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
-          'notifications list returned an unexpected body (${data.runtimeType})');
+        'notifications list returned an unexpected body (${data.runtimeType})',
+      );
     }
     final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
@@ -148,15 +165,20 @@ class NotificationsApi implements NotificationsClient {
 
   @override
   Future<AraNotification?> dismiss(String id, {String? reason}) => _post(
-        '/api/v1/notifications/$id/dismiss',
-        body: <String, dynamic>{'reason': ?reason},
-      );
+    '/api/v1/notifications/$id/dismiss',
+    body: <String, dynamic>{'reason': ?reason},
+  );
 
-  Future<AraNotification?> _post(String path, {Map<String, dynamic>? body}) async {
+  Future<AraNotification?> _post(
+    String path, {
+    Map<String, dynamic>? body,
+  }) async {
     try {
       final res = await _dio.post<dynamic>(path, data: body ?? const {});
       final data = res.data;
-      return data is Map<String, dynamic> ? AraNotification.fromJson(data) : null;
+      return data is Map<String, dynamic>
+          ? AraNotification.fromJson(data)
+          : null;
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
       rethrow;

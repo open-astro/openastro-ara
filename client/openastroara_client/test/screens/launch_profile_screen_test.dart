@@ -45,12 +45,17 @@ class _FakeApi extends ProfileApi {
   GuiderTwinPreview? twin;
 
   @override
-  Future<ProfileDeleteResult> deleteProfile(String id,
-      {bool deleteGuiderProfile = false}) async {
+  Future<ProfileDeleteResult> deleteProfile(
+    String id, {
+    bool deleteGuiderProfile = false,
+  }) async {
     deleteCalls.add(id);
     deleteGuiderFlags.add(deleteGuiderProfile);
     if (deleteError != null) throw deleteError!;
-    profiles = [for (final p in profiles) if (p.id != id) p];
+    profiles = [
+      for (final p in profiles)
+        if (p.id != id) p,
+    ];
     return deleteResult;
   }
 
@@ -64,19 +69,23 @@ class _FakeApi extends ProfileApi {
 
 Future<ProviderContainer> _pump(WidgetTester tester, _FakeApi api) async {
   final container = ProviderContainer(
-      overrides: [profileApiProvider.overrideWithValue(api)]);
+    overrides: [profileApiProvider.overrideWithValue(api)],
+  );
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: LaunchProfileScreen()),
-  ));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: LaunchProfileScreen()),
+    ),
+  );
   await tester.pumpAndSettle();
   return container;
 }
 
 void main() {
-  testWidgets('shows the active profile pre-selected with an Image button',
-      (tester) async {
+  testWidgets('shows the active profile pre-selected with an Image button', (
+    tester,
+  ) async {
     final container = await _pump(tester, _FakeApi());
     expect(find.text('My Backyard Rig'), findsOneWidget); // dropdown value
     expect(find.text('Image'), findsOneWidget);
@@ -86,64 +95,76 @@ void main() {
     expect(container.read(profileGatePassedProvider), isFalse);
   });
 
-  testWidgets('Image on the already-active profile passes the gate without a select RPC',
-      (tester) async {
-    final api = _FakeApi();
-    final container = await _pump(tester, api);
-    await tester.tap(find.text('Image'));
-    await tester.pumpAndSettle();
-    expect(api.selectCalls, isEmpty);
-    expect(container.read(profileGatePassedProvider), isTrue);
-  });
+  testWidgets(
+    'Image on the already-active profile passes the gate without a select RPC',
+    (tester) async {
+      final api = _FakeApi();
+      final container = await _pump(tester, api);
+      await tester.tap(find.text('Image'));
+      await tester.pumpAndSettle();
+      expect(api.selectCalls, isEmpty);
+      expect(container.read(profileGatePassedProvider), isTrue);
+    },
+  );
 
-  testWidgets('picking another profile then Image selects it on the daemon first',
-      (tester) async {
-    final api = _FakeApi();
-    final container = await _pump(tester, api);
-    await tester.tap(find.text('My Backyard Rig'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Travel Rig').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Image'));
-    await tester.pumpAndSettle();
-    expect(api.selectCalls, ['id-2']);
-    expect(container.read(profileGatePassedProvider), isTrue);
-  });
+  testWidgets(
+    'picking another profile then Image selects it on the daemon first',
+    (tester) async {
+      final api = _FakeApi();
+      final container = await _pump(tester, api);
+      await tester.tap(find.text('My Backyard Rig'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Travel Rig').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Image'));
+      await tester.pumpAndSettle();
+      expect(api.selectCalls, ['id-2']);
+      expect(container.read(profileGatePassedProvider), isTrue);
+    },
+  );
 
-  testWidgets('a failed profile switch keeps the gate closed and shows the error',
-      (tester) async {
-    final api = _FakeApi()..selectError = StateError('daemon said no');
-    final container = await _pump(tester, api);
-    await tester.tap(find.text('My Backyard Rig'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Travel Rig').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Image'));
-    await tester.pumpAndSettle();
-    expect(container.read(profileGatePassedProvider), isFalse);
-    expect(find.text('daemon said no'), findsOneWidget);
-  });
+  testWidgets(
+    'a failed profile switch keeps the gate closed and shows the error',
+    (tester) async {
+      final api = _FakeApi()..selectError = StateError('daemon said no');
+      final container = await _pump(tester, api);
+      await tester.tap(find.text('My Backyard Rig'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Travel Rig').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Image'));
+      await tester.pumpAndSettle();
+      expect(container.read(profileGatePassedProvider), isFalse);
+      expect(find.text('daemon said no'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a device that failed the switch is named in a SnackBar and the gate still passes',
-      (tester) async {
-    final api = _FakeApi()
-      ..selectMessages = const [
-        ProfileDeviceMessage(deviceName: 'AM5', message: 'Could not connect.'),
-      ];
-    final c = await _pump(tester, api);
-    await tester.tap(find.text('My Backyard Rig'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Travel Rig').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Image'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 100));
-    expect(find.textContaining('AM5: Could not connect.'), findsOneWidget);
-    expect(c.read(profileGatePassedProvider), isTrue);
-  });
+  testWidgets(
+    'a device that failed the switch is named in a SnackBar and the gate still passes',
+    (tester) async {
+      final api = _FakeApi()
+        ..selectMessages = const [
+          ProfileDeviceMessage(
+            deviceName: 'AM5',
+            message: 'Could not connect.',
+          ),
+        ];
+      final c = await _pump(tester, api);
+      await tester.tap(find.text('My Backyard Rig'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Travel Rig').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Image'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.textContaining('AM5: Could not connect.'), findsOneWidget);
+      expect(c.read(profileGatePassedProvider), isTrue);
+    },
+  );
 
-  testWidgets('no profiles: dropdown + Image hidden, Add / Import remain',
-      (tester) async {
+  testWidgets('no profiles: dropdown + Image hidden, Add / Import remain', (
+    tester,
+  ) async {
     final api = _FakeApi()
       ..profiles = const []
       ..activeId = null;
@@ -154,15 +175,19 @@ void main() {
     expect(find.text('Import Profile'), findsOneWidget);
   });
 
-  testWidgets('no server: shows the friendly error with a Retry action',
-      (tester) async {
+  testWidgets('no server: shows the friendly error with a Retry action', (
+    tester,
+  ) async {
     final container = ProviderContainer(
-        overrides: [profileApiProvider.overrideWithValue(null)]);
+      overrides: [profileApiProvider.overrideWithValue(null)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: LaunchProfileScreen()),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: LaunchProfileScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining('Connect to your rig'), findsOneWidget);
     expect(find.text('Retry'), findsOneWidget);
@@ -170,43 +195,49 @@ void main() {
   });
 
   testWidgets(
-      'deleting the ACTIVE profile is allowed and spells out the fallback',
-      (tester) async {
-    // Any profile is deletable now — the daemon falls back (newest remaining,
-    // or a reseeded factory Default for the last one), so the client no
-    // longer disables the button; the confirm dialog states the consequence.
-    final api = _FakeApi();
-    await _pump(tester, api);
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
-    await tester.pumpAndSettle();
-    expect(find.text('Delete profile?'), findsOneWidget);
-    expect(find.textContaining('most recent remaining profile becomes active'),
-        findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(api.deleteCalls, ['id-1']); // pre-selected = the active profile
-  });
+    'deleting the ACTIVE profile is allowed and spells out the fallback',
+    (tester) async {
+      // Any profile is deletable now — the daemon falls back (newest remaining,
+      // or a reseeded factory Default for the last one), so the client no
+      // longer disables the button; the confirm dialog states the consequence.
+      final api = _FakeApi();
+      await _pump(tester, api);
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete profile?'), findsOneWidget);
+      expect(
+        find.textContaining('most recent remaining profile becomes active'),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(api.deleteCalls, ['id-1']); // pre-selected = the active profile
+    },
+  );
 
-  testWidgets('picking a non-active profile enables delete; confirm deletes it',
-      (tester) async {
-    final api = _FakeApi();
-    await _pump(tester, api);
-    await tester.tap(find.text('My Backyard Rig'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Travel Rig').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
-    await tester.pumpAndSettle();
-    expect(find.text('Delete profile?'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(api.deleteCalls, ['id-2']);
-    // The dropdown fell back to the (still-active) remaining profile.
-    expect(find.text('My Backyard Rig'), findsOneWidget);
-  });
+  testWidgets(
+    'picking a non-active profile enables delete; confirm deletes it',
+    (tester) async {
+      final api = _FakeApi();
+      await _pump(tester, api);
+      await tester.tap(find.text('My Backyard Rig'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Travel Rig').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.text('Delete profile?'), findsOneWidget);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(api.deleteCalls, ['id-2']);
+      // The dropdown fell back to the (still-active) remaining profile.
+      expect(find.text('My Backyard Rig'), findsOneWidget);
+    },
+  );
 
-  testWidgets('deleting the LAST profile warns it goes back to profile setup',
-      (tester) async {
+  testWidgets('deleting the LAST profile warns it goes back to profile setup', (
+    tester,
+  ) async {
     final api = _FakeApi()
       ..profiles = const [ProfileMeta(id: 'id-1', name: 'My Backyard Rig')];
     await _pump(tester, api);
@@ -222,43 +253,53 @@ void main() {
     expect(find.text('Add a Profile'), findsOneWidget);
   });
 
-  testWidgets('the guider checkbox passes the choice to the API and reports the outcome',
-      (tester) async {
-    final api = _FakeApi()
-      ..twin = const GuiderTwinPreview(
+  testWidgets(
+    'the guider checkbox passes the choice to the API and reports the outcome',
+    (tester) async {
+      final api = _FakeApi()
+        ..twin = const GuiderTwinPreview(
           twinNames: ['Travel Rig', 'ara-travel-rig-deadbeef'],
           exists: true,
           shared: false,
-          canDeleteNow: true)
-      ..deleteResult =
-          const ProfileDeleteResult(guiderProfile: GuiderTwinOutcome.deleted);
-    await _pump(tester, api);
-    await tester.tap(find.text('My Backyard Rig'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Travel Rig').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Also delete its OpenAstro Guider profile "Travel Rig"'),
-        findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(api.deleteCalls, ['id-2']);
-    expect(api.deleteGuiderFlags, [true], reason: 'the checkbox defaults on');
-    expect(find.text('Guider profile deleted'), findsOneWidget);
-  });
+          canDeleteNow: true,
+        )
+        ..deleteResult = const ProfileDeleteResult(
+          guiderProfile: GuiderTwinOutcome.deleted,
+        );
+      await _pump(tester, api);
+      await tester.tap(find.text('My Backyard Rig'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Travel Rig').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining(
+          'Also delete its OpenAstro Guider profile "Travel Rig"',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(api.deleteCalls, ['id-2']);
+      expect(api.deleteGuiderFlags, [true], reason: 'the checkbox defaults on');
+      expect(find.text('Guider profile deleted'), findsOneWidget);
+    },
+  );
 
-  testWidgets('an old daemon with no twin route offers nothing about the guider',
-      (tester) async {
-    final api = _FakeApi(); // twin stays null → getGuiderTwin throws
-    await _pump(tester, api);
-    await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('OpenAstro Guider profile'), findsNothing);
-    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(api.deleteGuiderFlags, [false]);
-  });
+  testWidgets(
+    'an old daemon with no twin route offers nothing about the guider',
+    (tester) async {
+      final api = _FakeApi(); // twin stays null → getGuiderTwin throws
+      await _pump(tester, api);
+      await tester.tap(find.widgetWithIcon(IconButton, Icons.delete_outline));
+      await tester.pumpAndSettle();
+      expect(find.textContaining('OpenAstro Guider profile'), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+      await tester.pumpAndSettle();
+      expect(api.deleteGuiderFlags, [false]);
+    },
+  );
 
   testWidgets('cancel deletes nothing', (tester) async {
     final api = _FakeApi();
@@ -276,18 +317,29 @@ void main() {
 
   // #1129: the header read "Connected to openastro" while the profile load
   // said the rig didn't answer, and the screen had no way back to the scan.
-  testWidgets('an unreachable rig is named, not reported as connected', (tester) async {
+  testWidgets('an unreachable rig is named, not reported as connected', (
+    tester,
+  ) async {
     final api = _UnreachableApi();
-    final container = ProviderContainer(overrides: [
-      profileApiProvider.overrideWithValue(api),
-      activeServerProvider.overrideWithValue(
-          const AraServer(hostname: 'rig.local', port: 5555, mdnsName: 'openastro')),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        profileApiProvider.overrideWithValue(api),
+        activeServerProvider.overrideWithValue(
+          const AraServer(
+            hostname: 'rig.local',
+            port: 5555,
+            mdnsName: 'openastro',
+          ),
+        ),
+      ],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: LaunchProfileScreen()),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: LaunchProfileScreen()),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Rig: openastro'), findsOneWidget);
     expect(find.textContaining('Connected to'), findsNothing);
@@ -303,7 +355,8 @@ void main() {
 
 class _UnreachableApi extends _FakeApi {
   @override
-  Future<ProfileList> listProfiles() async => throw DioException.connectionError(
+  Future<ProfileList> listProfiles() async =>
+      throw DioException.connectionError(
         requestOptions: RequestOptions(path: '/api/v1/profiles'),
         reason: 'No route to host',
       );

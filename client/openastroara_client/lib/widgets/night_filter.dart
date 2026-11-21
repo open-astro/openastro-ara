@@ -52,7 +52,10 @@ class _NightFilterRenderWidget extends SingleChildRenderObjectWidget {
       RenderNightFilter(enabled);
 
   @override
-  void updateRenderObject(BuildContext context, RenderNightFilter renderObject) {
+  void updateRenderObject(
+    BuildContext context,
+    RenderNightFilter renderObject,
+  ) {
     renderObject.enabled = enabled;
   }
 }

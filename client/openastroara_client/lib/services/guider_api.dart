@@ -34,7 +34,8 @@ class GuideStartFailed implements Exception {
   final String? reason;
 
   @override
-  String toString() => reason == null ? "Guiding didn't start" : "Guiding didn't start: $reason";
+  String toString() =>
+      reason == null ? "Guiding didn't start" : "Guiding didn't start: $reason";
 }
 
 /// Client wrapper around the §63 guider equipment surface
@@ -47,11 +48,13 @@ class GuiderApi implements GuiderClient {
   final Dio _dio;
 
   GuiderApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ));
+        ),
+      );
 
   /// Current guider descriptor, or `null` when the daemon has no guider
   /// configured (`404`). Other HTTP failures throw `DioException` for the
@@ -75,7 +78,10 @@ class GuiderApi implements GuiderClient {
   /// (defaults match the daemon's `GuiderConnectRequestDto`). 202-Accepted;
   /// poll [getStatus] for the resulting link state.
   @override
-  Future<void> connect({String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+  Future<void> connect({
+    String host = kDefaultGuiderHost,
+    int port = kDefaultGuiderPort,
+  }) async {
     // 202-Accepted with no body we read — poll getStatus() for the result.
     await _dio.post<void>(
       '/api/v1/equipment/guider/connect',

@@ -22,21 +22,24 @@ class StorageSpace {
   final int? totalBytes;
 
   factory StorageSpace.fromJson(Map<String, dynamic> json) => StorageSpace(
-        saveDirectory: json['save_directory'] as String? ?? '',
-        isFallback: json['is_fallback'] as bool? ?? false,
-        freeBytes: (json['free_bytes'] as num?)?.toInt(),
-        totalBytes: (json['total_bytes'] as num?)?.toInt(),
-      );
+    saveDirectory: json['save_directory'] as String? ?? '',
+    isFallback: json['is_fallback'] as bool? ?? false,
+    freeBytes: (json['free_bytes'] as num?)?.toInt(),
+    totalBytes: (json['total_bytes'] as num?)?.toInt(),
+  );
 }
 
 class StorageSpaceApi {
   StorageSpaceApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ));
+            ),
+          );
 
   final Dio _dio;
 
@@ -54,7 +57,9 @@ class StorageSpaceApi {
 
 /// Re-fetched whenever the panel asks (and after a save-directory change), so a
 /// freshly mounted or freshly filled volume reports honestly.
-final storageSpaceProvider = FutureProvider.autoDispose<StorageSpace?>((ref) async {
+final storageSpaceProvider = FutureProvider.autoDispose<StorageSpace?>((
+  ref,
+) async {
   final server = ref.watch(activeServerProvider);
   if (server == null) {
     return null;

@@ -93,7 +93,7 @@ String pendingDraftServerKey(AraServer server) =>
 /// to be finished from Setup.
 /// Returns (applied, failed, held, rejected) counts.
 Future<(int applied, int failed, int held, int rejected)>
-    replayPendingProfileDrafts(
+replayPendingProfileDrafts(
   PendingProfileDraftService store,
   ProfileApi api, {
   required String serverKey,
@@ -129,8 +129,11 @@ Future<(int applied, int failed, int held, int rejected)>
         // EXISTS on this rig, pin the draft here: a draft saved with no server
         // (serverKey null) that half-landed on rig A must not create a fresh
         // profile on rig B next time and leave A's orphan behind.
-        debugPrint('[profile-drafts] replay of "${pending.name}" failed in transit: $e');
-        final pinned = pending.serverKey == null && pending.draft.savedProfileId != null
+        debugPrint(
+          '[profile-drafts] replay of "${pending.name}" failed in transit: $e',
+        );
+        final pinned =
+            pending.serverKey == null && pending.draft.savedProfileId != null
             ? PendingProfileDraft(
                 id: pending.id,
                 name: pending.name,
@@ -145,7 +148,9 @@ Future<(int applied, int failed, int held, int rejected)>
         } catch (_) {}
         failed++;
       } else {
-        debugPrint('[profile-drafts] replay of "${pending.name}" rejected, dropping it: $e');
+        debugPrint(
+          '[profile-drafts] replay of "${pending.name}" rejected, dropping it: $e',
+        );
         try {
           await store.delete(pending.id);
         } catch (_) {}
@@ -184,8 +189,12 @@ final pendingProfileDraftReplayProvider = Provider<void>((ref) {
     inFlight = true;
     try {
       final store = ref.read(pendingProfileDraftServiceProvider);
-      final (applied, failed, held, rejected) =
-          await replayPendingProfileDrafts(
+      final (
+        applied,
+        failed,
+        held,
+        rejected,
+      ) = await replayPendingProfileDrafts(
         store,
         api,
         serverKey: pendingDraftServerKey(server),

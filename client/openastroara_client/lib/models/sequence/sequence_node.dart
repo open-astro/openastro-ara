@@ -48,8 +48,8 @@ class SequenceNode {
     this.instructionType,
     Map<String, Object?> params = const <String, Object?>{},
     List<SequenceNode> children = const <SequenceNode>[],
-  })  : params = _freezeParams(params),
-        children = List<SequenceNode>.unmodifiable(children);
+  }) : params = _freezeParams(params),
+       children = List<SequenceNode>.unmodifiable(children);
 
   bool get isContainer => kind != SequenceNodeKind.instruction;
 
@@ -87,17 +87,16 @@ class SequenceNode {
     Object? instructionType = _unset,
     Map<String, Object?>? params,
     List<SequenceNode>? children,
-  }) =>
-      SequenceNode(
-        id: id,
-        kind: kind,
-        displayName: displayName ?? this.displayName,
-        instructionType: identical(instructionType, _unset)
-            ? this.instructionType
-            : instructionType as String?,
-        params: params ?? this.params,
-        children: children ?? this.children,
-      );
+  }) => SequenceNode(
+    id: id,
+    kind: kind,
+    displayName: displayName ?? this.displayName,
+    instructionType: identical(instructionType, _unset)
+        ? this.instructionType
+        : instructionType as String?,
+    params: params ?? this.params,
+    children: children ?? this.children,
+  );
 
   // DeepCollectionEquality handles nested List/Map values inside `params`
   // (e.g. the loop container's `filters: ['L', 'R', 'G', 'B']` list).
@@ -117,11 +116,11 @@ class SequenceNode {
 
   @override
   int get hashCode => Object.hash(
-        id,
-        kind,
-        displayName,
-        instructionType,
-        _deepEq.hash(params),
-        _deepEq.hash(children),
-      );
+    id,
+    kind,
+    displayName,
+    instructionType,
+    _deepEq.hash(params),
+    _deepEq.hash(children),
+  );
 }

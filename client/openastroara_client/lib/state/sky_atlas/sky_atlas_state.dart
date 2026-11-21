@@ -27,7 +27,8 @@ class SkyAtlasModeNotifier extends Notifier<SkyAtlasMode> {
 
 final skyAtlasModeProvider =
     NotifierProvider<SkyAtlasModeNotifier, SkyAtlasMode>(
-        SkyAtlasModeNotifier.new);
+      SkyAtlasModeNotifier.new,
+    );
 
 /// §36 — a chosen sky target (equatorial J2000 coordinates + a display name).
 /// The planetarium (`StellariumView`) flies to it; a connected mount can GoTo it.
@@ -35,7 +36,11 @@ class SkyTarget {
   final double raDeg;
   final double decDeg;
   final String name;
-  const SkyTarget({required this.raDeg, required this.decDeg, required this.name});
+  const SkyTarget({
+    required this.raDeg,
+    required this.decDeg,
+    required this.name,
+  });
 }
 
 /// The currently-selected planetarium target, or null when nothing is selected.
@@ -53,8 +58,9 @@ class SkyTargetNotifier extends Notifier<SkyTarget?> {
   bool updateShouldNotify(SkyTarget? previous, SkyTarget? next) => true;
 }
 
-final skyTargetProvider =
-    NotifierProvider<SkyTargetNotifier, SkyTarget?>(SkyTargetNotifier.new);
+final skyTargetProvider = NotifierProvider<SkyTargetNotifier, SkyTarget?>(
+  SkyTargetNotifier.new,
+);
 
 /// §36 slice 3b — a one-shot command for the self-driven planetarium page.
 /// Flutter chrome (e.g. the Tonight's Sky panel's recentre button) writes a
@@ -82,10 +88,12 @@ class PlanetariumCommandNotifier extends Notifier<Map<String, Object?>?> {
   // command — the listener never sees null, so it needs no null guard.
   @override
   bool updateShouldNotify(
-          Map<String, Object?>? previous, Map<String, Object?>? next) =>
-      next != null;
+    Map<String, Object?>? previous,
+    Map<String, Object?>? next,
+  ) => next != null;
 }
 
 final planetariumCommandProvider =
     NotifierProvider<PlanetariumCommandNotifier, Map<String, Object?>?>(
-        PlanetariumCommandNotifier.new);
+      PlanetariumCommandNotifier.new,
+    );

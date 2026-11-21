@@ -71,12 +71,15 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // the validated screens; reset to true by the controller on each step).
     final stepValid = ref.watch(wizardStepValidProvider);
     final info = ProfileWizard.steps[state.step]!;
-    final body = wizardScreenBuilders[state.step]?.call(context) ??
+    final body =
+        wizardScreenBuilders[state.step]?.call(context) ??
         Center(child: Text(context.l10n.wizardMissingScreen(state.step)));
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(context.l10n.wizardTitle(state.step, ProfileWizard.totalSteps)),
+        title: Text(
+          context.l10n.wizardTitle(state.step, ProfileWizard.totalSteps),
+        ),
         actions: [
           TextButton.icon(
             onPressed: () => _saveAndExit(controller),
@@ -114,14 +117,15 @@ class _WizardShellState extends ConsumerState<WizardShell> {
   // partial-or-complete state per §37.8), then exit the wizard. Shows a blocking
   // spinner during the round-trip and keeps the wizard open on failure so the
   // user doesn't lose their entries.
-  
+
   /// §36.10 — queue the star database(s) the fifth screen chose, on the rig,
   /// after the profile is saved. Best-effort and per id: a refused or failed
   /// queue never fails the save (the user can download from Settings → Sky
   /// data); 409 (already installed, e.g. another profile fetched it) is fine.
   Future<void> _queueSolverDatabases(ProfileDraft draft) async {
     final ps = draft.plateSolve;
-    if (!ps.downloadSolverDatabase || ps.solverDatabasePackageIds.isEmpty) return;
+    if (!ps.downloadSolverDatabase || ps.solverDatabasePackageIds.isEmpty)
+      return;
     final api = ref.read(dataManagerApiProvider);
     if (api == null) return;
     for (final id in ps.solverDatabasePackageIds) {
@@ -133,8 +137,10 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     }
   }
 
-  Future<void> _saveAndExit(WizardController controller,
-      {bool finalSave = false}) async {
+  Future<void> _saveAndExit(
+    WizardController controller, {
+    bool finalSave = false,
+  }) async {
     if (_isSaving) return; // double-tap guard until the spinner blocks input
     // liveDraft() returns the live draft object: saveWizardProfile stamps
     // draft.savedProfileId on the first attempt so a retry re-uses the same
@@ -223,7 +229,8 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         );
         return;
       }
-      error = 'Couldn\'t save the profile: ${e.message ?? 'network error'} '
+      error =
+          'Couldn\'t save the profile: ${e.message ?? 'network error'} '
           '(${e.response!.statusCode}).';
     } catch (e) {
       // Keep the raw detail in the logs; show the user a clean message (no
@@ -280,10 +287,12 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         debugPrint('[wizard] guider profile push failed: $e');
         // A server refusal carries its own reason; the "when the guider is
         // reachable" advice only fits a guider that gave no answer.
-        finishNotes.add(e is DioException && e.response != null
-            ? 'Guider: ${friendlyError(l, e, action: l.actionPushGuiderProfile)}'
-            : 'The guider profile push didn\'t complete — push it '
-                'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.');
+        finishNotes.add(
+          e is DioException && e.response != null
+              ? 'Guider: ${friendlyError(l, e, action: l.actionPushGuiderProfile)}'
+              : 'The guider profile push didn\'t complete — push it '
+                    'from Settings → OpenAstro Guider (the top-bar Guider button) when the guider is reachable.',
+        );
       }
       if (draft.guider.buildDarksOnFinish && !pushed) {
         // The guider is still on the previous profile's twin: darks would be
@@ -292,8 +301,10 @@ class _WizardShellState extends ConsumerState<WizardShell> {
       } else if (draft.guider.buildDarksOnFinish) {
         final calApi = ref.read(guiderCalibrationApiProvider);
         if (calApi == null) {
-          finishNotes.add('Dark-library build skipped (no server connection) '
-              '— build it later from the Guider panel.');
+          finishNotes.add(
+            'Dark-library build skipped (no server connection) '
+            '— build it later from the Guider panel.',
+          );
         } else {
           try {
             await calApi.buildDarkLibrary(
@@ -304,14 +315,17 @@ class _WizardShellState extends ConsumerState<WizardShell> {
             darksStarted = true;
           } catch (e) {
             debugPrint('[wizard] darks kickoff failed: $e');
-            finishNotes.add('The dark-library build couldn\'t start — cover '
-                'the guide scope and build it from the Guider panel.');
+            finishNotes.add(
+              'The dark-library build couldn\'t start — cover '
+              'the guide scope and build it from the Guider panel.',
+            );
           }
         }
       }
     }
 
-    if (nav.mounted) nav.pop(); // close the spinner — independent of widget mount state
+    if (nav.mounted)
+      nav.pop(); // close the spinner — independent of widget mount state
     // Clear the guard inside setState when still mounted (Flutter contract for
     // state mutations); fall back to a bare assignment if the widget is gone.
     if (mounted) {
@@ -349,10 +363,12 @@ class _WizardShellState extends ConsumerState<WizardShell> {
     // Profile saved fine, but some follow-ups degraded (device connects,
     // guider push, darks) — tell the user which, with where to finish them.
     if (finishNotes.isNotEmpty) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(l.wizardSavedWithNotes(finishNotes.join(' '))),
-        duration: const Duration(seconds: 8),
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(l.wizardSavedWithNotes(finishNotes.join(' '))),
+          duration: const Duration(seconds: 8),
+        ),
+      );
     }
     widget.onComplete?.call(ProfileDraftSnapshot(draft));
   }
@@ -401,26 +417,35 @@ class _WizardShellState extends ConsumerState<WizardShell> {
         : 'Untitled profile';
     try {
       final store = ref.read(pendingProfileDraftServiceProvider);
-      await ref.read(pendingProfileDraftsProvider.notifier).add(PendingProfileDraft(
-        id: store.newId(),
-        name: name,
-        savedUtc: DateTime.now().toUtc(),
-        draft: draft,
-        finalSave: finalSave,
-        // A save that broke off partway created the profile on THIS server
-        // (savedProfileId); the replay must go back to it, not to the next rig.
-        serverKey: server == null ? null : pendingDraftServerKey(server),
-      ));
+      await ref
+          .read(pendingProfileDraftsProvider.notifier)
+          .add(
+            PendingProfileDraft(
+              id: store.newId(),
+              name: name,
+              savedUtc: DateTime.now().toUtc(),
+              draft: draft,
+              finalSave: finalSave,
+              // A save that broke off partway created the profile on THIS server
+              // (savedProfileId); the replay must go back to it, not to the next rig.
+              serverKey: server == null ? null : pendingDraftServerKey(server),
+            ),
+          );
     } catch (e) {
       debugPrint('[wizard] local profile save failed: $e');
-      _showError(messenger, 'Couldn\'t save the profile on this device. Please try again.');
+      _showError(
+        messenger,
+        'Couldn\'t save the profile on this device. Please try again.',
+      );
       return;
     }
     if (nav.mounted) nav.pop(); // exit the wizard
-    messenger.showSnackBar(SnackBar(
-      content: Text(l.wizardSavedLocally(name)),
-      duration: const Duration(seconds: 6),
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(l.wizardSavedLocally(name)),
+        duration: const Duration(seconds: 6),
+      ),
+    );
     widget.onComplete?.call(ProfileDraftSnapshot(draft));
   }
 
@@ -534,26 +559,33 @@ class _BottomNavBar extends StatelessWidget {
 /// amber follow-up notes. Leaving is always safe — the build continues on
 /// the server.
 class WizardDoneView extends ConsumerWidget {
-  const WizardDoneView({super.key, required this.notes, required this.onFinish});
+  const WizardDoneView({
+    super.key,
+    required this.notes,
+    required this.onFinish,
+  });
 
   final List<String> notes;
   final VoidCallback onFinish;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final activity = ref
-        .watch(guiderBuildActivityProvider)[CalibrationArtifact.darkLibrary];
+    final activity = ref.watch(
+      guiderBuildActivityProvider,
+    )[CalibrationArtifact.darkLibrary];
     final phase = activity?.phase;
     final fraction = activity?.fraction;
     final String progressLine;
     if (phase == CalibrationBuildPhase.complete) {
       progressLine = 'Dark library complete.';
     } else if (phase == CalibrationBuildPhase.failed) {
-      progressLine = 'Dark-library build failed'
+      progressLine =
+          'Dark-library build failed'
           '${activity?.error != null ? ' (${activity!.error})' : ''} — '
           'rebuild it from the Guider panel.';
     } else if (activity?.exposureIndex != null) {
-      progressLine = 'Building dark library — exposure '
+      progressLine =
+          'Building dark library — exposure '
           '${activity!.exposureIndex}/${activity.exposureCount} '
           '(frame ${activity.frame}/${activity.frameCount})…';
     } else {
@@ -570,17 +602,20 @@ class WizardDoneView extends ConsumerWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.check_circle,
-                    size: 44, color: AraColors.accentConnected),
+                const Icon(
+                  Icons.check_circle,
+                  size: 44,
+                  color: AraColors.accentConnected,
+                ),
                 const SizedBox(height: 12),
-                Text(context.l10n.wizardDoneHeading,
-                    style: Theme.of(context).textTheme.headlineSmall),
+                Text(
+                  context.l10n.wizardDoneHeading,
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   context.l10n.wizardDoneBody,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodyMedium
+                  style: Theme.of(context).textTheme.bodyMedium
                       ?.copyWith(color: AraColors.textSecondary),
                 ),
                 const SizedBox(height: 20),
@@ -590,31 +625,37 @@ class WizardDoneView extends ConsumerWidget {
                         ? 1.0
                         : fraction,
                     backgroundColor: AraColors.bgPanel,
-                    valueColor:
-                        const AlwaysStoppedAnimation(AraColors.accentInfo),
+                    valueColor: const AlwaysStoppedAnimation(
+                      AraColors.accentInfo,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
-                Text(progressLine,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: phase == CalibrationBuildPhase.failed
-                              ? AraColors.accentBusy
-                              : AraColors.textSecondary,
-                        )),
+                Text(
+                  progressLine,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: phase == CalibrationBuildPhase.failed
+                        ? AraColors.accentBusy
+                        : AraColors.textSecondary,
+                  ),
+                ),
                 for (final note in notes) ...[
                   const SizedBox(height: 8),
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.warning_amber_rounded,
-                          size: 16, color: AraColors.accentBusy),
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: AraColors.accentBusy,
+                      ),
                       const SizedBox(width: 6),
                       Expanded(
-                        child: Text(note,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodySmall
-                                ?.copyWith(color: AraColors.textSecondary)),
+                        child: Text(
+                          note,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AraColors.textSecondary),
+                        ),
                       ),
                     ],
                   ),

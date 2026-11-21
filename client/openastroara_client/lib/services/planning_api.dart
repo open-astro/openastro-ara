@@ -34,7 +34,9 @@ class PlanningApi {
 
   /// Refit from the library now and return the stored record.
   Future<SkyModelCalibration?> recalibrate() async {
-    final res = await _dio.post<dynamic>('/api/v1/planning/sky-model/recalibrate');
+    final res = await _dio.post<dynamic>(
+      '/api/v1/planning/sky-model/recalibrate',
+    );
     return SkyModelCalibration.fromJson(res.data);
   }
 

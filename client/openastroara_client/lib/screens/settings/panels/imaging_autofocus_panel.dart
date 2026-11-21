@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../settings/registry.dart';
@@ -86,10 +88,18 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
     try {
       await ref.read(autofocusApiProvider)?.recalibrate();
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(l10n.focusCalibrationResetDone)));
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.focusCalibrationResetDone)),
+      );
     } catch (e) {
       if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: l10n.focusCalibrationResetAction));
+      setState(
+        () => _lastError = friendlyError(
+          context.l10n,
+          e,
+          action: l10n.focusCalibrationResetAction,
+        ),
+      );
       messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
     }
   }
@@ -163,26 +173,28 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
                   : l10n.deviceAutofocusOffHint,
             ),
             if (sharp != null)
-              'img.autofocus.keep_focus_sharp': SettingsDropdownRow<KeepFocusSharp>(
-                label: l10n.deviceKeepFocusSharp,
-                value: sharp,
-                items: {
-                  KeepFocusSharp.relaxed: l10n.deviceKeepSharpRelaxed,
-                  KeepFocusSharp.normal: l10n.deviceKeepSharpNormal,
-                  KeepFocusSharp.tight: l10n.deviceKeepSharpTight,
-                  // Triggers that match no preset; picking one overwrites them.
-                  if (sharp == KeepFocusSharp.custom)
-                    KeepFocusSharp.custom: l10n.deviceKeepSharpCustom,
-                },
-                onChanged: (v) {
-                  if (v != null) n.applyKeepFocusSharp(v);
-                },
-              ),
+              'img.autofocus.keep_focus_sharp':
+                  SettingsDropdownRow<KeepFocusSharp>(
+                    label: l10n.deviceKeepFocusSharp,
+                    value: sharp,
+                    items: {
+                      KeepFocusSharp.relaxed: l10n.deviceKeepSharpRelaxed,
+                      KeepFocusSharp.normal: l10n.deviceKeepSharpNormal,
+                      KeepFocusSharp.tight: l10n.deviceKeepSharpTight,
+                      // Triggers that match no preset; picking one overwrites them.
+                      if (sharp == KeepFocusSharp.custom)
+                        KeepFocusSharp.custom: l10n.deviceKeepSharpCustom,
+                    },
+                    onChanged: (v) {
+                      if (v != null) n.applyKeepFocusSharp(v);
+                    },
+                  ),
             'img.autofocus.af_filter': EditableTextRow(
               label: 'Filter for AF',
               helpKey: 'img.autofocus.filter',
               currentValue: s.afFilter,
-              getCanonical: () => ref.read(autofocusSettingsProvider).value?.afFilter ?? '',
+              getCanonical: () =>
+                  ref.read(autofocusSettingsProvider).value?.afFilter ?? '',
               parse: n.setAfFilter,
             ),
           }),
@@ -232,7 +244,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.exposure',
               currentValue: s.exposureSeconds.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.exposureSeconds.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.exposureSeconds
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = int.tryParse(str);
                 if (v != null) n.setExposureSeconds(v);
@@ -243,7 +260,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.binning',
               currentValue: s.binning.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.binning.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.binning
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = int.tryParse(str);
                 if (v != null) n.setBinning(v);
@@ -254,7 +276,8 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.steps',
               currentValue: s.steps.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.steps.toString() ?? '',
+                  ref.read(autofocusSettingsProvider).value?.steps.toString() ??
+                  '',
               parse: (str) {
                 final v = int.tryParse(str);
                 if (v != null) n.setSteps(v);
@@ -270,7 +293,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
                   : derivedStepSizeText(l10n, derivedStep),
               currentValue: s.stepSize.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.stepSize.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.stepSize
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = int.tryParse(str);
                 if (v != null) n.setStepSize(v);
@@ -290,7 +318,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.trigger_temp_delta_c',
               currentValue: s.triggerTempDeltaC.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.triggerTempDeltaC.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.triggerTempDeltaC
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = double.tryParse(str);
                 if (v != null) n.setTriggerTempDeltaC(v);
@@ -302,7 +335,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.trigger_hfr_drift_pct',
               currentValue: s.triggerHfrDriftPct.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.triggerHfrDriftPct.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.triggerHfrDriftPct
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = double.tryParse(str);
                 if (v != null) n.setTriggerHfrDriftPct(v);
@@ -314,7 +352,12 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
               helpKey: 'img.autofocus.every_n_hours',
               currentValue: s.everyNHours.toString(),
               getCanonical: () =>
-                  ref.read(autofocusSettingsProvider).value?.everyNHours.toString() ?? '',
+                  ref
+                      .read(autofocusSettingsProvider)
+                      .value
+                      ?.everyNHours
+                      .toString() ??
+                  '',
               parse: (str) {
                 final v = int.tryParse(str);
                 if (v != null) n.setEveryNHours(v);
@@ -341,7 +384,9 @@ class _ImagingAutofocusPanelState extends ConsumerState<ImagingAutofocusPanel>
             alignment: Alignment.centerLeft,
             child: OutlinedButton(
               key: const Key('af-reset-calibration'),
-              onPressed: ref.watch(autofocusApiProvider) == null ? null : _resetCalibration,
+              onPressed: ref.watch(autofocusApiProvider) == null
+                  ? null
+                  : _resetCalibration,
               child: Text(context.l10n.focusCalibrationReset),
             ),
           ),

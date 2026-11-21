@@ -29,19 +29,19 @@ class SafetyMonitorStatus extends EquipmentDeviceStatus {
     required this.lastTransitionAt,
   });
 
-  factory SafetyMonitorStatus.fromJson(Map<String, dynamic> json) =>
-      SafetyMonitorStatus(
-        deviceId: json['device_id'] as String? ?? '',
-        name: json['name'] as String? ?? '',
-        connectionState:
-            equipmentConnectionStateFromWire(json['state'] as String?),
-        // Tolerate a non-bool `safe` (a schema quirk sending 0/1) the same way the
-        // string fields tolerate a missing key. Degrading to `false` (Unsafe) is the
-        // deliberate FAIL-SAFE direction for a safety monitor — when the reading is
-        // unparseable, block (show Unsafe) rather than green-light an exposure.
-        safe: json['safe'] is bool ? json['safe'] as bool : false,
-        lastTransitionAt: _parseUtc(json['last_transition_at']),
-      );
+  factory SafetyMonitorStatus.fromJson(
+    Map<String, dynamic> json,
+  ) => SafetyMonitorStatus(
+    deviceId: json['device_id'] as String? ?? '',
+    name: json['name'] as String? ?? '',
+    connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
+    // Tolerate a non-bool `safe` (a schema quirk sending 0/1) the same way the
+    // string fields tolerate a missing key. Degrading to `false` (Unsafe) is the
+    // deliberate FAIL-SAFE direction for a safety monitor — when the reading is
+    // unparseable, block (show Unsafe) rather than green-light an exposure.
+    safe: json['safe'] is bool ? json['safe'] as bool : false,
+    lastTransitionAt: _parseUtc(json['last_transition_at']),
+  );
 
   static DateTime? _parseUtc(Object? raw) =>
       raw is String ? DateTime.tryParse(raw)?.toUtc() : null;

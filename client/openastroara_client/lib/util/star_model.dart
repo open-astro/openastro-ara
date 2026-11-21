@@ -44,12 +44,24 @@ final List<double> _bandSinB = [
 
 // Actual pooled HYG densities N(<9)/deg² per band (the anchor).
 const List<double> _densityAtMag9 = [
-  2.941788, 2.517927, 2.121440, 1.872188, 1.649431, 1.546706, 1.458785,
+  2.941788,
+  2.517927,
+  2.121440,
+  1.872188,
+  1.649431,
+  1.546706,
+  1.458785,
 ];
 
 // Validated per-band log-linear slopes d(log₁₀N)/dm from the m ∈ [5,8] fits.
 const List<double> _slopePerMag = [
-  0.468471, 0.466291, 0.458120, 0.502271, 0.473209, 0.457310, 0.439958,
+  0.468471,
+  0.466291,
+  0.458120,
+  0.502271,
+  0.473209,
+  0.457310,
+  0.439958,
 ];
 
 /// Cumulative stars per square degree brighter than [limitingMag] at galactic
@@ -79,7 +91,8 @@ double galacticLatitudeDeg(double raDeg, double decDeg) {
   const ngpDec = 27.12825 * math.pi / 180.0;
   final ra = raDeg * math.pi / 180.0;
   final dec = decDeg * math.pi / 180.0;
-  final sinB = math.sin(ngpDec) * math.sin(dec) +
+  final sinB =
+      math.sin(ngpDec) * math.sin(dec) +
       math.cos(ngpDec) * math.cos(dec) * math.cos(ra - ngpRa);
   return math.asin(sinB.clamp(-1.0, 1.0)) * 180.0 / math.pi;
 }
@@ -104,7 +117,8 @@ double seeingDiscPixels(OptimalSubInput input, double seeingFwhmArcsec) {
   final scale = pixelScaleArcsec(input);
   if (!scale.isFinite || scale <= 0) {
     throw ArgumentError(
-        'rig geometry must yield a positive, finite plate scale');
+      'rig geometry must yield a positive, finite plate scale',
+    );
   }
   final discAreaArcsec2 = math.pi * math.pow(seeingFwhmArcsec / 2.0, 2);
   return math.max(1.0, discAreaArcsec2 / (scale * scale));
@@ -114,8 +128,11 @@ double seeingDiscPixels(OptimalSubInput input, double seeingFwhmArcsec) {
 /// [exposureSec]. Closed form: `S* = (k² + √(k⁴ + 4k²N)) / 2`, then
 /// `m_lim = −2.5·log₁₀(S* / (F₀·BW·A·QE·t))`.
 double limitingMagnitude(
-    OptimalSubInput input, double exposureSec, double seeingFwhmArcsec,
-    {double snrThreshold = defaultDetectionSnr}) {
+  OptimalSubInput input,
+  double exposureSec,
+  double seeingFwhmArcsec, {
+  double snrThreshold = defaultDetectionSnr,
+}) {
   if (!exposureSec.isFinite || exposureSec <= 0) {
     throw ArgumentError('exposure must be a positive, finite seconds figure');
   }
@@ -134,7 +151,8 @@ double limitingMagnitude(
   final k2 = snrThreshold * snrThreshold;
   final sMin = (k2 + math.sqrt(k2 * k2 + 4.0 * k2 * n)) / 2.0;
 
-  final mag0ElectronsPerSec = photonFluxMag0PerCm2PerNm *
+  final mag0ElectronsPerSec =
+      photonFluxMag0PerCm2PerNm *
       input.filterBandwidthNm *
       apertureAreaCm2(input) *
       input.quantumEfficiency;
@@ -143,28 +161,47 @@ double limitingMagnitude(
 
 /// Predicted stars in [fovDeg2] square degrees whose per-sub SNR reaches
 /// [snrThreshold] in a sub of [exposureSec].
-double predictedStars(OptimalSubInput input, double exposureSec,
-    double seeingFwhmArcsec, double galLatDeg, double fovDeg2,
-    double snrThreshold) {
+double predictedStars(
+  OptimalSubInput input,
+  double exposureSec,
+  double seeingFwhmArcsec,
+  double galLatDeg,
+  double fovDeg2,
+  double snrThreshold,
+) {
   if (!(fovDeg2.isFinite && fovDeg2 > 0)) {
     throw ArgumentError('field of view must be a positive, finite deg² figure');
   }
-  final mLim = limitingMagnitude(input, exposureSec, seeingFwhmArcsec,
-      snrThreshold: snrThreshold);
+  final mLim = limitingMagnitude(
+    input,
+    exposureSec,
+    seeingFwhmArcsec,
+    snrThreshold: snrThreshold,
+  );
   return cumulativeStarsPerDeg2(mLim, galLatDeg) * fovDeg2;
 }
 
 /// `t_stars`: the shortest sub whose predicted registration-quality star
 /// count reaches [minStars] — or null when even [maxStarFloorSec] can't (a
 /// starved field). Log-domain bisection; monotone in exposure.
-double? starFloorSec(OptimalSubInput input, double seeingFwhmArcsec,
-    double galLatDeg, double fovDeg2,
-    {double minStars = minRegistrationStars}) {
+double? starFloorSec(
+  OptimalSubInput input,
+  double seeingFwhmArcsec,
+  double galLatDeg,
+  double fovDeg2, {
+  double minStars = minRegistrationStars,
+}) {
   if (!(minStars.isFinite && minStars > 0)) {
     throw ArgumentError('the star budget must be positive and finite');
   }
   double starsAt(double t) => predictedStars(
-      input, t, seeingFwhmArcsec, galLatDeg, fovDeg2, registrationSnr);
+    input,
+    t,
+    seeingFwhmArcsec,
+    galLatDeg,
+    fovDeg2,
+    registrationSnr,
+  );
 
   if (starsAt(maxStarFloorSec) < minStars) return null;
   if (starsAt(_minSearchSec) >= minStars) return _minSearchSec;
@@ -185,9 +222,14 @@ double? starFloorSec(OptimalSubInput input, double seeingFwhmArcsec,
 /// §3.1 presentation rules (effective floor = max(read-noise floor, t_stars),
 /// recommendation capped by the ceiling, counts evaluated at the FINAL
 /// recommendation). RA in degrees.
-OptimalSubResult augmentWithStarFloor(OptimalSubResult window,
-    OptimalSubInput input, double seeingFwhmArcsec, double raDeg,
-    double decDeg, double fovDeg2) {
+OptimalSubResult augmentWithStarFloor(
+  OptimalSubResult window,
+  OptimalSubInput input,
+  double seeingFwhmArcsec,
+  double raDeg,
+  double decDeg,
+  double fovDeg2,
+) {
   final galLat = galacticLatitudeDeg(raDeg, decDeg);
   final tStars = starFloorSec(input, seeingFwhmArcsec, galLat, fovDeg2);
 
@@ -198,16 +240,31 @@ OptimalSubResult augmentWithStarFloor(OptimalSubResult window,
   final bound = !viable
       ? OptimalSubBound.saturationCeiling
       : starsBind
-          ? OptimalSubBound.starFloor
-          : OptimalSubBound.readNoiseFloor;
+      ? OptimalSubBound.starFloor
+      : OptimalSubBound.readNoiseFloor;
 
-  final detected = predictedStars(input, recommended, seeingFwhmArcsec,
-      galLat, fovDeg2, defaultDetectionSnr);
-  final registration = predictedStars(input, recommended, seeingFwhmArcsec,
-      galLat, fovDeg2, registrationSnr);
+  final detected = predictedStars(
+    input,
+    recommended,
+    seeingFwhmArcsec,
+    galLat,
+    fovDeg2,
+    defaultDetectionSnr,
+  );
+  final registration = predictedStars(
+    input,
+    recommended,
+    seeingFwhmArcsec,
+    galLat,
+    fovDeg2,
+    registrationSnr,
+  );
   final mLimAtRecommended = limitingMagnitude(
-      input, recommended, seeingFwhmArcsec,
-      snrThreshold: registrationSnr);
+    input,
+    recommended,
+    seeingFwhmArcsec,
+    snrThreshold: registrationSnr,
+  );
 
   return OptimalSubResult(
     skyFluxEPerSecPerPx: window.skyFluxEPerSecPerPx,
@@ -220,31 +277,44 @@ OptimalSubResult augmentWithStarFloor(OptimalSubResult window,
     starsDetectedPerSub: detected,
     starsRegistrationPerSub: registration,
     starReason: _buildReason(
-        window, tStars, recommended, registration, starsBind,
-        mLimAtRecommended),
+      window,
+      tStars,
+      recommended,
+      registration,
+      starsBind,
+      mLimAtRecommended,
+    ),
   );
 }
 
-String _buildReason(OptimalSubResult gloverWindow, double? tStars,
-    double recommendedSec, double registrationStars, bool starsBind,
-    double mLimAtRecommended) {
+String _buildReason(
+  OptimalSubResult gloverWindow,
+  double? tStars,
+  double recommendedSec,
+  double registrationStars,
+  bool starsBind,
+  double mLimAtRecommended,
+) {
   String text;
   if (tStars == null || registrationStars < minRegistrationStars) {
-    text = '~${registrationStars.toStringAsFixed(0)} registration-quality '
+    text =
+        '~${registrationStars.toStringAsFixed(0)} registration-quality '
         'stars/sub at ${_short(recommendedSec)} s — thin for registration '
         '(~${minRegistrationStars.toStringAsFixed(0)} wanted)';
   } else if (starsBind) {
-    text = 'star floor ${_short(recommendedSec)} s: the '
+    text =
+        'star floor ${_short(recommendedSec)} s: the '
         '${_short(gloverWindow.floorSec)} s read-noise floor is star-starved '
         '— stars, not read noise, set the floor';
   } else {
-    text = '~${registrationStars.toStringAsFixed(0)} registration-quality '
+    text =
+        '~${registrationStars.toStringAsFixed(0)} registration-quality '
         'stars/sub at ${_short(recommendedSec)} s — read noise remains the '
         'binding floor';
   }
   return mLimAtRecommended > 9.0
       ? '$text (star counts extrapolated beyond the catalog\'s mag-9 depth — '
-          'optimistic)'
+            'optimistic)'
       : text;
 }
 

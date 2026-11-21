@@ -11,7 +11,8 @@ import 'package:flutter/foundation.dart'
         debugPrint,
         defaultTargetPlatform,
         visibleForTesting;
-import 'package:flutter/services.dart' show MethodChannel, MissingPluginException, PlatformException;
+import 'package:flutter/services.dart'
+    show MethodChannel, MissingPluginException, PlatformException;
 import 'package:multicast_dns/multicast_dns.dart';
 
 import '../models/server.dart';
@@ -106,14 +107,19 @@ class ServerDiscoveryService {
     final found = <AraServer>[];
     for (final r in await (nativeBrowse ?? _channelBrowse)()) {
       if (r is! Map) continue;
-      final host = r['host'], port = r['port'], name = r['name'], uuid = r['uuid'];
+      final host = r['host'],
+          port = r['port'],
+          name = r['name'],
+          uuid = r['uuid'];
       if (host is String && port is int) {
-        found.add(AraServer(
-          hostname: host,
-          port: port,
-          mdnsName: name is String ? name : null,
-          uuid: uuid is String ? uuid : null,
-        ));
+        found.add(
+          AraServer(
+            hostname: host,
+            port: port,
+            mdnsName: name is String ? name : null,
+            uuid: uuid is String ? uuid : null,
+          ),
+        );
       }
     }
     yield* Stream.fromIterable(_oneRowPerRig(found, await _localAddresses()));
@@ -154,12 +160,11 @@ class ServerDiscoveryService {
   @visibleForTesting
   static RawDatagramSocketFactory productionDatagramBind({
     RawDatagramSocketFactory bind = RawDatagramSocket.bind,
-  }) =>
-      platformDatagramBind(
-        defaultTargetPlatform == TargetPlatform.android ||
-            defaultTargetPlatform == TargetPlatform.windows,
-        bind: bind,
-      );
+  }) => platformDatagramBind(
+    defaultTargetPlatform == TargetPlatform.android ||
+        defaultTargetPlatform == TargetPlatform.windows,
+    bind: bind,
+  );
 
   /// The rig's own name from a PTR answer: `openastro._openastroara._tcp.local`
   /// → `openastro` (the list showed the whole service name, #1129).
@@ -177,12 +182,19 @@ class ServerDiscoveryService {
     bool noReusePort, {
     RawDatagramSocketFactory bind = RawDatagramSocket.bind,
   }) =>
-      (dynamic host, int port,
-              {bool reuseAddress = true, bool reusePort = false, int ttl = 1}) =>
-          bind(host, port,
-              reuseAddress: reuseAddress,
-              reusePort: noReusePort ? false : reusePort,
-              ttl: ttl);
+      (
+        dynamic host,
+        int port, {
+        bool reuseAddress = true,
+        bool reusePort = false,
+        int ttl = 1,
+      }) => bind(
+        host,
+        port,
+        reuseAddress: reuseAddress,
+        reusePort: noReusePort ? false : reusePort,
+        ttl: ttl,
+      );
 
   /// Test seam for the local IPv4 enumeration (production uses
   /// `NetworkInterface.list`).
@@ -228,7 +240,8 @@ class ServerDiscoveryService {
   /// failure was also what raised a false "iOS is blocking local network
   /// access" banner while the sweep had found the rig (#1129).
   @visibleForTesting
-  static bool get rawMulticastAllowed => defaultTargetPlatform != TargetPlatform.iOS;
+  static bool get rawMulticastAllowed =>
+      defaultTargetPlatform != TargetPlatform.iOS;
 
   /// errno values for "the remote host answered and refused the port":
   /// ECONNREFUSED on macOS/iOS (61), Linux/Android (111), and on Windows both
@@ -250,7 +263,8 @@ class ServerDiscoveryService {
   static ({bool answered, bool blocked}) probeErrorOutcome(Object error) {
     if (error is SocketException) {
       final errno = error.osError?.errorCode;
-      if (_refusedErrnos.contains(errno)) return (answered: true, blocked: false);
+      if (_refusedErrnos.contains(errno))
+        return (answered: true, blocked: false);
       if (_isBlockedSend(error) || _sweepOnlyBlockedErrnos.contains(errno)) {
         return (answered: false, blocked: true);
       }
@@ -263,8 +277,10 @@ class ServerDiscoveryService {
   /// rig, not even the router refusing the port — and some probe came back
   /// with an OS refusal. A rig that is simply off leaves the router answering.
   @visibleForTesting
-  static bool sweepSaysBlocked({required bool anyHostAnswered, required int blockedFailures}) =>
-      !anyHostAnswered && blockedFailures > 0;
+  static bool sweepSaysBlocked({
+    required bool anyHostAnswered,
+    required int blockedFailures,
+  }) => !anyHostAnswered && blockedFailures > 0;
 
   /// errno values a blocked multicast send comes back with: EHOSTUNREACH
   /// (65 on macOS/BSD, 113 on Linux; macOS Local Network denial), EPERM (1)
@@ -369,23 +385,25 @@ class ServerDiscoveryService {
       sweepSub = null;
     }
 
-    mdnsSub = (mdnsSource ?? (rawMulticastAllowed ? _mdnsDiscover : _bonjourDiscover))()
-        .listen(
-      (s) {
-        if (!sawMdnsResult) {
-          sawMdnsResult = true;
-          dropSweepStrands();
-        }
-        emit(s);
-      },
-      onError: (Object _) {},
-      onDone: () {
-        // mDNS finished with nothing — the sweep is the only hope; start it
-        // BEFORE done() so pending can't hit zero and close the stream first.
-        if (!sawMdnsResult) maybeStartSweep();
-        done();
-      },
-    );
+    mdnsSub =
+        (mdnsSource ??
+                (rawMulticastAllowed ? _mdnsDiscover : _bonjourDiscover))()
+            .listen(
+              (s) {
+                if (!sawMdnsResult) {
+                  sawMdnsResult = true;
+                  dropSweepStrands();
+                }
+                emit(s);
+              },
+              onError: (Object _) {},
+              onDone: () {
+                // mDNS finished with nothing — the sweep is the only hope; start it
+                // BEFORE done() so pending can't hit zero and close the stream first.
+                if (!sawMdnsResult) maybeStartSweep();
+                done();
+              },
+            );
     if (_sweepIsCurrent) {
       // A sweep is running or just finished: an earlier pass proved mDNS
       // empty, so take its hits now — waiting out the grace period again is
@@ -443,7 +461,8 @@ class ServerDiscoveryService {
     void onSocketError(Object error, StackTrace stack) {
       _logOnce('[discovery] mDNS socket error: $error');
       sawSocketError = true;
-      final rigJustAnswered = _lastRigSeen != null &&
+      final rigJustAnswered =
+          _lastRigSeen != null &&
           DateTime.now().difference(_lastRigSeen!) < _rigSeenVouchesFor;
       if (hasNetwork && _isBlockedSend(error) && !rigJustAnswered) {
         _localNetworkBlocked.value = true;
@@ -491,10 +510,7 @@ class ServerDiscoveryService {
                   ResourceRecordQuery.addressIPv4(srv.target),
                 )
                 .map((a) => a.address.address)
-                .timeout(
-                  _aRecordIdleWindow,
-                  onTimeout: (sink) => sink.close(),
-                )
+                .timeout(_aRecordIdleWindow, onTimeout: (sink) => sink.close())
                 .listen(candidates.add);
             // A cancellable Timer, not Future.delayed: a deadline that
             // outlives the subscription would leave a timer pending on
@@ -513,8 +529,10 @@ class ServerDiscoveryService {
             // ignore: avoid_catches_without_on_clauses
           } catch (e) {
             sawLookupFailure = true;
-            _logOnce('[discovery] mDNS A-record lookup for ${srv.target} '
-                'failed: $e');
+            _logOnce(
+              '[discovery] mDNS A-record lookup for ${srv.target} '
+              'failed: $e',
+            );
             continue;
           }
           if (candidates.isEmpty) {
@@ -645,9 +663,8 @@ class ServerDiscoveryService {
     List<String> candidates,
     Iterable<String> localAddresses,
   ) {
-    final localBases = {
-      for (final a in localAddresses) _slash24(a),
-    }..remove(null);
+    final localBases = {for (final a in localAddresses) _slash24(a)}
+      ..remove(null);
     final onSubnet = [
       for (final c in candidates)
         if (localBases.contains(_slash24(c))) c,
@@ -738,9 +755,7 @@ class ServerDiscoveryService {
         // point), so cancellation must be checked explicitly or a cancelled
         // pass would keep probing every remaining batch (review r4).
         if (cancelledNow()) return;
-        final probes = [
-          for (final h in hosts.skip(i).take(batch)) probe(h),
-        ];
+        final probes = [for (final h in hosts.skip(i).take(batch)) probe(h)];
         for (final r in await Future.wait(probes)) {
           anyHostAnswered |= r.answered;
           if (r.blocked) blockedFailures++;
@@ -754,7 +769,9 @@ class ServerDiscoveryService {
       // does. Elsewhere the mDNS path owns the flag.
       if (!rawMulticastAllowed && hits == 0) {
         _localNetworkBlocked.value = sweepSaysBlocked(
-            anyHostAnswered: anyHostAnswered, blockedFailures: blockedFailures);
+          anyHostAnswered: anyHostAnswered,
+          blockedFailures: blockedFailures,
+        );
       }
     } finally {
       client.close(force: true);
@@ -797,7 +814,8 @@ class ServerDiscoveryService {
   /// HTTP path (#1129 review).
   @visibleForTesting
   static Future<ProbeResult> probeForTest(String host, int port) async {
-    final client = HttpClient()..connectionTimeout = const Duration(milliseconds: 800);
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(milliseconds: 800);
     try {
       return await _probe(client, host, port: port);
     } finally {
@@ -810,7 +828,11 @@ class ServerDiscoveryService {
   /// (refused, timeout, non-JSON) means "not a daemon" — never an error. The
   /// result also says whether the host answered at all and whether the OS
   /// refused the connection, for [sweepSaysBlocked].
-  static Future<ProbeResult> _probe(HttpClient client, String host, {int port = defaultPort}) async {
+  static Future<ProbeResult> _probe(
+    HttpClient client,
+    String host, {
+    int port = defaultPort,
+  }) async {
     var answered = false;
     try {
       final req = await client
@@ -851,7 +873,10 @@ class ServerDiscoveryService {
     } catch (e) {
       // Not an Ara daemon (or unreachable) — skip silently.
       final outcome = probeErrorOutcome(e);
-      return ProbeResult(answered: answered || outcome.answered, blocked: outcome.blocked);
+      return ProbeResult(
+        answered: answered || outcome.answered,
+        blocked: outcome.blocked,
+      );
     }
   }
 }

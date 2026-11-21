@@ -145,7 +145,9 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
   } catch (_) {
     clientGps = null; // prefs unreadable → treat as disabled
   }
-  if (clientGps != null && clientGps.enabled && clientGps.freshFix(DateTime.now().toUtc())) {
+  if (clientGps != null &&
+      clientGps.enabled &&
+      clientGps.freshFix(DateTime.now().toUtc())) {
     final fix = clientGps.lastFix!;
     return GpsSiteFill.success(
       lat: fix.latitudeDeg!,
@@ -167,7 +169,8 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
           lat: loc.lat,
           lng: loc.lng,
           alt: loc.alt,
-          sourceLabel: "the rig's last known position (source: ${state.source})",
+          sourceLabel:
+              "the rig's last known position (source: ${state.source})",
         );
       }
     } catch (_) {
@@ -201,7 +204,8 @@ Future<GpsSiteFill> fillSiteFromGps(WidgetRef ref) async {
         lat: fix.latitudeDeg!,
         lng: fix.longitudeDeg!,
         alt: fix.altitudeM,
-        sourceLabel: 'the GPS dongle on $_thisDevice (now enabled in Settings → Site → Time sync)',
+        sourceLabel:
+            'the GPS dongle on $_thisDevice (now enabled in Settings → Site → Time sync)',
       );
     }
   }

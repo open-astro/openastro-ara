@@ -9,8 +9,10 @@ import '../models/server.dart';
 abstract interface class CalibrationClient {
   /// One page at the server's cap; pass [cursor] from the previous page's
   /// [CursorPage.nextCursor] to continue.
-  Future<CursorPage<CalibrationSession>> listSessions(
-      {int limit = 200, String? cursor});
+  Future<CursorPage<CalibrationSession>> listSessions({
+    int limit = 200,
+    String? cursor,
+  });
 
   /// One session; null when the server has no such calibration session.
   Future<CalibrationSession?> getSession(String sessionId);
@@ -56,17 +58,22 @@ class CalibrationApi implements CalibrationClient {
   final Dio _dio;
 
   CalibrationApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
-            ));
+            ),
+          );
 
   @override
-  Future<CursorPage<CalibrationSession>> listSessions(
-      {int limit = 200, String? cursor}) async {
+  Future<CursorPage<CalibrationSession>> listSessions({
+    int limit = 200,
+    String? cursor,
+  }) async {
     final res = await _dio.get<dynamic>(
       '/api/v1/calibration/sessions',
       queryParameters: <String, dynamic>{'limit': limit, 'cursor': ?cursor},
@@ -76,7 +83,8 @@ class CalibrationApi implements CalibrationClient {
     // shape means the wire contract changed — throw so the notifier surfaces it.
     if (data is! Map<String, dynamic> || data['items'] is! List) {
       throw FormatException(
-          'calibration sessions returned an unexpected body (${data.runtimeType})');
+        'calibration sessions returned an unexpected body (${data.runtimeType})',
+      );
     }
     final items = (data['items'] as List)
         .whereType<Map<String, dynamic>>()
@@ -94,11 +102,14 @@ class CalibrationApi implements CalibrationClient {
   @override
   Future<CalibrationSession?> getSession(String sessionId) async {
     try {
-      final res = await _dio.get<dynamic>('/api/v1/calibration/sessions/$sessionId');
+      final res = await _dio.get<dynamic>(
+        '/api/v1/calibration/sessions/$sessionId',
+      );
       final data = res.data;
       if (data is! Map<String, dynamic>) {
         throw FormatException(
-            'calibration session returned an unexpected body (${data.runtimeType})');
+          'calibration session returned an unexpected body (${data.runtimeType})',
+        );
       }
       return CalibrationSession.fromJson(data);
     } on DioException catch (e) {
@@ -143,18 +154,22 @@ class CalibrationApi implements CalibrationClient {
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-          'matching-flats returned an unexpected body (${data.runtimeType})');
+        'matching-flats returned an unexpected body (${data.runtimeType})',
+      );
     }
     return GeneratedFlatSequence.fromJson(data);
   }
 
   @override
   Future<DarkLibraryState> darkLibraryStatus() async {
-    final res = await _dio.get<dynamic>('/api/v1/calibration/dark-library/status');
+    final res = await _dio.get<dynamic>(
+      '/api/v1/calibration/dark-library/status',
+    );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
       throw FormatException(
-          'dark-library status returned an unexpected body (${data.runtimeType})');
+        'dark-library status returned an unexpected body (${data.runtimeType})',
+      );
     }
     return DarkLibraryState.fromJson(data);
   }

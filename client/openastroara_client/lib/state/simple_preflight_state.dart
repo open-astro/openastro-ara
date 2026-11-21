@@ -1,6 +1,8 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
 import '../l10n/l10n.dart';
 import 'sequencer/sequence_list_state.dart' show sequenceRunStateProvider;
 import 'simple_run_state.dart'
@@ -270,7 +272,8 @@ SimplePreflightStep? preflightNextStep({
   for (final s in SimplePreflightStep.values) {
     if (after != null && s.index <= after.index) continue;
     if (s == SimplePreflightStep.focus && focused) continue;
-    if (s == SimplePreflightStep.polarAlign && (aligned || permanentPier)) continue;
+    if (s == SimplePreflightStep.polarAlign && (aligned || permanentPier))
+      continue;
     if (s == SimplePreflightStep.guide && guided) continue;
     return s;
   }
@@ -350,7 +353,8 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   bool _polarFinished = false;
 
   void _go(SimplePreflightStep step) {
-    if (state == SimplePreflightStep.polarAlign && step != SimplePreflightStep.polarAlign) {
+    if (state == SimplePreflightStep.polarAlign &&
+        step != SimplePreflightStep.polarAlign) {
       _endPolar();
     }
     if (step == SimplePreflightStep.polarAlign) _polarFinished = false;
@@ -412,7 +416,9 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
       return;
     }
     if (ref.read(simpleRunProvider).sequenceId == null) {
-      _go(SimplePreflightStep.plan); // the plan was skipped: nothing to start yet
+      _go(
+        SimplePreflightStep.plan,
+      ); // the plan was skipped: nothing to start yet
       return;
     }
     if (s == SimplePreflightStep.polarAlign) _endPolar();
@@ -456,8 +462,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   /// running stops it: it moves the mount, and its stop button leaves the
   /// screen with the step. Done has already finished it.
   void _endPolar() {
-    if (_polarFinished ||
-        !ref.read(polarAlignLiveProvider).isActive) {
+    if (_polarFinished || !ref.read(polarAlignLiveProvider).isActive) {
       return;
     }
     final api = ref.read(polarAlignApiProvider);
@@ -465,6 +470,7 @@ class SimplePreflightNotifier extends Notifier<SimplePreflightStep?> {
   }
 }
 
-final simplePreflightProvider = NotifierProvider<SimplePreflightNotifier, SimplePreflightStep?>(
-  SimplePreflightNotifier.new,
-);
+final simplePreflightProvider =
+    NotifierProvider<SimplePreflightNotifier, SimplePreflightStep?>(
+      SimplePreflightNotifier.new,
+    );

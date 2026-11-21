@@ -28,8 +28,9 @@ abstract final class SequenceWsEvents {
 }
 
 /// Builds a [SequenceClient] for a server. Overridable in tests.
-final sequenceApiFactoryProvider =
-    Provider<SequenceClient Function(AraServer)>((ref) => SequenceApi.new);
+final sequenceApiFactoryProvider = Provider<SequenceClient Function(AraServer)>(
+  (ref) => SequenceApi.new,
+);
 
 /// [SequenceClient] bound to the active server ([activeServerProvider]), or `null`
 /// when no server is saved. autoDispose so the Dio client is released (and
@@ -97,24 +98,29 @@ class SequenceListNotifier extends AsyncNotifier<List<SequenceListItem>?> {
       }
       cursor = result.nextCursor;
     }
-    debugPrint('[sequencer] stopped after $maxPages pages of sequences '
-        '(${all.length} loaded) — Ara kept returning a cursor.');
+    debugPrint(
+      '[sequencer] stopped after $maxPages pages of sequences '
+      '(${all.length} loaded) — Ara kept returning a cursor.',
+    );
     return all;
   }
 }
 
-final sequenceListProvider = AsyncNotifierProvider.autoDispose<
-    SequenceListNotifier, List<SequenceListItem>?>(SequenceListNotifier.new);
+final sequenceListProvider =
+    AsyncNotifierProvider.autoDispose<
+      SequenceListNotifier,
+      List<SequenceListItem>?
+    >(SequenceListNotifier.new);
 
 /// The daemon's starting-point sequence templates for the "New" dialog. Null
 /// when no server is connected (distinct from an empty list — a connected daemon
 /// with no templates). autoDispose: only alive while the New dialog watches it.
 final sequenceTemplatesProvider =
     FutureProvider.autoDispose<List<SequenceTemplate>?>((ref) async {
-  final api = ref.watch(sequenceApiProvider);
-  if (api == null) return null;
-  return api.listTemplates();
-});
+      final api = ref.watch(sequenceApiProvider);
+      if (api == null) return null;
+      return api.listTemplates();
+    });
 
 /// Id of the sequence the user picked in the Load dialog (null = none loaded).
 /// The tab's tree/run controls key off this. Riverpod 3.x removed
@@ -128,12 +134,9 @@ final sequenceTemplatesProvider =
 class SelectedSequenceIdNotifier extends Notifier<String?> {
   @override
   String? build() {
-    ref.listen(
-      activeServerProvider,
-      (prev, next) {
-        if (prev != next) state = null;
-      },
-    );
+    ref.listen(activeServerProvider, (prev, next) {
+      if (prev != next) state = null;
+    });
     return null;
   }
 
@@ -142,7 +145,8 @@ class SelectedSequenceIdNotifier extends Notifier<String?> {
 
 final selectedSequenceIdProvider =
     NotifierProvider<SelectedSequenceIdNotifier, String?>(
-        SelectedSequenceIdNotifier.new);
+      SelectedSequenceIdNotifier.new,
+    );
 
 /// Live run state of the currently-selected sequence (null = nothing selected,
 /// no server, or no active run for it). Rebuilds when the selection or server
@@ -207,8 +211,9 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     for (final s in list ?? const <SequenceListItem>[]) {
       if (s.currentRunState?.isActive != true) continue;
       if (active == null ||
-          (s.modifiedUtc ?? DateTime(0))
-              .isAfter(active.modifiedUtc ?? DateTime(0))) {
+          (s.modifiedUtc ?? DateTime(0)).isAfter(
+            active.modifiedUtc ?? DateTime(0),
+          )) {
         active = s;
       }
     }
@@ -287,16 +292,23 @@ class SequenceRunStateNotifier extends AsyncNotifier<SequenceRunStateInfo?> {
     if (next.hasError) {
       // developer.log (not debugPrint) so the failure survives release builds —
       // it can be the only signal that e.g. completedUtc never reloaded.
-      developer.log('run-state refresh failed',
-          name: 'sequencer', error: next.error, stackTrace: next.stackTrace);
+      developer.log(
+        'run-state refresh failed',
+        name: 'sequencer',
+        error: next.error,
+        stackTrace: next.stackTrace,
+      );
     } else {
       state = next;
     }
   }
 }
 
-final sequenceRunStateProvider = AsyncNotifierProvider.autoDispose<
-    SequenceRunStateNotifier, SequenceRunStateInfo?>(SequenceRunStateNotifier.new);
+final sequenceRunStateProvider =
+    AsyncNotifierProvider.autoDispose<
+      SequenceRunStateNotifier,
+      SequenceRunStateInfo?
+    >(SequenceRunStateNotifier.new);
 
 /// True while a sequence lifecycle command (start/pause/resume/abort) is
 /// in-flight, so the toolbar can disable the controls and a rapid double-tap
@@ -312,4 +324,5 @@ class SequenceCommandBusyNotifier extends Notifier<bool> {
 
 final sequenceCommandBusyProvider =
     NotifierProvider<SequenceCommandBusyNotifier, bool>(
-        SequenceCommandBusyNotifier.new);
+      SequenceCommandBusyNotifier.new,
+    );

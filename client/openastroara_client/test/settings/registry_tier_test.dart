@@ -2,28 +2,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/settings/registry.dart';
 
 void main() {
-  test(
-    'every entry has a tier; Simple is the Advanced toggle and the three focus basics (#1544)',
-    () {
-      expect(settingsRegistry, isNotEmpty);
-      expect(
-        {for (final s in settingsRegistry) s.tier},
-        {SettingTier.simple, SettingTier.advanced},
-      );
-      expect(
-        {
-          for (final s in settingsRegistry)
-            if (s.tier == SettingTier.simple) s.id,
-        },
-        {
-          'app.settings.advanced',
-          'img.autofocus.during_plans',
-          'img.autofocus.keep_focus_sharp',
-          'img.autofocus.af_filter',
-        },
-      );
-    },
-  );
+  test('every entry has a tier; Simple is the Advanced toggle and the three focus basics (#1544)', () {
+    expect(settingsRegistry, isNotEmpty);
+    expect(
+      {for (final s in settingsRegistry) s.tier},
+      {SettingTier.simple, SettingTier.advanced},
+    );
+    expect(
+      {
+        for (final s in settingsRegistry)
+          if (s.tier == SettingTier.simple) s.id,
+      },
+      {
+        'app.settings.advanced',
+        'img.autofocus.during_plans',
+        'img.autofocus.keep_focus_sharp',
+        'img.autofocus.af_filter',
+      },
+    );
+  });
 
   test(
     'derived-by is set for the focus values something else computes (#1544)',

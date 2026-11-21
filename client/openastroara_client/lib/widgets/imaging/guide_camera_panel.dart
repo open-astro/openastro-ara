@@ -180,7 +180,8 @@ class GuideCameraPanel extends ConsumerWidget {
               const SizedBox(width: 8),
               FilledButton.tonalIcon(
                 key: const Key('guide-camera-guide'),
-                onPressed: !live.connected ||
+                onPressed:
+                    !live.connected ||
                         state.busy ||
                         (live.isGuidingPhase && live.appState != 'LostLock')
                     ? null
@@ -210,7 +211,9 @@ class GuideCameraPanel extends ConsumerWidget {
               const Spacer(),
               Flexible(
                 child: Text(
-                  (state.error == null ? null : failureReason(context.l10n, state.error!)) ??
+                  (state.error == null
+                          ? null
+                          : failureReason(context.l10n, state.error!)) ??
                       (live.connected
                           ? (live.hasFrame
                                 ? 'Tap a star to guide on it.'
@@ -239,7 +242,10 @@ class GuideCameraPanel extends ConsumerWidget {
       // DESIGN.md status rule: idle is healthy, a lost star a warning.
       'Guiding' || 'Stopped' => AraColors.accentConnected,
       'LostLock' => AraColors.accentBusy,
-      'Calibrating' || 'Looping' || 'Selected' || 'Paused' => AraColors.accentInfo,
+      'Calibrating' ||
+      'Looping' ||
+      'Selected' ||
+      'Paused' => AraColors.accentInfo,
       _ => AraColors.textSecondary,
     };
   }
@@ -329,11 +335,20 @@ class GuideMarksPainter extends CustomPainter {
   GuideMarksPainter(this.live, this.box);
 
   /// Frame pixel → canvas point for a BoxFit.contain picture. Pure — tested.
-  static Offset toCanvas(double x, double y, int frameWidth, int frameHeight, Size box) {
+  static Offset toCanvas(
+    double x,
+    double y,
+    int frameWidth,
+    int frameHeight,
+    Size box,
+  ) {
     final scale = scaleFor(frameWidth, frameHeight, box);
     final drawnW = frameWidth * scale;
     final drawnH = frameHeight * scale;
-    return Offset((box.width - drawnW) / 2 + x * scale, (box.height - drawnH) / 2 + y * scale);
+    return Offset(
+      (box.width - drawnW) / 2 + x * scale,
+      (box.height - drawnH) / 2 + y * scale,
+    );
   }
 
   static double scaleFor(int frameWidth, int frameHeight, Size box) {

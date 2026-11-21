@@ -88,24 +88,15 @@ const Map<String, dynamic> aboveHorizonConditionData = {
 /// fields, so each is just `{$type}`.
 const Map<String, String?> timeProviders = {
   'Custom time': null,
-  'Sunset':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunsetProvider, OpenAstroAra.Sequencer',
-  'Sunrise':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunriseProvider, OpenAstroAra.Sequencer',
-  'Civil Dusk':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDuskProvider, OpenAstroAra.Sequencer',
-  'Civil Dawn':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDawnProvider, OpenAstroAra.Sequencer',
-  'Nautical Dusk':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDuskProvider, OpenAstroAra.Sequencer',
-  'Nautical Dawn':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDawnProvider, OpenAstroAra.Sequencer',
-  'Astronomical Dusk':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer',
-  'Astronomical Dawn':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DawnProvider, OpenAstroAra.Sequencer',
-  'Meridian':
-      'OpenAstroAra.Sequencer.Utility.DateTimeProvider.MeridianProvider, OpenAstroAra.Sequencer',
+  'Sunset': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunsetProvider, OpenAstroAra.Sequencer',
+  'Sunrise': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.SunriseProvider, OpenAstroAra.Sequencer',
+  'Civil Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDuskProvider, OpenAstroAra.Sequencer',
+  'Civil Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.CivilDawnProvider, OpenAstroAra.Sequencer',
+  'Nautical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDuskProvider, OpenAstroAra.Sequencer',
+  'Nautical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.NauticalDawnProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dusk': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DuskProvider, OpenAstroAra.Sequencer',
+  'Astronomical Dawn': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.DawnProvider, OpenAstroAra.Sequencer',
+  'Meridian': 'OpenAstroAra.Sequencer.Utility.DateTimeProvider.MeridianProvider, OpenAstroAra.Sequencer',
 };
 
 /// Build a `SelectedProvider` value from a [timeProviders] label: null (custom
@@ -228,8 +219,7 @@ const List<ConditionDef> conditionCatalog = [
   // Run a container for a fixed wall-clock duration (HH:MM:SS). Default 1 minute
   // (the C# constructor default), all three are `[JsonProperty] public int`.
   ConditionDef(
-    type:
-        'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer',
     label: 'For a duration',
     icon: Icons.timelapse_outlined,
     fields: [
@@ -263,8 +253,7 @@ const List<ConditionDef> conditionCatalog = [
   // HasDsoParent is a [JsonProperty] the daemon recomputes from the parent DSO
   // context on load, so it's emitted at its default but hidden from the editor.
   ConditionDef(
-    type:
-        'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer',
     label: 'Until altitude',
     icon: Icons.height,
     fields: [

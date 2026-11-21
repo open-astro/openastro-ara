@@ -53,12 +53,18 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
       await ref.read(trackingCalibrationProvider.notifier).recalibrate();
       messenger.showSnackBar(
         const SnackBar(
-          content: Text('Tracking ceiling cleared — the next unguided run measures it again.'),
+          content: Text(
+            'Tracking ceiling cleared — the next unguided run measures it again.',
+          ),
         ),
       );
     } catch (e) {
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(l10n, e, action: l10n.actionClearCeiling))),
+        SnackBar(
+          content: Text(
+            friendlyError(l10n, e, action: l10n.actionClearCeiling),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -93,7 +99,10 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         if (_lastError != null)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: Text(_lastError!, style: const TextStyle(color: AraColors.accentError)),
+            child: Text(
+              _lastError!,
+              style: const TextStyle(color: AraColors.accentError),
+            ),
           ),
         const SettingsSectionHeader('Tracking ceiling'),
         if (!connected)
@@ -125,21 +134,36 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
               hint: 'The spec sheet or the previous night',
             ),
           if (record.polarAlignErrorArcmin != null)
-            SettingsRow(label: 'Polar-align residual', value: "${record.polarAlignErrorArcmin!.toStringAsFixed(1)}'"),
+            SettingsRow(
+              label: 'Polar-align residual',
+              value: "${record.polarAlignErrorArcmin!.toStringAsFixed(1)}'",
+            ),
           if (record.pixelScaleArcsec != null)
-            SettingsRow(label: 'Pixel scale', value: '${record.pixelScaleArcsec!.toStringAsFixed(2)}"/px'),
+            SettingsRow(
+              label: 'Pixel scale',
+              value: '${record.pixelScaleArcsec!.toStringAsFixed(2)}"/px',
+            ),
           if (record.seeingFwhmArcsec != null)
-            SettingsRow(label: 'Seeing', value: '${record.seeingFwhmArcsec!.toStringAsFixed(1)}" FWHM'),
+            SettingsRow(
+              label: 'Seeing',
+              value: '${record.seeingFwhmArcsec!.toStringAsFixed(1)}" FWHM',
+            ),
           if (record.rungs.isNotEmpty) ...[
             const SettingsSectionHeader('Ladder'),
             for (final r in record.rungs)
               SettingsRow(
                 label: formatExposureSeconds(r.exposureSeconds),
                 value: [
-                  if (r.eccentricity != null) 'ecc ${r.eccentricity!.toStringAsFixed(2)}',
-                  if (r.fwhmPx != null) 'FWHM ${r.fwhmPx!.toStringAsFixed(1)} px',
+                  if (r.eccentricity != null)
+                    'ecc ${r.eccentricity!.toStringAsFixed(2)}',
+                  if (r.fwhmPx != null)
+                    'FWHM ${r.fwhmPx!.toStringAsFixed(1)} px',
                   '${r.stars} stars',
-                  !r.usable ? 'too few stars' : r.passed ? 'pass' : 'trailed',
+                  !r.usable
+                      ? 'too few stars'
+                      : r.passed
+                      ? 'pass'
+                      : 'trailed',
                 ].join(' · '),
               ),
           ],
@@ -157,7 +181,8 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
                 final sheet =>
                   '${sheet.model ?? 'This mount'}: ${sheet.trackingFact}${sheet.hasPec ? ' · PEC available' : ''}',
               },
-              AsyncError() => 'Couldn\'t read the mount — check its connection.',
+              AsyncError() =>
+                'Couldn\'t read the mount — check its connection.',
               _ => 'Reading the mount…',
             },
             helpKey: 'img.unguided.ceiling',
@@ -166,7 +191,9 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         Align(
           alignment: Alignment.centerLeft,
           child: OutlinedButton.icon(
-            onPressed: connected && record != null && !_busy ? _recalibrate : null,
+            onPressed: connected && record != null && !_busy
+                ? _recalibrate
+                : null,
             icon: const Icon(Icons.refresh, size: 18),
             label: const Text('Recalibrate on the next run'),
           ),
@@ -197,7 +224,8 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         EditableNumberRow(
           label: 'Round at or under eccentricity',
           helpKey: 'img.unguided.eccentricity',
-          hint: 'Kept below the trailed bar; follows it down when you lower that',
+          hint:
+              'Kept below the trailed bar; follows it down when you lower that',
           currentValue: _num(u.goodEccentricity),
           getCanonical: () =>
               _num(ref.read(unguidedSettingsProvider).value!.goodEccentricity),
@@ -259,7 +287,10 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
               optics:
                   ref.watch(opticsSettingsProvider).value ??
                   const OpticsSettings(),
-              seeingArcsec: (ref.watch(siteSettingsProvider).value ?? const SiteSettings()).typicalSeeingArcsec,
+              seeingArcsec:
+                  (ref.watch(siteSettingsProvider).value ??
+                          const SiteSettings())
+                      .typicalSeeingArcsec,
             )
             case final gap?)
           Padding(
@@ -309,7 +340,11 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
 
 /// #1264 — what a single-figure prior tolerance basis still lacks, or null
 /// when the figure is there (or the basis needs none). Pure — unit-tested.
-String? basisGapFor(String basis, {required OpticsSettings optics, required double seeingArcsec}) {
+String? basisGapFor(
+  String basis, {
+  required OpticsSettings optics,
+  required double seeingArcsec,
+}) {
   switch (basis) {
     case 'pixel':
       return optics.focalLengthMm > 0 && optics.pixelSizeUm > 0

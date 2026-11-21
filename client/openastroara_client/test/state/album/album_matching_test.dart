@@ -10,18 +10,25 @@ import 'package:openastroara/state/album/album_matching.dart';
 /// "Client / State"): pure matching, aggregates, tiers, Nights and the merge
 /// rule of the collection cache (#1595, ADR 0001).
 
-PlanningDso _dso(String id, {String? name, double ra = 10, double dec = 20, int? m, int? c, List<String> aliases = const []}) =>
-    PlanningDso(
-      id: id,
-      name: name ?? id,
-      type: 'G',
-      magnitude: 5,
-      raDeg: ra,
-      decDeg: dec,
-      messierNum: m,
-      caldwellNum: c,
-      aliases: aliases,
-    );
+PlanningDso _dso(
+  String id, {
+  String? name,
+  double ra = 10,
+  double dec = 20,
+  int? m,
+  int? c,
+  List<String> aliases = const [],
+}) => PlanningDso(
+  id: id,
+  name: name ?? id,
+  type: 'G',
+  magnitude: 5,
+  raDeg: ra,
+  decDeg: dec,
+  messierNum: m,
+  caldwellNum: c,
+  aliases: aliases,
+);
 
 AlbumFrame _frame(
   String id, {
@@ -35,20 +42,19 @@ AlbumFrame _frame(
   String? filter,
   DateTime? captured,
   DateTime? updated,
-}) =>
-    AlbumFrame(
-      frameId: id,
-      raDeg: ra,
-      decDeg: dec,
-      width: width,
-      height: height,
-      pixelScaleArcsec: scale,
-      capturedUtc: captured ?? DateTime.utc(2026, 3, 2),
-      exposureSeconds: exposure,
-      filterName: filter,
-      targetName: target,
-      updatedUtc: updated,
-    );
+}) => AlbumFrame(
+  frameId: id,
+  raDeg: ra,
+  decDeg: dec,
+  width: width,
+  height: height,
+  pixelScaleArcsec: scale,
+  capturedUtc: captured ?? DateTime.utc(2026, 3, 2),
+  exposureSeconds: exposure,
+  filterName: filter,
+  targetName: target,
+  updatedUtc: updated,
+);
 
 void main() {
   group('containment: the inscribed circle', () {
@@ -65,7 +71,13 @@ void main() {
     });
     test('an object in a frame corner is not credited', () {
       // 500" east and 300" north of the centre: inside the rectangle, outside the circle.
-      expect(frameContains(frame, _dso('a', ra: 10 + 500 / 3600 / 0.9396926, dec: 20 + 300 / 3600)), isFalse);
+      expect(
+        frameContains(
+          frame,
+          _dso('a', ra: 10 + 500 / 3600 / 0.9396926, dec: 20 + 300 / 3600),
+        ),
+        isFalse,
+      );
     });
     test('a frame without pointing or scale contains nothing by position', () {
       expect(frameContains(_frame('f', ra: null), _dso('a')), isFalse);
@@ -74,20 +86,48 @@ void main() {
   });
 
   group('alias fallback', () {
-    final m31 = _dso('NGC0224', name: 'Andromeda Galaxy', m: 31, aliases: const ['M 31']);
-    for (final target in ['M31', 'M 31', 'Messier 31', 'messier31', 'NGC 224', 'Andromeda Galaxy']) {
-      test('"$target" names M31', () => expect(targetNames(target, m31), isTrue));
+    final m31 = _dso(
+      'NGC0224',
+      name: 'Andromeda Galaxy',
+      m: 31,
+      aliases: const ['M 31'],
+    );
+    for (final target in [
+      'M31',
+      'M 31',
+      'Messier 31',
+      'messier31',
+      'NGC 224',
+      'Andromeda Galaxy',
+    ]) {
+      test(
+        '"$target" names M31',
+        () => expect(targetNames(target, m31), isTrue),
+      );
     }
-    test('another object is not matched', () => expect(targetNames('M 32', m31), isFalse));
+    test(
+      'another object is not matched',
+      () => expect(targetNames('M 32', m31), isFalse),
+    );
     test('Caldwell folds like Messier', () {
-      expect(targetNames('Caldwell 14', _dso('NGC0869', c: 14, aliases: const ['C 014'])), isTrue);
+      expect(
+        targetNames(
+          'Caldwell 14',
+          _dso('NGC0869', c: 14, aliases: const ['C 014']),
+        ),
+        isTrue,
+      );
     });
   });
 
   group('tiers', () {
     test('none below 15 min, bronze at 15 min, silver at 1 h, gold at 5 h', () {
       expect(tierFor(lights: 0, hours: 0), isNull);
-      expect(tierFor(lights: 1, hours: 0.01), isNull, reason: 'a stray frame collects nothing');
+      expect(
+        tierFor(lights: 1, hours: 0.01),
+        isNull,
+        reason: 'a stray frame collects nothing',
+      );
       expect(tierFor(lights: 4, hours: 0.249), isNull);
       expect(tierFor(lights: 5, hours: 0.25), AlbumTier.bronze);
       expect(tierFor(lights: 12, hours: 0.999), AlbumTier.bronze);
@@ -98,42 +138,95 @@ void main() {
   });
 
   group('aggregates', () {
-    final m81 = _dso('NGC3031', ra: 148.888, dec: 69.065, m: 81, aliases: const ['M 81']);
+    final m81 = _dso(
+      'NGC3031',
+      ra: 148.888,
+      dec: 69.065,
+      m: 81,
+      aliases: const ['M 81'],
+    );
     final m82 = _dso('NGC3034', ra: 148.970, dec: 69.680, m: 82);
     // 3000 x 2000 px at 2"/px: a 33.3' radius covers both galaxies from a centre between them.
-    final wide = {'ra': 148.93, 'dec': 69.37, 'scale': 2.0, 'w': 3000, 'h': 2000};
+    final wide = {
+      'ra': 148.93,
+      'dec': 69.37,
+      'scale': 2.0,
+      'w': 3000,
+      'h': 2000,
+    };
 
-    test('every contained object gets full credit, filters and first capture', () {
-      final frames = [
-        _frame('late', ra: wide['ra'] as double, dec: wide['dec'] as double, scale: 2, width: 3000, height: 2000,
-            exposure: 1800, filter: 'Ha', captured: DateTime.utc(2026, 4, 2)),
-        _frame('early', ra: wide['ra'] as double, dec: wide['dec'] as double, scale: 2, width: 3000, height: 2000,
-            exposure: 1800, filter: 'L', captured: DateTime.utc(2026, 3, 1)),
-        _frame('named', ra: null, target: 'M81', exposure: 600, filter: 'Ha', captured: DateTime.utc(2026, 5, 1)),
-      ];
-      final stats = aggregateBook(frames, [m81, m82]);
+    test(
+      'every contained object gets full credit, filters and first capture',
+      () {
+        final frames = [
+          _frame(
+            'late',
+            ra: wide['ra'] as double,
+            dec: wide['dec'] as double,
+            scale: 2,
+            width: 3000,
+            height: 2000,
+            exposure: 1800,
+            filter: 'Ha',
+            captured: DateTime.utc(2026, 4, 2),
+          ),
+          _frame(
+            'early',
+            ra: wide['ra'] as double,
+            dec: wide['dec'] as double,
+            scale: 2,
+            width: 3000,
+            height: 2000,
+            exposure: 1800,
+            filter: 'L',
+            captured: DateTime.utc(2026, 3, 1),
+          ),
+          _frame(
+            'named',
+            ra: null,
+            target: 'M81',
+            exposure: 600,
+            filter: 'Ha',
+            captured: DateTime.utc(2026, 5, 1),
+          ),
+        ];
+        final stats = aggregateBook(frames, [m81, m82]);
 
-      final s81 = stats['NGC3031']!;
-      expect(s81.frameCount, 3);
-      expect(s81.integrationHours, closeTo(4200 / 3600, 1e-9));
-      expect(s81.firstCaptureUtc, DateTime.utc(2026, 3, 1));
-      expect(s81.filters, ['L', 'Ha'], reason: 'distinct, in capture order');
-      expect(s81.tier, AlbumTier.silver);
+        final s81 = stats['NGC3031']!;
+        expect(s81.frameCount, 3);
+        expect(s81.integrationHours, closeTo(4200 / 3600, 1e-9));
+        expect(s81.firstCaptureUtc, DateTime.utc(2026, 3, 1));
+        expect(s81.filters, ['L', 'Ha'], reason: 'distinct, in capture order');
+        expect(s81.tier, AlbumTier.silver);
 
-      final s82 = stats['NGC3034']!;
-      expect(s82.frameCount, 2, reason: 'the named frame credits M81 only');
-      expect(s82.integrationHours, 1.0);
-    });
+        final s82 = stats['NGC3034']!;
+        expect(s82.frameCount, 2, reason: 'the named frame credits M81 only');
+        expect(s82.integrationHours, 1.0);
+      },
+    );
 
     test('a frame whose stored scale or size is unusable falls back to its target name', () {
-      final frames = [_frame('zero', scale: 0, target: 'M81'), _frame('flat', width: 0, target: 'M81')];
+      final frames = [
+        _frame('zero', scale: 0, target: 'M81'),
+        _frame('flat', width: 0, target: 'M81'),
+      ];
       expect(aggregateBook(frames, [m81])['NGC3031']!.frameCount, 2);
     });
 
     test('first capture skips frames with no capture time', () {
-      final frames = [_frame('a', ra: null, target: 'M81', captured: null), _frame('b', ra: null, target: 'M81')];
-      final undated = AlbumFrame(frameId: 'u', targetName: 'M81', exposureSeconds: 60);
-      expect(aggregateBook([undated, ...frames], [m81])['NGC3031']!.firstCaptureUtc, DateTime.utc(2026, 3, 2));
+      final frames = [
+        _frame('a', ra: null, target: 'M81', captured: null),
+        _frame('b', ra: null, target: 'M81'),
+      ];
+      final undated = AlbumFrame(
+        frameId: 'u',
+        targetName: 'M81',
+        exposureSeconds: 60,
+      );
+      expect(
+        aggregateBook([undated, ...frames], [m81])['NGC3031']!.firstCaptureUtc,
+        DateTime.utc(2026, 3, 2),
+      );
     });
 
     test('an object no frame contains has no stats', () {
@@ -142,11 +235,16 @@ void main() {
 
     test('matching through the index credits exactly the frames a scan of every object does (#1887)', () {
       // The scan aggregateBook replaced, from the two public rules: every frame against every object.
-      Map<String, List<String>> scan(List<AlbumFrame> frames, List<PlanningDso> book) {
+      Map<String, List<String>> scan(
+        List<AlbumFrame> frames,
+        List<PlanningDso> book,
+      ) {
         final hits = <String, List<String>>{};
         for (final f in frames) {
           for (final o in book) {
-            if (f.hasPosition ? frameContains(f, o) : targetNames(f.targetName, o)) {
+            if (f.hasPosition
+                ? frameContains(f, o)
+                : targetNames(f.targetName, o)) {
               hits.putIfAbsent(o.id, () => []).add(f.frameId);
             }
           }
@@ -158,14 +256,25 @@ void main() {
       final book = [
         // A crowded patch across RA 0h, so frames hold several objects, and a cap round the pole.
         for (var i = 0; i < 400; i++)
-          _dso('N$i', ra: (350 + rnd.nextDouble() * 20) % 360, dec: 10 + rnd.nextDouble() * 20, aliases: ['X ${'$i'.padLeft(4, '0')}']),
-        for (var i = 0; i < 20; i++) _dso('P$i', ra: rnd.nextDouble() * 360, dec: 89 + rnd.nextDouble()),
+          _dso(
+            'N$i',
+            ra: (350 + rnd.nextDouble() * 20) % 360,
+            dec: 10 + rnd.nextDouble() * 20,
+            aliases: ['X ${'$i'.padLeft(4, '0')}'],
+          ),
+        for (var i = 0; i < 20; i++)
+          _dso('P$i', ra: rnd.nextDouble() * 360, dec: 89 + rnd.nextDouble()),
         _dso('EDGE', ra: 100, dec: 20 + 5 / 60),
         _dso('TOL', ra: 120, dec: 20 + (5 + 0.5e-9) / 60),
         _dso('OUT', ra: 140, dec: 20 + 5.05 / 60),
         _dso('WRAP', ra: 0.1, dec: 0),
         _dso('PASTPOLE', ra: 190, dec: 85),
-        _dso('NGC0224', name: 'Andromeda Galaxy', m: 31, aliases: ['M 31', 'NGC 224']),
+        _dso(
+          'NGC0224',
+          name: 'Andromeda Galaxy',
+          m: 31,
+          aliases: ['M 31', 'NGC 224'],
+        ),
         _dso('T1', aliases: ['Twin']),
         _dso('T2', aliases: ['twin']),
         // Away from every circle: only a name could credit it, and an empty one must not.
@@ -173,16 +282,37 @@ void main() {
       ];
       var n = 0;
       // Each frame its own filter, so a Card's filters list the frames that credited it, in order.
-      AlbumFrame f({double? ra, double? dec, double scale = 1, int px = 600, String target = ''}) {
+      AlbumFrame f({
+        double? ra,
+        double? dec,
+        double scale = 1,
+        int px = 600,
+        String target = '',
+      }) {
         final id = 'f${'${n++}'.padLeft(3, '0')}';
-        return _frame(id, ra: ra, dec: dec, scale: scale, width: px, height: px, target: target, filter: id,
-            captured: DateTime.utc(2026, 3, 2).add(Duration(minutes: n)));
+        return _frame(
+          id,
+          ra: ra,
+          dec: dec,
+          scale: scale,
+          width: px,
+          height: px,
+          target: target,
+          filter: id,
+          captured: DateTime.utc(2026, 3, 2).add(Duration(minutes: n)),
+        );
       }
 
       final frames = [
         for (var i = 0; i < 150; i++)
-          f(ra: (350 + rnd.nextDouble() * 20) % 360, dec: 10 + rnd.nextDouble() * 20, scale: 1.5 + rnd.nextDouble() * 13, px: 1000),
-        for (var i = 0; i < 10; i++) f(ra: rnd.nextDouble() * 360, dec: 89.5, scale: 7, px: 1000),
+          f(
+            ra: (350 + rnd.nextDouble() * 20) % 360,
+            dec: 10 + rnd.nextDouble() * 20,
+            scale: 1.5 + rnd.nextDouble() * 13,
+            px: 1000,
+          ),
+        for (var i = 0; i < 10; i++)
+          f(ra: rnd.nextDouble() * 360, dec: 89.5, scale: 7, px: 1000),
         // 600 px at 1"/px: a 5' circle, with an object on its edge, one past it by less than the
         // 1e-9' frameContains allows, and one outside.
         f(ra: 100, dec: 20),
@@ -192,20 +322,54 @@ void main() {
         f(ra: 359.9, dec: 0, px: 1800),
         // A corrupt pointing past the pole: the scan's trigonometry reads it as RA 190, dec 85.
         f(ra: 10, dec: 95, px: 3600),
-        for (final name in ['M31', 'Messier 31', 'ngc 0224', 'Andromeda Galaxy', 'x 7', 'X0012', 'TWIN', 'nothing', ''])
+        for (final name in [
+          'M31',
+          'Messier 31',
+          'ngc 0224',
+          'Andromeda Galaxy',
+          'x 7',
+          'X0012',
+          'TWIN',
+          'nothing',
+          '',
+        ])
           f(target: name),
       ];
 
       final want = scan(frames, book);
-      expect(want.keys, containsAll(['EDGE', 'TOL', 'WRAP', 'PASTPOLE', 'NGC0224', 'N7', 'N12', 'T1', 'T2']));
+      expect(
+        want.keys,
+        containsAll([
+          'EDGE',
+          'TOL',
+          'WRAP',
+          'PASTPOLE',
+          'NGC0224',
+          'N7',
+          'N12',
+          'T1',
+          'T2',
+        ]),
+      );
       expect(want.keys, isNot(anyOf(contains('OUT'), contains('BLANK'))));
       expect(want.length, greaterThan(150), reason: 'most frames hold objects');
       final got = aggregateBook(frames, book);
-      expect(got.keys.toList(), want.keys.toList(), reason: 'the same Cards, in the same order');
-      expect({for (final MapEntry(:key, :value) in got.entries) key: value.filters}, want);
-      expect({for (final MapEntry(:key, :value) in got.entries) key: value.frameCount},
-          {for (final MapEntry(:key, :value) in want.entries) key: value.length},
-          reason: 'a frame credits a Card once, however many of its designations fold to the name');
+      expect(
+        got.keys.toList(),
+        want.keys.toList(),
+        reason: 'the same Cards, in the same order',
+      );
+      expect({
+        for (final MapEntry(:key, :value) in got.entries) key: value.filters,
+      }, want);
+      expect(
+        {
+          for (final MapEntry(:key, :value) in got.entries)
+            key: value.frameCount,
+        },
+        {for (final MapEntry(:key, :value) in want.entries) key: value.length},
+        reason: 'a frame credits a Card once, however many of its designations fold to the name',
+      );
     });
   });
 
@@ -214,7 +378,10 @@ void main() {
     final b = _frame('b', updated: DateTime.utc(2026, 3, 2));
 
     test('a newer updated time replaces the cached row; the newest is the next since', () {
-      final merged = mergeAlbumRows({'a': a}, [b, _frame('a', exposure: 60, updated: DateTime.utc(2026, 3, 3))]);
+      final merged = mergeAlbumRows(
+        {'a': a},
+        [b, _frame('a', exposure: 60, updated: DateTime.utc(2026, 3, 3))],
+      );
       expect(merged.keys, unorderedEquals(['a', 'b']));
       expect(merged['a']!.exposureSeconds, 60);
       expect(albumSince(merged.values), DateTime.utc(2026, 3, 3));
@@ -222,26 +389,44 @@ void main() {
     });
 
     test('an older row never replaces a newer one', () {
-      final merged = mergeAlbumRows({'a': a}, [_frame('a', exposure: 60, updated: DateTime.utc(2026, 2, 1))]);
+      final merged = mergeAlbumRows(
+        {'a': a},
+        [_frame('a', exposure: 60, updated: DateTime.utc(2026, 2, 1))],
+      );
       expect(merged['a']!.exposureSeconds, 300);
     });
 
     test('a row absent from a later reply stays; a reply with fewer rows deletes nothing', () {
-      expect(mergeAlbumRows({'a': a, 'b': b}, [b]).keys, unorderedEquals(['a', 'b']));
-      expect(mergeAlbumRows({'a': a, 'b': b}, const []).keys, unorderedEquals(['a', 'b']));
+      expect(
+        mergeAlbumRows({'a': a, 'b': b}, [b]).keys,
+        unorderedEquals(['a', 'b']),
+      );
+      expect(
+        mergeAlbumRows({'a': a, 'b': b}, const []).keys,
+        unorderedEquals(['a', 'b']),
+      );
     });
 
-    test('a Tier computed before a deletion on the rig is the same after it', () {
-      final m31 = _dso('NGC0224', m: 31, aliases: const ['M 31']);
-      final cache = {
-        for (var i = 0; i < 12; i++) 'f$i': _frame('f$i', ra: null, exposure: 1800, updated: DateTime.utc(2026, 3, 1)),
-      };
-      final before = aggregateBook(cache.values, [m31])['NGC0224']!.tier;
-      // The rig deleted ten frames: its next full reply carries two.
-      final after = mergeAlbumRows(cache, cache.values.take(2));
-      expect(before, AlbumTier.gold);
-      expect(aggregateBook(after.values, [m31])['NGC0224']!.tier, before);
-    });
+    test(
+      'a Tier computed before a deletion on the rig is the same after it',
+      () {
+        final m31 = _dso('NGC0224', m: 31, aliases: const ['M 31']);
+        final cache = {
+          for (var i = 0; i < 12; i++)
+            'f$i': _frame(
+              'f$i',
+              ra: null,
+              exposure: 1800,
+              updated: DateTime.utc(2026, 3, 1),
+            ),
+        };
+        final before = aggregateBook(cache.values, [m31])['NGC0224']!.tier;
+        // The rig deleted ten frames: its next full reply carries two.
+        final after = mergeAlbumRows(cache, cache.values.take(2));
+        expect(before, AlbumTier.gold);
+        expect(aggregateBook(after.values, [m31])['NGC0224']!.tier, before);
+      },
+    );
   });
 
   group('Nights', () {
@@ -251,7 +436,10 @@ void main() {
         _frame('small hours', captured: DateTime(2026, 3, 3, 1).toUtc()),
         _frame('next', captured: DateTime(2026, 3, 3, 21).toUtc()),
       ]);
-      expect(nights.map((n) => (n.key, n.lights)), [('2026-03-03', 1), ('2026-03-02', 2)], reason: 'newest first');
+      expect(nights.map((n) => (n.key, n.lights)), [
+        ('2026-03-03', 1),
+        ('2026-03-02', 2),
+      ], reason: 'newest first');
     });
 
     test('Nights follow the site longitude, not the device zone', () {
@@ -277,33 +465,61 @@ void main() {
       expect(greenwich.map((n) => (n.key, n.lights)), [('2026-03-02', 2)]);
     });
 
-    test('the sub is the most common exposure of the Night, the longer on a tie', () {
-      DateTime t(int m) => DateTime(2026, 3, 2, 22, m).toUtc();
-      final night = albumNights([
-        _frame('a', exposure: 180, captured: t(0)),
-        _frame('b', exposure: 300, captured: t(5)),
-        _frame('c', exposure: 180, captured: t(10)),
-      ]).single;
-      expect(night.subSeconds, 180);
-      expect(night.hours, closeTo(660 / 3600, 1e-9));
-      expect(albumNights([_frame('a', exposure: 60, captured: t(0)), _frame('b', exposure: 120, captured: t(1))])
-          .single.subSeconds, 120);
-    });
+    test(
+      'the sub is the most common exposure of the Night, the longer on a tie',
+      () {
+        DateTime t(int m) => DateTime(2026, 3, 2, 22, m).toUtc();
+        final night = albumNights([
+          _frame('a', exposure: 180, captured: t(0)),
+          _frame('b', exposure: 300, captured: t(5)),
+          _frame('c', exposure: 180, captured: t(10)),
+        ]).single;
+        expect(night.subSeconds, 180);
+        expect(night.hours, closeTo(660 / 3600, 1e-9));
+        expect(
+          albumNights([
+            _frame('a', exposure: 60, captured: t(0)),
+            _frame('b', exposure: 120, captured: t(1)),
+          ]).single.subSeconds,
+          120,
+        );
+      },
+    );
 
-    test('a light with no capture time counts in the totals, not in any Night', () {
-      final stats = aggregateBook([
-        _frame('a', ra: null, target: 'M81'),
-        const AlbumFrame(frameId: 'u', targetName: 'M81', exposureSeconds: 60),
-      ], [_dso('NGC3031', m: 81, aliases: ['M 81'])])['NGC3031']!;
-      expect(stats.frameCount, 2);
-      expect(stats.nights.single.lights, 1);
-    });
+    test(
+      'a light with no capture time counts in the totals, not in any Night',
+      () {
+        final stats = aggregateBook(
+          [
+            _frame('a', ra: null, target: 'M81'),
+            const AlbumFrame(
+              frameId: 'u',
+              targetName: 'M81',
+              exposureSeconds: 60,
+            ),
+          ],
+          [
+            _dso('NGC3031', m: 81, aliases: ['M 81']),
+          ],
+        )['NGC3031']!;
+        expect(stats.frameCount, 2);
+        expect(stats.nights.single.lights, 1);
+      },
+    );
   });
 
   group('books', () {
     test('a Book lists its catalog numbers in order', () {
-      final catalog = [_dso('x', m: 2), _dso('y', c: 1), _dso('z', m: 1), _dso('w')];
-      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['z', 'x']);
+      final catalog = [
+        _dso('x', m: 2),
+        _dso('y', c: 1),
+        _dso('z', m: 1),
+        _dso('w'),
+      ];
+      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), [
+        'z',
+        'x',
+      ]);
       expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['y']);
     });
 
@@ -316,7 +532,11 @@ void main() {
       ];
       final rcw = bookObjects(catalog, AlbumBook.rcw);
       expect(rcw.map((d) => d.id), ['NGC2359', 'RCW 8', 'NGC3372']);
-      expect(rcw.map((d) => bookLabel(d, AlbumBook.rcw)), ['RCW 5', 'RCW 8', 'RCW 53']);
+      expect(rcw.map((d) => bookLabel(d, AlbumBook.rcw)), [
+        'RCW 5',
+        'RCW 8',
+        'RCW 53',
+      ]);
       expect(rcw.map((d) => bookNumberOf(d, AlbumBook.rcw)), [5, 8, 53]);
     });
 
@@ -331,10 +551,22 @@ void main() {
     });
 
     test('an object in two Books is a Card in each, so the RCW count is the true count (#1629)', () {
-      final catalog = [_dso('NGC3114', c: 90, aliases: ['RCW 40']), _dso('RCW 41'), _dso('NGC1976', m: 42, aliases: ['RCW 9'])];
-      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), ['NGC1976']);
-      expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), ['NGC3114']);
-      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), ['NGC1976', 'NGC3114', 'RCW 41']);
+      final catalog = [
+        _dso('NGC3114', c: 90, aliases: ['RCW 40']),
+        _dso('RCW 41'),
+        _dso('NGC1976', m: 42, aliases: ['RCW 9']),
+      ];
+      expect(bookObjects(catalog, AlbumBook.messier).map((d) => d.id), [
+        'NGC1976',
+      ]);
+      expect(bookObjects(catalog, AlbumBook.caldwell).map((d) => d.id), [
+        'NGC3114',
+      ]);
+      expect(bookObjects(catalog, AlbumBook.rcw).map((d) => d.id), [
+        'NGC1976',
+        'NGC3114',
+        'RCW 41',
+      ]);
     });
 
     test('the NGC, IC and Sharpless Books claim their own designations, in number-then-suffix order (#1887)', () {
@@ -350,19 +582,31 @@ void main() {
       ];
       final ngc = bookObjects(catalog, AlbumBook.ngc);
       expect(ngc.map((d) => d.id), ['NGC0224', 'NGC5194', 'NGC5194A']);
-      expect(ngc.map((d) => bookLabel(d, AlbumBook.ngc)), ['NGC 224', 'NGC 5194', 'NGC 5194A']);
+      expect(ngc.map((d) => bookLabel(d, AlbumBook.ngc)), [
+        'NGC 224',
+        'NGC 5194',
+        'NGC 5194A',
+      ]);
       expect(ngc.map((d) => bookNumberOf(d, AlbumBook.ngc)), [224, 5194, 5194]);
       final ic = bookObjects(catalog, AlbumBook.ic);
       expect(ic.map((d) => bookLabel(d, AlbumBook.ic)), ['IC 5', 'IC 434']);
       final sh = bookObjects(catalog, AlbumBook.sharpless);
-      expect(sh.map((d) => bookLabel(d, AlbumBook.sharpless)), ['Sh2-9', 'Sh2-101']);
+      expect(sh.map((d) => bookLabel(d, AlbumBook.sharpless)), [
+        'Sh2-9',
+        'Sh2-101',
+      ]);
     });
 
     test('a row with two NGC numbers is one Card, labelled by the lowest; an alias with a space still claims (#1887)', () {
       final row = _dso('NGC0300', aliases: ['NGC 0250', 'NGC 0299B']);
       expect(bookObjects([row], AlbumBook.ngc), [row]);
       expect(bookLabel(row, AlbumBook.ngc), 'NGC 250');
-      expect(bookObjects([_dso('NGC1976', aliases: ['IC 434'])], AlbumBook.ic).length, 1);
+      expect(
+        bookObjects([
+          _dso('NGC1976', aliases: ['IC 434']),
+        ], AlbumBook.ic).length,
+        1,
+      );
     });
 
     test('M 31 is also NGC 224: a Card in both Books, labelled M 31 by Book order, its Messier label unchanged (#1887)', () {
@@ -374,54 +618,124 @@ void main() {
       expect(AlbumBook.values.first, AlbumBook.messier);
     });
 
-    test("a row's NGC, IC and Sharpless claim is worked out once per row (#1887)", () {
-      final aliases = <String>[];
-      final row = _dso('NGC0001', aliases: aliases);
-      expect(bookNumberOf(row, AlbumBook.ngc), 1);
-      expect(bookNumberOf(row, AlbumBook.ic), isNull);
-      aliases..add('IC 5')..add('NGC 0000');
-      expect(bookNumberOf(row, AlbumBook.ngc), 1);
-      expect(bookNumberOf(row, AlbumBook.ic), isNull);
-    });
+    test(
+      "a row's NGC, IC and Sharpless claim is worked out once per row (#1887)",
+      () {
+        final aliases = <String>[];
+        final row = _dso('NGC0001', aliases: aliases);
+        expect(bookNumberOf(row, AlbumBook.ngc), 1);
+        expect(bookNumberOf(row, AlbumBook.ic), isNull);
+        aliases
+          ..add('IC 5')
+          ..add('NGC 0000');
+        expect(bookNumberOf(row, AlbumBook.ngc), 1);
+        expect(bookNumberOf(row, AlbumBook.ic), isNull);
+      },
+    );
 
-    test('a frame named ngc891 or IC 0434 or sh2-101 fills its Card (#1887)', () {
-      final cards = {
-        'ngc891': _dso('NGC0891'),
-        'IC 434': _dso('IC0434'),
-        'sh2-101': _dso('Sh2-101'),
-      };
-      for (final MapEntry(key: name, value: dso) in cards.entries) {
-        expect(aggregateBook([_frame('a', ra: null, target: name)], [dso]).keys, [dso.id], reason: name);
-      }
-    });
+    test(
+      'a frame named ngc891 or IC 0434 or sh2-101 fills its Card (#1887)',
+      () {
+        final cards = {
+          'ngc891': _dso('NGC0891'),
+          'IC 434': _dso('IC0434'),
+          'sh2-101': _dso('Sh2-101'),
+        };
+        for (final MapEntry(key: name, value: dso) in cards.entries) {
+          expect(
+            aggregateBook([_frame('a', ra: null, target: name)], [dso]).keys,
+            [dso.id],
+            reason: name,
+          );
+        }
+      },
+    );
 
-    test('a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)', () {
-      final rcw15 = _dso('RCW 15', aliases: ['Gum 15', 'NGC 2736']);
-      for (final name in ['Gum 15', 'Gum15', 'gum 015', 'NGC 2736', 'RCW 15']) {
-        final stats = aggregateBook([_frame('a', ra: null, target: name)], [rcw15]);
-        expect(stats.keys, ['RCW 15'], reason: name);
-      }
-      expect(aggregateBook([_frame('a', ra: null, target: 'Gum 16')], [rcw15]), isEmpty);
-    });
+    test(
+      'a frame saved as Gum 15 or by NGC number fills the RCW Card (#1629)',
+      () {
+        final rcw15 = _dso('RCW 15', aliases: ['Gum 15', 'NGC 2736']);
+        for (final name in [
+          'Gum 15',
+          'Gum15',
+          'gum 015',
+          'NGC 2736',
+          'RCW 15',
+        ]) {
+          final stats = aggregateBook(
+            [_frame('a', ra: null, target: name)],
+            [rcw15],
+          );
+          expect(stats.keys, ['RCW 15'], reason: name);
+        }
+        expect(
+          aggregateBook([_frame('a', ra: null, target: 'Gum 16')], [rcw15]),
+          isEmpty,
+        );
+      },
+    );
   });
 
   test('AlbumFrame parses the snake_case wire row', () {
     final f = AlbumFrame.fromJson({
-      'frame_id': 'id1', 'ra_deg': 10.68, 'dec_deg': 41.27, 'width': 4144, 'height': 2822, 'bin': 1,
-      'pixel_scale_arcsec': 1.56, 'captured_utc': '2026-03-02T11:20:31Z', 'exposure_seconds': 180,
-      'filter_name': 'Ha', 'target_name': 'M31', 'composite_score': 0.83, 'profile_id': 'p',
+      'frame_id': 'id1',
+      'ra_deg': 10.68,
+      'dec_deg': 41.27,
+      'width': 4144,
+      'height': 2822,
+      'bin': 1,
+      'pixel_scale_arcsec': 1.56,
+      'captured_utc': '2026-03-02T11:20:31Z',
+      'exposure_seconds': 180,
+      'filter_name': 'Ha',
+      'target_name': 'M31',
+      'composite_score': 0.83,
+      'profile_id': 'p',
       'updated_utc': '2026-03-03T00:00:00Z',
     });
-    expect((f.frameId, f.raDeg, f.width, f.pixelScaleArcsec, f.exposureSeconds, f.targetName),
-        ('id1', 10.68, 4144, 1.56, 180.0, 'M31'));
+    expect(
+      (
+        f.frameId,
+        f.raDeg,
+        f.width,
+        f.pixelScaleArcsec,
+        f.exposureSeconds,
+        f.targetName,
+      ),
+      ('id1', 10.68, 4144, 1.56, 180.0, 'M31'),
+    );
     expect(f.capturedUtc, DateTime.utc(2026, 3, 2, 11, 20, 31));
     expect(f.updatedUtc, DateTime.utc(2026, 3, 3));
     final back = AlbumFrame.fromJson(f.toJson());
-    expect((back.frameId, back.raDeg, back.decDeg, back.width, back.height, back.pixelScaleArcsec, back.capturedUtc,
-            back.exposureSeconds, back.filterName, back.targetName, back.updatedUtc),
-        (f.frameId, f.raDeg, f.decDeg, f.width, f.height, f.pixelScaleArcsec, f.capturedUtc, f.exposureSeconds,
-            f.filterName, f.targetName, f.updatedUtc),
-        reason: 'the cache file round-trips the row');
+    expect(
+      (
+        back.frameId,
+        back.raDeg,
+        back.decDeg,
+        back.width,
+        back.height,
+        back.pixelScaleArcsec,
+        back.capturedUtc,
+        back.exposureSeconds,
+        back.filterName,
+        back.targetName,
+        back.updatedUtc,
+      ),
+      (
+        f.frameId,
+        f.raDeg,
+        f.decDeg,
+        f.width,
+        f.height,
+        f.pixelScaleArcsec,
+        f.capturedUtc,
+        f.exposureSeconds,
+        f.filterName,
+        f.targetName,
+        f.updatedUtc,
+      ),
+      reason: 'the cache file round-trips the row',
+    );
   });
 
   test(

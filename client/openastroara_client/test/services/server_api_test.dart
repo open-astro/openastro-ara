@@ -59,31 +59,30 @@ void main() {
   test('Emergency Stop waits longer than the ladder can take: 17 rungs at 10 s each', () async {
     final adapter = _CannedAdapter(200, const <String, dynamic>{});
     await apiWith(adapter).emergencyStop();
-    expect(adapter.lastRequest!.receiveTimeout, greaterThan(const Duration(seconds: 170)));
+    expect(
+      adapter.lastRequest!.receiveTimeout,
+      greaterThan(const Duration(seconds: 170)),
+    );
   });
 
   group('ServerApi §27 connect/disconnect', () {
-    test(
-      'a 200 with a session id is granted, and the body carries hostname + prior id',
-      () async {
-        final adapter = _CannedAdapter(200, {
-          'session_id': 'sid-1',
-          'hostname': 'mac.local',
-          'connected_at': '2026-07-06T02:00:00Z',
-        });
-        final claim = await apiWith(
-          adapter,
-        ).connectClient(hostname: 'mac.local', sessionId: 'sid-old');
+    test('a 200 with a session id is granted, and the body carries hostname + prior id', () async {
+      final adapter = _CannedAdapter(200, {
+        'session_id': 'sid-1',
+        'hostname': 'mac.local',
+        'connected_at': '2026-07-06T02:00:00Z',
+      });
+      final claim = await apiWith(adapter)
+          .connectClient(hostname: 'mac.local', sessionId: 'sid-old');
 
-        expect(claim.granted, isTrue);
-        expect(claim.sessionId, 'sid-1');
-        expect(adapter.lastRequest?.path, '/api/v1/server/connect');
-        expect(jsonDecode(adapter.lastBody!), {
-          'hostname': 'mac.local',
-          'session_id': 'sid-old',
-        });
-      },
-    );
+      expect(claim.granted, isTrue);
+      expect(claim.sessionId, 'sid-1');
+      expect(adapter.lastRequest?.path, '/api/v1/server/connect');
+      expect(jsonDecode(adapter.lastBody!), {
+        'hostname': 'mac.local',
+        'session_id': 'sid-old',
+      });
+    });
 
     test('a first claim omits session_id from the body', () async {
       final adapter = _CannedAdapter(200, {'session_id': 'sid-1'});
@@ -96,9 +95,8 @@ void main() {
       'a malformed 200 without a session id is denied, not granted',
       () async {
         final adapter = _CannedAdapter(200, {'hostname': 'mac.local'});
-        final claim = await apiWith(
-          adapter,
-        ).connectClient(hostname: 'mac.local');
+        final claim = await apiWith(adapter)
+            .connectClient(hostname: 'mac.local');
 
         expect(
           claim.granted,

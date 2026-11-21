@@ -8,8 +8,8 @@ import '../saved_server_state.dart';
 /// Builds a [GuiderCalibrationClient] for a server. Overridable in tests.
 final guiderCalibrationApiFactoryProvider =
     Provider<GuiderCalibrationClient Function(AraServer)>(
-  (ref) => GuiderCalibrationApi.new,
-);
+      (ref) => GuiderCalibrationApi.new,
+    );
 
 /// [GuiderCalibrationClient] bound to the active server ([activeServerProvider]),
 /// or `null` when no server is saved. Closes the old Dio on a server change.
@@ -25,7 +25,8 @@ final guiderCalibrationApiProvider = Provider<GuiderCalibrationClient?>((ref) {
 /// server is saved. Exposes build/toggle actions that re-read status after the
 /// daemon accepts the request (builds are 202-Accepted, so the post-action
 /// status may not yet reflect a still-running build).
-class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?> {
+class GuiderCalibrationNotifier
+    extends AsyncNotifier<CalibrationStatusResponse?> {
   // Bumped on every build() (active-server change). Actions/refreshes capture it
   // and only write state if it still matches, so a server switch mid-action
   // can't land a stale read (or a spurious error from the old, now-closed Dio).
@@ -46,28 +47,30 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     bool clearExisting = false,
     String? notes,
     bool loadAfter = true,
-  }) =>
-      _run((api) => api.buildDarkLibrary(
-            frameCount: frameCount,
-            minExposureMs: minExposureMs,
-            maxExposureMs: maxExposureMs,
-            clearExisting: clearExisting,
-            notes: notes,
-            loadAfter: loadAfter,
-          ));
+  }) => _run(
+    (api) => api.buildDarkLibrary(
+      frameCount: frameCount,
+      minExposureMs: minExposureMs,
+      maxExposureMs: maxExposureMs,
+      clearExisting: clearExisting,
+      notes: notes,
+      loadAfter: loadAfter,
+    ),
+  );
 
   Future<void> buildDefectMap({
     int exposureMs = 3000,
     int frameCount = 10,
     String? notes,
     bool loadAfter = true,
-  }) =>
-      _run((api) => api.buildDefectMap(
-            exposureMs: exposureMs,
-            frameCount: frameCount,
-            notes: notes,
-            loadAfter: loadAfter,
-          ));
+  }) => _run(
+    (api) => api.buildDefectMap(
+      exposureMs: exposureMs,
+      frameCount: frameCount,
+      notes: notes,
+      loadAfter: loadAfter,
+    ),
+  );
 
   Future<void> setDarkLibraryEnabled(bool enabled) =>
       _run((api) => api.setDarkLibraryEnabled(enabled));
@@ -80,13 +83,19 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
   /// _refresh() re-reads it anyway — deliberately, so the write goes through
   /// the same generation-guarded path as every other action (a server switch
   /// mid-delete can't land a stale status).
-  Future<void> deleteCalibrationFiles({bool darks = true, bool defectmap = true}) =>
-      _run((api) => api.deleteCalibrationFiles(darks: darks, defectmap: defectmap));
+  Future<void> deleteCalibrationFiles({
+    bool darks = true,
+    bool defectmap = true,
+  }) => _run(
+    (api) => api.deleteCalibrationFiles(darks: darks, defectmap: defectmap),
+  );
 
   /// Runs an action against the active client, then refreshes status. Ignores
   /// overlapping calls and surfaces failures as [AsyncError] so the UI can show
   /// them rather than leaving a stale value.
-  Future<void> _run(Future<void> Function(GuiderCalibrationClient api) action) async {
+  Future<void> _run(
+    Future<void> Function(GuiderCalibrationClient api) action,
+  ) async {
     // Serialize on state.isLoading (like GuiderStatusNotifier): _run sets loading
     // up-front and only the trailing refresh() clears it, so the flag stays set
     // across the whole action → refresh window — a second tap can't start a
@@ -99,7 +108,8 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
     try {
       await action(api);
     } catch (e, st) {
-      if (ref.mounted && gen == _generation) state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
+      if (ref.mounted && gen == _generation)
+        state = AsyncValue<CalibrationStatusResponse?>.error(e, st);
       return;
     }
     // Re-read against the *current* client (not the captured one) — a server
@@ -140,5 +150,7 @@ class GuiderCalibrationNotifier extends AsyncNotifier<CalibrationStatusResponse?
 }
 
 final guiderCalibrationProvider =
-    AsyncNotifierProvider<GuiderCalibrationNotifier, CalibrationStatusResponse?>(
-        GuiderCalibrationNotifier.new);
+    AsyncNotifierProvider<
+      GuiderCalibrationNotifier,
+      CalibrationStatusResponse?
+    >(GuiderCalibrationNotifier.new);

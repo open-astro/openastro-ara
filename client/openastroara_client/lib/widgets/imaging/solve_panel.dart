@@ -53,7 +53,10 @@ class SolvePanel extends ConsumerWidget {
   }
 
   Future<void> _solve(
-      BuildContext context, WidgetRef ref, String frameId) async {
+    BuildContext context,
+    WidgetRef ref,
+    String frameId,
+  ) async {
     final server = ref.read(activeServerProvider);
     if (server == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -65,22 +68,30 @@ class SolvePanel extends ConsumerWidget {
   }
 
   Widget _resultText(
-      BuildContext context, AsyncValue<PlateSolveResult?> result, bool hasFrame) {
-    final mono = Theme.of(context)
-        .textTheme
-        .bodySmall
+    BuildContext context,
+    AsyncValue<PlateSolveResult?> result,
+    bool hasFrame,
+  ) {
+    final mono = Theme.of(context).textTheme.bodySmall
         ?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
 
     return result.when(
       loading: () => Text('Solving with ASTAP…', style: mono),
       error: (e, _) => Text(
-        e is PlateSolveException ? e.message : friendlyError(context.l10n, e, action: context.l10n.actionSolveFrame),
+        e is PlateSolveException
+            ? e.message
+            : friendlyError(
+                context.l10n,
+                e,
+                action: context.l10n.actionSolveFrame,
+              ),
         style: mono?.copyWith(color: AraColors.accentError),
       ),
       data: (r) {
         if (r == null) {
           return Text(
-            hasFrame ? 'Solve the captured frame for its sky coordinates.'
+            hasFrame
+                ? 'Solve the captured frame for its sky coordinates.'
                 : 'Capture a frame, then solve it.',
             style: mono?.copyWith(color: AraColors.textSecondary),
           );

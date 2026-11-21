@@ -67,15 +67,23 @@ void main() {
   group('parseNinaSequenceBody', () {
     late SequenceNode root;
     setUp(() {
-      root = parseNinaSequenceBody(jsonDecode(_ninaBody) as Map<String, dynamic>);
+      root = parseNinaSequenceBody(
+        jsonDecode(_ninaBody) as Map<String, dynamic>,
+      );
     });
 
     test('root keeps the sequence name and the three areas', () {
       expect(root.kind, SequenceNodeKind.root);
       expect(root.displayName, 'M42_Erics');
-      expect(root.children.map((c) => c.displayName), ['Start', 'Targets', 'End']);
-      expect(root.children.map((c) => c.kind),
-          everyElement(SequenceNodeKind.area));
+      expect(root.children.map((c) => c.displayName), [
+        'Start',
+        'Targets',
+        'End',
+      ]);
+      expect(
+        root.children.map((c) => c.kind),
+        everyElement(SequenceNodeKind.area),
+      );
       // The §38.1 envelope field is not a display param.
       expect(root.params.containsKey('schemaVersion'), isFalse);
     });
@@ -100,19 +108,24 @@ void main() {
       expect(cool.instructionType, 'CoolCamera');
     });
 
-    test('SmartExposure children: leaf + params; the \$ref sibling is skipped', () {
-      // Targets → M 42 → SequentialContainer → SmartExposure.
-      final smart =
-          root.children[1].children.single.children[0].children.single;
-      // SwitchFilter + TakeExposure are real children; the { "\$ref": "7" } is not.
-      expect(smart.children.map((c) => c.instructionType),
-          ['SwitchFilter', 'TakeExposure']);
-      final take = smart.children[1];
-      expect(take.params['ExposureTime'], 180.0);
-      expect(take.params['ImageType'], 'LIGHT');
-      // Structural/metadata keys never leak into params.
-      expect(take.params.containsKey('Items'), isFalse);
-    });
+    test(
+      'SmartExposure children: leaf + params; the \$ref sibling is skipped',
+      () {
+        // Targets → M 42 → SequentialContainer → SmartExposure.
+        final smart =
+            root.children[1].children.single.children[0].children.single;
+        // SwitchFilter + TakeExposure are real children; the { "\$ref": "7" } is not.
+        expect(smart.children.map((c) => c.instructionType), [
+          'SwitchFilter',
+          'TakeExposure',
+        ]);
+        final take = smart.children[1];
+        expect(take.params['ExposureTime'], 180.0);
+        expect(take.params['ImageType'], 'LIGHT');
+        // Structural/metadata keys never leak into params.
+        expect(take.params.containsKey('Items'), isFalse);
+      },
+    );
 
     test('Conditions/Triggers are captured as params, not tree children', () {
       final seq = root.children[1].children.single.children[0];
@@ -129,14 +142,14 @@ void main() {
       Map<String, dynamic> chain(int n) {
         var node = <String, dynamic>{
           r'$type': 'X.SequentialContainer',
-          'Name': 'leaf'
+          'Name': 'leaf',
         };
         for (var i = 0; i < n; i++) {
           node = <String, dynamic>{
             r'$type': 'X.SequentialContainer',
             'Name': 'c$i',
             'Items': {
-              r'$values': [node]
+              r'$values': [node],
             },
           };
         }
@@ -148,7 +161,7 @@ void main() {
             'NINA.Sequencer.Container.SequenceRootContainer, NINA.Sequencer',
         'Name': 'deep',
         'Items': {
-          r'$values': [chain(300)]
+          r'$values': [chain(300)],
         },
       };
       final root = parseNinaSequenceBody(body); // must not stack-overflow

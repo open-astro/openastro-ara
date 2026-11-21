@@ -8,6 +8,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+
 import '../../support/imaging_sections.dart';
 
 /// #1560 — a target the Full UI adds to a Simple Mode queue (which stops at
@@ -80,7 +81,10 @@ List<Object?> _dawns(Map<String, dynamic> block) => [
 
 Future<void> _addM42(WidgetTester tester, _SeqClient seq) async {
   final container = ProviderContainer(
-    overrides: [...imagingSectionsFromRig(), sequenceApiProvider.overrideWith((ref) => seq)],
+    overrides: [
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => seq),
+    ],
   );
   addTearDown(container.dispose);
   container.read(selectedSequenceIdProvider.notifier).select('queue');
@@ -100,8 +104,16 @@ Future<void> _addM42(WidgetTester tester, _SeqClient seq) async {
                 targetName: 'M42',
                 jumpToRun: false,
                 filterPlan: const [
-                  FilterPlanStep(filterName: 'L', exposureSeconds: 60, frameCount: 5),
-                  FilterPlanStep(filterName: 'R', exposureSeconds: 60, frameCount: 5),
+                  FilterPlanStep(
+                    filterName: 'L',
+                    exposureSeconds: 60,
+                    frameCount: 5,
+                  ),
+                  FilterPlanStep(
+                    filterName: 'R',
+                    exposureSeconds: 60,
+                    frameCount: 5,
+                  ),
                 ],
               ).then((_) => done = true),
               child: const Text('go'),
@@ -121,18 +133,29 @@ Future<void> _addM42(WidgetTester tester, _SeqClient seq) async {
 void main() {
   final nautical = {r'$type': timeProviders['Nautical Dawn']};
 
-  testWidgets('added to an idle queue that stops at dawn: the new target stops at it too', (tester) async {
-    final seq = _SeqClient(_queue(dawn: 'Nautical Dawn'));
-    await _addM42(tester, seq);
-    final m42 = childrenOf(seq.patched!).singleWhere((c) => c['Name'] == 'M42');
-    expect(_dawns(m42), [nautical, nautical, nautical], reason: 'the block and its two loops');
-  });
+  testWidgets(
+    'added to an idle queue that stops at dawn: the new target stops at it too',
+    (tester) async {
+      final seq = _SeqClient(_queue(dawn: 'Nautical Dawn'));
+      await _addM42(tester, seq);
+      final m42 = childrenOf(seq.patched!)
+          .singleWhere((c) => c['Name'] == 'M42');
+      expect(_dawns(m42), [
+        nautical,
+        nautical,
+        nautical,
+      ], reason: 'the block and its two loops');
+    },
+  );
 
-  testWidgets('added live to an imaging queue that stops at dawn: the new target stops at it too', (tester) async {
-    final seq = _SeqClient(_queue(dawn: 'Nautical Dawn'), running: true);
-    await _addM42(tester, seq);
-    expect(_dawns(seq.liveItems.single), [nautical, nautical, nautical]);
-  });
+  testWidgets(
+    'added live to an imaging queue that stops at dawn: the new target stops at it too',
+    (tester) async {
+      final seq = _SeqClient(_queue(dawn: 'Nautical Dawn'), running: true);
+      await _addM42(tester, seq);
+      expect(_dawns(seq.liveItems.single), [nautical, nautical, nautical]);
+    },
+  );
 
   testWidgets('added to a sequence without a dawn stop: none', (tester) async {
     final seq = _SeqClient(_queue());

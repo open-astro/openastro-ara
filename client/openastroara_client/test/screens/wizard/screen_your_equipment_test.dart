@@ -22,7 +22,8 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/equipment/switch_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
-import 'package:openastroara/models/switch_device.dart' show CoolingFan, SwitchConnectionState, SwitchDevice;
+import 'package:openastroara/models/switch_device.dart'
+    show CoolingFan, SwitchConnectionState, SwitchDevice;
 import 'package:openastroara/state/wizard/equipment_readiness_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 
@@ -57,8 +58,7 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
   Future<List<DiscoveredDevice>> discover(
     EquipmentDeviceType type, {
     bool forceRefresh = false,
-  }) async =>
-      byType[type] ?? const [];
+  }) async => byType[type] ?? const [];
   @override
   void close() {}
 }
@@ -74,7 +74,9 @@ class _FakeFactsSource implements DeviceFactsSource {
 
   @override
   Future<DiscoveredDevice?> resolve(
-      EquipmentDeviceType type, String assignedId) async {
+    EquipmentDeviceType type,
+    String assignedId,
+  ) async {
     for (final d in byType[type] ?? const <DiscoveredDevice>[]) {
       if (d.uniqueId == assignedId) return d;
     }
@@ -134,10 +136,12 @@ Future<ProviderContainer> _pump(
     ],
   );
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: Scaffold(body: ScreenYourEquipment())),
-  ));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ScreenYourEquipment())),
+    ),
+  );
   // Let the saved-server load, the post-frame prepare, and the parallel reads
   // all land.
   await tester.pumpAndSettle();
@@ -145,10 +149,13 @@ Future<ProviderContainer> _pump(
 }
 
 void main() {
-  testWidgets('#1700: with no switch connected the wizard hides the Cooling fan row', (tester) async {
-    await _pump(tester, byType: const {});
-    expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
-  });
+  testWidgets(
+    '#1700: with no switch connected the wizard hides the Cooling fan row',
+    (tester) async {
+      await _pump(tester, byType: const {});
+      expect(find.byKey(const Key('cooling-fan-picker')), findsNothing);
+    },
+  );
 
   testWidgets('#1700: the cooling fan not loaded reads as None and writes '
       'nothing to the draft', (tester) async {
@@ -171,50 +178,66 @@ void main() {
     expect(container.read(wizardControllerProvider).draft.coolingFan, isNull);
   });
 
-  testWidgets('#1700: the wizard offers the Cooling fan choice and keeps it in the draft', (tester) async {
-    final container = await _pump(tester, byType: const {}, switches: const [
-      SwitchDevice(
-        deviceId: 'sw',
-        alpacaDeviceNumber: 0,
-        name: 'Powerbox',
-        connectionState: SwitchConnectionState.connected,
-        ports: [],
-      ),
-    ]);
-    expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
-    expect(container.read(wizardControllerProvider).draft.coolingFan, isNull,
-        reason: 'untouched: Save keeps the base profile choice');
-  });
+  testWidgets(
+    '#1700: the wizard offers the Cooling fan choice and keeps it in the draft',
+    (tester) async {
+      final container = await _pump(
+        tester,
+        byType: const {},
+        switches: const [
+          SwitchDevice(
+            deviceId: 'sw',
+            alpacaDeviceNumber: 0,
+            name: 'Powerbox',
+            connectionState: SwitchConnectionState.connected,
+            ports: [],
+          ),
+        ],
+      );
+      expect(find.byKey(const Key('cooling-fan-picker')), findsOneWidget);
+      expect(
+        container.read(wizardControllerProvider).draft.coolingFan,
+        isNull,
+        reason: 'untouched: Save keeps the base profile choice',
+      );
+    },
+  );
 
   testWidgets(
-      'a single discovered device auto-assigns, verifies, and writes its '
-      'facts into the draft', (tester) async {
-    final byType = {
-      EquipmentDeviceType.camera: [
-        _device(EquipmentDeviceType.camera, 'cam-1', 'ZWO ASI2600MM Pro'),
-      ],
-    };
-    final container = await _pump(tester,
+    'a single discovered device auto-assigns, verifies, and writes its '
+    'facts into the draft',
+    (tester) async {
+      final byType = {
+        EquipmentDeviceType.camera: [
+          _device(EquipmentDeviceType.camera, 'cam-1', 'ZWO ASI2600MM Pro'),
+        ],
+      };
+      final container = await _pump(
+        tester,
         byType: byType,
         camera: const CameraGeometry(
-            sensorWidthPx: 6248,
-            sensorHeightPx: 4176,
-            pixelSizeUm: 3.76,
-            maxBin: 4));
+          sensorWidthPx: 6248,
+          sensorHeightPx: 4176,
+          pixelSizeUm: 3.76,
+          maxBin: 4,
+        ),
+      );
 
-    // Card shows the REAL device name + read facts, no typing anywhere.
-    expect(find.text('ZWO ASI2600MM Pro'), findsOneWidget);
-    expect(find.text('Pixel size: 3.76 µm'), findsOneWidget);
-    expect(find.text('Sensor: 6248×4176'), findsOneWidget);
+      // Card shows the REAL device name + read facts, no typing anywhere.
+      expect(find.text('ZWO ASI2600MM Pro'), findsOneWidget);
+      expect(find.text('Pixel size: 3.76 µm'), findsOneWidget);
+      expect(find.text('Sensor: 6248×4176'), findsOneWidget);
 
-    final draft = container.read(wizardControllerProvider).draft;
-    expect(draft.equipment.cameraDeviceId, 'cam-1');
-    expect(draft.camera.pixelSizeMicrons, 3.76);
-    expect(draft.equipmentAutoAssigned, isTrue);
-  });
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.equipment.cameraDeviceId, 'cam-1');
+      expect(draft.camera.pixelSizeMicrons, 3.76);
+      expect(draft.equipmentAutoAssigned, isTrue);
+    },
+  );
 
-  testWidgets('two cameras never auto-assign — ambiguity is a question',
-      (tester) async {
+  testWidgets('two cameras never auto-assign — ambiguity is a question', (
+    tester,
+  ) async {
     final byType = {
       EquipmentDeviceType.camera: [
         _device(EquipmentDeviceType.camera, 'cam-1', 'Main'),
@@ -230,115 +253,173 @@ void main() {
   });
 
   testWidgets(
-      'a mount that reports no optics goes amber with the AlpacaBridge deep '
-      'link, Recheck, and the manual fallback field in Details',
-      (tester) async {
-    final byType = {
-      EquipmentDeviceType.mount: [
-        _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
-      ],
-    };
-    await _pump(tester, byType: byType, mount: const MountProps());
+    'a mount that reports no optics goes amber with the AlpacaBridge deep '
+    'link, Recheck, and the manual fallback field in Details',
+    (tester) async {
+      final byType = {
+        EquipmentDeviceType.mount: [
+          _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
+        ],
+      };
+      await _pump(tester, byType: byType, mount: const MountProps());
 
-    expect(find.textContaining('Focal length — '), findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Open in AlpacaBridge'),
-        findsOneWidget);
-    expect(find.widgetWithText(OutlinedButton, 'Recheck'), findsOneWidget);
+      expect(find.textContaining('Focal length — '), findsOneWidget);
+      expect(
+        find.widgetWithText(OutlinedButton, 'Open in AlpacaBridge'),
+        findsOneWidget,
+      );
+      expect(find.widgetWithText(OutlinedButton, 'Recheck'), findsOneWidget);
 
-    // The escape hatch for non-reporting gear lives in the Details
-    // disclosure, visually secondary.
-    await tester.ensureVisible(find.text('Details').first);
-    await tester.tap(find.text('Details').first);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('Focal length (mm) — manual fallback'),
-        findsOneWidget);
-  });
+      // The escape hatch for non-reporting gear lives in the Details
+      // disclosure, visually secondary.
+      await tester.ensureVisible(find.text('Details').first);
+      await tester.tap(find.text('Details').first);
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('Focal length (mm) — manual fallback'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('an untouched reducer field is seeded from the cloned profile, and blank means an explicit 1× (§36.10)',
-      (tester) async {
-    // New wizard profiles clone the active profile: with a 0.8× reducer there,
-    // an untouched field must show 0.8× (and Save keeps 0.8), never 1×.
-    final byType = {
-      EquipmentDeviceType.mount: [
-        _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
-      ],
-    };
-    final container = await _pump(tester, byType: byType, mount: const MountProps(),
-        baseOptics: const OpticsSettings(reducerFactor: 0.8));
-    final draft = container.read(wizardControllerProvider).draft;
-    draft.telescope.focalLengthMm = 2032;
-    expect(draft.telescope.reducerFactor, 0.8,
-        reason: 'seeded on entry, before Details is ever opened, so the review row and Save agree');
-    await tester.ensureVisible(find.text('Details').first);
-    await tester.tap(find.text('Details').first);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'an untouched reducer field is seeded from the cloned profile, and blank means an explicit 1× (§36.10)',
+    (tester) async {
+      // New wizard profiles clone the active profile: with a 0.8× reducer there,
+      // an untouched field must show 0.8× (and Save keeps 0.8), never 1×.
+      final byType = {
+        EquipmentDeviceType.mount: [
+          _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
+        ],
+      };
+      final container = await _pump(
+        tester,
+        byType: byType,
+        mount: const MountProps(),
+        baseOptics: const OpticsSettings(reducerFactor: 0.8),
+      );
+      final draft = container.read(wizardControllerProvider).draft;
+      draft.telescope.focalLengthMm = 2032;
+      expect(
+        draft.telescope.reducerFactor,
+        0.8,
+        reason: 'seeded on entry, before Details is ever opened, so the review row and Save agree',
+      );
+      await tester.ensureVisible(find.text('Details').first);
+      await tester.tap(find.text('Details').first);
+      await tester.pumpAndSettle();
 
-    expect(draft.telescope.reducerFactor, 0.8, reason: 'seeded from the base profile');
-    expect(tester.widget<TextField>(find.byKey(const ValueKey('details-mount-reducer'))).controller!.text, '0.8');
-    expect(find.textContaining('1626 mm'), findsOneWidget, reason: '2032 × 0.8, what Save will write');
+      expect(
+        draft.telescope.reducerFactor,
+        0.8,
+        reason: 'seeded from the base profile',
+      );
+      expect(
+        tester
+            .widget<TextField>(
+              find.byKey(const ValueKey('details-mount-reducer')),
+            )
+            .controller!
+            .text,
+        '0.8',
+      );
+      expect(
+        find.textContaining('1626 mm'),
+        findsOneWidget,
+        reason: '2032 × 0.8, what Save will write',
+      );
 
-    // Clearing the field means "no reducer": an explicit 1×, not "keep 0.8".
-    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '');
-    await tester.pumpAndSettle();
-    expect(draft.telescope.reducerFactor, 1.0);
-    expect(find.textContaining('2032 mm'), findsOneWidget);
-  });
+      // Clearing the field means "no reducer": an explicit 1×, not "keep 0.8".
+      await tester.enterText(
+        find.byKey(const ValueKey('details-mount-reducer')),
+        '',
+      );
+      await tester.pumpAndSettle();
+      expect(draft.telescope.reducerFactor, 1.0);
+      expect(find.textContaining('2032 mm'), findsOneWidget);
+    },
+  );
 
-  testWidgets('the reducer field and its quick picks write the draft and show the effective focal length (§36.10)',
-      (tester) async {
-    final byType = {
-      EquipmentDeviceType.mount: [
-        _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
-      ],
-    };
-    final container = await _pump(tester, byType: byType, mount: const MountProps());
-    final draft = container.read(wizardControllerProvider).draft;
-    draft.telescope.focalLengthMm = 2032;
-    await tester.ensureVisible(find.text('Details').first);
-    await tester.tap(find.text('Details').first);
-    await tester.pumpAndSettle();
+  testWidgets(
+    'the reducer field and its quick picks write the draft and show the effective focal length (§36.10)',
+    (tester) async {
+      final byType = {
+        EquipmentDeviceType.mount: [
+          _device(EquipmentDeviceType.mount, 'mnt-1', 'iOptron CEM70'),
+        ],
+      };
+      final container = await _pump(
+        tester,
+        byType: byType,
+        mount: const MountProps(),
+      );
+      final draft = container.read(wizardControllerProvider).draft;
+      draft.telescope.focalLengthMm = 2032;
+      await tester.ensureVisible(find.text('Details').first);
+      await tester.tap(find.text('Details').first);
+      await tester.pumpAndSettle();
 
-    await tester.ensureVisible(find.byKey(const ValueKey('details-mount-reducer-0.63')));
-    await tester.tap(find.byKey(const ValueKey('details-mount-reducer-0.63')));
-    await tester.pumpAndSettle();
-    expect(draft.telescope.reducerFactor, 0.63);
-    expect(find.textContaining('1280 mm'), findsOneWidget, reason: '2032 × 0.63 effective focal length');
+      await tester.ensureVisible(
+        find.byKey(const ValueKey('details-mount-reducer-0.63')),
+      );
+      await tester.tap(
+        find.byKey(const ValueKey('details-mount-reducer-0.63')),
+      );
+      await tester.pumpAndSettle();
+      expect(draft.telescope.reducerFactor, 0.63);
+      expect(
+        find.textContaining('1280 mm'),
+        findsOneWidget,
+        reason: '2032 × 0.63 effective focal length',
+      );
 
-    // Any factor, not just the chips: a 2× Barlow.
-    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '2');
-    await tester.pumpAndSettle();
-    expect(draft.telescope.reducerFactor, 2);
-    expect(find.textContaining('4064 mm'), findsOneWidget);
+      // Any factor, not just the chips: a 2× Barlow.
+      await tester.enterText(
+        find.byKey(const ValueKey('details-mount-reducer')),
+        '2',
+      );
+      await tester.pumpAndSettle();
+      expect(draft.telescope.reducerFactor, 2);
+      expect(find.textContaining('4064 mm'), findsOneWidget);
 
-    // Out of range is refused, says so, and leaves the last good value.
-    await tester.enterText(find.byKey(const ValueKey('details-mount-reducer')), '9');
-    await tester.pumpAndSettle();
-    expect(draft.telescope.reducerFactor, 2);
-    expect(find.textContaining('between 0.1 and 5×'), findsOneWidget);
-  });
+      // Out of range is refused, says so, and leaves the last good value.
+      await tester.enterText(
+        find.byKey(const ValueKey('details-mount-reducer')),
+        '9',
+      );
+      await tester.pumpAndSettle();
+      expect(draft.telescope.reducerFactor, 2);
+      expect(find.textContaining('between 0.1 and 5×'), findsOneWidget);
+    },
+  );
 
   // #1298: discovery always lists the daemon's manual filter wheel, so it
   // must not count toward the one-device auto-assign or be assigned by itself.
-  final manualWheel = _device(EquipmentDeviceType.filterWheel,
-      DiscoveredDevice.manualFilterWheelId, 'Manual filter wheel');
+  final manualWheel = _device(
+    EquipmentDeviceType.filterWheel,
+    DiscoveredDevice.manualFilterWheelId,
+    'Manual filter wheel',
+  );
 
   testWidgets(
-      'one Alpaca filter wheel still auto-assigns beside the manual wheel',
-      (tester) async {
-    final byType = {
-      EquipmentDeviceType.filterWheel: [
-        _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
-        manualWheel,
-      ],
-    };
-    final container = await _pump(tester, byType: byType);
+    'one Alpaca filter wheel still auto-assigns beside the manual wheel',
+    (tester) async {
+      final byType = {
+        EquipmentDeviceType.filterWheel: [
+          _device(EquipmentDeviceType.filterWheel, 'fw-1', 'ZWO EFW'),
+          manualWheel,
+        ],
+      };
+      final container = await _pump(tester, byType: byType);
 
-    final draft = container.read(wizardControllerProvider).draft;
-    expect(draft.equipment.filterWheelDeviceId, 'fw-1');
-  });
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.equipment.filterWheelDeviceId, 'fw-1');
+    },
+  );
 
-  testWidgets('the manual filter wheel alone is never auto-assigned',
-      (tester) async {
+  testWidgets('the manual filter wheel alone is never auto-assigned', (
+    tester,
+  ) async {
     final byType = {
       EquipmentDeviceType.filterWheel: [manualWheel],
     };
@@ -348,30 +429,37 @@ void main() {
     expect(draft.equipment.filterWheelDeviceId, isNull);
   });
 
-  testWidgets('re-entry does not re-assign a slot the user explicitly cleared',
-      (tester) async {
-    final byType = {
-      EquipmentDeviceType.focuser: [
-        _device(EquipmentDeviceType.focuser, 'foc-1', 'ZWO EAF'),
-      ],
-    };
-    final container = await _pump(tester, byType: byType);
-    final draft = container.read(wizardControllerProvider).draft;
-    expect(draft.equipment.focuserDeviceId, 'foc-1');
+  testWidgets(
+    're-entry does not re-assign a slot the user explicitly cleared',
+    (tester) async {
+      final byType = {
+        EquipmentDeviceType.focuser: [
+          _device(EquipmentDeviceType.focuser, 'foc-1', 'ZWO EAF'),
+        ],
+      };
+      final container = await _pump(tester, byType: byType);
+      final draft = container.read(wizardControllerProvider).draft;
+      expect(draft.equipment.focuserDeviceId, 'foc-1');
 
-    // The user clears the slot (simulate the sheet's "— None" outcome), then
-    // the screen is rebuilt (Back → forward).
-    draft.equipment.focuserDeviceId = null;
-    await tester.pumpWidget(const SizedBox());
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ScreenYourEquipment())),
-    ));
-    await tester.pumpAndSettle();
+      // The user clears the slot (simulate the sheet's "— None" outcome), then
+      // the screen is rebuilt (Back → forward).
+      draft.equipment.focuserDeviceId = null;
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: ScreenYourEquipment())),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    expect(draft.equipment.focuserDeviceId, isNull,
-        reason: 'auto-assign runs once per wizard session');
-  });
+      expect(
+        draft.equipment.focuserDeviceId,
+        isNull,
+        reason: 'auto-assign runs once per wizard session',
+      );
+    },
+  );
 }
 
 /// The base profile the wizard clones from, as far as the reducer field reads
@@ -384,8 +472,9 @@ class _OpticsOnlyProfileApi implements ProfileApi {
   Future<OpticsSettings> getOptics() async => optics;
 
   @override
-  dynamic noSuchMethod(Invocation invocation) =>
-      throw UnimplementedError('${invocation.memberName} is not used by the reducer field');
+  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError(
+    '${invocation.memberName} is not used by the reducer field',
+  );
 }
 
 class _NotLoadedFan extends CoolingFanNotifier {

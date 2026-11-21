@@ -20,12 +20,19 @@ class BackupStreamStatus {
     required this.queueSizeBytes,
   });
 
-  factory BackupStreamStatus.fromJson(Map<String, dynamic> json) => BackupStreamStatus(
+  factory BackupStreamStatus.fromJson(Map<String, dynamic> json) =>
+      BackupStreamStatus(
         enabled: json['enabled'] is bool ? json['enabled'] as bool : false,
         activeTarget: json['active_target'] as String?,
-        pendingCount: json['pending_count'] is int ? json['pending_count'] as int : 0,
-        syncedCount: json['synced_count'] is int ? json['synced_count'] as int : 0,
-        queueSizeBytes: json['queue_size_bytes'] is int ? json['queue_size_bytes'] as int : 0,
+        pendingCount: json['pending_count'] is int
+            ? json['pending_count'] as int
+            : 0,
+        syncedCount: json['synced_count'] is int
+            ? json['synced_count'] as int
+            : 0,
+        queueSizeBytes: json['queue_size_bytes'] is int
+            ? json['queue_size_bytes'] as int
+            : 0,
       );
 }
 
@@ -54,11 +61,13 @@ class BackupStreamQueueEntry {
     this.relativePath,
   });
 
-  factory BackupStreamQueueEntry.fromJson(Map<String, dynamic> json) => BackupStreamQueueEntry(
+  factory BackupStreamQueueEntry.fromJson(Map<String, dynamic> json) =>
+      BackupStreamQueueEntry(
         id: json['id'] as String? ?? '',
         sha256: json['sha256'] as String?,
         sizeBytes: json['size_bytes'] is int ? json['size_bytes'] as int : 0,
-        capturedAt: DateTime.tryParse(json['captured_at'] as String? ?? '')?.toUtc(),
+        capturedAt: DateTime.tryParse(json['captured_at'] as String? ?? '')
+            ?.toUtc(),
         sessionId: json['session_id'] as String? ?? '',
         relativePath: json['relative_path'] as String?,
       );

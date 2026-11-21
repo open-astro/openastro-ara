@@ -41,7 +41,8 @@ class BackupStreamChip extends ConsumerWidget {
     }
 
     return Tooltip(
-      message: stream.problem ??
+      message:
+          stream.problem ??
           '${stream.syncedThisSession} frame(s) mirrored this session'
               '${stream.pendingCount > 0 ? ', ${stream.pendingCount} pending' : ''}.',
       child: Padding(
@@ -53,9 +54,7 @@ class BackupStreamChip extends ConsumerWidget {
             const SizedBox(width: 4),
             Text(
               text,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
+              style: Theme.of(context).textTheme.bodySmall
                   ?.copyWith(color: color),
             ),
           ],

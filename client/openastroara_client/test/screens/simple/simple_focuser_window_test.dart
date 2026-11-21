@@ -828,7 +828,9 @@ void main() {
     'a Keep focus sharp pick on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
     (tester) async {
       await _pump(tester, _wire(), afLoaded: false);
-      _c.read(autofocusSettingsProvider.notifier).seed(const AutofocusSettings());
+      _c
+          .read(autofocusSettingsProvider.notifier)
+          .seed(const AutofocusSettings());
       await tester.pump();
       expect(_c.read(autofocusSettingsProvider).source, SectionSource.cache);
       await tester.tap(chipFor('simple-focuser-sharp-tight'));
@@ -840,7 +842,9 @@ void main() {
         reason: 'the copy shown is unchanged',
       );
       expect(
-        find.textContaining("Couldn't save that: Settings not loaded from the rig"),
+        find.textContaining(
+          "Couldn't save that: Settings not loaded from the rig",
+        ),
         findsOneWidget,
       );
       await tester.pump(const Duration(seconds: 5));

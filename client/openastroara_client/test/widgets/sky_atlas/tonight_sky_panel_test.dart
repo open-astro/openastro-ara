@@ -34,6 +34,7 @@ import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
+
 import '../../support/imaging_sections.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
@@ -44,15 +45,18 @@ class _RecordingClient implements SequenceClient {
   Map<String, dynamic>? liveAddedItem;
 
   @override
-  Future<SequenceDetail> addRunItem(String id,
-      {required List<int> parentPath,
-      int? index,
-      required Map<String, dynamic> item}) async {
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) async {
     liveAddedId = id;
     liveAddedIndex = index;
     liveAddedItem = item;
     return detail ?? SequenceDetail(id: id, name: '', body: const {});
   }
+
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -69,8 +73,12 @@ class _RecordingClient implements SequenceClient {
   Map<String, dynamic>? updatedBody;
 
   @override
-  Future<String> create(String name, Map<String, dynamic> body,
-      {String? description, String? idempotencyKey}) async {
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+    String? idempotencyKey,
+  }) async {
     if (throwOnCreate) throw Exception('boom');
     createdName = name;
     createdBody = body;
@@ -84,7 +92,8 @@ class _RecordingClient implements SequenceClient {
   // The interface members the panel never calls — explicit overrides keep the
   // analyzer happy without `noSuchMethod` swallowing a real miss.
   @override
-  Future<SequencePage> list({int limit = 50, String? cursor}) => throw UnimplementedError();
+  Future<SequencePage> list({int limit = 50, String? cursor}) =>
+      throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() => throw UnimplementedError();
   @override
@@ -96,8 +105,12 @@ class _RecordingClient implements SequenceClient {
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       detail ?? (throw UnimplementedError());
   @override
-  Future<SequenceDetail> updateSequence(String id,
-      {String? name, String? description, Map<String, dynamic>? body}) async {
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  }) async {
     updatedId = id;
     updatedBody = body;
     return SequenceDetail(id: id, name: name ?? '', body: body ?? const {});
@@ -115,8 +128,11 @@ class _RecordingClient implements SequenceClient {
   @override
   Future<String> pause(String id) => throw UnimplementedError();
   @override
-  Future<String> resume(String id,
-          {bool recenter = true, bool refocus = false}) => throw UnimplementedError();
+  Future<String> resume(
+    String id, {
+    bool recenter = true,
+    bool refocus = false,
+  }) => throw UnimplementedError();
   @override
   Future<String> skipCurrent(String id) => throw UnimplementedError();
   @override
@@ -219,8 +235,7 @@ const _ngc = TonightSkyObject(
   score: 32,
 );
 
-Widget _host(_RecordingClient client,
-        {List<TonightSkyObject>? objects}) =>
+Widget _host(_RecordingClient client, {List<TonightSkyObject>? objects}) =>
     ProviderScope(
       overrides: [
         tonightSkyProvider.overrideWith((ref) async => objects ?? [_m31]),
@@ -288,38 +303,44 @@ void main() {
     await tester.pump();
     expect(find.text('Enquadramento para um mosaico 2×3'), findsOneWidget);
   });
-  testWidgets('the add action creates a full imaging run named after the object',
-      (tester) async {
-    final client = _RecordingClient();
-    await tester.pumpWidget(_host(client));
-    await tester.pump(); // resolve the tonightSky future
+  testWidgets(
+    'the add action creates a full imaging run named after the object',
+    (tester) async {
+      final client = _RecordingClient();
+      await tester.pumpWidget(_host(client));
+      await tester.pump(); // resolve the tonightSky future
 
-    expect(find.text('Andromeda Galaxy'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.playlist_add));
-    await tester.pump(); // run create()
-    await tester.pump(); // settle the SnackBar
+      expect(find.text('Andromeda Galaxy'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.playlist_add));
+      await tester.pump(); // run create()
+      await tester.pump(); // settle the SnackBar
 
-    expect(client.createdName, 'Andromeda Galaxy');
-    final body = client.createdBody!;
-    expect(body['schemaVersion'], 'openastroara-sequence-v1');
-    // A real session, not a bare slew: the slew plus an imaging loop of
-    // TakeExposures are all in the created tree.
-    final json = body.toString();
-    expect(json, contains('SlewScopeToRaDec'));
-    expect(json, contains('TakeExposure'));
-    expect(json, contains('LoopCondition'));
-    // S8: success renders the panel's confirmation card, not a SnackBar.
-    expect(find.textContaining('Run created for "Andromeda Galaxy"'),
-        findsOneWidget);
-    // S8: flush the confirmation card's auto-dismiss timer.
-    await tester.pump(const Duration(seconds: 7));
-  });
+      expect(client.createdName, 'Andromeda Galaxy');
+      final body = client.createdBody!;
+      expect(body['schemaVersion'], 'openastroara-sequence-v1');
+      // A real session, not a bare slew: the slew plus an imaging loop of
+      // TakeExposures are all in the created tree.
+      final json = body.toString();
+      expect(json, contains('SlewScopeToRaDec'));
+      expect(json, contains('TakeExposure'));
+      expect(json, contains('LoopCondition'));
+      // S8: success renders the panel's confirmation card, not a SnackBar.
+      expect(
+        find.textContaining('Run created for "Andromeda Galaxy"'),
+        findsOneWidget,
+      );
+      // S8: flush the confirmation card's auto-dismiss timer.
+      await tester.pump(const Duration(seconds: 7));
+    },
+  );
 
   // The append-path harness: a session for M 42 already open (selected), then
   // the add action for Andromeda. Returns the container so tests can pre-set
   // run state and inspect what happened.
   Future<ProviderContainer> pumpWithOpenSequence(
-      WidgetTester tester, _RecordingClient client) async {
+    WidgetTester tester,
+    _RecordingClient client,
+  ) async {
     client.detail = SequenceDetail(
       id: 'seq-open',
       name: 'M 42',
@@ -332,23 +353,28 @@ void main() {
         warmAtEnd: true,
       ),
     );
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_m31]),
-      ...imagingSectionsFromRig(),
-      sequenceApiProvider.overrideWith((ref) => client),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ...imagingSectionsFromRig(),
+        sequenceApiProvider.overrideWith((ref) => client),
+      ],
+    );
     addTearDown(container.dispose);
     container.read(selectedSequenceIdProvider.notifier).select('seq-open');
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
     await tester.pump(); // resolve the tonightSky future
     return container;
   }
 
-  testWidgets('with a sequence open, the add action appends the target to it',
-      (tester) async {
+  testWidgets('with a sequence open, the add action appends the target to it', (
+    tester,
+  ) async {
     final client = _RecordingClient();
     await pumpWithOpenSequence(tester, client);
 
@@ -359,38 +385,55 @@ void main() {
     // Patched, not created — ONE plan with both targets, the warm-up still last.
     expect(client.createdName, isNull);
     expect(client.updatedId, 'seq-open');
-    final names = childrenOf(client.updatedBody!).map((c) => c['Name']).toList();
+    final names = childrenOf(client.updatedBody!)
+        .map((c) => c['Name'])
+        .toList();
     expect(names, contains('M 42'));
     expect(names, contains('Andromeda Galaxy'));
-    expect(names.indexOf('Andromeda Galaxy'), greaterThan(names.indexOf('M 42')));
-    expect((childrenOf(client.updatedBody!).last[r'$type'] as String),
-        contains('WarmCamera'));
-    expect(find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
-        findsOneWidget);
+    expect(
+      names.indexOf('Andromeda Galaxy'),
+      greaterThan(names.indexOf('M 42')),
+    );
+    expect(
+      (childrenOf(client.updatedBody!).last[r'$type'] as String),
+      contains('WarmCamera'),
+    );
+    expect(
+      find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
+      findsOneWidget,
+    );
     // S8: flush the confirmation card's auto-dismiss timer.
     await tester.pump(const Duration(seconds: 7));
   });
 
-  testWidgets('an actively-running open sequence takes the target LIVE',
-      (tester) async {
+  testWidgets('an actively-running open sequence takes the target LIVE', (
+    tester,
+  ) async {
     // §38.9 — the daemon's live-edit endpoints graft the target into the
     // EXECUTING plan, so the new object images tonight instead of forking a
     // second sequence (the pre-§38.9 behavior this test used to assert).
     final client = _RecordingClient()
       ..runState = const SequenceRunStateInfo(
-          sequenceId: 'seq-open', state: SequenceRunState.running);
+        sequenceId: 'seq-open',
+        state: SequenceRunState.running,
+      );
     final container = await pumpWithOpenSequence(tester, client);
     // A DIRTY editor holding a diverged working copy (extra leading child):
     // the live-append index must come from the daemon's saved body, not this
     // local structure (review #872 — only the integer travels to the server).
     final divergedBody = Map<String, dynamic>.of(client.detail!.body);
-    container.read(sequenceEditorProvider.notifier).load(SequenceDetail(
-        id: 'seq-open',
-        name: 'M 42',
-        body: withChildren(divergedBody, [
-          instructionForType(sequentialContainerType)!.build(),
-          ...childrenOf(divergedBody),
-        ])));
+    container
+        .read(sequenceEditorProvider.notifier)
+        .load(
+          SequenceDetail(
+            id: 'seq-open',
+            name: 'M 42',
+            body: withChildren(divergedBody, [
+              instructionForType(sequentialContainerType)!.build(),
+              ...childrenOf(divergedBody),
+            ]),
+          ),
+        );
 
     await tester.tap(find.byIcon(Icons.playlist_add));
     await tester.pump();
@@ -404,36 +447,62 @@ void main() {
     // The insert slot skips the trailing warm-up (session-end) step, computed
     // from the SERVER's saved body — the diverged editor copy (one extra
     // child) would have produced a different index.
-    expect(client.liveAddedIndex,
-        childrenOf(client.detail!.body).length - 1);
-    expect(find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
-        findsOneWidget);
+    expect(client.liveAddedIndex, childrenOf(client.detail!.body).length - 1);
+    expect(
+      find.textContaining('"Andromeda Galaxy" joined tonight\'s run'),
+      findsOneWidget,
+    );
     // S8: flush the confirmation card's auto-dismiss timer.
     await tester.pump(const Duration(seconds: 7));
   });
 
-  testWidgets('a curated region keeps its catalog number in the row and the details: Skull Nebula (NGC 246) (#1957)',
-      (tester) async {
-    const skull = TonightSkyObject(
-        id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
-        altitudeDeg: 40, maxAltitudeDeg: 60, aliases: ['C 056'], score: 60);
-    await tester.pumpWidget(_host(_RecordingClient(), objects: [skull]));
-    await tester.pumpAndSettle();
-    expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget, reason: 'the row');
-    await tester.tap(find.byIcon(Icons.info_outline));
-    await tester.pump();
-    expect(find.text('Skull Nebula (NGC 246)'), findsNWidgets(2), reason: 'the row and the details title');
-  });
+  testWidgets(
+    'a curated region keeps its catalog number in the row and the details: Skull Nebula (NGC 246) (#1957)',
+    (tester) async {
+      const skull = TonightSkyObject(
+        id: 'NGC0246',
+        name: 'Skull Nebula',
+        type: 'PN',
+        magnitude: 8,
+        raDeg: 11.76,
+        decDeg: -11.87,
+        altitudeDeg: 40,
+        maxAltitudeDeg: 60,
+        aliases: ['C 056'],
+        score: 60,
+      );
+      await tester.pumpWidget(_host(_RecordingClient(), objects: [skull]));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Skull Nebula (NGC 246)'),
+        findsOneWidget,
+        reason: 'the row',
+      );
+      await tester.tap(find.byIcon(Icons.info_outline));
+      await tester.pump();
+      expect(
+        find.text('Skull Nebula (NGC 246)'),
+        findsNWidgets(2),
+        reason: 'the row and the details title',
+      );
+    },
+  );
 
-  testWidgets('a merged row lists its other designations under the name (#1267)',
-      (tester) async {
-    await tester.pumpWidget(_host(_RecordingClient(), objects: [_nam]));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('also Sh2-117, C 020, LBN 373'), findsOneWidget);
-  });
+  testWidgets(
+    'a merged row lists its other designations under the name (#1267)',
+    (tester) async {
+      await tester.pumpWidget(_host(_RecordingClient(), objects: [_nam]));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('also Sh2-117, C 020, LBN 373'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('tapping the row sends a framing goto and highlights the row',
-      (tester) async {
+  testWidgets('tapping the row sends a framing goto and highlights the row', (
+    tester,
+  ) async {
     await tester.pumpWidget(_host(_RecordingClient()));
     await tester.pump();
 
@@ -441,7 +510,8 @@ void main() {
     await tester.pump();
 
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(TonightSkyPanel)));
+      tester.element(find.byType(TonightSkyPanel)),
+    );
     // The framing goto carries the name (the page labels the frame with it)
     // and frame:true (the page opens the framing overlay on the object).
     expect(container.read(planetariumCommandProvider), {
@@ -455,22 +525,28 @@ void main() {
     // which row drove the atlas.
     expect(container.read(selectedTonightObjectProvider), 'M31');
     // S3 made the row's paint a BoxDecoration (hero/selection share it).
-    final rowBox = tester.widget<Container>(find
-        .ancestor(of: find.text('Andromeda Galaxy'),
-            matching: find.byType(Container))
-        .first);
+    final rowBox = tester.widget<Container>(
+      find
+          .ancestor(
+            of: find.text('Andromeda Galaxy'),
+            matching: find.byType(Container),
+          )
+          .first,
+    );
     expect((rowBox.decoration as BoxDecoration?)?.color, isNotNull);
   });
 
-  testWidgets('framing a second row after the first still sends its goto',
-      (tester) async {
+  testWidgets('framing a second row after the first still sends its goto', (
+    tester,
+  ) async {
     // Repro for "frame A, then frame B doesn't work": two sequential row taps
     // must each deliver their own framing goto (the command bus re-fires on
     // every non-null send, even when the page-side frame was toggled between).
     await tester.pumpWidget(_host(_RecordingClient(), objects: [_m31, _ngc]));
     await tester.pump();
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(TonightSkyPanel)));
+      tester.element(find.byType(TonightSkyPanel)),
+    );
 
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pump();
@@ -493,8 +569,9 @@ void main() {
     expect(container.read(selectedTonightObjectProvider), 'NGC1976');
   });
 
-  testWidgets('the crosshair icon stays a centre-only goto (no frame key)',
-      (tester) async {
+  testWidgets('the crosshair icon stays a centre-only goto (no frame key)', (
+    tester,
+  ) async {
     await tester.pumpWidget(_host(_RecordingClient()));
     await tester.pump();
 
@@ -502,7 +579,8 @@ void main() {
     await tester.pump();
 
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(TonightSkyPanel)));
+      tester.element(find.byType(TonightSkyPanel)),
+    );
     expect(container.read(planetariumCommandProvider), {
       'type': 'goto',
       'ra': _m31.raDeg,
@@ -513,27 +591,30 @@ void main() {
     expect(container.read(selectedTonightObjectProvider), isNull);
   });
 
-  testWidgets('info action opens target details without changing atlas command',
-      (tester) async {
-    await tester.pumpWidget(_host(_RecordingClient()));
-    await tester.pump();
+  testWidgets(
+    'info action opens target details without changing atlas command',
+    (tester) async {
+      await tester.pumpWidget(_host(_RecordingClient()));
+      await tester.pump();
 
-    final container = ProviderScope.containerOf(
-        tester.element(find.byType(TonightSkyPanel)));
-    await tester.tap(find.byIcon(Icons.info_outline));
-    await tester.pump();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(TonightSkyPanel)),
+      );
+      await tester.tap(find.byIcon(Icons.info_outline));
+      await tester.pump();
 
-    expect(find.text('Andromeda Galaxy'), findsNWidgets(2));
-    expect(find.textContaining('Coordinates:'), findsOneWidget);
-    expect(find.text('Type: Galaxy'), findsOneWidget);
-    expect(find.text('Tonight score: 88'), findsOneWidget);
-    expect(find.text('• fills the frame (+35)'), findsOneWidget);
-    expect(find.text('Close'), findsOneWidget);
-    // The info button wins the gesture over the row's tap: no goto was sent
-    // and nothing was framed.
-    expect(container.read(planetariumCommandProvider), isNull);
-    expect(container.read(selectedTonightObjectProvider), isNull);
-  });
+      expect(find.text('Andromeda Galaxy'), findsNWidgets(2));
+      expect(find.textContaining('Coordinates:'), findsOneWidget);
+      expect(find.text('Type: Galaxy'), findsOneWidget);
+      expect(find.text('Tonight score: 88'), findsOneWidget);
+      expect(find.text('• fills the frame (+35)'), findsOneWidget);
+      expect(find.text('Close'), findsOneWidget);
+      // The info button wins the gesture over the row's tap: no goto was sent
+      // and nothing was framed.
+      expect(container.read(planetariumCommandProvider), isNull);
+      expect(container.read(selectedTonightObjectProvider), isNull);
+    },
+  );
 
   testWidgets('a create failure surfaces an error SnackBar', (tester) async {
     final client = _RecordingClient()..throwOnCreate = true;
@@ -547,8 +628,9 @@ void main() {
     expect(find.textContaining("Couldn't create the run"), findsOneWidget);
   });
 
-  testWidgets('renders the score badge, framing chip and timing line',
-      (tester) async {
+  testWidgets('renders the score badge, framing chip and timing line', (
+    tester,
+  ) async {
     await tester.pumpWidget(_host(_RecordingClient()));
     await tester.pump();
 
@@ -572,8 +654,7 @@ void main() {
     expect(find.text('• 6 h dark window (+25)'), findsOneWidget);
   });
 
-  testWidgets(
-      'filter advice renders a chip, and the Why? breakdown carries the '
+  testWidgets('filter advice renders a chip, and the Why? breakdown carries the '
       'reason + Optimal Sub + Glover attribution', (tester) async {
     final advised = TonightSkyObject(
       id: 'NGC6960',
@@ -603,8 +684,11 @@ void main() {
     await tester.pump();
     expect(find.textContaining('~14× less sky glow'), findsOneWidget);
     expect(find.textContaining('Optimal sub ≈ 5.0 min'), findsOneWidget);
-    expect(find.textContaining('Dr. Robin Glover'), findsOneWidget,
-        reason: 'the attribution is a condition of the permission');
+    expect(
+      find.textContaining('Dr. Robin Glover'),
+      findsOneWidget,
+      reason: 'the attribution is a condition of the permission',
+    );
   });
 
   testWidgets('no advice fields → no chip and no advice lines', (tester) async {
@@ -618,26 +702,46 @@ void main() {
     expect(find.textContaining('Glover'), findsNothing);
   });
 
-  testWidgets('a moon-up window renders the separation/illumination chip',
-      (tester) async {
+  testWidgets('a moon-up window renders the separation/illumination chip', (
+    tester,
+  ) async {
     final moonlit = TonightSkyObject(
-      id: _m31.id, name: _m31.name, type: _m31.type,
-      magnitude: _m31.magnitude, raDeg: _m31.raDeg, decDeg: _m31.decDeg,
-      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
-      moonSeparationDeg: 42.3, moonIlluminationPct: 78, moonUpFraction: 0.65,
+      id: _m31.id,
+      name: _m31.name,
+      type: _m31.type,
+      magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg,
+      decDeg: _m31.decDeg,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      score: 88,
+      moonSeparationDeg: 42.3,
+      moonIlluminationPct: 78,
+      moonUpFraction: 0.65,
     );
     await tester.pumpWidget(_host(_RecordingClient(), objects: [moonlit]));
     await tester.pump();
-    expect(find.text('42° · 78%'), findsOneWidget); // S7: icon replaces the glyph char
+    expect(
+      find.text('42° · 78%'),
+      findsOneWidget,
+    ); // S7: icon replaces the glyph char
     expect(find.text('Moonless'), findsNothing);
   });
 
   testWidgets('a moonless window renders the Moonless chip', (tester) async {
     final moonless = TonightSkyObject(
-      id: _m31.id, name: _m31.name, type: _m31.type,
-      magnitude: _m31.magnitude, raDeg: _m31.raDeg, decDeg: _m31.decDeg,
-      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
-      moonSeparationDeg: 120, moonIlluminationPct: 78, moonUpFraction: 0,
+      id: _m31.id,
+      name: _m31.name,
+      type: _m31.type,
+      magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg,
+      decDeg: _m31.decDeg,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      score: 88,
+      moonSeparationDeg: 120,
+      moonIlluminationPct: 78,
+      moonUpFraction: 0,
     );
     await tester.pumpWidget(_host(_RecordingClient(), objects: [moonless]));
     await tester.pump();
@@ -647,10 +751,17 @@ void main() {
 
   group('windowStateFor (slice-4 best-window highlight)', () {
     TonightSkyObject obj({DateTime? start, DateTime? end}) => TonightSkyObject(
-          id: 'X', name: 'X', type: 'galaxy', magnitude: 8,
-          raDeg: 0, decDeg: 0, altitudeDeg: 40, maxAltitudeDeg: 60,
-          windowStartUtc: start, windowEndUtc: end,
-        );
+      id: 'X',
+      name: 'X',
+      type: 'galaxy',
+      magnitude: 8,
+      raDeg: 0,
+      decDeg: 0,
+      altitudeDeg: 40,
+      maxAltitudeDeg: 60,
+      windowStartUtc: start,
+      windowEndUtc: end,
+    );
     final t0 = DateTime.utc(2026, 12, 21, 22);
     final t1 = DateTime.utc(2026, 12, 22, 4);
 
@@ -659,31 +770,51 @@ void main() {
       expect(windowStateFor(obj(start: t0), t0), TonightWindowState.none);
     });
     test('before the window → upcoming', () {
-      expect(windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 21, 20)),
-          TonightWindowState.upcoming);
+      expect(
+        windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 21, 20)),
+        TonightWindowState.upcoming,
+      );
     });
     test('inside (and at both boundaries) → open', () {
       final o = obj(start: t0, end: t1);
-      expect(windowStateFor(o, DateTime.utc(2026, 12, 22, 1)), TonightWindowState.open);
-      expect(windowStateFor(o, t0), TonightWindowState.open,
-          reason: 'the opening instant is in the window');
-      expect(windowStateFor(o, t1), TonightWindowState.open,
-          reason: 'an exposure started in the last minute still counts');
+      expect(
+        windowStateFor(o, DateTime.utc(2026, 12, 22, 1)),
+        TonightWindowState.open,
+      );
+      expect(
+        windowStateFor(o, t0),
+        TonightWindowState.open,
+        reason: 'the opening instant is in the window',
+      );
+      expect(
+        windowStateFor(o, t1),
+        TonightWindowState.open,
+        reason: 'an exposure started in the last minute still counts',
+      );
     });
     test('after the window → passed', () {
-      expect(windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 22, 6)),
-          TonightWindowState.passed);
+      expect(
+        windowStateFor(obj(start: t0, end: t1), DateTime.utc(2026, 12, 22, 6)),
+        TonightWindowState.passed,
+      );
     });
   });
 
-  testWidgets('an open window renders the green "now · " timing treatment',
-      (tester) async {
+  testWidgets('an open window renders the green "now · " timing treatment', (
+    tester,
+  ) async {
     // Window straddling the real clock (±1 h) — deterministic for any test run.
     final now = DateTime.now().toUtc();
     final inWindow = TonightSkyObject(
-      id: _m31.id, name: _m31.name, type: _m31.type, magnitude: _m31.magnitude,
-      raDeg: _m31.raDeg, decDeg: _m31.decDeg,
-      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      id: _m31.id,
+      name: _m31.name,
+      type: _m31.type,
+      magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg,
+      decDeg: _m31.decDeg,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      score: 88,
       windowStartUtc: now.subtract(const Duration(hours: 1)),
       windowEndUtc: now.add(const Duration(hours: 1)),
       integrationHours: 2,
@@ -693,13 +824,20 @@ void main() {
     expect(find.textContaining('now · '), findsOneWidget);
   });
 
-  testWidgets('a fully-passed window renders without the "now" marker',
-      (tester) async {
+  testWidgets('a fully-passed window renders without the "now" marker', (
+    tester,
+  ) async {
     final now = DateTime.now().toUtc();
     final passed = TonightSkyObject(
-      id: _m31.id, name: _m31.name, type: _m31.type, magnitude: _m31.magnitude,
-      raDeg: _m31.raDeg, decDeg: _m31.decDeg,
-      altitudeDeg: 55, maxAltitudeDeg: 60, score: 88,
+      id: _m31.id,
+      name: _m31.name,
+      type: _m31.type,
+      magnitude: _m31.magnitude,
+      raDeg: _m31.raDeg,
+      decDeg: _m31.decDeg,
+      altitudeDeg: 55,
+      maxAltitudeDeg: 60,
+      score: 88,
       windowStartUtc: now.subtract(const Duration(hours: 8)),
       windowEndUtc: now.subtract(const Duration(hours: 2)),
       integrationHours: 6,
@@ -707,12 +845,16 @@ void main() {
     await tester.pumpWidget(_host(_RecordingClient(), objects: [passed]));
     await tester.pump();
     expect(find.textContaining('now · '), findsNothing);
-    expect(find.textContaining('h dark'), findsOneWidget,
-        reason: 'the row still shows its timing — advise, never hide');
+    expect(
+      find.textContaining('h dark'),
+      findsOneWidget,
+      reason: 'the row still shows its timing — advise, never hide',
+    );
   });
 
-  testWidgets('a pre-slice-4 daemon (no moon fields) renders no moon chip',
-      (tester) async {
+  testWidgets('a pre-slice-4 daemon (no moon fields) renders no moon chip', (
+    tester,
+  ) async {
     // _m31 carries no moon fields at all.
     await tester.pumpWidget(_host(_RecordingClient()));
     await tester.pump();
@@ -720,20 +862,23 @@ void main() {
     expect(find.textContaining('☾'), findsNothing);
   });
 
-  testWidgets(
-      'the recentre action sends a goto with the object ra/dec to the '
+  testWidgets('the recentre action sends a goto with the object ra/dec to the '
       'planetarium command provider', (tester) async {
     // Own container so we can read the provider seam after the tap.
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_m31]),
-      ...imagingSectionsFromRig(),
-      sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ...imagingSectionsFromRig(),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+      ],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
     await tester.pump(); // resolve the tonightSky future
 
     expect(container.read(planetariumCommandProvider), isNull);
@@ -751,9 +896,7 @@ void main() {
   testWidgets('low-scoring rows are still shown, ranked below', (tester) async {
     // Server ranks descending; the panel must render every row it's given,
     // including the low-score oversized target (advise, don't dictate).
-    await tester.pumpWidget(
-      _host(_RecordingClient(), objects: [_m31, _ngc]),
-    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [_m31, _ngc]));
     await tester.pump();
 
     expect(find.text('Andromeda Galaxy'), findsOneWidget);
@@ -762,14 +905,13 @@ void main() {
     expect(find.text('Too big'), findsOneWidget); // framing advice shown
   });
 
-  testWidgets('cards are uniform: no hero treatment, altitude on every row',
-      (tester) async {
+  testWidgets('cards are uniform: no hero treatment, altitude on every row', (
+    tester,
+  ) async {
     // #861 review follow-up — the rank-#1 card must render exactly like the
     // rest: same name style, no accent border, and the plain altitude figure
     // (formerly swapped for the framing glyph) present on EVERY row.
-    await tester.pumpWidget(
-      _host(_RecordingClient(), objects: [_m31, _ngc]),
-    );
+    await tester.pumpWidget(_host(_RecordingClient(), objects: [_m31, _ngc]));
     await tester.pump();
 
     expect(find.text('55°'), findsOneWidget); // rank-#1 row's altitude
@@ -777,64 +919,73 @@ void main() {
 
     final firstName = tester.widget<Text>(find.text('Andromeda Galaxy'));
     final secondName = tester.widget<Text>(find.text('Orion Nebula'));
-    expect(firstName.style, secondName.style,
-        reason: 'rank-#1 must not get a bigger title than other rows');
+    expect(
+      firstName.style,
+      secondName.style,
+      reason: 'rank-#1 must not get a bigger title than other rows',
+    );
 
     // Neither ROW's own container carries a border (the old hero accent
     // outline) — chips inside the row have their own borders, so check the
     // nearest Container ancestor of each row's name, not every Container.
     for (final name in ['Andromeda Galaxy', 'Orion Nebula']) {
-      final rowBox = tester.widget<Container>(find
-          .ancestor(of: find.text(name), matching: find.byType(Container))
-          .first);
-      expect((rowBox.decoration as BoxDecoration?)?.border, isNull,
-          reason: '"$name" row must not carry the hero accent border');
+      final rowBox = tester.widget<Container>(
+        find
+            .ancestor(of: find.text(name), matching: find.byType(Container))
+            .first,
+      );
+      expect(
+        (rowBox.decoration as BoxDecoration?)?.border,
+        isNull,
+        reason: '"$name" row must not carry the hero accent border',
+      );
     }
   });
 }
 
-
 /// A target ranked for later tonight: its window opens 40 min from now.
 TonightSkyObject _risingLater() => TonightSkyObject(
-      id: 'LATER',
-      name: 'Later Nebula',
-      type: 'HII',
-      magnitude: 7,
-      raDeg: 0,
-      decDeg: 0,
-      altitudeDeg: 12,
-      maxAltitudeDeg: 70,
-      windowStartUtc: DateTime.now().toUtc().add(const Duration(minutes: 40)),
-      windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 5)),
-      integrationHours: 4.3,
-      remainingHours: 4.3,
-      framing: TonightFraming.good,
-      score: 90,
-    );
+  id: 'LATER',
+  name: 'Later Nebula',
+  type: 'HII',
+  magnitude: 7,
+  raDeg: 0,
+  decDeg: 0,
+  altitudeDeg: 12,
+  maxAltitudeDeg: 70,
+  windowStartUtc: DateTime.now().toUtc().add(const Duration(minutes: 40)),
+  windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 5)),
+  integrationHours: 4.3,
+  remainingHours: 4.3,
+  framing: TonightFraming.good,
+  score: 90,
+);
 
 /// A target whose window is open right now.
 TonightSkyObject _upNow() => TonightSkyObject(
-      id: 'NOW',
-      name: 'Now Nebula',
-      type: 'HII',
-      magnitude: 7,
-      raDeg: 0,
-      decDeg: 0,
-      altitudeDeg: 60,
-      maxAltitudeDeg: 70,
-      windowStartUtc: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
-      windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 4)),
-      integrationHours: 5,
-      remainingHours: 4,
-      framing: TonightFraming.good,
-      score: 85,
-    );
+  id: 'NOW',
+  name: 'Now Nebula',
+  type: 'HII',
+  magnitude: 7,
+  raDeg: 0,
+  decDeg: 0,
+  altitudeDeg: 60,
+  maxAltitudeDeg: 70,
+  windowStartUtc: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
+  windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 4)),
+  integrationHours: 5,
+  remainingHours: 4,
+  framing: TonightFraming.good,
+  score: 85,
+);
 
 void _upNowTests() {
-  testWidgets('a row that rises later says so, and "Up now" hides it',
-      (tester) async {
-    await tester.pumpWidget(_host(_RecordingClient(),
-        objects: [_risingLater(), _upNow()]));
+  testWidgets('a row that rises later says so, and "Up now" hides it', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _host(_RecordingClient(), objects: [_risingLater(), _upNow()]),
+    );
     await tester.pump();
     // Whole night by default: both listed, the later one honest about it.
     expect(find.text('Later Nebula'), findsOneWidget);
@@ -851,54 +1002,74 @@ void _upNowTests() {
     expect(find.text('Later Nebula'), findsOneWidget);
   });
 
-  testWidgets('"Up now" with nothing open explains when the next one opens',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_risingLater()]),
-      ...imagingSectionsFromRig(),
-      sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
-      targetPreviewProvider.overrideWith((ref, key) async => null),
-    ]);
+  testWidgets('"Up now" with nothing open explains when the next one opens', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_risingLater()]),
+        ...imagingSectionsFromRig(),
+        sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
     addTearDown(container.dispose);
     container.read(tonightSkyUpNowProvider.notifier).set(true);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
     await tester.pump();
-    expect(find.textContaining('Nothing on tonight\'s list is up right now'),
-        findsOneWidget);
+    expect(
+      find.textContaining('Nothing on tonight\'s list is up right now'),
+      findsOneWidget,
+    );
     expect(find.textContaining('the next one opens at'), findsOneWidget);
   });
 }
 
-
 void _offlineAddTests() {
-  testWidgets('with no server the row add is live and saves a local draft',
-      (tester) async {
+  testWidgets('with no server the row add is live and saves a local draft', (
+    tester,
+  ) async {
     final drafts = _MemDrafts();
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_m31]),
-      ...imagingSectionsFromRig(),
-      sequenceApiProvider.overrideWith((ref) => null),
-      draftSequenceServiceProvider.overrideWithValue(drafts),
-      targetPreviewProvider.overrideWith((ref, key) async => null),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ...imagingSectionsFromRig(),
+        sequenceApiProvider.overrideWith((ref) => null),
+        draftSequenceServiceProvider.overrideWithValue(drafts),
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+      ],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+      ),
+    );
     await tester.pump();
     final add = find.byTooltip(
-        'Save as a draft run (no server — pushes when you reconnect)');
+      'Save as a draft run (no server — pushes when you reconnect)',
+    );
     expect(add, findsOneWidget);
-    expect(tester.widget<IconButton>(find.ancestor(
-            of: add, matching: find.byType(IconButton))).onPressed,
-        isNotNull, reason: 'offline add must not be disabled');
+    expect(
+      tester
+          .widget<IconButton>(
+            find.ancestor(of: add, matching: find.byType(IconButton)),
+          )
+          .onPressed,
+      isNotNull,
+      reason: 'offline add must not be disabled',
+    );
     await tester.tap(add);
     await tester.pump();
-    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await tester.pump();
     expect(drafts.store, hasLength(1));
     expect(drafts.store.values.single.name, 'Andromeda Galaxy');
@@ -942,41 +1113,46 @@ void _budgetTests() {
     peakAltitudeDeg: 60,
   );
   TonightSkyObject withBudget({double remaining = 3.2}) => TonightSkyObject(
-        id: 'M31',
-        name: 'Andromeda Galaxy',
-        type: 'galaxy',
-        magnitude: 3.4,
-        raDeg: 10.6847,
-        decDeg: 41.269,
-        altitudeDeg: 55,
-        maxAltitudeDeg: 60,
-        integrationHours: 6.3,
-        remainingHours: remaining,
-        surfaceBrightness: 22,
-        score: 88,
-        integrationBudget: budget.display,
-        budgetFullHours: budget.full.hours,
-        budget: budget,
-      );
+    id: 'M31',
+    name: 'Andromeda Galaxy',
+    type: 'galaxy',
+    magnitude: 3.4,
+    raDeg: 10.6847,
+    decDeg: 41.269,
+    altitudeDeg: 55,
+    maxAltitudeDeg: 60,
+    integrationHours: 6.3,
+    remainingHours: remaining,
+    surfaceBrightness: 22,
+    score: 88,
+    integrationBudget: budget.display,
+    budgetFullHours: budget.full.hours,
+    budget: budget,
+  );
 
   Widget host(TonightSkyObject o, {List<StatsTarget>? stats}) => ProviderScope(
-        overrides: [
-          tonightSkyProvider.overrideWith((ref) async => [o]),
-          ...imagingSectionsFromRig(),
-          sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
-          targetPreviewProvider.overrideWith((ref, key) async => null),
-          statsTargetsProvider.overrideWith(() => _FixedStats(stats)),
-        ],
-        child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-      );
+    overrides: [
+      tonightSkyProvider.overrideWith((ref) async => [o]),
+      ...imagingSectionsFromRig(),
+      sequenceApiProvider.overrideWith((ref) => _RecordingClient()),
+      targetPreviewProvider.overrideWith((ref, key) async => null),
+      statsTargetsProvider.overrideWith(() => _FixedStats(stats)),
+    ],
+    child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+  );
 
-  testWidgets('#1140 the details popover lists the budget inputs', (tester) async {
+  testWidgets('#1140 the details popover lists the budget inputs', (
+    tester,
+  ) async {
     await tester.pumpWidget(host(withBudget()));
     await tester.pump();
     await tester.tap(find.byIcon(Icons.info_outline));
     await tester.pumpAndSettle();
     expect(find.text('Hours needed — how it was computed'), findsOneWidget);
-    expect(find.textContaining('Surface brightness: 22.0 mag/arcsec²'), findsOneWidget);
+    expect(
+      find.textContaining('Surface brightness: 22.0 mag/arcsec²'),
+      findsOneWidget,
+    );
     expect(find.textContaining('Sky flux:'), findsOneWidget);
     expect(find.textContaining('SNR goals: core 5'), findsOneWidget);
   });
@@ -1015,102 +1191,205 @@ void _budgetTests() {
     expect(colorOf('Dr. Robin Glover'), AraColors.textSecondary);
   });
 
-  testWidgets('#1140 banked hours past the full tier flag diminishing returns', (tester) async {
-    final needed = budget.full.hours;
-    await tester.pumpWidget(host(withBudget(), stats: [
-      StatsTarget(targetName: 'Andromeda Galaxy', integrationHours: needed + 1),
-    ]));
-    await tester.pump();
-    await tester.pump();
-    expect(find.text('Tier complete — diminishing returns'), findsOneWidget);
-    expect(find.textContaining('consider a new target'), findsOneWidget);
-  });
+  testWidgets(
+    '#1140 banked hours past the full tier flag diminishing returns',
+    (tester) async {
+      final needed = budget.full.hours;
+      await tester.pumpWidget(
+        host(
+          withBudget(),
+          stats: [
+            StatsTarget(
+              targetName: 'Andromeda Galaxy',
+              integrationHours: needed + 1,
+            ),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Tier complete — diminishing returns'), findsOneWidget);
+      expect(find.textContaining('consider a new target'), findsOneWidget);
+    },
+  );
 
-  testWidgets('#1140 the remaining need is judged against tonight\'s window', (tester) async {
+  testWidgets('#1140 the remaining need is judged against tonight\'s window', (
+    tester,
+  ) async {
     final needed = budget.full.hours;
-    await tester.pumpWidget(host(withBudget(remaining: 3.2), stats: [
-      StatsTarget(targetName: 'M31', integrationHours: needed - 1),
-    ]));
+    await tester.pumpWidget(
+      host(
+        withBudget(remaining: 3.2),
+        stats: [StatsTarget(targetName: 'M31', integrationHours: needed - 1)],
+      ),
+    );
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('to go — finishes tonight.'), findsOneWidget);
     expect(find.text('Tier complete — diminishing returns'), findsNothing);
 
     await tester.pumpWidget(const SizedBox());
-    await tester.pumpWidget(host(withBudget(remaining: 0.5), stats: [
-      StatsTarget(targetName: 'M31', integrationHours: needed - 1),
-    ]));
+    await tester.pumpWidget(
+      host(
+        withBudget(remaining: 0.5),
+        stats: [StatsTarget(targetName: 'M31', integrationHours: needed - 1)],
+      ),
+    );
     await tester.pump();
     await tester.pump();
     expect(find.textContaining('to go — needs another night.'), findsOneWidget);
   });
 
-  testWidgets('#1140 NEXTGEN §5 the header opens the Optimal Sub calculator seeded from the profile', (tester) async {
-    tester.view.physicalSize = const Size(1400, 2000);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_m31]),
-    ]);
-    addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
-    await tester.pump();
-    await tester.tap(find.byTooltip('Optimal Sub calculator'));
-    await tester.pumpAndSettle();
-    expect(find.text('Optimal Sub calculator'), findsOneWidget);
-    // An unset profile (0 mm aperture…) is a sentence, not a crash.
-    expect(find.textContaining('Needs a positive'), findsOneWidget);
-  });
+  testWidgets(
+    '#1140 NEXTGEN §5 the header opens the Optimal Sub calculator seeded from the profile',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 2000);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final container = ProviderContainer(
+        overrides: [
+          tonightSkyProvider.overrideWith((ref) async => [_m31]),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byTooltip('Optimal Sub calculator'));
+      await tester.pumpAndSettle();
+      expect(find.text('Optimal Sub calculator'), findsOneWidget);
+      // An unset profile (0 mm aperture…) is a sentence, not a crash.
+      expect(find.textContaining('Needs a positive'), findsOneWidget);
+    },
+  );
 
-  testWidgets('#1140 the calculator opens seeded from the profile: first filter, its passband, its k, Tier-0 camera defaults', (tester) async {
-    tester.view.physicalSize = const Size(1400, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    final container = ProviderContainer(overrides: [
-      tonightSkyProvider.overrideWith((ref) async => [_m31]),
-      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
-          focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-      // Read noise / full well UNSET: the Tier-0 defaults must seed the rows.
-      cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 21.3))),
-      filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(filters: [
-        PlanningFilter(name: 'Ha 3nm', kind: FilterKind.ha, bandwidthNm: 3),
-        PlanningFilter(name: 'L', kind: FilterKind.l),
-      ]))),
-      skyModelCalibrationProvider.overrideWith(() => _SeededSkyModel(SkyModelCalibration(
-        fittedUtc: DateTime.utc(2026, 10, 13), framesConsidered: 9,
-        filters: const [SkyModelFilterCalibration(kind: 'ha', bin: 1, k: 0.7, frameCount: 9, passed: true)]))),
-    ]);
-    addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
-    ));
-    await tester.pump();
-    await container.read(skyModelCalibrationProvider.future);
-    await tester.tap(find.byTooltip('Optimal Sub calculator'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    '#1140 the calculator opens seeded from the profile: first filter, its passband, its k, Tier-0 camera defaults',
+    (tester) async {
+      tester.view.physicalSize = const Size(1400, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final container = ProviderContainer(
+        overrides: [
+          tonightSkyProvider.overrideWith((ref) async => [_m31]),
+          opticsSettingsProvider.overrideWith(
+            () => _SeededOptics(
+              const OpticsSettings(
+                focalLengthMm: 447,
+                reducerFactor: 1.0,
+                sensorWidthPx: 6248,
+                sensorHeightPx: 4176,
+                pixelSizeUm: 3.76,
+                apertureMm: 91,
+              ),
+            ),
+          ),
+          // Read noise / full well UNSET: the Tier-0 defaults must seed the rows.
+          cameraElectronicsProvider.overrideWith(
+            () => _SeededElectronics(
+              const CameraElectronics(
+                electronsPerAdu: 0.8,
+                quantumEfficiencyPeak: 0.8,
+              ),
+            ),
+          ),
+          siteSettingsProvider.overrideWith(
+            () => _SeededSite(
+              const SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 21.3),
+            ),
+          ),
+          filterSetProvider.overrideWith(
+            () => _SeededFilters(
+              const FilterSetSettings(
+                filters: [
+                  PlanningFilter(
+                    name: 'Ha 3nm',
+                    kind: FilterKind.ha,
+                    bandwidthNm: 3,
+                  ),
+                  PlanningFilter(name: 'L', kind: FilterKind.l),
+                ],
+              ),
+            ),
+          ),
+          skyModelCalibrationProvider.overrideWith(
+            () => _SeededSkyModel(
+              SkyModelCalibration(
+                fittedUtc: DateTime.utc(2026, 10, 13),
+                framesConsidered: 9,
+                filters: const [
+                  SkyModelFilterCalibration(
+                    kind: 'ha',
+                    bin: 1,
+                    k: 0.7,
+                    frameCount: 9,
+                    passed: true,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: TonightSkyPanel())),
+        ),
+      );
+      await tester.pump();
+      await container.read(skyModelCalibrationProvider.future);
+      await tester.tap(find.byTooltip('Optimal Sub calculator'));
+      await tester.pumpAndSettle();
 
-    String row(String label) => tester.widget<EditableNumberRow>(find.widgetWithText(EditableNumberRow, label)).currentValue;
-    expect(row('Filter passband (nm)'), '3', reason: "the first filter's declared passband");
-    expect(row('Sky model calibration k'), '0.7', reason: "appliedK for the first filter's kind");
-    expect(find.textContaining('(k 0.70 applied)'), findsOneWidget);
-    expect(row('Sky brightness (mag/arcsec²)'), '21.3', reason: 'SQM beats Bortle');
-    expect(row('Read noise (e⁻)'), '3.5', reason: 'Tier-0 default for an unset profile (defaultReadNoiseE)');
-    expect(defaultReadNoiseE, 3.5);
-    expect(row('Full well (e⁻)'), defaultFullWellE.toStringAsFixed(0));
-    expect(row('Aperture (mm)'), '91');
-    expect(find.textContaining('Suggested exposure:'), findsOneWidget);
-  });
+      String row(String label) => tester
+          .widget<EditableNumberRow>(
+            find.widgetWithText(EditableNumberRow, label),
+          )
+          .currentValue;
+      expect(
+        row('Filter passband (nm)'),
+        '3',
+        reason: "the first filter's declared passband",
+      );
+      expect(
+        row('Sky model calibration k'),
+        '0.7',
+        reason: "appliedK for the first filter's kind",
+      );
+      expect(find.textContaining('(k 0.70 applied)'), findsOneWidget);
+      expect(
+        row('Sky brightness (mag/arcsec²)'),
+        '21.3',
+        reason: 'SQM beats Bortle',
+      );
+      expect(
+        row('Read noise (e⁻)'),
+        '3.5',
+        reason: 'Tier-0 default for an unset profile (defaultReadNoiseE)',
+      );
+      expect(defaultReadNoiseE, 3.5);
+      expect(row('Full well (e⁻)'), defaultFullWellE.toStringAsFixed(0));
+      expect(row('Aperture (mm)'), '91');
+      expect(find.textContaining('Suggested exposure:'), findsOneWidget);
+    },
+  );
 
   test('aliasSuffix lists up to three other designations (#1267 item 4)', () {
     expect(aliasSuffix(const []), '');
     expect(aliasSuffix(const ['C 020', 'Sh2-117']), ' · also Sh2-117, C 020');
     expect(
-      aliasSuffix(const ['2MASX J00424433+4116074', 'Messier 31', 'UGC 00454', 'M 31']),
+      aliasSuffix(const [
+        '2MASX J00424433+4116074',
+        'Messier 31',
+        'UGC 00454',
+        'M 31',
+      ]),
       ' · also M 31',
     );
     expect(

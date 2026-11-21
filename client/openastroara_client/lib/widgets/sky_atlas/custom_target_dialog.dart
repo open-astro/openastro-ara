@@ -181,8 +181,9 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
       'name': name,
       'frame': true,
     });
-    final remember =
-        ref.read(customTargetsProvider.notifier).remember(_asCustomTarget(c));
+    final remember = ref
+        .read(customTargetsProvider.notifier)
+        .remember(_asCustomTarget(c));
     Navigator.of(context).pop();
     await remember;
   }
@@ -239,9 +240,11 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
 
     final resolved = widget.resolved;
     return AlertDialog(
-      title: Text(resolved != null && resolved.resolved
-          ? 'Resolved target'
-          : 'Target by coordinates'),
+      title: Text(
+        resolved != null && resolved.resolved
+            ? 'Resolved target'
+            : 'Target by coordinates',
+      ),
       content: SizedBox(
         width: 440,
         child: SingleChildScrollView(
@@ -315,7 +318,8 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Tooltip(
-                    message: 'J2000: catalogues, SIMBAD, Gaia, plate solves. '
+                    message:
+                        'J2000: catalogues, SIMBAD, Gaia, plate solves. '
                         'JNow: a hand controller or planetarium readout for '
                         'tonight — converted to J2000 for the run.',
                     child: SegmentedButton<_Epoch>(
@@ -337,7 +341,8 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
                   ),
                   if (raUnitIsAmbiguous(_ra.text))
                     Tooltip(
-                      message: 'A single decimal RA below 24 could be '
+                      message:
+                          'A single decimal RA below 24 could be '
                           'hours or degrees — pick which.',
                       child: SegmentedButton<RaUnit>(
                         showSelectedIcon: false,
@@ -440,13 +445,15 @@ class _CustomTargetDialogState extends ConsumerState<CustomTargetDialog> {
 
 /// Open the dialog; [initialText] pre-fills a pasted "RA Dec" line and
 /// [resolved] a name the daemon resolved (#1267).
-Future<void> showCustomTargetDialog(BuildContext context,
-        {String? initialText, TargetResolution? resolved}) =>
-    showDialog<void>(
-      context: context,
-      builder: (_) =>
-          CustomTargetDialog(initialText: initialText, resolved: resolved),
-    );
+Future<void> showCustomTargetDialog(
+  BuildContext context, {
+  String? initialText,
+  TargetResolution? resolved,
+}) => showDialog<void>(
+  context: context,
+  builder: (_) =>
+      CustomTargetDialog(initialText: initialText, resolved: resolved),
+);
 
 /// " · Simbad · also HIP 12235, TYC 4320-505-1" for a resolved recent target,
 /// nothing for a typed one (#1267 item 5).

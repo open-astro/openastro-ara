@@ -59,17 +59,18 @@ class TargetPreview extends ConsumerWidget {
       TargetPreviewService.fieldDegFor(object.sizeMajArcmin, _footprintArcmin);
 
   TargetPreviewKey get _key => (
-        id: object.id,
-        raDeg: object.raDeg,
-        decDeg: object.decDeg,
-        fieldDeg: _fieldDeg,
-      );
+    id: object.id,
+    raDeg: object.raDeg,
+    decDeg: object.decDeg,
+    fieldDeg: _fieldDeg,
+  );
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final preview = ref.watch(targetPreviewProvider(_key));
     final fieldDeg = _fieldDeg;
-    final label = '${object.name} preview, ${fieldDeg.toStringAsFixed(1)}° field';
+    final label =
+        '${object.name} preview, ${fieldDeg.toStringAsFixed(1)}° field';
     final Widget tile = preview.when(
       loading: () => const Center(
         child: SizedBox(
@@ -97,69 +98,75 @@ class TargetPreview extends ConsumerWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: bytes != null ? () => _enlarge(context, bytes) : null,
-        child: LayoutBuilder(builder: (context, constraints) {
-          final pxPerArcmin = constraints.maxWidth / (fieldDeg * 60);
-          // Dragging moves the FRAME across the fixed field: screen right is
-          // west (east-left survey), screen down is south, so both axes
-          // invert into the +east/+north tangent-plane offset. Axis-specific
-          // recognisers (not a pan): inside the dialog's scroll view a pan
-          // loses the arena to the scroll and the card just scrolls.
-          return GestureDetector(
-            onVerticalDragUpdate: canAim
-                ? (d) => onAim!((
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final pxPerArcmin = constraints.maxWidth / (fieldDeg * 60);
+            // Dragging moves the FRAME across the fixed field: screen right is
+            // west (east-left survey), screen down is south, so both axes
+            // invert into the +east/+north tangent-plane offset. Axis-specific
+            // recognisers (not a pan): inside the dialog's scroll view a pan
+            // loses the arena to the scroll and the card just scrolls.
+            return GestureDetector(
+              onVerticalDragUpdate: canAim
+                  ? (d) => onAim!((
                       aimOffsetArcmin.$1,
                       aimOffsetArcmin.$2 - d.delta.dy / pxPerArcmin,
                     ))
-                : null,
-            onHorizontalDragUpdate: canAim
-                ? (d) => onAim!((
+                  : null,
+              onHorizontalDragUpdate: canAim
+                  ? (d) => onAim!((
                       aimOffsetArcmin.$1 - d.delta.dx / pxPerArcmin,
                       aimOffsetArcmin.$2,
                     ))
-                : null,
-            child: ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: AspectRatio(
-            aspectRatio: TargetPreviewService.aspect,
-            child: ColoredBox(
-              color: AraColors.imageBackdrop,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  tile,
-                  if (frameFovArcmin != null)
-                    IgnorePointer(
-                      child: CustomPaint(
-                        painter: _FramePainter(
-                          fovArcmin: frameFovArcmin!,
-                          fieldDeg: fieldDeg,
-                          rotationDeg: rotationDeg,
-                          mosaic: mosaic,
-                          aimOffsetArcmin: aimOffsetArcmin,
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    left: 6,
-                    bottom: 4,
-                    child: Text(
-                      '${fieldDeg.toStringAsFixed(1)}° across · DSS2'
-                      '${canAim ? ' · drag to aim' : ''}',
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AraColors.onImageTextQuiet,
-                            shadows: const [
-                              Shadow(color: AraColors.onImageShadow, blurRadius: 3)
-                            ],
+                  : null,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: AspectRatio(
+                  aspectRatio: TargetPreviewService.aspect,
+                  child: ColoredBox(
+                    color: AraColors.imageBackdrop,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        tile,
+                        if (frameFovArcmin != null)
+                          IgnorePointer(
+                            child: CustomPaint(
+                              painter: _FramePainter(
+                                fovArcmin: frameFovArcmin!,
+                                fieldDeg: fieldDeg,
+                                rotationDeg: rotationDeg,
+                                mosaic: mosaic,
+                                aimOffsetArcmin: aimOffsetArcmin,
+                              ),
+                            ),
                           ),
+                        Positioned(
+                          left: 6,
+                          bottom: 4,
+                          child: Text(
+                            '${fieldDeg.toStringAsFixed(1)}° across · DSS2'
+                            '${canAim ? ' · drag to aim' : ''}',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: AraColors.onImageTextQuiet,
+                                  shadows: const [
+                                    Shadow(
+                                      color: AraColors.onImageShadow,
+                                      blurRadius: 3,
+                                    ),
+                                  ],
+                                ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
+            );
+          },
         ),
-          );
-        }),
       ),
     );
   }
@@ -210,9 +217,7 @@ class TargetPreview extends ConsumerWidget {
                 '(CDS hips2fits)'
                 '${frameFovArcmin != null ? ' · frame at ${rotationDeg.round()}°' : ''}'
                 '${mosaic.isMosaic ? ' · ${mosaic.cols}×${mosaic.rows} mosaic' : ''}',
-                style: Theme.of(ctx)
-                    .textTheme
-                    .bodySmall
+                style: Theme.of(ctx).textTheme.bodySmall
                     ?.copyWith(color: AraColors.textSecondary),
               ),
             ],
@@ -331,13 +336,15 @@ class _NoPreview extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Tooltip(
-        message:
-            'No preview cached — connect to the internet once to fetch it',
-        child: Center(
-          child: Icon(Icons.image_not_supported_outlined,
-              size: 24, color: AraColors.textDisabled),
-        ),
-      );
+    message: 'No preview cached — connect to the internet once to fetch it',
+    child: Center(
+      child: Icon(
+        Icons.image_not_supported_outlined,
+        size: 24,
+        color: AraColors.textDisabled,
+      ),
+    ),
+  );
 }
 
 /// The camera frame as a rotated rectangle over a cutout [fieldDeg] degrees
@@ -366,10 +373,12 @@ class _FramePainter extends CustomPainter {
     final h = fovArcmin.$2 / 60 * pxPerDeg;
     // The frame's centre: the object (field centre) shifted by the aim —
     // +east is screen-left, +north is screen-up on the survey cutout.
-    final c = size.center(Offset(
-      -aimOffsetArcmin.$1 / 60 * pxPerDeg,
-      -aimOffsetArcmin.$2 / 60 * pxPerDeg,
-    ));
+    final c = size.center(
+      Offset(
+        -aimOffsetArcmin.$1 / 60 * pxPerDeg,
+        -aimOffsetArcmin.$2 / 60 * pxPerDeg,
+      ),
+    );
     // A small cross on the catalogue centre so an aimed frame shows what it
     // moved away from.
     if (aimOffsetArcmin.$1 != 0 || aimOffsetArcmin.$2 != 0) {
@@ -382,9 +391,10 @@ class _FramePainter extends CustomPainter {
     }
     // Panel centres in the unrotated grid (pixels); the canvas rotation
     // below turns the whole grid, matching the overlay's tangent-plane math.
-    final panels = mosaicPanelOffsetsArcmin(fovArcmin, mosaic)
-        .map((o) => Offset(o.$1 / 60 * pxPerDeg, o.$2 / 60 * pxPerDeg))
-        .toList();
+    final panels = mosaicPanelOffsetsArcmin(
+      fovArcmin,
+      mosaic,
+    ).map((o) => Offset(o.$1 / 60 * pxPerDeg, o.$2 / 60 * pxPerDeg)).toList();
     canvas.save();
     canvas.translate(c.dx, c.dy);
     canvas.rotate(rotationDeg * math.pi / 180);
@@ -397,12 +407,12 @@ class _FramePainter extends CustomPainter {
     // overlapping panels stay fully clear (an even-odd path would re-dim
     // the overlap bands).
     final everything = Rect.fromCenter(
-        center: Offset.zero,
-        width: size.longestSide * 4,
-        height: size.longestSide * 4);
+      center: Offset.zero,
+      width: size.longestSide * 4,
+      height: size.longestSide * 4,
+    );
     canvas.saveLayer(everything, Paint());
-    canvas.drawRect(
-        everything, Paint()..color = AraColors.previewMask);
+    canvas.drawRect(everything, Paint()..color = AraColors.previewMask);
     canvas.drawPath(union, Paint()..blendMode = BlendMode.clear);
     canvas.restore();
     final shadow = Paint()

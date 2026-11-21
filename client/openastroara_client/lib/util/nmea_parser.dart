@@ -9,7 +9,12 @@
 /// A parsed fix. [timeUtc] is only carried by RMC (GGA has no date field);
 /// [altitudeM] only by GGA.
 class NmeaFix {
-  const NmeaFix({this.timeUtc, this.latitudeDeg, this.longitudeDeg, this.altitudeM});
+  const NmeaFix({
+    this.timeUtc,
+    this.latitudeDeg,
+    this.longitudeDeg,
+    this.altitudeM,
+  });
 
   final DateTime? timeUtc;
   final double? latitudeDeg;
@@ -102,7 +107,13 @@ DateTime? _parseUtc(String hhmmss, String ddmmyy) {
   }
   // Reject what DateTime would otherwise normalise (e.g. month 13 → next year):
   // a cold receiver emits nonsense dates and the daemon skips those too.
-  if (mo! < 1 || mo > 12 || dd! < 1 || dd > 31 || hh! > 23 || mm! > 59 || ss! > 60) {
+  if (mo! < 1 ||
+      mo > 12 ||
+      dd! < 1 ||
+      dd > 31 ||
+      hh! > 23 ||
+      mm! > 59 ||
+      ss! > 60) {
     return null;
   }
   // NMEA's 2-digit year is unambiguous in practice: GPS predates 2000, ARA doesn't.
@@ -112,7 +123,11 @@ DateTime? _parseUtc(String hhmmss, String ddmmyy) {
 }
 
 // NMEA coordinates are ddmm.mmmm (lat) / dddmm.mmmm (lng) with a N/S/E/W hemisphere field.
-double? _parseCoordinate(String value, String hemisphere, {required bool isLatitude}) {
+double? _parseCoordinate(
+  String value,
+  String hemisphere, {
+  required bool isLatitude,
+}) {
   if (value.isEmpty || hemisphere.isEmpty) return null;
   final degDigits = isLatitude ? 2 : 3;
   if (value.length <= degDigits) return null;

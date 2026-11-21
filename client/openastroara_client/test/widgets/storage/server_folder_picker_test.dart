@@ -17,7 +17,10 @@ class _FakeBrowse implements StorageBrowseApi {
     dirs: [
       StorageBrowseEntry(name: 'Home', path: '/home/pi'),
       StorageBrowseEntry(
-          name: 'USB / removable (media)', path: '/media', removable: true),
+        name: 'USB / removable (media)',
+        path: '/media',
+        removable: true,
+      ),
     ],
   );
 
@@ -33,7 +36,11 @@ class _FakeBrowse implements StorageBrowseApi {
           parent: '/',
           writable: false,
           dirs: [
-            StorageBrowseEntry(name: 'usb', path: '/media/usb', removable: true),
+            StorageBrowseEntry(
+              name: 'usb',
+              path: '/media/usb',
+              removable: true,
+            ),
           ],
         );
       case '/media/usb':
@@ -51,7 +58,10 @@ class _FakeBrowse implements StorageBrowseApi {
   final List<(String, String)> created = [];
 
   @override
-  Future<StorageBrowseLevel> createFolder(String parentPath, String name) async {
+  Future<StorageBrowseLevel> createFolder(
+    String parentPath,
+    String name,
+  ) async {
     created.add((parentPath, name));
     return StorageBrowseLevel(
       path: parentPath,
@@ -73,44 +83,58 @@ void main() {
   const server = AraServer(hostname: 'test', port: 1);
 
   Future<({_FakeBrowse api, Future<String?> result})> open(
-      WidgetTester tester, {String? startPath}) async {
+    WidgetTester tester, {
+    String? startPath,
+  }) async {
     final api = _FakeBrowse();
     late Future<String?> result;
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        storageBrowseApiFactoryProvider.overrideWithValue((_) => api),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Consumer(builder: (context, ref, _) {
-            return ElevatedButton(
-              onPressed: () {
-                result = showServerFolderPicker(context, ref,
-                    server: server, startPath: startPath);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          storageBrowseApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) {
+                return ElevatedButton(
+                  onPressed: () {
+                    result = showServerFolderPicker(
+                      context,
+                      ref,
+                      server: server,
+                      startPath: startPath,
+                    );
+                  },
+                  child: const Text('open'),
+                );
               },
-              child: const Text('open'),
-            );
-          }),
+            ),
+          ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     return (api: api, result: result);
   }
 
-  testWidgets('walks roots → USB mount and returns the picked writable folder',
-      (tester) async {
+  testWidgets('walks roots → USB mount and returns the picked writable folder', (
+    tester,
+  ) async {
     final o = await open(tester);
 
     // Roots: USB entry badged, "Use this folder" disabled (roots aren't a dir).
     expect(find.text('USB / removable (media)'), findsOneWidget);
     expect(find.text('Removable / USB'), findsOneWidget);
     expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Use this folder'))
-            .onPressed,
-        isNull);
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Use this folder'),
+          )
+          .onPressed,
+      isNull,
+    );
 
     await tester.tap(find.text('USB / removable (media)'));
     await tester.pumpAndSettle();
@@ -124,55 +148,68 @@ void main() {
     expect(o.api.requests, [null, '/media', '/media/usb']);
   });
 
-  testWidgets('a non-writable directory keeps the pick button disabled',
-      (tester) async {
+  testWidgets('a non-writable directory keeps the pick button disabled', (
+    tester,
+  ) async {
     await open(tester);
     await tester.tap(find.text('USB / removable (media)'));
     await tester.pumpAndSettle();
 
     // /media itself is not writable → disabled with the tooltip explanation.
     expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Use this folder'))
-            .onPressed,
-        isNull);
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Use this folder'),
+          )
+          .onPressed,
+      isNull,
+    );
   });
 
-  testWidgets('an unknown start path falls back to the roots, not an error',
-      (tester) async {
+  testWidgets('an unknown start path falls back to the roots, not an error', (
+    tester,
+  ) async {
     final o = await open(tester, startPath: '/gone/rig');
-    expect(find.text('USB / removable (media)'), findsOneWidget,
-        reason: 'stale path from another rig → roots listing');
+    expect(
+      find.text('USB / removable (media)'),
+      findsOneWidget,
+      reason: 'stale path from another rig → roots listing',
+    );
     expect(o.api.requests.first, '/gone/rig');
   });
 
   testWidgets(
-      'New folder is disabled at the roots and creates + relists in a writable dir',
-      (tester) async {
-    final o = await open(tester);
+    'New folder is disabled at the roots and creates + relists in a writable dir',
+    (tester) async {
+      final o = await open(tester);
 
-    // Roots: can't create there.
-    expect(
+      // Roots: can't create there.
+      expect(
         tester
             .widget<TextButton>(find.widgetWithText(TextButton, 'New folder'))
             .onPressed,
-        isNull);
+        isNull,
+      );
 
-    await tester.tap(find.text('USB / removable (media)'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('usb'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('USB / removable (media)'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('usb'));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.text('New folder'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Lights');
-    await tester.tap(find.text('Create'));
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('New folder'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'Lights');
+      await tester.tap(find.text('Create'));
+      await tester.pumpAndSettle();
 
-    expect(o.api.created, [('/media/usb', 'Lights')]);
-    expect(find.text('Lights'), findsOneWidget,
-        reason: 'the refreshed listing shows the new folder');
-  });
+      expect(o.api.created, [('/media/usb', 'Lights')]);
+      expect(
+        find.text('Lights'),
+        findsOneWidget,
+        reason: 'the refreshed listing shows the new folder',
+      );
+    },
+  );
 
   testWidgets('cancel returns null', (tester) async {
     final o = await open(tester);

@@ -33,8 +33,7 @@ class _FakeClient implements NotificationsClient {
     int limit = 50,
     String? cursor,
     bool? unreadOnly,
-  }) async =>
-      CursorPage(items: items, nextCursor: null, hasMore: false);
+  }) async => CursorPage(items: items, nextCursor: null, hasMore: false);
 
   @override
   Future<AraNotification?> markRead(String id) async => null;
@@ -50,32 +49,36 @@ class _FakeClient implements NotificationsClient {
   void close() {}
 }
 
-AraNotification _n(String id,
-        {required String title,
-        bool read = false,
-        Duration age = const Duration(minutes: 4)}) =>
-    AraNotification(
-      id: id,
-      postedUtc: DateTime.now().subtract(age),
-      severity: NotificationSeverity.warning,
-      category: NotificationCategory.equipment,
-      title: title,
-      message: 'It could not find a star after three tries.',
-      read: read,
-      dismissed: false,
-    );
+AraNotification _n(
+  String id, {
+  required String title,
+  bool read = false,
+  Duration age = const Duration(minutes: 4),
+}) => AraNotification(
+  id: id,
+  postedUtc: DateTime.now().subtract(age),
+  severity: NotificationSeverity.warning,
+  category: NotificationCategory.equipment,
+  title: title,
+  message: 'It could not find a star after three tries.',
+  read: read,
+  dismissed: false,
+);
 
 Future<void> _pump(WidgetTester tester, _FakeClient client) async {
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      notificationsApiFactoryProvider.overrideWithValue((_) => client),
-    ],
-    child: const MaterialApp(
-      home: Scaffold(appBar: null, body: Center(child: NotificationBell())),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        notificationsApiFactoryProvider.overrideWithValue((_) => client),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(appBar: null, body: Center(child: NotificationBell())),
+      ),
     ),
-  ));
+  );
   await tester.pumpAndSettle();
 }
 
@@ -88,24 +91,27 @@ void main() {
 
   testWidgets('unread count rides on the bell', (tester) async {
     await _pump(
-        tester,
-        _FakeClient([
-          _n('a', title: 'Guider gave up'),
-          _n('b', title: 'Disk nearly full', read: true),
-        ]));
+      tester,
+      _FakeClient([
+        _n('a', title: 'Guider gave up'),
+        _n('b', title: 'Disk nearly full', read: true),
+      ]),
+    );
     expect(find.text('1'), findsOneWidget);
   });
 
-  testWidgets('an empty inbox says so instead of showing a blank list',
-      (tester) async {
+  testWidgets('an empty inbox says so instead of showing a blank list', (
+    tester,
+  ) async {
     await _pump(tester, _FakeClient(const []));
     await tester.tap(find.byType(IconButton));
     await tester.pumpAndSettle();
     expect(find.text("You're all caught up."), findsOneWidget);
   });
 
-  testWidgets('opening the bell lists what happened, newest wording intact',
-      (tester) async {
+  testWidgets('opening the bell lists what happened, newest wording intact', (
+    tester,
+  ) async {
     await _pump(tester, _FakeClient([_n('a', title: 'Guider gave up')]));
     await tester.tap(find.byType(IconButton).first);
     await tester.pumpAndSettle();
@@ -113,8 +119,9 @@ void main() {
     expect(find.textContaining('Equipment · 4 minutes ago'), findsOneWidget);
   });
 
-  testWidgets('dismiss appears when you reach for the row, not before',
-      (tester) async {
+  testWidgets('dismiss appears when you reach for the row, not before', (
+    tester,
+  ) async {
     final client = _FakeClient([_n('a', title: 'Guider gave up')]);
     await _pump(tester, client);
     await tester.tap(find.byType(IconButton).first);
@@ -137,16 +144,18 @@ void main() {
     expect(find.text("You're all caught up."), findsOneWidget);
   });
 
-  testWidgets('a backlog reads as a timeline, not one undifferentiated wall',
-      (tester) async {
+  testWidgets('a backlog reads as a timeline, not one undifferentiated wall', (
+    tester,
+  ) async {
     await _pump(
-        tester,
-        _FakeClient([
-          // Zero age: the default 4 minutes lands on yesterday in the first
-          // minutes after midnight, and the TODAY header goes missing.
-          _n('a', title: 'Guider gave up', age: Duration.zero),
-          _n('b', title: 'Disk nearly full', age: const Duration(days: 1)),
-        ]));
+      tester,
+      _FakeClient([
+        // Zero age: the default 4 minutes lands on yesterday in the first
+        // minutes after midnight, and the TODAY header goes missing.
+        _n('a', title: 'Guider gave up', age: Duration.zero),
+        _n('b', title: 'Disk nearly full', age: const Duration(days: 1)),
+      ]),
+    );
     await tester.tap(find.byType(IconButton).first);
     await tester.pumpAndSettle();
     expect(find.text('TODAY'), findsOneWidget);
@@ -155,17 +164,29 @@ void main() {
 
   test('relative time reads the way you would say it', () {
     final now = DateTime(2026, 8, 2, 22);
-    expect(relativeTime(now.subtract(const Duration(seconds: 5)), now: now),
-        'just now');
-    expect(relativeTime(now.subtract(const Duration(minutes: 1)), now: now),
-        '1 minute ago');
-    expect(relativeTime(now.subtract(const Duration(minutes: 40)), now: now),
-        '40 minutes ago');
-    expect(relativeTime(now.subtract(const Duration(hours: 3)), now: now),
-        '3 hours ago');
-    expect(relativeTime(now.subtract(const Duration(days: 1)), now: now),
-        'yesterday');
-    expect(relativeTime(now.subtract(const Duration(days: 30)), now: now),
-        '2026-07-03');
+    expect(
+      relativeTime(now.subtract(const Duration(seconds: 5)), now: now),
+      'just now',
+    );
+    expect(
+      relativeTime(now.subtract(const Duration(minutes: 1)), now: now),
+      '1 minute ago',
+    );
+    expect(
+      relativeTime(now.subtract(const Duration(minutes: 40)), now: now),
+      '40 minutes ago',
+    );
+    expect(
+      relativeTime(now.subtract(const Duration(hours: 3)), now: now),
+      '3 hours ago',
+    );
+    expect(
+      relativeTime(now.subtract(const Duration(days: 1)), now: now),
+      'yesterday',
+    );
+    expect(
+      relativeTime(now.subtract(const Duration(days: 30)), now: now),
+      '2026-07-03',
+    );
   });
 }

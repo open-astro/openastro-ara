@@ -365,11 +365,7 @@ Map<String, dynamic> buildTargetBlock({
       // caller derived its exposure count at [exposureSeconds].
       final scaled = expSeconds == exposureSeconds
           ? afEvery
-          : math.max(
-              1,
-              (afEvery * exposureSeconds / expSeconds)
-                  .round(),
-            );
+          : math.max(1, (afEvery * exposureSeconds / expSeconds).round());
       triggers.add(afTriggerDef.build()..['AfterExposures'] = scaled);
     }
     if (afTemp != null) {
@@ -476,15 +472,16 @@ Map<String, dynamic> buildTargetBlock({
   // would pull the field off the guide star); without guiding it waits for
   // the cool and keeps the blind slew and the late centre.
   final focusFirst = afAtStart && !guide;
-  final goToTarget = (positionAngleDeg != null
-      ? (_item(centerAndRotateType)
-          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
-          ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
-      : (_item(slewScopeToRaDecType)
-          ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
-          // Absent follows Settings → Plate Solving; Simple Mode always centres.
-          ..addAll({if (alwaysCenter) 'Center': true})))
-    ..['ErrorBehavior'] = skipInstructionSetOnError;
+  final goToTarget =
+      (positionAngleDeg != null
+            ? (_item(centerAndRotateType)
+                ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+                ..['PositionAngle'] = ((positionAngleDeg % 360) + 360) % 360)
+            : (_item(slewScopeToRaDecType)
+                ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
+                // Absent follows Settings → Plate Solving; Simple Mode always centres.
+                ..addAll({if (alwaysCenter) 'Center': true})))
+        ..['ErrorBehavior'] = skipInstructionSetOnError;
   final blindSlew = _item(slewScopeToRaDecType)
     ..['Coordinates'] = inputCoordinatesFromDeg(raDeg, decDeg)
     ..['Center'] = false
@@ -530,11 +527,11 @@ Map<String, dynamic> buildTargetBlock({
     if (plan != null)
       for (var i = 0; i < plan.length; i++) ...[
         if (i > 0) ?switchTo(plan[i].filterName),
-          imagingLoop(
-            name: '${plan[i].filterName.trim()} Imaging',
-            expSeconds: plan[i].exposureSeconds,
-            count: plan[i].frameCount,
-          ),
+        imagingLoop(
+          name: '${plan[i].filterName.trim()} Imaging',
+          expSeconds: plan[i].exposureSeconds,
+          count: plan[i].frameCount,
+        ),
       ]
     else
       imagingLoop(
@@ -543,7 +540,12 @@ Map<String, dynamic> buildTargetBlock({
         count: frameCount,
       ),
     if (flatsAfter && plan != null)
-      ...flatSets([for (final p in plan) p.filterName], rig, gain: gain, offset: offset),
+      ...flatSets(
+        [for (final p in plan) p.filterName],
+        rig,
+        gain: gain,
+        offset: offset,
+      ),
   ];
 
   var block = _item(sequentialContainerType);
@@ -654,12 +656,12 @@ List<Map<String, dynamic>> flatSets(
   int offset = -1,
   int frames = kSimpleFlatFrames,
 }) => [
-  if (!rig.flatPanel)
-    _item(waitForUserType)
-      ..['Text'] =
-          'Put the screen or light box over the scope for the flats, then press Resume.',
-  for (final f in {for (final f in filters) f.trim()}.where((f) => f.isNotEmpty)) ...[
-    if (rig.filterWheel) _item(switchFilterType)..['Filter'] = buildFilterInfo(f),
+  if (!rig.flatPanel) _item(waitForUserType)..['Text'] = 'Put the screen or light box over the scope for the flats, then press Resume.',
+  for (final f in {
+    for (final f in filters) f.trim(),
+  }.where((f) => f.isNotEmpty)) ...[
+    if (rig.filterWheel)
+      _item(switchFilterType)..['Filter'] = buildFilterInfo(f),
     _item(flatPanelFlatsType)
       ..['FrameCount'] = frames
       ..['Gain'] = gain
@@ -726,7 +728,9 @@ Map<String, dynamic> withLensCap(String text) =>
 /// The frames a Calibration block takes and their time: each loop's
 /// iterations times its exposures, and each flat set's frames. Pure —
 /// unit-tested.
-({int frames, double seconds}) calibrationBlockTime(Map<String, dynamic> block) {
+({int frames, double seconds}) calibrationBlockTime(
+  Map<String, dynamic> block,
+) {
   var frames = 0;
   var seconds = 0.0;
   void walk(Map<String, dynamic> node, int times) {

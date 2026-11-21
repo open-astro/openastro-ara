@@ -158,7 +158,8 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
       // is in progress; a focused text field consumes Space first, which is
       // the right precedence.
       bindings: <ShortcutActivator, VoidCallback>{
-        if (_slewing) const SingleActivator(LogicalKeyboardKey.space): _stopMount,
+        if (_slewing)
+          const SingleActivator(LogicalKeyboardKey.space): _stopMount,
       },
       child: Stack(
         // Fill the parent regardless of the child's own size, so the banner's
@@ -167,19 +168,19 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
         children: [
           widget.child,
           if (_slewing && !widget.quiet)
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            // The listener wraps the shell's SafeArea, so honor the top inset
-            // here: at least 64 px down, more when a notch/status bar demands
-            // it (#837 r1).
-            child: SafeArea(
-              bottom: false,
-              minimum: const EdgeInsets.only(top: 64),
-              child: Center(child: _slewBanner(context)),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              // The listener wraps the shell's SafeArea, so honor the top inset
+              // here: at least 64 px down, more when a notch/status bar demands
+              // it (#837 r1).
+              child: SafeArea(
+                bottom: false,
+                minimum: const EdgeInsets.only(top: 64),
+                child: Center(child: _slewBanner(context)),
+              ),
             ),
-          ),
         ],
       ),
     );
@@ -211,8 +212,9 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
                 style: FilledButton.styleFrom(
                   backgroundColor: AraColors.accentError,
                   foregroundColor: AraColors.onFill,
-                  textStyle: theme.textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.bold),
+                  textStyle: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 // Single-tap, no confirmation gate — the button IS the
                 // confirmation (§57.3).
@@ -313,7 +315,15 @@ class _StopMountListenerState extends ConsumerState<StopMountListener> {
     } catch (e) {
       if (!mounted) return;
       messenger.showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionSequenceAction))),
+        SnackBar(
+          content: Text(
+            friendlyError(
+              context.l10n,
+              e,
+              action: context.l10n.actionSequenceAction,
+            ),
+          ),
+        ),
       );
     }
   }
@@ -372,11 +382,19 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
       if (!mounted) return;
       setState(() {
         _verified = result;
-        if (result == null) _verifyError = 'No server connection — cannot take a verification image.';
+        if (result == null)
+          _verifyError =
+              'No server connection — cannot take a verification image.';
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _verifyError = friendlyError(context.l10n, e, action: context.l10n.actionTakeVerification));
+      setState(
+        () => _verifyError = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionTakeVerification,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _verifying = false);
     }
@@ -412,9 +430,17 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
             key: const ValueKey('stop_modal_verify'),
             onPressed: _verifying ? null : _verify,
             icon: _verifying
-                ? const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.camera_alt_outlined, size: 18),
-            label: Text(_verifying ? 'Taking a 2 s image and solving…' : 'Verify Position — show me an image'),
+            label: Text(
+              _verifying
+                  ? 'Taking a 2 s image and solving…'
+                  : 'Verify Position — show me an image',
+            ),
           ),
           if (verified != null) ...[
             const SizedBox(height: 8),
@@ -425,7 +451,9 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
                   line,
                   key: const ValueKey('stop_modal_verify_line'),
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: line.startsWith('Image did not solve') ? AraColors.accentBusy : null,
+                    color: line.startsWith('Image did not solve')
+                        ? AraColors.accentBusy
+                        : null,
                   ),
                 ),
               ),
@@ -436,7 +464,9 @@ class _MountStoppedDialogState extends State<_MountStoppedDialog> {
               child: Text(
                 _verifyError!,
                 key: const ValueKey('stop_modal_verify_error'),
-                style: theme.textTheme.bodySmall?.copyWith(color: AraColors.accentError),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AraColors.accentError,
+                ),
               ),
             ),
         ],

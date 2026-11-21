@@ -82,9 +82,8 @@ class _DataManagerViewState extends ConsumerState<DataManagerView> {
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Text(
                   '${formatBytes(usedBytes)} installed',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
               ),
           ],
@@ -216,7 +215,9 @@ class _PackageRow extends ConsumerWidget {
                   ),
                 // #1136 — a solver database says where it sits: after an index-path change
                 // the files may be under the old path, which the rig no longer solves from.
-                if (package.category == 'solver' && package.isInstalled && package.installPath != null)
+                if (package.category == 'solver' &&
+                    package.isInstalled &&
+                    package.installPath != null)
                   Text(
                     'Installed in ${package.installPath}',
                     style: theme.textTheme.bodySmall?.copyWith(
@@ -351,10 +352,11 @@ class _PackageRow extends ConsumerWidget {
       await op();
     } catch (e) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(
-            SnackBar(content: Text(friendlyError(context.l10n, e, action: action))));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(friendlyError(context.l10n, e, action: action)),
+          ),
+        );
       }
     }
   }

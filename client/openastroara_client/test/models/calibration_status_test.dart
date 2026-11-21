@@ -44,7 +44,11 @@ void main() {
         'dark_count_loaded': 'many',
         'dark_min_exposure_seconds_loaded': 'x',
       });
-      expect(s.profileId, isNull, reason: 'wrong-typed id → null, not a coerced 0');
+      expect(
+        s.profileId,
+        isNull,
+        reason: 'wrong-typed id → null, not a coerced 0',
+      );
       expect(s.darkLibraryPath, isNull);
       expect(s.darkLibraryExists, isFalse);
       expect(s.darkCountLoaded, isNull);
@@ -52,8 +56,14 @@ void main() {
     });
 
     test('a fractional profile_id degrades to null (no silent truncation)', () {
-      final s = CalibrationStatus.fromJson(<String, dynamic>{'profile_id': 1.9});
-      expect(s.profileId, isNull, reason: 'a fractional id must not become a valid-looking 1');
+      final s = CalibrationStatus.fromJson(<String, dynamic>{
+        'profile_id': 1.9,
+      });
+      expect(
+        s.profileId,
+        isNull,
+        reason: 'a fractional id must not become a valid-looking 1',
+      );
     });
 
     test('non-finite exposures are filtered to null', () {
@@ -77,13 +87,13 @@ void main() {
 
   group('value equality', () {
     Map<String, dynamic> frame() => <String, dynamic>{
-          'connected': true,
-          'status': <String, dynamic>{
-            'profile_id': 3,
-            'dark_library_exists': true,
-            'dark_count_loaded': 12,
-          },
-        };
+      'connected': true,
+      'status': <String, dynamic>{
+        'profile_id': 3,
+        'dark_library_exists': true,
+        'dark_count_loaded': 12,
+      },
+    };
     test('equal-content responses compare equal (no rebuild churn)', () {
       final a = CalibrationStatusResponse.fromJson(frame());
       final b = CalibrationStatusResponse.fromJson(frame());
@@ -93,7 +103,9 @@ void main() {
     });
     test('a changed field breaks equality', () {
       final a = CalibrationStatusResponse.fromJson(frame());
-      final c = CalibrationStatusResponse.fromJson(frame()..['status']['dark_library_exists'] = false);
+      final c = CalibrationStatusResponse.fromJson(
+        frame()..['status']['dark_library_exists'] = false,
+      );
       expect(a, isNot(equals(c)));
     });
   });
@@ -102,7 +114,10 @@ void main() {
     test('connected with status', () {
       final r = CalibrationStatusResponse.fromJson(<String, dynamic>{
         'connected': true,
-        'status': <String, dynamic>{'profile_id': 3, 'dark_library_exists': true},
+        'status': <String, dynamic>{
+          'profile_id': 3,
+          'dark_library_exists': true,
+        },
       });
       expect(r.connected, isTrue);
       expect(r.status!.profileId, 3);
@@ -110,7 +125,10 @@ void main() {
     });
 
     test('not connected → null status', () {
-      final r = CalibrationStatusResponse.fromJson(<String, dynamic>{'connected': false, 'status': null});
+      final r = CalibrationStatusResponse.fromJson(<String, dynamic>{
+        'connected': false,
+        'status': null,
+      });
       expect(r.connected, isFalse);
       expect(r.status, isNull);
     });

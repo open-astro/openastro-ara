@@ -154,18 +154,39 @@ void main() {
       'A whole number',
     );
     expect(snr.format(6.0), '6');
-    final maxDec = GuiderAdvancedField.all.firstWhere((f) => f.key == 'max_dec_duration_ms');
-    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '0'), (0, null), reason: '0 = no Dec correction');
-    expect(GuiderAdvancedPanelTestHooks.parse(snr, '0').$2, 'A positive number');
+    final maxDec = GuiderAdvancedField.all.firstWhere(
+      (f) => f.key == 'max_dec_duration_ms',
+    );
+    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '0'), (
+      0,
+      null,
+    ), reason: '0 = no Dec correction');
+    expect(
+      GuiderAdvancedPanelTestHooks.parse(snr, '0').$2,
+      'A positive number',
+    );
     expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '-1').$2, '0 or more');
-    expect(GuiderAdvancedField.editText(0.125), '0.125', reason: 'full precision in the editor');
+    expect(
+      GuiderAdvancedField.editText(0.125),
+      '0.125',
+      reason: 'full precision in the editor',
+    );
     expect(GuiderAdvancedField.editText(6.0), '6');
     expect(GuiderAdvancedField.editText(1500), '1500');
-    final pulse = GuiderAdvancedField.all.firstWhere((f) => f.key == 'backlash_pulse_ms');
-    expect(GuiderAdvancedPanelTestHooks.parse(pulse, '10').$2, '20–8000', reason: 'below the guider\'s minimum');
+    final pulse = GuiderAdvancedField.all.firstWhere(
+      (f) => f.key == 'backlash_pulse_ms',
+    );
+    expect(
+      GuiderAdvancedPanelTestHooks.parse(pulse, '10').$2,
+      '20–8000',
+      reason: 'below the guider\'s minimum',
+    );
     expect(GuiderAdvancedPanelTestHooks.parse(pulse, '9000').$2, '20–8000');
     expect(GuiderAdvancedPanelTestHooks.parse(pulse, '450'), (450, null));
-    expect(GuiderAdvancedPanelTestHooks.parse(maxDec, '1000001').$2, '0–1000000');
+    expect(
+      GuiderAdvancedPanelTestHooks.parse(maxDec, '1000001').$2,
+      '0–1000000',
+    );
     expect(ms.format(1500), '1500 ms');
   });
 
@@ -200,7 +221,9 @@ void main() {
     expect(find.byKey(const Key('guider-advanced-status')), findsOneWidget);
   });
 
-  testWidgets('saving multi-star off while connected writes it to the guider', (t) async {
+  testWidgets('saving multi-star off while connected writes it to the guider', (
+    t,
+  ) async {
     final fake = await _pump(
       t,
       profile: const GuiderAdvancedSettings({'multi_star_enabled': false}),
@@ -208,56 +231,82 @@ void main() {
     await t.tap(find.widgetWithText(FilledButton, 'Apply'));
     await t.pumpAndSettle();
     expect(fake.putBody!['multi_star_enabled'], false);
-    expect(fake.multiStarApplies, 1, reason: 'the guider reports on, the profile says off');
-    final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;
+    expect(
+      fake.multiStarApplies,
+      1,
+      reason: 'the guider reports on, the profile says off',
+    );
+    final status = t
+        .widget<Text>(find.byKey(const Key('guider-advanced-status')))
+        .data!;
     expect(status, isNot(contains('next guider connect')));
   });
 
-  testWidgets('Guider advanced: Apply sends the tag of the copy it loaded (ADR 0015)', (t) async {
-    final fake = await _pump(t, profile: const GuiderAdvancedSettings({'min_star_snr': 7.0}));
-    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
-    await t.pumpAndSettle();
-    expect(fake.ifMatches, ['"v1"']);
-  });
+  testWidgets(
+    'Guider advanced: Apply sends the tag of the copy it loaded (ADR 0015)',
+    (t) async {
+      final fake = await _pump(
+        t,
+        profile: const GuiderAdvancedSettings({'min_star_snr': 7.0}),
+      );
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(fake.ifMatches, ['"v1"']);
+    },
+  );
 
-  testWidgets('Guider advanced: Apply over a copy another device saved since is '
-      'refused, nothing written or pushed, and Reload shows the rig\'s copy (ADR 0015)', (t) async {
-    final fake = await _pump(t);
-    await t.enterText(find.byKey(const Key('ga-min_star_snr')), '9');
-    await t.pump();
-    fake
-      ..profile = const GuiderAdvancedSettings({'min_star_snr': 12.0})
-      ..savedElsewhere();
-    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
-    await t.pumpAndSettle();
-    expect(fake.putBody, isNull);
-    expect(fake.pushes, 0);
-    expect(find.textContaining('changed on the rig'), findsWidgets);
-    await t.tap(find.text('Reload'));
-    await t.pumpAndSettle();
-    expect(find.widgetWithText(TextField, '12'), findsOneWidget);
-    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
-    await t.pumpAndSettle();
-    expect(fake.ifMatches, ['"v2"']);
-  });
+  testWidgets(
+    'Guider advanced: Apply over a copy another device saved since is '
+    'refused, nothing written or pushed, and Reload shows the rig\'s copy (ADR 0015)',
+    (t) async {
+      final fake = await _pump(t);
+      await t.enterText(find.byKey(const Key('ga-min_star_snr')), '9');
+      await t.pump();
+      fake
+        ..profile = const GuiderAdvancedSettings({'min_star_snr': 12.0})
+        ..savedElsewhere();
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(fake.putBody, isNull);
+      expect(fake.pushes, 0);
+      expect(find.textContaining('changed on the rig'), findsWidgets);
+      await t.tap(find.text('Reload'));
+      await t.pumpAndSettle();
+      expect(find.widgetWithText(TextField, '12'), findsOneWidget);
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(fake.ifMatches, ['"v2"']);
+    },
+  );
 
   test('Guider advanced: the multi-star chip writes over the copy it '
       'loaded, with its tag (ADR 0015)', () async {
-    final fake = _Fake(const GuiderAdvancedSettings({'min_star_snr': 7.0}), _guider());
+    final fake = _Fake(
+      const GuiderAdvancedSettings({'min_star_snr': 7.0}),
+      _guider(),
+    );
     await setMultiStar(fake, false);
     expect(fake.ifMatches, ['"v1"']);
-    expect(fake.putBody, {...const GuiderAdvancedSettings({'min_star_snr': 7.0}).toJson(), 'multi_star_enabled': false});
+    expect(fake.putBody, {
+      ...const GuiderAdvancedSettings({'min_star_snr': 7.0}).toJson(),
+      'multi_star_enabled': false,
+    });
     expect(fake.multiStarApplies, 1);
   });
 
-  testWidgets('an unset multi-star matches a guider that reports on: no reconnect', (t) async {
-    final fake = await _pump(t);
-    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
-    await t.pumpAndSettle();
-    expect(fake.multiStarApplies, 0);
-  });
+  testWidgets(
+    'an unset multi-star matches a guider that reports on: no reconnect',
+    (t) async {
+      final fake = await _pump(t);
+      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+      await t.pumpAndSettle();
+      expect(fake.multiStarApplies, 0);
+    },
+  );
 
-  testWidgets('a refused multi-star write is reported in plain words', (t) async {
+  testWidgets('a refused multi-star write is reported in plain words', (
+    t,
+  ) async {
     final fake = await _pump(
       t,
       profile: const GuiderAdvancedSettings({'multi_star_enabled': false}),
@@ -272,7 +321,9 @@ void main() {
     );
     await t.tap(find.widgetWithText(FilledButton, 'Apply'));
     await t.pumpAndSettle();
-    final status = t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data!;
+    final status = t
+        .widget<Text>(find.byKey(const Key('guider-advanced-status')))
+        .data!;
     expect(status, startsWith('Saved, but multi-star was not applied'));
     expect(status, contains('stop guiding first'));
   });
@@ -415,47 +466,82 @@ void main() {
       expect(GuiderAdvancedPanelTestHooks.parse(f, '11').$2, isNotNull);
     });
 
-    test('equal star HFDs and a pulse outside floor to ceiling are refused', () {
-      expect(
-        GuiderAdvancedPanelTestHooks.crossFieldProblem(
-          const GuiderAdvancedSettings({'min_star_hfd': 3.0, 'max_star_hfd': 3.0}),
-        ),
-        contains('Star HFD'),
-      );
-      expect(
-        GuiderAdvancedPanelTestHooks.crossFieldProblem(
-          const GuiderAdvancedSettings({'backlash_pulse_ms': 100, 'backlash_floor_ms': 200}),
-        ),
-        contains('Backlash'),
-      );
-    });
+    test(
+      'equal star HFDs and a pulse outside floor to ceiling are refused',
+      () {
+        expect(
+          GuiderAdvancedPanelTestHooks.crossFieldProblem(
+            const GuiderAdvancedSettings({
+              'min_star_hfd': 3.0,
+              'max_star_hfd': 3.0,
+            }),
+          ),
+          contains('Star HFD'),
+        );
+        expect(
+          GuiderAdvancedPanelTestHooks.crossFieldProblem(
+            const GuiderAdvancedSettings({
+              'backlash_pulse_ms': 100,
+              'backlash_floor_ms': 200,
+            }),
+          ),
+          contains('Backlash'),
+        );
+      },
+    );
 
     testWidgets('a saved mass change shows as a percentage', (t) async {
-      await _pump(t, profile: const GuiderAdvancedSettings({'mass_change_threshold': 0.35}));
+      await _pump(
+        t,
+        profile: const GuiderAdvancedSettings({'mass_change_threshold': 0.35}),
+      );
       expect(
-        t.widget<TextField>(find.byKey(const Key('ga-mass_change_threshold'))).controller!.text,
+        t
+            .widget<TextField>(
+              find.byKey(const Key('ga-mass_change_threshold')),
+            )
+            .controller!
+            .text,
         '35',
       );
     });
 
-    testWidgets('what the push did not land is listed with its reason', (t) async {
+    testWidgets('what the push did not land is listed with its reason', (
+      t,
+    ) async {
       await _pump(
         t,
         guider: GuiderAdvancedView.fromJson({
           'connected': true,
           'not_applied': [
-            {'setting': 'RA aggressiveness', 'reason': 'The current guide algorithm has no aggressiveness setting.'},
+            {
+              'setting': 'RA aggressiveness',
+              'reason':
+                  'The current guide algorithm has no aggressiveness setting.',
+            },
           ],
         }),
       );
       expect(find.byKey(const Key('guider-not-applied')), findsOneWidget);
-      expect(find.textContaining('RA aggressiveness: The current'), findsOneWidget);
       expect(
-        find.descendant(of: find.byType(ListView), matching: find.byKey(const Key('guider-not-applied'))),
+        find.textContaining('RA aggressiveness: The current'),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byType(ListView),
+          matching: find.byKey(const Key('guider-not-applied')),
+        ),
         findsOneWidget,
         reason: 'a long list scrolls with the settings',
       );
-      expect(find.descendant(of: find.byKey(const Key('guider-not-applied')), matching: find.byIcon(Icons.warning_amber_rounded)), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('guider-not-applied')),
+          matching: find.byIcon(Icons.warning_amber_rounded),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('nothing to report shows no list', (t) async {
@@ -463,15 +549,23 @@ void main() {
       expect(find.byKey(const Key('guider-not-applied')), findsNothing);
     });
 
-    testWidgets('a saved algorithm the guider does not offer is marked', (t) async {
-      await _pump(t, profile: const GuiderAdvancedSettings({'ra_algorithm': 'ZFilter'}));
+    testWidgets('a saved algorithm the guider does not offer is marked', (
+      t,
+    ) async {
+      await _pump(
+        t,
+        profile: const GuiderAdvancedSettings({'ra_algorithm': 'ZFilter'}),
+      );
       expect(find.textContaining('ZFilter (not offered)'), findsWidgets);
     });
 
     final notLanded = GuiderAdvancedView.fromJson({
       'connected': true,
       'not_applied': [
-        {'setting': 'Search region', 'reason': 'Must be a whole number from 7 to 50. Not sent.'},
+        {
+          'setting': 'Search region',
+          'reason': 'Must be a whole number from 7 to 50. Not sent.',
+        },
       ],
     });
 
@@ -481,35 +575,77 @@ void main() {
       expect(node.flagsCollection.isLiveRegion, isTrue);
     });
 
-    testWidgets('Apply does not read as a clean success when a setting did not land', (t) async {
-      await _pump(t, guider: notLanded);
-      await t.tap(find.widgetWithText(FilledButton, 'Apply'));
-      await t.pumpAndSettle();
-      expect(t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data, contains('did not apply'));
-    });
+    testWidgets(
+      'Apply does not read as a clean success when a setting did not land',
+      (t) async {
+        await _pump(t, guider: notLanded);
+        await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+        await t.pumpAndSettle();
+        expect(
+          t.widget<Text>(find.byKey(const Key('guider-advanced-status'))).data,
+          contains('did not apply'),
+        );
+      },
+    );
 
-    testWidgets('a cross-field problem reads in the error text colour', (t) async {
-      await _pump(t, profile: const GuiderAdvancedSettings({'min_star_hfd': 3.0, 'max_star_hfd': 3.0}));
-      expect(t.widget<Text>(find.byKey(const Key('guider-advanced-cross-field'))).style?.color, AraColors.errorText);
+    testWidgets('a cross-field problem reads in the error text colour', (
+      t,
+    ) async {
+      await _pump(
+        t,
+        profile: const GuiderAdvancedSettings({
+          'min_star_hfd': 3.0,
+          'max_star_hfd': 3.0,
+        }),
+      );
+      expect(
+        t
+            .widget<Text>(find.byKey(const Key('guider-advanced-cross-field')))
+            .style
+            ?.color,
+        AraColors.errorText,
+      );
     });
 
     test('a range error fits a narrow field', () {
-      expect(GuiderAdvancedPanelTestHooks.parse(field('dither_scale_factor'), '101').$2, 'Up to 100');
-      expect(GuiderAdvancedPanelTestHooks.parse(field('variable_delay_long_s'), '121').$2, '0–120');
+      expect(
+        GuiderAdvancedPanelTestHooks.parse(
+          field('dither_scale_factor'),
+          '101',
+        ).$2,
+        'Up to 100',
+      );
+      expect(
+        GuiderAdvancedPanelTestHooks.parse(
+          field('variable_delay_long_s'),
+          '121',
+        ).$2,
+        '0–120',
+      );
     });
 
-    testWidgets('the Apply result is announced from anywhere in the settings', (t) async {
+    testWidgets('the Apply result is announced from anywhere in the settings', (
+      t,
+    ) async {
       await _pump(t);
       await t.tap(find.widgetWithText(FilledButton, 'Apply'));
       await t.pumpAndSettle();
-      expect(t.getSemantics(find.byKey(const Key('guider-advanced-status'))).flagsCollection.isLiveRegion, isTrue);
+      expect(
+        t
+            .getSemantics(find.byKey(const Key('guider-advanced-status')))
+            .flagsCollection
+            .isLiveRegion,
+        isTrue,
+      );
     });
 
     testWidgets('a field error reads in the error text colour', (t) async {
       await _pump(t);
       await t.enterText(find.byKey(const Key('ga-dither_scale_factor')), '101');
       await t.pump();
-      final field = t.widget<TextField>(find.byKey(const Key('ga-dither_scale_factor')));
+      final field = t.widget<TextField>(
+        find.byKey(const Key('ga-dither_scale_factor')),
+      );
       expect(field.decoration?.errorStyle?.color, AraColors.errorText);
     });
   });

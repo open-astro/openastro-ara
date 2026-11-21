@@ -109,7 +109,9 @@ class PaResidual {
       alignEndedUtc: _t(json['align_ended_utc']),
       completedUtc: _t(json['completed_utc']),
       reason: json['reason'] is String ? json['reason'] as String : null,
-      aboveAlignFlag: json['above_align'] is bool ? json['above_align'] as bool : null,
+      aboveAlignFlag: json['above_align'] is bool
+          ? json['above_align'] as bool
+          : null,
     );
   }
 

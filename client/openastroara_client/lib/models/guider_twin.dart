@@ -35,7 +35,9 @@ class GuiderTwinPreview {
   factory GuiderTwinPreview.fromJson(Map<String, dynamic> json) {
     final names = json['twin_names'];
     return GuiderTwinPreview(
-      twinNames: names is List ? [for (final n in names) n.toString()] : const [],
+      twinNames: names is List
+          ? [for (final n in names) n.toString()]
+          : const [],
       exists: json['exists'] is bool ? json['exists'] as bool : null,
       shared: json['shared'] == true,
       sharedWith: json['shared_with']?.toString(),
@@ -57,7 +59,9 @@ class ProfileDeleteResult {
   const ProfileDeleteResult({required this.guiderProfile, this.reason});
 
   /// An old daemon answers 204 with no body: nothing was asked of the guider.
-  static const kept = ProfileDeleteResult(guiderProfile: GuiderTwinOutcome.kept);
+  static const kept = ProfileDeleteResult(
+    guiderProfile: GuiderTwinOutcome.kept,
+  );
 
   factory ProfileDeleteResult.fromJson(Map<String, dynamic> json) {
     final outcome = switch (json['guider_profile']?.toString()) {
@@ -68,20 +72,22 @@ class ProfileDeleteResult {
       _ => GuiderTwinOutcome.kept,
     };
     return ProfileDeleteResult(
-        guiderProfile: outcome, reason: json['reason']?.toString());
+      guiderProfile: outcome,
+      reason: json['reason']?.toString(),
+    );
   }
 
   /// The snackbar line after a delete, or null when there is nothing to say
   /// (the guider profile was not asked about).
   String? get message => switch (guiderProfile) {
-        GuiderTwinOutcome.deleted => 'Guider profile deleted',
-        GuiderTwinOutcome.queued =>
-          'Guider profile will be deleted when the guider is free',
-        GuiderTwinOutcome.notFound => 'No guider profile to delete',
-        GuiderTwinOutcome.failed =>
-          "Couldn't delete the guider profile: ${reason ?? 'the guider refused'}",
-        GuiderTwinOutcome.kept => null,
-      };
+    GuiderTwinOutcome.deleted => 'Guider profile deleted',
+    GuiderTwinOutcome.queued =>
+      'Guider profile will be deleted when the guider is free',
+    GuiderTwinOutcome.notFound => 'No guider profile to delete',
+    GuiderTwinOutcome.failed =>
+      "Couldn't delete the guider profile: ${reason ?? 'the guider refused'}",
+    GuiderTwinOutcome.kept => null,
+  };
 
   bool get isFailure => guiderProfile == GuiderTwinOutcome.failed;
 }

@@ -88,17 +88,18 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     try {
       final drafts = await ref.read(draftSequencesProvider.future);
       if (!mounted) return;
-      if (ref.read(selectedSequenceIdProvider) != id) return; // stale — see above
+      if (ref.read(selectedSequenceIdProvider) != id)
+        return; // stale — see above
       final draft = drafts.where((d) => d.id == id).firstOrNull;
       if (draft == null) {
         _onLoadFailed(id);
         return;
       }
-      ref.read(sequenceEditorProvider.notifier).load(SequenceDetail(
-            id: draft.id,
-            name: draft.name,
-            body: draft.body,
-          ));
+      ref
+          .read(sequenceEditorProvider.notifier)
+          .load(
+            SequenceDetail(id: draft.id, name: draft.name, body: draft.body),
+          );
     } catch (e) {
       debugPrint('[sequencer] failed to load draft body for $id: $e');
       _onLoadFailed(id);
@@ -119,11 +120,14 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     // emits a fresh change (null → id), which a same-value `select(id)` alone
     // would not (Riverpod skips equal values).
     ref.read(selectedSequenceIdProvider.notifier).select(null);
-    ScaffoldMessenger.maybeOf(context)?.showSnackBar(const SnackBar(
-      content: Text(
-          "Couldn't load the sequence. Check the connection and try again."),
-      backgroundColor: AraColors.accentError,
-    ));
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Couldn't load the sequence. Check the connection and try again.",
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
   }
 
   @override
@@ -142,8 +146,8 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       final now = next.value?.state;
       if (was == null || now == null || was == now) return;
       final wasActive = was.isActive && now != SequenceRunState.aborting;
-      final terminal = now == SequenceRunState.completed ||
-          now == SequenceRunState.failed;
+      final terminal =
+          now == SequenceRunState.completed || now == SequenceRunState.failed;
       if (wasActive && terminal && mounted) {
         RunCompletionSheet.show(context, next.value!);
       }
@@ -170,10 +174,15 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
         // §38.10 — the daemon is refining pointing/focus before imaging
         // continues; tell the user why frames aren't rolling yet.
         final refocus = event.payload['refocus'] == true;
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(SnackBar(
-            content: Text(refocus
-                ? 'Re-centering and refocusing before imaging continues…'
-                : 'Re-centering the target before imaging continues…')));
+        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+          SnackBar(
+            content: Text(
+              refocus
+                  ? 'Re-centering and refocusing before imaging continues…'
+                  : 'Re-centering the target before imaging continues…',
+            ),
+          ),
+        );
       }
     });
     final hasSequence = ref.watch(sequenceEditorProvider) != null;
@@ -183,10 +192,14 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     final runActive =
         ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
     final motionOff = reduceMotionOf(context);
-    final dimDuration =
-        motionOff ? Duration.zero : const Duration(milliseconds: 250);
+    final dimDuration = motionOff
+        ? Duration.zero
+        : const Duration(milliseconds: 250);
     Widget dimmed(Widget child) => AnimatedOpacity(
-        opacity: runActive ? 0.55 : 1.0, duration: dimDuration, child: child);
+      opacity: runActive ? 0.55 : 1.0,
+      duration: dimDuration,
+      child: child,
+    );
 
     // §Run-redesign S12 — editor keyboard: ⌘Z/⌘⇧Z undo-redo, Delete removes
     // the selected node, ↑/↓ walk the tree, ⌘R runs/resumes and Space
@@ -206,31 +219,32 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     return Focus(
       autofocus: true,
       onKeyEvent: _onTabKeyEvent,
-        child: Column(
-      children: [
-        const SequencerToolbar(),
-        // §Run-redesign S5 — the live dashboard band renders only while a run
-        // is active (SizedBox.shrink otherwise), so compose-mood layout and
-        // its tests are untouched.
-        const RunDashboardBand(),
-        Expanded(
-          // §Run-redesign S6 — with nothing loaded, the tab invites instead of
-          // presenting three empty grey panes.
-          child: !hasSequence
-              ? const _ZeroState()
-              : Row(
-                  children: [
-                    _pane(flex: 2, child: dimmed(const SequencerPalette())),
-                    _pane(flex: 3, child: const SequenceEditorTree()),
-                    // Rightmost pane: same bg as the others, no trailing divider.
-                    _pane(
+      child: Column(
+        children: [
+          const SequencerToolbar(),
+          // §Run-redesign S5 — the live dashboard band renders only while a run
+          // is active (SizedBox.shrink otherwise), so compose-mood layout and
+          // its tests are untouched.
+          const RunDashboardBand(),
+          Expanded(
+            // §Run-redesign S6 — with nothing loaded, the tab invites instead of
+            // presenting three empty grey panes.
+            child: !hasSequence
+                ? const _ZeroState()
+                : Row(
+                    children: [
+                      _pane(flex: 2, child: dimmed(const SequencerPalette())),
+                      _pane(flex: 3, child: const SequenceEditorTree()),
+                      // Rightmost pane: same bg as the others, no trailing divider.
+                      _pane(
                         flex: 2,
                         border: false,
-                        child: dimmed(const SequenceFieldEditor())),
-                  ],
-                ),
-        ),
-      ],
+                        child: dimmed(const SequenceFieldEditor()),
+                      ),
+                    ],
+                  ),
+          ),
+        ],
       ),
     );
   }
@@ -280,7 +294,9 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       return KeyEventResult.handled;
     }
     if (accel && !shift && !alt && key == LogicalKeyboardKey.keyR) {
-      return _runOrResumeKey() ? KeyEventResult.handled : KeyEventResult.ignored;
+      return _runOrResumeKey()
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
     }
     if (plain && key == LogicalKeyboardKey.space) {
       // A focused button gets Space to activate itself; firing the lifecycle
@@ -326,9 +342,11 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     if ((state?.isActive ?? false) && !isPaused) return false;
     // §38.10 — a keyboard resume offers the same re-center/refocus choice as
     // the toolbar button (one path, one dialog).
-    unawaited(isPaused
-        ? promptAndResumeSequence(context, ref.read)
-        : preflightAndRunSequence(context, ref.read));
+    unawaited(
+      isPaused
+          ? promptAndResumeSequence(context, ref.read)
+          : preflightAndRunSequence(context, ref.read),
+    );
     return true;
   }
 
@@ -341,7 +359,9 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
     if (!_lifecycleKeysArmed) return false;
     final state = ref.read(sequenceRunStateProvider).value?.state;
     if (state == SequenceRunState.running) {
-      unawaited(runSequenceLifecycle(context, ref.read, (api, id) => api.pause(id)));
+      unawaited(
+        runSequenceLifecycle(context, ref.read, (api, id) => api.pause(id)),
+      );
       return true;
     }
     if (state?.isAnyPaused ?? false) {
@@ -371,21 +391,23 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
 
   // An editor pane: shared bg, with a trailing divider before the next pane
   // ([border]) for all but the rightmost.
-  Widget _pane({required int flex, required Widget child, bool border = true}) =>
-      Expanded(
-        flex: flex,
-        child: Container(
-          decoration: BoxDecoration(
-            color: AraColors.bgPrimary,
-            border: border
-                ? const Border(right: BorderSide(color: AraColors.border))
-                : null,
-          ),
-          child: child,
-        ),
-      );
+  Widget _pane({
+    required int flex,
+    required Widget child,
+    bool border = true,
+  }) => Expanded(
+    flex: flex,
+    child: Container(
+      decoration: BoxDecoration(
+        color: AraColors.bgPrimary,
+        border: border
+            ? const Border(right: BorderSide(color: AraColors.border))
+            : null,
+      ),
+      child: child,
+    ),
+  );
 }
-
 
 /// Inviting zero state: what this tab is for + the three ways in. Replaces the
 /// old bare "No sequence loaded" center-text (which still guards the tree for
@@ -401,8 +423,11 @@ class _ZeroState extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.movie_filter_outlined,
-                size: 44, color: AraColors.textDisabled),
+            const Icon(
+              Icons.movie_filter_outlined,
+              size: 44,
+              color: AraColors.textDisabled,
+            ),
             const SizedBox(height: AraSpace.s16),
             const Text('Ready to build tonight\'s run', style: AraText.title),
             const SizedBox(height: AraSpace.s8),

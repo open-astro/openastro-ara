@@ -407,8 +407,7 @@ Object? deepCloneJson(Object? value) {
       );
     }
     return <String, dynamic>{
-      for (final entry in value.entries)
-        entry.key: deepCloneJson(entry.value),
+      for (final entry in value.entries) entry.key: deepCloneJson(entry.value),
     };
   }
   if (value is List) {
@@ -604,8 +603,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // ── Focuser ────────────────────────────────────────────────────────────────
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserAbsolute, OpenAstroAra.Sequencer',
     label: 'Move Focuser (absolute)',
     category: InstructionCategory.focuser,
     icon: Icons.center_focus_strong_outlined,
@@ -619,8 +617,7 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserRelative, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Focuser.MoveFocuserRelative, OpenAstroAra.Sequencer',
     label: 'Move Focuser (relative)',
     category: InstructionCategory.focuser,
     icon: Icons.center_focus_weak_outlined,
@@ -636,8 +633,7 @@ const List<InstructionDef> instructionCatalog = [
   // Turn the rotator to a mechanical angle (the camera's own angle, not the
   // sky's). Matching flats use it to put the camera back where the lights were.
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Rotator.MoveRotatorMechanical, OpenAstroAra.Sequencer',
     label: 'Move Rotator (mechanical)',
     category: InstructionCategory.rotator,
     icon: Icons.rotate_right_outlined,
@@ -908,8 +904,7 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Guider.StopGuiding, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Guider.StopGuiding, OpenAstroAra.Sequencer',
     label: 'Stop Guiding',
     category: InstructionCategory.guider,
     icon: Icons.stop_circle_outlined,
@@ -931,8 +926,7 @@ const List<InstructionDef> instructionCatalog = [
   // default every NINA import carries, since NINA has no such field) = the
   // lowest-numbered one.
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Switch.SetSwitchValue, OpenAstroAra.Sequencer',
     label: 'Set Switch Value',
     category: InstructionCategory.switchDevice,
     icon: Icons.toggle_on_outlined,
@@ -963,8 +957,7 @@ const List<InstructionDef> instructionCatalog = [
   ),
   // ── Utility ────────────────────────────────────────────────────────────────
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Utility.WaitForTimeSpan, OpenAstroAra.Sequencer',
     label: 'Wait (duration)',
     category: InstructionCategory.utility,
     icon: Icons.hourglass_empty_outlined,
@@ -1049,8 +1042,7 @@ const List<InstructionDef> instructionCatalog = [
     ],
   ),
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer',
     label: 'Annotation',
     category: InstructionCategory.utility,
     icon: Icons.sticky_note_2_outlined,
@@ -1073,39 +1065,32 @@ const List<InstructionDef> instructionCatalog = [
     label: 'Sequential Instruction Set',
     category: InstructionCategory.container,
     icon: Icons.account_tree_outlined,
-    strategyType:
-        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+    strategyType: 'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
   ),
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Container.ParallelContainer, OpenAstroAra.Sequencer',
     label: 'Parallel Instruction Set',
     category: InstructionCategory.container,
     icon: Icons.call_split,
-    strategyType:
-        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.ParallelStrategy, OpenAstroAra.Sequencer',
+    strategyType: 'OpenAstroAra.Sequencer.Container.ExecutionStrategy.ParallelStrategy, OpenAstroAra.Sequencer',
   ),
   // §38 NINA import — the per-target block. A SequentialContainer subclass that also carries a
   // Target (name + coordinates); the target name is surfaced in the tree label (see node_display).
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer',
     label: 'Deep Sky Object',
     category: InstructionCategory.container,
     icon: Icons.travel_explore_outlined,
-    strategyType:
-        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+    strategyType: 'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
   ),
   // §38 NINA import — NINA's "Smart Exposure": a SequentialContainer subclass bundling a filter
   // switch + exposure + dither into one block. Renders as a container; its children show nested.
   InstructionDef(
-    type:
-        'OpenAstroAra.Sequencer.SequenceItem.Imaging.SmartExposure, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.SequenceItem.Imaging.SmartExposure, OpenAstroAra.Sequencer',
     label: 'Smart Exposure',
     category: InstructionCategory.container,
     icon: Icons.burst_mode_outlined,
-    strategyType:
-        'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
+    strategyType: 'OpenAstroAra.Sequencer.Container.ExecutionStrategy.SequentialStrategy, OpenAstroAra.Sequencer',
   ),
 ];
 

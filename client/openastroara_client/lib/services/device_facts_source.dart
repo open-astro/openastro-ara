@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import '../models/tracking_calibration.dart';
 import 'tracking_api.dart';
 
@@ -20,7 +21,10 @@ import '../state/settings/equipment_connection_state.dart';
 abstract interface class DeviceFactsSource {
   /// The discovery record for [assignedId], or null when it isn't on the
   /// bridge right now. Throws on transport failure.
-  Future<DiscoveredDevice?> resolve(EquipmentDeviceType type, String assignedId);
+  Future<DiscoveredDevice?> resolve(
+    EquipmentDeviceType type,
+    String assignedId,
+  );
 
   /// Connect [device] and wait until the daemon reports it (bounded); returns
   /// false when the connect never completes. Throws on transport failure.
@@ -54,14 +58,17 @@ class AraDeviceFactsSource implements DeviceFactsSource {
   final Duration pollInterval;
   final int pollAttempts;
 
-  AraDeviceFactsSource(this._server,
-      {this.pollInterval = const Duration(milliseconds: 750),
-      this.pollAttempts = 20})
-      : _discovery = EquipmentDiscoveryApi(_server);
+  AraDeviceFactsSource(
+    this._server, {
+    this.pollInterval = const Duration(milliseconds: 750),
+    this.pollAttempts = 20,
+  }) : _discovery = EquipmentDiscoveryApi(_server);
 
   @override
   Future<DiscoveredDevice?> resolve(
-      EquipmentDeviceType type, String assignedId) async {
+    EquipmentDeviceType type,
+    String assignedId,
+  ) async {
     final devices = await _discovery.discover(type);
     for (final d in devices) {
       if (d.uniqueId == assignedId) return d;

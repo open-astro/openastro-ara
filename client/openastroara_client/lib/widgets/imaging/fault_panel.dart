@@ -32,8 +32,10 @@ class _FaultPanelState extends ConsumerState<FaultPanel> {
     final level = n == 0
         ? StatusLevel.connected
         : standing.byDeviceType.values
-            .map((f) => f.level)
-            .reduce((a, b) => statusLevelRank(a) >= statusLevelRank(b) ? a : b);
+              .map((f) => f.level)
+              .reduce(
+                (a, b) => statusLevelRank(a) >= statusLevelRank(b) ? a : b,
+              );
     final label = n == 0
         ? 'Faults: none standing'
         : 'Faults: $n standing — ${level == StatusLevel.error ? 'critical' : 'advisory'}';
@@ -51,8 +53,11 @@ class _FaultPanelState extends ConsumerState<FaultPanel> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 children: [
-                  Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18, color: AraColors.textSecondary),
+                  Icon(
+                    _expanded ? Icons.expand_more : Icons.chevron_right,
+                    size: 18,
+                    color: AraColors.textSecondary,
+                  ),
                   const SizedBox(width: 4),
                   // Expanded, not a Spacer: the label ellipsizes in the
                   // 320 px rail instead of overflowing (as DiagnosticPanel).
@@ -92,30 +97,32 @@ class _FaultHistoryList extends ConsumerWidget {
     final notifier = ref.read(faultFeedProvider.notifier);
     return feed.when(
       loading: () => const Center(
-          child: Padding(
-              padding: EdgeInsets.all(12),
-              child: SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: AdaptiveProgressIndicator(strokeWidth: 2)))),
+        child: Padding(
+          padding: EdgeInsets.all(12),
+          child: SizedBox(
+            width: 16,
+            height: 16,
+            child: AdaptiveProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      ),
       error: (e, _) => Padding(
         padding: const EdgeInsets.all(12),
-        child: Text(friendlyError(context.l10n, e, action: context.l10n.actionLoadFaults),
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: AraColors.textSecondary)),
+        child: Text(
+          friendlyError(context.l10n, e, action: context.l10n.actionLoadFaults),
+          style: Theme.of(context).textTheme.bodySmall
+              ?.copyWith(color: AraColors.textSecondary),
+        ),
       ),
       data: (rows) {
         if (rows == null || rows.isEmpty) {
           return Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-                rows == null ? 'No server connected' : 'No faults recorded',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AraColors.textSecondary)),
+              rows == null ? 'No server connected' : 'No faults recorded',
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
           );
         }
         final groups = groupFaultRows(rows);
@@ -127,12 +134,12 @@ class _FaultHistoryList extends ConsumerWidget {
             if (i == groups.length) {
               return ListTile(
                 dense: true,
-                title: Text('Load more…',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AraColors.textSecondary)),
+                title: Text(
+                  'Load more…',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
+                ),
                 onTap: notifier.loadMore,
               );
             }
@@ -294,9 +301,7 @@ class FaultHistoryTile extends StatelessWidget {
       ),
       subtitle: Text(
         outcome,
-        style: Theme.of(context)
-            .textTheme
-            .labelSmall
+        style: Theme.of(context).textTheme.labelSmall
             ?.copyWith(color: AraColors.textSecondary),
       ),
       trailing: Text(

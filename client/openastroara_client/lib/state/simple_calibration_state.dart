@@ -5,7 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../l10n/l10n.dart';
 import '../models/calibration/calibration_models.dart';
 import '../models/sequence/imaging_run_body.dart';
-import '../models/sequence/instruction_catalog.dart' show instructionForType, sequentialContainerType;
+import '../models/sequence/instruction_catalog.dart'
+    show instructionForType, sequentialContainerType;
 import '../models/sequence/sequence_summary.dart';
 import '../models/sequence/nina_dom.dart' show childrenOf, withChildren;
 import '../util/friendly_error.dart';

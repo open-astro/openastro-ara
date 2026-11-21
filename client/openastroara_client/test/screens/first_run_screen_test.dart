@@ -50,30 +50,45 @@ class _MemLastRig extends LastRigService {
 
 /// ALP-4890: the scan screen with a remembered rig and a handshake that
 /// answers with the rig's nickname, without a network.
-Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemLastRig last,
-    {bool chooser = false, Locale? locale}) async {
+Future<ProviderContainer> _scan(
+  WidgetTester tester,
+  List<AraServer> rigs,
+  _MemLastRig last, {
+  bool chooser = false,
+  Locale? locale,
+}) async {
   FlutterSecureStorage.setMockInitialValues({});
-  final container = ProviderContainer(overrides: [
-    discoveryServiceProvider.overrideWithValue(_FakeDiscovery(rigs)),
-    lastRigServiceProvider.overrideWithValue(last),
-    serverHandshakeProvider.overrideWith((ref) async {
-      final s = ref.watch(selectedServerProvider);
-      return s == null
-          ? null
-          : ServerInfo(name: s.mdnsName ?? s.hostname, version: '1', apiVersion: '1', uuid: 'uuid-${s.hostname}');
-    }),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      discoveryServiceProvider.overrideWithValue(_FakeDiscovery(rigs)),
+      lastRigServiceProvider.overrideWithValue(last),
+      serverHandshakeProvider.overrideWith((ref) async {
+        final s = ref.watch(selectedServerProvider);
+        return s == null
+            ? null
+            : ServerInfo(
+                name: s.mdnsName ?? s.hostname,
+                version: '1',
+                apiVersion: '1',
+                uuid: 'uuid-${s.hostname}',
+              );
+      }),
+    ],
+  );
   addTearDown(container.dispose);
-  if (chooser) container.read(serverChooserRequestedProvider.notifier).request();
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      locale: locale,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: const FirstRunScreen(),
+  if (chooser)
+    container.read(serverChooserRequestedProvider.notifier).request();
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        locale: locale,
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: const FirstRunScreen(),
+      ),
     ),
-  ));
+  );
   await tester.pump();
   await tester.pump(const Duration(seconds: 1));
   await tester.pump();
@@ -81,50 +96,112 @@ Future<ProviderContainer> _scan(WidgetTester tester, List<AraServer> rigs, _MemL
 }
 
 void main() {
-  testWidgets('the first-run screen is in Brazilian Portuguese', (tester) async {
-    await _scan(tester, const [], _MemLastRig(), locale: const Locale('pt', 'BR'));
+  testWidgets('the first-run screen is in Brazilian Portuguese', (
+    tester,
+  ) async {
+    await _scan(
+      tester,
+      const [],
+      _MemLastRig(),
+      locale: const Locale('pt', 'BR'),
+    );
     expect(find.text('Conectar ao OpenAstro Ara'), findsOneWidget);
     expect(find.text('Ou adicione manualmente:'), findsOneWidget);
     expect(find.text('Connect to OpenAstro Ara'), findsNothing);
   });
 
-  test('autoPickRig: the last rig by name, in either spelling, first found wins', () {
-    const sweep = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro.lan');
-    const mdns = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro-lan');
-    const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
-    expect(autoPickRig([other, sweep], const LastRig('astro.lan')), sweep);
-    expect(autoPickRig([mdns], const LastRig('Astro.lan')), mdns);
-    expect(autoPickRig([mdns, sweep], const LastRig('astro.lan')), mdns);
-    expect(autoPickRig([other], const LastRig('astro.lan')), isNull);
-    expect(autoPickRig([sweep], null), isNull);
-    expect(autoPickRig([const AraServer(hostname: '10.0.0.8', port: 5555)], const LastRig('astro.lan')), isNull);
-  });
+  test(
+    'autoPickRig: the last rig by name, in either spelling, first found wins',
+    () {
+      const sweep = AraServer(
+        hostname: '10.0.0.5',
+        port: 5555,
+        mdnsName: 'astro.lan',
+      );
+      const mdns = AraServer(
+        hostname: '10.0.0.6',
+        port: 5555,
+        mdnsName: 'astro-lan',
+      );
+      const other = AraServer(
+        hostname: '10.0.0.7',
+        port: 5555,
+        mdnsName: 'garage',
+      );
+      expect(autoPickRig([other, sweep], const LastRig('astro.lan')), sweep);
+      expect(autoPickRig([mdns], const LastRig('Astro.lan')), mdns);
+      expect(autoPickRig([mdns, sweep], const LastRig('astro.lan')), mdns);
+      expect(autoPickRig([other], const LastRig('astro.lan')), isNull);
+      expect(autoPickRig([sweep], null), isNull);
+      expect(
+        autoPickRig([
+          const AraServer(hostname: '10.0.0.8', port: 5555),
+        ], const LastRig('astro.lan')),
+        isNull,
+      );
+    },
+  );
 
   test('autoPickRig: a rig that says its uuid is matched on it, not on its name (#1485)', () {
-    const mine = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro', uuid: 'u-mine');
-    const twin = AraServer(hostname: '10.0.0.6', port: 5555, mdnsName: 'astro', uuid: 'u-twin');
+    const mine = AraServer(
+      hostname: '10.0.0.5',
+      port: 5555,
+      mdnsName: 'astro',
+      uuid: 'u-mine',
+    );
+    const twin = AraServer(
+      hostname: '10.0.0.6',
+      port: 5555,
+      mdnsName: 'astro',
+      uuid: 'u-twin',
+    );
     const unnamed = AraServer(hostname: '10.0.0.9', port: 5555, uuid: 'u-mine');
-    const noUuid = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'astro');
-    expect(autoPickRig([twin, mine], const LastRig('astro', uuid: 'u-mine')), mine, reason: 'two rigs, one hostname');
+    const noUuid = AraServer(
+      hostname: '10.0.0.7',
+      port: 5555,
+      mdnsName: 'astro',
+    );
+    expect(
+      autoPickRig([twin, mine], const LastRig('astro', uuid: 'u-mine')),
+      mine,
+      reason: 'two rigs, one hostname',
+    );
     expect(autoPickRig([twin], const LastRig('astro', uuid: 'u-mine')), isNull);
-    expect(autoPickRig([unnamed], const LastRig('OpenAstro Ara', uuid: 'u-mine')), unnamed,
-        reason: 'a rig with no nickname still comes back');
-    expect(autoPickRig([noUuid], const LastRig('astro', uuid: 'u-mine')), noUuid,
-        reason: 'a path that cannot say the uuid (raw multicast) falls back to the name');
-    expect(autoPickRig([twin], const LastRig('astro')), twin, reason: 'a rig remembered before uuids: by name');
+    expect(
+      autoPickRig([unnamed], const LastRig('OpenAstro Ara', uuid: 'u-mine')),
+      unnamed,
+      reason: 'a rig with no nickname still comes back',
+    );
+    expect(
+      autoPickRig([noUuid], const LastRig('astro', uuid: 'u-mine')),
+      noUuid,
+      reason: 'a path that cannot say the uuid (raw multicast) falls back to the name',
+    );
+    expect(
+      autoPickRig([twin], const LastRig('astro')),
+      twin,
+      reason: 'a rig remembered before uuids: by name',
+    );
   });
 
-  testWidgets('the auto-picked rig is confirmed once, however often the handshake answers (#1485)', (tester) async {
-    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    final last = _MemLastRig(const LastRig('astro'));
-    final c = await _scan(tester, const [rig], last);
-    expect(last.saves, 1);
-    c.invalidate(serverHandshakeProvider);
-    await tester.pump();
-    await tester.pump();
-    expect(last.saves, 1);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  testWidgets(
+    'the auto-picked rig is confirmed once, however often the handshake answers (#1485)',
+    (tester) async {
+      const rig = AraServer(
+        hostname: '10.0.0.5',
+        port: 5555,
+        mdnsName: 'astro',
+      );
+      final last = _MemLastRig(const LastRig('astro'));
+      final c = await _scan(tester, const [rig], last);
+      expect(last.saves, 1);
+      c.invalidate(serverHandshakeProvider);
+      await tester.pump();
+      await tester.pump();
+      expect(last.saves, 1);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
   testWidgets('a confirmed rig is remembered with its uuid', (tester) async {
     const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
@@ -139,33 +216,61 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('ALP-4890: the last rig connects on its own when the scan finds it', (tester) async {
-    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    const other = AraServer(hostname: '10.0.0.7', port: 5555, mdnsName: 'garage');
-    final c = await _scan(tester, const [other, rig], _MemLastRig(const LastRig('astro')));
-    expect(c.read(selectedServerProvider), rig);
-    expect(await c.read(savedServersProvider.future), [rig]);
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  testWidgets(
+    'ALP-4890: the last rig connects on its own when the scan finds it',
+    (tester) async {
+      const rig = AraServer(
+        hostname: '10.0.0.5',
+        port: 5555,
+        mdnsName: 'astro',
+      );
+      const other = AraServer(
+        hostname: '10.0.0.7',
+        port: 5555,
+        mdnsName: 'garage',
+      );
+      final c = await _scan(tester, const [
+        other,
+        rig,
+      ], _MemLastRig(const LastRig('astro')));
+      expect(c.read(selectedServerProvider), rig);
+      expect(await c.read(savedServersProvider.future), [rig]);
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
-  testWidgets('ALP-4890: no remembered rig, or another rig, waits for a tap; a tap remembers it', (tester) async {
-    const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    final last = _MemLastRig(const LastRig('garage'));
-    final c = await _scan(tester, const [rig], last);
-    expect(c.read(selectedServerProvider), isNull);
-    expect(await c.read(savedServersProvider.future), isEmpty);
-    await tester.tap(find.text('astro'));
-    await tester.pump();
-    await tester.pump();
-    await tester.tap(find.text('Continue'));
-    await tester.pump();
-    expect(last.name, 'astro');
-    await tester.pumpWidget(const SizedBox.shrink());
-  });
+  testWidgets(
+    'ALP-4890: no remembered rig, or another rig, waits for a tap; a tap remembers it',
+    (tester) async {
+      const rig = AraServer(
+        hostname: '10.0.0.5',
+        port: 5555,
+        mdnsName: 'astro',
+      );
+      final last = _MemLastRig(const LastRig('garage'));
+      final c = await _scan(tester, const [rig], last);
+      expect(c.read(selectedServerProvider), isNull);
+      expect(await c.read(savedServersProvider.future), isEmpty);
+      await tester.tap(find.text('astro'));
+      await tester.pump();
+      await tester.pump();
+      await tester.tap(find.text('Continue'));
+      await tester.pump();
+      expect(last.name, 'astro');
+      await tester.pumpWidget(const SizedBox.shrink());
+    },
+  );
 
-  testWidgets('ALP-4890: Launchpad\'s chooser never connects on its own', (tester) async {
+  testWidgets('ALP-4890: Launchpad\'s chooser never connects on its own', (
+    tester,
+  ) async {
     const rig = AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro');
-    final c = await _scan(tester, const [rig], _MemLastRig(const LastRig('astro')), chooser: true);
+    final c = await _scan(
+      tester,
+      const [rig],
+      _MemLastRig(const LastRig('astro')),
+      chooser: true,
+    );
     expect(c.read(selectedServerProvider), isNull);
     expect(await c.read(savedServersProvider.future), isEmpty);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -205,15 +310,20 @@ void main() {
     );
     await tester.pump();
 
-    await tester.fling(find.textContaining('Looking for servers'), const Offset(0, 300), 1000);
+    await tester.fling(
+      find.textContaining('Looking for servers'),
+      const Offset(0, 300),
+      1000,
+    );
     await tester.pumpAndSettle();
     expect(fake.resets, 1);
 
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
-  testWidgets('a Local Network block shows how to allow it, and clears',
-      (tester) async {
+  testWidgets('a Local Network block shows how to allow it, and clears', (
+    tester,
+  ) async {
     // #1111 — on macOS a denied Local Network prompt made every mDNS send
     // fail silently; the screen said "looking for servers" forever.
     final fake = _FakeDiscovery();
@@ -229,7 +339,10 @@ void main() {
     fake.blocked.value = true;
     await tester.pump();
     expect(find.textContaining('blocking local network'), findsOneWidget);
-    expect(find.textContaining('Adding the rig manually below'), findsOneWidget);
+    expect(
+      find.textContaining('Adding the rig manually below'),
+      findsOneWidget,
+    );
 
     fake.blocked.value = false;
     await tester.pump();
@@ -239,43 +352,65 @@ void main() {
   });
 
   // #1129: the setting lives in a different place per OS.
-  testWidgets('the Local Network banner names the right settings path per platform',
-      (tester) async {
-    for (final (platform, needle) in [
-      (TargetPlatform.iOS, 'Settings → Privacy & Security → Local Network → OpenAstro Ara'),
-      (TargetPlatform.macOS, 'System Settings → Privacy & Security → Local Network'),
-      (TargetPlatform.android, 'network privacy settings'),
-    ]) {
-      debugDefaultTargetPlatformOverride = platform;
-      final fake = _FakeDiscovery();
-      await tester.pumpWidget(
-        ProviderScope(
-          overrides: [discoveryServiceProvider.overrideWithValue(fake)],
-          child: const MaterialApp(home: FirstRunScreen()),
+  testWidgets(
+    'the Local Network banner names the right settings path per platform',
+    (tester) async {
+      for (final (platform, needle) in [
+        (
+          TargetPlatform.iOS,
+          'Settings → Privacy & Security → Local Network → OpenAstro Ara',
         ),
-      );
-      fake.blocked.value = true;
-      await tester.pump();
-      expect(find.textContaining(needle), findsOneWidget, reason: '$platform');
-      await tester.pumpWidget(const SizedBox.shrink());
-      debugDefaultTargetPlatformOverride = null;
-    }
-  });
+        (
+          TargetPlatform.macOS,
+          'System Settings → Privacy & Security → Local Network',
+        ),
+        (TargetPlatform.android, 'network privacy settings'),
+      ]) {
+        debugDefaultTargetPlatformOverride = platform;
+        final fake = _FakeDiscovery();
+        await tester.pumpWidget(
+          ProviderScope(
+            overrides: [discoveryServiceProvider.overrideWithValue(fake)],
+            child: const MaterialApp(home: FirstRunScreen()),
+          ),
+        );
+        fake.blocked.value = true;
+        await tester.pump();
+        expect(
+          find.textContaining(needle),
+          findsOneWidget,
+          reason: '$platform',
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        debugDefaultTargetPlatformOverride = null;
+      }
+    },
+  );
 
   // #1129: every launch scans, and the user always taps the rig — a site can
   // have four or five, some not up yet, so even a lone rig is never picked
   // automatically.
-  testWidgets('a rig found is listed and waits for the user to pick it', (tester) async {
+  testWidgets('a rig found is listed and waits for the user to pick it', (
+    tester,
+  ) async {
     FlutterSecureStorage.setMockInitialValues({});
-    const rig = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
-    final container = ProviderContainer(overrides: [
-      discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rig])),
-    ]);
+    const rig = AraServer(
+      hostname: 'rig-a.test',
+      port: 5555,
+      mdnsName: 'openastro',
+    );
+    final container = ProviderContainer(
+      overrides: [
+        discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rig])),
+      ],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: FirstRunScreen()),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: FirstRunScreen()),
+      ),
+    );
     await tester.pump();
     await tester.pump(const Duration(seconds: 30));
     expect(find.text('openastro'), findsOneWidget);
@@ -287,29 +422,48 @@ void main() {
   // #2093: a server from another X.Y release line is flagged next to its
   // version, without stopping the user from continuing.
   group('server version warning', () {
-    Future<void> handshakeWith(WidgetTester tester, String serverVersion,
-        {Locale? locale}) async {
+    Future<void> handshakeWith(
+      WidgetTester tester,
+      String serverVersion, {
+      Locale? locale,
+    }) async {
       FlutterSecureStorage.setMockInitialValues({});
-      const rig = AraServer(hostname: 'rig-a.test', port: 5555, mdnsName: 'openastro');
-      final container = ProviderContainer(overrides: [
-        discoveryServiceProvider.overrideWithValue(_FakeDiscovery(const [rig])),
-        lastRigServiceProvider.overrideWithValue(_MemLastRig()),
-        appVersionProvider.overrideWithValue('1.0.0-beta.2'),
-        serverHandshakeProvider.overrideWith((ref) async =>
-            ref.watch(selectedServerProvider) == null
+      const rig = AraServer(
+        hostname: 'rig-a.test',
+        port: 5555,
+        mdnsName: 'openastro',
+      );
+      final container = ProviderContainer(
+        overrides: [
+          discoveryServiceProvider.overrideWithValue(
+            _FakeDiscovery(const [rig]),
+          ),
+          lastRigServiceProvider.overrideWithValue(_MemLastRig()),
+          appVersionProvider.overrideWithValue('1.0.0-beta.2'),
+          serverHandshakeProvider.overrideWith(
+            (ref) async => ref.watch(selectedServerProvider) == null
                 ? null
-                : ServerInfo(name: 'openastro', version: serverVersion, apiVersion: '1', uuid: 'u')),
-      ]);
+                : ServerInfo(
+                    name: 'openastro',
+                    version: serverVersion,
+                    apiVersion: '1',
+                    uuid: 'u',
+                  ),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          locale: locale,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: const FirstRunScreen(),
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            locale: locale,
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: const FirstRunScreen(),
+          ),
         ),
-      ));
+      );
       await tester.pump();
       container.read(selectedServerProvider.notifier).select(rig);
       // The handshake, then the app's own version the warning reads.
@@ -318,11 +472,15 @@ void main() {
       await tester.pump();
     }
 
-    testWidgets('another release line warns and still offers Continue', (tester) async {
+    testWidgets('another release line warns and still offers Continue', (
+      tester,
+    ) async {
       await handshakeWith(tester, '1.1.0');
       expect(find.text('Server version: 1.1.0'), findsOneWidget);
       expect(
-        find.text('Server 1.1.0 and app 1.0.0-beta.2 differ; update both from the same release.'),
+        find.text(
+          'Server 1.1.0 and app 1.0.0-beta.2 differ; update both from the same release.',
+        ),
         findsOneWidget,
       );
       expect(find.text('Continue'), findsOneWidget);
@@ -331,15 +489,24 @@ void main() {
 
     testWidgets('the warning is in Brazilian Portuguese too', (tester) async {
       await handshakeWith(tester, '2.0.0', locale: const Locale('pt', 'BR'));
-      expect(find.textContaining('O servidor 2.0.0 e o app 1.0.0-beta.2'), findsOneWidget);
+      expect(
+        find.textContaining('O servidor 2.0.0 e o app 1.0.0-beta.2'),
+        findsOneWidget,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
     });
 
-    testWidgets('the same release line, or an old daemon version, shows none', (tester) async {
+    testWidgets('the same release line, or an old daemon version, shows none', (
+      tester,
+    ) async {
       for (final v in ['1.0.0', '1.0.0.0', 'dev-build']) {
         await handshakeWith(tester, v);
         expect(find.text('Server version: $v'), findsOneWidget);
-        expect(find.byKey(const Key('version-mismatch-warning')), findsNothing, reason: v);
+        expect(
+          find.byKey(const Key('version-mismatch-warning')),
+          findsNothing,
+          reason: v,
+        );
         await tester.pumpWidget(const SizedBox.shrink());
       }
     });
@@ -355,22 +522,27 @@ void main() {
       calls = [];
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, (call) async {
-        calls.add(call.method);
-        return null;
-      });
+            calls.add(call.method);
+            return null;
+          });
     });
 
     tearDown(() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
           .setMockMethodCallHandler(channel, null);
-      MulticastLock.isAndroid = () => defaultTargetPlatform == TargetPlatform.android;
+      MulticastLock.isAndroid = () =>
+          defaultTargetPlatform == TargetPlatform.android;
     });
 
     Future<void> openAndClose(WidgetTester tester) async {
-      await tester.pumpWidget(ProviderScope(
-        overrides: [discoveryServiceProvider.overrideWithValue(_FakeDiscovery())],
-        child: const MaterialApp(home: FirstRunScreen()),
-      ));
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            discoveryServiceProvider.overrideWithValue(_FakeDiscovery()),
+          ],
+          child: const MaterialApp(home: FirstRunScreen()),
+        ),
+      );
       await tester.pump();
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump();

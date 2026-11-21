@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../../widgets/status_indicator.dart' show StatusBlink;
+
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -243,7 +245,9 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
                 Expanded(child: Text(l10n.focuserSetZeroAsk('$pos'))),
                 TextButton(
                   onPressed: () => setState(() => _askZero = false),
-                  child: Text(MaterialLocalizations.of(context).cancelButtonLabel),
+                  child: Text(
+                    MaterialLocalizations.of(context).cancelButtonLabel,
+                  ),
                 ),
                 FilledButton(
                   key: const Key('focuser-set-zero-confirm'),
@@ -260,13 +264,11 @@ class _FocuserBodyState extends ConsumerState<_FocuserBody> {
         Row(
           children: [
             Expanded(
-              child: Text(
-                switch (s.calibration) {
-                  'calibrating' => l10n.focuserCalibrating,
-                  'calibrated' => l10n.focuserCalibrated,
-                  _ => l10n.focuserCalibrateHint,
-                },
-              ),
+              child: Text(switch (s.calibration) {
+                'calibrating' => l10n.focuserCalibrating,
+                'calibrated' => l10n.focuserCalibrated,
+                _ => l10n.focuserCalibrateHint,
+              }),
             ),
             calibrating
                 ? FilledButton(
@@ -420,8 +422,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
             setState(() {
               _running = false;
               _lastFailed = true;
-              _result =
-                  'Lost contact with the server while autofocusing — autofocus may still be running. Check the Focuser panel.';
+              _result = 'Lost contact with the server while autofocusing — autofocus may still be running. Check the Focuser panel.';
             });
             debugPrint(
               '[autofocus] poll gave up after $consecutivePollFailures consecutive failures: $e',
@@ -446,8 +447,7 @@ class _RunAutofocusRowState extends ConsumerState<_RunAutofocusRow> {
           setState(() {
             _running = false;
             _lastFailed = true;
-            _result =
-                'Lost track of the sweep — the server may have restarted mid-autofocus. Check the focuser position before imaging.';
+            _result = 'Lost track of the sweep — the server may have restarted mid-autofocus. Check the focuser position before imaging.';
           });
           return;
         }

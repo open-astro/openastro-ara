@@ -40,18 +40,16 @@ class ImagingDefaults {
     double? coolerTargetC,
     double? coolerRampRatePerMin,
     bool? warmupAtSessionEnd,
-  }) =>
-      ImagingDefaults(
-        defaultExposure: defaultExposure ?? this.defaultExposure,
-        defaultGain: defaultGain ?? this.defaultGain,
-        defaultOffset: defaultOffset ?? this.defaultOffset,
-        defaultBin: defaultBin ?? this.defaultBin,
-        defaultFrameKind: defaultFrameKind ?? this.defaultFrameKind,
-        coolerTargetC: coolerTargetC ?? this.coolerTargetC,
-        coolerRampRatePerMin:
-            coolerRampRatePerMin ?? this.coolerRampRatePerMin,
-        warmupAtSessionEnd: warmupAtSessionEnd ?? this.warmupAtSessionEnd,
-      );
+  }) => ImagingDefaults(
+    defaultExposure: defaultExposure ?? this.defaultExposure,
+    defaultGain: defaultGain ?? this.defaultGain,
+    defaultOffset: defaultOffset ?? this.defaultOffset,
+    defaultBin: defaultBin ?? this.defaultBin,
+    defaultFrameKind: defaultFrameKind ?? this.defaultFrameKind,
+    coolerTargetC: coolerTargetC ?? this.coolerTargetC,
+    coolerRampRatePerMin: coolerRampRatePerMin ?? this.coolerRampRatePerMin,
+    warmupAtSessionEnd: warmupAtSessionEnd ?? this.warmupAtSessionEnd,
+  );
 }
 
 /// ADR 0015 — a value only once the rig has answered. Loads itself: Simple

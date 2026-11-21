@@ -74,14 +74,20 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
         Row(
           children: [
             Expanded(
-              child: Text('Overview',
-                  style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                'Overview',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             // The page's pull down refreshes; this shows it running.
             if (spinning)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
+                ),
               ),
           ],
         ),
@@ -115,7 +121,9 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
       return const _Hint('Connect to a server to see your imaging overview.');
     }
     if (data.isEmpty) {
-      return const _Hint('No frames captured yet — your totals appear here once you start imaging.');
+      return const _Hint(
+        'No frames captured yet — your totals appear here once you start imaging.',
+      );
     }
     // Each total once: (icon, value, label). Advanced Mode keeps its tile
     // grid; Simple Mode's dashboard (mock `design/preview/stats-layouts-mock.html`
@@ -125,10 +133,22 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
     final totals = [
       (Icons.list_alt, '${data.totalSessions}', 'Sessions'),
       (Icons.image_outlined, '${data.totalFrames}', 'Frames'),
-      (Icons.wb_incandescent_outlined, '${data.totalLightFrames}', 'Light frames'),
-      (Icons.timelapse, formatIntegrationHours(data.totalIntegrationHours), 'Total integration'),
+      (
+        Icons.wb_incandescent_outlined,
+        '${data.totalLightFrames}',
+        'Light frames',
+      ),
+      (
+        Icons.timelapse,
+        formatIntegrationHours(data.totalIntegrationHours),
+        'Total integration',
+      ),
       (Icons.gps_fixed, '${data.uniqueTargetsImaged}', 'Unique targets'),
-      (Icons.event_available, formatStatsDate(data.lastImageUtc), 'Last imaged'),
+      (
+        Icons.event_available,
+        formatStatsDate(data.lastImageUtc),
+        'Last imaged',
+      ),
     ];
     if (!widget.dashboard) {
       return ResponsiveTileGrid(
@@ -138,7 +158,11 @@ class _OverviewSectionState extends ConsumerState<OverviewSection>
         ],
       );
     }
-    final hero = _Hero(data, label: totals[integration].$3, value: totals[integration].$2);
+    final hero = _Hero(
+      data,
+      label: totals[integration].$3,
+      value: totals[integration].$2,
+    );
     final kpis = StatKpiGrid(
       children: [
         for (final (i, (_, value, label)) in totals.indexed)
@@ -228,9 +252,8 @@ class _StaleBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Couldn’t refresh — showing the last loaded totals.',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AraColors.accentBusy,
-                ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.accentBusy),
           ),
         ],
       ),
@@ -247,7 +270,10 @@ class _Hint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(message, style: const TextStyle(color: AraColors.textSecondary)),
+      child: Text(
+        message,
+        style: const TextStyle(color: AraColors.textSecondary),
+      ),
     );
   }
 }

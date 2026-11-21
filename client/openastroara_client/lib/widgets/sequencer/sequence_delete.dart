@@ -30,9 +30,12 @@ Future<bool> confirmAndDeleteSequence(
   final api = ref.read(sequenceApiProvider);
   final messenger = ScaffoldMessenger.of(context);
   if (api == null) {
-    messenger.showSnackBar(const SnackBar(
+    messenger.showSnackBar(
+      const SnackBar(
         content: Text('Connect to your rig to delete sequences.'),
-        backgroundColor: AraColors.accentError));
+        backgroundColor: AraColors.accentError,
+      ),
+    );
     return false;
   }
   // Post-await provider work goes through the container, not [ref]: the Load
@@ -58,10 +61,12 @@ Future<bool> confirmAndDeleteSequence(
     context: context,
     builder: (ctx) => AlertDialog(
       title: Text(active ? 'Stop the run and delete?' : 'Delete sequence?'),
-      content: Text(active
-          ? '$displayName is currently running. This aborts the run, then '
-              'permanently deletes the sequence from Ara.'
-          : 'This permanently deletes $displayName from Ara.'),
+      content: Text(
+        active
+            ? '$displayName is currently running. This aborts the run, then '
+                  'permanently deletes the sequence from Ara.'
+            : 'This permanently deletes $displayName from Ara.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(ctx).pop(false),
@@ -89,18 +94,28 @@ Future<bool> confirmAndDeleteSequence(
       activeNow = (await api.getRunState(id))?.state?.isActive ?? false;
     } catch (_) {}
     if (activeNow && !active) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text('The sequence started running while the confirm was '
-              'open — nothing was deleted. Stop the run (or delete again) '
-              'to proceed.'),
-          backgroundColor: AraColors.accentError));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'The sequence started running while the confirm was '
+            'open — nothing was deleted. Stop the run (or delete again) '
+            'to proceed.',
+          ),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
       return false;
     }
     if (activeNow && !await _abortAndSettle(api, id)) {
-      messenger.showSnackBar(const SnackBar(
-          content: Text("Couldn't stop the run — the sequence was not "
-              'deleted. Try again once it has stopped.'),
-          backgroundColor: AraColors.accentError));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't stop the run — the sequence was not "
+            'deleted. Try again once it has stopped.',
+          ),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
       return false;
     }
     // false = the daemon didn't know the id (already gone) — same outcome the
@@ -119,10 +134,15 @@ Future<bool> confirmAndDeleteSequence(
     return true;
   } catch (e, st) {
     debugPrint('[sequencer] delete error: $e\n$st');
-    messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't delete that sequence. Check the connection "
-            'and try again.'),
-        backgroundColor: AraColors.accentError));
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Couldn't delete that sequence. Check the connection "
+          'and try again.',
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
     return false;
   }
 }
@@ -151,12 +171,15 @@ Future<bool> confirmAndDeleteDraft(
     context: context,
     builder: (ctx) => AlertDialog(
       title: const Text('Delete draft?'),
-      content: Text('"$display" will be removed from this device. '
-          "This can't be undone."),
+      content: Text(
+        '"$display" will be removed from this device. '
+        "This can't be undone.",
+      ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Cancel'),
+        ),
         TextButton(
           style: TextButton.styleFrom(foregroundColor: AraColors.accentError),
           onPressed: () => Navigator.of(ctx).pop(true),
@@ -181,10 +204,12 @@ Future<bool> confirmAndDeleteDraft(
     return true;
   } catch (e) {
     debugPrint('[sequencer] draft delete failed: $e');
-    messenger.showSnackBar(const SnackBar(
-      content: Text("Couldn't delete the draft."),
-      backgroundColor: AraColors.accentError,
-    ));
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text("Couldn't delete the draft."),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
     return false;
   }
 }

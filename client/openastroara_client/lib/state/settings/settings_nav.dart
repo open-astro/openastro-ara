@@ -241,11 +241,7 @@ const List<SettingsGroup> settingsTree = <SettingsGroup>[
       // atlas needs no downloads — what remains is COMPUTE data (DSO catalog
       // for Tonight's Sky, star catalogs for plate solving, ephemerides),
       // which is system data, not atlas imagery.
-      SettingsPanelInfo(
-        id: 'sky.data',
-        label: 'Sky data',
-        groupId: 'system',
-      ),
+      SettingsPanelInfo(id: 'sky.data', label: 'Sky data', groupId: 'system'),
       SettingsPanelInfo(
         id: 'app.experimental',
         label: 'Experimental',
@@ -301,8 +297,9 @@ final highlightedSettingProvider =
 
 /// The Options sidebar: [settingsTree] without Equipment, whose panels the
 /// top-bar device chips (and search) open directly.
-final List<SettingsGroup> settingsSidebarGroups =
-    settingsTree.where((g) => g.id != 'equipment').toList(growable: false);
+final List<SettingsGroup> settingsSidebarGroups = settingsTree
+    .where((g) => g.id != 'equipment')
+    .toList(growable: false);
 
 SettingsPanelInfo? findPanelInfo(String id) {
   for (final g in settingsTree) {

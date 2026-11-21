@@ -60,9 +60,11 @@ NinaImportTranslation translateNinaSequence(Map<String, dynamic> nina) {
   if (nina.containsKey(_schemaVersionField)) {
     body = _deepCopy(nina);
   } else {
-    body = <String, dynamic>{_schemaVersionField: schemaVersion, ..._deepCopy(nina)};
-    warnings.add(
-        "schemaVersion was missing; backfilled to '$schemaVersion'.");
+    body = <String, dynamic>{
+      _schemaVersionField: schemaVersion,
+      ..._deepCopy(nina),
+    };
+    warnings.add("schemaVersion was missing; backfilled to '$schemaVersion'.");
   }
 
   // §38.4 — normalize $type names. Collect editor-unknown sequencer types for
@@ -72,8 +74,9 @@ NinaImportTranslation translateNinaSequence(Map<String, dynamic> nina) {
   if (unsupported.isNotEmpty) {
     final sorted = unsupported.toList()..sort();
     warnings.add(
-        '${sorted.length} instruction type(s) are not yet supported and were '
-        'kept as-is: ${sorted.join(', ')}.');
+      '${sorted.length} instruction type(s) are not yet supported and were '
+      'kept as-is: ${sorted.join(', ')}.',
+    );
   }
 
   return NinaImportTranslation(body: body, warnings: warnings);
@@ -129,10 +132,10 @@ String _shortName(String typeString) {
 
 Map<String, dynamic> _deepCopy(Map<String, dynamic> source) {
   Object? copy(Object? v) => switch (v) {
-        Map<String, dynamic> m => {for (final e in m.entries) e.key: copy(e.value)},
-        Map m => {for (final e in m.entries) e.key.toString(): copy(e.value)},
-        List l => [for (final e in l) copy(e)],
-        _ => v,
-      };
+    Map<String, dynamic> m => {for (final e in m.entries) e.key: copy(e.value)},
+    Map m => {for (final e in m.entries) e.key.toString(): copy(e.value)},
+    List l => [for (final e in l) copy(e)],
+    _ => v,
+  };
   return copy(source) as Map<String, dynamic>;
 }

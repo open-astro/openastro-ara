@@ -78,10 +78,22 @@ List<({WeatherBreach kind, double value, double limit})> weatherBreaches(
   final t = w.temperatureC, dew = w.dewPointC, hum = w.humidityPct;
   return [
     if (wind != null && wind * 3.6 > p.maxWindKmh)
-      (kind: WeatherBreach.wind, value: wind * 3.6, limit: p.maxWindKmh.toDouble()),
+      (
+        kind: WeatherBreach.wind,
+        value: wind * 3.6,
+        limit: p.maxWindKmh.toDouble(),
+      ),
     if (ok(hum) && hum! > p.maxHumidityPct)
-      (kind: WeatherBreach.humidity, value: hum, limit: p.maxHumidityPct.toDouble()),
+      (
+        kind: WeatherBreach.humidity,
+        value: hum,
+        limit: p.maxHumidityPct.toDouble(),
+      ),
     if (ok(t) && ok(dew) && t! - dew! < p.minDewDeltaC)
-      (kind: WeatherBreach.dewMargin, value: t - dew, limit: p.minDewDeltaC.toDouble()),
+      (
+        kind: WeatherBreach.dewMargin,
+        value: t - dew,
+        limit: p.minDewDeltaC.toDouble(),
+      ),
   ];
 }

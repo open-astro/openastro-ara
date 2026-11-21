@@ -3,13 +3,13 @@ import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/util/imaging_regions.dart';
 
 PlanningDso _dso(String id, {String? common}) => PlanningDso(
-      id: id,
-      name: common ?? id,
-      type: 'HII',
-      magnitude: null,
-      raDeg: 100,
-      decDeg: 10,
-    );
+  id: id,
+  name: common ?? id,
+  type: 'HII',
+  magnitude: null,
+  raDeg: 100,
+  decDeg: 10,
+);
 
 void main() {
   final catalog = [
@@ -51,8 +51,10 @@ void main() {
       expect(planetariumSearchCommand(catalog, 'sh2-129')['name'], 'Sh2-129');
     });
     test('no hit hands the trimmed query to the engine search', () {
-      expect(planetariumSearchCommand(catalog, ' Moon '),
-          {'type': 'search', 'q': 'Moon'});
+      expect(planetariumSearchCommand(catalog, ' Moon '), {
+        'type': 'search',
+        'q': 'Moon',
+      });
     });
   });
 
@@ -60,12 +62,25 @@ void main() {
     // "WR 2-1" and "WR 21" both strip to wr21 once dashes go (review #1107):
     // the dash-preserving pass has to win before the loose one.
     const wr21 = PlanningDso(
-        id: 'WR 2-1', name: 'WR 2-1', type: 'WR*', magnitude: 14.0,
-        raDeg: 18.0, decDeg: 64.8);
+      id: 'WR 2-1',
+      name: 'WR 2-1',
+      type: 'WR*',
+      magnitude: 14.0,
+      raDeg: 18.0,
+      decDeg: 64.8,
+    );
     const wr21plain = PlanningDso(
-        id: 'WR 21', name: 'WR 21', type: 'WR*', magnitude: 9.8,
-        raDeg: 155.7, decDeg: -58.1);
-    for (final order in [[wr21, wr21plain], [wr21plain, wr21]]) {
+      id: 'WR 21',
+      name: 'WR 21',
+      type: 'WR*',
+      magnitude: 9.8,
+      raDeg: 155.7,
+      decDeg: -58.1,
+    );
+    for (final order in [
+      [wr21, wr21plain],
+      [wr21plain, wr21],
+    ]) {
       expect(findCatalogObject(order, 'WR 21')!.id, 'WR 21');
       expect(findCatalogObject(order, 'wr21')!.id, 'WR 21');
       expect(findCatalogObject(order, 'WR 2-1')!.id, 'WR 2-1');
@@ -73,8 +88,13 @@ void main() {
     }
     // Loose matching still serves the un-dashed spellings people type.
     const sh2 = PlanningDso(
-        id: 'Sh2-129', name: 'Sh2-129', type: 'HII', magnitude: null,
-        raDeg: 318.0, decDeg: 60.0);
+      id: 'Sh2-129',
+      name: 'Sh2-129',
+      type: 'HII',
+      magnitude: null,
+      raDeg: 318.0,
+      decDeg: 60.0,
+    );
     expect(findCatalogObject(const [sh2, wr21], 'SH2129')!.id, 'Sh2-129');
     expect(findCatalogObject(const [sh2, wr21], 'sh2 129')!.id, 'Sh2-129');
   });
@@ -90,12 +110,21 @@ void main() {
     expect(findCatalogObject(layered, 'tulip')!.id, 'REGION-SH2-101');
     // An override renames a mirror row: the imaging name resolves to it.
     const crescent = PlanningDso(
-        id: 'NGC6888', name: 'NGC6888', type: 'EmN', magnitude: 7.4,
-        raDeg: 303.05, decDeg: 38.35, sizeMajArcmin: 18);
+      id: 'NGC6888',
+      name: 'NGC6888',
+      type: 'EmN',
+      magnitude: 7.4,
+      raDeg: 303.05,
+      decDeg: 38.35,
+      sizeMajArcmin: 18,
+    );
     final withRow = applyImagingRegions(const [crescent]);
     expect(findCatalogObject(withRow, 'crescent')!.id, 'NGC6888');
-    expect(findCatalogObject(withRow, "thor's helmet"), isNull,
-        reason: 'no NGC 2359 row in this mirror — nothing to rename');
+    expect(
+      findCatalogObject(withRow, "thor's helmet"),
+      isNull,
+      reason: 'no NGC 2359 row in this mirror — nothing to rename',
+    );
   });
 
   test('zero padding and aliases find the object (#1267 item 4)', () {
@@ -134,41 +163,88 @@ void main() {
     final idx = CatalogNameIndex(m29);
     expect(idx.lookup('M 2-9'), isNull);
     expect(idx.lookup('M 1-7'), isNull);
-    expect(CatalogNameIndex(cat).lookup('north'), isNull, reason: 'no substring');
+    expect(
+      CatalogNameIndex(cat).lookup('north'),
+      isNull,
+      reason: 'no substring',
+    );
     expect(findCatalogObject(cat, 'north')!.id, 'NGC7000');
   });
 
   test('the display form is name (designation) in the search row and the plan (#1957)', () {
-    expect(designationWithName('NGC0246', 'Skull Nebula'), 'Skull Nebula (NGC 246)');
-    expect(designationWithName('Sh2-129', 'Sh2-129'), 'Sh2-129', reason: 'no other name');
-    expect(designationWithName('NGC7000', 'North America Nebula (NGC 7000)'), 'North America Nebula (NGC 7000)',
-        reason: 'the name already carries its designation');
+    expect(
+      designationWithName('NGC0246', 'Skull Nebula'),
+      'Skull Nebula (NGC 246)',
+    );
+    expect(
+      designationWithName('Sh2-129', 'Sh2-129'),
+      'Sh2-129',
+      reason: 'no other name',
+    );
+    expect(
+      designationWithName('NGC7000', 'North America Nebula (NGC 7000)'),
+      'North America Nebula (NGC 7000)',
+      reason: 'the name already carries its designation',
+    );
     expect(designationWithName('', 'Skull Nebula'), 'Skull Nebula');
     final skull = PlanningDso(
-        id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
-        aliases: const ['C 056', 'Skull Nebula']);
-    expect(suggestionTitle(searchSuggestions([skull], 'skull').single), 'Skull Nebula (NGC 246)',
-        reason: 'a nickname matched: the title shows the designation, then the name');
-    expect(suggestionTitle(searchSuggestions([skull], 'C 56').single), 'Skull Nebula (C 56)',
-        reason: 'a Caldwell number matched: it is the designation');
+      id: 'NGC0246',
+      name: 'Skull Nebula',
+      type: 'PN',
+      magnitude: 8,
+      raDeg: 11.76,
+      decDeg: -11.87,
+      aliases: const ['C 056', 'Skull Nebula'],
+    );
+    expect(
+      suggestionTitle(searchSuggestions([skull], 'skull').single),
+      'Skull Nebula (NGC 246)',
+      reason:
+          'a nickname matched: the title shows the designation, then the name',
+    );
+    expect(
+      suggestionTitle(searchSuggestions([skull], 'C 56').single),
+      'Skull Nebula (C 56)',
+      reason: 'a Caldwell number matched: it is the designation',
+    );
     const m33 = PlanningDso(
-        id: 'NGC0598', name: 'Triangulum Galaxy', type: 'G', magnitude: 5.7, raDeg: 23.46, decDeg: 30.66,
-        aliases: ['M 33', 'Triangulum Pinwheel']);
-    expect(suggestionTitle(searchSuggestions([m33], 'triangulum pinwheel').single), 'Triangulum Pinwheel (NGC 598)',
-        reason: 'a nickname other than its name matched: the row shows it, so it says why it is listed');
+      id: 'NGC0598',
+      name: 'Triangulum Galaxy',
+      type: 'G',
+      magnitude: 5.7,
+      raDeg: 23.46,
+      decDeg: 30.66,
+      aliases: ['M 33', 'Triangulum Pinwheel'],
+    );
+    expect(
+      suggestionTitle(searchSuggestions([m33], 'triangulum pinwheel').single),
+      'Triangulum Pinwheel (NGC 598)',
+      reason: 'a nickname other than its name matched: the row shows it, so it says why it is listed',
+    );
   });
 
   test('a curated region name reads name first, Skull Nebula (NGC 246), on every pick path (#1957)', () {
     // Recent and Tonight's Best pick the ranked row, which carries the
     // curated name; the card titles it with designationWithName.
     final skull = applyImagingRegions(const [
-      PlanningDso(id: 'NGC0246', name: 'Skull Nebula', type: 'PN', magnitude: 8, raDeg: 11.76, decDeg: -11.87,
-          aliases: ['C 056']),
+      PlanningDso(
+        id: 'NGC0246',
+        name: 'Skull Nebula',
+        type: 'PN',
+        magnitude: 8,
+        raDeg: 11.76,
+        decDeg: -11.87,
+        aliases: ['C 056'],
+      ),
     ]).firstWhere((o) => o.id == 'NGC0246');
     expect(designationWithName(skull.id, skull.name), 'Skull Nebula (NGC 246)');
     for (final e in overrides.entries) {
-      expect(e.value.name, isNot(contains('(')),
-          reason: '${e.key}: the designation in the name would show twice or out of order');
+      expect(
+        e.value.name,
+        isNot(contains('(')),
+        reason:
+            '${e.key}: the designation in the name would show twice or out of order',
+      );
     }
   });
 }

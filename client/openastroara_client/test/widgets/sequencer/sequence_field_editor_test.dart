@@ -35,17 +35,16 @@ const _altitude =
     'OpenAstroAra.Sequencer.Conditions.AltitudeCondition, OpenAstroAra.Sequencer';
 
 SequenceDetail _detailWith(String type) => SequenceDetail(
-      id: 's',
-      body: {
-        r'$type':
-            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-        'Name': 'root',
-        'Items': {
-          r'$type': itemsWrapperType,
-          r'$values': [_node(type)],
-        },
-      },
-    );
+  id: 's',
+  body: {
+    r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    'Name': 'root',
+    'Items': {
+      r'$type': itemsWrapperType,
+      r'$values': [_node(type)],
+    },
+  },
+);
 
 // root → [WaitForTimeSpan, StartGuiding, SetTracking, TakeExposure]
 SequenceDetail sampleDetail() => SequenceDetail(
@@ -115,17 +114,24 @@ class _DefaultLabels extends FilterWheelLabelsNotifier {
 class _ConnectedWheel extends FilterWheelNotifier {
   @override
   Future<FilterWheelStatus?> build() async => FilterWheelStatus(
-        deviceId: 'ZWO_EFW_0',
-        name: 'ZWO EFW',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: 0,
-        slots: [
-          for (final (i, n) in const ['Luminance', 'Red', 'Green', 'Blue', 'Ha', 'OIII', 'SII']
-              .indexed)
-            FilterSlot(position: i, name: n, focusOffset: 0),
-        ],
-      );
+    deviceId: 'ZWO_EFW_0',
+    name: 'ZWO EFW',
+    connectionState: EquipmentConnectionState.connected,
+    runtimeState: 'idle',
+    currentSlot: 0,
+    slots: [
+      for (final (i, n) in const [
+        'Luminance',
+        'Red',
+        'Green',
+        'Blue',
+        'Ha',
+        'OIII',
+        'SII',
+      ].indexed)
+        FilterSlot(position: i, name: n, focusOffset: 0),
+    ],
+  );
 }
 
 /// The daemon's switch list (`GET /equipment/switch`) as a fixed set, so the
@@ -206,17 +212,22 @@ Map<String, dynamic> _nodeAt(ProviderContainer c, NodePath p) =>
 /// dimmed. `_FieldControl` sets `enabled: false` on the input when its
 /// `enabledWhen` predicate is false.
 bool _hoursDisabled(WidgetTester tester) {
-  final field = tester.widget<TextField>(find.descendant(
-    of: find.byKey(const ValueKey('/cond/0/Hours')),
-    matching: find.byType(TextField),
-  ));
+  final field = tester.widget<TextField>(
+    find.descendant(
+      of: find.byKey(const ValueKey('/cond/0/Hours')),
+      matching: find.byType(TextField),
+    ),
+  );
   return field.enabled == false;
 }
 
 void main() {
   testWidgets('placeholder when nothing is selected', (tester) async {
     await _pump(tester, detail: sampleDetail());
-    expect(find.text('Select an instruction to edit its settings.'), findsOneWidget);
+    expect(
+      find.text('Select an instruction to edit its settings.'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('edits a number field back into the body', (tester) async {
@@ -230,39 +241,50 @@ void main() {
 
   group('value fields only accept what their keyboard implies', () {
     Finder fieldFor(String key) => find.descendant(
-          of: find.byKey(ValueKey('3/$key')),
-          matching: find.byType(TextField),
+      of: find.byKey(ValueKey('3/$key')),
+      matching: find.byType(TextField),
+    );
+
+    testWidgets(
+      'a decimal field drops letters but keeps digits and the point',
+      (tester) async {
+        // TakeExposure's ExposureTime is an unbounded number → the plain value
+        // field (not the min/max-clamped _NumField).
+        await _pump(tester, detail: sampleDetail(), select: const [3]);
+        await tester.enterText(fieldFor('ExposureTime'), '1a2.3x');
+        await tester.pump();
+        expect(
+          tester.widget<TextField>(fieldFor('ExposureTime')).controller!.text,
+          '12.3',
         );
+      },
+    );
 
-    testWidgets('a decimal field drops letters but keeps digits and the point',
-        (tester) async {
-      // TakeExposure's ExposureTime is an unbounded number → the plain value
-      // field (not the min/max-clamped _NumField).
-      await _pump(tester, detail: sampleDetail(), select: const [3]);
-      await tester.enterText(fieldFor('ExposureTime'), '1a2.3x');
-      await tester.pump();
-      expect(tester.widget<TextField>(fieldFor('ExposureTime')).controller!.text,
-          '12.3');
-    });
-
-    testWidgets('an integer field also drops the decimal point',
-        (tester) async {
+    testWidgets('an integer field also drops the decimal point', (
+      tester,
+    ) async {
       // Gain is an integer: a '.' could only parse to nothing and silently
       // drop the edit, so it never reaches the field.
       await _pump(tester, detail: sampleDetail(), select: const [3]);
       await tester.enterText(fieldFor('Gain'), '-1.5');
       await tester.pump();
       expect(
-          tester.widget<TextField>(fieldFor('Gain')).controller!.text, '-15');
+        tester.widget<TextField>(fieldFor('Gain')).controller!.text,
+        '-15',
+      );
     });
   });
 
-  testWidgets('the Annotation note field grows to multiple lines',
-      (tester) async {
-    await _pump(tester,
-        detail: _detailWith(
-            'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer'),
-        select: const [0]);
+  testWidgets('the Annotation note field grows to multiple lines', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      detail: _detailWith(
+        'OpenAstroAra.Sequencer.SequenceItem.Utility.Annotation, OpenAstroAra.Sequencer',
+      ),
+      select: const [0],
+    );
     final field = tester.widget<TextField>(find.byType(TextField).first);
     expect(field.maxLines, isNull, reason: 'null maxLines = grows with text');
     expect(field.inputFormatters, isNull, reason: 'free text is not filtered');
@@ -286,30 +308,39 @@ void main() {
     expect(_nodeAt(c, [2])['TrackingMode'], 1); // Lunar
   });
 
-  testWidgets('an out-of-range enum value clamps to null (no Flutter assertion)',
-      (tester) async {
-    // A body saved with a now-removed TrackingMode variant (99).
-    final detail = SequenceDetail(
-      id: 's',
-      body: {
-        r'$type':
-            'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-        'Name': 'root',
-        'Items': {
-          r'$type': itemsWrapperType,
-          r'$values': [
-            {..._node(_setTracking), 'TrackingMode': 99},
-          ],
+  testWidgets(
+    'an out-of-range enum value clamps to null (no Flutter assertion)',
+    (tester) async {
+      // A body saved with a now-removed TrackingMode variant (99).
+      final detail = SequenceDetail(
+        id: 's',
+        body: {
+          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          'Name': 'root',
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': [
+              {..._node(_setTracking), 'TrackingMode': 99},
+            ],
+          },
         },
-      },
-    );
-    await _pump(tester, detail: detail, select: const [0]);
-    expect(tester.takeException(), isNull); // would assert if value not clamped
-  });
+      );
+      await _pump(tester, detail: detail, select: const [0]);
+      expect(
+        tester.takeException(),
+        isNull,
+      ); // would assert if value not clamped
+    },
+  );
 
-  testWidgets('renders a string-enum dropdown + the binning X×Y editor',
-      (tester) async {
-    await _pump(tester, detail: sampleDetail(), select: const [3]); // TakeExposure
+  testWidgets('renders a string-enum dropdown + the binning X×Y editor', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      detail: sampleDetail(),
+      select: const [3],
+    ); // TakeExposure
     expect(find.text('Take Exposure'), findsOneWidget);
     expect(find.text('LIGHT'), findsOneWidget); // ImageType dropdown value
     // Binning now has an inline X × Y editor (no placeholder).
@@ -317,8 +348,9 @@ void main() {
     expect(find.textContaining('advanced field'), findsNothing);
   });
 
-  testWidgets('editing binning X writes the whole BinningMode map back',
-      (tester) async {
+  testWidgets('editing binning X writes the whole BinningMode map back', (
+    tester,
+  ) async {
     final c = await _pump(tester, detail: sampleDetail(), select: const [3]);
     await tester.enterText(find.byKey(const Key('Binning_x')), '2');
     await tester.pump();
@@ -338,15 +370,23 @@ void main() {
   });
 
   group('coordinates editor (Slew RA/Dec)', () {
-    testWidgets('edits RA hours and a Dec seconds (int + double) in place',
-        (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+    testWidgets('edits RA hours and a Dec seconds (int + double) in place', (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       expect(find.text('RA'), findsOneWidget);
       expect(find.text('Dec'), findsOneWidget);
 
       await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '12');
       await tester.pump();
-      await tester.enterText(find.byKey(const Key('Coordinates_dec_s')), '30.5');
+      await tester.enterText(
+        find.byKey(const Key('Coordinates_dec_s')),
+        '30.5',
+      );
       await tester.pump();
 
       final coords = _nodeAt(c, [0])['Coordinates'] as Map;
@@ -357,31 +397,44 @@ void main() {
     });
 
     testWidgets('RA hours clamps to 23 and corrects the field', (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       await tester.enterText(find.byKey(const Key('Coordinates_ra_h')), '99');
       await tester.pump();
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['RAHours'], 23);
-      final f = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('Coordinates_ra_h')), matching: find.byType(TextField)));
+      final f = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('Coordinates_ra_h')),
+          matching: find.byType(TextField),
+        ),
+      );
       expect(f.controller!.text, '23');
     });
 
-    testWidgets('Dec at 90° forces minutes/seconds to 0 (pole boundary)',
-        (tester) async {
+    testWidgets('Dec at 90° forces minutes/seconds to 0 (pole boundary)', (
+      tester,
+    ) async {
       // Start at 89°30' so the cross-field rule has something to zero.
       final detail = SequenceDetail(
         id: 's',
         body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
           'Name': 'root',
           'Items': {
             r'$type': itemsWrapperType,
             r'$values': [
-              {..._node(_slew), 'Coordinates': {
-                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
-                'DecDegrees': 89, 'DecMinutes': 30,
-              }},
+              {
+                ..._node(_slew),
+                'Coordinates': {
+                  ...?(_node(_slew)['Coordinates'] as Map?)
+                      ?.cast<String, dynamic>(),
+                  'DecDegrees': 89,
+                  'DecMinutes': 30,
+                },
+              },
             ],
           },
         },
@@ -394,13 +447,23 @@ void main() {
       expect(coords['DecMinutes'], 0); // zeroed at the pole
       expect(coords['DecSeconds'], 0.0);
       // ...and the minutes/seconds fields are now disabled to show the constraint.
-      final decM = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('Coordinates_dec_m')), matching: find.byType(TextField)));
+      final decM = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_m')),
+          matching: find.byType(TextField),
+        ),
+      );
       expect(decM.enabled, isFalse);
     });
 
-    testWidgets('a second decimal point is rejected, not blanked', (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+    testWidgets('a second decimal point is rejected, not blanked', (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       final dec = find.byKey(const Key('Coordinates_dec_s'));
       await tester.enterText(dec, '30.5'); // valid
       await tester.pump();
@@ -409,13 +472,19 @@ void main() {
       await tester.enterText(dec, '30.5.');
       await tester.pump();
       final f = tester.widget<TextField>(
-          find.descendant(of: dec, matching: find.byType(TextField)));
+        find.descendant(of: dec, matching: find.byType(TextField)),
+      );
       expect(f.controller!.text, '30.5');
     });
 
-    testWidgets('a trailing decimal point does not snap the field mid-edit',
-        (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+    testWidgets('a trailing decimal point does not snap the field mid-edit', (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       final dec = find.byKey(const Key('Coordinates_dec_s'));
       await tester.enterText(dec, '30.5');
       await tester.pump();
@@ -423,99 +492,149 @@ void main() {
       await tester.enterText(dec, '30.');
       await tester.pump();
       final f = tester.widget<TextField>(
-          find.descendant(of: dec, matching: find.byType(TextField)));
-      expect(f.controller!.text, '30.'); // field left as-is
-      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.5); // model unchanged
-    });
-
-    testWidgets('an out-of-range loaded seconds value displays clamped (not 60)',
-        (tester) async {
-      // A server body with 59.9995 must NOT display as a rounded-up "60".
-      final detail = SequenceDetail(
-        id: 's',
-        body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-          'Name': 'root',
-          'Items': {
-            r'$type': itemsWrapperType,
-            r'$values': [
-              {..._node(_slew), 'Coordinates': {
-                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
-                'DecSeconds': 59.9995,
-              }},
-            ],
-          },
-        },
+        find.descendant(of: dec, matching: find.byType(TextField)),
       );
-      final c = await _pump(tester, detail: detail, select: const [0]);
-      final f = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
-      expect(f.controller!.text, '59.999'); // displayed in range
-      // The model stays verbatim until the user actually edits it.
-      expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
+      expect(f.controller!.text, '30.'); // field left as-is
+      expect(
+        (_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'],
+        30.5,
+      ); // model unchanged
     });
 
-    testWidgets('an ordinary decimal (30.3) is not corrupted by truncation',
-        (tester) async {
+    testWidgets(
+      'an out-of-range loaded seconds value displays clamped (not 60)',
+      (tester) async {
+        // A server body with 59.9995 must NOT display as a rounded-up "60".
+        final detail = SequenceDetail(
+          id: 's',
+          body: {
+            r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+            'Name': 'root',
+            'Items': {
+              r'$type': itemsWrapperType,
+              r'$values': [
+                {
+                  ..._node(_slew),
+                  'Coordinates': {
+                    ...?(_node(_slew)['Coordinates'] as Map?)
+                        ?.cast<String, dynamic>(),
+                    'DecSeconds': 59.9995,
+                  },
+                },
+              ],
+            },
+          },
+        );
+        final c = await _pump(tester, detail: detail, select: const [0]);
+        final f = tester.widget<TextField>(
+          find.descendant(
+            of: find.byKey(const Key('Coordinates_dec_s')),
+            matching: find.byType(TextField),
+          ),
+        );
+        expect(f.controller!.text, '59.999'); // displayed in range
+        // The model stays verbatim until the user actually edits it.
+        expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 59.9995);
+      },
+    );
+
+    testWidgets('an ordinary decimal (30.3) is not corrupted by truncation', (
+      tester,
+    ) async {
       // 30.3 is stored as 30.2999…; a naive *1000-floor would show '30.299'.
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       final dec = find.byKey(const Key('Coordinates_dec_s'));
       await tester.enterText(dec, '30.3');
       await tester.pump(); // commit → rebuild → didUpdateWidget reformats
       final f = tester.widget<TextField>(
-          find.descendant(of: dec, matching: find.byType(TextField)));
+        find.descendant(of: dec, matching: find.byType(TextField)),
+      );
       expect(f.controller!.text, '30.3'); // not '30.299'
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['DecSeconds'], 30.3);
     });
 
-    testWidgets('an in-range value truncates (not rounds) on display', (tester) async {
+    testWidgets('an in-range value truncates (not rounds) on display', (
+      tester,
+    ) async {
       // 29.9995 must show '29.999', not a rounded-up '30'.
       final detail = SequenceDetail(
         id: 's',
         body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
           'Name': 'root',
           'Items': {
             r'$type': itemsWrapperType,
             r'$values': [
-              {..._node(_slew), 'Coordinates': {
-                ...?(_node(_slew)['Coordinates'] as Map?)?.cast<String, dynamic>(),
-                'DecSeconds': 29.9995,
-              }},
+              {
+                ..._node(_slew),
+                'Coordinates': {
+                  ...?(_node(_slew)['Coordinates'] as Map?)
+                      ?.cast<String, dynamic>(),
+                  'DecSeconds': 29.9995,
+                },
+              },
             ],
           },
         },
       );
       await _pump(tester, detail: detail, select: const [0]);
-      final f = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('Coordinates_dec_s')), matching: find.byType(TextField)));
+      final f = tester.widget<TextField>(
+        find.descendant(
+          of: find.byKey(const Key('Coordinates_dec_s')),
+          matching: find.byType(TextField),
+        ),
+      );
       expect(f.controller!.text, '29.999');
     });
 
     testWidgets('the ± toggle flips NegativeDec', (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_slew),
+        select: const [0],
+      );
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], false);
       await tester.tap(find.text('+')); // currently positive
       await tester.pump();
       expect((_nodeAt(c, [0])['Coordinates'] as Map)['NegativeDec'], true);
     });
 
-    testWidgets('a negative declination is written signed (NINA shape) and shown unsigned',
-        (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_slew), select: const [0]);
-      await tester.enterText(find.byKey(const Key('Coordinates_dec_d')), '5');
-      await tester.pump();
-      await tester.tap(find.text('+'));
-      await tester.pump();
-      final coords = _nodeAt(c, [0])['Coordinates'] as Map;
-      expect(coords['NegativeDec'], true);
-      expect(coords['DecDegrees'], -5, reason: 'the daemon subtracts M/S from a SIGNED DecDegrees');
-      final f = tester.widget<TextField>(find.descendant(
-          of: find.byKey(const Key('Coordinates_dec_d')), matching: find.byType(TextField)));
-      expect(f.controller!.text, '5', reason: 'the field shows the magnitude; the sign is the toggle');
-    });
+    testWidgets(
+      'a negative declination is written signed (NINA shape) and shown unsigned',
+      (tester) async {
+        final c = await _pump(
+          tester,
+          detail: _detailWith(_slew),
+          select: const [0],
+        );
+        await tester.enterText(find.byKey(const Key('Coordinates_dec_d')), '5');
+        await tester.pump();
+        await tester.tap(find.text('+'));
+        await tester.pump();
+        final coords = _nodeAt(c, [0])['Coordinates'] as Map;
+        expect(coords['NegativeDec'], true);
+        expect(
+          coords['DecDegrees'],
+          -5,
+          reason: 'the daemon subtracts M/S from a SIGNED DecDegrees',
+        );
+        final f = tester.widget<TextField>(
+          find.descendant(
+            of: find.byKey(const Key('Coordinates_dec_d')),
+            matching: find.byType(TextField),
+          ),
+        );
+        expect(
+          f.controller!.text,
+          '5',
+          reason: 'the field shows the magnitude; the sign is the toggle',
+        );
+      },
+    );
   });
 
   testWidgets('binning 0 snaps to 1 in both model and field', (tester) async {
@@ -523,31 +642,46 @@ void main() {
     await tester.enterText(find.byKey(const Key('Binning_x')), '0');
     await tester.pump();
     expect((_nodeAt(c, [3])['Binning'] as Map)['X'], 1); // model clamped
-    final field = tester.widget<TextField>(find.descendant(
-      of: find.byKey(const Key('Binning_x')),
-      matching: find.byType(TextField),
-    ));
-    expect(field.controller!.text, '1'); // displayed text corrected (no divergence)
+    final field = tester.widget<TextField>(
+      find.descendant(
+        of: find.byKey(const Key('Binning_x')),
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(
+      field.controller!.text,
+      '1',
+    ); // displayed text corrected (no divergence)
   });
 
   group('container Name editor', () {
-    testWidgets('a selected container shows a Name field, no "No settings" line',
-        (tester) async {
-      // The root SequentialContainer (named "root") is selected.
-      await _pump(tester, detail: sampleDetail(), select: const []);
-      expect(find.text('Name'), findsOneWidget); // the field label
-      expect(find.byKey(const Key('container_name')), findsOneWidget);
-      expect(find.text('No settings — this instruction runs as-is.'), findsNothing);
-    });
+    testWidgets(
+      'a selected container shows a Name field, no "No settings" line',
+      (tester) async {
+        // The root SequentialContainer (named "root") is selected.
+        await _pump(tester, detail: sampleDetail(), select: const []);
+        expect(find.text('Name'), findsOneWidget); // the field label
+        expect(find.byKey(const Key('container_name')), findsOneWidget);
+        expect(
+          find.text('No settings — this instruction runs as-is.'),
+          findsNothing,
+        );
+      },
+    );
 
-    testWidgets('editing the Name writes it back to the container and goes dirty',
-        (tester) async {
-      final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      await tester.enterText(find.byKey(const Key('container_name')), 'Lights');
-      await tester.pump();
-      expect(_nodeAt(c, const [])['Name'], 'Lights');
-      expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
-    });
+    testWidgets(
+      'editing the Name writes it back to the container and goes dirty',
+      (tester) async {
+        final c = await _pump(tester, detail: sampleDetail(), select: const []);
+        await tester.enterText(
+          find.byKey(const Key('container_name')),
+          'Lights',
+        );
+        await tester.pump();
+        expect(_nodeAt(c, const [])['Name'], 'Lights');
+        expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
+      },
+    );
 
     testWidgets('a leaf instruction has no Name editor', (tester) async {
       // StartGuiding (index 1) is a leaf with a boolean field, not a Name.
@@ -555,28 +689,40 @@ void main() {
       expect(find.text('Name'), findsNothing);
     });
 
-    testWidgets('reflects an external Name change for the still-selected container',
-        (tester) async {
-      // The field owns a controller + didUpdateWidget so an external mutation
-      // (e.g. a future undo/redo) of the same node's Name updates the display.
-      final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).setNodeField(const [], 'Name', 'Renamed externally');
-      await tester.pump();
-      final field = tester.widget<TextField>(find.byKey(const Key('container_name')));
-      expect(field.controller!.text, 'Renamed externally');
-    });
+    testWidgets(
+      'reflects an external Name change for the still-selected container',
+      (tester) async {
+        // The field owns a controller + didUpdateWidget so an external mutation
+        // (e.g. a future undo/redo) of the same node's Name updates the display.
+        final c = await _pump(tester, detail: sampleDetail(), select: const []);
+        c
+            .read(sequenceEditorProvider.notifier)
+            .setNodeField(const [], 'Name', 'Renamed externally');
+        await tester.pump();
+        final field = tester.widget<TextField>(
+          find.byKey(const Key('container_name')),
+        );
+        expect(field.controller!.text, 'Renamed externally');
+      },
+    );
   });
 
   group('container conditions editor', () {
-    testWidgets('shows the Conditions header and empty state for a bare container',
-        (tester) async {
-      await _pump(tester, detail: sampleDetail(), select: const []);
-      expect(find.text('Conditions'), findsOneWidget);
-      expect(find.text('No loop conditions — the container runs once.'), findsOneWidget);
-    });
+    testWidgets(
+      'shows the Conditions header and empty state for a bare container',
+      (tester) async {
+        await _pump(tester, detail: sampleDetail(), select: const []);
+        expect(find.text('Conditions'), findsOneWidget);
+        expect(
+          find.text('No loop conditions — the container runs once.'),
+          findsOneWidget,
+        );
+      },
+    );
 
-    testWidgets('adding a Loop condition via the menu appends it to the body',
-        (tester) async {
+    testWidgets('adding a Loop condition via the menu appends it to the body', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
       // Tooltip-scoped: the Triggers section has its own add button too.
       await tester.tap(find.byTooltip('Add condition'));
@@ -587,16 +733,24 @@ void main() {
       expect(conditions, hasLength(1));
       expect(conditions.single[r'$type'], contains('LoopCondition'));
       expect(conditions.single['Iterations'], 2); // catalog default
-      expect(find.text('No loop conditions — the container runs once.'), findsNothing);
+      expect(
+        find.text('No loop conditions — the container runs once.'),
+        findsNothing,
+      );
     });
 
-    testWidgets('editing a condition field writes via setConditionFieldOn',
-        (tester) async {
+    testWidgets('editing a condition field writes via setConditionFieldOn', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addConditionTo(
-          const [],
-          conditionForType(
-              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(
+            const [],
+            conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
       // Iterations is a bounded (min 1) field → a clamped _NumField (TextField).
       await tester.enterText(
@@ -610,13 +764,18 @@ void main() {
       expect(conditionsOf(_nodeAt(c, const [])).single['Iterations'], 15);
     });
 
-    testWidgets('a bounded condition field clamps the entry (Minutes max 59)',
-        (tester) async {
+    testWidgets('a bounded condition field clamps the entry (Minutes max 59)', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addConditionTo(
-          const [],
-          conditionForType(
-              'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(
+            const [],
+            conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeSpanCondition, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
       final minutes = find.descendant(
         of: find.byKey(const ValueKey('/cond/0/Minutes')),
@@ -624,25 +783,37 @@ void main() {
       );
       await tester.enterText(minutes, '99');
       await tester.pump();
-      expect(conditionsOf(_nodeAt(c, const [])).single['Minutes'], 59); // clamped
+      expect(
+        conditionsOf(_nodeAt(c, const [])).single['Minutes'],
+        59,
+      ); // clamped
       // and the displayed text was corrected to the clamped value
       expect(tester.widget<TextField>(minutes).controller!.text, '59');
     });
 
-    testWidgets('TimeCondition When dropdown sets a sky-event provider',
-        (tester) async {
+    testWidgets('TimeCondition When dropdown sets a sky-event provider', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addConditionTo(
-          const [],
-          conditionForType(
-              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(
+            const [],
+            conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
-      expect(find.text('Custom time'), findsOneWidget); // default provider label
+      expect(
+        find.text('Custom time'),
+        findsOneWidget,
+      ); // default provider label
       await tester.tap(find.text('Custom time'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Civil Dusk').last);
       await tester.pumpAndSettle();
-      final provider = conditionsOf(_nodeAt(c, const [])).single['SelectedProvider'];
+      final provider = conditionsOf(_nodeAt(c, const []))
+          .single['SelectedProvider'];
       expect(provider, isA<Map>());
       expect((provider as Map)[r'$type'], contains('CivilDuskProvider'));
       // After the write-back rebuild, the controlled dropdown reflects the new
@@ -654,24 +825,35 @@ void main() {
       expect(_hoursDisabled(tester), isTrue);
     });
 
-    testWidgets('TimeCondition H/M/S are enabled in Custom-time mode',
-        (tester) async {
+    testWidgets('TimeCondition H/M/S are enabled in Custom-time mode', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addConditionTo(
-          const [],
-          conditionForType(
-              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(
+            const [],
+            conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.TimeCondition, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
       // Default is Custom time (null provider) → H/M/S editable (enabled).
       expect(_hoursDisabled(tester), isFalse);
     });
 
-    testWidgets('removing a condition deletes it from the body', (tester) async {
+    testWidgets('removing a condition deletes it from the body', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addConditionTo(
-          const [],
-          conditionForType(
-              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addConditionTo(
+            const [],
+            conditionForType(
+              'OpenAstroAra.Sequencer.Conditions.LoopCondition, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
       expect(conditionsOf(_nodeAt(c, const [])), hasLength(1));
       await tester.tap(find.byIcon(Icons.delete_outline));
@@ -691,9 +873,12 @@ void main() {
     }
 
     Map<String, dynamic> data(ProviderContainer c) =>
-        conditionsOf(_nodeAt(c, const [])).single['Data'] as Map<String, dynamic>;
+        conditionsOf(_nodeAt(c, const [])).single['Data']
+            as Map<String, dynamic>;
 
-    testWidgets('renders the comparator/offset/coordinates controls', (tester) async {
+    testWidgets('renders the comparator/offset/coordinates controls', (
+      tester,
+    ) async {
       await pumpAltitude(tester);
       expect(find.byKey(const Key('Data_comparator')), findsOneWidget);
       expect(find.byKey(const Key('Data_offset')), findsOneWidget);
@@ -710,24 +895,28 @@ void main() {
       expect(data(c)['Comparator'], 3);
     });
 
-    testWidgets('a double-typed comparator (1.0) is read, not defaulted to 3',
-        (tester) async {
+    testWidgets('a double-typed comparator (1.0) is read, not defaulted to 3', (
+      tester,
+    ) async {
       // A serializer that emits the enum as 1.0 must still read as LessThan (1),
       // not silently coerce to GreaterThan (an `is int` check would miss it).
       final detail = SequenceDetail(
         id: 's',
         body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
           'Name': 'root',
-          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+          'Items': {
+            r'$type': itemsWrapperType,
+            r'$values': <Map<String, dynamic>>[],
+          },
           'Conditions': {
             r'$type': conditionsWrapperType,
             r'$values': [
               {
                 ...conditionForType(_altitude)!.build(),
                 'Data': {
-                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
+                  ...conditionForType(_altitude)!.build()['Data']
+                      as Map<String, dynamic>,
                   'Comparator': 1.0,
                 },
               },
@@ -739,7 +928,9 @@ void main() {
       expect(find.text('Less than (<)'), findsOneWidget); // read as 1, not 3
     });
 
-    testWidgets('editing the offset writes Data.Offset (signed)', (tester) async {
+    testWidgets('editing the offset writes Data.Offset (signed)', (
+      tester,
+    ) async {
       final c = await pumpAltitude(tester);
       await tester.enterText(
         find.descendant(
@@ -752,7 +943,9 @@ void main() {
       expect(data(c)['Offset'], -12.5);
     });
 
-    testWidgets('the offset clamps to the ±90° altitude domain', (tester) async {
+    testWidgets('the offset clamps to the ±90° altitude domain', (
+      tester,
+    ) async {
       final c = await pumpAltitude(tester);
       final field = find.descendant(
         of: find.byKey(const Key('Data_offset')),
@@ -764,8 +957,9 @@ void main() {
       expect(tester.widget<TextField>(field).controller!.text, '-90');
     });
 
-    testWidgets('a partial "-" offset entry commits nothing (model unchanged)',
-        (tester) async {
+    testWidgets('a partial "-" offset entry commits nothing (model unchanged)', (
+      tester,
+    ) async {
       final c = await pumpAltitude(tester);
       expect(data(c)['Offset'], 30.0); // AltitudeCondition default
       await tester.enterText(
@@ -780,82 +974,97 @@ void main() {
       expect(data(c)['Offset'], 30.0);
     });
 
-    testWidgets('a Data missing Comparator falls back to the condition default',
-        (tester) async {
-      // AltitudeCondition → LessThan(1); AboveHorizonCondition → GreaterThan(3).
-      for (final (type, label) in [
-        (_altitude, 'Less than (<)'),
-        ('OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
-            'Greater than (>)'),
-      ]) {
-        final data = conditionForType(type)!.build()['Data'] as Map<String, dynamic>;
-        data.remove('Comparator'); // a body that arrived without the key
+    testWidgets(
+      'a Data missing Comparator falls back to the condition default',
+      (tester) async {
+        // AltitudeCondition → LessThan(1); AboveHorizonCondition → GreaterThan(3).
+        for (final (type, label) in [
+          (_altitude, 'Less than (<)'),
+          (
+            'OpenAstroAra.Sequencer.Conditions.AboveHorizonCondition, OpenAstroAra.Sequencer',
+            'Greater than (>)',
+          ),
+        ]) {
+          final data =
+              conditionForType(type)!.build()['Data'] as Map<String, dynamic>;
+          data.remove('Comparator'); // a body that arrived without the key
+          final detail = SequenceDetail(
+            id: 's',
+            body: {
+              r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+              'Name': 'root',
+              'Items': {
+                r'$type': itemsWrapperType,
+                r'$values': <Map<String, dynamic>>[],
+              },
+              'Conditions': {
+                r'$type': conditionsWrapperType,
+                r'$values': [
+                  {...conditionForType(type)!.build(), 'Data': data},
+                ],
+              },
+            },
+          );
+          await _pump(tester, detail: detail, select: const []);
+          expect(find.text(label), findsOneWidget, reason: type);
+        }
+      },
+    );
+
+    testWidgets(
+      'a stored comparator outside the allow-list coerces (no assert)',
+      (tester) async {
+        // A body persisted with GreaterThanOrEqual (4) — not user-selectable.
         final detail = SequenceDetail(
           id: 's',
           body: {
-            r'$type':
-                'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+            r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
             'Name': 'root',
-            'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
+            'Items': {
+              r'$type': itemsWrapperType,
+              r'$values': <Map<String, dynamic>>[],
+            },
             'Conditions': {
               r'$type': conditionsWrapperType,
               r'$values': [
-                {...conditionForType(type)!.build(), 'Data': data},
+                {
+                  ...conditionForType(_altitude)!.build(),
+                  'Data': {
+                    ...conditionForType(_altitude)!.build()['Data']
+                        as Map<String, dynamic>,
+                    'Comparator': 4,
+                  },
+                },
               ],
             },
           },
         );
-        await _pump(tester, detail: detail, select: const []);
-        expect(find.text(label), findsOneWidget, reason: type);
-      }
-    });
+        final c = await _pump(tester, detail: detail, select: const []);
+        expect(tester.takeException(), isNull); // no DropdownButton assert
+        // The dropdown coerces to THIS condition's default (AltitudeCondition →
+        // Less than), not a fixed GreaterThan bias, and never a blank.
+        expect(find.text('Less than (<)'), findsOneWidget);
+        // Editing an UNRELATED field preserves the raw stored comparator (4) —
+        // coercion is display-only and never silently flips the loop direction.
+        await tester.enterText(
+          find.descendant(
+            of: find.byKey(const Key('Data_offset')),
+            matching: find.byType(TextField),
+          ),
+          '15',
+        );
+        await tester.pump();
+        expect(
+          (conditionsOf(_nodeAt(c, const [])).single['Data']
+              as Map)['Comparator'],
+          4,
+        );
+      },
+    );
 
-    testWidgets('a stored comparator outside the allow-list coerces (no assert)',
-        (tester) async {
-      // A body persisted with GreaterThanOrEqual (4) — not user-selectable.
-      final detail = SequenceDetail(
-        id: 's',
-        body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
-          'Name': 'root',
-          'Items': {r'$type': itemsWrapperType, r'$values': <Map<String, dynamic>>[]},
-          'Conditions': {
-            r'$type': conditionsWrapperType,
-            r'$values': [
-              {
-                ...conditionForType(_altitude)!.build(),
-                'Data': {
-                  ...conditionForType(_altitude)!.build()['Data'] as Map<String, dynamic>,
-                  'Comparator': 4,
-                },
-              },
-            ],
-          },
-        },
-      );
-      final c = await _pump(tester, detail: detail, select: const []);
-      expect(tester.takeException(), isNull); // no DropdownButton assert
-      // The dropdown coerces to THIS condition's default (AltitudeCondition →
-      // Less than), not a fixed GreaterThan bias, and never a blank.
-      expect(find.text('Less than (<)'), findsOneWidget);
-      // Editing an UNRELATED field preserves the raw stored comparator (4) —
-      // coercion is display-only and never silently flips the loop direction.
-      await tester.enterText(
-        find.descendant(
-          of: find.byKey(const Key('Data_offset')),
-          matching: find.byType(TextField),
-        ),
-        '15',
-      );
-      await tester.pump();
-      expect(
-        (conditionsOf(_nodeAt(c, const [])).single['Data'] as Map)['Comparator'],
-        4,
-      );
-    });
-
-    testWidgets('editing the target coordinates writes Data.Coordinates', (tester) async {
+    testWidgets('editing the target coordinates writes Data.Coordinates', (
+      tester,
+    ) async {
       final c = await pumpAltitude(tester);
       await tester.enterText(
         find.descendant(
@@ -873,15 +1082,18 @@ void main() {
   });
 
   group('container triggers editor', () {
-    testWidgets('shows the Triggers header and empty state for a bare container',
-        (tester) async {
-      await _pump(tester, detail: sampleDetail(), select: const []);
-      expect(find.text('Triggers'), findsOneWidget);
-      expect(find.text('No triggers.'), findsOneWidget);
-    });
+    testWidgets(
+      'shows the Triggers header and empty state for a bare container',
+      (tester) async {
+        await _pump(tester, detail: sampleDetail(), select: const []);
+        expect(find.text('Triggers'), findsOneWidget);
+        expect(find.text('No triggers.'), findsOneWidget);
+      },
+    );
 
-    testWidgets('adding Meridian Flip via the menu appends it to the body',
-        (tester) async {
+    testWidgets('adding Meridian Flip via the menu appends it to the body', (
+      tester,
+    ) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
       await tester.tap(find.byTooltip('Add trigger'));
       await tester.pumpAndSettle();
@@ -890,16 +1102,23 @@ void main() {
       final triggers = triggersOf(_nodeAt(c, const []));
       expect(triggers, hasLength(1));
       expect(triggers.single[r'$type'], contains('MeridianFlipTrigger'));
-      expect(triggers.single['TriggerRunner'], isA<Map>()); // empty runner built
+      expect(
+        triggers.single['TriggerRunner'],
+        isA<Map>(),
+      ); // empty runner built
       expect(find.text('No triggers.'), findsNothing);
     });
 
     testWidgets('removing a trigger deletes it from the body', (tester) async {
       final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addTriggerTo(
-          const [],
-          triggerForType(
-              'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer')!);
+      c
+          .read(sequenceEditorProvider.notifier)
+          .addTriggerTo(
+            const [],
+            triggerForType(
+              'OpenAstroAra.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, OpenAstroAra.Sequencer',
+            )!,
+          );
       await tester.pump();
       expect(triggersOf(_nodeAt(c, const [])), hasLength(1));
       await tester.tap(find.byIcon(Icons.delete_outline));
@@ -907,55 +1126,84 @@ void main() {
       expect(triggersOf(_nodeAt(c, const [])), isEmpty);
     });
 
-    testWidgets('a Reconnect Device trigger edits its device via the dropdown',
-        (tester) async {
-      final c = await _pump(tester, detail: sampleDetail(), select: const []);
-      c.read(sequenceEditorProvider.notifier).addTriggerTo(
-          const [],
-          triggerForType(
-              'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer')!);
-      await tester.pump();
-      expect(triggersOf(_nodeAt(c, const [])).single['SelectedDevice'], 'Camera');
-      // The trigger card renders the SelectedDevice stringEnum as a dropdown.
-      await tester.tap(find.text('Camera'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Mount').last);
-      await tester.pumpAndSettle();
-      expect(triggersOf(_nodeAt(c, const [])).single['SelectedDevice'], 'Mount');
-    });
+    testWidgets(
+      'a Reconnect Device trigger edits its device via the dropdown',
+      (tester) async {
+        final c = await _pump(tester, detail: sampleDetail(), select: const []);
+        c
+            .read(sequenceEditorProvider.notifier)
+            .addTriggerTo(
+              const [],
+              triggerForType(
+                'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
+              )!,
+            );
+        await tester.pump();
+        expect(
+          triggersOf(_nodeAt(c, const [])).single['SelectedDevice'],
+          'Camera',
+        );
+        // The trigger card renders the SelectedDevice stringEnum as a dropdown.
+        await tester.tap(find.text('Camera'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Mount').last);
+        await tester.pumpAndSettle();
+        expect(
+          triggersOf(_nodeAt(c, const [])).single['SelectedDevice'],
+          'Mount',
+        );
+      },
+    );
   });
 
   group('filter picker (SwitchFilter)', () {
     // Default filter-wheel labels: L R G B Hα OIII SII (+ one empty slot).
-    testWidgets('shows the hint when unset and lists the configured filters',
-        (tester) async {
-      await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
-      expect(find.text('Select a filter'), findsOneWidget); // null Filter → hint
+    testWidgets('shows the hint when unset and lists the configured filters', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        detail: _detailWith(_switchFilter),
+        select: const [0],
+      );
+      expect(
+        find.text('Select a filter'),
+        findsOneWidget,
+      ); // null Filter → hint
       await tester.tap(find.byType(DropdownButton<String>));
       await tester.pumpAndSettle();
       expect(find.text('Hα').last, findsOneWidget); // a configured slot label
       expect(find.text('OIII').last, findsOneWidget);
     });
 
-    testWidgets('picking a filter writes a minimal FilterInfo (name + position)',
-        (tester) async {
-      final c = await _pump(tester, detail: _detailWith(_switchFilter), select: const [0]);
-      await tester.tap(find.byType(DropdownButton<String>));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('OIII').last);
-      await tester.pumpAndSettle();
-      final filter = _nodeAt(c, [0])['Filter'] as Map;
-      expect(filter['_name'], 'OIII');
-      expect(filter['_position'], 5); // 0-based slot index (6th slot)
-      expect(filter[r'$type'], contains('FilterInfo'));
-    });
-
-    testWidgets("a connected wheel's Alpaca names replace the slot labels",
-        (tester) async {
-      final c = await _pump(tester,
+    testWidgets(
+      'picking a filter writes a minimal FilterInfo (name + position)',
+      (tester) async {
+        final c = await _pump(
+          tester,
           detail: _detailWith(_switchFilter),
           select: const [0],
-          connectedWheel: true);
+        );
+        await tester.tap(find.byType(DropdownButton<String>));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OIII').last);
+        await tester.pumpAndSettle();
+        final filter = _nodeAt(c, [0])['Filter'] as Map;
+        expect(filter['_name'], 'OIII');
+        expect(filter['_position'], 5); // 0-based slot index (6th slot)
+        expect(filter[r'$type'], contains('FilterInfo'));
+      },
+    );
+
+    testWidgets("a connected wheel's Alpaca names replace the slot labels", (
+      tester,
+    ) async {
+      final c = await _pump(
+        tester,
+        detail: _detailWith(_switchFilter),
+        select: const [0],
+        connectedWheel: true,
+      );
       await tester.pumpAndSettle(); // the wheel status future resolves
       await tester.tap(find.byType(DropdownButton<String>));
       await tester.pumpAndSettle();
@@ -967,13 +1215,13 @@ void main() {
       expect(filter['_position'], 4);
     });
 
-    testWidgets('an unknown stored filter stays visible rather than blanking',
-        (tester) async {
+    testWidgets('an unknown stored filter stays visible rather than blanking', (
+      tester,
+    ) async {
       final detail = SequenceDetail(
         id: 's',
         body: {
-          r'$type':
-              'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+          r'$type': 'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
           'Name': 'root',
           'Items': {
             r'$type': itemsWrapperType,

@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+
 import '../models/mount_spec_sheet.dart';
 
 import '../models/server.dart';
@@ -85,18 +86,21 @@ class TelescopeOpticsApi {
   final Dio _dio;
 
   TelescopeOpticsApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           receiveTimeout: const Duration(seconds: 5),
-        ));
+        ),
+      );
 
   /// The connected mount's optics, or null when none is connected. Throws
   /// `DioException` on transport failure.
   Future<TelescopeOptics?> read() async {
     try {
-      final res =
-          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/telescope');
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/equipment/telescope',
+      );
       final data = res.data;
       return data is Map<String, dynamic>
           ? TelescopeOptics.fromTelescopeJson(data)
@@ -111,8 +115,9 @@ class TelescopeOpticsApi {
   /// connected. Throws `DioException` on transport failure.
   Future<MountProps?> readProps() async {
     try {
-      final res =
-          await _dio.get<Map<String, dynamic>>('/api/v1/equipment/telescope');
+      final res = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/equipment/telescope',
+      );
       final data = res.data;
       return data is Map<String, dynamic>
           ? MountProps.fromTelescopeJson(data)

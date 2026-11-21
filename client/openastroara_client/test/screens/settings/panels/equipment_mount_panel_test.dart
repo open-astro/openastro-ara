@@ -52,6 +52,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
   Future<void> forget() async {
     calls.add('forget');
   }
+
   _FakeMountApi(this.status, {this.moveAxisError, this.moveAxisStopError});
   MountStatus? status;
   final List<String> calls = [];
@@ -70,6 +71,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
       calls.add('connect:${device.name}');
   @override
   Future<void> disconnect() async => calls.add('disconnect');
+
   /// When set, an unforced slew is refused the way the daemon refuses one
   /// while a run is in progress (409, problem title run_in_progress).
   bool refuseSlewDuringRun = false;
@@ -80,8 +82,8 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
       body != null && body.containsKey('rate')
           ? 'command:$subpath:axis=${body['axis']}:rate=${body['rate']}'
           : subpath == 'slew'
-              ? 'command:slew:force=${body?['force'] == true}'
-              : 'command:$subpath:enabled=${body?['enabled']}',
+          ? 'command:slew:force=${body?['force'] == true}'
+          : 'command:$subpath:enabled=${body?['enabled']}',
     );
     if (subpath == 'slew' && refuseSlewDuringRun && body?['force'] != true) {
       final request = RequestOptions(path: '/slew');
@@ -93,7 +95,8 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
           statusCode: 409,
           data: {
             'title': 'run_in_progress',
-            'detail': 'a sequence run is in progress: slewing now stops guiding '
+            'detail':
+                'a sequence run is in progress: slewing now stops guiding '
                 'and pauses the run awaiting you. Repeat with force to slew anyway.',
           },
         ),
@@ -105,6 +108,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
       if (err != null) throw err;
     }
   }
+
   @override
   void close() {}
 }
@@ -244,7 +248,9 @@ void main() {
     expect(find.text('Longitude'), findsNothing);
   });
 
-  testWidgets('the site loads itself from the rig and shows lat/long', (tester) async {
+  testWidgets('the site loads itself from the rig and shows lat/long', (
+    tester,
+  ) async {
     await _wideSurface(tester);
     final api = _FakeMountApi(_status());
     await tester.pumpWidget(
@@ -277,18 +283,28 @@ void main() {
     expect(api.calls, contains('command:tracking:enabled=true'));
   });
 
-  testWidgets('Tracking speed lists the mount rates and sets the one picked (#1649)', (tester) async {
-    await _pump(tester, _status());
-    expect(find.byKey(const Key('mount_tracking_rate')), findsNothing, reason: 'one rate or none: no row');
-    final api = await _pump(
-      tester,
-      _status(trackingRates: const ['Sidereal', 'Lunar', 'Solar'], trackingRate: 'Sidereal'),
-    );
-    expect(find.text('King'), findsNothing);
-    await tester.tap(find.text('Lunar'));
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('command:trackingrate:axis=null:rate=Lunar'));
-  });
+  testWidgets(
+    'Tracking speed lists the mount rates and sets the one picked (#1649)',
+    (tester) async {
+      await _pump(tester, _status());
+      expect(
+        find.byKey(const Key('mount_tracking_rate')),
+        findsNothing,
+        reason: 'one rate or none: no row',
+      );
+      final api = await _pump(
+        tester,
+        _status(
+          trackingRates: const ['Sidereal', 'Lunar', 'Solar'],
+          trackingRate: 'Sidereal',
+        ),
+      );
+      expect(find.text('King'), findsNothing);
+      await tester.tap(find.text('Lunar'));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('command:trackingrate:axis=null:rate=Lunar'));
+    },
+  );
 
   testWidgets('Park sends the park command', (tester) async {
     final api = await _pump(tester, _status());
@@ -319,76 +335,108 @@ void main() {
     expect(home.onPressed, isNull); // must unpark before homing
   });
 
-  testWidgets('an unverified position turns Park and Home off and says to run the zero search (#2070)', (
-    tester,
-  ) async {
-    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
-    expect(find.byKey(const Key('mount_position_unverified')), findsOneWidget);
-    expect(find.text('Mount position unverified'), findsOneWidget);
-    final park = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Park'),
-    );
-    expect(park.onPressed, isNull, reason: 'the rig refuses a park from an unverified position');
-    final home = tester.widget<OutlinedButton>(
-      find.widgetWithText(OutlinedButton, 'Home'),
-    );
-    expect(home.onPressed, isNull, reason: 'Home by the mount model is refused too');
-    expect(
-      find.textContaining('Run the mount\'s zero search'),
-      findsOneWidget,
-    );
-    expect(
-      find.byKey(const Key('mount_confirm_home')),
-      findsNothing,
-      reason: 'the mount does not report Home yet',
-    );
-  });
+  testWidgets(
+    'an unverified position turns Park and Home off and says to run the zero search (#2070)',
+    (tester) async {
+      await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+      expect(
+        find.byKey(const Key('mount_position_unverified')),
+        findsOneWidget,
+      );
+      expect(find.text('Mount position unverified'), findsOneWidget);
+      final park = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Park'),
+      );
+      expect(
+        park.onPressed,
+        isNull,
+        reason: 'the rig refuses a park from an unverified position',
+      );
+      final home = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Home'),
+      );
+      expect(
+        home.onPressed,
+        isNull,
+        reason: 'Home by the mount model is refused too',
+      );
+      expect(
+        find.textContaining('Run the mount\'s zero search'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('mount_confirm_home')),
+        findsNothing,
+        reason: 'the mount does not report Home yet',
+      );
+    },
+  );
 
   // #2066 polar alignment's stop was not confirmed: the warning says so, not
   // "the mount may have lost power".
-  testWidgets('Advanced: a position left unverified by an unconfirmed stop says why', (tester) async {
-    await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
-    final en = lookupAppLocalizations(const Locale('en'));
-    expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
-    expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
-  });
+  testWidgets(
+    'Advanced: a position left unverified by an unconfirmed stop says why',
+    (tester) async {
+      await _pump(
+        tester,
+        _status(
+          canFindHome: true,
+          positionUnverified: true,
+          unverifiedReason: 'stop_unconfirmed',
+        ),
+      );
+      final en = lookupAppLocalizations(const Locale('en'));
+      expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
+      expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
+    },
+  );
 
-  testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (
-    tester,
-  ) async {
-    await _pump(tester, _status(canFindHome: true, atHome: true));
-    expect(find.byKey(const Key('mount_position_unverified')), findsNothing);
-    expect(
-      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Park')).onPressed,
-      isNotNull,
-    );
-    expect(
-      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Home')).onPressed,
-      isNotNull,
-    );
-  });
+  testWidgets(
+    'a trusted position keeps Park and Home on and shows no warning (#2070)',
+    (tester) async {
+      await _pump(tester, _status(canFindHome: true, atHome: true));
+      expect(find.byKey(const Key('mount_position_unverified')), findsNothing);
+      expect(
+        tester
+            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Park'))
+            .onPressed,
+        isNotNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Home'))
+            .onPressed,
+        isNotNull,
+      );
+    },
+  );
 
-  testWidgets('confirming Home at an unverified Home asks first, and Cancel sends nothing (#2070)', (
-    tester,
-  ) async {
-    final api = await _pump(
-      tester,
-      _status(atHome: true, positionUnverified: true),
-    );
-    await tester.tap(find.byKey(const Key('mount_confirm_home')));
-    await tester.pumpAndSettle();
-    expect(find.byType(AlertDialog), findsOneWidget);
-    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty, reason: 'the panel asks first');
-    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
-    await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty);
+  testWidgets(
+    'confirming Home at an unverified Home asks first, and Cancel sends nothing (#2070)',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        _status(atHome: true, positionUnverified: true),
+      );
+      await tester.tap(find.byKey(const Key('mount_confirm_home')));
+      await tester.pumpAndSettle();
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(
+        api.calls.where((c) => c.contains('confirm-home')),
+        isEmpty,
+        reason: 'the panel asks first',
+      );
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+      expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty);
 
-    await tester.tap(find.byKey(const Key('mount_confirm_home')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('mount_confirm_home_yes')));
-    await tester.pumpAndSettle();
-    expect(api.calls, contains('command:confirm-home:enabled=null'));
-  });
+      await tester.tap(find.byKey(const Key('mount_confirm_home')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('mount_confirm_home_yes')));
+      await tester.pumpAndSettle();
+      expect(api.calls, contains('command:confirm-home:enabled=null'));
+    },
+  );
 
   testWidgets('parked mount shows Unpark and hides Park; tracking disabled', (
     tester,
@@ -510,30 +558,37 @@ void main() {
     expect(api.calls.any((c) => c.startsWith('command:slew')), isTrue);
   });
 
-  testWidgets('a GoTo during a run asks first and slews forced on Slew anyway', (
-    tester,
-  ) async {
-    // Rig night 2026-10-18: a Planning GoTo mid-dither was accepted without a
-    // word; the guider stopped and the run parked awaiting the user.
-    final api = await _pump(
-      tester,
-      _status(canMoveAxis: true, axisRates: const [4.0]),
-    );
-    api.refuseSlewDuringRun = true;
-    await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
-    await tester.enterText(find.widgetWithText(TextField, 'Dec (°)'), '-12.25');
-    await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
-    await tester.pumpAndSettle();
-    expect(find.text('A run is in progress'), findsOneWidget);
-    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
-        ['command:slew:force=false']);
+  testWidgets(
+    'a GoTo during a run asks first and slews forced on Slew anyway',
+    (tester) async {
+      // Rig night 2026-10-18: a Planning GoTo mid-dither was accepted without a
+      // word; the guider stopped and the run parked awaiting the user.
+      final api = await _pump(
+        tester,
+        _status(canMoveAxis: true, axisRates: const [4.0]),
+      );
+      api.refuseSlewDuringRun = true;
+      await tester.enterText(find.widgetWithText(TextField, 'RA (h)'), '5.5');
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Dec (°)'),
+        '-12.25',
+      );
+      await tester.tap(find.widgetWithText(FilledButton, 'GoTo'));
+      await tester.pumpAndSettle();
+      expect(find.text('A run is in progress'), findsOneWidget);
+      expect(api.calls.where((c) => c.startsWith('command:slew')).toList(), [
+        'command:slew:force=false',
+      ]);
 
-    await tester.tap(find.byKey(const Key('mount-goto-anyway')));
-    await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
-        ['command:slew:force=false', 'command:slew:force=true']);
-    expect(find.text('A run is in progress'), findsNothing);
-  });
+      await tester.tap(find.byKey(const Key('mount-goto-anyway')));
+      await tester.pumpAndSettle();
+      expect(api.calls.where((c) => c.startsWith('command:slew')).toList(), [
+        'command:slew:force=false',
+        'command:slew:force=true',
+      ]);
+      expect(find.text('A run is in progress'), findsNothing);
+    },
+  );
 
   testWidgets('a GoTo during a run left alone sends nothing more', (
     tester,
@@ -549,8 +604,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Leave the run'));
     await tester.pumpAndSettle();
-    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(),
-        ['command:slew:force=false']);
+    expect(api.calls.where((c) => c.startsWith('command:slew')).toList(), [
+      'command:slew:force=false',
+    ]);
     expect(find.textContaining("Couldn't slew"), findsNothing);
   });
 
@@ -612,113 +668,141 @@ void main() {
   });
 
   DioException refusal(String detail) => DioException(
-        requestOptions: RequestOptions(path: '/moveaxis'),
-        response: Response<Object?>(
-          requestOptions: RequestOptions(path: '/moveaxis'),
-          statusCode: 409,
-          data: {'detail': detail},
-        ),
-        type: DioExceptionType.badResponse,
+    requestOptions: RequestOptions(path: '/moveaxis'),
+    response: Response<Object?>(
+      requestOptions: RequestOptions(path: '/moveaxis'),
+      statusCode: 409,
+      data: {'detail': detail},
+    ),
+    type: DioExceptionType.badResponse,
+  );
+
+  testWidgets(
+    'a refused diagonal press (two starts, same refusal) toasts once',
+    (tester) async {
+      await _wideSurface(tester);
+      final api = _FakeMountApi(
+        _status(canMoveAxis: true, axisRates: const [4.0]),
+        moveAxisError: refusal('mount is not connected'),
       );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            serverLinkUpProvider.overrideWith((ref) => true),
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(const [
+                AraServer(hostname: 'h', port: 5555),
+              ]),
+            ),
+            mountApiFactoryProvider.overrideWithValue((_) => api),
+          ],
+          child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+      await tester.pump();
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.north_west)),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        api.calls
+            .where(
+              (c) =>
+                  c.startsWith('command:moveaxis') && !c.endsWith('rate=0.0'),
+            )
+            .length,
+        2,
+        reason: 'a diagonal press starts both axes',
+      );
+      expect(
+        find.textContaining('mount is not connected'),
+        findsOneWidget,
+        reason: 'two identical refusals → one toast (delete the dedupe and the second queues)',
+      );
+      await hold.up();
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('mount is not connected'),
+        findsNothing,
+        reason: 'no second identical toast surfaces once the first dismisses',
+      );
+    },
+  );
 
-  testWidgets('a refused diagonal press (two starts, same refusal) toasts once',
-      (tester) async {
-    await _wideSurface(tester);
-    final api = _FakeMountApi(
-      _status(canMoveAxis: true, axisRates: const [4.0]),
-      moveAxisError: refusal('mount is not connected'),
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serverLinkUpProvider.overrideWith((ref) => true),
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [
-              AraServer(hostname: 'h', port: 5555),
-            ]),
-          ),
-          mountApiFactoryProvider.overrideWithValue((_) => api),
-        ],
-        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
-    await tester.pump();
-    final hold = await tester.startGesture(
-      tester.getCenter(find.byIcon(Icons.north_west)),
-    );
-    await tester.pump();
-    await tester.pump();
-    expect(
-      api.calls.where((c) => c.startsWith('command:moveaxis') && !c.endsWith('rate=0.0')).length,
-      2,
-      reason: 'a diagonal press starts both axes',
-    );
-    expect(find.textContaining('mount is not connected'), findsOneWidget,
-        reason: 'two identical refusals → one toast (delete the dedupe and the second queues)');
-    await hold.up();
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('mount is not connected'), findsNothing,
-        reason: 'no second identical toast surfaces once the first dismisses');
-  });
-
-  testWidgets('a refused nudge (409) is shown once per press; the release stays silent',
-      (tester) async {
-    await _wideSurface(tester);
-    final api = _FakeMountApi(
-      _status(canMoveAxis: true, axisRates: const [4.0]),
-      moveAxisError: refusal('Mount reports no MoveAxis rate for this axis (or its '
-          'capabilities are still being read); manual nudge refused.'),
-      // A distinct refusal on the STOP: if the rate != 0 guard were missing it
-      // would queue a second, different toast that surfaces once the first
-      // one auto-dismisses.
-      moveAxisStopError: refusal('STOP REFUSED — must never be shown'),
-    );
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          serverLinkUpProvider.overrideWith((ref) => true),
-          savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [
-              AraServer(hostname: 'h', port: 5555),
-            ]),
-          ),
-          mountApiFactoryProvider.overrideWithValue((_) => api),
-        ],
-        child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
-    await tester.pump();
-    final hold = await tester.startGesture(
-      tester.getCenter(find.byIcon(Icons.north)),
-    );
-    await tester.pump();
-    await tester.pump();
-    expect(find.textContaining('manual nudge refused'), findsOneWidget,
-        reason: 'the daemon\'s 409 detail reaches the user');
-    await hold.up();
-    await tester.pump();
-    await tester.pump();
-    expect(
-      api.calls.where((c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0')),
-      isNotEmpty,
-      reason: 'the stop still goes out',
-    );
-    // Let the start's SnackBar auto-dismiss (~4 s) so a queued second toast
-    // would now be built: with the guard nothing more ever appears.
-    // The SnackBar's auto-dismiss timer only starts once its entrance animation
-    // completed: one pump to finish that, one past the ~4 s duration, then settle.
-    await tester.pump(const Duration(seconds: 1));
-    await tester.pump(const Duration(seconds: 5));
-    await tester.pumpAndSettle();
-    expect(find.textContaining('STOP REFUSED'), findsNothing,
-        reason: 'the release (rate 0) is refused too but never toasts');
-    expect(find.textContaining('manual nudge refused'), findsNothing,
-        reason: 'the start toast has been dismissed and nothing replaced it');
-  });
+  testWidgets(
+    'a refused nudge (409) is shown once per press; the release stays silent',
+    (tester) async {
+      await _wideSurface(tester);
+      final api = _FakeMountApi(
+        _status(canMoveAxis: true, axisRates: const [4.0]),
+        moveAxisError: refusal(
+          'Mount reports no MoveAxis rate for this axis (or its '
+          'capabilities are still being read); manual nudge refused.',
+        ),
+        // A distinct refusal on the STOP: if the rate != 0 guard were missing it
+        // would queue a second, different toast that surfaces once the first
+        // one auto-dismisses.
+        moveAxisStopError: refusal('STOP REFUSED — must never be shown'),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            serverLinkUpProvider.overrideWith((ref) => true),
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(const [
+                AraServer(hostname: 'h', port: 5555),
+              ]),
+            ),
+            mountApiFactoryProvider.overrideWithValue((_) => api),
+          ],
+          child: const MaterialApp(home: Scaffold(body: EquipmentMountPanel())),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ChoiceChip, '100% · 4°/s'));
+      await tester.pump();
+      final hold = await tester.startGesture(
+        tester.getCenter(find.byIcon(Icons.north)),
+      );
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.textContaining('manual nudge refused'),
+        findsOneWidget,
+        reason: 'the daemon\'s 409 detail reaches the user',
+      );
+      await hold.up();
+      await tester.pump();
+      await tester.pump();
+      expect(
+        api.calls.where(
+          (c) => c.startsWith('command:moveaxis') && c.endsWith('rate=0.0'),
+        ),
+        isNotEmpty,
+        reason: 'the stop still goes out',
+      );
+      // Let the start's SnackBar auto-dismiss (~4 s) so a queued second toast
+      // would now be built: with the guard nothing more ever appears.
+      // The SnackBar's auto-dismiss timer only starts once its entrance animation
+      // completed: one pump to finish that, one past the ~4 s duration, then settle.
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('STOP REFUSED'),
+        findsNothing,
+        reason: 'the release (rate 0) is refused too but never toasts',
+      );
+      expect(
+        find.textContaining('manual nudge refused'),
+        findsNothing,
+        reason: 'the start toast has been dismissed and nothing replaced it',
+      );
+    },
+  );
 }

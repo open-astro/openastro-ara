@@ -56,12 +56,12 @@ class GuiderEquipmentChoices {
 
   @override
   int get hashCode => Object.hashAll([
-        Object.hashAll(cameras),
-        Object.hashAll(mounts),
-        Object.hashAll(auxMounts),
-        Object.hashAll(adaptiveOptics),
-        Object.hashAll(rotators),
-      ]);
+    Object.hashAll(cameras),
+    Object.hashAll(mounts),
+    Object.hashAll(auxMounts),
+    Object.hashAll(adaptiveOptics),
+    Object.hashAll(rotators),
+  ]);
 }
 
 /// The choices read's envelope: [connected] distinguishes "guider not
@@ -77,8 +77,9 @@ class GuiderEquipmentChoicesResponse {
     final c = json['choices'];
     return GuiderEquipmentChoicesResponse(
       connected: connected is bool && connected,
-      choices:
-          c is Map<String, dynamic> ? GuiderEquipmentChoices.fromJson(c) : null,
+      choices: c is Map<String, dynamic>
+          ? GuiderEquipmentChoices.fromJson(c)
+          : null,
     );
   }
 

@@ -34,15 +34,23 @@ void main() {
     // Identifier and wire fields: ids, storage keys, search keywords, and
     // fully-qualified type names sent to the server are not prose.
     for (final field in const [
-      'id:', 'profilePath:', 'settingKey:', 'keywords:', 'key:', 'type:', 'name:',
+      'id:',
+      'profilePath:',
+      'settingKey:',
+      'keywords:',
+      'key:',
+      'type:',
+      'name:',
     ]) {
       if (l.startsWith(field)) {
         return true;
       }
     }
     final context = "$preceding\n$line";
-    if (context.contains('throw ') || context.contains('Exception(') ||
-        context.contains('StateError(') || context.contains('FormatException') ||
+    if (context.contains('throw ') ||
+        context.contains('Exception(') ||
+        context.contains('StateError(') ||
+        context.contains('FormatException') ||
         context.contains('assert(')) {
       return true;
     }
@@ -84,8 +92,11 @@ void main() {
         for (final match in stringLiteral.allMatches(line)) {
           final value = match.group(1) ?? '';
           if (value.isEmpty ||
-              isMachineString(line, value,
-                  lines.sublist(i > 2 ? i - 3 : 0, i).join('\n'))) {
+              isMachineString(
+                line,
+                value,
+                lines.sublist(i > 2 ? i - 3 : 0, i).join('\n'),
+              )) {
             continue;
           }
           // Only the PROSE is user-visible: interpolated expressions are code
@@ -95,9 +106,11 @@ void main() {
               .replaceAll(RegExp(r'\$[A-Za-z_][A-Za-z0-9_]*'), '');
           for (final entry in banned.entries) {
             if (prose.toLowerCase().contains(entry.key.toLowerCase())) {
-              offenders.add('${entity.path}:${i + 1}\n'
-                  '    "${value.length > 90 ? '${value.substring(0, 90)}…' : value}"\n'
-                  '    → ${entry.value}');
+              offenders.add(
+                '${entity.path}:${i + 1}\n'
+                '    "${value.length > 90 ? '${value.substring(0, 90)}…' : value}"\n'
+                '    → ${entry.value}',
+              );
             }
           }
         }
@@ -107,7 +120,8 @@ void main() {
     expect(
       offenders,
       isEmpty,
-      reason: 'User-visible copy contains developer vocabulary:\n\n'
+      reason:
+          'User-visible copy contains developer vocabulary:\n\n'
           '${offenders.join('\n\n')}\n\n'
           'Rewrite it the way an astrophotographer would say it. If the string '
           'is genuinely not shown to a person (a log line, an asset key), move '

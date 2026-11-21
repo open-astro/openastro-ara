@@ -31,9 +31,10 @@ class LibrarySession {
       targetName: (json['target_name'] as String?) ?? '(unknown)',
       sessionStartUtc:
           DateTime.tryParse(json['session_start_utc'] as String? ?? '') ??
-              DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      sessionEndUtc:
-          DateTime.tryParse(json['session_end_utc'] as String? ?? ''),
+          DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+      sessionEndUtc: DateTime.tryParse(
+        json['session_end_utc'] as String? ?? '',
+      ),
       totalFrames: (json['total_frames'] as num?)?.toInt() ?? 0,
       lightFrames: (json['light_frames'] as num?)?.toInt() ?? 0,
       calibrationFrames: (json['calibration_frames'] as num?)?.toInt() ?? 0,
@@ -81,7 +82,8 @@ class LibraryFrameItem {
       frameType: (json['frame_type'] as String?) ?? 'light',
       filterName: json['filter_name'] as String?,
       exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 0,
-      capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
+      capturedUtc:
+          DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       hfr: (json['hfr'] as num?)?.toDouble(),
       starCount: (json['star_count'] as num?)?.toInt(),
@@ -128,9 +130,9 @@ class LibraryFrameDetail {
       focuserPosition: (json['focuser_position'] as num?)?.toInt(),
       width: (json['width'] as num?)?.toInt() ?? 0,
       height: (json['height'] as num?)?.toInt() ?? 0,
-      tags: ((json['tags'] as List?) ?? const [])
-          .whereType<String>()
-          .toList(growable: false),
+      tags: ((json['tags'] as List?) ?? const []).whereType<String>().toList(
+        growable: false,
+      ),
     );
   }
 }

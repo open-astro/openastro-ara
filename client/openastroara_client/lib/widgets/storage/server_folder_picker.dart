@@ -61,11 +61,13 @@ class _NewFolderNameDialogState extends State<_NewFolderNameDialog> {
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.of(context).pop(null),
-            child: const Text('Cancel')),
+          onPressed: () => Navigator.of(context).pop(null),
+          child: const Text('Cancel'),
+        ),
         FilledButton(
-            onPressed: () => Navigator.of(context).pop(_controller.text),
-            child: const Text('Create')),
+          onPressed: () => Navigator.of(context).pop(_controller.text),
+          child: const Text('Create'),
+        ),
       ],
     );
   }
@@ -142,8 +144,10 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
       });
     } catch (e) {
       if (!mounted) return;
-      setState(() => _notice =
-          'Couldn\'t create "$trimmed" here — check the name and permissions.');
+      setState(
+        () => _notice =
+            'Couldn\'t create "$trimmed" here — check the name and permissions.',
+      );
     }
   }
 
@@ -157,9 +161,13 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
           const Text('Choose a folder on the server'),
           if (level != null && !level.isRoots) ...[
             const SizedBox(height: 4),
-            Text(level.path,
-                style: const TextStyle(
-                    fontSize: 12, color: AraColors.textSecondary)),
+            Text(
+              level.path,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AraColors.textSecondary,
+              ),
+            ),
           ],
         ],
       ),
@@ -169,55 +177,64 @@ class _ServerFolderPickerDialogState extends State<_ServerFolderPickerDialog> {
         child: _loading
             ? const Center(child: AdaptiveProgressIndicator())
             : _error != null
-                ? Center(
-                    child: Text(_error!,
-                        style:
-                            const TextStyle(color: AraColors.textSecondary)))
-                : ListView(
-                    children: [
-                      if (level != null && !level.isRoots)
-                        ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.arrow_upward, size: 18),
-                          title: const Text('Up one level'),
-                          // Parent null = filesystem root's parent → the
-                          // curated roots listing.
-                          onTap: () => _go(level.parent),
-                        ),
-                      for (final d in level?.dirs ?? const <StorageBrowseEntry>[])
-                        ListTile(
-                          dense: true,
-                          leading: Icon(
-                            d.removable ? Icons.usb : Icons.folder_outlined,
-                            size: 18,
-                            color: d.removable
-                                ? AraColors.accentConnected
-                                : AraColors.textSecondary,
-                          ),
-                          title: Text(d.name),
-                          subtitle: d.removable
-                              ? const Text('Removable / USB',
-                                  style: TextStyle(fontSize: 11))
-                              : null,
-                          onTap: () => _go(d.path),
-                        ),
-                      if (level != null && level.dirs.isEmpty && !level.isRoots)
-                        const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Text('No subfolders here.',
-                              style:
-                                  TextStyle(color: AraColors.textSecondary)),
-                        ),
-                    ],
-                  ),
+            ? Center(
+                child: Text(
+                  _error!,
+                  style: const TextStyle(color: AraColors.textSecondary),
+                ),
+              )
+            : ListView(
+                children: [
+                  if (level != null && !level.isRoots)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.arrow_upward, size: 18),
+                      title: const Text('Up one level'),
+                      // Parent null = filesystem root's parent → the
+                      // curated roots listing.
+                      onTap: () => _go(level.parent),
+                    ),
+                  for (final d in level?.dirs ?? const <StorageBrowseEntry>[])
+                    ListTile(
+                      dense: true,
+                      leading: Icon(
+                        d.removable ? Icons.usb : Icons.folder_outlined,
+                        size: 18,
+                        color: d.removable
+                            ? AraColors.accentConnected
+                            : AraColors.textSecondary,
+                      ),
+                      title: Text(d.name),
+                      subtitle: d.removable
+                          ? const Text(
+                              'Removable / USB',
+                              style: TextStyle(fontSize: 11),
+                            )
+                          : null,
+                      onTap: () => _go(d.path),
+                    ),
+                  if (level != null && level.dirs.isEmpty && !level.isRoots)
+                    const Padding(
+                      padding: EdgeInsets.all(16),
+                      child: Text(
+                        'No subfolders here.',
+                        style: TextStyle(color: AraColors.textSecondary),
+                      ),
+                    ),
+                ],
+              ),
       ),
       actions: [
         if (_notice != null)
           Padding(
             padding: const EdgeInsets.only(right: 8),
-            child: Text(_notice!,
-                style: const TextStyle(
-                    fontSize: 12, color: AraColors.textSecondary)),
+            child: Text(
+              _notice!,
+              style: const TextStyle(
+                fontSize: 12,
+                color: AraColors.textSecondary,
+              ),
+            ),
           ),
         Tooltip(
           message: level != null && !level.isRoots && level.writable

@@ -13,11 +13,19 @@ class EquipmentStateChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, text) = switch (state) {
-      EquipmentConnectionState.connected => (AraColors.accentConnected, 'Connected'),
-      EquipmentConnectionState.connecting => (AraColors.accentInfo, 'Connecting'),
+      EquipmentConnectionState.connected => (
+        AraColors.accentConnected,
+        'Connected',
+      ),
+      EquipmentConnectionState.connecting => (
+        AraColors.accentInfo,
+        'Connecting',
+      ),
       EquipmentConnectionState.error => (AraColors.accentError, 'Error'),
-      EquipmentConnectionState.disconnected =>
-        (AraColors.textSecondary, 'Disconnected'),
+      EquipmentConnectionState.disconnected => (
+        AraColors.textSecondary,
+        'Disconnected',
+      ),
       EquipmentConnectionState.unknown => (AraColors.textSecondary, 'Unknown'),
     };
     return Container(

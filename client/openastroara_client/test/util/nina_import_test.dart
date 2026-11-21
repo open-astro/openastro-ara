@@ -46,19 +46,29 @@ void main() {
 
   test(r'remaps every NINA $type to the OpenAstroAra twin, data verbatim', () {
     final t = translateNinaSequence(fixture());
-    expect(t.body[r'$type'],
-        'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer');
+    expect(
+      t.body[r'$type'],
+      'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    );
     final dso = (t.body['Items'] as List).first as Map;
-    expect(dso[r'$type'],
-        'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer');
+    expect(
+      dso[r'$type'],
+      'OpenAstroAra.Sequencer.Container.DeepSkyObjectContainer, OpenAstroAra.Sequencer',
+    );
     final target = dso['Target'] as Map;
-    expect(target[r'$type'],
-        'OpenAstroAra.Astrometry.InputTarget, OpenAstroAra.Astrometry');
+    expect(
+      target[r'$type'],
+      'OpenAstroAra.Astrometry.InputTarget, OpenAstroAra.Astrometry',
+    );
     final exposure = (dso['Items'] as List).first as Map;
-    expect(exposure[r'$type'],
-        'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer');
-    expect((exposure['Binning'] as Map)[r'$type'],
-        'OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core');
+    expect(
+      exposure[r'$type'],
+      'OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure, OpenAstroAra.Sequencer',
+    );
+    expect(
+      (exposure['Binning'] as Map)[r'$type'],
+      'OpenAstroAra.Core.Model.Equipment.BinningMode, OpenAstroAra.Core',
+    );
     // Everything non-$type survives byte-identical.
     expect(exposure['ExposureTime'], 60.0);
     expect(exposure['Gain'], 100);
@@ -66,17 +76,21 @@ void main() {
     expect((target['InputCoordinates'] as Map)['DecMinutes'], 47);
   });
 
-  test('backfills schemaVersion with a warning; keeps an existing one silently',
-      () {
-    final t = translateNinaSequence(fixture());
-    expect(t.body['schemaVersion'], schemaVersion);
-    expect(t.warnings.join(' '), contains('schemaVersion was missing'));
+  test(
+    'backfills schemaVersion with a warning; keeps an existing one silently',
+    () {
+      final t = translateNinaSequence(fixture());
+      expect(t.body['schemaVersion'], schemaVersion);
+      expect(t.warnings.join(' '), contains('schemaVersion was missing'));
 
-    final already = fixture()..['schemaVersion'] = schemaVersion;
-    final t2 = translateNinaSequence(already);
-    expect(t2.warnings.join(' '),
-        isNot(contains('schemaVersion was missing')));
-  });
+      final already = fixture()..['schemaVersion'] = schemaVersion;
+      final t2 = translateNinaSequence(already);
+      expect(
+        t2.warnings.join(' '),
+        isNot(contains('schemaVersion was missing')),
+      );
+    },
+  );
 
   test('editor-unknown sequencer types are kept as-is but warned about', () {
     final t = translateNinaSequence(fixture());
@@ -89,45 +103,49 @@ void main() {
     expect(t.warnings.join(' '), contains('not yet supported'));
   });
 
-  test('strategies, conditions and triggers are NOT flagged as unsupported',
-      () {
-    // Every real NINA export has container Strategy nodes, and most carry
-    // conditions/triggers — all first-class in the editor. Flagging them
-    // would put a false "not yet supported" warning on essentially every
-    // import (the #854 review catch).
-    final nina = fixture();
-    nina['Conditions'] = [
-      {
-        r'$type':
-            'NINA.Sequencer.Conditions.TimeSpanCondition, NINA.Sequencer',
-        'Time': 3600,
-      }
-    ];
-    nina['Triggers'] = [
-      {
-        r'$type':
-            'NINA.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, NINA.Sequencer',
-      }
-    ];
-    final t = translateNinaSequence(nina);
-    final unsupported =
-        t.warnings.where((w) => w.contains('not yet supported')).join(' ');
-    // The made-up PulseLaser is the ONLY unsupported type — the fixture's
-    // SequentialStrategy plus the condition and trigger all resolve.
-    expect(unsupported, contains('PulseLaser'));
-    expect(unsupported, isNot(contains('Strategy')));
-    expect(unsupported, isNot(contains('TimeSpanCondition')));
-    expect(unsupported, isNot(contains('MeridianFlipTrigger')));
-    expect(unsupported, contains('1 instruction type(s)'));
-  });
+  test(
+    'strategies, conditions and triggers are NOT flagged as unsupported',
+    () {
+      // Every real NINA export has container Strategy nodes, and most carry
+      // conditions/triggers — all first-class in the editor. Flagging them
+      // would put a false "not yet supported" warning on essentially every
+      // import (the #854 review catch).
+      final nina = fixture();
+      nina['Conditions'] = [
+        {
+          r'$type':
+              'NINA.Sequencer.Conditions.TimeSpanCondition, NINA.Sequencer',
+          'Time': 3600,
+        },
+      ];
+      nina['Triggers'] = [
+        {
+          r'$type': 'NINA.Sequencer.Trigger.MeridianFlip.MeridianFlipTrigger, NINA.Sequencer',
+        },
+      ];
+      final t = translateNinaSequence(nina);
+      final unsupported = t.warnings
+          .where((w) => w.contains('not yet supported'))
+          .join(' ');
+      // The made-up PulseLaser is the ONLY unsupported type — the fixture's
+      // SequentialStrategy plus the condition and trigger all resolve.
+      expect(unsupported, contains('PulseLaser'));
+      expect(unsupported, isNot(contains('Strategy')));
+      expect(unsupported, isNot(contains('TimeSpanCondition')));
+      expect(unsupported, isNot(contains('MeridianFlipTrigger')));
+      expect(unsupported, contains('1 instruction type(s)'));
+    },
+  );
 
   test('legacy single-NINA-assembly form remaps too', () {
     final t = translateNinaSequence({
       r'$type': 'NINA.Sequencer.Container.SequentialContainer, NINA',
       'Items': <dynamic>[],
     });
-    expect(t.body[r'$type'],
-        'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer');
+    expect(
+      t.body[r'$type'],
+      'OpenAstroAra.Sequencer.Container.SequentialContainer, OpenAstroAra.Sequencer',
+    );
   });
 
   test('the input map is not mutated (translation is a copy)', () {

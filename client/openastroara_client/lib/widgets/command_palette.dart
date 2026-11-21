@@ -65,11 +65,13 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     _searchFocus = FocusNode();
     _rebuildIndex();
   }
+
   // #1170 — the index carries what the daemon offers right now (templates,
   // tonight's targets). Both are async; a still-loading list just contributes
   // nothing until build() sees it land and rebuilds the index.
   void _rebuildIndex() {
-    final templates = ref.read(sequenceTemplatesProvider).asData?.value ?? const [];
+    final templates =
+        ref.read(sequenceTemplatesProvider).asData?.value ?? const [];
     final targets = ref.read(tonightSkyProvider).asData?.value ?? const [];
     _index = buildSearchIndex(
       templateNames: templates.map((t) => t.name),
@@ -78,9 +80,11 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       simple: ref.read(simpleModeActiveProvider),
     );
     _results = searchSettings(_index, _controller.text);
-    _selectedIndex = _selectedIndex.clamp(0, _results.isEmpty ? 0 : _results.length - 1);
+    _selectedIndex = _selectedIndex.clamp(
+      0,
+      _results.isEmpty ? 0 : _results.length - 1,
+    );
   }
-
 
   @override
   void dispose() {
@@ -99,8 +103,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   void _navigate(int delta) {
     if (_results.isEmpty) return;
     setState(() {
-      _selectedIndex =
-          (_selectedIndex + delta).clamp(0, _results.length - 1).toInt();
+      _selectedIndex = (_selectedIndex + delta)
+          .clamp(0, _results.length - 1)
+          .toInt();
     });
   }
 
@@ -154,7 +159,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     final armed = lifecycleArmed(container.read);
     if (!armed) {
       ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
-        const SnackBar(content: Text('Select a saved sequence on a connected rig first.')),
+        const SnackBar(
+          content: Text('Select a saved sequence on a connected rig first.'),
+        ),
       );
     }
     return armed;
@@ -165,7 +172,9 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   /// wait for the value before branching (r2 note). A failed load branches on
   /// null, which the helpers treat as "not running".
   static Future<void> _withRunState(
-      ProviderContainer container, Future<void> Function(SequenceRunState? state) then) async {
+    ProviderContainer container,
+    Future<void> Function(SequenceRunState? state) then,
+  ) async {
     final sub = container.listen(sequenceRunStateProvider, (_, _) {});
     try {
       SequenceRunState? state;
@@ -186,26 +195,40 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
   // top-bar buttons in app_shell.dart — same routes, same dialog. The run
   // actions (#1154) go through the Sequence tab's own helpers, so ⌘K and the key
   // shortcuts take exactly one path to the daemon.
-  static void _runAction(BuildContext rootContext, ProviderContainer container, String actionId) {
+  static void _runAction(
+    BuildContext rootContext,
+    ProviderContainer container,
+    String actionId,
+  ) {
     if (actionId.startsWith(templateActionPrefix)) {
       final templateName = actionId.substring(templateActionPrefix.length);
       final now = DateTime.now();
       String two(int n) => n.toString().padLeft(2, '0');
       container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
-      createSequenceFromTemplate(rootContext, container,
-          templateName: templateName,
-          newName: '$templateName ${now.year}-${two(now.month)}-${two(now.day)}');
+      createSequenceFromTemplate(
+        rootContext,
+        container,
+        templateName: templateName,
+        newName: '$templateName ${now.year}-${two(now.month)}-${two(now.day)}',
+      );
       return;
     }
     if (actionId.startsWith(gotoActionPrefix)) {
       final id = actionId.substring(gotoActionPrefix.length);
-      final target = (container.read(tonightSkyProvider).asData?.value ?? const []).where((o) => o.id == id).firstOrNull;
+      final target =
+          (container.read(tonightSkyProvider).asData?.value ?? const [])
+              .where((o) => o.id == id)
+              .firstOrNull;
       if (target == null) return; // the list moved on since the palette opened
-      container.read(selectedTabIndexProvider.notifier).select(kPlanningTabIndex);
+      container
+          .read(selectedTabIndexProvider.notifier)
+          .select(kPlanningTabIndex);
       // The selection provider auto-disposes with no listener; the Planning
       // tab subscribes on its first frame, so select once that frame is up.
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        container.read(selectedTonightObjectProvider.notifier).select(target.id);
+        container
+            .read(selectedTonightObjectProvider.notifier)
+            .select(target.id);
         container.read(planetariumCommandProvider.notifier).send({
           'type': 'goto',
           'ra': target.raDeg,
@@ -217,51 +240,99 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
     }
     switch (actionId) {
       case 'action.mount.park':
-        _equipmentOp(rootContext, 'park the mount', () => container.read(mountProvider.notifier).park());
+        _equipmentOp(
+          rootContext,
+          'park the mount',
+          () => container.read(mountProvider.notifier).park(),
+        );
       case 'action.mount.unpark':
-        _equipmentOp(rootContext, 'unpark the mount', () => container.read(mountProvider.notifier).unpark());
+        _equipmentOp(
+          rootContext,
+          'unpark the mount',
+          () => container.read(mountProvider.notifier).unpark(),
+        );
       case 'action.mount.home':
-        _equipmentOp(rootContext, 'find the mount\'s home', () => container.read(mountProvider.notifier).findHome());
+        _equipmentOp(
+          rootContext,
+          'find the mount\'s home',
+          () => container.read(mountProvider.notifier).findHome(),
+        );
       case 'action.mount.tracking_on':
-        _equipmentOp(rootContext, 'start tracking', () => container.read(mountProvider.notifier).setTracking(true));
+        _equipmentOp(
+          rootContext,
+          'start tracking',
+          () => container.read(mountProvider.notifier).setTracking(true),
+        );
       case 'action.mount.tracking_off':
-        _equipmentOp(rootContext, 'stop tracking', () => container.read(mountProvider.notifier).setTracking(false));
+        _equipmentOp(
+          rootContext,
+          'stop tracking',
+          () => container.read(mountProvider.notifier).setTracking(false),
+        );
       case 'action.camera.cooler_off':
-        _equipmentOp(rootContext, 'switch the cooler off', () => container.read(cameraStatusProvider.notifier).setCooler(false));
+        _equipmentOp(
+          rootContext,
+          'switch the cooler off',
+          () => container.read(cameraStatusProvider.notifier).setCooler(false),
+        );
       case 'action.run.start':
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
         if (!_runArmed(rootContext, container)) return;
-        unawaited(_withRunState(container, (state) async {
-          if (state?.isAnyPaused ?? false) {
-            await promptAndResumeSequence(rootContext, container.read);
-          } else if (_settling(state)) {
-            _say(rootContext, 'The sequence is ${state!.name} — wait for it to settle.');
-          } else if (state?.isActive ?? false) {
-            ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
-              const SnackBar(content: Text('The sequence is already running — Space pauses it.')),
-            );
-          } else {
-            await preflightAndRunSequence(rootContext, container.read);
-          }
-        }));
+        unawaited(
+          _withRunState(container, (state) async {
+            if (state?.isAnyPaused ?? false) {
+              await promptAndResumeSequence(rootContext, container.read);
+            } else if (_settling(state)) {
+              _say(
+                rootContext,
+                'The sequence is ${state!.name} — wait for it to settle.',
+              );
+            } else if (state?.isActive ?? false) {
+              ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'The sequence is already running — Space pauses it.',
+                  ),
+                ),
+              );
+            } else {
+              await preflightAndRunSequence(rootContext, container.read);
+            }
+          }),
+        );
       case 'action.run.pause':
         container.read(selectedTabIndexProvider.notifier).select(kRunTabIndex);
         if (!_runArmed(rootContext, container)) return;
-        unawaited(_withRunState(container, (state) async {
-          if (state == SequenceRunState.running) {
-            await runSequenceLifecycle(rootContext, container.read, (api, id) => api.pause(id));
-          } else if (state?.isAnyPaused ?? false) {
-            await promptAndResumeSequence(rootContext, container.read);
-          } else if (_settling(state)) {
-            _say(rootContext, 'The sequence is ${state!.name} — wait for it to settle.');
-          } else {
-            ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
-              const SnackBar(content: Text('No sequence is running — ⌘R starts the selected one.')),
-            );
-          }
-        }));
+        unawaited(
+          _withRunState(container, (state) async {
+            if (state == SequenceRunState.running) {
+              await runSequenceLifecycle(
+                rootContext,
+                container.read,
+                (api, id) => api.pause(id),
+              );
+            } else if (state?.isAnyPaused ?? false) {
+              await promptAndResumeSequence(rootContext, container.read);
+            } else if (_settling(state)) {
+              _say(
+                rootContext,
+                'The sequence is ${state!.name} — wait for it to settle.',
+              );
+            } else {
+              ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'No sequence is running — ⌘R starts the selected one.',
+                  ),
+                ),
+              );
+            }
+          }),
+        );
       case 'action.plan.tonight':
-        container.read(selectedTabIndexProvider.notifier).select(kPlanningTabIndex);
+        container
+            .read(selectedTabIndexProvider.notifier)
+            .select(kPlanningTabIndex);
         showDialog<void>(
           context: rootContext,
           builder: (_) => const SessionPlanDialog(),
@@ -305,18 +376,34 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       s == SequenceRunState.starting || s == SequenceRunState.aborting;
 
   static void _say(BuildContext rootContext, String text) =>
-      ScaffoldMessenger.maybeOf(rootContext)?.showSnackBar(SnackBar(content: Text(text)));
+      ScaffoldMessenger.maybeOf(rootContext)
+          ?.showSnackBar(SnackBar(content: Text(text)));
 
-  static void _equipmentOp(BuildContext rootContext, String what, Future<bool> Function() op) {
-    final messenger = ScaffoldMessenger.maybeOf(rootContext); // grabbed before the await
-    op().then((performed) {
-      if (!performed) {
-        // false covers both the fence (another command still in flight) and no device.
-        messenger?.showSnackBar(SnackBar(content: Text('Could not $what — the device is not connected, or busy with another command.')));
-      }
-    }, onError: (Object e) {
-      messenger?.showSnackBar(SnackBar(content: Text('Could not $what: $e')));
-    });
+  static void _equipmentOp(
+    BuildContext rootContext,
+    String what,
+    Future<bool> Function() op,
+  ) {
+    final messenger = ScaffoldMessenger.maybeOf(
+      rootContext,
+    ); // grabbed before the await
+    op().then(
+      (performed) {
+        if (!performed) {
+          // false covers both the fence (another command still in flight) and no device.
+          messenger?.showSnackBar(
+            SnackBar(
+              content: Text(
+                'Could not $what — the device is not connected, or busy with another command.',
+              ),
+            ),
+          );
+        }
+      },
+      onError: (Object e) {
+        messenger?.showSnackBar(SnackBar(content: Text('Could not $what: $e')));
+      },
+    );
   }
 
   @override
@@ -329,8 +416,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       alignment: Alignment.topCenter,
       insetPadding: const EdgeInsets.only(top: 80, left: 24, right: 24),
       backgroundColor: AraColors.bgPanel,
-      shape:
-          RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 640, maxHeight: 480),
         child: Shortcuts(
@@ -428,13 +514,10 @@ class _SearchField extends StatelessWidget {
           padding: EdgeInsets.only(left: 16, right: 12),
           child: Icon(Icons.search, size: 20, color: AraColors.textSecondary),
         ),
-        prefixIconConstraints:
-            const BoxConstraints(minWidth: 0, minHeight: 0),
+        prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
         hintText:
             'Search settings or navigate — try "dither", "park", "go to run"…',
-        hintStyle: Theme.of(context)
-            .textTheme
-            .bodyLarge
+        hintStyle: Theme.of(context).textTheme.bodyLarge
             ?.copyWith(color: AraColors.textDisabled),
         border: InputBorder.none,
         enabledBorder: InputBorder.none,
@@ -465,11 +548,10 @@ class _EmptyHint extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              hasQuery
-                  ? 'No matches'
-                  : 'Search settings and actions',
-              style: theme.textTheme.bodyLarge
-                  ?.copyWith(color: AraColors.textSecondary),
+              hasQuery ? 'No matches' : 'Search settings and actions',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: AraColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 6),
             ConstrainedBox(
@@ -477,13 +559,14 @@ class _EmptyHint extends StatelessWidget {
               child: Text(
                 hasQuery
                     ? 'Try another word — sensor, cooling, dither, park, '
-                        'autofocus, plate-solve, file naming, safety, sky '
-                        'data, profiles…'
+                          'autofocus, plate-solve, file naming, safety, sky '
+                          'data, profiles…'
                     : '↑ ↓ to navigate ·  Enter to open  ·  Esc to close  ·  '
-                        '⌘K from anywhere',
+                          '⌘K from anywhere',
                 textAlign: TextAlign.center,
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(color: AraColors.textDisabled),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AraColors.textDisabled,
+                ),
               ),
             ),
           ],
@@ -508,8 +591,7 @@ class _ResultRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Container(
-        color:
-            selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
+        color: selected ? AraColors.selectionBg.withValues(alpha: 0.25) : null,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         child: Row(
           children: [
@@ -517,10 +599,10 @@ class _ResultRow extends StatelessWidget {
               entry.actionId != null
                   ? Icons.bolt
                   : entry.tabIndex != null
-                      ? Icons.arrow_forward
-                      : entry.helpKey != null
-                          ? Icons.help_outline
-                          : Icons.tune,
+                  ? Icons.arrow_forward
+                  : entry.helpKey != null
+                  ? Icons.help_outline
+                  : Icons.tune,
               size: 16,
               color: AraColors.textSecondary,
             ),
@@ -529,13 +611,14 @@ class _ResultRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(entry.label,
-                      style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    entry.label,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                   Text(
                     '${entry.groupLabel} · ${entry.id}',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: AraColors.textDisabled,
-                        ),
+                    style: Theme.of(context).textTheme.labelSmall
+                        ?.copyWith(color: AraColors.textDisabled),
                   ),
                   if (selected && entry.description != null)
                     Padding(
@@ -551,9 +634,9 @@ class _ResultRow extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AraColors.textSecondary,
-                              fontStyle: FontStyle.italic,
-                            ),
+                          color: AraColors.textSecondary,
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
                   if (selected && entry.relatedSettings.isNotEmpty)
@@ -562,17 +645,17 @@ class _ResultRow extends StatelessWidget {
                       child: Wrap(
                         spacing: 8,
                         children: [
-                          Text('Related:',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .labelSmall
-                                  ?.copyWith(color: AraColors.textDisabled)),
+                          Text(
+                            'Related:',
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(color: AraColors.textDisabled),
+                          ),
                           for (final rel in entry.relatedSettings)
-                            Text(rel,
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .labelSmall
-                                    ?.copyWith(color: AraColors.selectionBg)),
+                            Text(
+                              rel,
+                              style: Theme.of(context).textTheme.labelSmall
+                                  ?.copyWith(color: AraColors.selectionBg),
+                            ),
                         ],
                       ),
                     ),
@@ -580,8 +663,11 @@ class _ResultRow extends StatelessWidget {
               ),
             ),
             if (selected)
-              const Icon(Icons.keyboard_return,
-                  size: 14, color: AraColors.textSecondary),
+              const Icon(
+                Icons.keyboard_return,
+                size: 14,
+                color: AraColors.textSecondary,
+              ),
           ],
         ),
       ),

@@ -32,7 +32,16 @@ void main() {
     test('SQM to Bortle at every class boundary and the clamps', () {
       // Class b covers (skyMagFromBortle(b) - 0.25, skyMagFromBortle(b) + 0.25]
       // away from the .5 rounding edge: exact, just above, just below.
-      final edges = {21.75: 2, 21.25: 3, 20.75: 4, 20.25: 5, 19.75: 6, 19.25: 7, 18.75: 8, 18.25: 9};
+      final edges = {
+        21.75: 2,
+        21.25: 3,
+        20.75: 4,
+        20.25: 5,
+        19.75: 6,
+        19.25: 7,
+        18.75: 8,
+        18.25: 9,
+      };
       edges.forEach((m, b) {
         // round() takes .5 away from zero: the exact edge falls to the
         // brighter-sky (higher) class; just above stays one class darker.
@@ -66,20 +75,25 @@ void main() {
     test('Bortle 6 and SQM 19.5 give the same Glover floor and ceiling', () {
       SkyState bortle6 = SkyState(bortleClass: 6);
       SkyState sqm = SkyState(bortleClass: 1, sqmMagPerArcsec2: 19.5);
-      OptimalSubResult run(SkyState s) => computeOptimalSub(OptimalSubInput(
-            readNoiseE: 1.5,
-            fullWellE: 51000,
-            electronsPerAdu: 0.78,
-            pixelSizeUm: 3.76,
-            apertureMm: 51,
-            focalLengthMm: 250,
-            quantumEfficiency: 0.8,
-            skyMagPerArcsec2: s.skyMag,
-            filterBandwidthNm: 100,
-          ));
+      OptimalSubResult run(SkyState s) => computeOptimalSub(
+        OptimalSubInput(
+          readNoiseE: 1.5,
+          fullWellE: 51000,
+          electronsPerAdu: 0.78,
+          pixelSizeUm: 3.76,
+          apertureMm: 51,
+          focalLengthMm: 250,
+          quantumEfficiency: 0.8,
+          skyMagPerArcsec2: s.skyMag,
+          filterBandwidthNm: 100,
+        ),
+      );
       expect(run(sqm).floorSec, run(bortle6).floorSec);
       expect(run(sqm).ceilingSec, run(bortle6).ceilingSec);
-      expect(run(sqm).floorSec, closeTo(computeOptimalSub(input).floorSec, 1e-9));
+      expect(
+        run(sqm).floorSec,
+        closeTo(computeOptimalSub(input).floorSec, 1e-9),
+      );
       // A darker reading moves both bounds.
       final dark = run(SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5));
       expect(dark.floorSec, greaterThan(run(bortle6).floorSec));
@@ -91,14 +105,23 @@ void main() {
       const nb = FilterSetSettings(filters: [ha, l]);
       const lOnly = FilterSetSettings(filters: [l]);
       final dark = adviseFilter(
-          EmissionClass.emissionLine, lOnly, SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5));
+        EmissionClass.emissionLine,
+        lOnly,
+        SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5),
+      );
       final city = adviseFilter(
-          EmissionClass.emissionLine, lOnly, SkyState(bortleClass: 1, sqmMagPerArcsec2: 18.5));
+        EmissionClass.emissionLine,
+        lOnly,
+        SkyState(bortleClass: 1, sqmMagPerArcsec2: 18.5),
+      );
       expect(dark!.$2, isNot(contains('many hours')));
       expect(city!.$2, contains('many hours'));
       expect(city.$2, contains('SQM 18.5 sky'));
-      final reason = adviseFilter(EmissionClass.emissionLine, nb,
-          SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5))!.$2;
+      final reason = adviseFilter(
+        EmissionClass.emissionLine,
+        nb,
+        SkyState(bortleClass: 6, sqmMagPerArcsec2: 21.5),
+      )!.$2;
       expect(reason, contains('SQM 21.5 sky'));
       expect(reason, isNot(contains('Bortle 6')));
     });
@@ -108,7 +131,8 @@ void main() {
     test('sky flux P matches the closed-form model', () {
       // P = 1e4 · 10^(−0.4·19.5) · 100 · π·(51/20)² · (206.265·3.76/250)² · 0.8
       final scale = 206.265 * 3.76 / 250.0;
-      final expected = 1.0e4 *
+      final expected =
+          1.0e4 *
           math.pow(10.0, -0.4 * 19.5) *
           100 *
           math.pi *
@@ -175,17 +199,20 @@ void main() {
 
     test('non-physical inputs are rejected', () {
       expect(
-          () => computeOptimalSub(const OptimalSubInput(
-                readNoiseE: 1.5,
-                fullWellE: 51000,
-                pixelSizeUm: 3.76,
-                apertureMm: 51,
-                focalLengthMm: 250,
-                quantumEfficiency: 1.2, // > 1
-                skyMagPerArcsec2: 19.5,
-                filterBandwidthNm: 100,
-              )),
-          throwsArgumentError);
+        () => computeOptimalSub(
+          const OptimalSubInput(
+            readNoiseE: 1.5,
+            fullWellE: 51000,
+            pixelSizeUm: 3.76,
+            apertureMm: 51,
+            focalLengthMm: 250,
+            quantumEfficiency: 1.2, // > 1
+            skyMagPerArcsec2: 19.5,
+            filterBandwidthNm: 100,
+          ),
+        ),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -211,18 +238,25 @@ void main() {
         final fit = _fitLogLinear(hygDensities[band]);
         final predicted9 = math.pow(10.0, fit.intercept + fit.slope * 9.0);
         final ratio = predicted9 / hygDensities[band][4];
-        expect(ratio, inInclusiveRange(0.5, 2.0),
-            reason: '|b|=${bandLatitudes[band]}°: the m=9 extrapolation '
-                'must sit inside the factor-2 gate');
+        expect(
+          ratio,
+          inInclusiveRange(0.5, 2.0),
+          reason:
+              '|b|=${bandLatitudes[band]}°: the m=9 extrapolation '
+              'must sit inside the factor-2 gate',
+        );
       }
     });
 
     test('the model anchors exactly at the real m=9 densities', () {
       for (var band = 0; band < bandLatitudes.length; band++) {
-        expect(stars.cumulativeStarsPerDeg2(9.0, bandLatitudes[band]),
-            closeTo(hygDensities[band][4], 1e-9),
-            reason: '|b|=${bandLatitudes[band]}°: at m=9 the model IS the '
-                'measured HYG density');
+        expect(
+          stars.cumulativeStarsPerDeg2(9.0, bandLatitudes[band]),
+          closeTo(hygDensities[band][4], 1e-9),
+          reason:
+              '|b|=${bandLatitudes[band]}°: at m=9 the model IS the '
+              'measured HYG density',
+        );
       }
     });
 
@@ -232,44 +266,61 @@ void main() {
       // multiply counts by 10^(slope re-derived from the embedded grid).
       for (var band = 0; band < bandLatitudes.length; band++) {
         final derived = _fitLogLinear(hygDensities[band]).slope;
-        final ratio = stars.cumulativeStarsPerDeg2(10, bandLatitudes[band]) /
+        final ratio =
+            stars.cumulativeStarsPerDeg2(10, bandLatitudes[band]) /
             stars.cumulativeStarsPerDeg2(9, bandLatitudes[band]);
         // Two 6-dp rounding sources stack (shipped slope ≤5e-7, grid
         // densities ≲1.5e-6 on the fitted slope); 2e-6 covers both.
-        expect(_log10(ratio), closeTo(derived, 2e-6),
-            reason: '|b|=${bandLatitudes[band]}°: the shipped slope must be '
-                'the grid-derived fit');
+        expect(
+          _log10(ratio),
+          closeTo(derived, 2e-6),
+          reason:
+              '|b|=${bandLatitudes[band]}°: the shipped slope must be '
+              'the grid-derived fit',
+        );
       }
     });
 
     test('counts are symmetric about the plane', () {
-      expect(stars.cumulativeStarsPerDeg2(11, -30),
-          closeTo(stars.cumulativeStarsPerDeg2(11, 30), 1e-12));
+      expect(
+        stars.cumulativeStarsPerDeg2(11, -30),
+        closeTo(stars.cumulativeStarsPerDeg2(11, 30), 1e-12),
+      );
     });
 
     test('galactic latitude reproduces the defining identities', () {
       expect(stars.galacticLatitudeDeg(266.417, -29.008), closeTo(0, 0.1));
-      expect(stars.galacticLatitudeDeg(12.85948, -27.12825),
-          closeTo(-90, 0.01));
+      expect(
+        stars.galacticLatitudeDeg(12.85948, -27.12825),
+        closeTo(-90, 0.01),
+      );
     });
 
     test('invalid inputs throw', () {
-      expect(() => stars.cumulativeStarsPerDeg2(double.nan, 30),
-          throwsArgumentError);
-      expect(() => stars.cumulativeStarsPerDeg2(9, double.infinity),
-          throwsArgumentError);
+      expect(
+        () => stars.cumulativeStarsPerDeg2(double.nan, 30),
+        throwsArgumentError,
+      );
+      expect(
+        () => stars.cumulativeStarsPerDeg2(9, double.infinity),
+        throwsArgumentError,
+      );
       expect(() => stars.cumulativeStarsPerDeg2(9, 91), throwsArgumentError);
       expect(() => stars.galacticLatitudeDeg(180, 95), throwsArgumentError);
-      expect(() => stars.galacticLatitudeDeg(double.nan, 0),
-          throwsArgumentError);
+      expect(
+        () => stars.galacticLatitudeDeg(double.nan, 0),
+        throwsArgumentError,
+      );
     });
 
     test('counts increase with limiting magnitude and toward the plane', () {
       final faint = stars.cumulativeStarsPerDeg2(12, 30);
       final bright = stars.cumulativeStarsPerDeg2(9, 30);
       expect(faint, greaterThan(bright));
-      expect(stars.cumulativeStarsPerDeg2(10, 0),
-          greaterThan(stars.cumulativeStarsPerDeg2(10, 90)));
+      expect(
+        stars.cumulativeStarsPerDeg2(10, 0),
+        greaterThan(stars.cumulativeStarsPerDeg2(10, 90)),
+      );
     });
 
     test('limiting magnitude deepens with exposure', () {
@@ -278,44 +329,66 @@ void main() {
       expect(m300, greaterThan(m30));
     });
 
-    test('star floor: wide fast field is unconstrained, tiny field starves',
-        () {
-      // ~3.4°×2.3° field at 250 mm on this sensor — plenty of stars.
-      final fovDeg2 = (6248 * 206.265 * 3.76 / 250 / 3600) *
-          (4176 * 206.265 * 3.76 / 250 / 3600);
-      final t = stars.starFloorSec(input, 2.5, 30, fovDeg2);
-      expect(t, isNotNull);
-      expect(t!, lessThan(60)); // far below any realistic sub length
-      // A 0.001 deg² field CAN still get there, just needs long subs — the
-      // floor moves up rather than starving.
-      final narrow = stars.starFloorSec(input, 2.5, 90, 0.001);
-      expect(narrow, isNotNull);
-      expect(narrow!, greaterThan(t));
-      // A 0.0001 deg² field at the pole can't reach 20 registration stars
-      // even at the 3600 s search bound — genuinely starved.
-      expect(stars.starFloorSec(input, 2.5, 90, 0.0001), isNull);
-    });
+    test(
+      'star floor: wide fast field is unconstrained, tiny field starves',
+      () {
+        // ~3.4°×2.3° field at 250 mm on this sensor — plenty of stars.
+        final fovDeg2 =
+            (6248 * 206.265 * 3.76 / 250 / 3600) *
+            (4176 * 206.265 * 3.76 / 250 / 3600);
+        final t = stars.starFloorSec(input, 2.5, 30, fovDeg2);
+        expect(t, isNotNull);
+        expect(t!, lessThan(60)); // far below any realistic sub length
+        // A 0.001 deg² field CAN still get there, just needs long subs — the
+        // floor moves up rather than starving.
+        final narrow = stars.starFloorSec(input, 2.5, 90, 0.001);
+        expect(narrow, isNotNull);
+        expect(narrow!, greaterThan(t));
+        // A 0.0001 deg² field at the pole can't reach 20 registration stars
+        // even at the 3600 s search bound — genuinely starved.
+        expect(stars.starFloorSec(input, 2.5, 90, 0.0001), isNull);
+      },
+    );
 
     test('augment: healthy field keeps the read-noise floor as binding', () {
       final window = computeOptimalSub(input);
-      final fovDeg2 = (6248 * 206.265 * 3.76 / 250 / 3600) *
+      final fovDeg2 =
+          (6248 * 206.265 * 3.76 / 250 / 3600) *
           (4176 * 206.265 * 3.76 / 250 / 3600);
-      final a = stars.augmentWithStarFloor(window, input, 2.5, 83.8, -5.4,
-          fovDeg2);
+      final a = stars.augmentWithStarFloor(
+        window,
+        input,
+        2.5,
+        83.8,
+        -5.4,
+        fovDeg2,
+      );
       expect(a.limitingBound, OptimalSubBound.readNoiseFloor);
       expect(a.recommendedSec, closeTo(window.recommendedSec, 1e-9));
-      expect(a.starsRegistrationPerSub, greaterThan(stars.minRegistrationStars));
+      expect(
+        a.starsRegistrationPerSub,
+        greaterThan(stars.minRegistrationStars),
+      );
       expect(a.starReason, contains('read noise remains the binding floor'));
     });
   });
 
   group('filter advice', () {
-    const haFilter =
-        PlanningFilter(name: 'Ha', kind: FilterKind.ha, bandwidthNm: 7);
-    const lFilter =
-        PlanningFilter(name: 'L', kind: FilterKind.l, bandwidthNm: 0);
-    const duoFilter =
-        PlanningFilter(name: 'L-eXtreme', kind: FilterKind.duo, bandwidthNm: 7);
+    const haFilter = PlanningFilter(
+      name: 'Ha',
+      kind: FilterKind.ha,
+      bandwidthNm: 7,
+    );
+    const lFilter = PlanningFilter(
+      name: 'L',
+      kind: FilterKind.l,
+      bandwidthNm: 0,
+    );
+    const duoFilter = PlanningFilter(
+      name: 'L-eXtreme',
+      kind: FilterKind.duo,
+      bandwidthNm: 7,
+    );
 
     test('emission classification matches the daemon table', () {
       expect(classifyEmission('HII'), EmissionClass.emissionLine);
@@ -328,44 +401,67 @@ void main() {
       expect(classifyEmission(null), EmissionClass.unknown);
     });
 
-    test('emission target + mono narrowband → narrowband with the ~14× ratio',
-        () {
-      final advice = adviseFilter(EmissionClass.emissionLine,
-          const FilterSetSettings(filters: [haFilter, lFilter]), SkyState(bortleClass: 6));
-      expect(advice, isNotNull);
-      expect(advice!.$1, TonightFilterAdvice.narrowband);
-      expect(advice.$2, contains('~14×'));
-    });
+    test(
+      'emission target + mono narrowband → narrowband with the ~14× ratio',
+      () {
+        final advice = adviseFilter(
+          EmissionClass.emissionLine,
+          const FilterSetSettings(filters: [haFilter, lFilter]),
+          SkyState(bortleClass: 6),
+        );
+        expect(advice, isNotNull);
+        expect(advice!.$1, TonightFilterAdvice.narrowband);
+        expect(advice.$2, contains('~14×'));
+      },
+    );
 
     test('continuum target → broadband even when narrowband exists', () {
-      final advice = adviseFilter(EmissionClass.continuum,
-          const FilterSetSettings(filters: [haFilter, lFilter]), SkyState(bortleClass: 4));
+      final advice = adviseFilter(
+        EmissionClass.continuum,
+        const FilterSetSettings(filters: [haFilter, lFilter]),
+        SkyState(bortleClass: 4),
+      );
       expect(advice!.$1, TonightFilterAdvice.broadband);
     });
 
     test('mixed under a bright sky tips to duoband with OSC kit', () {
-      final advice = adviseFilter(EmissionClass.mixed,
-          const FilterSetSettings(filters: [duoFilter]), SkyState(bortleClass: 7));
+      final advice = adviseFilter(
+        EmissionClass.mixed,
+        const FilterSetSettings(filters: [duoFilter]),
+        SkyState(bortleClass: 7),
+      );
       expect(advice!.$1, TonightFilterAdvice.duoband);
     });
 
     test('no honest advice: empty set or unknown emission', () {
       expect(
-          adviseFilter(EmissionClass.emissionLine,
-              const FilterSetSettings(filters: []), SkyState(bortleClass: 6)),
-          isNull);
+        adviseFilter(
+          EmissionClass.emissionLine,
+          const FilterSetSettings(filters: []),
+          SkyState(bortleClass: 6),
+        ),
+        isNull,
+      );
       expect(
-          adviseFilter(EmissionClass.unknown,
-              const FilterSetSettings(filters: [haFilter]), SkyState(bortleClass: 6)),
-          isNull);
+        adviseFilter(
+          EmissionClass.unknown,
+          const FilterSetSettings(filters: [haFilter]),
+          SkyState(bortleClass: 6),
+        ),
+        isNull,
+      );
     });
 
     test('representative filter prefers Ha, then L, then OSC', () {
       const set = FilterSetSettings(filters: [lFilter, haFilter]);
-      expect(representativeFilter(set, TonightFilterAdvice.narrowband)!.name,
-          'Ha');
       expect(
-          representativeFilter(set, TonightFilterAdvice.broadband)!.name, 'L');
+        representativeFilter(set, TonightFilterAdvice.narrowband)!.name,
+        'Ha',
+      );
+      expect(
+        representativeFilter(set, TonightFilterAdvice.broadband)!.name,
+        'L',
+      );
       expect(representativeFilter(set, TonightFilterAdvice.duoband), isNull);
     });
 

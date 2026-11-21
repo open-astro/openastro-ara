@@ -82,10 +82,15 @@ class SequencerToolbar extends ConsumerWidget {
     final hasSelection = connected && selectedId != null && !busy && !isDraft;
     // Save is enabled only when the open sequence has unsaved edits. A draft
     // saves to the local store, so it needs no connection.
-    final dirty = ref.watch(sequenceEditorProvider.select((s) => s?.isDirty ?? false));
-    final canSave = dirty && !busy && (hasSelection || (isDraft && selectedId != null));
+    final dirty = ref.watch(
+      sequenceEditorProvider.select((s) => s?.isDirty ?? false),
+    );
+    final canSave =
+        dirty && !busy && (hasSelection || (isDraft && selectedId != null));
     // Validate works on whatever's loaded in the editor (even if not dirty).
-    final editorLoaded = ref.watch(sequenceEditorProvider.select((s) => s != null));
+    final editorLoaded = ref.watch(
+      sequenceEditorProvider.select((s) => s != null),
+    );
     final canValidate = connected && editorLoaded && !busy;
     final isActive = runState?.isActive ?? false;
     final isRunning = runState == SequenceRunState.running;
@@ -113,7 +118,8 @@ class SequencerToolbar extends ConsumerWidget {
     // it, which is not what a user pressing Delete on one row expects.
     final editorState = ref.watch(sequenceEditorProvider);
     final selectedNodePath = editorState?.selectedPath;
-    final selectedNode = (editorState != null &&
+    final selectedNode =
+        (editorState != null &&
             selectedNodePath != null &&
             selectedNodePath.isNotEmpty)
         ? nodeAt(editorState.body, selectedNodePath)
@@ -160,8 +166,12 @@ class SequencerToolbar extends ConsumerWidget {
         // saw a draft: id (review #845). Local draft export is a
         // tracked follow-up.
         onPressed: (connected && selectedId != null && !isDraft)
-            ? () => exportSequence(context, ref,
-                id: selectedId, name: selectedName ?? selectedId)
+            ? () => exportSequence(
+                context,
+                ref,
+                id: selectedId,
+                name: selectedName ?? selectedId,
+              )
             : null,
       ),
       _ToolAction(
@@ -178,25 +188,29 @@ class SequencerToolbar extends ConsumerWidget {
           onPressed: busy
               ? null
               : () => _deleteSelectedItem(
-                  context, ref, selectedNodePath!, nodeLabel(selectedNode)),
+                  context,
+                  ref,
+                  selectedNodePath!,
+                  nodeLabel(selectedNode),
+                ),
         )
       else
-      _ToolAction(
-        icon: Icons.delete_outline,
-        label: 'Delete sequence',
-        // Delete the OPEN sequence right from the tab (the Load
-        // dialog's per-row trash covers the rest). The shared flow
-        // confirms, stop-and-deletes an active run, and clears the
-        // selection + editor.
-        // An open offline DRAFT is deletable too (it lives on this device,
-        // no daemon involved) — before, Delete was dead for drafts and the
-        // only way out was the Load dialog's per-row trash.
-        onPressed: hasSelection
-            ? () => _delete(context, ref, selectedId, selectedName)
-            : (isDraft && selectedId != null && !busy)
-                ? () => _deleteDraft(context, ref, selectedId, selectedName)
-                : null,
-      ),
+        _ToolAction(
+          icon: Icons.delete_outline,
+          label: 'Delete sequence',
+          // Delete the OPEN sequence right from the tab (the Load
+          // dialog's per-row trash covers the rest). The shared flow
+          // confirms, stop-and-deletes an active run, and clears the
+          // selection + editor.
+          // An open offline DRAFT is deletable too (it lives on this device,
+          // no daemon involved) — before, Delete was dead for drafts and the
+          // only way out was the Load dialog's per-row trash.
+          onPressed: hasSelection
+              ? () => _delete(context, ref, selectedId, selectedName)
+              : (isDraft && selectedId != null && !busy)
+              ? () => _deleteDraft(context, ref, selectedId, selectedName)
+              : null,
+        ),
     ];
 
     // ── Lifecycle cluster (run-redesign S2): the run verbs get
@@ -211,10 +225,10 @@ class SequencerToolbar extends ConsumerWidget {
         kind: _LifecycleKind.primary,
         onPressed: canRunOrResume
             ? () => isPaused
-                // §38.10 — resuming offers the pointing/focus
-                // refinement choice before imaging continues.
-                ? promptAndResumeSequence(context, ref.read)
-                : preflightAndRunSequence(context, ref.read)
+                  // §38.10 — resuming offers the pointing/focus
+                  // refinement choice before imaging continues.
+                  ? promptAndResumeSequence(context, ref.read)
+                  : preflightAndRunSequence(context, ref.read)
             : null,
       ),
       _ToolAction(
@@ -223,7 +237,10 @@ class SequencerToolbar extends ConsumerWidget {
         kind: _LifecycleKind.caution,
         onPressed: canPause
             ? () => runSequenceLifecycle(
-                context, ref.read, (api, id) => api.pause(id))
+                context,
+                ref.read,
+                (api, id) => api.pause(id),
+              )
             : null,
       ),
       _ToolAction(
@@ -233,7 +250,10 @@ class SequencerToolbar extends ConsumerWidget {
         // horizon) so the run advances to the next without aborting.
         onPressed: canSkip
             ? () => runSequenceLifecycle(
-                context, ref.read, (api, id) => api.skipCurrent(id))
+                context,
+                ref.read,
+                (api, id) => api.skipCurrent(id),
+              )
             : null,
       ),
       _ToolAction(
@@ -269,6 +289,7 @@ class _ToolAction {
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
+
   /// Null for a utility button; set for the run verbs.
   final _LifecycleKind? kind;
   const _ToolAction({
@@ -308,8 +329,10 @@ class _ToolbarLayout extends StatelessWidget {
 
   /// Nominal width of the "More" (⋯) overflow button.
   static const double _moreWidth = 48;
+
   /// Width of the divider between the utility and lifecycle clusters.
   static const double _dividerWidth = 16;
+
   /// The status line only earns space once the buttons have theirs; below
   /// this reserve it's dropped rather than squeezed to an unreadable stub.
   static const double _statusReserve = 140;
@@ -336,22 +359,27 @@ class _ToolbarLayout extends StatelessWidget {
     // Icon-only lifecycle: a 40×40 IconButton with the same ±2 outer padding.
     const double lifecycleIconWidth = 44;
 
-    final labelledLifecycle =
-        lifecycle.fold<double>(0, (sum, a) => sum + lifecycleWidth(a));
+    final labelledLifecycle = lifecycle.fold<double>(
+      0,
+      (sum, a) => sum + lifecycleWidth(a),
+    );
     final compactLifecycle = lifecycleIconWidth * lifecycle.length;
 
     // Step 1 — can the lifecycle cluster keep its labels? It needs room for
     // itself plus at least the More button (the utilities' minimum footprint).
     final lifecycleLabelled =
         width >= labelledLifecycle + _dividerWidth + _moreWidth;
-    final lifecycleSpan =
-        lifecycleLabelled ? labelledLifecycle : compactLifecycle;
+    final lifecycleSpan = lifecycleLabelled
+        ? labelledLifecycle
+        : compactLifecycle;
 
     // Step 2 — greedily place utilities from the left. Reserve the More
     // button's width unless EVERY utility fits without it.
     final available = width - lifecycleSpan - _dividerWidth;
-    final allWidth =
-        utilities.fold<double>(0, (sum, a) => sum + utilityWidth(a));
+    final allWidth = utilities.fold<double>(
+      0,
+      (sum, a) => sum + utilityWidth(a),
+    );
     final List<_ToolAction> inline;
     final List<_ToolAction> overflow;
     if (allWidth <= available) {
@@ -373,9 +401,9 @@ class _ToolbarLayout extends StatelessWidget {
     // Step 3 — the status line gets the remainder, if it's worth showing.
     final usedByButtons =
         inline.fold<double>(0, (s, a) => s + utilityWidth(a)) +
-            (overflow.isEmpty ? 0 : _moreWidth) +
-            _dividerWidth +
-            lifecycleSpan;
+        (overflow.isEmpty ? 0 : _moreWidth) +
+        _dividerWidth +
+        lifecycleSpan;
     final showStatus = width - usedByButtons >= _statusReserve;
 
     return Row(
@@ -397,14 +425,16 @@ class _ToolbarLayout extends StatelessWidget {
             _ToolButton(icon: a.icon, label: a.label, onPressed: a.onPressed)
           else
             _CompactToolButton(
-                icon: a.icon, label: a.label, onPressed: a.onPressed),
+              icon: a.icon,
+              label: a.label,
+              onPressed: a.onPressed,
+            ),
         if (showStatus)
           Expanded(
             child: Text(
               status,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textDisabled,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textDisabled),
               overflow: TextOverflow.ellipsis,
               maxLines: 1,
               textAlign: TextAlign.right,
@@ -417,7 +447,10 @@ class _ToolbarLayout extends StatelessWidget {
   }
 
   static double _estimateWidth(
-      String label, TextStyle? style, TextScaler scaler) {
+    String label,
+    TextStyle? style,
+    TextScaler scaler,
+  ) {
     final painter = TextPainter(
       text: TextSpan(text: label, style: style),
       textDirection: TextDirection.ltr,
@@ -441,7 +474,11 @@ class _MoreMenu extends StatelessWidget {
   Widget build(BuildContext context) {
     return PopupMenuButton<_ToolAction>(
       tooltip: 'More actions',
-      icon: const Icon(Icons.more_horiz, size: 20, color: AraColors.textPrimary),
+      icon: const Icon(
+        Icons.more_horiz,
+        size: 20,
+        color: AraColors.textPrimary,
+      ),
       color: AraColors.bgPanel,
       onSelected: (a) => a.onPressed?.call(),
       itemBuilder: (context) => [
@@ -449,15 +486,19 @@ class _MoreMenu extends StatelessWidget {
           PopupMenuItem<_ToolAction>(
             value: a,
             enabled: a.onPressed != null,
-            child: Row(children: [
-              Icon(a.icon,
+            child: Row(
+              children: [
+                Icon(
+                  a.icon,
                   size: 18,
                   color: a.onPressed != null
                       ? AraColors.textPrimary
-                      : AraColors.textDisabled),
-              const SizedBox(width: 12),
-              Text(a.label),
-            ]),
+                      : AraColors.textDisabled,
+                ),
+                const SizedBox(width: 12),
+                Text(a.label),
+              ],
+            ),
           ),
       ],
     );
@@ -519,9 +560,11 @@ bool lifecycleArmed(ProviderReader read) {
 /// (planning-only rigs, permanent piers and daytime tests all run fine
 /// unaligned). "Go to Checklist" jumps to the checklist instead. Public: the
 /// tab's keyboard shortcuts drive the same path as the Run button.
-Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) async {
-  final aligned =
-      read(setupPolarAlignStateProvider) == SetupStepState.done;
+Future<void> preflightAndRunSequence(
+  BuildContext context,
+  ProviderReader read,
+) async {
+  final aligned = read(setupPolarAlignStateProvider) == SetupStepState.done;
   if (!aligned) {
     final choice = await showDialog<_PreflightChoice>(
       context: context,
@@ -529,10 +572,11 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
         backgroundColor: AraColors.bgPanel,
         title: const Text('Not polar aligned — run anyway?'),
         content: const Text(
-            'Polar alignment hasn\'t been completed this session. On a '
-            'freshly set up mount, unguided pointing and field rotation will '
-            'suffer. If the mount is already aligned (permanent pier), just '
-            'run.'),
+          'Polar alignment hasn\'t been completed this session. On a '
+          'freshly set up mount, unguided pointing and field rotation will '
+          'suffer. If the mount is already aligned (permanent pier), just '
+          'run.',
+        ),
         actions: [
           TextButton(
             onPressed: () =>
@@ -593,16 +637,21 @@ enum _PreflightChoice { cancel, goToSetup, runAnyway }
 /// The daemon refused to start: there is no storage disk for the frames.
 /// "Open Storage" jumps to Options → Storage, where the drive is set up.
 Future<void> _showNoStorageDisk(
-    BuildContext context, ProviderReader read, String detail) async {
+  BuildContext context,
+  ProviderReader read,
+  String detail,
+) async {
   final openStorage = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       backgroundColor: AraColors.bgPanel,
       title: const Text('No storage disk'),
-      content: Text(detail.isNotEmpty
-          ? detail
-          : 'There is no disk to save frames to. Plug in the storage drive '
-              'before imaging.'),
+      content: Text(
+        detail.isNotEmpty
+            ? detail
+            : 'There is no disk to save frames to. Plug in the storage drive '
+                  'before imaging.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -657,22 +706,28 @@ Future<void> runSequenceLifecycle(
       } else {
         // The daemon's own words when it sent them (the Bahtinov mask is on…);
         // a bare 409 is the run having already moved past this action.
-        messenger.showSnackBar(SnackBar(
-          content: Text(detail.isNotEmpty
-              ? detail
-              : code == 409
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(
+              detail.isNotEmpty
+                  ? detail
+                  : code == 409
                   ? "Command not valid in the sequence's current state."
-                  : 'Sequence command failed (${code ?? e.message ?? 'network error'}).'),
-          backgroundColor: AraColors.accentError,
-        ));
+                  : 'Sequence command failed (${code ?? e.message ?? 'network error'}).',
+            ),
+            backgroundColor: AraColors.accentError,
+          ),
+        );
       }
     } catch (e) {
       // e.g. a FormatException if the 202 lacked an operation_id — still surface
       // it rather than let it propagate as an unhandled exception.
-      messenger.showSnackBar(const SnackBar(
-        content: Text('Sequence command failed.'),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text('Sequence command failed.'),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
     // Re-read run state BEFORE re-enabling the controls (the busy flag drops in
     // the finally below), so a fast re-click can't act on the stale pre-command
@@ -709,14 +764,17 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
           .read(draftSequencesProvider.notifier)
           .saveBody(editor.id, sentBody);
       editorNotifier.markSaved(sentBody);
-      messenger
-          .showSnackBar(const SnackBar(content: Text('Draft saved locally.')));
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Draft saved locally.')),
+      );
     } catch (e) {
       debugPrint('[sequencer] draft save error: $e');
-      messenger.showSnackBar(const SnackBar(
-        content: Text("Couldn't save the draft to disk."),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text("Couldn't save the draft to disk."),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     } finally {
       busy.setBusy(false);
     }
@@ -734,19 +792,27 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
     messenger.showSnackBar(const SnackBar(content: Text('Sequence saved.')));
   } on DioException catch (e) {
     final code = e.response?.statusCode;
-    messenger.showSnackBar(SnackBar(
-      content: Text(code == 422
-          ? 'Save rejected: ${_validationMessage(e) ?? 'the sequence is invalid.'}'
-          : "Couldn't save the sequence. Check the connection and try again."),
-      backgroundColor: AraColors.accentError,
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          code == 422
+              ? 'Save rejected: ${_validationMessage(e) ?? 'the sequence is invalid.'}'
+              : "Couldn't save the sequence. Check the connection and try again.",
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
   } catch (e) {
     // Don't let a programming error masquerade as a network failure in dev.
     debugPrint('[sequencer] unexpected save error: $e');
-    messenger.showSnackBar(const SnackBar(
-      content: Text("Couldn't save the sequence. Check the connection and try again."),
-      backgroundColor: AraColors.accentError,
-    ));
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Couldn't save the sequence. Check the connection and try again.",
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
   } finally {
     busy.setBusy(false);
   }
@@ -766,19 +832,28 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
   busy.setBusy(true);
   try {
     final result = await api.validate(editor.body);
-    messenger.showSnackBar(SnackBar(
-      content: Text(result.valid
-          ? 'Sequence is valid.'
-          : 'Invalid: ${result.reason ?? 'failed schema validation.'}'),
-      backgroundColor:
-          result.valid ? AraColors.accentConnected : AraColors.accentError,
-    ));
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          result.valid
+              ? 'Sequence is valid.'
+              : 'Invalid: ${result.reason ?? 'failed schema validation.'}',
+        ),
+        backgroundColor: result.valid
+            ? AraColors.accentConnected
+            : AraColors.accentError,
+      ),
+    );
   } catch (e) {
     debugPrint('[sequencer] validate error: $e');
-    messenger.showSnackBar(const SnackBar(
-      content: Text("Couldn't validate the sequence. Check the connection and try again."),
-      backgroundColor: AraColors.accentError,
-    ));
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          "Couldn't validate the sequence. Check the connection and try again.",
+        ),
+        backgroundColor: AraColors.accentError,
+      ),
+    );
   } finally {
     busy.setBusy(false);
   }
@@ -789,23 +864,36 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
 /// editor applies it to the run (or explains why it can't) and there is no
 /// local undo, so no Undo is offered then.
 void _deleteSelectedItem(
-    BuildContext context, WidgetRef ref, NodePath path, String label) {
+  BuildContext context,
+  WidgetRef ref,
+  NodePath path,
+  String label,
+) {
   final notifier = ref.read(sequenceEditorProvider.notifier);
   notifier.removeNode(path);
   if (!notifier.canUndo) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text('Deleted $label'),
-    // The default action colour is near-white on the light snackbar.
-    action: SnackBarAction(
-        label: 'Undo', textColor: AraColors.accentInfo, onPressed: notifier.undo),
-  ));
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Text('Deleted $label'),
+      // The default action colour is near-white on the light snackbar.
+      action: SnackBarAction(
+        label: 'Undo',
+        textColor: AraColors.accentInfo,
+        onPressed: notifier.undo,
+      ),
+    ),
+  );
 }
 
 /// Delete the open sequence via the shared confirm/stop-and-delete flow,
 /// bracketing the busy fence so the other toolbar commands (Run above all)
 /// can't fire against a sequence that's mid-deletion.
 Future<void> _delete(
-    BuildContext context, WidgetRef ref, String id, String? name) async {
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+  String? name,
+) async {
   if (ref.read(sequenceCommandBusyProvider)) return;
   final busy = ref.read(sequenceCommandBusyProvider.notifier);
   busy.setBusy(true);
@@ -821,7 +909,11 @@ Future<void> _delete(
 /// the shared _delete: a keyboard-driven command while the dialog sits open
 /// must not slip past (review #1106 note).
 Future<void> _deleteDraft(
-    BuildContext context, WidgetRef ref, String id, String? name) async {
+  BuildContext context,
+  WidgetRef ref,
+  String id,
+  String? name,
+) async {
   if (ref.read(sequenceCommandBusyProvider)) return;
   final busy = ref.read(sequenceCommandBusyProvider.notifier);
   busy.setBusy(true);
@@ -868,8 +960,12 @@ String? _validationMessage(DioException e) {
   return msg.length > 200 ? '${msg.substring(0, 200)}…' : msg;
 }
 
-String _statusLine(bool connected, String? selectedId, String? selectedName,
-    SequenceRunStateInfo? runInfo) {
+String _statusLine(
+  bool connected,
+  String? selectedId,
+  String? selectedName,
+  SequenceRunStateInfo? runInfo,
+) {
   if (selectedId != null && isDraftSequenceId(selectedId)) {
     // A draft is fully local: show it whether or not a server is connected,
     // and never a run state (drafts can't run until pushed).
@@ -892,18 +988,18 @@ String _statusLine(bool connected, String? selectedId, String? selectedName,
 }
 
 String _runStateLabel(SequenceRunState s) => switch (s) {
-      SequenceRunState.idle => 'Idle',
-      SequenceRunState.starting => 'Starting',
-      SequenceRunState.running => 'Running',
-      SequenceRunState.paused => 'Paused',
-      // §58.12 — the run stopped itself after an urgent failure (e.g. a failed
-      // meridian flip, mount in safe rest) and won't continue until resumed.
-      SequenceRunState.pausedAwaitingUser => 'Paused — needs your attention',
-      SequenceRunState.aborting => 'Aborting',
-      SequenceRunState.stopped => 'Stopped',
-      SequenceRunState.completed => 'Completed',
-      SequenceRunState.failed => 'Failed',
-    };
+  SequenceRunState.idle => 'Idle',
+  SequenceRunState.starting => 'Starting',
+  SequenceRunState.running => 'Running',
+  SequenceRunState.paused => 'Paused',
+  // §58.12 — the run stopped itself after an urgent failure (e.g. a failed
+  // meridian flip, mount in safe rest) and won't continue until resumed.
+  SequenceRunState.pausedAwaitingUser => 'Paused — needs your attention',
+  SequenceRunState.aborting => 'Aborting',
+  SequenceRunState.stopped => 'Stopped',
+  SequenceRunState.completed => 'Completed',
+  SequenceRunState.failed => 'Failed',
+};
 
 class _ToolButton extends StatelessWidget {
   final IconData icon;
@@ -936,15 +1032,19 @@ class _ToolButton extends StatelessWidget {
 /// shortcuts (⌘R / Space on a paused run) drive the same path as the button.
 /// The daemon skips the refinement gracefully when the run moved past the
 /// paused target or no plate solver is configured, so offering it is always safe.
-Future<void> promptAndResumeSequence(BuildContext context, ProviderReader read) async {
+Future<void> promptAndResumeSequence(
+  BuildContext context,
+  ProviderReader read,
+) async {
   final choice = await showDialog<(bool recenter, bool refocus)>(
     context: context,
     builder: (dialogContext) => AlertDialog(
       backgroundColor: AraColors.bgPanel,
       title: const Text('Resume imaging?'),
       content: const Text(
-          'The target can be re-centered with a plate solve before imaging '
-          'continues — recommended after a pause. You can also refocus first.'),
+        'The target can be re-centered with a plate solve before imaging '
+        'continues — recommended after a pause. You can also refocus first.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop((false, false)),
@@ -963,10 +1063,10 @@ Future<void> promptAndResumeSequence(BuildContext context, ProviderReader read) 
   );
   if (choice == null || !context.mounted) return; // dismissed — user backed out
   await runSequenceLifecycle(
-      context,
-      read,
-      (api, id) =>
-          api.resume(id, recenter: choice.$1, refocus: choice.$2));
+    context,
+    read,
+    (api, id) => api.resume(id, recenter: choice.$1, refocus: choice.$2),
+  );
 }
 
 /// Aborting mid-run is destructive (the night's remaining plan dies with it)
@@ -978,8 +1078,9 @@ Future<void> _confirmAbort(BuildContext context, WidgetRef ref) async {
       backgroundColor: AraColors.bgPanel,
       title: const Text('Abort this run?'),
       content: const Text(
-          'The sequence stops where it is — completed frames are kept, the '
-          'rest of tonight\'s plan is cancelled.'),
+        'The sequence stops where it is — completed frames are kept, the '
+        'rest of tonight\'s plan is cancelled.',
+      ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(dialogContext).pop(false),
@@ -1007,6 +1108,7 @@ class _LifecycleButton extends StatelessWidget {
   final String label;
   final _LifecycleKind kind;
   final VoidCallback? onPressed;
+
   /// Icon-only (tooltip carries the label) for the narrowest toolbar widths.
   final bool compact;
   const _LifecycleButton({
@@ -1022,7 +1124,10 @@ class _LifecycleButton extends StatelessWidget {
     if (compact) {
       final enabled = onPressed != null;
       final (Color fg, Color? bg) = switch (kind) {
-        _LifecycleKind.primary => (AraColors.onBrightFill, AraColors.accentConnected),
+        _LifecycleKind.primary => (
+          AraColors.onBrightFill,
+          AraColors.accentConnected,
+        ),
         _LifecycleKind.caution => (AraColors.accentBusy, null),
         _LifecycleKind.destructive => (AraColors.accentError, null),
       };
@@ -1042,7 +1147,8 @@ class _LifecycleButton extends StatelessWidget {
                 ? BorderSide(
                     color: enabled
                         ? AraColors.accentError.withValues(alpha: 0.6)
-                        : AraColors.border)
+                        : AraColors.border,
+                  )
                 : null,
           ),
         ),
@@ -1052,44 +1158,45 @@ class _LifecycleButton extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: switch (kind) {
         _LifecycleKind.primary => FilledButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 16),
-            label: Text(label),
-            style: FilledButton.styleFrom(
-              backgroundColor: AraColors.accentConnected,
-              foregroundColor: AraColors.onBrightFill,
-              disabledBackgroundColor: AraColors.bgInput,
-              disabledForegroundColor: AraColors.textDisabled,
-              visualDensity: VisualDensity.compact,
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              shape: const StadiumBorder(),
-            ),
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            backgroundColor: AraColors.accentConnected,
+            foregroundColor: AraColors.onBrightFill,
+            disabledBackgroundColor: AraColors.bgInput,
+            disabledForegroundColor: AraColors.textDisabled,
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            shape: const StadiumBorder(),
           ),
+        ),
         _LifecycleKind.caution => TextButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 16),
-            label: Text(label),
-            style: TextButton.styleFrom(
-              foregroundColor: AraColors.accentBusy,
-              disabledForegroundColor: AraColors.textDisabled,
-              visualDensity: VisualDensity.compact,
-            ),
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style: TextButton.styleFrom(
+            foregroundColor: AraColors.accentBusy,
+            disabledForegroundColor: AraColors.textDisabled,
+            visualDensity: VisualDensity.compact,
           ),
+        ),
         _LifecycleKind.destructive => OutlinedButton.icon(
-            onPressed: onPressed,
-            icon: Icon(icon, size: 16),
-            label: Text(label),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AraColors.accentError,
-              disabledForegroundColor: AraColors.textDisabled,
-              side: BorderSide(
-                  color: onPressed == null
-                      ? AraColors.border
-                      : AraColors.accentError.withValues(alpha: 0.6)),
-              visualDensity: VisualDensity.compact,
-              shape: const StadiumBorder(),
+          onPressed: onPressed,
+          icon: Icon(icon, size: 16),
+          label: Text(label),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AraColors.accentError,
+            disabledForegroundColor: AraColors.textDisabled,
+            side: BorderSide(
+              color: onPressed == null
+                  ? AraColors.border
+                  : AraColors.accentError.withValues(alpha: 0.6),
             ),
+            visualDensity: VisualDensity.compact,
+            shape: const StadiumBorder(),
           ),
+        ),
       },
     );
     return child;

@@ -29,7 +29,8 @@ Color zoneColor(double? totalErrorArcmin) {
 /// Plain-English verdict for a total polar error (label, what it means): the
 /// Polar Align quality card's bands, shared with the guiding strip's
 /// residual-from-guiding readout. Pure — unit-tested.
-(String, String) polarErrorRating(double arcmin) => _ratingByVerdict[polarVerdictFor(arcmin)]!;
+(String, String) polarErrorRating(double arcmin) =>
+    _ratingByVerdict[polarVerdictFor(arcmin)]!;
 
 /// The daemon's verdict token for a total error — the same bands as
 /// `PolarAlignService.VerdictFor` (`excellent` ≤1′, `very_good` ≤3′, `good`
@@ -46,7 +47,8 @@ String polarVerdictFor(double arcmin) {
 /// The words for a verdict the daemon sent (`check_result.verdict`), so the
 /// checked card shows the daemon's own call; null for a token this build does
 /// not know (fall back to [polarErrorRating] on the total). Pure — unit-tested.
-(String, String)? polarRatingForVerdict(String verdict) => _ratingByVerdict[verdict];
+(String, String)? polarRatingForVerdict(String verdict) =>
+    _ratingByVerdict[verdict];
 
 const _ratingByVerdict = <String, (String, String)>{
   'excellent': ('Excellent', "Polar alignment won't limit your exposures."),
@@ -87,13 +89,19 @@ String paResidualDetail(AppLocalizations l, PaResidual r) {
   final duration = _clock(r.sampleSeconds);
   final drift = r.driftArcsecPerMin?.abs().toStringAsFixed(2);
   final ha = r.hourAngleHours;
-  final hours = ha == null ? null : '${ha < 0 ? '−' : '+'}${ha.abs().toStringAsFixed(1)}';
+  final hours = ha == null
+      ? null
+      : '${ha < 0 ? '−' : '+'}${ha.abs().toStringAsFixed(1)}';
   final align = r.alignErrorArcmin;
   final alignText = align == null ? null : formatPoleOffset(align).$1;
   final lines = <String>[
     uncertainty == null
         ? l.paResidualDetailFigure(duration, error)
-        : l.paResidualDetailFigureSigma(duration, error, formatPoleOffset(uncertainty).$1),
+        : l.paResidualDetailFigureSigma(
+            duration,
+            error,
+            formatPoleOffset(uncertainty).$1,
+          ),
     if (drift != null && hours != null)
       l.paResidualDetailDriftAtHourAngle(drift, hours)
     else if (drift != null)
@@ -114,16 +122,17 @@ String paResidualDetail(AppLocalizations l, PaResidual r) {
 }
 
 /// What an `unavailable` reason means, in the user's words.
-String paResidualReasonText(AppLocalizations l, String? reason) => switch (reason) {
-  'lock_shift' => l.paResidualReasonLockShift,
-  'ao' => l.paResidualReasonAo,
-  'guiding_not_holding' => l.paResidualReasonGuidingNotHolding,
-  'settle_failed' => l.paResidualReasonSettleFailed,
-  'mount_not_tracking' => l.paResidualReasonMountNotTracking,
-  'no_calibration' => l.paResidualReasonNoCalibration,
-  'no_pixel_scale' => l.paResidualReasonNoPixelScale,
-  _ => l.paResidualReasonNoFit,
-};
+String paResidualReasonText(AppLocalizations l, String? reason) =>
+    switch (reason) {
+      'lock_shift' => l.paResidualReasonLockShift,
+      'ao' => l.paResidualReasonAo,
+      'guiding_not_holding' => l.paResidualReasonGuidingNotHolding,
+      'settle_failed' => l.paResidualReasonSettleFailed,
+      'mount_not_tracking' => l.paResidualReasonMountNotTracking,
+      'no_calibration' => l.paResidualReasonNoCalibration,
+      'no_pixel_scale' => l.paResidualReasonNoPixelScale,
+      _ => l.paResidualReasonNoFit,
+    };
 
 /// "m:ss" for a measurement's progress.
 String paResidualClock(double seconds) => _clock(seconds);

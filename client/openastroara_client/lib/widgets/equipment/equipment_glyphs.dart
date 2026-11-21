@@ -5,31 +5,49 @@ import 'package:flutter/material.dart';
 /// Device glyphs Material Icons has no match for, drawn at icon size in the
 /// icon colour so they sit beside the stock icons in the top equipment bar.
 class EquipmentGlyph extends StatelessWidget {
-  final void Function(Canvas canvas, Size size, Paint stroke, Paint fill) _paint;
+  final void Function(Canvas canvas, Size size, Paint stroke, Paint fill)
+  _paint;
   final double size;
   final Color color;
 
   /// A refractor on a tripod, tube pointing up-left: the mount chip.
-  const EquipmentGlyph.telescope({super.key, this.size = 28, required this.color}) : _paint = _telescope;
+  const EquipmentGlyph.telescope({
+    super.key,
+    this.size = 28,
+    required this.color,
+  }) : _paint = _telescope;
 
   /// A filter wheel: round housing with the motor box below, five filter holes.
-  const EquipmentGlyph.filterWheel({super.key, this.size = 28, required this.color}) : _paint = _filterWheel;
+  const EquipmentGlyph.filterWheel({
+    super.key,
+    this.size = 28,
+    required this.color,
+  }) : _paint = _filterWheel;
 
   /// A flat panel seen face on: the round lit panel on the tube's rim, hinge on top.
-  const EquipmentGlyph.flatPanel({super.key, this.size = 28, required this.color}) : _paint = _flatPanel;
+  const EquipmentGlyph.flatPanel({
+    super.key,
+    this.size = 28,
+    required this.color,
+  }) : _paint = _flatPanel;
 
   /// An observatory dome on its wall, with the shutter slit open.
-  const EquipmentGlyph.dome({super.key, this.size = 28, required this.color}) : _paint = _dome;
+  const EquipmentGlyph.dome({super.key, this.size = 28, required this.color})
+    : _paint = _dome;
 
   /// Dew point: a leaf with its stem and midrib, a drop over its broken upper
   /// edge (Material's dew point mark read as a second thermometer).
-  const EquipmentGlyph.dewPoint({super.key, this.size = 28, required this.color}) : _paint = _dewPoint;
+  const EquipmentGlyph.dewPoint({
+    super.key,
+    this.size = 28,
+    required this.color,
+  }) : _paint = _dewPoint;
 
   @override
   Widget build(BuildContext context) => SizedBox.square(
-        dimension: size,
-        child: CustomPaint(painter: _GlyphPainter(_paint, color)),
-      );
+    dimension: size,
+    child: CustomPaint(painter: _GlyphPainter(_paint, color)),
+  );
 
   static void _telescope(Canvas c, Size s, Paint stroke, Paint fill) {
     final u = s.width / 24; // drawn on a 24-unit grid like Material icons
@@ -41,7 +59,10 @@ class EquipmentGlyph extends StatelessWidget {
     c.save();
     c.translate(11 * u, 9 * u);
     c.rotate(-math.pi / 7);
-    c.drawRRect(RRect.fromLTRBR(-8 * u, -2 * u, 7 * u, 2 * u, Radius.circular(0.8 * u)), fill);
+    c.drawRRect(
+      RRect.fromLTRBR(-8 * u, -2 * u, 7 * u, 2 * u, Radius.circular(0.8 * u)),
+      fill,
+    );
     c.drawRect(Rect.fromLTRB(7 * u, -3 * u, 10 * u, 3 * u), fill);
     c.drawRect(Rect.fromLTRB(-10 * u, -1 * u, -8 * u, 1 * u), fill);
     c.restore();
@@ -61,12 +82,24 @@ class EquipmentGlyph extends StatelessWidget {
     final centre = Offset(12 * u, 11 * u);
     final body = Path()
       ..addOval(Rect.fromCircle(center: centre, radius: 10.5 * u))
-      ..addRRect(RRect.fromLTRBR(8 * u, 17 * u, 16 * u, 23.5 * u, Radius.circular(1.2 * u)));
+      ..addRRect(
+        RRect.fromLTRBR(
+          8 * u,
+          17 * u,
+          16 * u,
+          23.5 * u,
+          Radius.circular(1.2 * u),
+        ),
+      );
     final holes = Path()..fillType = PathFillType.evenOdd;
     for (var i = 0; i < 5; i++) {
       final a = -math.pi / 2 + i * 2 * math.pi / 5;
-      holes.addOval(Rect.fromCircle(
-          center: centre + Offset(math.cos(a), math.sin(a)) * (6 * u), radius: 2.9 * u));
+      holes.addOval(
+        Rect.fromCircle(
+          center: centre + Offset(math.cos(a), math.sin(a)) * (6 * u),
+          radius: 2.9 * u,
+        ),
+      );
     }
     holes.addOval(Rect.fromCircle(center: centre, radius: 0.9 * u));
     c.drawPath(Path.combine(PathOperation.difference, body, holes), fill);
@@ -83,7 +116,16 @@ class EquipmentGlyph extends StatelessWidget {
       ..addOval(Rect.fromCircle(center: centre, radius: 8.6 * u));
     c.drawPath(rim, fill);
     c.drawCircle(centre, 7 * u, fill);
-    c.drawRRect(RRect.fromLTRBR(9.5 * u, 1.5 * u, 14.5 * u, 4.1 * u, Radius.circular(0.8 * u)), fill);
+    c.drawRRect(
+      RRect.fromLTRBR(
+        9.5 * u,
+        1.5 * u,
+        14.5 * u,
+        4.1 * u,
+        Radius.circular(0.8 * u),
+      ),
+      fill,
+    );
   }
 
   static void _dome(Canvas c, Size s, Paint stroke, Paint fill) {
@@ -117,33 +159,41 @@ class EquipmentGlyph extends StatelessWidget {
       ..strokeJoin = StrokeJoin.round;
     // The leaf, its upper edge broken under the drop.
     c.drawPath(
-        Path()
-          ..moveTo(13.5 * u, 9 * u)
-          ..cubicTo(12 * u, 7.5 * u, 9.5 * u, 6.6 * u, 6 * u, 8 * u)
-          ..cubicTo(3 * u, 13.5 * u, 7.5 * u, 20.5 * u, 20 * u, 19 * u)
-          ..cubicTo(19 * u, 16.5 * u, 18 * u, 14.5 * u, 16.5 * u, 12.5 * u),
-        line);
+      Path()
+        ..moveTo(13.5 * u, 9 * u)
+        ..cubicTo(12 * u, 7.5 * u, 9.5 * u, 6.6 * u, 6 * u, 8 * u)
+        ..cubicTo(3 * u, 13.5 * u, 7.5 * u, 20.5 * u, 20 * u, 19 * u)
+        ..cubicTo(19 * u, 16.5 * u, 18 * u, 14.5 * u, 16.5 * u, 12.5 * u),
+      line,
+    );
     // The stem, running on as the midrib; it stops short of the tip, which
     // otherwise reads as an arrowhead.
     c.drawPath(
-        Path()
-          ..moveTo(3 * u, 3 * u)
-          ..cubicTo(5.5 * u, 7.5 * u, 9.5 * u, 12 * u, 15.5 * u, 15.8 * u),
-        line);
+      Path()
+        ..moveTo(3 * u, 3 * u)
+        ..cubicTo(5.5 * u, 7.5 * u, 9.5 * u, 12 * u, 15.5 * u, 15.8 * u),
+      line,
+    );
     // The drop (no highlight: at this line width it closes up the drop).
     c.drawPath(
-        Path()
-          ..moveTo(18 * u, 1.8 * u)
-          ..cubicTo(18 * u, 1.8 * u, 15 * u, 5.6 * u, 15 * u, 7.4 * u)
-          ..arcToPoint(p(21, 7.4), radius: Radius.circular(3 * u), clockwise: false)
-          ..cubicTo(21 * u, 5.6 * u, 18 * u, 1.8 * u, 18 * u, 1.8 * u)
-          ..close(),
-        line);
+      Path()
+        ..moveTo(18 * u, 1.8 * u)
+        ..cubicTo(18 * u, 1.8 * u, 15 * u, 5.6 * u, 15 * u, 7.4 * u)
+        ..arcToPoint(
+          p(21, 7.4),
+          radius: Radius.circular(3 * u),
+          clockwise: false,
+        )
+        ..cubicTo(21 * u, 5.6 * u, 18 * u, 1.8 * u, 18 * u, 1.8 * u)
+        ..close(),
+      line,
+    );
   }
 }
 
 class _GlyphPainter extends CustomPainter {
-  final void Function(Canvas canvas, Size size, Paint stroke, Paint fill) paintGlyph;
+  final void Function(Canvas canvas, Size size, Paint stroke, Paint fill)
+  paintGlyph;
   final Color color;
   _GlyphPainter(this.paintGlyph, this.color);
 
@@ -159,5 +209,6 @@ class _GlyphPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_GlyphPainter old) => old.color != color || old.paintGlyph != paintGlyph;
+  bool shouldRepaint(_GlyphPainter old) =>
+      old.color != color || old.paintGlyph != paintGlyph;
 }

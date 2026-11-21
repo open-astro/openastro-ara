@@ -32,10 +32,10 @@ class StatsTarget {
   });
 
   factory StatsTarget.fromJson(Map<String, dynamic> json) => StatsTarget(
-        targetName: _str(json['target_name']),
-        frameCount: _int(json['frame_count']),
-        integrationHours: _dbl(json['integration_hours']),
-        compositeQualityScore: _dblOrNull(json['composite_quality_score']),
-        lastImagedUtc: parseStatsUtc(json['last_imaged_utc']),
-      );
+    targetName: _str(json['target_name']),
+    frameCount: _int(json['frame_count']),
+    integrationHours: _dbl(json['integration_hours']),
+    compositeQualityScore: _dblOrNull(json['composite_quality_score']),
+    lastImagedUtc: parseStatsUtc(json['last_imaged_utc']),
+  );
 }

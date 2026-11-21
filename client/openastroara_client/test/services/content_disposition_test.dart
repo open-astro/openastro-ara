@@ -20,7 +20,8 @@ void main() {
     test('RFC 5987 filename* (percent-encoded, prefers over plain)', () {
       expect(
         fileNameFromContentDisposition(
-            "attachment; filename=fallback.zip; filename*=UTF-8''open%20astro.zip"),
+          "attachment; filename=fallback.zip; filename*=UTF-8''open%20astro.zip",
+        ),
         'open astro.zip',
       );
     });

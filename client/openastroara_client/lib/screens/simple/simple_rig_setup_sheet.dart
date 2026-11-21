@@ -271,10 +271,7 @@ class _Line extends StatelessWidget {
         ),
         borderRadius: BorderRadius.circular(AraRadius.container),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(AraSpace.s12),
-        child: row,
-      ),
+      child: Padding(padding: const EdgeInsets.all(AraSpace.s12), child: row),
     );
   }
 }
@@ -296,7 +293,9 @@ List<_Item> _items(AppLocalizations l10n, RigSetupFacts facts) {
       gap: RigSetupGap.site,
       id: 'site',
       label: l10n.rigSetupSite,
-      missing: gaps.contains(RigSetupGap.site) ? l10n.rigSetupSiteMissing : null,
+      missing: gaps.contains(RigSetupGap.site)
+          ? l10n.rigSetupSiteMissing
+          : null,
       action: l10n.rigSetupSiteAction,
     ),
     (
@@ -333,8 +332,11 @@ List<_Item> _items(AppLocalizations l10n, RigSetupFacts facts) {
   ];
 }
 
-String _progress(AppLocalizations l10n, List<_Item> items) => l10n
-    .rigSetupProgress(items.where((i) => i.missing == null).length, items.length);
+String _progress(AppLocalizations l10n, List<_Item> items) =>
+    l10n.rigSetupProgress(
+      items.where((i) => i.missing == null).length,
+      items.length,
+    );
 
 /// #1562 — Settings › Rig's header while the rig still lacks a fact: the count,
 /// a bar, and the next missing item with its fix. [onFix] runs the fix for
@@ -395,7 +397,9 @@ class SimpleRigSetupHeader extends ConsumerWidget {
                     children: [
                       Text(
                         l10n.rigSetupNext(next.label),
-                        style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
+                        style: kSimpleText.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       Text(next.missing!, style: AraText.caption),
                     ],

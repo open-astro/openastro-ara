@@ -28,12 +28,14 @@ class GuideFocusApi implements GuideFocusClient {
   final Dio _dio;
 
   GuideFocusApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           // Stop drains the in-flight frame (≤ exposure + 30 s on the daemon).
           receiveTimeout: const Duration(seconds: 65),
-        ));
+        ),
+      );
 
   @override
   Future<void> start({double? exposureSec, int? binning}) async {

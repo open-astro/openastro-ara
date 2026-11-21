@@ -27,8 +27,11 @@ class TargetPlanChoice {
   /// changes become Wait-for-User pauses (S58.12-b) so the user can swap
   /// screw-in filters by hand and press Resume.
   final bool manualFilterSwap;
-  const TargetPlanChoice(
-      {this.filterPlan, required this.guide, this.manualFilterSwap = false});
+  const TargetPlanChoice({
+    this.filterPlan,
+    required this.guide,
+    this.manualFilterSwap = false,
+  });
 }
 
 /// One selectable plan card: a label plus its ready-computed steps
@@ -64,9 +67,11 @@ Future<TargetPlanChoice?> showTargetPlanDialog(
   // still be loading the store. An unreachable rig plans with the spec sheet.
   var skyCalibrationK = const <String, double>{};
   try {
-    skyCalibrationK = (await ProviderScope.containerOf(context, listen: false)
-                .read(skyModelCalibrationProvider.future))
-            ?.appliedK ??
+    skyCalibrationK =
+        (await ProviderScope.containerOf(
+          context,
+          listen: false,
+        ).read(skyModelCalibrationProvider.future))?.appliedK ??
         const {};
   } catch (_) {
     // no scope, or the store failed: spec-sheet model
@@ -97,8 +102,7 @@ bool planOptionsAvailable(List<PlanningFilter> filters) {
       FilterKind.l ||
       FilterKind.r ||
       FilterKind.g ||
-      FilterKind.b =>
-        true,
+      FilterKind.b => true,
       FilterKind.osc || FilterKind.duo || FilterKind.tri => false,
     },
   );
@@ -162,13 +166,13 @@ int planFrameCount(
   double exposureSeconds, {
   required double? remainingDarkHours,
   required int filterCount,
-}) =>
-    defaultFrameCount(
-      exposureSeconds,
-      remainingDarkHours:
-          remainingDarkHours == null ? null : remainingDarkHours / filterCount,
-      fallbackFrames: math.max(12, 60 ~/ filterCount),
-    );
+}) => defaultFrameCount(
+  exposureSeconds,
+  remainingDarkHours: remainingDarkHours == null
+      ? null
+      : remainingDarkHours / filterCount,
+  fallbackFrames: math.max(12, 60 ~/ filterCount),
+);
 
 class _TargetPlanDialog extends ConsumerStatefulWidget {
   const _TargetPlanDialog({
@@ -221,7 +225,8 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   List<FilterPlanStep> _steps(List<PlanningFilter> picked) {
     final defaults =
         ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
-    final defaultExposure = defaults.defaultExposure.inMilliseconds /
+    final defaultExposure =
+        defaults.defaultExposure.inMilliseconds /
         Duration.millisecondsPerSecond;
     return [
       for (final f in picked)
@@ -247,11 +252,15 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     ];
   }
 
-  static String _fmtSec(double s) =>
-      s >= 120 ? '${(s / 60).toStringAsFixed(s % 60 == 0 ? 0 : 1)} min' : '${s.round()} s';
+  static String _fmtSec(double s) => s >= 120
+      ? '${(s / 60).toStringAsFixed(s % 60 == 0 ? 0 : 1)} min'
+      : '${s.round()} s';
 
   String _subtitle(List<FilterPlanStep> steps) => steps
-      .map((s) => '${s.filterName} ${_fmtSec(s.exposureSeconds)} × ${s.frameCount}')
+      .map(
+        (s) =>
+            '${s.filterName} ${_fmtSec(s.exposureSeconds)} × ${s.frameCount}',
+      )
       .join(' ·   ');
 
   List<_PlanOption> _buildOptions() {
@@ -267,13 +276,15 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     ];
     if (narrow.isNotEmpty) {
       final steps = _steps(narrow);
-      options.add(_PlanOption(
-        narrow.length == 3
-            ? 'Narrowband · SHO'
-            : 'Narrowband · ${narrow.map((f) => f.name).join(" / ")}',
-        _subtitle(steps),
-        steps,
-      ));
+      options.add(
+        _PlanOption(
+          narrow.length == 3
+              ? 'Narrowband · SHO'
+              : 'Narrowband · ${narrow.map((f) => f.name).join(" / ")}',
+          _subtitle(steps),
+          steps,
+        ),
+      );
     }
 
     final broad = [
@@ -282,11 +293,15 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     ];
     if (broad.isNotEmpty) {
       final steps = _steps(broad);
-      options.add(_PlanOption(
-        broad.length >= 4 ? 'Broadband · LRGB' : 'Broadband · ${broad.map((f) => f.name).join(" / ")}',
-        _subtitle(steps),
-        steps,
-      ));
+      options.add(
+        _PlanOption(
+          broad.length >= 4
+              ? 'Broadband · LRGB'
+              : 'Broadband · ${broad.map((f) => f.name).join(" / ")}',
+          _subtitle(steps),
+          steps,
+        ),
+      );
     }
 
     // Every filter singly — for the "just shoot Ha tonight" session.
@@ -296,11 +311,13 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
       options.add(_PlanOption('${f.name} only', _subtitle(steps), steps));
     }
 
-    options.add(const _PlanOption(
-      'Basic',
-      'One loop with your Imaging Defaults — no filter changes.',
-      null,
-    ));
+    options.add(
+      const _PlanOption(
+        'Basic',
+        'One loop with your Imaging Defaults — no filter changes.',
+        null,
+      ),
+    );
     return options;
   }
 
@@ -320,8 +337,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                 'Pick how tonight gets imaged — exposures come from your '
                 'optics and sky, frames split the window across filters. '
                 'Everything stays editable in the sequence afterwards.',
-                style:
-                    TextStyle(color: AraColors.textSecondary, fontSize: 12),
+                style: TextStyle(color: AraColors.textSecondary, fontSize: 12),
               ),
               if (_manualSwap) ...[
                 const SizedBox(height: 8),
@@ -329,8 +345,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                   'No filter wheel configured - at each filter change the run '
                   'will pause and wait for you to swap the filter and press '
                   'Resume.',
-                  style:
-                      TextStyle(color: AraColors.accentInfo, fontSize: 12),
+                  style: TextStyle(color: AraColors.accentInfo, fontSize: 12),
                 ),
               ],
               const SizedBox(height: 12),
@@ -347,28 +362,36 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                   child: Text(
                     'No guider on this rig — the run has no guiding steps.',
                     style: TextStyle(
-                        color: AraColors.textSecondary, fontSize: 11.5),
+                      color: AraColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
                   ),
                 )
               else
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                title: const Text('Guide with OpenAstro Guider',
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  dense: true,
+                  title: const Text(
+                    'Guide with OpenAstro Guider',
                     style: TextStyle(
-                        color: AraColors.textPrimary, fontSize: 13)),
-                subtitle: Text(
-                  _guide
-                      ? 'Starts guiding after autofocus, dithers every '
-                          '${(ref.read(phd2SettingsProvider).value ?? const Phd2Settings()).ditherEveryNFrames} '
-                          'frame(s).'
-                      : 'No guiding steps in the run.',
-                  style: const TextStyle(
-                      color: AraColors.textSecondary, fontSize: 11.5),
+                      color: AraColors.textPrimary,
+                      fontSize: 13,
+                    ),
+                  ),
+                  subtitle: Text(
+                    _guide
+                        ? 'Starts guiding after autofocus, dithers every '
+                              '${(ref.read(phd2SettingsProvider).value ?? const Phd2Settings()).ditherEveryNFrames} '
+                              'frame(s).'
+                        : 'No guiding steps in the run.',
+                    style: const TextStyle(
+                      color: AraColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                  value: _guide,
+                  onChanged: (v) => setState(() => _guide = v),
                 ),
-                value: _guide,
-                onChanged: (v) => setState(() => _guide = v),
-              ),
             ],
           ),
         ),
@@ -383,11 +406,13 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
           context,
           filled: true,
           isDefault: true,
-          onPressed: () => Navigator.of(context).pop(TargetPlanChoice(
-            filterPlan: _options[_selected].steps,
-            guide: _guide,
-            manualFilterSwap: _manualSwap,
-          )),
+          onPressed: () => Navigator.of(context).pop(
+            TargetPlanChoice(
+              filterPlan: _options[_selected].steps,
+              guide: _guide,
+              manualFilterSwap: _manualSwap,
+            ),
+          ),
           child: const Text('Create run'),
         ),
       ],
@@ -408,38 +433,45 @@ class _PlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: InkWell(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: InkWell(
+      borderRadius: BorderRadius.circular(8),
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
-          onTap: onTap,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: selected ? AraColors.accentInfo : AraColors.border,
-                width: selected ? 1.5 : 1,
-              ),
-              color: selected
-                  ? AraColors.accentInfo.withValues(alpha: 0.08)
-                  : Colors.transparent,
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(option.label,
-                    style: const TextStyle(
-                        color: AraColors.textPrimary,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600)),
-                const SizedBox(height: 2),
-                Text(option.subtitle,
-                    style: const TextStyle(
-                        color: AraColors.textSecondary, fontSize: 11.5)),
-              ],
-            ),
+          border: Border.all(
+            color: selected ? AraColors.accentInfo : AraColors.border,
+            width: selected ? 1.5 : 1,
           ),
+          color: selected
+              ? AraColors.accentInfo.withValues(alpha: 0.08)
+              : Colors.transparent,
         ),
-      );
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              option.label,
+              style: const TextStyle(
+                color: AraColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              option.subtitle,
+              style: const TextStyle(
+                color: AraColors.textSecondary,
+                fontSize: 11.5,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }

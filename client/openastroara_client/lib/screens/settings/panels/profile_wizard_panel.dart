@@ -28,9 +28,8 @@ class ProfileWizardPanel extends StatelessWidget {
                 'Walks through the 18-screen / 7-stage wizard again,'
                 'starting from the current profile values as defaults. '
                 'Useful after swapping equipment or moving site.',
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: AraColors.textSecondary,
-                ),
+                style: Theme.of(context).textTheme.bodyMedium
+                    ?.copyWith(color: AraColors.textSecondary),
               ),
               const SizedBox(height: 24),
               FilledButton.icon(

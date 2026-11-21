@@ -734,9 +734,9 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
           .read(mountProvider.notifier)
           .moveAxis(axis: axis, rate: rate)
           .catchError((Object e) {
-        if (rate != 0 && mounted) _showNudgeRefusal(e);
-        return false;
-      });
+            if (rate != 0 && mounted) _showNudgeRefusal(e);
+            return false;
+          });
     } catch (_) {
       // ref.read threw during teardown — nothing to do; Stop/AbortSlew is the backstop.
     }
@@ -751,14 +751,13 @@ class _ManualMovePadState extends ConsumerState<_ManualMovePad> {
     if (_shownRefusal == text) return;
     _shownRefusal = text;
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(
-          content: Text(text),
-          backgroundColor: AraColors.accentError,
-        ))
+        .showSnackBar(
+          SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
+        )
         .closed
         .then((_) {
-      if (_shownRefusal == text) _shownRefusal = null;
-    });
+          if (_shownRefusal == text) _shownRefusal = null;
+        });
   }
 }
 

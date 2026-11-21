@@ -8,6 +8,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/frame_quality_state.dart';
 import 'package:openastroara/widgets/stats/charts/frame_quality_chart.dart';
+
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -41,27 +42,28 @@ class _FakeFrameQualityClient implements FrameQualityClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 FrameQualityDistribution _dist(int count) => FrameQualityDistribution(
-      buckets: [FrameQualityBucket(rangeLow: 0.9, rangeHigh: 1.0, count: count)],
-      meanScore: 0.95,
-    );
+  buckets: [FrameQualityBucket(rangeLow: 0.9, rangeHigh: 1.0, count: count)],
+  meanScore: 0.95,
+);
 
 Widget _app(List<AraServer> servers, FrameQualityClient api) {
   return ProviderScope(
     overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
       frameQualityApiFactoryProvider.overrideWithValue((_) => api),
     ],
     child: const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: FrameQualityChart()),
-      ),
+      home: Scaffold(body: SingleChildScrollView(child: FrameQualityChart())),
     ),
   );
 }
 
 void main() {
-  testWidgets('a failed manual refresh shows the stale chip over the chart',
-      (tester) async {
+  testWidgets('a failed manual refresh shows the stale chip over the chart', (
+    tester,
+  ) async {
     final api = _FakeFrameQualityClient(_dist(5));
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();

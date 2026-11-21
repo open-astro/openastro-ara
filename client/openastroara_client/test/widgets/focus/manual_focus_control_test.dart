@@ -30,44 +30,68 @@ class _Focuser extends FocuserNotifier {
   }
 }
 
-FocuserStatus _status({int? position = 1000, String runtime = 'idle', int? max = 2000}) => FocuserStatus(
-      deviceId: 'eaf',
-      name: 'EAF',
-      connectionState: EquipmentConnectionState.connected,
-      capabilities: max == null ? null : FocuserCapabilities(minPosition: 0, maxPosition: max, stepSizeUm: 1, canTempComp: false, absoluteFocuser: true),
-      runtimeState: runtime,
-      position: position,
-      temperature: null,
-      tempCompEnabled: false,
-    );
+FocuserStatus _status({
+  int? position = 1000,
+  String runtime = 'idle',
+  int? max = 2000,
+}) => FocuserStatus(
+  deviceId: 'eaf',
+  name: 'EAF',
+  connectionState: EquipmentConnectionState.connected,
+  capabilities: max == null
+      ? null
+      : FocuserCapabilities(
+          minPosition: 0,
+          maxPosition: max,
+          stepSizeUm: 1,
+          canTempComp: false,
+          absoluteFocuser: true,
+        ),
+  runtimeState: runtime,
+  position: position,
+  temperature: null,
+  tempCompEnabled: false,
+);
 
 class _Run extends SequenceRunStateNotifier {
   @override
-  Future<SequenceRunStateInfo?> build() async =>
-      SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: SequenceRunState.running);
+  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(
+    sequenceId: 's',
+    runId: 'r',
+    state: SequenceRunState.running,
+  );
 }
 
 class _Autofocusing extends AutofocusLiveNotifier {
   @override
-  AutofocusLive build() => AutofocusLive(run: AutofocusRun.fromJson({'state': AutofocusRunStates.running}));
+  AutofocusLive build() => AutofocusLive(
+    run: AutofocusRun.fromJson({'state': AutofocusRunStates.running}),
+  );
   @override
   Future<void> refresh() async {}
 }
 
-Future<_Focuser> _pump(WidgetTester tester, FocuserStatus status, {bool plan = false, bool autofocus = false}) async {
+Future<_Focuser> _pump(
+  WidgetTester tester,
+  FocuserStatus status, {
+  bool plan = false,
+  bool autofocus = false,
+}) async {
   final f = _Focuser();
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      focuserProvider.overrideWith(() => f),
-      if (plan) sequenceRunStateProvider.overrideWith(_Run.new),
-      if (autofocus) autofocusLiveProvider.overrideWith(_Autofocusing.new),
-    ],
-    child: MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: Scaffold(body: ManualFocusControl(focuser: status)),
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        focuserProvider.overrideWith(() => f),
+        if (plan) sequenceRunStateProvider.overrideWith(_Run.new),
+        if (autofocus) autofocusLiveProvider.overrideWith(_Autofocusing.new),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(body: ManualFocusControl(focuser: status)),
+      ),
     ),
-  ));
+  );
   await tester.pump();
   return f;
 }
@@ -90,17 +114,21 @@ void main() {
   testWidgets('the Bahtinov card has the nudge too (#1542)', (tester) async {
     tester.view.physicalSize = const Size(2400, 3600);
     addTearDown(tester.view.resetPhysicalSize);
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        focuserProvider.overrideWith(_Connected.new),
-        mainFocusMethodProvider.overrideWith(_Bahtinov.new),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: const Scaffold(body: SizedBox(width: 1100, height: 1600, child: MainFocusCard())),
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          focuserProvider.overrideWith(_Connected.new),
+          mainFocusMethodProvider.overrideWith(_Bahtinov.new),
+        ],
+        child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: const Scaffold(
+            body: SizedBox(width: 1100, height: 1600, child: MainFocusCard()),
+          ),
+        ),
       ),
-    ));
+    );
     await tester.pump();
     expect(_stop, findsOneWidget);
   });

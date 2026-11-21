@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/state/focus/autofocus_live_state.dart';
@@ -8,24 +9,48 @@ void main() {
   group('applyRunSnapshot', () {
     test('a run that completes during this session marks it as focused', () {
       final running = applyRunSnapshot(
-          const AutofocusLive(), AutofocusRun(state: AutofocusRunStates.running, startedUtc: DateTime.utc(2026, 10, 3, 21)));
+        const AutofocusLive(),
+        AutofocusRun(
+          state: AutofocusRunStates.running,
+          startedUtc: DateTime.utc(2026, 10, 3, 21),
+        ),
+      );
       expect(running.focusedThisSession, isFalse);
-      final next = applyRunSnapshot(running,
-          AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 21), finalPosition: 100));
+      final next = applyRunSnapshot(
+        running,
+        AutofocusRun(
+          state: AutofocusRunStates.complete,
+          startedUtc: DateTime.utc(2026, 10, 3, 21),
+          finalPosition: 100,
+        ),
+      );
       expect(next.focusedThisSession, isTrue);
       expect(next.run.finalPosition, 100);
     });
 
-    test('a run already complete on the first snapshot is from an earlier session', () {
-      // Ara keeps its last run until it restarts: last night's 05:40 run must not
-      // tick the Smart Focus step (or open the OAG gate) tonight.
-      final lastNight = AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 5, 40));
-      final first = applyRunSnapshot(const AutofocusLive(), lastNight);
-      expect(first.focusedThisSession, isFalse);
-      expect(first.run.isComplete, isTrue, reason: 'the old run is still shown');
-      expect(applyRunSnapshot(first, lastNight).focusedThisSession, isFalse,
-          reason: 'seeing the same old run again on a later refresh does not count either');
-    });
+    test(
+      'a run already complete on the first snapshot is from an earlier session',
+      () {
+        // Ara keeps its last run until it restarts: last night's 05:40 run must not
+        // tick the Smart Focus step (or open the OAG gate) tonight.
+        final lastNight = AutofocusRun(
+          state: AutofocusRunStates.complete,
+          startedUtc: DateTime.utc(2026, 10, 3, 5, 40),
+        );
+        final first = applyRunSnapshot(const AutofocusLive(), lastNight);
+        expect(first.focusedThisSession, isFalse);
+        expect(
+          first.run.isComplete,
+          isTrue,
+          reason: 'the old run is still shown',
+        );
+        expect(
+          applyRunSnapshot(first, lastNight).focusedThisSession,
+          isFalse,
+          reason: 'seeing the same old run again on a later refresh does not count either',
+        );
+      },
+    );
 
     test('an earlier session\'s run with no start time still never counts', () {
       const old = AutofocusRun(state: AutofocusRunStates.complete);
@@ -34,30 +59,63 @@ void main() {
     });
 
     test('a new run that completes after an earlier session\'s run counts', () {
-      final first = applyRunSnapshot(const AutofocusLive(),
-          AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 5, 40)));
+      final first = applyRunSnapshot(
+        const AutofocusLive(),
+        AutofocusRun(
+          state: AutofocusRunStates.complete,
+          startedUtc: DateTime.utc(2026, 10, 3, 5, 40),
+        ),
+      );
       final next = applyRunSnapshot(
-          first, AutofocusRun(state: AutofocusRunStates.complete, startedUtc: DateTime.utc(2026, 10, 3, 21, 15)));
+        first,
+        AutofocusRun(
+          state: AutofocusRunStates.complete,
+          startedUtc: DateTime.utc(2026, 10, 3, 21, 15),
+        ),
+      );
       expect(next.focusedThisSession, isTrue);
     });
 
     test('focusedThisSession survives a later failed run', () {
       const current = AutofocusLive(focusedThisSession: true);
-      final next = applyRunSnapshot(current, const AutofocusRun(state: AutofocusRunStates.failed, reason: 'clouds'));
-      expect(next.focusedThisSession, isTrue, reason: 'the scope was focused once this session');
+      final next = applyRunSnapshot(
+        current,
+        const AutofocusRun(state: AutofocusRunStates.failed, reason: 'clouds'),
+      );
+      expect(
+        next.focusedThisSession,
+        isTrue,
+        reason: 'the scope was focused once this session',
+      );
       expect(next.run.isFailed, isTrue);
     });
 
     test('a new run without a frame drops the previous picture', () {
-      final current = AutofocusLive(frame: Uint8List.fromList([1, 2]), frameSeq: 4);
-      final next = applyRunSnapshot(current, const AutofocusRun(state: AutofocusRunStates.running, hasFrame: false));
+      final current = AutofocusLive(
+        frame: Uint8List.fromList([1, 2]),
+        frameSeq: 4,
+      );
+      final next = applyRunSnapshot(
+        current,
+        const AutofocusRun(state: AutofocusRunStates.running, hasFrame: false),
+      );
       expect(next.frame, isNull);
       expect(next.frameSeq, 0);
     });
 
     test('a running run that already has a frame keeps the picture', () {
-      final current = AutofocusLive(frame: Uint8List.fromList([1, 2]), frameSeq: 4);
-      final next = applyRunSnapshot(current, const AutofocusRun(state: AutofocusRunStates.running, hasFrame: true, frameSeq: 4));
+      final current = AutofocusLive(
+        frame: Uint8List.fromList([1, 2]),
+        frameSeq: 4,
+      );
+      final next = applyRunSnapshot(
+        current,
+        const AutofocusRun(
+          state: AutofocusRunStates.running,
+          hasFrame: true,
+          frameSeq: 4,
+        ),
+      );
       expect(next.frame, isNotNull);
     });
   });
@@ -67,19 +125,56 @@ void main() {
       expect(focusStepState(const AutofocusLive()), SetupStepState.pending);
     });
     test('inProgress while running', () {
-      expect(focusStepState(const AutofocusLive(run: AutofocusRun(state: AutofocusRunStates.running))), SetupStepState.inProgress);
+      expect(
+        focusStepState(
+          const AutofocusLive(
+            run: AutofocusRun(state: AutofocusRunStates.running),
+          ),
+        ),
+        SetupStepState.inProgress,
+      );
     });
     test('done once focused this session', () {
-      expect(focusStepState(const AutofocusLive(focusedThisSession: true, run: AutofocusRun(state: AutofocusRunStates.complete))), SetupStepState.done);
+      expect(
+        focusStepState(
+          const AutofocusLive(
+            focusedThisSession: true,
+            run: AutofocusRun(state: AutofocusRunStates.complete),
+          ),
+        ),
+        SetupStepState.done,
+      );
     });
     test('problem after a failed run', () {
-      expect(focusStepState(const AutofocusLive(run: AutofocusRun(state: AutofocusRunStates.failed))), SetupStepState.problem);
+      expect(
+        focusStepState(
+          const AutofocusLive(
+            run: AutofocusRun(state: AutofocusRunStates.failed),
+          ),
+        ),
+        SetupStepState.problem,
+      );
     });
     test('a cancelled run is pending, not a problem', () {
-      expect(focusStepState(const AutofocusLive(run: AutofocusRun(state: AutofocusRunStates.cancelled))), SetupStepState.pending);
+      expect(
+        focusStepState(
+          const AutofocusLive(
+            run: AutofocusRun(state: AutofocusRunStates.cancelled),
+          ),
+        ),
+        SetupStepState.pending,
+      );
     });
     test('a manual "already in focus" wins over an old failure', () {
-      expect(focusStepState(const AutofocusLive(focusedThisSession: true, run: AutofocusRun(state: AutofocusRunStates.failed))), SetupStepState.done);
+      expect(
+        focusStepState(
+          const AutofocusLive(
+            focusedThisSession: true,
+            run: AutofocusRun(state: AutofocusRunStates.failed),
+          ),
+        ),
+        SetupStepState.done,
+      );
     });
   });
 }

@@ -15,7 +15,11 @@ import 'package:flutter/widgets.dart';
 class FitPane extends StatelessWidget {
   final EdgeInsets padding;
   final Widget child;
-  const FitPane({super.key, this.padding = EdgeInsets.zero, required this.child});
+  const FitPane({
+    super.key,
+    this.padding = EdgeInsets.zero,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +28,9 @@ class FitPane extends StatelessWidget {
         padding: padding,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            minHeight: c.hasBoundedHeight ? math.max(0.0, c.maxHeight - padding.vertical) : 0,
+            minHeight: c.hasBoundedHeight
+                ? math.max(0.0, c.maxHeight - padding.vertical)
+                : 0,
           ),
           child: child,
         ),
@@ -71,12 +77,15 @@ class FitFill extends ParentDataWidget<_FitParentData> {
 /// left for it. The builder clamps that height to whatever floor its content
 /// needs; building taller makes the pane scroll.
 class FitBand extends StatelessWidget {
-  final Widget Function(BuildContext context, double width, double height) builder;
+  final Widget Function(BuildContext context, double width, double height)
+  builder;
   const FitBand({super.key, required this.builder});
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(builder: (context, c) => builder(context, c.maxWidth, c.minHeight));
+    return LayoutBuilder(
+      builder: (context, c) => builder(context, c.maxWidth, c.minHeight),
+    );
   }
 }
 
@@ -88,8 +97,12 @@ class FitBand extends StatelessWidget {
 class FitRow extends MultiChildRenderObjectWidget {
   final List<int> flex;
   final double spacing;
-  const FitRow({super.key, required this.flex, this.spacing = 0, super.children})
-      : assert(flex.length == children.length);
+  const FitRow({
+    super.key,
+    required this.flex,
+    this.spacing = 0,
+    super.children,
+  }) : assert(flex.length == children.length);
 
   @override
   RenderObject createRenderObject(BuildContext context) =>
@@ -113,7 +126,8 @@ class _RenderFitColumn extends RenderBox
         RenderBoxContainerDefaultsMixin<RenderBox, _FitParentData> {
   @override
   void setupParentData(RenderBox child) {
-    if (child.parentData is! _FitParentData) child.parentData = _FitParentData();
+    if (child.parentData is! _FitParentData)
+      child.parentData = _FitParentData();
   }
 
   // No dry layout: the fill height depends on laying the other children
@@ -121,11 +135,14 @@ class _RenderFitColumn extends RenderBox
   // IntrinsicHeight.
   @override
   Size computeDryLayout(BoxConstraints constraints) {
-    assert(debugCannotComputeDryLayout(
-      reason: 'FitColumn lays its children out to find the fill height; it cannot '
-          'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
-          'similar parents (see FitPane).',
-    ));
+    assert(
+      debugCannotComputeDryLayout(
+        reason:
+            'FitColumn lays its children out to find the fill height; it cannot '
+            'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
+            'similar parents (see FitPane).',
+      ),
+    );
     return Size.zero;
   }
 
@@ -171,7 +188,8 @@ class _RenderFitColumn extends RenderBox
       defaultComputeDistanceToFirstActualBaseline(baseline);
 
   @override
-  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>
@@ -200,7 +218,8 @@ class _RenderFitRow extends RenderBox
 
   @override
   void setupParentData(RenderBox child) {
-    if (child.parentData is! _FitParentData) child.parentData = _FitParentData();
+    if (child.parentData is! _FitParentData)
+      child.parentData = _FitParentData();
   }
 
   // No dry layout: the fill height depends on laying the other children
@@ -208,11 +227,14 @@ class _RenderFitRow extends RenderBox
   // IntrinsicHeight.
   @override
   Size computeDryLayout(BoxConstraints constraints) {
-    assert(debugCannotComputeDryLayout(
-      reason: 'FitRow lays its children out to find the fill height; it cannot '
-          'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
-          'similar parents (see FitPane).',
-    ));
+    assert(
+      debugCannotComputeDryLayout(
+        reason:
+            'FitRow lays its children out to find the fill height; it cannot '
+            'be measured without layout. Keep it out of IntrinsicHeight, Wrap and '
+            'similar parents (see FitPane).',
+      ),
+    );
     return Size.zero;
   }
 
@@ -220,13 +242,20 @@ class _RenderFitRow extends RenderBox
   void performLayout() {
     final children = getChildrenAsList();
     final total = _flex.fold<int>(0, (a, b) => a + b);
-    final free = math.max(0.0, constraints.maxWidth - _spacing * math.max(0, children.length - 1));
+    final free = math.max(
+      0.0,
+      constraints.maxWidth - _spacing * math.max(0, children.length - 1),
+    );
     final widths = [for (final f in _flex) total == 0 ? 0.0 : free * f / total];
     // First pass: each column at the parent's minimum, free to grow.
     var height = constraints.minHeight;
     for (var i = 0; i < children.length; i++) {
       children[i].layout(
-        BoxConstraints(minWidth: widths[i], maxWidth: widths[i], minHeight: constraints.minHeight),
+        BoxConstraints(
+          minWidth: widths[i],
+          maxWidth: widths[i],
+          minHeight: constraints.minHeight,
+        ),
         parentUsesSize: true,
       );
       height = math.max(height, children[i].size.height);
@@ -237,7 +266,10 @@ class _RenderFitRow extends RenderBox
     for (var i = 0; i < children.length; i++) {
       final child = children[i];
       if (child.size.height != height) {
-        child.layout(BoxConstraints.tightFor(width: widths[i], height: height), parentUsesSize: true);
+        child.layout(
+          BoxConstraints.tightFor(width: widths[i], height: height),
+          parentUsesSize: true,
+        );
       }
       (child.parentData! as _FitParentData).offset = Offset(x, 0);
       x += widths[i] + _spacing;
@@ -246,7 +278,8 @@ class _RenderFitRow extends RenderBox
   }
 
   @override
-  void paint(PaintingContext context, Offset offset) => defaultPaint(context, offset);
+  void paint(PaintingContext context, Offset offset) =>
+      defaultPaint(context, offset);
 
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) =>

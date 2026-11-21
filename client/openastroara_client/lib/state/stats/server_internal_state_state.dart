@@ -9,10 +9,12 @@ import 'stats_refresh_mixin.dart';
 /// Builds a [ServerInternalStateClient] for a server. Overridable in tests.
 final serverInternalStateApiFactoryProvider =
     Provider<ServerInternalStateClient Function(AraServer)>(
-  (ref) => ServerInternalStateApi.new,
-);
+      (ref) => ServerInternalStateApi.new,
+    );
 
-final serverInternalStateApiProvider = Provider<ServerInternalStateClient?>((ref) {
+final serverInternalStateApiProvider = Provider<ServerInternalStateClient?>((
+  ref,
+) {
   final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(serverInternalStateApiFactoryProvider)(server);
@@ -34,11 +36,12 @@ class ServerInternalStateNotifier extends AsyncNotifier<ServerInternalState?>
   }
 
   Future<void> refresh() => refreshUsing(() async {
-        final api = ref.read(serverInternalStateApiProvider);
-        return api?.fetch();
-      });
+    final api = ref.read(serverInternalStateApiProvider);
+    return api?.fetch();
+  });
 }
 
 final serverInternalStateProvider =
     AsyncNotifierProvider<ServerInternalStateNotifier, ServerInternalState?>(
-        ServerInternalStateNotifier.new);
+      ServerInternalStateNotifier.new,
+    );

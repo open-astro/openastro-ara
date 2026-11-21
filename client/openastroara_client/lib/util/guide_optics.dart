@@ -11,7 +11,10 @@ library;
 /// Returns 0 ("unset" — the daemon keeps the OpenAstro Guider profile default) when the
 /// main optics aren't configured yet (focal length ≤ 0) or the reducer factor
 /// is non-positive (physically impossible; the optics section rejects it too).
-int derivedOagGuideFocalLength(double opticsFocalLengthMm, double reducerFactor) {
+int derivedOagGuideFocalLength(
+  double opticsFocalLengthMm,
+  double reducerFactor,
+) {
   if (opticsFocalLengthMm <= 0 || reducerFactor <= 0) return 0;
   return (opticsFocalLengthMm * reducerFactor).round();
 }
@@ -22,8 +25,8 @@ int derivedOagGuideFocalLength(double opticsFocalLengthMm, double reducerFactor)
 /// user sees is the number that gets persisted.
 double effectiveOagReducerFactor(double? baseReducerFactor) =>
     (baseReducerFactor != null && baseReducerFactor > 0)
-        ? baseReducerFactor
-        : 1.0;
+    ? baseReducerFactor
+    : 1.0;
 
 /// True when a guide scope's focal length equals the main scope's (with or without the reducer): the
 /// signature of a value copied from the main optics, not measured. Off-axis guiders share the train on

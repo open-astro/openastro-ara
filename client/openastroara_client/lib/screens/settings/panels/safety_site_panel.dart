@@ -85,10 +85,12 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
       if (result.success) {
         if (!_siteUnchangedSince(before)) {
           if (mounted) {
-            setState(() => _gpsStatus =
-                'A location was found, but you edited the site fields while it '
-                'was being looked up — not overwritten. Press Fill from GPS '
-                'again to apply it.');
+            setState(
+              () => _gpsStatus =
+                  'A location was found, but you edited the site fields while it '
+                  'was being looked up — not overwritten. Press Fill from GPS '
+                  'again to apply it.',
+            );
           }
           return;
         }
@@ -183,97 +185,94 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
             onRetry: loadSections,
           )
         else ...[
-        Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              OutlinedButton.icon(
-                key: const ValueKey('site_fill_from_gps'),
-                onPressed: _gpsBusy ? null : _fillFromGps,
-                icon: _gpsBusy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: AdaptiveProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.gps_fixed, size: 18),
-                label: const Text('Fill from GPS'),
-              ),
-              if (_gpsStatus != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text(
-                    _gpsStatus!,
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('site_fill_from_gps'),
+                  onPressed: _gpsBusy ? null : _fillFromGps,
+                  icon: _gpsBusy
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: AdaptiveProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.gps_fixed, size: 18),
+                  label: const Text('Fill from GPS'),
                 ),
-            ],
+                if (_gpsStatus != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      _gpsStatus!,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+              ],
+            ),
           ),
-        ),
-        EditableTextRow(
-          label: 'Site name',
-          helpKey: 'safety.site.site_name',
-          currentValue: s.siteName,
-          getCanonical: () => now().siteName,
-          parse: n.setSiteName,
-        ),
-        EditableNumberRow(
-          label: 'Latitude (°)',
-          helpKey: 'safety.site.latitude',
-          key: ValueKey('site-gps-lat-$_gpsFill'),
-          currentValue: s.latitudeDeg.toString(),
-          getCanonical: () =>
-              now().latitudeDeg.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) {
-              n.setLatitudeDeg(v);
-              _deriveTimezoneFromCoords();
-            }
-          },
-        ),
-        EditableNumberRow(
-          label: 'Longitude (°)',
-          helpKey: 'safety.site.longitude',
-          key: ValueKey('site-gps-lng-$_gpsFill'),
-          currentValue: s.longitudeDeg.toString(),
-          getCanonical: () =>
-              now().longitudeDeg.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) {
-              n.setLongitudeDeg(v);
-              _deriveTimezoneFromCoords();
-            }
-          },
-        ),
-        EditableNumberRow(
-          label: 'Elevation (m)',
-          helpKey: 'safety.site.elevation',
-          key: ValueKey('site-gps-alt-$_gpsFill'),
-          currentValue: s.elevationM.toString(),
-          getCanonical: () =>
-              now().elevationM.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setElevationM(v);
-          },
-        ),
-        EditableTextRow(
-          label: 'Time zone',
-          helpKey: 'safety.site.time_zone',
-          key: ValueKey('site-gps-tz-$_gpsFill'),
-          currentValue: s.timeZone,
-          getCanonical: () => now().timeZone,
-          parse: (v) {
-            _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
-            n.setTimeZone(v);
-          },
-          hint:
-              'IANA name (e.g. America/Los_Angeles) — auto-filled from '
-              'the coordinates',
-        ),
+          EditableTextRow(
+            label: 'Site name',
+            helpKey: 'safety.site.site_name',
+            currentValue: s.siteName,
+            getCanonical: () => now().siteName,
+            parse: n.setSiteName,
+          ),
+          EditableNumberRow(
+            label: 'Latitude (°)',
+            helpKey: 'safety.site.latitude',
+            key: ValueKey('site-gps-lat-$_gpsFill'),
+            currentValue: s.latitudeDeg.toString(),
+            getCanonical: () => now().latitudeDeg.toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) {
+                n.setLatitudeDeg(v);
+                _deriveTimezoneFromCoords();
+              }
+            },
+          ),
+          EditableNumberRow(
+            label: 'Longitude (°)',
+            helpKey: 'safety.site.longitude',
+            key: ValueKey('site-gps-lng-$_gpsFill'),
+            currentValue: s.longitudeDeg.toString(),
+            getCanonical: () => now().longitudeDeg.toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) {
+                n.setLongitudeDeg(v);
+                _deriveTimezoneFromCoords();
+              }
+            },
+          ),
+          EditableNumberRow(
+            label: 'Elevation (m)',
+            helpKey: 'safety.site.elevation',
+            key: ValueKey('site-gps-alt-$_gpsFill'),
+            currentValue: s.elevationM.toString(),
+            getCanonical: () => now().elevationM.toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setElevationM(v);
+            },
+          ),
+          EditableTextRow(
+            label: 'Time zone',
+            helpKey: 'safety.site.time_zone',
+            key: ValueKey('site-gps-tz-$_gpsFill'),
+            currentValue: s.timeZone,
+            getCanonical: () => now().timeZone,
+            parse: (v) {
+              _tzUserEdited = true; // pin: lat/lng edits stop overwriting it
+              n.setTimeZone(v);
+            },
+            hint:
+                'IANA name (e.g. America/Los_Angeles) — auto-filled from '
+                'the coordinates',
+          ),
         ],
         // Same provider as Simple Mode's switch (#1565): it writes the profile's
         // site.permanent_pier at once, not through this panel's Save.
@@ -305,84 +304,80 @@ class _SafetySitePanelState extends ConsumerState<SafetySitePanel>
         const SettingsSectionHeader('Time sync'),
         const TimeSyncSection(),
         if (s != null) ...[
-        const SettingsSectionHeader('Horizon'),
-        SettingsSwitchRow(
-          label: 'Use my measured horizon',
-          helpKey: 'safety.site.use_custom_horizon',
-          value: s.useCustomHorizon,
-          onChanged: n.setUseCustomHorizon,
-        ),
-        if (s.useCustomHorizon)
-          _CustomHorizonEditor(onRetry: loadSections)
-        else
+          const SettingsSectionHeader('Horizon'),
+          SettingsSwitchRow(
+            label: 'Use my measured horizon',
+            helpKey: 'safety.site.use_custom_horizon',
+            value: s.useCustomHorizon,
+            onChanged: n.setUseCustomHorizon,
+          ),
+          if (s.useCustomHorizon)
+            _CustomHorizonEditor(onRetry: loadSections)
+          else
+            EditableNumberRow(
+              label: 'Default horizon altitude (°)',
+              helpKey: 'safety.site.default_horizon_altitude_deg',
+              currentValue: s.defaultHorizonAltitudeDeg.toString(),
+              getCanonical: () => now().defaultHorizonAltitudeDeg.toString(),
+              parse: (str) {
+                final v = double.tryParse(str);
+                if (v != null) n.setDefaultHorizonAltitudeDeg(v);
+              },
+            ),
+          const SettingsSectionHeader('Conditions defaults'),
+          _SkyBrightnessRows(
+            sky: SkyState(
+              bortleClass: s.bortleClass,
+              sqmMagPerArcsec2: s.sqmMagPerArcsec2,
+            ),
+            sqmText: s.sqmMagPerArcsec2.toString(),
+            bortleText: s.bortleClass.toString(),
+          ),
           EditableNumberRow(
-            label: 'Default horizon altitude (°)',
-            helpKey: 'safety.site.default_horizon_altitude_deg',
-            currentValue: s.defaultHorizonAltitudeDeg.toString(),
-            getCanonical: () => now().defaultHorizonAltitudeDeg
-                .toString(),
+            label: 'Typical seeing (″)',
+            helpKey: 'safety.site.typical_seeing_arcsec',
+            currentValue: s.typicalSeeingArcsec.toString(),
+            getCanonical: () => now().typicalSeeingArcsec.toString(),
             parse: (str) {
               final v = double.tryParse(str);
-              if (v != null) n.setDefaultHorizonAltitudeDeg(v);
+              if (v != null) n.setTypicalSeeingArcsec(v);
             },
           ),
-        const SettingsSectionHeader('Conditions defaults'),
-        _SkyBrightnessRows(
-          sky: SkyState(
-            bortleClass: s.bortleClass,
-            sqmMagPerArcsec2: s.sqmMagPerArcsec2,
+          SettingsDropdownRow<TwilightDefinition>(
+            label: 'Twilight definition',
+            helpKey: 'safety.site.twilight_definition',
+            value: s.twilightDefinition,
+            items: const {
+              TwilightDefinition.civil: 'Civil (−6°)',
+              TwilightDefinition.nautical: 'Nautical (−12°)',
+              TwilightDefinition.astronomical: 'Astronomical (−18°)',
+            },
+            onChanged: (v) {
+              if (v != null) n.setTwilightDefinition(v);
+            },
           ),
-          sqmText: s.sqmMagPerArcsec2.toString(),
-          bortleText: s.bortleClass.toString(),
-        ),
-        EditableNumberRow(
-          label: 'Typical seeing (″)',
-          helpKey: 'safety.site.typical_seeing_arcsec',
-          currentValue: s.typicalSeeingArcsec.toString(),
-          getCanonical: () =>
-              now().typicalSeeingArcsec.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setTypicalSeeingArcsec(v);
-          },
-        ),
-        SettingsDropdownRow<TwilightDefinition>(
-          label: 'Twilight definition',
-          helpKey: 'safety.site.twilight_definition',
-          value: s.twilightDefinition,
-          items: const {
-            TwilightDefinition.civil: 'Civil (−6°)',
-            TwilightDefinition.nautical: 'Nautical (−12°)',
-            TwilightDefinition.astronomical: 'Astronomical (−18°)',
-          },
-          onChanged: (v) {
-            if (v != null) n.setTwilightDefinition(v);
-          },
-        ),
-        EditableNumberRow(
-          label: 'Soft warning altitude (°)',
-          helpKey: 'safety.site.soft_warning_altitude_deg',
-          currentValue: s.softWarningAltitudeDeg.toString(),
-          getCanonical: () =>
-              now().softWarningAltitudeDeg.toString(),
-          parse: (str) {
-            final v = double.tryParse(str);
-            if (v != null) n.setSoftWarningAltitudeDeg(v);
-          },
-        ),
-        // "0 = no limit" lives in the row's help entry — the label must fit the
-        // panel's fixed label column.
-        EditableNumberRow(
-          label: 'Max sequence runtime (min)',
-          helpKey: 'safety.site.max_sequence_runtime_min',
-          currentValue: s.maxSequenceRuntimeMin.toString(),
-          getCanonical: () =>
-              now().maxSequenceRuntimeMin.toString(),
-          parse: (str) {
-            final v = int.tryParse(str);
-            if (v != null) n.setMaxSequenceRuntimeMin(v);
-          },
-        ),
+          EditableNumberRow(
+            label: 'Soft warning altitude (°)',
+            helpKey: 'safety.site.soft_warning_altitude_deg',
+            currentValue: s.softWarningAltitudeDeg.toString(),
+            getCanonical: () => now().softWarningAltitudeDeg.toString(),
+            parse: (str) {
+              final v = double.tryParse(str);
+              if (v != null) n.setSoftWarningAltitudeDeg(v);
+            },
+          ),
+          // "0 = no limit" lives in the row's help entry — the label must fit the
+          // panel's fixed label column.
+          EditableNumberRow(
+            label: 'Max sequence runtime (min)',
+            helpKey: 'safety.site.max_sequence_runtime_min',
+            currentValue: s.maxSequenceRuntimeMin.toString(),
+            getCanonical: () => now().maxSequenceRuntimeMin.toString(),
+            parse: (str) {
+              final v = int.tryParse(str);
+              if (v != null) n.setMaxSequenceRuntimeMin(v);
+            },
+          ),
         ],
         const SizedBox(height: 24),
         if (_lastError != null) ...[
@@ -538,7 +533,12 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.sqm_mag_per_arcsec2',
             currentValue: sqmText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).value?.sqmMagPerArcsec2.toString() ?? '',
+                ref
+                    .read(siteSettingsProvider)
+                    .value
+                    ?.sqmMagPerArcsec2
+                    .toString() ??
+                '',
             parse: (str) {
               final v = double.tryParse(str);
               if (v != null) n.setSkySqm(v);
@@ -561,7 +561,8 @@ class _SkyBrightnessRows extends ConsumerWidget {
             helpKey: 'safety.site.bortle_class',
             currentValue: bortleText,
             getCanonical: () =>
-                ref.read(siteSettingsProvider).value?.bortleClass.toString() ?? '',
+                ref.read(siteSettingsProvider).value?.bortleClass.toString() ??
+                '',
             parse: (str) {
               final v = int.tryParse(str);
               if (v != null) n.setSkyBortle(v);

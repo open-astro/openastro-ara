@@ -74,7 +74,9 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
         break;
       }
       if (!DateTime.now().isBefore(deadline)) {
-        throw TimeoutException('Backup did not finish within ${timeout.inSeconds}s.');
+        throw TimeoutException(
+          'Backup did not finish within ${timeout.inSeconds}s.',
+        );
       }
       await Future<void>.delayed(interval);
     }
@@ -131,7 +133,9 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
         return status;
       }
       if (!DateTime.now().isBefore(deadline)) {
-        throw TimeoutException('Restore did not finish within ${timeout.inSeconds}s.');
+        throw TimeoutException(
+          'Restore did not finish within ${timeout.inSeconds}s.',
+        );
       }
       await Future<void>.delayed(interval);
     }
@@ -168,4 +172,5 @@ class BackupSnapshotsNotifier extends AsyncNotifier<List<BackupSnapshot>?> {
 
 final backupSnapshotsProvider =
     AsyncNotifierProvider<BackupSnapshotsNotifier, List<BackupSnapshot>?>(
-        BackupSnapshotsNotifier.new);
+      BackupSnapshotsNotifier.new,
+    );

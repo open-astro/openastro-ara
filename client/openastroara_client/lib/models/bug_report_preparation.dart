@@ -43,7 +43,8 @@ class BugReportPreparation {
       // Surface a malformed prepare response at the root rather than letting an
       // empty id fall through to download('') and a confusing downstream 4xx.
       throw const FormatException(
-          'Bug-report prepare response is missing preparation_id.');
+        'Bug-report prepare response is missing preparation_id.',
+      );
     }
     final completed = json['completed_utc'] as String?;
     return BugReportPreparation(
@@ -51,9 +52,10 @@ class BugReportPreparation {
       status: (json['status'] as String?) ?? 'unknown',
       // tolerate int or num on the wire
       estimatedSizeBytes: (json['estimated_size_bytes'] as num?)?.toInt() ?? 0,
-      completedUtc:
-          completed != null ? DateTime.tryParse(completed)?.toUtc() : null,
-          sharingMode: json['sharing_mode'] as String? ?? 'full',
+      completedUtc: completed != null
+          ? DateTime.tryParse(completed)?.toUtc()
+          : null,
+      sharingMode: json['sharing_mode'] as String? ?? 'full',
       sources: [
         for (final s in (json['sources'] as List?) ?? const [])
           if (s is Map<String, dynamic>) BugReportSourceSummary.fromJson(s),

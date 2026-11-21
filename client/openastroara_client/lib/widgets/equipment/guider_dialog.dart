@@ -10,7 +10,8 @@ import 'equipment_state_chip.dart';
 import '../adaptive_controls.dart';
 
 /// Human-readable runtime-phase label (one wording for every screen, #1364).
-String guiderRuntimeLabel(AppLocalizations l, GuiderRuntimeState state) => guiderRuntimeText(l, state);
+String guiderRuntimeLabel(AppLocalizations l, GuiderRuntimeState state) =>
+    guiderRuntimeText(l, state);
 
 /// The §63 guider link: status rows plus Refresh and Connect/Disconnect. Lives
 /// at the top of the guider's Settings panel, where the top-bar GUIDE chip
@@ -24,10 +25,12 @@ class GuiderConnectionSection extends ConsumerStatefulWidget {
   final Future<void> Function()? onBeforeConnect;
 
   @override
-  ConsumerState<GuiderConnectionSection> createState() => _GuiderConnectionSectionState();
+  ConsumerState<GuiderConnectionSection> createState() =>
+      _GuiderConnectionSectionState();
 }
 
-class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSection> {
+class _GuiderConnectionSectionState
+    extends ConsumerState<GuiderConnectionSection> {
   // Local feedback for a manual Refresh: the notifier's refresh() deliberately
   // doesn't emit a loading state (so the body doesn't flash blank), so the
   // button tracks its own in-flight flag to disable + spinner.
@@ -71,60 +74,90 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
                 child: Center(child: AdaptiveProgressIndicator()),
               )
             : async.hasError
-                ? Row(
+            ? Row(
+                children: [
+                  const Icon(
+                    Icons.error_outline,
+                    color: AraColors.accentError,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 8),
+                  // Don't interpolate the raw error — a DioException can carry URLs/
+                  // headers/stack excerpts into a user-visible string.
+                  const Expanded(
+                    child: Text(
+                      'Could not reach the guider. Check the connection and try again.',
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: actionsLocked ? null : _refresh,
+                    child: _refreshing
+                        ? const _BusySpinner()
+                        : const Text('Retry'),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      const Icon(Icons.error_outline, color: AraColors.accentError, size: 20),
-                      const SizedBox(width: 8),
-                      // Don't interpolate the raw error — a DioException can carry URLs/
-                      // headers/stack excerpts into a user-visible string.
-                      const Expanded(
-                        child: Text('Could not reach the guider. Check the connection and try again.'),
+                      Expanded(
+                        child: Text(
+                          status?.name ?? 'OpenAstro Guider',
+                          style: text.titleMedium,
+                        ),
                       ),
-                      TextButton(
-                        onPressed: actionsLocked ? null : _refresh,
-                        child: _refreshing ? const _BusySpinner() : const Text('Retry'),
+                      EquipmentStateChip(
+                        state: _chipState(status?.connectionState),
                       ),
-                    ],
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(status?.name ?? 'OpenAstro Guider', style: text.titleMedium),
-                          ),
-                          EquipmentStateChip(state: _chipState(status?.connectionState)),
-                          if (connected)
-                            IconButton(
-                              tooltip: 'Disconnect',
-                              icon: busy ? const _BusySpinner() : const Icon(Icons.link_off, size: 18),
-                              onPressed: actionsLocked ? null : () => notifier.disconnect(),
-                            )
-                          else
-                            IconButton(
-                              tooltip: 'Connect',
-                              icon: busy ? const _BusySpinner() : const Icon(Icons.link, size: 18),
-                              onPressed: actionsLocked ? null : () => _connect(notifier),
-                            ),
-                        ],
-                      ),
-                      const Divider(height: 20, color: AraColors.border),
-                      if (status == null)
-                        Text('No guider configured on this server.',
-                            style: text.bodySmall?.copyWith(color: AraColors.textSecondary))
-                      else if (!connected)
-                        Text('Not connected.',
-                            style: text.bodySmall?.copyWith(color: AraColors.textSecondary))
+                      if (connected)
+                        IconButton(
+                          tooltip: 'Disconnect',
+                          icon: busy
+                              ? const _BusySpinner()
+                              : const Icon(Icons.link_off, size: 18),
+                          onPressed: actionsLocked
+                              ? null
+                              : () => notifier.disconnect(),
+                        )
                       else
-                        _StatusBody(status: status),
+                        IconButton(
+                          tooltip: 'Connect',
+                          icon: busy
+                              ? const _BusySpinner()
+                              : const Icon(Icons.link, size: 18),
+                          onPressed: actionsLocked
+                              ? null
+                              : () => _connect(notifier),
+                        ),
                     ],
                   ),
+                  const Divider(height: 20, color: AraColors.border),
+                  if (status == null)
+                    Text(
+                      'No guider configured on this server.',
+                      style: text.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    )
+                  else if (!connected)
+                    Text(
+                      'Not connected.',
+                      style: text.bodySmall?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    )
+                  else
+                    _StatusBody(status: status),
+                ],
+              ),
       ),
     );
   }
 
-  static EquipmentConnectionState _chipState(GuiderConnectionState? s) => switch (s) {
+  static EquipmentConnectionState _chipState(GuiderConnectionState? s) =>
+      switch (s) {
         GuiderConnectionState.connected => EquipmentConnectionState.connected,
         GuiderConnectionState.connecting => EquipmentConnectionState.connecting,
         GuiderConnectionState.error => EquipmentConnectionState.error,
@@ -135,8 +168,11 @@ class _GuiderConnectionSectionState extends ConsumerState<GuiderConnectionSectio
 class _BusySpinner extends StatelessWidget {
   const _BusySpinner();
   @override
-  Widget build(BuildContext context) =>
-      const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2));
+  Widget build(BuildContext context) => const SizedBox(
+    width: 16,
+    height: 16,
+    child: AdaptiveProgressIndicator(strokeWidth: 2),
+  );
 }
 
 class _StatusBody extends StatelessWidget {
@@ -150,8 +186,13 @@ class _StatusBody extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _row(context, 'State', guiderRuntimeLabel(context.l10n, status.runtimeState)),
-        if (status.currentProfile != null) _row(context, 'Profile', status.currentProfile!),
+        _row(
+          context,
+          'State',
+          guiderRuntimeLabel(context.l10n, status.runtimeState),
+        ),
+        if (status.currentProfile != null)
+          _row(context, 'Profile', status.currentProfile!),
         if (rms != null) _row(context, 'RMS', '${rms.toStringAsFixed(2)}"'),
       ],
     );
@@ -169,5 +210,4 @@ class _StatusBody extends StatelessWidget {
       ),
     );
   }
-
 }

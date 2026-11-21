@@ -11,8 +11,8 @@ import '../ws/ws_providers.dart';
 /// Builds a [DataManagerClient] for a server. Overridable in tests.
 final dataManagerApiFactoryProvider =
     Provider<DataManagerClient Function(AraServer)>(
-  (ref) => DataManagerApi.new,
-);
+      (ref) => DataManagerApi.new,
+    );
 
 /// [DataManagerClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -54,7 +54,10 @@ class DataManagerPackagesNotifier extends AsyncNotifier<List<DataPackage>?> {
   /// THROWS on failure (the daemon's 409 for an already-installed package, or a
   /// transport error) — the failure does NOT land in this provider's state, so the
   /// caller (the slice-2 modal) must `try/catch` to surface it.
-  Future<String?> download(String packageId, {bool forceReinstall = false}) async {
+  Future<String?> download(
+    String packageId, {
+    bool forceReinstall = false,
+  }) async {
     final api = ref.read(dataManagerApiProvider);
     if (api == null) return null;
     final id = await api.download(packageId, forceReinstall: forceReinstall);
@@ -115,7 +118,8 @@ class DataManagerPackagesNotifier extends AsyncNotifier<List<DataPackage>?> {
 
 final dataManagerPackagesProvider =
     AsyncNotifierProvider<DataManagerPackagesNotifier, List<DataPackage>?>(
-        DataManagerPackagesNotifier.new);
+      DataManagerPackagesNotifier.new,
+    );
 
 /// Live download progress for the active server, keyed by package id, folded
 /// from the `data_manager.download.{progress,complete,failed}` WS stream. Reads
@@ -125,7 +129,8 @@ final dataManagerPackagesProvider =
 /// Terminal entries (`complete` / `failed`) stay in the map until the server
 /// reconnects (which rebuilds this notifier with a fresh empty map) — the slice-2
 /// UI decides how to surface or dismiss a finished row.
-class DataManagerDownloadsNotifier extends Notifier<Map<String, DownloadProgress>> {
+class DataManagerDownloadsNotifier
+    extends Notifier<Map<String, DownloadProgress>> {
   @override
   Map<String, DownloadProgress> build() {
     final stream = ref.watch(wsEventStreamProvider);
@@ -171,5 +176,7 @@ class DataManagerDownloadsNotifier extends Notifier<Map<String, DownloadProgress
 const String _prefix = 'data_manager.download';
 
 final dataManagerDownloadsProvider =
-    NotifierProvider<DataManagerDownloadsNotifier, Map<String, DownloadProgress>>(
-        DataManagerDownloadsNotifier.new);
+    NotifierProvider<
+      DataManagerDownloadsNotifier,
+      Map<String, DownloadProgress>
+    >(DataManagerDownloadsNotifier.new);

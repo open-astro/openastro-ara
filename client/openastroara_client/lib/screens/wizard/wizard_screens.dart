@@ -14,9 +14,9 @@ typedef WizardScreenBuilder = Widget Function(BuildContext);
 
 final Map<int, WizardScreenBuilder> wizardScreenBuilders =
     <int, WizardScreenBuilder>{
-  1: (_) => const ScreenProfileBasics(),
-  2: (_) => const ScreenAlpacaConnect(),
-  3: (_) => const ScreenYourEquipment(),
-  4: (_) => const ScreenGuider(),
-  5: (_) => const ScreenReview(),
-};
+      1: (_) => const ScreenProfileBasics(),
+      2: (_) => const ScreenAlpacaConnect(),
+      3: (_) => const ScreenYourEquipment(),
+      4: (_) => const ScreenGuider(),
+      5: (_) => const ScreenReview(),
+    };

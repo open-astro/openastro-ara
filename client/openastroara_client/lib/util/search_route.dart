@@ -144,7 +144,8 @@ Map<String, Object?>? routeResolved(
 Map<String, Object?> searchCommandFor(
   Map<String, Object?> command, {
   required bool bare,
-}) => bare && command['type'] == 'goto' ? {...command, 'select': true} : command;
+}) =>
+    bare && command['type'] == 'goto' ? {...command, 'select': true} : command;
 
 Map<String, Object?>? resolvedGoto(TargetResolution r) =>
     r.resolved && r.raDeg != null && r.decDeg != null

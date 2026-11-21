@@ -16,16 +16,26 @@ void main() {
       expect(p.completedUtc, isNotNull);
     });
 
-    test('reads the §54.3 sharing mode and falls back to full on an older daemon', () {
-      expect(
-        BugReportPreparation.fromJson(const {'preparation_id': 'a', 'status': 'ready', 'sharing_mode': 'coarse_gps'}).sharingMode,
-        'coarse_gps',
-      );
-      expect(
-        BugReportPreparation.fromJson(const {'preparation_id': 'a', 'status': 'ready'}).sharingMode,
-        'full',
-      );
-    });
+    test(
+      'reads the §54.3 sharing mode and falls back to full on an older daemon',
+      () {
+        expect(
+          BugReportPreparation.fromJson(const {
+            'preparation_id': 'a',
+            'status': 'ready',
+            'sharing_mode': 'coarse_gps',
+          }).sharingMode,
+          'coarse_gps',
+        );
+        expect(
+          BugReportPreparation.fromJson(const {
+            'preparation_id': 'a',
+            'status': 'ready',
+          }).sharingMode,
+          'full',
+        );
+      },
+    );
 
     test('throws FormatException on a missing preparation_id', () {
       expect(
@@ -49,7 +59,13 @@ void main() {
       'estimated_size_bytes': 10,
       'since_utc': '2026-10-28T03:00:00Z',
       'sources': [
-        {'source': 'guider', 'files': 3, 'bytes': 99, 'truncated': true, 'note': null},
+        {
+          'source': 'guider',
+          'files': 3,
+          'bytes': 99,
+          'truncated': true,
+          'note': null,
+        },
       ],
       'error': null,
     });
@@ -57,7 +73,20 @@ void main() {
     expect(p.sources.single.truncated, isTrue);
     expect(p.sinceUtc, DateTime.utc(2026, 10, 28, 3));
     expect(p.isPreparing, isFalse);
-    expect(BugReportPreparation.fromJson({'preparation_id': 'y', 'status': 'preparing'}).isPreparing, isTrue);
-    expect(BugReportPreparation.fromJson({'preparation_id': 'z', 'status': 'failed', 'error': 'disk'}).error, 'disk');
+    expect(
+      BugReportPreparation.fromJson({
+        'preparation_id': 'y',
+        'status': 'preparing',
+      }).isPreparing,
+      isTrue,
+    );
+    expect(
+      BugReportPreparation.fromJson({
+        'preparation_id': 'z',
+        'status': 'failed',
+        'error': 'disk',
+      }).error,
+      'disk',
+    );
   });
 }

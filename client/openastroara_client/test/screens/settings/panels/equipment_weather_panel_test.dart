@@ -28,6 +28,7 @@ class _FakeWeatherApi implements EquipmentDeviceClient<WeatherStatus> {
   Future<void> forget() async {
     calls.add('forget');
   }
+
   _FakeWeatherApi(this.status);
   final WeatherStatus? status;
   final List<String> calls = [];
@@ -50,46 +51,53 @@ WeatherStatus _status({
   double? temperature = 4.5,
   double? dewPoint = -0.5,
   double? windGust = 6.1,
-}) =>
-    WeatherStatus(
-      deviceId: 'oc-0',
-      name: 'CloudWatcher',
-      connectionState: state,
-      temperatureC: temperature,
-      humidityPct: 72,
-      dewPointC: dewPoint,
-      pressureHpa: 1013,
-      cloudCoverPct: 20,
-      windSpeedMs: 3.2,
-      windGustMs: windGust,
-      windDirectionDeg: 180,
-      rainRate: 0,
-      capturedAt: DateTime.utc(2026, 6, 22, 6),
-    );
+}) => WeatherStatus(
+  deviceId: 'oc-0',
+  name: 'CloudWatcher',
+  connectionState: state,
+  temperatureC: temperature,
+  humidityPct: 72,
+  dewPointC: dewPoint,
+  pressureHpa: 1013,
+  cloudCoverPct: 20,
+  windSpeedMs: 3.2,
+  windGustMs: windGust,
+  windDirectionDeg: 180,
+  rainRate: 0,
+  capturedAt: DateTime.utc(2026, 6, 22, 6),
+);
 
 Future<void> _wideSurface(WidgetTester tester) async {
   await tester.binding.setSurfaceSize(const Size(1200, 1000));
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeWeatherApi> _pump(WidgetTester tester, WeatherStatus? status) async {
+Future<_FakeWeatherApi> _pump(
+  WidgetTester tester,
+  WeatherStatus? status,
+) async {
   await _wideSurface(tester);
   final api = _FakeWeatherApi(status);
-  await tester.pumpWidget(ProviderScope(
-    overrides: [
-      serverLinkUpProvider.overrideWith((ref) => true),
-      savedServerServiceProvider.overrideWithValue(
-          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-      weatherApiFactoryProvider.overrideWithValue((_) => api),
-    ],
-    child: const MaterialApp(home: Scaffold(body: EquipmentWeatherPanel())),
-  ));
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        serverLinkUpProvider.overrideWith((ref) => true),
+        savedServerServiceProvider.overrideWithValue(
+          _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+        ),
+        weatherApiFactoryProvider.overrideWithValue((_) => api),
+      ],
+      child: const MaterialApp(home: Scaffold(body: EquipmentWeatherPanel())),
+    ),
+  );
   await tester.pumpAndSettle();
   return api;
 }
 
 void main() {
-  testWidgets('renders the live sensors of a connected station', (tester) async {
+  testWidgets('renders the live sensors of a connected station', (
+    tester,
+  ) async {
     await _pump(tester, _status());
     expect(find.text('CloudWatcher'), findsOneWidget);
     expect(find.text('Connected'), findsOneWidget);
@@ -101,28 +109,34 @@ void main() {
 
   testWidgets('omits sensors the device does not implement', (tester) async {
     await _pump(
-        tester, _status(dewPoint: null, windGust: null, temperature: 10));
+      tester,
+      _status(dewPoint: null, windGust: null, temperature: 10),
+    );
     expect(find.text('Temperature'), findsOneWidget);
     expect(find.text('Dew point'), findsNothing);
     expect(find.text('Wind gust'), findsNothing);
   });
 
-  testWidgets('an error sub-state shows a distinct message, not "no sensors"',
-      (tester) async {
+  testWidgets('an error sub-state shows a distinct message, not "no sensors"', (
+    tester,
+  ) async {
     await _pump(
-        tester,
-        _status(
-            state: EquipmentConnectionState.error,
-            temperature: null,
-            dewPoint: null,
-            windGust: null));
+      tester,
+      _status(
+        state: EquipmentConnectionState.error,
+        temperature: null,
+        dewPoint: null,
+        windGust: null,
+      ),
+    );
     expect(find.text('Error'), findsOneWidget); // the chip
     expect(find.text('Sensor read failed — check the device.'), findsOneWidget);
     expect(find.text('This weather station reports no sensors.'), findsNothing);
   });
 
-  testWidgets('no device connected shows the empty state + Connect…',
-      (tester) async {
+  testWidgets('no device connected shows the empty state + Connect…', (
+    tester,
+  ) async {
     await _pump(tester, null);
     expect(find.text('No weather station connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);

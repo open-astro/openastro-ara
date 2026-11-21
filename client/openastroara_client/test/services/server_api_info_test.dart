@@ -14,15 +14,26 @@ class _JsonAdapter implements HttpClientAdapter {
   void close({bool force = false}) {}
 
   @override
-  Future<ResponseBody> fetch(RequestOptions options, Stream<Uint8List>? requestStream,
-          Future<void>? cancelFuture) async =>
-      ResponseBody.fromString(jsonEncode(body), 200,
-          headers: {Headers.contentTypeHeader: [Headers.jsonContentType]});
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async => ResponseBody.fromString(
+    jsonEncode(body),
+    200,
+    headers: {
+      Headers.contentTypeHeader: [Headers.jsonContentType],
+    },
+  );
 }
 
 Future<ServerInfo> infoFrom(Map<String, Object?> body) {
-  final dio = Dio(BaseOptions(baseUrl: 'http://rig:5555'))..httpClientAdapter = _JsonAdapter(body);
-  return ServerApi(const AraServer(hostname: 'rig', port: 5555), dio: dio).getInfo();
+  final dio = Dio(BaseOptions(baseUrl: 'http://rig:5555'))
+    ..httpClientAdapter = _JsonAdapter(body);
+  return ServerApi(
+    const AraServer(hostname: 'rig', port: 5555),
+    dio: dio,
+  ).getInfo();
 }
 
 void main() {
@@ -43,7 +54,11 @@ void main() {
   });
 
   test('falls back to the older name / api_version keys', () async {
-    final info = await infoFrom({'name': 'old rig', 'version': '0.9', 'api_version': 'v0'});
+    final info = await infoFrom({
+      'name': 'old rig',
+      'version': '0.9',
+      'api_version': 'v0',
+    });
     expect(info.name, 'old rig');
     expect(info.apiVersion, 'v0');
   });

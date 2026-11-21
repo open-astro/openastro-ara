@@ -18,12 +18,8 @@ class HfrTrendChart extends StatelessWidget {
     if (measured.length < 2) {
       return Center(
         child: Text(
-          samples.isEmpty
-              ? 'The HFR trend appears after the first frames.'
-              : 'No stars measured yet — point at a star field or lengthen the exposure.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
+          samples.isEmpty ? 'The HFR trend appears after the first frames.' : 'No stars measured yet — point at a star field or lengthen the exposure.',
+          style: Theme.of(context).textTheme.bodySmall
               ?.copyWith(color: AraColors.textSecondary),
           textAlign: TextAlign.center,
         ),
@@ -78,7 +74,10 @@ class HfrTrendChart extends StatelessWidget {
                   label: HorizontalLineLabel(
                     show: true,
                     alignment: Alignment.topLeft,
-                    style: const TextStyle(fontSize: 10, color: AraColors.accentConnected),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: AraColors.accentConnected,
+                    ),
                     labelResolver: (_) => 'best ${bestHfr!.toStringAsFixed(2)}',
                   ),
                 ),

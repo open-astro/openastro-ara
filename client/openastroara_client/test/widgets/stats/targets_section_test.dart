@@ -8,6 +8,7 @@ import 'package:openastroara/services/stats_export_api.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/widgets/stats/targets_section.dart';
+
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -49,21 +50,22 @@ const _server = AraServer(hostname: 'h', port: 5555);
 Widget _app(List<AraServer> servers, StatsExportClient api) {
   return ProviderScope(
     overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
       statsExportApiFactoryProvider.overrideWithValue((_) => api),
     ],
     child: const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: TargetsSection()),
-      ),
+      home: Scaffold(body: SingleChildScrollView(child: TargetsSection())),
     ),
   );
 }
 
 void main() {
   testWidgets('renders the target tiles when data is present', (tester) async {
-    final api = _FakeStatsExportClient(
-        const [StatsTarget(targetName: 'M31', frameCount: 12)]);
+    final api = _FakeStatsExportClient(const [
+      StatsTarget(targetName: 'M31', frameCount: 12),
+    ]);
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();
 
@@ -71,8 +73,9 @@ void main() {
     expect(find.textContaining('Couldn’t refresh'), findsNothing);
   });
 
-  testWidgets('a failed manual refresh shows the stale banner over the list',
-      (tester) async {
+  testWidgets('a failed manual refresh shows the stale banner over the list', (
+    tester,
+  ) async {
     final api = _FakeStatsExportClient(const [StatsTarget(targetName: 'M31')]);
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();

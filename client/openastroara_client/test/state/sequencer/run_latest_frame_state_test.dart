@@ -16,40 +16,52 @@ class _FakeRun extends SequenceRunStateNotifier {
 }
 
 WsEvent _frame(String id) => WsEvent(
-    type: 'frame.complete',
-    ts: DateTime.now().toUtc(),
-    seq: 1,
-    payload: {'frame_id': id, 'filter_name': 'Ha'});
+  type: 'frame.complete',
+  ts: DateTime.now().toUtc(),
+  seq: 1,
+  payload: {'frame_id': id, 'filter_name': 'Ha'},
+);
 
 void main() {
-  test('frame.complete during an active run updates; idle frames ignored',
-      () async {
-    final ws = StreamController<WsEvent>.broadcast();
-    addTearDown(ws.close);
-    final container = ProviderContainer(overrides: [
-      wsEventsProvider.overrideWith((ref) => ws.stream),
-      sequenceRunStateProvider.overrideWith(() => _FakeRun(
-          const SequenceRunStateInfo(
-              runId: 'r1', state: SequenceRunState.running))),
-    ]);
-    addTearDown(container.dispose);
+  test(
+    'frame.complete during an active run updates; idle frames ignored',
+    () async {
+      final ws = StreamController<WsEvent>.broadcast();
+      addTearDown(ws.close);
+      final container = ProviderContainer(
+        overrides: [
+          wsEventsProvider.overrideWith((ref) => ws.stream),
+          sequenceRunStateProvider.overrideWith(
+            () => _FakeRun(
+              const SequenceRunStateInfo(
+                runId: 'r1',
+                state: SequenceRunState.running,
+              ),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    // Materialize + let the fake run state land.
-    container.listen(runLatestFrameProvider, (_, _) {});
-    await container.read(sequenceRunStateProvider.future);
-    ws.add(_frame('f-1'));
-    await Future<void>.delayed(Duration.zero);
-    expect(container.read(runLatestFrameProvider)?.frameId, 'f-1');
-    expect(container.read(runLatestFrameProvider)?.filterName, 'Ha');
-  });
+      // Materialize + let the fake run state land.
+      container.listen(runLatestFrameProvider, (_, _) {});
+      await container.read(sequenceRunStateProvider.future);
+      ws.add(_frame('f-1'));
+      await Future<void>.delayed(Duration.zero);
+      expect(container.read(runLatestFrameProvider)?.frameId, 'f-1');
+      expect(container.read(runLatestFrameProvider)?.filterName, 'Ha');
+    },
+  );
 
   test('no active run → frames ignored', () async {
     final ws = StreamController<WsEvent>.broadcast();
     addTearDown(ws.close);
-    final container = ProviderContainer(overrides: [
-      wsEventsProvider.overrideWith((ref) => ws.stream),
-      sequenceRunStateProvider.overrideWith(() => _FakeRun(null)),
-    ]);
+    final container = ProviderContainer(
+      overrides: [
+        wsEventsProvider.overrideWith((ref) => ws.stream),
+        sequenceRunStateProvider.overrideWith(() => _FakeRun(null)),
+      ],
+    );
     addTearDown(container.dispose);
     container.listen(runLatestFrameProvider, (_, _) {});
     await container.read(sequenceRunStateProvider.future);

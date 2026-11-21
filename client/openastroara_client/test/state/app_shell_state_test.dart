@@ -17,8 +17,11 @@ void main() {
       final notifier = container.read(selectedTabIndexProvider.notifier);
       for (var i = 0; i < 5; i++) {
         notifier.select(i);
-        expect(container.read(selectedTabIndexProvider), i,
-            reason: 'failed for index $i');
+        expect(
+          container.read(selectedTabIndexProvider),
+          i,
+          reason: 'failed for index $i',
+        );
       }
     });
 
@@ -82,8 +85,9 @@ void main() {
       await Future<void>.delayed(Duration.zero);
       sub = container.listen(visitedTabsProvider, (_, _) {});
       addTearDown(sub.close);
-      expect(container.read(visitedTabsProvider), {4},
-          reason: 'a fresh shell starts lazy, on whichever tab is current');
+      expect(container.read(visitedTabsProvider), {
+        4,
+      }, reason: 'a fresh shell starts lazy, on whichever tab is current');
     });
   });
 }

@@ -33,7 +33,9 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   @override
   Future<FilterWheelStatus?> build() async => null;
   @override
-  Future<void> refresh([EquipmentDeviceClient<FilterWheelStatus>? client]) async {
+  Future<void> refresh([
+    EquipmentDeviceClient<FilterWheelStatus>? client,
+  ]) async {
     refreshCalls++;
     // No-op by design: the fake manages state via park(). The base refresh
     // would set state to AsyncData(null) — no API client exists in tests —
@@ -51,41 +53,48 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
       final current = state.asData?.value;
       final oldSlot = current?.currentSlot;
       final slots = current?.slots ?? const [];
-      park(FilterWheelStatus(
-        deviceId: 'fw',
-        name: 'FILTERWHEEL',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'moving',
-        currentSlot: null,
-        slots: slots,
-      ));
+      park(
+        FilterWheelStatus(
+          deviceId: 'fw',
+          name: 'FILTERWHEEL',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'moving',
+          currentSlot: null,
+          slots: slots,
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
-      park(FilterWheelStatus(
-        deviceId: 'fw',
-        name: 'FILTERWHEEL',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: oldSlot,
-        slots: slots,
-      ));
+      park(
+        FilterWheelStatus(
+          deviceId: 'fw',
+          name: 'FILTERWHEEL',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: oldSlot,
+          slots: slots,
+        ),
+      );
       return true;
     }
     if (moveDelay > Duration.zero) {
       await Future<void>.delayed(moveDelay);
     }
-    park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'idle',
-      currentSlot: position,
-      slots: slotsOverride ??
-          const [
-            FilterSlot(position: 0, name: 'L', focusOffset: 0),
-            FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
-            FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
-          ],
-    ));
+    park(
+      FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: position,
+        slots:
+            slotsOverride ??
+            const [
+              FilterSlot(position: 0, name: 'L', focusOffset: 0),
+              FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+              FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+            ],
+      ),
+    );
     return true;
   }
 
@@ -108,17 +117,21 @@ FilterWheelStatus _wheelAt(int position, {bool connected = true}) =>
       ],
     );
 
-Future<ProviderContainer> _pump(WidgetTester tester,
-    {List<String>? labels,
-    CameraStatus? cameraStatus,
-    int initialBin = 1,
-    bool awaitCamera = true}) async {
-  final container = ProviderContainer(overrides: [
-    if (labels != null)
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-    cameraStatusProvider.overrideWith(() => _FixedCameraStatus(cameraStatus)),
-    exposureControllerProvider.overrideWith(() => _FixedExposure(initialBin)),
-  ]);
+Future<ProviderContainer> _pump(
+  WidgetTester tester, {
+  List<String>? labels,
+  CameraStatus? cameraStatus,
+  int initialBin = 1,
+  bool awaitCamera = true,
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      if (labels != null)
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+      cameraStatusProvider.overrideWith(() => _FixedCameraStatus(cameraStatus)),
+      exposureControllerProvider.overrideWith(() => _FixedExposure(initialBin)),
+    ],
+  );
   if (labels != null) _FixedLabels.labels = labels;
   // Resolve the camera status before the first frame so the dropdown's first
   // build already sees the camera's real bin range. Pass awaitCamera: false
@@ -126,10 +139,12 @@ Future<ProviderContainer> _pump(WidgetTester tester,
   // capabilities arriving on a later frame).
   if (awaitCamera) await container.read(cameraStatusProvider.future);
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-  ));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+    ),
+  );
   return container;
 }
 
@@ -163,23 +178,23 @@ class _FixedExposure extends ExposureController {
 
 /// A connected camera whose (symmetric) bin range tops out at [max].
 CameraStatus _cameraWithMaxBin(int max) => CameraStatus.fromJson({
-      'state': 'connected',
-      'capabilities': {
-        'sensor_width': 100,
-        'sensor_height': 100,
-        'min_bin_x': 1,
-        'max_bin_x': max,
-        'min_bin_y': 1,
-        'max_bin_y': max,
-      },
-      'runtime': {'state': 'idle'},
-    });
+  'state': 'connected',
+  'capabilities': {
+    'sensor_width': 100,
+    'sensor_height': 100,
+    'min_bin_x': 1,
+    'max_bin_x': max,
+    'min_bin_y': 1,
+    'max_bin_y': max,
+  },
+  'runtime': {'state': 'idle'},
+});
 
 void main() {
-  testWidgets('PR #71: the filter picker exists and drives filterSlot',
-      (tester) async {
-    final container =
-        await _pump(tester, labels: ['L', 'Ha', 'OIII', '', '']);
+  testWidgets('PR #71: the filter picker exists and drives filterSlot', (
+    tester,
+  ) async {
+    final container = await _pump(tester, labels: ['L', 'Ha', 'OIII', '', '']);
     expect(find.text('Filter'), findsOneWidget);
 
     await tester.tap(find.text('L').last);
@@ -187,28 +202,38 @@ void main() {
     await tester.tap(find.text('Ha').last);
     await tester.pumpAndSettle();
 
-    expect(container.read(exposureControllerProvider).filterSlot, 'Ha',
-        reason: 'the picker mutates the exposure params sent as filter_name');
+    expect(
+      container.read(exposureControllerProvider).filterSlot,
+      'Ha',
+      reason: 'the picker mutates the exposure params sent as filter_name',
+    );
     // Empty slots never appear as choices.
     expect(find.text(''), findsNothing);
   });
 
-  testWidgets('r1: duplicate slot labels dedupe instead of crashing the picker',
-      (tester) async {
-    // Two slots labelled 'Ha' would trip DropdownButtonFormField's
-    // exactly-one-item-per-value assertion without the keep-first dedupe.
-    final container = await _pump(tester, labels: ['L', 'Ha', 'Ha', 'OIII']);
-    expect(tester.takeException(), isNull);
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    expect(find.text('Ha'), findsOneWidget, reason: 'the duplicate collapses to one choice');
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-  });
+  testWidgets(
+    'r1: duplicate slot labels dedupe instead of crashing the picker',
+    (tester) async {
+      // Two slots labelled 'Ha' would trip DropdownButtonFormField's
+      // exactly-one-item-per-value assertion without the keep-first dedupe.
+      final container = await _pump(tester, labels: ['L', 'Ha', 'Ha', 'OIII']);
+      expect(tester.takeException(), isNull);
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Ha'),
+        findsOneWidget,
+        reason: 'the duplicate collapses to one choice',
+      );
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+    },
+  );
 
-  testWidgets('a stored filter not among the labels stays selectable',
-      (tester) async {
+  testWidgets('a stored filter not among the labels stays selectable', (
+    tester,
+  ) async {
     final container = await _pump(tester, labels: ['Ha', 'OIII']);
     // The default filterSlot 'L' isn't in the labels — it must still render
     // as the current selection rather than being silently dropped.
@@ -216,30 +241,36 @@ void main() {
     expect(find.text('L'), findsOneWidget);
   });
 
-  testWidgets('a pick during the confirm flash does not drop the busy state',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('a pick during the confirm flash does not drop the busy state', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // on L
     wheel.moveDelay = const Duration(milliseconds: 400);
     await tester.pump();
 
-    DropdownButtonFormField<String> field() => tester
-        .widget<DropdownButtonFormField<String>>(
-            find.byType(DropdownButtonFormField<String>));
+    DropdownButtonFormField<String> field() =>
+        tester.widget<DropdownButtonFormField<String>>(
+          find.byType(DropdownButtonFormField<String>),
+        );
 
     // First pick: long move (400 ms) so the confirm flash (600 ms) is still
     // playing after the menu cycles through close + reopen.
@@ -248,8 +279,11 @@ void main() {
     await tester.tap(find.text('Ha').last);
     await tester.pump(const Duration(milliseconds: 50)); // busy mid-flight
     await tester.pump(const Duration(milliseconds: 400)); // move lands -> flash
-    expect(field().onChanged, isNotNull,
-        reason: 'enabled during the confirm flash');
+    expect(
+      field().onChanged,
+      isNotNull,
+      reason: 'enabled during the confirm flash',
+    );
 
     // Pick OIII DURING the flash — the busy state must survive the
     // interrupted flash's whenComplete.
@@ -258,10 +292,16 @@ void main() {
     await tester.tap(find.text('OIII').last);
     await tester.pump(const Duration(milliseconds: 50));
     expect(wheel.changeCalls, [1, 2], reason: 'the second pick was commanded');
-    expect(field().onChanged, isNull,
-        reason: 'the interrupted confirm flash must not drop the new busy state');
-    expect(field().decoration.enabledBorder, isNotNull,
-        reason: 'busy border stays while the new move is in flight');
+    expect(
+      field().onChanged,
+      isNull,
+      reason: 'the interrupted confirm flash must not drop the new busy state',
+    );
+    expect(
+      field().decoration.enabledBorder,
+      isNotNull,
+      reason: 'busy border stays while the new move is in flight',
+    );
 
     // Let everything settle and finish the pending timers.
     await tester.pump(const Duration(milliseconds: 500)); // second move lands
@@ -271,188 +311,258 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('the reconcile poll re-reads the daemon while a move is pending',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets(
+    'the reconcile poll re-reads the daemon while a move is pending',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+          filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+        ],
+      );
+      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final wheel =
+          container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(_wheelAt(0));
+      wheel.moveDelay = const Duration(seconds: 10); // landing arrives late
+      await tester.pump();
+
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ha').last);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      final before = wheel.refreshCalls;
+      await tester.pump(
+        const Duration(milliseconds: 1600),
+      ); // one reconcile tick
+      expect(
+        wheel.refreshCalls,
+        greaterThan(before),
+        reason:
+            'the picker re-reads the daemon at the fast cadence while '
+            'waiting for the landing',
+      );
+
+      // The daemon catches up — the move lands.
+      wheel.park(_wheelAt(1));
+      await tester.pumpAndSettle();
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+      // Let the fake's delayed move complete so no timers outlive the test.
+      await tester.pump(const Duration(seconds: 10));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('a filter pick refused for another action is a refused pill', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        simpleModeActiveProvider.overrideWithValue(true),
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
-
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
-    wheel.park(_wheelAt(0));
-    wheel.moveDelay = const Duration(seconds: 10); // landing arrives late
-    await tester.pump();
-
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pump(const Duration(milliseconds: 100));
-
-    final before = wheel.refreshCalls;
-    await tester.pump(const Duration(milliseconds: 1600)); // one reconcile tick
-    expect(wheel.refreshCalls, greaterThan(before),
-        reason: 'the picker re-reads the daemon at the fast cadence while '
-            'waiting for the landing');
-
-    // The daemon catches up — the move lands.
-    wheel.park(_wheelAt(1));
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    // Let the fake's delayed move complete so no timers outlive the test.
-    await tester.pump(const Duration(seconds: 10));
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('a filter pick refused for another action is a refused pill', (tester) async {
-    final container = ProviderContainer(overrides: [
-      simpleModeActiveProvider.overrideWithValue(true),
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
-    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
-    addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
-    await tester.pumpAndSettle();
-    final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0));
     wheel.refuseMoves = true;
     await tester.pump();
-    final field = tester.widget<DropdownButtonFormField<String>>(find.byType(DropdownButtonFormField<String>));
+    final field = tester.widget<DropdownButtonFormField<String>>(
+      find.byType(DropdownButtonFormField<String>),
+    );
     field.onChanged!('Ha');
     await tester.pump();
     await tester.pump();
-    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.refused);
+    expect(
+      container.read(simpleMessagesProvider).single.kind,
+      SimpleMessageKind.refused,
+    );
     await tester.pump(kSimpleResultLife);
   });
 
-  testWidgets('the picker disables + pulses while the wheel is moving',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('the picker disables + pulses while the wheel is moving', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // parked on L
     await tester.pump();
 
-    DropdownButtonFormField<String> field() => tester
-        .widget<DropdownButtonFormField<String>>(
-            find.byType(DropdownButtonFormField<String>));
+    DropdownButtonFormField<String> field() =>
+        tester.widget<DropdownButtonFormField<String>>(
+          find.byType(DropdownButtonFormField<String>),
+        );
     expect(field().onChanged, isNotNull, reason: 'enabled while parked');
 
     // Wheel starts turning — the picker disables and the busy border shows.
-    wheel.park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'moving',
-      currentSlot: null,
-      slots: const [
-        FilterSlot(position: 0, name: 'L', focusOffset: 0),
-        FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
-        FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
-      ],
-    ));
-    await tester.pump();
-    expect(field().onChanged, isNull, reason: 'disabled while the wheel turns');
-    expect(field().decoration.enabledBorder, isNotNull,
-        reason: 'busy border pulse is active');
-
-    // Wheel lands on Ha — re-enabled, value shows.
-    wheel.park(_wheelAt(1));
-    await tester.pumpAndSettle();
-    expect(field().onChanged, isNotNull, reason: 're-enabled after landing');
-    expect(field().decoration.enabledBorder, isNull,
-        reason: 'busy border cleared after landing');
-    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-  });
-
-  for (final reduce in [false, true]) {
-    testWidgets('a moving wheel blinks the underline green, as Simple Mode does; steady with reduce motion: $reduce',
-        (tester) async {
-      final container = ProviderContainer(overrides: [
-        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-      ]);
-      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
-      addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: MediaQuery(
-            data: MediaQueryData(disableAnimations: reduce),
-            child: const Scaffold(body: ExposureControlsPanel()),
-          ),
-        ),
-      ));
-      await tester.pumpAndSettle();
-      final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
-      wheel.park(FilterWheelStatus(
+    wheel.park(
+      FilterWheelStatus(
         deviceId: 'fw',
         name: 'FILTERWHEEL',
         connectionState: EquipmentConnectionState.connected,
         runtimeState: 'moving',
         currentSlot: null,
-        slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
-      ));
-      await tester.pump();
-      Color underline() => (tester
-              .widget<DropdownButtonFormField<String>>(find.byType(DropdownButtonFormField<String>))
-              .decoration
-              .disabledBorder as UnderlineInputBorder)
-          .borderSide
-          .color;
-      expect(underline(), AraColors.accentConnected, reason: 'green, never the fault red');
-      await tester.pump(const Duration(milliseconds: 300));
-      if (reduce) {
-        expect(underline(), AraColors.accentConnected, reason: 'reduce motion: no blink');
-      } else {
-        expect(underline(), isNot(AraColors.accentConnected), reason: 'it blinks');
-      }
-      wheel.park(_wheelAt(0));
-      await tester.pumpAndSettle();
-    });
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+          FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+        ],
+      ),
+    );
+    await tester.pump();
+    expect(field().onChanged, isNull, reason: 'disabled while the wheel turns');
+    expect(
+      field().decoration.enabledBorder,
+      isNotNull,
+      reason: 'busy border pulse is active',
+    );
+
+    // Wheel lands on Ha — re-enabled, value shows.
+    wheel.park(_wheelAt(1));
+    await tester.pumpAndSettle();
+    expect(field().onChanged, isNotNull, reason: 're-enabled after landing');
+    expect(
+      field().decoration.enabledBorder,
+      isNull,
+      reason: 'busy border cleared after landing',
+    );
+    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+  });
+
+  for (final reduce in [false, true]) {
+    testWidgets(
+      'a moving wheel blinks the underline green, as Simple Mode does; steady with reduce motion: $reduce',
+      (tester) async {
+        final container = ProviderContainer(
+          overrides: [
+            filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+            filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+          ],
+        );
+        _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: MaterialApp(
+              home: MediaQuery(
+                data: MediaQueryData(disableAnimations: reduce),
+                child: const Scaffold(body: ExposureControlsPanel()),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+        final wheel =
+            container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+        wheel.park(
+          FilterWheelStatus(
+            deviceId: 'fw',
+            name: 'FILTERWHEEL',
+            connectionState: EquipmentConnectionState.connected,
+            runtimeState: 'moving',
+            currentSlot: null,
+            slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+          ),
+        );
+        await tester.pump();
+        Color underline() =>
+            (tester
+                        .widget<DropdownButtonFormField<String>>(
+                          find.byType(DropdownButtonFormField<String>),
+                        )
+                        .decoration
+                        .disabledBorder
+                    as UnderlineInputBorder)
+                .borderSide
+                .color;
+        expect(
+          underline(),
+          AraColors.accentConnected,
+          reason: 'green, never the fault red',
+        );
+        await tester.pump(const Duration(milliseconds: 300));
+        if (reduce) {
+          expect(
+            underline(),
+            AraColors.accentConnected,
+            reason: 'reduce motion: no blink',
+          );
+        } else {
+          expect(
+            underline(),
+            isNot(AraColors.accentConnected),
+            reason: 'it blinks',
+          );
+        }
+        wheel.park(_wheelAt(0));
+        await tester.pumpAndSettle();
+      },
+    );
   }
 
-  testWidgets('picking a filter also moves the connected wheel to that slot',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('picking a filter also moves the connected wheel to that slot', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // wheel parked on L
     await tester.pump();
 
@@ -462,8 +572,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    expect(wheel.changeCalls, [1],
-        reason: 'Ha is slot 1 — picking it must command the wheel there');
+    expect(wheel.changeCalls, [
+      1,
+    ], reason: 'Ha is slot 1 — picking it must command the wheel there');
     // The controlled button must now DISPLAY Ha (it follows the state).
     expect(
       find.descendant(
@@ -471,65 +582,83 @@ void main() {
         matching: find.text('Ha'),
       ),
       findsOneWidget,
-      reason: 'the picker shows the wheel\'s new filter after a successful move',
+      reason:
+          'the picker shows the wheel\'s new filter after a successful move',
     );
   });
 
-  testWidgets('while a plan runs, a filter change asks first; Cancel leaves the wheel alone (ADR 0013)',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-      sequenceRunStateProvider.overrideWith(_PlanRunning.new),
-    ]);
+  testWidgets(
+    'while a plan runs, a filter change asks first; Cancel leaves the wheel alone (ADR 0013)',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+          filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+          sequenceRunStateProvider.overrideWith(_PlanRunning.new),
+        ],
+      );
+      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final wheel =
+          container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(_wheelAt(0));
+      await tester.pump();
+
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('A plan is running. Change the filter anyway?'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+      expect(wheel.changeCalls, isEmpty);
+
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Change anyway'));
+      await tester.pump();
+      expect(wheel.changeCalls, [1]);
+      wheel.park(_wheelAt(1));
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets('picking the already-current slot does not re-move the wheel', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
-    await tester.pumpAndSettle();
-    final wheel = container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
-    wheel.park(_wheelAt(0));
-    await tester.pump();
 
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
-    expect(find.text('A plan is running. Change the filter anyway?'), findsOneWidget);
-    await tester.tap(find.text('Cancel'));
-    await tester.pumpAndSettle();
-    expect(wheel.changeCalls, isEmpty);
-
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Change anyway'));
-    await tester.pump();
-    expect(wheel.changeCalls, [1]);
-    wheel.park(_wheelAt(1));
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('picking the already-current slot does not re-move the wheel',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
-    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
-    addTearDown(container.dispose);
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     // Connect at L (the daemon-side first-connect home is a no-op there), then the wheel
     // is moved to Ha via the panel — the picker follows.
     wheel.park(_wheelAt(0));
@@ -544,27 +673,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    expect(wheel.changeCalls, isEmpty,
-        reason: 'already on Ha — nothing to move');
+    expect(
+      wheel.changeCalls,
+      isEmpty,
+      reason: 'already on Ha — nothing to move',
+    );
   });
 
-  testWidgets('a move accepted but failing in flight leaves no stale tag',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('a move accepted but failing in flight leaves no stale tag', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // wheel on L
     wheel.failInFlight = true; // 202 accepted, but the motor never lands
     await tester.pump();
@@ -589,74 +726,91 @@ void main() {
     );
   });
 
-  testWidgets("a connected wheel's names replace the local labels",
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets("a connected wheel's names replace the local labels", (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     // Local labels say 'Ha'; the driver (AlpacaBridge) names that slot 'Hα'.
     // The wheel's name is the truth, so the picker offers 'Hα' only.
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
-    wheel.park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'idle',
-      currentSlot: 0,
-      slots: const [
-        FilterSlot(position: 0, name: 'L', focusOffset: 0),
-        FilterSlot(position: 1, name: 'Hα', focusOffset: 0),
-        FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
-      ],
-    ));
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+    wheel.park(
+      FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: const [
+          FilterSlot(position: 0, name: 'L', focusOffset: 0),
+          FilterSlot(position: 1, name: 'Hα', focusOffset: 0),
+          FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
+        ],
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.text('L').last);
     await tester.pumpAndSettle();
-    expect(find.text('Ha'), findsNothing,
-        reason: "the stale local label isn't offered");
+    expect(
+      find.text('Ha'),
+      findsNothing,
+      reason: "the stale local label isn't offered",
+    );
     await tester.tap(find.text('Hα').last);
     await tester.pumpAndSettle();
     expect(wheel.changeCalls, [1]);
   });
 
-  testWidgets("labels beyond the connected wheel's slots aren't offered",
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets("labels beyond the connected wheel's slots aren't offered", (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     // A one-slot wheel: 'Ha' and 'OIII' have no physical slot.
-    wheel.park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'idle',
-      currentSlot: 0,
-      slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
-    ));
+    wheel.park(
+      FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.text('L').last);
@@ -666,18 +820,24 @@ void main() {
     expect(wheel.changeCalls, isEmpty);
   });
 
-  testWidgets('a stale picked name on a connected wheel says so', (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('a stale picked name on a connected wheel says so', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
     // The capture is tagged 'Ha' offline, then a one-slot wheel ('L' only)
@@ -689,16 +849,18 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
-    wheel.park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'idle',
-      currentSlot: null,
-      slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
-    ));
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+    wheel.park(
+      FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: null,
+        slots: const [FilterSlot(position: 0, name: 'L', focusOffset: 0)],
+      ),
+    );
     await tester.pump();
     expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
@@ -709,8 +871,10 @@ void main() {
 
     // No silent lie: no move, and a snackbar says the name isn't on the wheel.
     expect(wheel.changeCalls, isEmpty);
-    expect(find.textContaining("isn't a slot on the connected wheel"),
-        findsOneWidget);
+    expect(
+      find.textContaining("isn't a slot on the connected wheel"),
+      findsOneWidget,
+    );
   });
 
   testWidgets(
@@ -768,37 +932,44 @@ void main() {
     },
   );
 
-  testWidgets('a pick landing on an unnamed device slot tags the local label',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('a pick landing on an unnamed device slot tags the local label', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     // The driver never names slot 1 — only local label 'Ha' covers it.
     wheel.slotsOverride = const [
       FilterSlot(position: 0, name: 'L', focusOffset: 0),
       FilterSlot(position: 1, name: '', focusOffset: 0),
       FilterSlot(position: 2, name: 'OIII', focusOffset: 0),
     ];
-    wheel.park(FilterWheelStatus(
-      deviceId: 'fw',
-      name: 'FILTERWHEEL',
-      connectionState: EquipmentConnectionState.connected,
-      runtimeState: 'idle',
-      currentSlot: 0,
-      slots: wheel.slotsOverride!,
-    ));
+    wheel.park(
+      FilterWheelStatus(
+        deviceId: 'fw',
+        name: 'FILTERWHEEL',
+        connectionState: EquipmentConnectionState.connected,
+        runtimeState: 'idle',
+        currentSlot: 0,
+        slots: wheel.slotsOverride!,
+      ),
+    );
     await tester.pump();
 
     await tester.tap(find.text('L').last);
@@ -814,46 +985,60 @@ void main() {
     expect(wheel.changeCalls, [1]);
   });
 
-  testWidgets('the busy pulse re-arms on every move (not just the first)',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+  testWidgets('the busy pulse re-arms on every move (not just the first)', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+        filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+      ],
+    );
     _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
     addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
+      ),
+    );
     await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
+    final wheel =
+        container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
     wheel.park(_wheelAt(0)); // on L
     wheel.moveDelay = const Duration(milliseconds: 400);
     await tester.pump();
 
-    DropdownButtonFormField<String> field() => tester
-        .widget<DropdownButtonFormField<String>>(
-            find.byType(DropdownButtonFormField<String>));
+    DropdownButtonFormField<String> field() =>
+        tester.widget<DropdownButtonFormField<String>>(
+          find.byType(DropdownButtonFormField<String>),
+        );
 
     Future<void> pick(String name, String landedName) async {
-      await tester.tap(find.text(container
-              .read(exposureControllerProvider)
-              .filterSlot)
-          .last); // open
+      await tester.tap(
+        find.text(container.read(exposureControllerProvider).filterSlot).last,
+      ); // open
       await tester.pumpAndSettle();
       await tester.tap(find.text(name).last);
       await tester.pump(const Duration(milliseconds: 50)); // mid-flight
-      expect(field().onChanged, isNull,
-          reason: 'busy -> disabled while the move is in flight ($name)');
-      expect(field().decoration.enabledBorder, isNotNull,
-          reason: 'busy border pulse is active ($name)');
+      expect(
+        field().onChanged,
+        isNull,
+        reason: 'busy -> disabled while the move is in flight ($name)',
+      );
+      expect(
+        field().decoration.enabledBorder,
+        isNotNull,
+        reason: 'busy border pulse is active ($name)',
+      );
       await tester.pumpAndSettle(); // landing + green flash
-      expect(field().onChanged, isNotNull,
-          reason: 're-enabled after landing ($name)');
+      expect(
+        field().onChanged,
+        isNotNull,
+        reason: 're-enabled after landing ($name)',
+      );
       expect(container.read(exposureControllerProvider).filterSlot, landedName);
     }
 
@@ -863,99 +1048,125 @@ void main() {
     await pick('OIII', 'OIII');
   });
 
-  testWidgets('picking a filter with no connected wheel only tags the capture',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
-    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
-    addTearDown(container.dispose);
+  testWidgets(
+    'picking a filter with no connected wheel only tags the capture',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+          filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+        ],
+      );
+      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+      addTearDown(container.dispose);
 
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
-    await tester.pumpAndSettle();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
 
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
-    wheel.park(_wheelAt(0, connected: false)); // wheel disconnected
-    await tester.pump();
+      final wheel =
+          container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(_wheelAt(0, connected: false)); // wheel disconnected
+      await tester.pump();
 
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
 
-    expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    expect(wheel.changeCalls, isEmpty,
-        reason: 'no wheel to move — the picker only tags the capture');
-  });
-
-  testWidgets('a failed wheel move does not tag the capture and shows an error',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
-    _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
-    addTearDown(container.dispose);
-
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: ExposureControlsPanel())),
-    ));
-    await tester.pumpAndSettle();
-
-    final wheel = container.read(filterWheelProvider.notifier)
-        as _FakeWheelNotifier;
-    wheel.park(_wheelAt(0)); // wheel on L
-    wheel.failMoves = true; // driver rejects the move
-    await tester.pump();
-
-    await tester.tap(find.text('L').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Ha').last);
-    await tester.pumpAndSettle();
-
-    // The failed move must NOT tag the capture with a filter that isn't in
-    // the light path — the picker stays truthful to the wheel (L).
-    expect(container.read(exposureControllerProvider).filterSlot, 'L');
-    expect(wheel.changeCalls, [1], reason: 'the move was attempted');
-    expect(find.text('driver rejected the move'), findsOneWidget,
-        reason: 'the failure surfaces as a snackbar (StateError passes through '
-            'friendlyError verbatim), not a silent drop');
-    // The controlled button re-syncs to state: it must still DISPLAY L, not
-    // the just-tapped name (DropdownButtonFormField would have lied here).
-    expect(
-      find.descendant(
-        of: find.byType(DropdownButton<String>),
-        matching: find.text('L'),
-      ),
-      findsOneWidget,
-      reason: 'the picker shows the wheel\'s actual filter after a failed move',
-    );
-  });
+      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+      expect(
+        wheel.changeCalls,
+        isEmpty,
+        reason: 'no wheel to move — the picker only tags the capture',
+      );
+    },
+  );
 
   testWidgets(
-      'Option A: bin renders as a symmetric dropdown from the camera range',
-      (tester) async {
-    final container = await _pump(tester, cameraStatus: _cameraWithMaxBin(4));
-    expect(find.text('Bin'), findsOneWidget);
-    // Default bin 1 is shown as 1x1 and the camera's max (4) is the cap.
-    expect(find.text('1x1'), findsOneWidget);
-    await tester.tap(find.text('1x1').last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('3x3').last);
-    await tester.pumpAndSettle();
-    expect(container.read(exposureControllerProvider).bin, 3);
-    // 5x5 is beyond the camera's 4x4 cap and must not be offered.
-    expect(find.text('5x5'), findsNothing);
-  });
+    'a failed wheel move does not tag the capture and shows an error',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          filterWheelLabelsProvider.overrideWith(_FixedLabels.new),
+          filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
+        ],
+      );
+      _FixedLabels.labels = ['L', 'Ha', 'OIII', '', ''];
+      addTearDown(container.dispose);
 
-  testWidgets('Option A: bin dropdown falls back to 1..8 with no camera',
-      (tester) async {
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
+            home: Scaffold(body: ExposureControlsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final wheel =
+          container.read(filterWheelProvider.notifier) as _FakeWheelNotifier;
+      wheel.park(_wheelAt(0)); // wheel on L
+      wheel.failMoves = true; // driver rejects the move
+      await tester.pump();
+
+      await tester.tap(find.text('L').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Ha').last);
+      await tester.pumpAndSettle();
+
+      // The failed move must NOT tag the capture with a filter that isn't in
+      // the light path — the picker stays truthful to the wheel (L).
+      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+      expect(wheel.changeCalls, [1], reason: 'the move was attempted');
+      expect(
+        find.text('driver rejected the move'),
+        findsOneWidget,
+        reason:
+            'the failure surfaces as a snackbar (StateError passes through '
+            'friendlyError verbatim), not a silent drop',
+      );
+      // The controlled button re-syncs to state: it must still DISPLAY L, not
+      // the just-tapped name (DropdownButtonFormField would have lied here).
+      expect(
+        find.descendant(
+          of: find.byType(DropdownButton<String>),
+          matching: find.text('L'),
+        ),
+        findsOneWidget,
+        reason:
+            'the picker shows the wheel\'s actual filter after a failed move',
+      );
+    },
+  );
+
+  testWidgets(
+    'Option A: bin renders as a symmetric dropdown from the camera range',
+    (tester) async {
+      final container = await _pump(tester, cameraStatus: _cameraWithMaxBin(4));
+      expect(find.text('Bin'), findsOneWidget);
+      // Default bin 1 is shown as 1x1 and the camera's max (4) is the cap.
+      expect(find.text('1x1'), findsOneWidget);
+      await tester.tap(find.text('1x1').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('3x3').last);
+      await tester.pumpAndSettle();
+      expect(container.read(exposureControllerProvider).bin, 3);
+      // 5x5 is beyond the camera's 4x4 cap and must not be offered.
+      expect(find.text('5x5'), findsNothing);
+    },
+  );
+
+  testWidgets('Option A: bin dropdown falls back to 1..8 with no camera', (
+    tester,
+  ) async {
     final container = await _pump(tester); // no camera connected
     expect(find.text('1x1'), findsOneWidget);
     await tester.tap(find.text('1x1').last);
@@ -968,63 +1179,74 @@ void main() {
   });
 
   testWidgets(
-      'Option A: an out-of-range stored bin clamps to a valid selection '
-      'AND the clamp is written back to state', (tester) async {
-    // Camera caps at 2x2 but the stored bin is 8 (e.g. a camera swap) — the
-    // picker must clamp rather than crash on a value with no matching item.
-    final container =
-        await _pump(tester, cameraStatus: _cameraWithMaxBin(2), initialBin: 8);
-    expect(tester.takeException(), isNull);
-    expect(find.text('2x2'), findsOneWidget);
-    expect(find.text('8x8'), findsNothing);
-    // The correction must reach ExposureParams.bin — a display-only clamp
-    // would still submit bin 8 on capture.
-    await tester.pump(); // post-frame write-back
-    expect(container.read(exposureControllerProvider).bin, 2);
-  });
+    'Option A: an out-of-range stored bin clamps to a valid selection '
+    'AND the clamp is written back to state',
+    (tester) async {
+      // Camera caps at 2x2 but the stored bin is 8 (e.g. a camera swap) — the
+      // picker must clamp rather than crash on a value with no matching item.
+      final container = await _pump(
+        tester,
+        cameraStatus: _cameraWithMaxBin(2),
+        initialBin: 8,
+      );
+      expect(tester.takeException(), isNull);
+      expect(find.text('2x2'), findsOneWidget);
+      expect(find.text('8x8'), findsNothing);
+      // The correction must reach ExposureParams.bin — a display-only clamp
+      // would still submit bin 8 on capture.
+      await tester.pump(); // post-frame write-back
+      expect(container.read(exposureControllerProvider).bin, 2);
+    },
+  );
 
   testWidgets(
-      'Option A: capabilities arriving after the first build re-clamp the '
-      'selection (no exactly-one-item-per-value crash)', (tester) async {
-    // Real mount order: the camera provider is still loading on the first
-    // frame (dropdown shows the 1..8 fallback with the stored bin 8), then
-    // the capabilities resolve and narrow the range to 2.
-    final container = await _pump(tester,
-        cameraStatus: _cameraWithMaxBin(2), initialBin: 8, awaitCamera: false);
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-    expect(find.text('2x2'), findsOneWidget);
-    expect(find.text('8x8'), findsNothing);
-    expect(container.read(exposureControllerProvider).bin, 2);
-  });
+    'Option A: capabilities arriving after the first build re-clamp the '
+    'selection (no exactly-one-item-per-value crash)',
+    (tester) async {
+      // Real mount order: the camera provider is still loading on the first
+      // frame (dropdown shows the 1..8 fallback with the stored bin 8), then
+      // the capabilities resolve and narrow the range to 2.
+      final container = await _pump(
+        tester,
+        cameraStatus: _cameraWithMaxBin(2),
+        initialBin: 8,
+        awaitCamera: false,
+      );
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+      expect(find.text('2x2'), findsOneWidget);
+      expect(find.text('8x8'), findsNothing);
+      expect(container.read(exposureControllerProvider).bin, 2);
+    },
+  );
 
   testWidgets(
-      'Option A: malformed bin capabilities (min above max) keep the 1..8 '
-      'fallback', (tester) async {
-    final broken = CameraStatus.fromJson({
-      'state': 'connected',
-      'capabilities': {
-        'sensor_width': 100,
-        'sensor_height': 100,
-        'min_bin_x': 6,
-        'max_bin_x': 2,
-        'min_bin_y': 6,
-        'max_bin_y': 2,
-      },
-      'runtime': {'state': 'idle'},
-    });
-    await _pump(tester, cameraStatus: broken);
-    expect(tester.takeException(), isNull);
-    expect(find.text('1x1'), findsOneWidget);
-    await tester.tap(find.text('1x1').last);
-    await tester.pumpAndSettle();
-    expect(find.text('8x8'), findsOneWidget); // full fallback range offered
-  });
-
+    'Option A: malformed bin capabilities (min above max) keep the 1..8 '
+    'fallback',
+    (tester) async {
+      final broken = CameraStatus.fromJson({
+        'state': 'connected',
+        'capabilities': {
+          'sensor_width': 100,
+          'sensor_height': 100,
+          'min_bin_x': 6,
+          'max_bin_x': 2,
+          'min_bin_y': 6,
+          'max_bin_y': 2,
+        },
+        'runtime': {'state': 'idle'},
+      });
+      await _pump(tester, cameraStatus: broken);
+      expect(tester.takeException(), isNull);
+      expect(find.text('1x1'), findsOneWidget);
+      await tester.tap(find.text('1x1').last);
+      await tester.pumpAndSettle();
+      expect(find.text('8x8'), findsOneWidget); // full fallback range offered
+    },
+  );
 
   group('Exposure (s) field', () {
-    Finder exposureField() =>
-        find.widgetWithText(TextField, 'Exposure (s)');
+    Finder exposureField() => find.widgetWithText(TextField, 'Exposure (s)');
 
     Future<void> submit(WidgetTester tester, String text) async {
       await tester.enterText(exposureField(), text);
@@ -1035,41 +1257,50 @@ void main() {
     String shown(WidgetTester tester) =>
         tester.widget<TextField>(exposureField()).controller!.text;
 
-    testWidgets('takes a sub-second exposure and shows it as typed',
-        (tester) async {
+    testWidgets('takes a sub-second exposure and shows it as typed', (
+      tester,
+    ) async {
       final container = await _pump(tester);
       await submit(tester, '0.5');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(milliseconds: 500));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(milliseconds: 500),
+      );
       expect(shown(tester), '0.5');
     });
 
     testWidgets('accepts a comma decimal separator', (tester) async {
       final container = await _pump(tester);
       await submit(tester, '2,5');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(milliseconds: 2500));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(milliseconds: 2500),
+      );
       expect(shown(tester), '2.5');
     });
 
-    testWidgets('whole seconds still display without a decimal',
-        (tester) async {
+    testWidgets('whole seconds still display without a decimal', (
+      tester,
+    ) async {
       final container = await _pump(tester);
       expect(shown(tester), '5');
       await submit(tester, '30');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(seconds: 30));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(seconds: 30),
+      );
       expect(shown(tester), '30');
     });
 
-    testWidgets('zero or junk puts back the exposure in force',
-        (tester) async {
+    testWidgets('zero or junk puts back the exposure in force', (tester) async {
       final container = await _pump(tester);
       for (final bad in ['0', '-1', 'abc', 'NaN', 'Infinity']) {
         await submit(tester, bad);
-        expect(container.read(exposureControllerProvider).exposure,
-            const Duration(seconds: 5),
-            reason: bad);
+        expect(
+          container.read(exposureControllerProvider).exposure,
+          const Duration(seconds: 5),
+          reason: bad,
+        );
         expect(shown(tester), '5', reason: bad);
       }
     });
@@ -1091,16 +1322,20 @@ void main() {
       });
       final container = await _pump(tester, cameraStatus: camera);
       await submit(tester, '0.001');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(milliseconds: 10));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(milliseconds: 10),
+      );
       expect(shown(tester), '0.01');
     });
 
     testWidgets('a positive input under 1 ms floors to 1 ms', (tester) async {
       final container = await _pump(tester);
       await submit(tester, '0.0001');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(milliseconds: 1));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(milliseconds: 1),
+      );
       expect(shown(tester), '0.001');
     });
 
@@ -1121,30 +1356,39 @@ void main() {
       });
       final container = await _pump(tester, cameraStatus: camera);
       await submit(tester, '900');
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(seconds: 600));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(seconds: 600),
+      );
       expect(shown(tester), '600');
     });
 
-    testWidgets('an absurd input with no camera is bounded, not overflowed',
-        (tester) async {
+    testWidgets('an absurd input with no camera is bounded, not overflowed', (
+      tester,
+    ) async {
       final container = await _pump(tester);
       await submit(tester, '1e300');
       expect(tester.takeException(), isNull);
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(hours: 24));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(hours: 24),
+      );
     });
 
     testWidgets('offers a decimal key on mobile keyboards', (tester) async {
       await _pump(tester);
-      expect(tester.widget<TextField>(exposureField()).keyboardType,
-          const TextInputType.numberWithOptions(decimal: true));
+      expect(
+        tester.widget<TextField>(exposureField()).keyboardType,
+        const TextInputType.numberWithOptions(decimal: true),
+      );
     });
   });
 }
 
 class _PlanRunning extends SequenceRunStateNotifier {
   @override
-  Future<SequenceRunStateInfo?> build() async =>
-      const SequenceRunStateInfo(sequenceId: 'seq-1', state: SequenceRunState.running);
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+    sequenceId: 'seq-1',
+    state: SequenceRunState.running,
+  );
 }

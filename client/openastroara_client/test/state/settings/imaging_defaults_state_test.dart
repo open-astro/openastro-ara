@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../../support/section_load.dart';
+
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 
@@ -30,11 +31,15 @@ void main() {
       final n = container.read(imagingDefaultsProvider.notifier);
       n.setExposure(Duration.zero);
       n.setExposure(const Duration(seconds: -1));
-      expect(container.read(imagingDefaultsProvider).value!.defaultExposure,
-          const Duration(seconds: 5));
+      expect(
+        container.read(imagingDefaultsProvider).value!.defaultExposure,
+        const Duration(seconds: 5),
+      );
       n.setExposure(const Duration(seconds: 30));
-      expect(container.read(imagingDefaultsProvider).value!.defaultExposure,
-          const Duration(seconds: 30));
+      expect(
+        container.read(imagingDefaultsProvider).value!.defaultExposure,
+        const Duration(seconds: 30),
+      );
     });
 
     test('setGain + setOffset reject negative', () {
@@ -73,21 +78,29 @@ void main() {
       n.setCoolerRampRate(0);
       n.setCoolerRampRate(-1);
       n.setCoolerRampRate(100);
-      expect(container.read(imagingDefaultsProvider).value!.coolerRampRatePerMin,
-          1.0);
+      expect(
+        container.read(imagingDefaultsProvider).value!.coolerRampRatePerMin,
+        1.0,
+      );
       n.setCoolerRampRate(2.5);
-      expect(container.read(imagingDefaultsProvider).value!.coolerRampRatePerMin,
-          2.5);
+      expect(
+        container.read(imagingDefaultsProvider).value!.coolerRampRatePerMin,
+        2.5,
+      );
     });
 
     test('setFrameKind + setWarmupAtSessionEnd assign directly', () {
       final n = container.read(imagingDefaultsProvider.notifier);
       n.setFrameKind(FrameKind.dark);
       n.setWarmupAtSessionEnd(true);
-      expect(container.read(imagingDefaultsProvider).value!.defaultFrameKind,
-          FrameKind.dark);
-      expect(container.read(imagingDefaultsProvider).value!.warmupAtSessionEnd,
-          isTrue);
+      expect(
+        container.read(imagingDefaultsProvider).value!.defaultFrameKind,
+        FrameKind.dark,
+      );
+      expect(
+        container.read(imagingDefaultsProvider).value!.warmupAtSessionEnd,
+        isTrue,
+      );
     });
 
     test('copyWith preserves unchanged fields', () {

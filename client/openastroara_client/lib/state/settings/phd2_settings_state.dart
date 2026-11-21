@@ -16,8 +16,28 @@ import '../guider/guider_choice_state.dart' show applyGuiderPick;
 /// PHD2's standard list), ms. The Tune Guiding picker is built from this so a
 /// chosen value is always one the guider accepts; 0 = "leave the guider's own".
 const List<int> guideExposureChoicesMs = [
-  10, 20, 50, 100, 200, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500,
-  5000, 6000, 7000, 8000, 9000, 10000, 15000, 30000,
+  10,
+  20,
+  50,
+  100,
+  200,
+  500,
+  1000,
+  1500,
+  2000,
+  2500,
+  3000,
+  3500,
+  4000,
+  4500,
+  5000,
+  6000,
+  7000,
+  8000,
+  9000,
+  10000,
+  15000,
+  30000,
 ];
 
 /// Human label for a guide exposure in ms ("0.5 s", "2 s", "10 s"); 0 is
@@ -163,42 +183,41 @@ class Phd2Settings {
     int? guideExposureMs,
     int? guideCameraGain,
     int? guiderProfileId,
-  }) =>
-      Phd2Settings(
-        host: host ?? this.host,
-        port: port ?? this.port,
-        phd2Profile: phd2Profile ?? this.phd2Profile,
-        ditherEnabled: ditherEnabled ?? this.ditherEnabled,
-        ditherEveryNFrames: ditherEveryNFrames ?? this.ditherEveryNFrames,
-        ditherPixels: ditherPixels ?? this.ditherPixels,
-        settlePixels: settlePixels ?? this.settlePixels,
-        settleTimeSec: settleTimeSec ?? this.settleTimeSec,
-        settleTimeoutSec: settleTimeoutSec ?? this.settleTimeoutSec,
-        forceCalibrationEachSession:
-            forceCalibrationEachSession ?? this.forceCalibrationEachSession,
-        guiderSetupType: guiderSetupType ?? this.guiderSetupType,
-        guideFocalLength: guideFocalLength ?? this.guideFocalLength,
-        guidePixelSize: guidePixelSize ?? this.guidePixelSize,
-        raAggressiveness: raAggressiveness ?? this.raAggressiveness,
-        decAggressiveness: decAggressiveness ?? this.decAggressiveness,
-        minimumMove: minimumMove ?? this.minimumMove,
-        decMinimumMove: decMinimumMove ?? this.decMinimumMove,
-        decGuideMode: decGuideMode ?? this.decGuideMode,
-        guiderCamera: guiderCamera ?? this.guiderCamera,
-        guiderCameraId: guiderCameraId ?? this.guiderCameraId,
-        guiderCameraAlpacaUniqueId:
-            guiderCameraAlpacaUniqueId ?? this.guiderCameraAlpacaUniqueId,
-        guiderMount: guiderMount ?? this.guiderMount,
-        guiderAuxMount: guiderAuxMount ?? this.guiderAuxMount,
-        guiderRotator: guiderRotator ?? this.guiderRotator,
-        guiderAlpacaHost: guiderAlpacaHost ?? this.guiderAlpacaHost,
-        guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
-        guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
-        guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
-        guideExposureMs: guideExposureMs ?? this.guideExposureMs,
-        guideCameraGain: guideCameraGain ?? this.guideCameraGain,
-        guiderProfileId: guiderProfileId ?? this.guiderProfileId,
-      );
+  }) => Phd2Settings(
+    host: host ?? this.host,
+    port: port ?? this.port,
+    phd2Profile: phd2Profile ?? this.phd2Profile,
+    ditherEnabled: ditherEnabled ?? this.ditherEnabled,
+    ditherEveryNFrames: ditherEveryNFrames ?? this.ditherEveryNFrames,
+    ditherPixels: ditherPixels ?? this.ditherPixels,
+    settlePixels: settlePixels ?? this.settlePixels,
+    settleTimeSec: settleTimeSec ?? this.settleTimeSec,
+    settleTimeoutSec: settleTimeoutSec ?? this.settleTimeoutSec,
+    forceCalibrationEachSession:
+        forceCalibrationEachSession ?? this.forceCalibrationEachSession,
+    guiderSetupType: guiderSetupType ?? this.guiderSetupType,
+    guideFocalLength: guideFocalLength ?? this.guideFocalLength,
+    guidePixelSize: guidePixelSize ?? this.guidePixelSize,
+    raAggressiveness: raAggressiveness ?? this.raAggressiveness,
+    decAggressiveness: decAggressiveness ?? this.decAggressiveness,
+    minimumMove: minimumMove ?? this.minimumMove,
+    decMinimumMove: decMinimumMove ?? this.decMinimumMove,
+    decGuideMode: decGuideMode ?? this.decGuideMode,
+    guiderCamera: guiderCamera ?? this.guiderCamera,
+    guiderCameraId: guiderCameraId ?? this.guiderCameraId,
+    guiderCameraAlpacaUniqueId:
+        guiderCameraAlpacaUniqueId ?? this.guiderCameraAlpacaUniqueId,
+    guiderMount: guiderMount ?? this.guiderMount,
+    guiderAuxMount: guiderAuxMount ?? this.guiderAuxMount,
+    guiderRotator: guiderRotator ?? this.guiderRotator,
+    guiderAlpacaHost: guiderAlpacaHost ?? this.guiderAlpacaHost,
+    guiderAlpacaPort: guiderAlpacaPort ?? this.guiderAlpacaPort,
+    guideExposureMinMs: guideExposureMinMs ?? this.guideExposureMinMs,
+    guideExposureMaxMs: guideExposureMaxMs ?? this.guideExposureMaxMs,
+    guideExposureMs: guideExposureMs ?? this.guideExposureMs,
+    guideCameraGain: guideCameraGain ?? this.guideCameraGain,
+    guiderProfileId: guiderProfileId ?? this.guiderProfileId,
+  );
 }
 
 /// ADR 0015 — a value only once the rig has answered. Loads itself: Simple
@@ -283,11 +302,15 @@ class Phd2SettingsNotifier extends SelfLoadingSection<Phd2Settings> {
   /// scope, and a guide scope would keep it as if it were its own (#1715).
   void setGuiderSetupType(String v) {
     final norm = normalizeGuiderSetupType(v);
-    edit((c) => c.copyWith(
-      guiderSetupType: norm,
-      guiderRotator: norm == 'oag' ? c.guiderRotator : '',
-      guideFocalLength: c.guiderSetupType == 'oag' && norm != 'oag' ? 0 : null,
-    ));
+    edit(
+      (c) => c.copyWith(
+        guiderSetupType: norm,
+        guiderRotator: norm == 'oag' ? c.guiderRotator : '',
+        guideFocalLength: c.guiderSetupType == 'oag' && norm != 'oag'
+            ? 0
+            : null,
+      ),
+    );
   }
 
   /// True when the guide camera turns with the imaging rotator — the only
@@ -357,7 +380,8 @@ class Phd2SettingsNotifier extends SelfLoadingSection<Phd2Settings> {
   void setGuiderCameraAlpacaUniqueId(String s) =>
       edit((c) => c.copyWith(guiderCameraAlpacaUniqueId: s.trim()));
 
-  void setGuiderMount(String s) => edit((c) => c.copyWith(guiderMount: s.trim()));
+  void setGuiderMount(String s) =>
+      edit((c) => c.copyWith(guiderMount: s.trim()));
 
   void setGuiderAuxMount(String s) =>
       edit((c) => c.copyWith(guiderAuxMount: s.trim()));

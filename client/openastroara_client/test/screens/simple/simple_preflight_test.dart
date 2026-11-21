@@ -29,8 +29,12 @@ class _Step extends Notifier<SetupStepState> {
   void set(SetupStepState s) => state = s;
 }
 
-final _focus = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
-final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepState.pending));
+final _focus = NotifierProvider<_Step, SetupStepState>(
+  () => _Step(SetupStepState.pending),
+);
+final _aligned = NotifierProvider<_Step, SetupStepState>(
+  () => _Step(SetupStepState.pending),
+);
 
 class _PolarApi implements PolarAlignClient {
   @override
@@ -86,8 +90,12 @@ class _Mount extends MountNotifier {
 /// A connected guider, stopped until [startGuiding]; records the asks.
 class _Guider extends GuiderStatusNotifier {
   final calls = <String>[];
-  static GuiderStatus _at(String runtime) => GuiderStatus.fromJson(
-      {'device_id': 'g', 'name': 'PHD2', 'state': 'connected', 'runtime': {'state': runtime}});
+  static GuiderStatus _at(String runtime) => GuiderStatus.fromJson({
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {'state': runtime},
+  });
   @override
   Future<GuiderStatus?> build() async => _at('stopped');
   @override
@@ -95,6 +103,7 @@ class _Guider extends GuiderStatusNotifier {
     calls.add('start');
     state = AsyncData(_at('calibrating'));
   }
+
   @override
   Future<void> stopGuiding() async => calls.add('stop');
   void guiding() => state = AsyncData(_at('guiding'));
@@ -111,11 +120,15 @@ class _Run extends SequenceRunStateNotifier {
   _Run(this.run);
   final SequenceRunState run;
   @override
-  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
+  Future<SequenceRunStateInfo?> build() async =>
+      SequenceRunStateInfo(sequenceId: 's', runId: 'r', state: run);
 }
 
-Future<(ProviderContainer, _PolarApi)> _container(
-    {bool permanent = false, _Guider? guider, SequenceRunState? queue}) async {
+Future<(ProviderContainer, _PolarApi)> _container({
+  bool permanent = false,
+  _Guider? guider,
+  SequenceRunState? queue,
+}) async {
   final api = _PolarApi();
   final c = ProviderContainer(
     overrides: [
@@ -141,28 +154,114 @@ Future<(ProviderContainer, _PolarApi)> _container(
 
 void main() {
   test('Plan first, then the first setup step not done; nothing left means start imaging', () {
-    expect(preflightNextStep(focused: true, aligned: true, permanentPier: false, guided: true), SimplePreflightStep.plan,
-        reason: 'the plan is never done beforehand: Preflight starts on it');
-    expect(preflightNextStep(after: SimplePreflightStep.plan, focused: false, aligned: false, permanentPier: false, guided: true),
-        SimplePreflightStep.focus);
-    expect(preflightNextStep(after: SimplePreflightStep.plan, focused: true, aligned: false, permanentPier: false, guided: true),
-        SimplePreflightStep.polarAlign);
-    expect(preflightNextStep(after: SimplePreflightStep.plan, focused: true, aligned: false, permanentPier: true, guided: true), isNull);
-    expect(preflightNextStep(after: SimplePreflightStep.focus, focused: false, aligned: false, permanentPier: false, guided: true),
-        SimplePreflightStep.polarAlign, reason: 'Skip from Focus');
-    expect(preflightNextStep(after: SimplePreflightStep.polarAlign, focused: false, aligned: false, permanentPier: false, guided: true), isNull);
+    expect(
+      preflightNextStep(
+        focused: true,
+        aligned: true,
+        permanentPier: false,
+        guided: true,
+      ),
+      SimplePreflightStep.plan,
+      reason: 'the plan is never done beforehand: Preflight starts on it',
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.plan,
+        focused: false,
+        aligned: false,
+        permanentPier: false,
+        guided: true,
+      ),
+      SimplePreflightStep.focus,
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.plan,
+        focused: true,
+        aligned: false,
+        permanentPier: false,
+        guided: true,
+      ),
+      SimplePreflightStep.polarAlign,
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.plan,
+        focused: true,
+        aligned: false,
+        permanentPier: true,
+        guided: true,
+      ),
+      isNull,
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.focus,
+        focused: false,
+        aligned: false,
+        permanentPier: false,
+        guided: true,
+      ),
+      SimplePreflightStep.polarAlign,
+      reason: 'Skip from Focus',
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.polarAlign,
+        focused: false,
+        aligned: false,
+        permanentPier: false,
+        guided: true,
+      ),
+      isNull,
+    );
   });
 
   test('Guide comes after polar align; skipped when guiding already or with no guider', () {
     // User, 2026-11-04: the guide routine is part of Preflight, after Polar align.
-    expect(preflightNextStep(after: SimplePreflightStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: false),
-        SimplePreflightStep.guide);
-    expect(preflightNextStep(after: SimplePreflightStep.plan, focused: true, aligned: false, permanentPier: true, guided: false),
-        SimplePreflightStep.guide, reason: 'a permanent pier skips polar align, not guiding');
-    expect(preflightNextStep(after: SimplePreflightStep.polarAlign, focused: true, aligned: true, permanentPier: false, guided: true),
-        isNull, reason: 'already guiding (or no guider): imaging is next');
-    expect(preflightNextStep(after: SimplePreflightStep.guide, focused: false, aligned: false, permanentPier: false, guided: false),
-        isNull, reason: 'the last step');
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.polarAlign,
+        focused: true,
+        aligned: true,
+        permanentPier: false,
+        guided: false,
+      ),
+      SimplePreflightStep.guide,
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.plan,
+        focused: true,
+        aligned: false,
+        permanentPier: true,
+        guided: false,
+      ),
+      SimplePreflightStep.guide,
+      reason: 'a permanent pier skips polar align, not guiding',
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.polarAlign,
+        focused: true,
+        aligned: true,
+        permanentPier: false,
+        guided: true,
+      ),
+      isNull,
+      reason: 'already guiding (or no guider): imaging is next',
+    );
+    expect(
+      preflightNextStep(
+        after: SimplePreflightStep.guide,
+        focused: false,
+        aligned: false,
+        permanentPier: false,
+        guided: false,
+      ),
+      isNull,
+      reason: 'the last step',
+    );
   });
 
   test('the Guide step does not start guiding while the main camera is busy: calibration turns the mount '
@@ -175,11 +274,21 @@ void main() {
     plan.queued();
     c.read(_focus.notifier).set(SetupStepState.done);
     c.read(_aligned.notifier).set(SetupStepState.done);
-    c.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 30));
+    c
+        .read(captureProgressProvider.notifier)
+        .beginExposing(const Duration(seconds: 30));
     pilot.next(); // the plan's Next: focus and polar align done, so Guide
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.guide, reason: 'the step is held, not skipped');
+    expect(
+      c.read(simplePreflightProvider),
+      SimplePreflightStep.guide,
+      reason: 'the step is held, not skipped',
+    );
     await Future<void>.value();
-    expect(guider.calls, isEmpty, reason: 'no calibration under a frame; the shutter says why');
+    expect(
+      guider.calls,
+      isEmpty,
+      reason: 'no calibration under a frame; the shutter says why',
+    );
     c.read(captureProgressProvider.notifier).reset();
   });
 
@@ -200,7 +309,9 @@ void main() {
       c.read(_aligned.notifier).set(SetupStepState.done);
       pilot.next();
       expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-      await Future<void>.delayed(Duration.zero); // the mount status read, then the start
+      await Future<void>.delayed(
+        Duration.zero,
+      ); // the mount status read, then the start
       expect(guider.calls, starts ? ['start'] : isEmpty, reason: '$queue');
     }
   });
@@ -217,13 +328,19 @@ void main() {
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     pilot.next(); // polar align's Done (or Skip)
     expect(c.read(simplePreflightProvider), SimplePreflightStep.guide);
-    await Future<void>.delayed(Duration.zero); // the mount status read, then the start
-    expect(guider.calls, ['start'], reason: 'entering Guide starts the routine (calibrating when needed)');
+    await Future<void>.delayed(
+      Duration.zero,
+    ); // the mount status read, then the start
+    expect(guider.calls, [
+      'start',
+    ], reason: 'entering Guide starts the routine (calibrating when needed)');
     guider.guiding();
     pilot.next(); // Guide's Done · Start imaging
     await Future<void>.value();
     expect(plan.starts, hasLength(1), reason: 'imaging starts');
-    expect(guider.calls, ['start'], reason: 'leaving Guide keeps it guiding for imaging');
+    expect(guider.calls, [
+      'start',
+    ], reason: 'leaving Guide keeps it guiding for imaging');
   });
 
   test('Preflight opens on the plan; its Next goes to Focus', () async {
@@ -242,7 +359,11 @@ void main() {
     c.read(_focus.notifier).set(SetupStepState.done);
     expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
     await Future<void>.delayed(Duration.zero);
-    expect(api.calls, isEmpty, reason: 'the routine turns the mount from where it points: the user starts it');
+    expect(
+      api.calls,
+      isEmpty,
+      reason: 'the routine turns the mount from where it points: the user starts it',
+    );
   });
 
   test("on a permanent pier a finished autofocus waits for its Done: nothing starts on its own", () async {
@@ -255,8 +376,7 @@ void main() {
     expect(api.calls, isEmpty);
   });
 
-  test("the last setup step's Done starts imaging (the queue, at dark when it's before dark) and ends Preflight",
-      () async {
+  test("the last setup step's Done starts imaging (the queue, at dark when it's before dark) and ends Preflight", () async {
     final (c, _) = await _container();
     final plan = c.read(simpleRunProvider.notifier) as _Plan;
     c.read(simplePreflightProvider.notifier).start();
@@ -270,28 +390,39 @@ void main() {
     c.read(simplePreflightProvider.notifier).next();
     await Future<void>.value();
     expect(plan.starts, hasLength(1));
-    expect(c.read(simplePreflightProvider), isNull, reason: 'imaging: Preflight is done');
+    expect(
+      c.read(simplePreflightProvider),
+      isNull,
+      reason: 'imaging: Preflight is done',
+    );
   });
 
-  test('a Preflight started while a queue images stays open through its updates', () async {
-    // #1486 review: any run update with started set ended Preflight, not only imaging starting.
-    final (c, _) = await _container();
-    final plan = c.read(simpleRunProvider.notifier) as _Plan;
-    plan.started();
-    c.read(simplePreflightProvider.notifier).start();
-    final step = c.read(simplePreflightProvider);
-    expect(step, isNotNull, reason: 'precondition: running');
-    plan.state = const SimpleRun(sequenceId: 'seq-1', started: true, busy: true); // an update
-    await Future<void>.value();
-    expect(c.read(simplePreflightProvider), step);
-    // Its last Done ends it without starting the running queue again.
-    c.read(_focus.notifier).set(SetupStepState.done);
-    c.read(_aligned.notifier).set(SetupStepState.done);
-    while (c.read(simplePreflightProvider) != null) {
-      c.read(simplePreflightProvider.notifier).next();
-    }
-    expect(plan.starts, isEmpty);
-  });
+  test(
+    'a Preflight started while a queue images stays open through its updates',
+    () async {
+      // #1486 review: any run update with started set ended Preflight, not only imaging starting.
+      final (c, _) = await _container();
+      final plan = c.read(simpleRunProvider.notifier) as _Plan;
+      plan.started();
+      c.read(simplePreflightProvider.notifier).start();
+      final step = c.read(simplePreflightProvider);
+      expect(step, isNotNull, reason: 'precondition: running');
+      plan.state = const SimpleRun(
+        sequenceId: 'seq-1',
+        started: true,
+        busy: true,
+      ); // an update
+      await Future<void>.value();
+      expect(c.read(simplePreflightProvider), step);
+      // Its last Done ends it without starting the running queue again.
+      c.read(_focus.notifier).set(SetupStepState.done);
+      c.read(_aligned.notifier).set(SetupStepState.done);
+      while (c.read(simplePreflightProvider) != null) {
+        c.read(simplePreflightProvider.notifier).next();
+      }
+      expect(plan.starts, isEmpty);
+    },
+  );
 
   test('with nothing queued the last Done goes back to the plan instead of doing nothing', () async {
     // PR #1486 review: Skip on the plan with nothing queued, then the last Done reached startQueue, which
@@ -305,7 +436,11 @@ void main() {
     c.read(simplePreflightProvider.notifier).next(); // Done · Start imaging
     await Future<void>.value();
     expect(plan.starts, isEmpty);
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.plan, reason: 'pick something to image first');
+    expect(
+      c.read(simplePreflightProvider),
+      SimplePreflightStep.plan,
+      reason: 'pick something to image first',
+    );
   });
 
   for (final (how, leave) in <(String, void Function(SimplePreflightNotifier))>[
@@ -313,7 +448,29 @@ void main() {
     ('Back', (p) => p.back()),
     ('leaving Preflight', (p) => p.stop()),
   ]) {
-    test('$how from a running polar routine stops it: the mount must not keep moving', () async {
+    test(
+      '$how from a running polar routine stops it: the mount must not keep moving',
+      () async {
+        final (c, api) = await _container();
+        final plan = c.read(simpleRunProvider.notifier) as _Plan;
+        final pilot = c.read(simplePreflightProvider.notifier);
+        pilot.start();
+        plan.queued();
+        pilot.next();
+        c.read(_focus.notifier).set(SetupStepState.done);
+        expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
+        (c.read(polarAlignLiveProvider.notifier) as _Live)
+            .run(); // started from the shutter
+        leave(pilot);
+        await Future<void>.value();
+        expect(api.calls, ['stop']);
+      },
+    );
+  }
+
+  test(
+    "the polar step's Done completes the routine: moving on stops nothing",
+    () async {
       final (c, api) = await _container();
       final plan = c.read(simpleRunProvider.notifier) as _Plan;
       final pilot = c.read(simplePreflightProvider.notifier);
@@ -322,28 +479,14 @@ void main() {
       pilot.next();
       c.read(_focus.notifier).set(SetupStepState.done);
       expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-      (c.read(polarAlignLiveProvider.notifier) as _Live).run(); // started from the shutter
-      leave(pilot);
+      (c.read(polarAlignLiveProvider.notifier) as _Live)
+          .run(); // complete sent, the rig not caught up yet
+      pilot.polarDone();
       await Future<void>.value();
-      expect(api.calls, ['stop']);
-    });
-  }
-
-  test("the polar step's Done completes the routine: moving on stops nothing", () async {
-    final (c, api) = await _container();
-    final plan = c.read(simpleRunProvider.notifier) as _Plan;
-    final pilot = c.read(simplePreflightProvider.notifier);
-    pilot.start();
-    plan.queued();
-    pilot.next();
-    c.read(_focus.notifier).set(SetupStepState.done);
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.polarAlign);
-    (c.read(polarAlignLiveProvider.notifier) as _Live).run(); // complete sent, the rig not caught up yet
-    pilot.polarDone();
-    await Future<void>.value();
-    expect(api.calls, isNot(contains('stop')));
-    expect(plan.starts, hasLength(1));
-  });
+      expect(api.calls, isNot(contains('stop')));
+      expect(plan.starts, hasLength(1));
+    },
+  );
 
   test('a polar routine that already ended is not stopped again', () async {
     final (c, api) = await _container();
@@ -356,29 +499,51 @@ void main() {
     expect(api.calls, isEmpty, reason: 'nothing running: no stop');
   });
 
-  testWidgets('the strip shows Plan, Focus, Polar align, the current one lit; Skip and Back move', (tester) async {
-    final (c, _) = await _container();
-    c.read(simplePreflightProvider.notifier).start();
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: c,
-      child: const MaterialApp(home: Scaffold(body: Center(child: SimplePreflightStrip()))),
-    ));
-    final x = [for (final s in ['Plan', 'Focus', 'Polar align']) tester.getCenter(find.text(s)).dx];
-    expect(x, orderedEquals([...x]..sort()), reason: 'Plan first');
-    expect(tester.widget<TextButton>(find.byKey(const Key('preflight-back'))).onPressed, isNull);
-    (c.read(simpleRunProvider.notifier) as _Plan).queued();
-    await tester.tap(find.byKey(const Key('preflight-skip')));
-    await tester.pump();
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
-    expect(find.bySemanticsLabel('Plan, done'), findsOneWidget, reason: 'a queue is in');
-    expect(find.bySemanticsLabel('Focus, current step'), findsOneWidget);
-    expect(find.bySemanticsLabel('Polar align, next'), findsOneWidget);
-    await tester.tap(find.byKey(const Key('preflight-skip')));
-    await tester.pump();
-    expect(find.bySemanticsLabel('Focus, skipped'), findsOneWidget);
-    expect(tester.widget<Icon>(find.byIcon(Icons.skip_next)).color, AraColors.accentBusy);
-    await tester.tap(find.byKey(const Key('preflight-back')));
-    await tester.pump();
-    expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
-  });
+  testWidgets(
+    'the strip shows Plan, Focus, Polar align, the current one lit; Skip and Back move',
+    (tester) async {
+      final (c, _) = await _container();
+      c.read(simplePreflightProvider.notifier).start();
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: c,
+          child: const MaterialApp(
+            home: Scaffold(body: Center(child: SimplePreflightStrip())),
+          ),
+        ),
+      );
+      final x = [
+        for (final s in ['Plan', 'Focus', 'Polar align'])
+          tester.getCenter(find.text(s)).dx,
+      ];
+      expect(x, orderedEquals([...x]..sort()), reason: 'Plan first');
+      expect(
+        tester
+            .widget<TextButton>(find.byKey(const Key('preflight-back')))
+            .onPressed,
+        isNull,
+      );
+      (c.read(simpleRunProvider.notifier) as _Plan).queued();
+      await tester.tap(find.byKey(const Key('preflight-skip')));
+      await tester.pump();
+      expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
+      expect(
+        find.bySemanticsLabel('Plan, done'),
+        findsOneWidget,
+        reason: 'a queue is in',
+      );
+      expect(find.bySemanticsLabel('Focus, current step'), findsOneWidget);
+      expect(find.bySemanticsLabel('Polar align, next'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('preflight-skip')));
+      await tester.pump();
+      expect(find.bySemanticsLabel('Focus, skipped'), findsOneWidget);
+      expect(
+        tester.widget<Icon>(find.byIcon(Icons.skip_next)).color,
+        AraColors.accentBusy,
+      );
+      await tester.tap(find.byKey(const Key('preflight-back')));
+      await tester.pump();
+      expect(c.read(simplePreflightProvider), SimplePreflightStep.focus);
+    },
+  );
 }

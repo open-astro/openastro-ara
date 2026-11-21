@@ -40,19 +40,19 @@ class LiveFrameState {
     String? error,
     bool clearError = false,
     bool clearJpeg = false,
-  }) =>
-      LiveFrameState(
-        jpeg: clearJpeg ? null : (jpeg ?? this.jpeg),
-        seq: seq ?? this.seq,
-        session: session ?? this.session,
-        active: active ?? this.active,
-        error: clearError ? null : (error ?? this.error),
-      );
+  }) => LiveFrameState(
+    jpeg: clearJpeg ? null : (jpeg ?? this.jpeg),
+    seq: seq ?? this.seq,
+    session: session ?? this.session,
+    active: active ?? this.active,
+    error: clearError ? null : (error ?? this.error),
+  );
 }
 
 /// Builds a [LiveViewClient] for a server. Overridable in tests with a fake.
-final liveViewApiFactoryProvider =
-    Provider<LiveViewClient Function(AraServer)>((ref) => LiveViewApi.new);
+final liveViewApiFactoryProvider = Provider<LiveViewClient Function(AraServer)>(
+  (ref) => LiveViewApi.new,
+);
 
 /// Drives the §64 Live View loop from the client: POST start, poll the frame
 /// endpoint on a short timer (change-detecting on session+seq so an unchanged
@@ -65,7 +65,8 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
   // session's stop can't reach the (single-session) server AFTER the new start
   // and kill it.
   Future<void>? _stopInFlight;
-  LiveViewClient? _stoppingApi; // the client whose stop() round-trip is in flight
+  LiveViewClient?
+  _stoppingApi; // the client whose stop() round-trip is in flight
   int _consecutiveErrors = 0;
   static const _pollInterval = Duration(milliseconds: 250);
   static const _maxBackoff = Duration(seconds: 5);
@@ -105,7 +106,11 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     }
     // Disposed while the ask was out (a server switch, teardown): a read of
     // state or ref would throw, and the client it built would leak.
-    if (_disposed || !active || _api != null || state.active || ref.read(activeServerProvider) != server) {
+    if (_disposed ||
+        !active ||
+        _api != null ||
+        state.active ||
+        ref.read(activeServerProvider) != server) {
       api.close();
       return;
     }
@@ -132,8 +137,7 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     _stoppingApi = null;
   }
 
-  AraServer? _activeServer() =>
-      ref.read(activeServerProvider);
+  AraServer? _activeServer() => ref.read(activeServerProvider);
 
   /// Start the loop with the given exposure/gain/binning, then begin polling.
   Future<void> start({
@@ -161,7 +165,12 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     final api = ref.read(liveViewApiFactoryProvider)(server);
     _api = api;
     try {
-      await api.start(exposureSec: exposureSec, gain: gain, binX: binX, binY: binY);
+      await api.start(
+        exposureSec: exposureSec,
+        gain: gain,
+        binX: binX,
+        binY: binY,
+      );
     } catch (e) {
       // Superseded by a second start() while this one was in flight — leave the
       // new session alone (don't null its _api or stamp an error over it).
@@ -208,8 +217,14 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
     final delay = _consecutiveErrors == 0
         ? _pollInterval
         : Duration(
-            milliseconds: (_pollInterval.inMilliseconds * (1 << _consecutiveErrors.clamp(1, 5)))
-                .clamp(_pollInterval.inMilliseconds, _maxBackoff.inMilliseconds));
+            milliseconds:
+                (_pollInterval.inMilliseconds *
+                        (1 << _consecutiveErrors.clamp(1, 5)))
+                    .clamp(
+                      _pollInterval.inMilliseconds,
+                      _maxBackoff.inMilliseconds,
+                    ),
+          );
     _timer = Timer(delay, () async {
       final api = _api;
       if (api == null || !state.active) return;
@@ -224,7 +239,11 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
         // the loop spins up its first frame.
         if (f != null && (f.session != state.session || f.seq != state.seq)) {
           state = state.copyWith(
-              jpeg: f.bytes, seq: f.seq, session: f.session, clearError: true);
+            jpeg: f.bytes,
+            seq: f.seq,
+            session: f.session,
+            clearError: true,
+          );
         } else if (state.error != null) {
           state = state.copyWith(clearError: true);
         }
@@ -253,4 +272,5 @@ class LiveViewFrameNotifier extends Notifier<LiveFrameState> {
 
 final liveViewFrameProvider =
     NotifierProvider<LiveViewFrameNotifier, LiveFrameState>(
-        LiveViewFrameNotifier.new);
+      LiveViewFrameNotifier.new,
+    );

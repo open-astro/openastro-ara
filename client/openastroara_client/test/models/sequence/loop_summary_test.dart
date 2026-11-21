@@ -46,7 +46,10 @@ void main() {
     expect(ha.exposuresPerPass, 1);
     expect(ha.totalFrames, 56);
     expect(ha.loopChip, '× 56 · 5.2 min · ≈ 4.8 h');
-    expect(ha.triggerChip, 'AF every 23 · dither every 1 · meridian flip if Auto flip is on');
+    expect(
+      ha.triggerChip,
+      'AF every 23 · dither every 1 · meridian flip if Auto flip is on',
+    );
   });
 
   // #1195 — an unguided rig's loop carries the re-centre trigger; the note names
@@ -94,8 +97,11 @@ void main() {
     expect(formatSeconds(30), '30 s');
     expect(formatSeconds(300), '5 min');
     expect(formatSeconds(310), '5.2 min');
-    expect(formatDuration(const Duration(seconds: 4)), '4 s',
-        reason: 'a short test loop must not read "≈ 0 min"');
+    expect(
+      formatDuration(const Duration(seconds: 4)),
+      '4 s',
+      reason: 'a short test loop must not read "≈ 0 min"',
+    );
     expect(formatDuration(const Duration(minutes: 25)), '25 min');
     expect(formatDuration(const Duration(minutes: 289)), '4.8 h');
   });
@@ -104,20 +110,35 @@ void main() {
     String note(String type, Map<String, dynamic> fields) =>
         summarizeContainer({
           'Conditions': [
-            {r'$type': 'OpenAstroAra.Sequencer.Conditions.$type, '
-                'OpenAstroAra.Sequencer', ...fields},
+            {
+              r'$type':
+                  'OpenAstroAra.Sequencer.Conditions.$type, '
+                  'OpenAstroAra.Sequencer',
+              ...fields,
+            },
           ],
         }).conditionNotes.single;
 
-    expect(note('TimeSpanCondition', {'Hours': 0, 'Minutes': 0, 'Seconds': 30}),
-        'for 30s', reason: 'a 30 s span must not read "for 0m"');
-    expect(note('TimeSpanCondition', {'Hours': 1, 'Minutes': 30, 'Seconds': 0}),
-        'for 1h 30m');
-    expect(note('TimeSpanCondition', {'Hours': 0, 'Minutes': 2, 'Seconds': 15}),
-        'for 2m 15s');
-    expect(note('TimeCondition', {'Hours': 22, 'Minutes': 5, 'Seconds': 0}),
-        'until 22:05');
-    expect(note('TimeCondition', {'Hours': 22, 'Minutes': 5, 'Seconds': 9}),
-        'until 22:05:09');
+    expect(
+      note('TimeSpanCondition', {'Hours': 0, 'Minutes': 0, 'Seconds': 30}),
+      'for 30s',
+      reason: 'a 30 s span must not read "for 0m"',
+    );
+    expect(
+      note('TimeSpanCondition', {'Hours': 1, 'Minutes': 30, 'Seconds': 0}),
+      'for 1h 30m',
+    );
+    expect(
+      note('TimeSpanCondition', {'Hours': 0, 'Minutes': 2, 'Seconds': 15}),
+      'for 2m 15s',
+    );
+    expect(
+      note('TimeCondition', {'Hours': 22, 'Minutes': 5, 'Seconds': 0}),
+      'until 22:05',
+    );
+    expect(
+      note('TimeCondition', {'Hours': 22, 'Minutes': 5, 'Seconds': 9}),
+      'until 22:05:09',
+    );
   });
 }

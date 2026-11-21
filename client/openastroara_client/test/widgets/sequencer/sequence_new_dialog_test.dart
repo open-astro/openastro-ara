@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,11 +13,12 @@ import 'package:openastroara/widgets/sequencer/sequence_new_dialog.dart';
 /// instantiateTemplate returns a configured id (or throws); records what was sent.
 class _NewClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(String id,
-          {required List<int> parentPath,
-          int? index,
-          required Map<String, dynamic> item}) =>
-      throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) => throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -25,18 +27,21 @@ class _NewClient implements SequenceClient {
       throw UnimplementedError();
 
   @override
-  Future<String> decideAutoFlats(String id,
-          {required String choice, required bool remember}) =>
-      throw UnimplementedError();
+  Future<String> decideAutoFlats(
+    String id, {
+    required String choice,
+    required bool remember,
+  }) => throw UnimplementedError();
   @override
   Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
   Future<SequenceValidationResult> validate(Map<String, dynamic> body) async =>
       const SequenceValidationResult(valid: true);
-  _NewClient(
-      {this.id = 'tmpl-1',
-      this.throwOnInstantiate = false,
-      this.templates = const []});
+  _NewClient({
+    this.id = 'tmpl-1',
+    this.throwOnInstantiate = false,
+    this.templates = const [],
+  });
   final String id;
   final bool throwOnInstantiate;
   final List<SequenceTemplate> templates;
@@ -52,20 +57,32 @@ class _NewClient implements SequenceClient {
   }
 
   @override
-  Future<String> create(String name, Map<String, dynamic> body,
-          {String? description, String? idempotencyKey}) async =>
-      id;
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+    String? idempotencyKey,
+  }) async => id;
   @override
   Future<List<SequenceTemplate>> listTemplates() async => templates;
   @override
-  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async =>
+      const SequencePage(items: []);
   @override
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
   @override
-  Future<SequenceDetail> updateSequence(String id,
-          {String? name, String? description, Map<String, dynamic>? body}) async =>
-      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  }) async => SequenceDetail(
+    id: id,
+    name: name ?? id,
+    description: description,
+    body: body ?? const {},
+  );
   @override
   Future<SequenceNode> getSequence(String id) async =>
       SequenceNode(id: 'root', kind: SequenceNodeKind.root, displayName: id);
@@ -76,8 +93,11 @@ class _NewClient implements SequenceClient {
   @override
   Future<String> pause(String id) async => 'op';
   @override
-  Future<String> resume(String id,
-          {bool recenter = true, bool refocus = false}) async => 'op';
+  Future<String> resume(
+    String id, {
+    bool recenter = true,
+    bool refocus = false,
+  }) async => 'op';
   @override
   Future<String> skipCurrent(String id) async => 'op';
   @override
@@ -85,7 +105,8 @@ class _NewClient implements SequenceClient {
   @override
   Future<String> stop(String id) async => 'op';
   @override
-  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
+  Future<SequenceShareExport> exportShare(String id) async =>
+      throw UnimplementedError();
   @override
   void close() {}
 }
@@ -95,31 +116,40 @@ void main() {
 
   Future<ProviderContainer> pump(WidgetTester tester, _NewClient client) async {
     returnedId = null;
-    final container = ProviderContainer(overrides: [
-      sequenceApiProvider.overrideWithValue(client),
-    ]);
+    final container = ProviderContainer(
+      overrides: [sequenceApiProvider.overrideWithValue(client)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Consumer(builder: (context, ref, _) {
-            return ElevatedButton(
-              onPressed: () async {
-                returnedId = await createSequenceFromTemplate(context, ProviderScope.containerOf(context),
-                    templateName: 'Deep-sky LRGB', newName: 'M42');
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, ref, _) {
+                return ElevatedButton(
+                  onPressed: () async {
+                    returnedId = await createSequenceFromTemplate(
+                      context,
+                      ProviderScope.containerOf(context),
+                      templateName: 'Deep-sky LRGB',
+                      newName: 'M42',
+                    );
+                  },
+                  child: const Text('go'),
+                );
               },
-              child: const Text('go'),
-            );
-          }),
+            ),
+          ),
         ),
       ),
-    ));
+    );
     return container;
   }
 
-  testWidgets('a successful create selects the new sequence + confirms',
-      (tester) async {
+  testWidgets('a successful create selects the new sequence + confirms', (
+    tester,
+  ) async {
     final container = await pump(tester, _NewClient(id: 'seq-9'));
     await tester.tap(find.text('go'));
     await tester.pumpAndSettle();
@@ -129,8 +159,9 @@ void main() {
     expect(find.textContaining('Created "M42"'), findsOneWidget); // SnackBar
   });
 
-  testWidgets('a create failure shows a SnackBar and selects nothing',
-      (tester) async {
+  testWidgets('a create failure shows a SnackBar and selects nothing', (
+    tester,
+  ) async {
     final container = await pump(tester, _NewClient(throwOnInstantiate: true));
     await tester.tap(find.text('go'));
     await tester.pumpAndSettle();
@@ -151,35 +182,41 @@ void main() {
 
   testWidgets('the dialog lists templates; picking one enables Create and '
       'instantiates the picked template', (tester) async {
-    final client = _NewClient(id: 'seq-7', templates: const [
-      SequenceTemplate(name: 'Deep-sky LRGB', category: 'Deep sky'),
-      SequenceTemplate(name: 'Quick test', category: 'Utility'),
-    ]);
-    final container = ProviderContainer(overrides: [
-      sequenceApiProvider.overrideWithValue(client),
-    ]);
+    final client = _NewClient(
+      id: 'seq-7',
+      templates: const [
+        SequenceTemplate(name: 'Deep-sky LRGB', category: 'Deep sky'),
+        SequenceTemplate(name: 'Quick test', category: 'Utility'),
+      ],
+    );
+    final container = ProviderContainer(
+      overrides: [sequenceApiProvider.overrideWithValue(client)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => ElevatedButton(
-              onPressed: () => SequenceNewDialog.show(context),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => ElevatedButton(
+                onPressed: () => SequenceNewDialog.show(context),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
 
     // Both templates listed; Create disabled until one is picked.
     expect(find.text('Deep-sky LRGB'), findsOneWidget);
     expect(find.text('Quick test'), findsOneWidget);
-    final createButton =
-        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Create'));
+    final createButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Create'),
+    );
     expect(createButton.onPressed, isNull);
 
     // Pick a template → name prefilled → Create enabled → instantiates it.
@@ -197,29 +234,38 @@ void main() {
 
   // Pump the dialog directly with an overridden templates create fn so the
   // loading / error / no-server states can be asserted in isolation.
-  Future<void> pumpDialog(WidgetTester tester,
-      FutureOr<List<SequenceTemplate>?> Function(Ref ref) create) async {
-    final container = ProviderContainer(overrides: [
-      sequenceTemplatesProvider.overrideWith(create),
-    ]);
+  Future<void> pumpDialog(
+    WidgetTester tester,
+    FutureOr<List<SequenceTemplate>?> Function(Ref ref) create,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [sequenceTemplatesProvider.overrideWith(create)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SequenceNewDialog())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequenceNewDialog())),
+      ),
+    );
   }
 
   testWidgets('shows a spinner while templates are loading', (tester) async {
-    await pumpDialog(tester,
-        (ref) => Completer<List<SequenceTemplate>?>().future); // never completes
+    await pumpDialog(
+      tester,
+      (ref) => Completer<List<SequenceTemplate>?>().future,
+    ); // never completes
     await tester.pump();
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
-  testWidgets('shows an error message when the templates load fails',
-      (tester) async {
+  testWidgets('shows an error message when the templates load fails', (
+    tester,
+  ) async {
     await pumpDialog(
-        tester, (ref) => Future<List<SequenceTemplate>?>.error('x'));
+      tester,
+      (ref) => Future<List<SequenceTemplate>?>.error('x'),
+    );
     await tester.pumpAndSettle();
     expect(find.textContaining("Couldn't load templates"), findsOneWidget);
   });
@@ -230,12 +276,15 @@ void main() {
     expect(find.textContaining('Connect to your rig'), findsOneWidget);
   });
 
-  testWidgets('picking a template does not clobber a name the user typed',
-      (tester) async {
+  testWidgets('picking a template does not clobber a name the user typed', (
+    tester,
+  ) async {
     await pumpDialog(
-        tester,
-        (ref) async =>
-            const [SequenceTemplate(name: 'Deep-sky LRGB', category: 'Deep sky')]);
+      tester,
+      (ref) async => const [
+        SequenceTemplate(name: 'Deep-sky LRGB', category: 'Deep sky'),
+      ],
+    );
     await tester.pumpAndSettle();
 
     await tester.enterText(find.byType(TextField), 'My own name');
@@ -245,6 +294,9 @@ void main() {
 
     // The typed name is preserved (only an empty field is pre-filled).
     expect(find.text('My own name'), findsOneWidget);
-    expect(find.text('Deep-sky LRGB'), findsOneWidget); // the radio row, not the field
+    expect(
+      find.text('Deep-sky LRGB'),
+      findsOneWidget,
+    ); // the radio row, not the field
   });
 }

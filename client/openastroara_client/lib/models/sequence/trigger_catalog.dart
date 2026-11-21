@@ -221,8 +221,7 @@ const List<TriggerDef> triggerCatalog = [
   // Re-connect a device if it drops mid-run. SelectedDevice is one of the
   // ConnectEquipment device names; default "Camera" (the C# constructor default).
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Trigger.Connect.ReconnectTrigger, OpenAstroAra.Sequencer',
     label: 'Reconnect Device',
     icon: Icons.cable_outlined,
     fields: [
@@ -271,8 +270,7 @@ const List<TriggerDef> triggerCatalog = [
   // §59.5 — autofocus once N minutes have passed since the last AF (long-term
   // drift catch-all). C# class default 30; the playbook recommends 90.
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterTimeTrigger, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterTimeTrigger, OpenAstroAra.Sequencer',
     label: 'Autofocus After Time',
     icon: Icons.schedule_outlined,
     fields: [
@@ -308,8 +306,7 @@ const List<TriggerDef> triggerCatalog = [
   // Amount% above the best HFR since the last AF (catches drift the time
   // trigger missed).
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterHFRIncreaseTrigger, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterHFRIncreaseTrigger, OpenAstroAra.Sequencer',
     label: 'Autofocus After HFR Increase',
     icon: Icons.trending_up_outlined,
     fields: [
@@ -334,8 +331,7 @@ const List<TriggerDef> triggerCatalog = [
   // the use-current-filter policy this is how per-filter offsets are learned.
   // No serialized fields of its own.
   TriggerDef(
-    type:
-        'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterFilterChange, OpenAstroAra.Sequencer',
+    type: 'OpenAstroAra.Sequencer.Trigger.Autofocus.AutofocusAfterFilterChange, OpenAstroAra.Sequencer',
     label: 'Autofocus After Filter Change',
     icon: Icons.filter_b_and_w_outlined,
     runnerItems: [runAutofocusType],

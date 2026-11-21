@@ -18,7 +18,7 @@ class SavedServerService {
   bool _legacyCleared = false;
 
   SavedServerService([FlutterSecureStorage? storage])
-      : _storage = storage ?? const FlutterSecureStorage();
+    : _storage = storage ?? const FlutterSecureStorage();
 
   Future<List<AraServer>> loadAll() async {
     if (!_legacyCleared) {
@@ -46,8 +46,10 @@ class SavedServerService {
     // END — the last one confirmed is the active one. Metadata merges
     // per-field: a bare manual re-entry (host:port only) must not blank what
     // a richer earlier confirmation recorded.
-    await saveAll(
-        [...existing.where((s) => s != server), merge(server, existing)]);
+    await saveAll([
+      ...existing.where((s) => s != server),
+      merge(server, existing),
+    ]);
   }
 
   /// The entry to keep for a (re-)confirmed [server]: its own metadata,

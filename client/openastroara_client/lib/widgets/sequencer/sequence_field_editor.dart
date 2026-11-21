@@ -19,7 +19,8 @@ import '../../models/sequence/instruction_catalog.dart';
 import '../../models/sequence/loop_summary.dart';
 import '../../models/sequence/nina_dom.dart';
 import '../../models/sequence/instruction_style.dart';
-import '../../models/sequence/node_display.dart' show nodeLabel, nodeIcon, shortTypeName;
+import '../../models/sequence/node_display.dart'
+    show nodeLabel, nodeIcon, shortTypeName;
 import '../../models/sequence/trigger_catalog.dart';
 import '../../models/switch_device.dart';
 import '../../state/equipment/filter_choices_state.dart';
@@ -80,11 +81,15 @@ class SequenceFieldEditor extends ConsumerWidget {
       ),
       if (def != null)
         if (instructionDescriptions[def.label] case final String desc) ...[
-        const SizedBox(height: 4),
-        Text(desc,
+          const SizedBox(height: 4),
+          Text(
+            desc,
             style: const TextStyle(
-                color: AraColors.textSecondary, fontSize: 11.5)),
-      ],
+              color: AraColors.textSecondary,
+              fontSize: 11.5,
+            ),
+          ),
+        ],
       if (repeatLine != null) ...[
         const SizedBox(height: 6),
         Row(
@@ -94,9 +99,13 @@ class SequenceFieldEditor extends ConsumerWidget {
             const Icon(Icons.repeat, size: 14, color: AraColors.accentInfo),
             const SizedBox(width: 6),
             Expanded(
-              child: Text(repeatLine,
-                  style: const TextStyle(
-                      color: AraColors.accentInfo, fontSize: 12)),
+              child: Text(
+                repeatLine,
+                style: const TextStyle(
+                  color: AraColors.accentInfo,
+                  fontSize: 12,
+                ),
+              ),
             ),
           ],
         ),
@@ -1380,7 +1389,9 @@ class _ValueTextFieldState extends State<_ValueTextField> {
 
   @override
   Widget build(BuildContext context) {
-    final keyboard = widget.multiline ? TextInputType.multiline : widget.keyboard;
+    final keyboard = widget.multiline
+        ? TextInputType.multiline
+        : widget.keyboard;
     return TextField(
       controller: _controller,
       enabled: widget.enabled,

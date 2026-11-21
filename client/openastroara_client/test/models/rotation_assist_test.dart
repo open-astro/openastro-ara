@@ -126,7 +126,11 @@ void main() {
         'binning': 4,
         'auto_binning': 4,
         'max_binning': 8,
-        'confirmation': {'seq': 3, 'solved_position_angle_deg': 10.2, 'delta_deg': -0.2},
+        'confirmation': {
+          'seq': 3,
+          'solved_position_angle_deg': 10.2,
+          'delta_deg': -0.2,
+        },
       });
       expect(s.binning, 4);
       expect(s.autoBinning, 4);

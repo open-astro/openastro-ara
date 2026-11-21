@@ -103,9 +103,8 @@ class ScreenReview extends ConsumerWidget {
         ref.read(wizardControllerProvider.notifier).jumpTo(step);
 
     final t = draft.telescope;
-    final fr = (t.focalLengthMm != null &&
-            t.apertureMm != null &&
-            t.apertureMm! > 0)
+    final fr =
+        (t.focalLengthMm != null && t.apertureMm != null && t.apertureMm! > 0)
         ? 'f/${(t.focalLengthMm! / t.apertureMm!).toStringAsFixed(1)}'
         : _notSet;
     final c = draft.camera;
@@ -124,150 +123,268 @@ class ScreenReview extends ConsumerWidget {
       step: 5,
       intro: l.wizardReviewIntro,
       children: [
-        _ReviewSection(title: l.wizardReviewSecBasics, step: 1, onEdit: edit, rows: [
-          ('Name', reviewValue(draft.profileName)),
-          ('Site name', reviewValue(draft.siteName)),
-          ('Latitude', _deg(draft.latitudeDeg)),
-          ('Longitude', _deg(draft.longitudeDeg)),
-          ('Altitude', _unit(draft.altitudeMeters, 'm')),
-          ('Time zone', reviewValue(draft.timezone)),
-        ]),
+        _ReviewSection(
+          title: l.wizardReviewSecBasics,
+          step: 1,
+          onEdit: edit,
+          rows: [
+            ('Name', reviewValue(draft.profileName)),
+            ('Site name', reviewValue(draft.siteName)),
+            ('Latitude', _deg(draft.latitudeDeg)),
+            ('Longitude', _deg(draft.longitudeDeg)),
+            ('Altitude', _unit(draft.altitudeMeters, 'm')),
+            ('Time zone', reviewValue(draft.timezone)),
+          ],
+        ),
         // AlpacaBridge address is set on step 2 (connect); device assignment on
         // step 3 — keep them as separate Edit targets so each jumps to its own
         // screen.
-        _ReviewSection(title: l.wizardReviewSecConnection, step: 2, onEdit: edit, rows: [
-          ('AlpacaBridge', reviewValue(draft.alpacaBridgeAddress)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecEquipment, step: 3, onEdit: edit, rows: [
-          ('Assigned', assignedEquipment(draft.equipment)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecTelescope, step: 3, onEdit: edit, rows: [
-          ('Name', reviewValue(t.name)),
-          ('Focal length', _unit(t.focalLengthMm, 'mm')),
-          ('Aperture', _unit(t.apertureMm, 'mm')),
-          // Null = untouched with no rig to read the base profile from: Save
-          // then keeps the profile's own reducer, so never claim 1× here.
-          ('Reducer / Barlow', t.reducerFactor == null ? "Profile's value (not set here)" : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm'),
-          ('Focal ratio', fr),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecCamera, step: 3, onEdit: edit, rows: [
-          ('Cooling target', _unit(c.coolingTargetC, '°C')),
-          ('Warmup', switch (c.warmupMode) {
-            CoolerWarmupMode.off => 'Off',
-            CoolerWarmupMode.ramp => 'Ramp',
-            CoolerWarmupMode.immediate => 'Immediate',
-          }),
-          ('Gain / Offset', '${reviewValue(c.defaultGain)} / '
-              '${reviewValue(c.defaultOffset)}'),
-          ('Binning', reviewValue(c.defaultBin)),
-          ('Pixel size', _unit(c.pixelSizeMicrons, 'µm')),
-          ('Read noise', _unit(c.readNoiseE, 'e⁻')),
-          ('Peak QE', _unit(c.qePeakPct, '%')),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecFilterWheel, step: 3, onEdit: edit, rows: [
-          ('Filters', draft.filterWheel.filters.isEmpty
-              ? 'None defined'
-              : '${draft.filterWheel.filters.length} defined'),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecFocuser, step: 3, onEdit: edit, rows: [
-          ('Step size', _unit(f.stepSizeMicrons, 'µm')),
-          ('Backlash in/out',
-              '${reviewValue(f.backlashInSteps)} / ${reviewValue(f.backlashOutSteps)}'),
-          ('Temp. compensation', reviewValue(f.temperatureCompensationEnabled)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecMount, step: 3, onEdit: edit, rows: [
-          ('Name', reviewValue(m.name)),
-          ('Slew rate', _unit(m.slewRateDegPerSec, '°/s')),
-          ('Meridian flip', switch (m.meridianFlip) {
-            MeridianFlipBehavior.auto => 'Auto',
-            MeridianFlipBehavior.prompt => 'Prompt',
-            MeridianFlipBehavior.never => 'Never',
-          }),
-          ('Settle time', formatDuration(m.settleTimeAfterSlew)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecRotator, step: 3, onEdit: edit, rows: [
-          // A range needs both ends — if either is unset, fall back to "Not set"
-          // rather than rendering a half-filled "Not set – 45.0°".
-          ('Range', (r.minAngleDeg == null || r.maxAngleDeg == null)
-              ? _notSet
-              : '${_deg(r.minAngleDeg)} – ${_deg(r.maxAngleDeg)}'),
-          ('Step', _deg(r.stepDeg)),
-          ('Reversed', reviewValue(r.reverse)),
-        ]),
+        _ReviewSection(
+          title: l.wizardReviewSecConnection,
+          step: 2,
+          onEdit: edit,
+          rows: [('AlpacaBridge', reviewValue(draft.alpacaBridgeAddress))],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecEquipment,
+          step: 3,
+          onEdit: edit,
+          rows: [('Assigned', assignedEquipment(draft.equipment))],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecTelescope,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            ('Name', reviewValue(t.name)),
+            ('Focal length', _unit(t.focalLengthMm, 'mm')),
+            ('Aperture', _unit(t.apertureMm, 'mm')),
+            // Null = untouched with no rig to read the base profile from: Save
+            // then keeps the profile's own reducer, so never claim 1× here.
+            (
+              'Reducer / Barlow',
+              t.reducerFactor == null
+                  ? "Profile's value (not set here)"
+                  : '${t.reducerFactor}× → ${t.effectiveFocalLengthMm?.toStringAsFixed(0) ?? '?'} mm',
+            ),
+            ('Focal ratio', fr),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecCamera,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            ('Cooling target', _unit(c.coolingTargetC, '°C')),
+            (
+              'Warmup',
+              switch (c.warmupMode) {
+                CoolerWarmupMode.off => 'Off',
+                CoolerWarmupMode.ramp => 'Ramp',
+                CoolerWarmupMode.immediate => 'Immediate',
+              },
+            ),
+            (
+              'Gain / Offset',
+              '${reviewValue(c.defaultGain)} / '
+                  '${reviewValue(c.defaultOffset)}',
+            ),
+            ('Binning', reviewValue(c.defaultBin)),
+            ('Pixel size', _unit(c.pixelSizeMicrons, 'µm')),
+            ('Read noise', _unit(c.readNoiseE, 'e⁻')),
+            ('Peak QE', _unit(c.qePeakPct, '%')),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecFilterWheel,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            (
+              'Filters',
+              draft.filterWheel.filters.isEmpty
+                  ? 'None defined'
+                  : '${draft.filterWheel.filters.length} defined',
+            ),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecFocuser,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            ('Step size', _unit(f.stepSizeMicrons, 'µm')),
+            (
+              'Backlash in/out',
+              '${reviewValue(f.backlashInSteps)} / ${reviewValue(f.backlashOutSteps)}',
+            ),
+            (
+              'Temp. compensation',
+              reviewValue(f.temperatureCompensationEnabled),
+            ),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecMount,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            ('Name', reviewValue(m.name)),
+            ('Slew rate', _unit(m.slewRateDegPerSec, '°/s')),
+            (
+              'Meridian flip',
+              switch (m.meridianFlip) {
+                MeridianFlipBehavior.auto => 'Auto',
+                MeridianFlipBehavior.prompt => 'Prompt',
+                MeridianFlipBehavior.never => 'Never',
+              },
+            ),
+            ('Settle time', formatDuration(m.settleTimeAfterSlew)),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecRotator,
+          step: 3,
+          onEdit: edit,
+          rows: [
+            // A range needs both ends — if either is unset, fall back to "Not set"
+            // rather than rendering a half-filled "Not set – 45.0°".
+            (
+              'Range',
+              (r.minAngleDeg == null || r.maxAngleDeg == null)
+                  ? _notSet
+                  : '${_deg(r.minAngleDeg)} – ${_deg(r.maxAngleDeg)}',
+            ),
+            ('Step', _deg(r.stepDeg)),
+            ('Reversed', reviewValue(r.reverse)),
+          ],
+        ),
         // OpenAstro Guider fields are non-nullable with sensible defaults, so they always
         // show a value (never "Not set"); routing them through the same
         // formatters as every other row keeps display consistent. The section's
         // skipped banner conveys when the user didn't customise them.
-        _ReviewSection(title: l.wizardReviewSecGuider, step: 4, onEdit: edit, rows: [
-          ('Host:port', reviewValue(g.hostPort)),
-          ('Dither', _unit(g.ditherPixels, 'px')),
-          ('Settle threshold', _unit(g.settleThresholdPx, 'px')),
-          ('Calibration', switch (g.calibrationCadence) {
-            CalibrationCadence.eachSession => 'Each session',
-            CalibrationCadence.onceReuse => 'Once, then reuse',
-            CalibrationCadence.neverRecalibrate => 'Never recalibrate',
-          }),
-        ]),
+        _ReviewSection(
+          title: l.wizardReviewSecGuider,
+          step: 4,
+          onEdit: edit,
+          rows: [
+            ('Host:port', reviewValue(g.hostPort)),
+            ('Dither', _unit(g.ditherPixels, 'px')),
+            ('Settle threshold', _unit(g.settleThresholdPx, 'px')),
+            (
+              'Calibration',
+              switch (g.calibrationCadence) {
+                CalibrationCadence.eachSession => 'Each session',
+                CalibrationCadence.onceReuse => 'Once, then reuse',
+                CalibrationCadence.neverRecalibrate => 'Never recalibrate',
+              },
+            ),
+          ],
+        ),
         // §36.10 — the star database(s) this rig needs, from the optics above
         // (and the guide camera, which solves polar-alignment frames). Chosen
         // here and downloaded on the rig after Save, so setup stays 5 screens.
         const _SolverDatabaseSection(),
-        _ReviewSection(title: l.wizardReviewSecPlateSolving, step: null, onEdit: edit, rows: [
-          ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
-          ('Star database', reviewValue(ps.starDatabasePath)),
-          ('Search radius', _deg(ps.searchRadiusDeg)),
-          ('Downsample', reviewValue(ps.downsampleFactor)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecAutofocus, step: null, onEdit: edit, rows: [
-          ('Exposure', af.exposureSeconds == null
-              ? _notSet
-              : '${af.exposureSeconds} s'),
-          ('Steps', reviewValue(af.steps)),
-          ('Step size', reviewValue(af.stepSize)),
-          ('After filter change', reviewValue(af.runAfterFilterChange)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecFileSaving, step: null, onEdit: edit, rows: [
-          ('Directory', reviewValue(fs.saveDirectory)),
-          ('Format', switch (fs.format) {
-            ImageFormat.fits => 'FITS',
-            ImageFormat.xisf => 'XISF',
-            null => _notSet,
-          }),
-          ('Compress', reviewValue(fs.compress)),
-          ('Filename template', reviewValue(fs.filenameTemplate)),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecImaging, step: null, onEdit: edit, rows: [
-          ('Exposure', formatDuration(id.exposure)),
-          ('Frame type', switch (id.frameType) {
-            FrameType.light => 'Light',
-            FrameType.dark => 'Dark',
-            FrameType.bias => 'Bias',
-            FrameType.flat => 'Flat',
-            null => _notSet,
-          }),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecSafety, step: null, onEdit: edit, rows: [
-          ('When unsafe', switch (sf.onUnsafe) {
-            UnsafeConditionAction.pauseAndPark => 'Pause & park',
-            UnsafeConditionAction.parkOnly => 'Park only',
-            UnsafeConditionAction.abortAndPark => 'Abort & park',
-            UnsafeConditionAction.ignore => 'Ignore',
-            null => _notSet,
-          }),
-          ('Auto-resume when safe', reviewValue(sf.autoResumeWhenSafe)),
-          ('Resume delay', sf.resumeDelayMin == null
-              ? _notSet
-              : '${sf.resumeDelayMin} min'),
-        ]),
-        _ReviewSection(title: l.wizardReviewSecSite, step: null, onEdit: edit, rows: [
-          ('Horizon floor', _deg(si.hardMinAltitudeDeg)),
-          ('Twilight', switch (si.twilight) {
-            TwilightOption.civil => 'Civil',
-            TwilightOption.nautical => 'Nautical',
-            TwilightOption.astronomical => 'Astronomical',
-            null => _notSet,
-          }),
-        ]),
+        _ReviewSection(
+          title: l.wizardReviewSecPlateSolving,
+          step: null,
+          onEdit: edit,
+          rows: [
+            ('ASTAP binary', reviewValue(ps.astapBinaryPath)),
+            ('Star database', reviewValue(ps.starDatabasePath)),
+            ('Search radius', _deg(ps.searchRadiusDeg)),
+            ('Downsample', reviewValue(ps.downsampleFactor)),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecAutofocus,
+          step: null,
+          onEdit: edit,
+          rows: [
+            (
+              'Exposure',
+              af.exposureSeconds == null ? _notSet : '${af.exposureSeconds} s',
+            ),
+            ('Steps', reviewValue(af.steps)),
+            ('Step size', reviewValue(af.stepSize)),
+            ('After filter change', reviewValue(af.runAfterFilterChange)),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecFileSaving,
+          step: null,
+          onEdit: edit,
+          rows: [
+            ('Directory', reviewValue(fs.saveDirectory)),
+            (
+              'Format',
+              switch (fs.format) {
+                ImageFormat.fits => 'FITS',
+                ImageFormat.xisf => 'XISF',
+                null => _notSet,
+              },
+            ),
+            ('Compress', reviewValue(fs.compress)),
+            ('Filename template', reviewValue(fs.filenameTemplate)),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecImaging,
+          step: null,
+          onEdit: edit,
+          rows: [
+            ('Exposure', formatDuration(id.exposure)),
+            (
+              'Frame type',
+              switch (id.frameType) {
+                FrameType.light => 'Light',
+                FrameType.dark => 'Dark',
+                FrameType.bias => 'Bias',
+                FrameType.flat => 'Flat',
+                null => _notSet,
+              },
+            ),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecSafety,
+          step: null,
+          onEdit: edit,
+          rows: [
+            (
+              'When unsafe',
+              switch (sf.onUnsafe) {
+                UnsafeConditionAction.pauseAndPark => 'Pause & park',
+                UnsafeConditionAction.parkOnly => 'Park only',
+                UnsafeConditionAction.abortAndPark => 'Abort & park',
+                UnsafeConditionAction.ignore => 'Ignore',
+                null => _notSet,
+              },
+            ),
+            ('Auto-resume when safe', reviewValue(sf.autoResumeWhenSafe)),
+            (
+              'Resume delay',
+              sf.resumeDelayMin == null ? _notSet : '${sf.resumeDelayMin} min',
+            ),
+          ],
+        ),
+        _ReviewSection(
+          title: l.wizardReviewSecSite,
+          step: null,
+          onEdit: edit,
+          rows: [
+            ('Horizon floor', _deg(si.hardMinAltitudeDeg)),
+            (
+              'Twilight',
+              switch (si.twilight) {
+                TwilightOption.civil => 'Civil',
+                TwilightOption.nautical => 'Nautical',
+                TwilightOption.astronomical => 'Astronomical',
+                null => _notSet,
+              },
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -292,8 +409,11 @@ class _ReviewSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final wasSkipped = ref.watch(wizardControllerProvider
-        .select((s) => s.draft.skippedScreens.contains(step)));
+    final wasSkipped = ref.watch(
+      wizardControllerProvider.select(
+        (s) => s.draft.skippedScreens.contains(step),
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
@@ -302,8 +422,10 @@ class _ReviewSection extends ConsumerWidget {
           Row(
             children: [
               Expanded(
-                child: Text(title,
-                    style: Theme.of(context).textTheme.titleMedium),
+                child: Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
               if (step != null)
                 TextButton.icon(
@@ -312,36 +434,43 @@ class _ReviewSection extends ConsumerWidget {
                   label: Text(context.l10n.wizardReviewEdit),
                 )
               else
-                Text(context.l10n.wizardReviewDefaultsLater,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AraColors.textSecondary)),
+                Text(
+                  context.l10n.wizardReviewDefaultsLater,
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
+                ),
             ],
           ),
           if (wasSkipped)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
-              child: Text(context.l10n.wizardReviewSkipped,
-                  style: const TextStyle(
-                      color: AraColors.accentBusy, fontSize: 12)),
+              child: Text(
+                context.l10n.wizardReviewSkipped,
+                style: const TextStyle(
+                  color: AraColors.accentBusy,
+                  fontSize: 12,
+                ),
+              ),
             ),
           const Divider(height: 8),
-          ...rows.map((row) => Padding(
-                padding: const EdgeInsets.symmetric(vertical: 3),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 150,
-                      child: Text(row.$1,
-                          style: const TextStyle(
-                              color: AraColors.textSecondary)),
+          ...rows.map(
+            (row) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 150,
+                    child: Text(
+                      row.$1,
+                      style: const TextStyle(color: AraColors.textSecondary),
                     ),
-                    Expanded(child: Text(row.$2)),
-                  ],
-                ),
-              )),
+                  ),
+                  Expanded(child: Text(row.$2)),
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -357,10 +486,12 @@ class _SolverDatabaseSection extends ConsumerStatefulWidget {
   const _SolverDatabaseSection();
 
   @override
-  ConsumerState<_SolverDatabaseSection> createState() => _SolverDatabaseSectionState();
+  ConsumerState<_SolverDatabaseSection> createState() =>
+      _SolverDatabaseSectionState();
 }
 
-class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> {
+class _SolverDatabaseSectionState
+    extends ConsumerState<_SolverDatabaseSection> {
   SolverRecommendation? _rec;
   String? _error;
   bool _loading = true;
@@ -391,18 +522,20 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       final t = draft.telescope;
       final c = draft.camera;
       final g = draft.guider;
-      final rec = await api.solverRecommendation(SolverRecommendationRequest(
-        focalLengthMm: t.focalLengthMm,
-        reducerFactor: t.reducerFactor,
-        sensorWidthPx: c.sensorWidthPx,
-        sensorHeightPx: c.sensorHeightPx,
-        pixelSizeUm: c.pixelSizeMicrons,
-        guideFocalLengthMm: g.guideFocalLengthMm?.toDouble(),
-        guidePixelSizeUm: g.guidePixelSizeUm,
-        // No guide sensor here: the profile never holds it, the daemon reads
-        // it from the connected guider.
-        guideSetupType: g.setupType,
-      ));
+      final rec = await api.solverRecommendation(
+        SolverRecommendationRequest(
+          focalLengthMm: t.focalLengthMm,
+          reducerFactor: t.reducerFactor,
+          sensorWidthPx: c.sensorWidthPx,
+          sensorHeightPx: c.sensorHeightPx,
+          pixelSizeUm: c.pixelSizeMicrons,
+          guideFocalLengthMm: g.guideFocalLengthMm?.toDouble(),
+          guidePixelSizeUm: g.guidePixelSizeUm,
+          // No guide sensor here: the profile never holds it, the daemon reads
+          // it from the connected guider.
+          guideSetupType: g.setupType,
+        ),
+      );
       if (!mounted) return;
       final ids = rec.packages
           .where((p) => p.packageId != null && !p.isInstalled)
@@ -423,7 +556,11 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
       draft.plateSolve.solverDatabasePackageIds = const [];
       setState(() {
         _loading = false;
-        _error = friendlyError(context.l10n, e, action: context.l10n.actionStarDatabase);
+        _error = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionStarDatabase,
+        );
       });
     }
   }
@@ -441,7 +578,10 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
           Row(
             children: [
               Expanded(
-                child: Text(context.l10n.wizardReviewSolverTitle, style: theme.textTheme.titleMedium),
+                child: Text(
+                  context.l10n.wizardReviewSolverTitle,
+                  style: theme.textTheme.titleMedium,
+                ),
               ),
               TextButton.icon(
                 onPressed: _loading ? null : _load,
@@ -454,14 +594,25 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
           if (_loading)
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Row(children: [
-                const SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
-                const SizedBox(width: 8),
-                Text(context.l10n.wizardReviewSolverWorking),
-              ]),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(context.l10n.wizardReviewSolverWorking),
+                ],
+              ),
             )
           else if (_error != null)
-            Text(_error!, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error))
+            Text(
+              _error!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
           else if (rec != null) ...[
             if (rec.packages.isEmpty)
               Text(rec.reason, style: theme.textTheme.bodySmall)
@@ -473,10 +624,16 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
                 contentPadding: EdgeInsets.zero,
                 controlAffinity: ListTileControlAffinity.leading,
                 value: draft.plateSolve.downloadSolverDatabase,
-                onChanged: (v) => setState(() => draft.plateSolve.downloadSolverDatabase = v ?? true),
+                onChanged: (v) => setState(
+                  () => draft.plateSolve.downloadSolverDatabase = v ?? true,
+                ),
                 title: Text(
                   context.l10n.wizardReviewSolverDownload(
-                    formatBytes(rec.packages.where((p) => p.packageId != null && !p.isInstalled).fold<int>(0, (s, p) => s + p.sizeBytes)),
+                    formatBytes(
+                      rec.packages
+                          .where((p) => p.packageId != null && !p.isInstalled)
+                          .fold<int>(0, (s, p) => s + p.sizeBytes),
+                    ),
                   ),
                 ),
                 subtitle: Text(context.l10n.wizardReviewSolverDownloadNote),
@@ -490,32 +647,62 @@ class _SolverDatabaseSectionState extends ConsumerState<_SolverDatabaseSection> 
   Widget _pickRow(BuildContext context, SolverDatabasePick p) {
     final theme = Theme.of(context);
     final l = context.l10n;
-    final role = p.role == 'guide camera' ? l.wizardReviewRoleGuideCamera : l.wizardReviewRoleCamera;
-    final field = l.wizardReviewSolverField(role, p.fovDeg.toStringAsFixed(2), p.band);
+    final role = p.role == 'guide camera'
+        ? l.wizardReviewRoleGuideCamera
+        : l.wizardReviewRoleCamera;
+    final field = l.wizardReviewSolverField(
+      role,
+      p.fovDeg.toStringAsFixed(2),
+      p.band,
+    );
     if (p.tooNarrow) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentError),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(l.wizardReviewSolverTooNarrow(field, p.reason),
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error)),
-          ),
-        ]),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              size: 18,
+              color: AraColors.accentError,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                l.wizardReviewSolverTooNarrow(field, p.reason),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.error,
+                ),
+              ),
+            ),
+          ],
+        ),
       );
     }
-    final status = p.isInstalled ? l.wizardReviewAlreadyOnRig : formatBytes(p.sizeBytes);
+    final status = p.isInstalled
+        ? l.wizardReviewAlreadyOnRig
+        : formatBytes(p.sizeBytes);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(p.isInstalled ? Icons.check_circle_outline : Icons.download_outlined, size: 18, color: theme.colorScheme.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text('$field → ${p.packageName ?? p.packageId} ($status)',
-              style: theme.textTheme.bodySmall),
-        ),
-      ]),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            p.isInstalled
+                ? Icons.check_circle_outline
+                : Icons.download_outlined,
+            size: 18,
+            color: theme.colorScheme.primary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              '$field → ${p.packageName ?? p.packageId} ($status)',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

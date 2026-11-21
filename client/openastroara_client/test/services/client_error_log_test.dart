@@ -60,19 +60,21 @@ void main() {
     expect(l.status.value.lastMessage, 'Bad state: boom');
   });
 
-  test('the debugPrint ring buffer is dumped into each entry, capped',
-      () async {
-    final l = log(ringCapacity: 3);
-    for (var i = 0; i < 5; i++) {
-      l.notePrint('line $i');
-    }
-    expect(l.recentPrints, ['line 2', 'line 3', 'line 4']);
-    await l.record('uncaught', 'x');
-    final text = current().readAsStringSync();
-    expect(text, contains('recent debugPrint (3 lines):\n'));
-    expect(text, contains('  line 2\n  line 3\n  line 4\n'));
-    expect(text, isNot(contains('line 1')));
-  });
+  test(
+    'the debugPrint ring buffer is dumped into each entry, capped',
+    () async {
+      final l = log(ringCapacity: 3);
+      for (var i = 0; i < 5; i++) {
+        l.notePrint('line $i');
+      }
+      expect(l.recentPrints, ['line 2', 'line 3', 'line 4']);
+      await l.record('uncaught', 'x');
+      final text = current().readAsStringSync();
+      expect(text, contains('recent debugPrint (3 lines):\n'));
+      expect(text, contains('  line 2\n  line 3\n  line 4\n'));
+      expect(text, isNot(contains('line 1')));
+    },
+  );
 
   test('a second header is not written for a second entry', () async {
     final l = log();
@@ -83,8 +85,7 @@ void main() {
     expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
   });
 
-  test('rotation keeps one older file and starts a fresh headed one',
-      () async {
+  test('rotation keeps one older file and starts a fresh headed one', () async {
     final l = log(maxBytes: 600);
     final big = 'x' * 300;
     await l.record('a', big);
@@ -119,8 +120,7 @@ void main() {
     expect(current().readAsStringSync(), contains('# app: 0.0.1a+37 (test)'));
   });
 
-  test('entry and file caps are byte budgets and never split a surrogate',
-      () {
+  test('entry and file caps are byte budgets and never split a surrogate', () {
     // 'x' + emoji (2 UTF-16 units, 4 UTF-8 bytes each): a 4-byte budget fits
     // only the 'x' — a code-unit cut at 4 would have kept 'x' plus one whole
     // emoji (5 bytes), and a cut at 2 would have split the first pair.
@@ -128,13 +128,16 @@ void main() {
     final t = ClientErrorLog.truncateToBytes(s, 4);
     expect(t, startsWith('x\n  … (entry truncated)'));
     expect(ClientErrorLog.truncateToBytes(s, 5), startsWith('x😀\n'));
-    expect(utf8.encode(ClientErrorLog.truncateToBytes(s, 9).split('\n').first)
-        .length, lessThanOrEqualTo(9));
+    expect(
+      utf8
+          .encode(ClientErrorLog.truncateToBytes(s, 9).split('\n').first)
+          .length,
+      lessThanOrEqualTo(9),
+    );
     expect(ClientErrorLog.truncateToBytes('plain', 100), 'plain');
   });
 
-  test('exportTo concatenates the rotated file then the current one',
-      () async {
+  test('exportTo concatenates the rotated file then the current one', () async {
     final l = log(maxBytes: 600);
     final big = 'x' * 300;
     await l.record('a', big);
@@ -144,30 +147,35 @@ void main() {
     final text = File(out).readAsStringSync();
     expect(bytes, text.length);
     expect(text.indexOf(' a ==='), lessThan(text.indexOf(' b ===')));
-    expect(
-      text,
-      rotated().readAsStringSync() + current().readAsStringSync(),
-    );
+    expect(text, rotated().readAsStringSync() + current().readAsStringSync());
   });
 
-  test('exportTo applies the §54.6 blacklist, the file on disk keeps it',
-      () async {
-    final l = log();
-    await l.record('dio', 'headers {X-Ara-Token: abcdefghij12345} host pi.local');
-    await l.record(
-      'ssh',
-      '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----',
-    );
-    final out = '${dir.path}/export.log';
-    await l.exportTo(out);
-    final text = File(out).readAsStringSync();
-    expect(text, contains('X-Ara-Token: [REDACTED-TOKEN]} host pi.local'));
-    expect(text, contains('[REDACTED-KEY]'));
-    expect(text, isNot(contains('abcdefghij12345')));
-    expect(text, isNot(contains('AAAA')));
-    expect(current().readAsStringSync(), contains('abcdefghij12345'),
-        reason: 'the local log keeps full info (§54.1); only the export is cut');
-  });
+  test(
+    'exportTo applies the §54.6 blacklist, the file on disk keeps it',
+    () async {
+      final l = log();
+      await l.record(
+        'dio',
+        'headers {X-Ara-Token: abcdefghij12345} host pi.local',
+      );
+      await l.record(
+        'ssh',
+        '-----BEGIN OPENSSH PRIVATE KEY-----\nAAAA\n-----END OPENSSH PRIVATE KEY-----',
+      );
+      final out = '${dir.path}/export.log';
+      await l.exportTo(out);
+      final text = File(out).readAsStringSync();
+      expect(text, contains('X-Ara-Token: [REDACTED-TOKEN]} host pi.local'));
+      expect(text, contains('[REDACTED-KEY]'));
+      expect(text, isNot(contains('abcdefghij12345')));
+      expect(text, isNot(contains('AAAA')));
+      expect(
+        current().readAsStringSync(),
+        contains('abcdefghij12345'),
+        reason: 'the local log keeps full info (§54.1); only the export is cut',
+      );
+    },
+  );
 
   test('exportTo with nothing recorded still writes the header', () async {
     final l = log();
@@ -185,9 +193,7 @@ void main() {
       now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
       burstLimit: 100,
     );
-    await Future.wait([
-      for (var i = 0; i < 20; i++) l.record('k$i', 'msg $i'),
-    ]);
+    await Future.wait([for (var i = 0; i < 20; i++) l.record('k$i', 'msg $i')]);
     final text = current().readAsStringSync();
     var last = -1;
     for (var i = 0; i < 20; i++) {
@@ -224,25 +230,29 @@ void main() {
     expect(l.status.value.entries, 0);
   });
 
-  test('identical errors inside the repeat window are counted, not written',
-      () async {
-    final l = log();
-    for (var i = 0; i < 4; i++) {
-      await l.record('flutter_error', 'same assertion\nframe $i');
-    }
-    var text = current().readAsStringSync();
-    expect(ClientErrorLog.entryMarker.allMatches(text).length, 1);
-    expect(l.status.value.entries, 1);
-    expect(l.status.value.suppressedRepeats, 3);
+  test(
+    'identical errors inside the repeat window are counted, not written',
+    () async {
+      final l = log();
+      for (var i = 0; i < 4; i++) {
+        await l.record('flutter_error', 'same assertion\nframe $i');
+      }
+      var text = current().readAsStringSync();
+      expect(ClientErrorLog.entryMarker.allMatches(text).length, 1);
+      expect(l.status.value.entries, 1);
+      expect(l.status.value.suppressedRepeats, 3);
 
-    // A different error ends the streak and writes the count out first.
-    await l.record('flutter_error', 'other');
-    text = current().readAsStringSync();
-    final note = text.indexOf('(previous entry repeated 3 more times within 5s');
-    expect(note, greaterThan(0));
-    expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
-    expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
-  });
+      // A different error ends the streak and writes the count out first.
+      await l.record('flutter_error', 'other');
+      text = current().readAsStringSync();
+      final note = text.indexOf(
+        '(previous entry repeated 3 more times within 5s',
+      );
+      expect(note, greaterThan(0));
+      expect(note, lessThan(text.indexOf(' flutter_error ===', note)));
+      expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
+    },
+  );
 
   test('a suppressed repeat never touches status synchronously', () async {
     // record() runs inside FlutterError.onError, possibly mid-build; a
@@ -252,8 +262,11 @@ void main() {
     await l.record('a', 'x');
     final before = l.status.value;
     final pending = l.record('a', 'x');
-    expect(identical(l.status.value, before), isTrue,
-        reason: 'status changed before the call returned');
+    expect(
+      identical(l.status.value, before),
+      isTrue,
+      reason: 'status changed before the call returned',
+    );
     await pending;
     expect(l.status.value.suppressedRepeats, 1);
   });
@@ -264,8 +277,10 @@ void main() {
     await l.record('a', 'x');
     final out = '${dir.path}/export.log';
     await l.exportTo(out);
-    expect(File(out).readAsStringSync(),
-        contains('(previous entry repeated 1 more time within 5s'));
+    expect(
+      File(out).readAsStringSync(),
+      contains('(previous entry repeated 1 more time within 5s'),
+    );
   });
 
   test('the same error outside the window is written again', () async {
@@ -277,8 +292,12 @@ void main() {
     );
     await l.record('a', 'x');
     await l.record('a', 'x');
-    expect(ClientErrorLog.entryMarker.allMatches(current().readAsStringSync())
-        .length, 2);
+    expect(
+      ClientErrorLog.entryMarker
+          .allMatches(current().readAsStringSync())
+          .length,
+      2,
+    );
     expect(l.status.value.suppressedRepeats, 0);
   });
 
@@ -312,85 +331,94 @@ void main() {
     expect(second.status.value.lastKind, 'b');
   });
 
-  test('a burst of distinct errors is capped per window and reported',
-      () async {
-    final l = ClientErrorLog(
-      supportDir: () async => dir,
-      appVersion: () async => 'v',
-      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
-      burstLimit: 3,
-      burstWindow: const Duration(seconds: 60),
-    );
-    // Two widgets alternating defeat the consecutive-repeat check: A, B, A
-    // are written; B is dropped; A is a repeat of the last WRITTEN entry
-    // (the dropped B never became the streak owner); B is dropped again.
-    for (var i = 0; i < 6; i++) {
-      await l.record('flutter_error', i.isEven ? 'widget A' : 'widget B');
-    }
-    var text = current().readAsStringSync();
-    expect(ClientErrorLog.entryMarker.allMatches(text).length, 3);
-    expect(l.status.value.entries, 3);
-    expect(l.status.value.suppressedRepeats, 3);
+  test(
+    'a burst of distinct errors is capped per window and reported',
+    () async {
+      final l = ClientErrorLog(
+        supportDir: () async => dir,
+        appVersion: () async => 'v',
+        now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+        burstLimit: 3,
+        burstWindow: const Duration(seconds: 60),
+      );
+      // Two widgets alternating defeat the consecutive-repeat check: A, B, A
+      // are written; B is dropped; A is a repeat of the last WRITTEN entry
+      // (the dropped B never became the streak owner); B is dropped again.
+      for (var i = 0; i < 6; i++) {
+        await l.record('flutter_error', i.isEven ? 'widget A' : 'widget B');
+      }
+      var text = current().readAsStringSync();
+      expect(ClientErrorLog.entryMarker.allMatches(text).length, 3);
+      expect(l.status.value.entries, 3);
+      expect(l.status.value.suppressedRepeats, 3);
 
-    // Next window: the repeat and drop counts are written before the new
-    // entry.
-    tick += 100;
-    await l.record('flutter_error', 'later');
-    text = current().readAsStringSync();
-    final rep = text.indexOf('(previous entry repeated 1 more time');
-    final drop = text.indexOf('(2 entries dropped: more than 3 in 60s)');
-    expect(rep, greaterThan(0));
-    expect(drop, greaterThan(rep));
-    expect(drop, lessThan(text.indexOf(' flutter_error ===', drop)));
-    expect(ClientErrorLog.entryMarker.allMatches(text).length, 4);
-  });
+      // Next window: the repeat and drop counts are written before the new
+      // entry.
+      tick += 100;
+      await l.record('flutter_error', 'later');
+      text = current().readAsStringSync();
+      final rep = text.indexOf('(previous entry repeated 1 more time');
+      final drop = text.indexOf('(2 entries dropped: more than 3 in 60s)');
+      expect(rep, greaterThan(0));
+      expect(drop, greaterThan(rep));
+      expect(drop, lessThan(text.indexOf(' flutter_error ===', drop)));
+      expect(ClientErrorLog.entryMarker.allMatches(text).length, 4);
+    },
+  );
 
-  test('a dropped entry keeps the previous entry\'s repeat streak intact',
-      () async {
-    final l = ClientErrorLog(
-      supportDir: () async => dir,
-      appVersion: () async => 'v',
-      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
-      burstLimit: 1,
-      burstWindow: const Duration(seconds: 60),
-    );
-    await l.record('e', 'A'); // written, budget now full
-    await l.record('e', 'A'); // repeat of A (repeats: 1)
-    await l.record('e', 'B'); // dropped — must not consume A's streak
-    await l.record('e', 'A'); // still a repeat of A (repeats: 2)
-    tick += 100;
-    await l.record('e', 'C'); // new window: both notes, then C
-    final text = current().readAsStringSync();
-    final rep = text.indexOf('(previous entry repeated 2 more times');
-    final drop = text.indexOf('(1 entry dropped: more than 1 in 60s)');
-    final c = text.indexOf(' e ===', text.indexOf(' e ===') + 1);
-    expect(rep, greaterThan(0));
-    expect(drop, greaterThan(rep));
-    expect(c, greaterThan(drop));
-    expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
-  });
+  test(
+    'a dropped entry keeps the previous entry\'s repeat streak intact',
+    () async {
+      final l = ClientErrorLog(
+        supportDir: () async => dir,
+        appVersion: () async => 'v',
+        now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+        burstLimit: 1,
+        burstWindow: const Duration(seconds: 60),
+      );
+      await l.record('e', 'A'); // written, budget now full
+      await l.record('e', 'A'); // repeat of A (repeats: 1)
+      await l.record('e', 'B'); // dropped — must not consume A's streak
+      await l.record('e', 'A'); // still a repeat of A (repeats: 2)
+      tick += 100;
+      await l.record('e', 'C'); // new window: both notes, then C
+      final text = current().readAsStringSync();
+      final rep = text.indexOf('(previous entry repeated 2 more times');
+      final drop = text.indexOf('(1 entry dropped: more than 1 in 60s)');
+      final c = text.indexOf(' e ===', text.indexOf(' e ===') + 1);
+      expect(rep, greaterThan(0));
+      expect(drop, greaterThan(rep));
+      expect(c, greaterThan(drop));
+      expect(ClientErrorLog.entryMarker.allMatches(text).length, 2);
+    },
+  );
 
-  test('a dropped entry that re-fires is counted as drops, not repeats',
-      () async {
-    final l = ClientErrorLog(
-      supportDir: () async => dir,
-      appVersion: () async => 'v',
-      now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
-      burstLimit: 1,
-      burstWindow: const Duration(seconds: 60),
-    );
-    await l.record('e', 'H'); // written
-    for (var i = 0; i < 5; i++) {
-      await l.record('e', 'I'); // all dropped
-    }
-    tick += 100;
-    await l.record('e', 'J');
-    final text = current().readAsStringSync();
-    expect(text, contains('(5 entries dropped: more than 1 in 60s)'));
-    expect(text, isNot(contains('repeated')),
-        reason: 'H fired once; I was never written, so nothing repeated');
-    expect(l.status.value.suppressedRepeats, 5);
-  });
+  test(
+    'a dropped entry that re-fires is counted as drops, not repeats',
+    () async {
+      final l = ClientErrorLog(
+        supportDir: () async => dir,
+        appVersion: () async => 'v',
+        now: () => DateTime.utc(2026, 9, 27, 14, 11, tick++),
+        burstLimit: 1,
+        burstWindow: const Duration(seconds: 60),
+      );
+      await l.record('e', 'H'); // written
+      for (var i = 0; i < 5; i++) {
+        await l.record('e', 'I'); // all dropped
+      }
+      tick += 100;
+      await l.record('e', 'J');
+      final text = current().readAsStringSync();
+      expect(text, contains('(5 entries dropped: more than 1 in 60s)'));
+      expect(
+        text,
+        isNot(contains('repeated')),
+        reason: 'H fired once; I was never written, so nothing repeated',
+      );
+      expect(l.status.value.suppressedRepeats, 5);
+    },
+  );
 
   test('notes are exempt from the burst budget', () async {
     final l = ClientErrorLog(
@@ -403,8 +431,12 @@ void main() {
     await l.record('a', 'x');
     await l.note('launch');
     await l.note('second');
-    expect(ClientErrorLog.entryMarker.allMatches(current().readAsStringSync())
-        .length, 3);
+    expect(
+      ClientErrorLog.entryMarker
+          .allMatches(current().readAsStringSync())
+          .length,
+      3,
+    );
   });
 
   test('the entry is formatted on the chain, not inside record()', () async {
@@ -464,8 +496,7 @@ void main() {
     expect(second.status.value.entries, 1);
   });
 
-  test('entries tracks the two files even after a second rotation',
-      () async {
+  test('entries tracks the two files even after a second rotation', () async {
     final l = log(maxBytes: 600);
     final big = 'x' * 300;
     await l.record('a', big);
@@ -486,39 +517,45 @@ void main() {
     expect(l.summary(), startsWith('client log: 1 entry, last '));
     expect(l.summary(), endsWith(' flutter_error: boom'));
     await l.record('flutter_error', 'boom');
-    expect(l.summary(), startsWith('client log: 1 entry (+1 suppressed), last '));
-  });
-
-  test('an unwritable directory never throws and marks the log unavailable',
-      () async {
-    final l = ClientErrorLog(
-      supportDir: () async => throw const FileSystemException('nope'),
-      appVersion: () async => 'v',
-    );
-    await l.record('a', 'b');
-    await l.note('c');
-    expect(l.status.value.available, isFalse);
-    expect(l.summary(), 'client log: unavailable (write failed)');
-    await expectLater(
-      l.exportTo('${dir.path}/never.log'),
-      throwsA(isA<FileSystemException>()),
+    expect(
+      l.summary(),
+      startsWith('client log: 1 entry (+1 suppressed), last '),
     );
   });
 
-  test('an export to an unwritable path throws but leaves the log available',
-      () async {
-    final l = log();
-    await l.record('a', 'b');
-    await expectLater(
-      l.exportTo('${dir.path}/missing-dir/out.log'),
-      throwsA(isA<FileSystemException>()),
-    );
-    expect(l.status.value.available, isTrue);
-    expect(l.status.value.entries, 1);
-  });
+  test(
+    'an unwritable directory never throws and marks the log unavailable',
+    () async {
+      final l = ClientErrorLog(
+        supportDir: () async => throw const FileSystemException('nope'),
+        appVersion: () async => 'v',
+      );
+      await l.record('a', 'b');
+      await l.note('c');
+      expect(l.status.value.available, isFalse);
+      expect(l.summary(), 'client log: unavailable (write failed)');
+      await expectLater(
+        l.exportTo('${dir.path}/never.log'),
+        throwsA(isA<FileSystemException>()),
+      );
+    },
+  );
 
-  test('a header version lookup that throws falls back to (unknown)',
-      () async {
+  test(
+    'an export to an unwritable path throws but leaves the log available',
+    () async {
+      final l = log();
+      await l.record('a', 'b');
+      await expectLater(
+        l.exportTo('${dir.path}/missing-dir/out.log'),
+        throwsA(isA<FileSystemException>()),
+      );
+      expect(l.status.value.available, isTrue);
+      expect(l.status.value.entries, 1);
+    },
+  );
+
+  test('a header version lookup that throws falls back to (unknown)', () async {
     final l = ClientErrorLog(
       supportDir: () async => dir,
       appVersion: () async => throw StateError('no channel'),

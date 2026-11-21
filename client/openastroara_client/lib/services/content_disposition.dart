@@ -9,9 +9,10 @@ String? fileNameFromContentDisposition(String? header) {
   // RFC 5987 ext-value: charset'language'value, percent-encoded, never quoted.
   // Require the charset'language' prefix so a malformed prefix-less form falls
   // through to the plain branch / default.
-  final extended =
-      RegExp("filename\\*=[^']*'[^']*'([^;]+)", caseSensitive: false)
-          .firstMatch(header);
+  final extended = RegExp(
+    "filename\\*=[^']*'[^']*'([^;]+)",
+    caseSensitive: false,
+  ).firstMatch(header);
   if (extended != null) {
     final raw = extended.group(1)!.trim();
     String decoded;
@@ -22,8 +23,10 @@ String? fileNameFromContentDisposition(String? header) {
     }
     return _basename(decoded);
   }
-  final plain =
-      RegExp('filename="?([^";]+)', caseSensitive: false).firstMatch(header);
+  final plain = RegExp(
+    'filename="?([^";]+)',
+    caseSensitive: false,
+  ).firstMatch(header);
   final name = plain?.group(1)?.trim();
   return name == null ? null : _basename(name);
 }

@@ -38,7 +38,11 @@ void main() {
 
       container.read(_link.notifier).set(false);
       async.elapse(const Duration(seconds: 14));
-      expect(container.read(profileGatePassedProvider), isTrue, reason: 'still inside the grace');
+      expect(
+        container.read(profileGatePassedProvider),
+        isTrue,
+        reason: 'still inside the grace',
+      );
 
       async.elapse(const Duration(seconds: 2));
       expect(container.read(profileGatePassedProvider), isFalse);
@@ -56,7 +60,11 @@ void main() {
       async.elapse(const Duration(seconds: 1));
       container.read(_link.notifier).set(false);
       async.elapse(const Duration(seconds: 10));
-      expect(container.read(profileGatePassedProvider), isTrue, reason: 'a short drop does not add up');
+      expect(
+        container.read(profileGatePassedProvider),
+        isTrue,
+        reason: 'a short drop does not add up',
+      );
 
       async.elapse(const Duration(seconds: 6));
       expect(container.read(profileGatePassedProvider), isFalse);
@@ -71,12 +79,20 @@ void main() {
       container.read(_simple.notifier).set(true);
       container.read(_link.notifier).set(false);
       async.elapse(const Duration(seconds: 30));
-      expect(container.read(profileGatePassedProvider), isTrue, reason: 'Simple Mode shows its Connect card instead (#1559)');
+      expect(
+        container.read(profileGatePassedProvider),
+        isTrue,
+        reason: 'Simple Mode shows its Connect card instead (#1559)',
+      );
 
       container.read(_simple.notifier).set(false);
       container.read(offlineModeProvider.notifier).enter();
       async.elapse(const Duration(seconds: 30));
-      expect(container.read(profileGatePassedProvider), isTrue, reason: 'offline planning has no rig to lose');
+      expect(
+        container.read(profileGatePassedProvider),
+        isTrue,
+        reason: 'offline planning has no rig to lose',
+      );
     });
   });
 }

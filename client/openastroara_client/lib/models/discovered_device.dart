@@ -136,9 +136,9 @@ class DiscoveredDevice {
 
   /// "host:port/N" for each host spelling the daemon reported (name and IP).
   List<String> get alpacaEndpoints => [
-        for (final h in {hostName, ipAddress})
-          if (h.isNotEmpty) '$h:$ipPort/$alpacaDeviceNumber',
-      ];
+    for (final h in {hostName, ipAddress})
+      if (h.isNotEmpty) '$h:$ipPort/$alpacaDeviceNumber',
+  ];
 
   /// Snake_case body for the daemon's `ConnectRequestDto.Device` (System.Text.Json
   /// `SnakeCaseLower`). `type` is the daemon's lowercase `DeviceType` token, which

@@ -15,20 +15,22 @@ class _FakeGuider implements GuiderClient {
   bool connectedAfter = true;
 
   @override
-  Future<void> connect(
-      {String host = kDefaultGuiderHost, int port = kDefaultGuiderPort}) async {
+  Future<void> connect({
+    String host = kDefaultGuiderHost,
+    int port = kDefaultGuiderPort,
+  }) async {
     lastHost = host;
     lastPort = port;
   }
 
   @override
   Future<GuiderStatus?> getStatus() async => GuiderStatus(
-        name: 'OpenAstro Guider',
-        connectionState: connectedAfter
-            ? GuiderConnectionState.connected
-            : GuiderConnectionState.disconnected,
-        runtimeState: GuiderRuntimeState.stopped,
-      );
+    name: 'OpenAstro Guider',
+    connectionState: connectedAfter
+        ? GuiderConnectionState.connected
+        : GuiderConnectionState.disconnected,
+    runtimeState: GuiderRuntimeState.stopped,
+  );
 
   @override
   void noSuchMethod(Invocation invocation) =>
@@ -37,58 +39,78 @@ class _FakeGuider implements GuiderClient {
 
 void main() {
   Future<void> pump(WidgetTester tester, GuiderClient? api) async {
-    final container = ProviderContainer(overrides: [
-      guiderApiProvider.overrideWithValue(api),
-    ]);
+    final container = ProviderContainer(
+      overrides: [guiderApiProvider.overrideWithValue(api)],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-          home: Scaffold(body: Builder(builder: (c) => wizardScreenBuilders[4]!(c)))),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(builder: (c) => wizardScreenBuilders[4]!(c)),
+          ),
+        ),
+      ),
+    );
     await tester.pump();
   }
 
-  testWidgets('Test connection asks the DAEMON to reach the entered host:port',
-      (tester) async {
-    final api = _FakeGuider();
-    await pump(tester, api);
+  testWidgets(
+    'Test connection asks the DAEMON to reach the entered host:port',
+    (tester) async {
+      final api = _FakeGuider();
+      await pump(tester, api);
 
-    // The user's SBC case: OpenAstro Guider on another machine, non-default port.
-    await tester.enterText(find.byType(TextField).first, 'sbc.local:8080');
-    await tester.ensureVisible(find.text('Test connection'));
-    await tester.tap(find.text('Test connection'));
-    await tester.pump(const Duration(milliseconds: 600));
-    await tester.pumpAndSettle();
+      // The user's SBC case: OpenAstro Guider on another machine, non-default port.
+      await tester.enterText(find.byType(TextField).first, 'sbc.local:8080');
+      await tester.ensureVisible(find.text('Test connection'));
+      await tester.tap(find.text('Test connection'));
+      await tester.pump(const Duration(milliseconds: 600));
+      await tester.pumpAndSettle();
 
-    expect(api.lastHost, 'sbc.local');
-    expect(api.lastPort, 8080);
-    expect(find.textContaining('Connected to OpenAstro Guider at sbc.local:8080'),
-        findsOneWidget);
-  });
+      expect(api.lastHost, 'sbc.local');
+      expect(api.lastPort, 8080);
+      expect(
+        find.textContaining('Connected to OpenAstro Guider at sbc.local:8080'),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('an unreachable OpenAstro Guider reports a hint instead of hanging',
-      (tester) async {
-    final api = _FakeGuider()..connectedAfter = false;
-    await pump(tester, api);
+  testWidgets(
+    'an unreachable OpenAstro Guider reports a hint instead of hanging',
+    (tester) async {
+      final api = _FakeGuider()..connectedAfter = false;
+      await pump(tester, api);
 
-    await tester.ensureVisible(find.text('Test connection'));
-    await tester.tap(find.text('Test connection'));
-    // The poll gives up after 20 × 500 ms.
-    await tester.pump(const Duration(seconds: 11));
-    await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Test connection'));
+      await tester.tap(find.text('Test connection'));
+      // The poll gives up after 20 × 500 ms.
+      await tester.pump(const Duration(seconds: 11));
+      await tester.pumpAndSettle();
 
-    expect(api.lastPort, 4400, reason: 'blank field falls back to the default');
-    expect(find.textContaining('No OpenAstro Guider answered'), findsOneWidget);
-    expect(find.textContaining('Enable Server'), findsOneWidget);
-  });
+      expect(
+        api.lastPort,
+        4400,
+        reason: 'blank field falls back to the default',
+      );
+      expect(
+        find.textContaining('No OpenAstro Guider answered'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Enable Server'), findsOneWidget);
+    },
+  );
 
   testWidgets('offline explains the server does the talking', (tester) async {
     await pump(tester, null);
     await tester.ensureVisible(find.text('Test connection'));
     await tester.tap(find.text('Test connection'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('the server is what talks to OpenAstro Guider'),
-        findsOneWidget);
+    expect(
+      find.textContaining('the server is what talks to OpenAstro Guider'),
+      findsOneWidget,
+    );
   });
 }

@@ -98,9 +98,8 @@ class _SafetyBody extends StatelessWidget {
             padding: const EdgeInsets.only(top: 6),
             child: Text(
               'Last change: ${formatUtcMinute(status.lastTransitionAt!)}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
           ),
       ],
@@ -123,10 +122,8 @@ class _SafeIndicator extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           text,
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: color,
-            fontWeight: FontWeight.w600,
-          ),
+          style: Theme.of(context).textTheme.titleMedium
+              ?.copyWith(color: color, fontWeight: FontWeight.w600),
         ),
       ],
     );

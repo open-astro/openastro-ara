@@ -43,8 +43,11 @@ class _SeqClient implements SequenceClient {
 // A rig with a focuser: the temperature trigger is gated on one.
 class _Focuser extends FocuserNotifier {
   @override
-  Future<FocuserStatus?> build() async =>
-      FocuserStatus.fromJson({'device_id': 'd', 'name': 'EAF', 'state': 'connected'});
+  Future<FocuserStatus?> build() async => FocuserStatus.fromJson({
+    'device_id': 'd',
+    'name': 'EAF',
+    'state': 'connected',
+  });
 }
 
 Future<ImagingRunResult?> _run(
@@ -63,20 +66,21 @@ Future<ImagingRunResult?> _run(
         home: Scaffold(
           body: Consumer(
             builder: (context, ref, _) => ElevatedButton(
-              onPressed: () => createImagingRun(
-                ref,
-                raDeg: 10.68,
-                decDeg: 41.27,
-                targetName: 'M31',
-                jumpToRun: false,
-                appendToOpen: false,
-                filterPlan: filterPlan,
-                exposureSeconds: exposureSeconds,
-                frameCount: frameCount,
-              ).then((r) {
-                result = r;
-                done = true;
-              }),
+              onPressed: () =>
+                  createImagingRun(
+                    ref,
+                    raDeg: 10.68,
+                    decDeg: 41.27,
+                    targetName: 'M31',
+                    jumpToRun: false,
+                    appendToOpen: false,
+                    filterPlan: filterPlan,
+                    exposureSeconds: exposureSeconds,
+                    frameCount: frameCount,
+                  ).then((r) {
+                    result = r;
+                    done = true;
+                  }),
               child: const Text('go'),
             ),
           ),
@@ -99,34 +103,38 @@ void main() {
   setUp(() {
     seq = _SeqClient();
     container = ProviderContainer(
-      overrides: [...imagingSectionsFromRig(), sequenceApiProvider.overrideWith((ref) => seq)],
+      overrides: [
+        ...imagingSectionsFromRig(),
+        sequenceApiProvider.overrideWith((ref) => seq),
+      ],
     );
     // A sequence is open: Simple Mode's run must not join it.
     container.read(selectedSequenceIdProvider.notifier).select('open-one');
   });
   tearDown(() => container.dispose());
 
-  testWidgets('a given filter plan becomes a fresh run with one loop per filter', (
-    tester,
-  ) async {
-    final r = await _run(
-      tester,
-      container,
-      filterPlan: const [
-        FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
-        FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 20),
-      ],
-    );
-    expect(r?.appended, isFalse);
-    expect(r?.sequenceId, 'seq-1');
-    expect(seq.bodies, hasLength(1));
-    final json = jsonEncode(seq.bodies.single);
-    expect(json, contains('"L Imaging"'));
-    expect(json, contains('"R Imaging"'));
-    expect(json, contains('"ExposureTime":300.0'));
-    expect(json, contains('"Iterations":40'));
-    expect(json, contains('"ExposureTime":180.0'));
-  });
+  testWidgets(
+    'a given filter plan becomes a fresh run with one loop per filter',
+    (tester) async {
+      final r = await _run(
+        tester,
+        container,
+        filterPlan: const [
+          FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40),
+          FilterPlanStep(filterName: 'R', exposureSeconds: 180, frameCount: 20),
+        ],
+      );
+      expect(r?.appended, isFalse);
+      expect(r?.sequenceId, 'seq-1');
+      expect(seq.bodies, hasLength(1));
+      final json = jsonEncode(seq.bodies.single);
+      expect(json, contains('"L Imaging"'));
+      expect(json, contains('"R Imaging"'));
+      expect(json, contains('"ExposureTime":300.0'));
+      expect(json, contains('"Iterations":40'));
+      expect(json, contains('"ExposureTime":180.0'));
+    },
+  );
 
   testWidgets('without a plan the given sub length and frame count are used', (
     tester,
@@ -137,80 +145,91 @@ void main() {
     expect(json, contains('"Iterations":30'));
   });
 
-  testWidgets('connected with the imaging defaults not loaded from the rig, no run is built from the class defaults (ADR 0015)', (
-    tester,
-  ) async {
-    container.dispose();
-    container = ProviderContainer(
-      overrides: [sequenceApiProvider.overrideWith((ref) => seq)],
-    );
-    // Autofocus is in; only the imaging defaults are missing.
-    await tester.runAsync(
-      () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
-    );
-    Object? error;
-    await tester.pumpWidget(
-      UncontrolledProviderScope(
-        container: container,
-        child: MaterialApp(
-          home: Consumer(
-            builder: (context, ref, _) => ElevatedButton(
-              onPressed: () => createImagingRun(
-                ref,
-                raDeg: 10.68,
-                decDeg: 41.27,
-                targetName: 'M31',
-                jumpToRun: false,
-                appendToOpen: false,
-                exposureSeconds: 120,
-                frameCount: 30,
-              ).catchError((Object e) {
-                error = e;
-                return null;
-              }),
-              child: const Text('go'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.tap(find.text('go'));
-    for (var i = 0; i < 20 && error == null; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-    }
-    expect(error, isA<SectionNotLoadedException>());
-    expect(seq.bodies, isEmpty, reason: 'nothing reaches the rig');
-  });
-
-  // The profile's refocus-on-temperature amount reaches the run, plan or not.
-  for (final withPlan in [true, false]) {
-    testWidgets('the profile\'s temperature refocus becomes the run\'s trigger (plan: $withPlan)', (
-      tester,
-    ) async {
+  testWidgets(
+    'connected with the imaging defaults not loaded from the rig, no run is built from the class defaults (ADR 0015)',
+    (tester) async {
       container.dispose();
       container = ProviderContainer(
-        overrides: [
-          ...imagingSectionsFromRig(),
-          sequenceApiProvider.overrideWith((ref) => seq),
-          focuserProvider.overrideWith(_Focuser.new),
-        ],
+        overrides: [sequenceApiProvider.overrideWith((ref) => seq)],
       );
+      // Autofocus is in; only the imaging defaults are missing.
       await tester.runAsync(
         () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
       );
-      container.read(autofocusSettingsProvider.notifier).setTriggerTempDeltaC(1.5);
-      await _run(
-        tester,
-        container,
-        filterPlan: withPlan
-            ? const [FilterPlanStep(filterName: 'L', exposureSeconds: 300, frameCount: 40)]
-            : null,
-        exposureSeconds: withPlan ? null : 120,
-        frameCount: withPlan ? null : 30,
+      Object? error;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Consumer(
+              builder: (context, ref, _) => ElevatedButton(
+                onPressed: () =>
+                    createImagingRun(
+                      ref,
+                      raDeg: 10.68,
+                      decDeg: 41.27,
+                      targetName: 'M31',
+                      jumpToRun: false,
+                      appendToOpen: false,
+                      exposureSeconds: 120,
+                      frameCount: 30,
+                    ).catchError((Object e) {
+                      error = e;
+                      return null;
+                    }),
+                child: const Text('go'),
+              ),
+            ),
+          ),
+        ),
       );
-      final json = jsonEncode(seq.bodies.single);
-      expect(json, contains('AutofocusAfterTemperatureChange'));
-      expect(json, contains('"Amount":1.5'));
-    });
+      await tester.tap(find.text('go'));
+      for (var i = 0; i < 20 && error == null; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+      }
+      expect(error, isA<SectionNotLoadedException>());
+      expect(seq.bodies, isEmpty, reason: 'nothing reaches the rig');
+    },
+  );
+
+  // The profile's refocus-on-temperature amount reaches the run, plan or not.
+  for (final withPlan in [true, false]) {
+    testWidgets(
+      'the profile\'s temperature refocus becomes the run\'s trigger (plan: $withPlan)',
+      (tester) async {
+        container.dispose();
+        container = ProviderContainer(
+          overrides: [
+            ...imagingSectionsFromRig(),
+            sequenceApiProvider.overrideWith((ref) => seq),
+            focuserProvider.overrideWith(_Focuser.new),
+          ],
+        );
+        await tester.runAsync(
+          () => loadSection(container, autofocusSettingsProvider, 'autofocus'),
+        );
+        container
+            .read(autofocusSettingsProvider.notifier)
+            .setTriggerTempDeltaC(1.5);
+        await _run(
+          tester,
+          container,
+          filterPlan: withPlan
+              ? const [
+                  FilterPlanStep(
+                    filterName: 'L',
+                    exposureSeconds: 300,
+                    frameCount: 40,
+                  ),
+                ]
+              : null,
+          exposureSeconds: withPlan ? null : 120,
+          frameCount: withPlan ? null : 30,
+        );
+        final json = jsonEncode(seq.bodies.single);
+        expect(json, contains('AutofocusAfterTemperatureChange'));
+        expect(json, contains('"Amount":1.5'));
+      },
+    );
   }
 }

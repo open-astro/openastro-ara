@@ -6,7 +6,8 @@ void main() {
   group('parseNmeaSentence', () {
     test('RMC with a valid checksum yields time and signed position', () {
       final fix = parseNmeaSentence(
-          r'$GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A*79');
+        r'$GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A*79',
+      );
       // The checksum above is computed below by the sanity test; assert on content here.
       expect(fix, isNotNull);
       expect(fix!.timeUtc, DateTime.utc(2026, 9, 22, 4, 19, 26));
@@ -16,7 +17,11 @@ void main() {
     });
 
     test('talker prefix does not matter (GN, GL)', () {
-      final gn = parseNmeaSentence(_withChecksum(r'GNRMC,120000.00,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A'));
+      final gn = parseNmeaSentence(
+        _withChecksum(
+          r'GNRMC,120000.00,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A',
+        ),
+      );
       expect(gn, isNotNull);
       expect(gn!.timeUtc, DateTime.utc(2026, 1, 1, 12));
       expect(gn.latitudeDeg, closeTo(51.5, 1e-9));
@@ -24,20 +29,34 @@ void main() {
     });
 
     test('void RMC (V flag) is not a fix', () {
-      expect(parseNmeaSentence(_withChecksum(r'GPRMC,120000,V,,,,,,,010126,,,N')), isNull);
+      expect(
+        parseNmeaSentence(_withChecksum(r'GPRMC,120000,V,,,,,,,010126,,,N')),
+        isNull,
+      );
     });
 
     test('bad checksum is rejected', () {
-      expect(parseNmeaSentence(r'$GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A*00'), isNull);
+      expect(
+        parseNmeaSentence(
+          r'$GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A*00',
+        ),
+        isNull,
+      );
     });
 
     test('sentence without a checksum still parses', () {
-      final fix = parseNmeaSentence(r'$GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A');
+      final fix = parseNmeaSentence(
+        r'$GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A',
+      );
       expect(fix?.timeUtc, DateTime.utc(2026, 1, 1, 12));
     });
 
     test('GGA yields position and altitude but no time', () {
-      final fix = parseNmeaSentence(_withChecksum(r'GPGGA,120000,5130.0000,N,00007.0000,W,1,08,0.9,145.3,M,47.0,M,,'));
+      final fix = parseNmeaSentence(
+        _withChecksum(
+          r'GPGGA,120000,5130.0000,N,00007.0000,W,1,08,0.9,145.3,M,47.0,M,,',
+        ),
+      );
       expect(fix, isNotNull);
       expect(fix!.timeUtc, isNull);
       expect(fix.altitudeM, closeTo(145.3, 1e-9));
@@ -45,38 +64,76 @@ void main() {
     });
 
     test('GGA with fix quality 0 is not a fix', () {
-      expect(parseNmeaSentence(_withChecksum(r'GPGGA,120000,,,,,0,00,,,M,,M,,')), isNull);
+      expect(
+        parseNmeaSentence(_withChecksum(r'GPGGA,120000,,,,,0,00,,,M,,M,,')),
+        isNull,
+      );
     });
 
     test('a cold receiver with a nonsense date is skipped', () {
-      expect(parseNmeaSentence(_withChecksum(r'GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,310226,,,A')), isNull,
-          reason: '31 Feb must not roll over to March');
-      expect(parseNmeaSentence(_withChecksum(r'GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,011326,,,A')), isNull,
-          reason: 'month 13');
+      expect(
+        parseNmeaSentence(
+          _withChecksum(
+            r'GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,310226,,,A',
+          ),
+        ),
+        isNull,
+        reason: '31 Feb must not roll over to March',
+      );
+      expect(
+        parseNmeaSentence(
+          _withChecksum(
+            r'GPRMC,120000,A,5130.0000,N,00007.0000,W,0.0,0.0,011326,,,A',
+          ),
+        ),
+        isNull,
+        reason: 'month 13',
+      );
     });
 
     test('fractional seconds are kept', () {
-      final fix = parseNmeaSentence(_withChecksum(r'GPRMC,120000.250,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A'));
+      final fix = parseNmeaSentence(
+        _withChecksum(
+          r'GPRMC,120000.250,A,5130.0000,N,00007.0000,W,0.0,0.0,010126,,,A',
+        ),
+      );
       expect(fix!.timeUtc, DateTime.utc(2026, 1, 1, 12, 0, 0, 250));
     });
 
-    test('line noise, other sentences and empty input are null, never throw', () {
-      for (final s in [null, '', r'$', 'GPRMC,…', r'$GPGSV,3,1,11,…*00', r'$GPRMC*', r'$GPRMC,1,2*Z9', 'x' * 3]) {
-        expect(() => parseNmeaSentence(s), returnsNormally);
-        expect(parseNmeaSentence(s), isNull);
-      }
-    });
+    test(
+      'line noise, other sentences and empty input are null, never throw',
+      () {
+        for (final s in [
+          null,
+          '',
+          r'$',
+          'GPRMC,…',
+          r'$GPGSV,3,1,11,…*00',
+          r'$GPRMC*',
+          r'$GPRMC,1,2*Z9',
+          'x' * 3,
+        ]) {
+          expect(() => parseNmeaSentence(s), returnsNormally);
+          expect(parseNmeaSentence(s), isNull);
+        }
+      },
+    );
 
     test('checksum helper matches the parser', () {
       // Sanity for the fixtures: the first test's literal was produced this way.
-      expect(_withChecksum(r'GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A'),
-          r'$GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A*79');
+      expect(
+        _withChecksum(
+          r'GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A',
+        ),
+        r'$GPRMC,041926.000,A,3851.2384,N,07702.6101,W,0.09,318.63,220926,,,A*79',
+      );
     });
   });
 
   group('OsSerialGpsSource.parseWindowsModeOutput', () {
     test('finds COM ports whatever language mode speaks', () {
-      const de = 'Status für Gerät COM3:\n-----------------\n    Baudrate: 9600\n\nStatus für Gerät COM10:\n';
+      const de =
+          'Status für Gerät COM3:\n-----------------\n    Baudrate: 9600\n\nStatus für Gerät COM10:\n';
       const en = 'Status for device COM4:\n---\nStatus for device CON:\n';
       expect(OsSerialGpsSource.parseWindowsModeOutput(de), ['COM3', 'COM10']);
       expect(OsSerialGpsSource.parseWindowsModeOutput(en), ['COM4']);

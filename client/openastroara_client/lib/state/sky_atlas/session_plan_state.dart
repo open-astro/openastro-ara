@@ -41,16 +41,15 @@ class SessionPlanState {
     List<TonightSkyObject>? ranked,
     SessionOverheads? overheads,
     Map<String, double>? bankedHours,
-  }) =>
-      SessionPlanState(
-        start: start ?? this.start,
-        end: end ?? this.end,
-        targetCount: targetCount ?? this.targetCount,
-        plan: clearPlan ? null : (plan ?? this.plan),
-        ranked: ranked ?? this.ranked,
-        overheads: overheads ?? this.overheads,
-        bankedHours: bankedHours ?? this.bankedHours,
-      );
+  }) => SessionPlanState(
+    start: start ?? this.start,
+    end: end ?? this.end,
+    targetCount: targetCount ?? this.targetCount,
+    plan: clearPlan ? null : (plan ?? this.plan),
+    ranked: ranked ?? this.ranked,
+    overheads: overheads ?? this.overheads,
+    bankedHours: bankedHours ?? this.bankedHours,
+  );
 }
 
 class SessionPlanNotifier extends Notifier<SessionPlanState> {
@@ -64,11 +63,18 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
   void setTargetCount(int n) =>
       state = state.copyWith(targetCount: n, clearPlan: true);
 
-  void setPlan(SessionPlan plan,
-      {required List<TonightSkyObject> ranked,
-      required SessionOverheads overheads,
-      Map<String, double> bankedHours = const {}}) {
-    state = state.copyWith(plan: plan, ranked: ranked, overheads: overheads, bankedHours: bankedHours);
+  void setPlan(
+    SessionPlan plan, {
+    required List<TonightSkyObject> ranked,
+    required SessionOverheads overheads,
+    Map<String, double> bankedHours = const {},
+  }) {
+    state = state.copyWith(
+      plan: plan,
+      ranked: ranked,
+      overheads: overheads,
+      bankedHours: bankedHours,
+    );
   }
 
   /// Dial a camera rotation onto slice [index]; null clears it.
@@ -91,8 +97,14 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     final plan = state.plan;
     if (plan == null) return;
     state = state.copyWith(
-        plan: setPlanMosaic(plan, index, g,
-            bankedHours: state.bankedHours, overheads: state.overheads));
+      plan: setPlanMosaic(
+        plan,
+        index,
+        g,
+        bankedHours: state.bankedHours,
+        overheads: state.overheads,
+      ),
+    );
   }
 
   /// Put [replacement] into slice [index] (see [swapPlanTarget]).
@@ -100,12 +112,18 @@ class SessionPlanNotifier extends Notifier<SessionPlanState> {
     final plan = state.plan;
     if (plan == null) return;
     state = state.copyWith(
-      plan: swapPlanTarget(plan, index, replacement,
-          overheads: state.overheads, bankedHours: state.bankedHours),
+      plan: swapPlanTarget(
+        plan,
+        index,
+        replacement,
+        overheads: state.overheads,
+        bankedHours: state.bankedHours,
+      ),
     );
   }
 }
 
 final sessionPlanProvider =
     NotifierProvider<SessionPlanNotifier, SessionPlanState>(
-        SessionPlanNotifier.new);
+      SessionPlanNotifier.new,
+    );

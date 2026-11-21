@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+
 import '../../../util/app_licenses.dart';
 
 import '../../../app_version.dart';
@@ -35,9 +36,8 @@ class AboutPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final version = ref.watch(aboutAppVersionProvider);
-    final dim = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -53,9 +53,8 @@ class AboutPanel extends ConsumerWidget {
         const SizedBox(height: 12),
         Text(
           'OpenAstro Ara — the desktop client',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: AraColors.textPrimary),
+          style: Theme.of(context).textTheme.bodyMedium
+              ?.copyWith(color: AraColors.textPrimary),
         ),
         const SizedBox(height: 4),
         Text(
@@ -156,9 +155,8 @@ class _DaemonIdentity extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final dim = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    final dim = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
     final async = ref.watch(daemonVersionsProvider);
     final text = async.when(
       loading: () => 'Server: reading…',

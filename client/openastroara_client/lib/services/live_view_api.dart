@@ -18,9 +18,15 @@ class LiveFrame {
 /// The §64 Live View client surface (start/stop/poll). An interface so the
 /// frame notifier can be unit-tested with a fake instead of real HTTP.
 abstract interface class LiveViewClient {
-  Future<void> start({required double exposureSec, int? gain, int binX, int binY});
+  Future<void> start({
+    required double exposureSec,
+    int? gain,
+    int binX,
+    int binY,
+  });
   Future<void> stop();
   Future<LiveFrame?> fetchFrame();
+
   /// Whether the daemon's loop is running (a loop a dead app left behind).
   Future<bool> isActive();
   void close();
@@ -33,14 +39,16 @@ class LiveViewApi implements LiveViewClient {
   final Dio _dio;
 
   LiveViewApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           // Stop awaits the server loop draining (the daemon caps this at the
           // 15 s exposure + readout for a non-cancellable ImageArray download),
           // so allow a generous receive window.
           receiveTimeout: const Duration(seconds: 30),
-        ));
+        ),
+      );
 
   /// Start the loop. ExposureSec is clamped to the daemon's (0, 15] cap.
   @override
@@ -63,7 +71,9 @@ class LiveViewApi implements LiveViewClient {
 
   @override
   Future<bool> isActive() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/equipment/camera/liveview');
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/equipment/camera/liveview',
+    );
     return res.data?['active'] == true;
   }
 
@@ -90,7 +100,8 @@ class LiveViewApi implements LiveViewClient {
     // multi-KB JPEG on every poll tick (constant GC pressure at ~4 Hz).
     final u8 = bytes is Uint8List ? bytes : Uint8List.fromList(bytes);
     final seq = int.tryParse(res.headers.value('x-frame-seq') ?? '') ?? 0;
-    final session = int.tryParse(res.headers.value('x-live-session') ?? '') ?? 0;
+    final session =
+        int.tryParse(res.headers.value('x-live-session') ?? '') ?? 0;
     return LiveFrame(u8, seq, session);
   }
 

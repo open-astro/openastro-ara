@@ -86,11 +86,12 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
   // deep-freeze turns any stored List into List<Object?>, so consumers must read
   // `params['conditionTypes'] as List` and `.cast<String>()` (never `as
   // List<String>`, which would throw on the frozen value).
-  List<Object?> typeSummaries(dynamic collection) => values(collection)
-      .whereType<Map>()
-      .map((e) => shortType(e[r'$type']))
-      .where((s) => s.isNotEmpty)
-      .toList(growable: false);
+  List<Object?> typeSummaries(dynamic collection) =>
+      values(collection)
+          .whereType<Map>()
+          .map((e) => shortType(e[r'$type']))
+          .where((s) => s.isNotEmpty)
+          .toList(growable: false);
 
   // Parses one node. [forceRoot] makes the top object a root regardless of its
   // $type, with the sequence-name fallbacks. Returns null for a $ref placeholder
@@ -138,11 +139,11 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
           : kindFor(type, children.isNotEmpty),
       displayName: forceRoot
           ? (trimmedName(raw['Name']) ??
-              trimmedName(raw['name']) ??
-              trimmedName(raw['target']) ??
-              'Sequence')
+                trimmedName(raw['name']) ??
+                trimmedName(raw['target']) ??
+                'Sequence')
           : (trimmedName(raw['Name']) ??
-              (type.isEmpty ? 'Item' : humanize(type))),
+                (type.isEmpty ? 'Item' : humanize(type))),
       // The root is a display container, not an instruction.
       instructionType: forceRoot || type.isEmpty ? null : type,
       params: params,
@@ -152,7 +153,8 @@ SequenceNode parseNinaSequenceBody(Map<String, dynamic> body) {
 
   return node(body, 0, forceRoot: true) ??
       SequenceNode(
-          id: 'root',
-          kind: SequenceNodeKind.root,
-          displayName: 'Sequence');
+        id: 'root',
+        kind: SequenceNodeKind.root,
+        displayName: 'Sequence',
+      );
 }

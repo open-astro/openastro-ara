@@ -73,7 +73,8 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
               top: 0,
               left: 4,
               child: ChartStaleChip(
-                tooltip: 'Couldn’t refresh — showing the last loaded distribution.',
+                tooltip:
+                    'Couldn’t refresh — showing the last loaded distribution.',
               ),
             ),
           // The page's pull down refreshes; this shows it running.
@@ -81,7 +82,11 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
             const Positioned(
               top: 12,
               right: 16,
-              child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+              child: SizedBox(
+                width: 16,
+                height: 16,
+                child: AdaptiveProgressIndicator(strokeWidth: 2),
+              ),
             ),
         ],
       ),
@@ -105,7 +110,9 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
       return const _Hint('Connect to a server to see frame quality.');
     }
     if (dist.isEmpty) {
-      return const _Hint('No scored frames yet — quality appears here once captures are scored.');
+      return const _Hint(
+        'No scored frames yet — quality appears here once captures are scored.',
+      );
     }
 
     final bars = <BarChartGroupData>[];
@@ -114,19 +121,26 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
       final b = dist.buckets[i];
       if (b.count > maxCount) maxCount = b.count;
       final mid = (b.rangeLow + b.rangeHigh) / 2;
-      bars.add(BarChartGroupData(x: i, barRods: [
-        BarChartRodData(
-          toY: b.count.toDouble(),
-          // Higher score = better, so green at the top end, red at the bottom.
-          color: mid >= 0.7
-              ? AraColors.selectionBg
-              : mid >= 0.4
+      bars.add(
+        BarChartGroupData(
+          x: i,
+          barRods: [
+            BarChartRodData(
+              toY: b.count.toDouble(),
+              // Higher score = better, so green at the top end, red at the bottom.
+              color: mid >= 0.7
+                  ? AraColors.selectionBg
+                  : mid >= 0.4
                   ? AraColors.accentBusy
                   : AraColors.qualityPoor,
-          width: 14,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+              width: 14,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(4),
+              ),
+            ),
+          ],
         ),
-      ]));
+      );
     }
     // ~10% headroom so the tallest bar doesn't touch the chart border; ceil
     // keeps at least 1 frame of clearance for small counts. The `maxCount == 0`
@@ -148,10 +162,8 @@ class _FrameQualityChartState extends ConsumerState<FrameQualityChart>
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => const FlLine(
-              color: AraColors.border,
-              strokeWidth: 0.5,
-            ),
+            getDrawingHorizontalLine: (_) =>
+                const FlLine(color: AraColors.border, strokeWidth: 0.5),
           ),
           titlesData: FlTitlesData(
             leftTitles: const AxisTitles(
@@ -207,9 +219,8 @@ class _Hint extends StatelessWidget {
             child: Text(
               message,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textDisabled,
-                  ),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textDisabled),
             ),
           ),
           if (onRetry != null)

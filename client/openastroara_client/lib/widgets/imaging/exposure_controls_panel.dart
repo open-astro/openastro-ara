@@ -46,13 +46,13 @@ class ExposureControlsPanel extends ConsumerWidget {
     // Width, background and border come from the imaging tab's rail (which
     // also owns scrolling) — this is the compact two-column control grid.
     Widget pair(Widget left, Widget right) => Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(child: left),
-            const SizedBox(width: 8),
-            Expanded(child: right),
-          ],
-        );
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: left),
+        const SizedBox(width: 8),
+        Expanded(child: right),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.all(12),
       child: Column(
@@ -84,10 +84,7 @@ class ExposureControlsPanel extends ConsumerWidget {
               max: 200,
               onChanged: ctrl.setOffset,
             ),
-            _BinDropdown(
-              value: params.bin,
-              onChanged: ctrl.setBin,
-            ),
+            _BinDropdown(value: params.bin, onChanged: ctrl.setBin),
           ),
           const SizedBox(height: 6),
           // PR #71 follow-up — the filter picker, wired to params.filterSlot
@@ -167,9 +164,7 @@ const int _kMaxExposureMs = 24 * 3600 * 1000;
 String _formatSeconds(Duration d) {
   final ms = d.inMilliseconds;
   if (ms % 1000 == 0) return (ms ~/ 1000).toString();
-  return (ms / 1000)
-      .toStringAsFixed(3)
-      .replaceFirst(RegExp(r'0+$'), '');
+  return (ms / 1000).toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
 }
 
 class _DurationSecondsFieldState extends State<DurationSecondsField> {
@@ -206,8 +201,10 @@ class _DurationSecondsFieldState extends State<DurationSecondsField> {
     final minMs = minSec.isFinite && minSec > 0
         ? (minSec * 1000).ceil().clamp(1, maxMs)
         : 1;
-    final ms =
-        (parsed.clamp(0, maxMs / 1000) * 1000).round().clamp(minMs, maxMs);
+    final ms = (parsed.clamp(0, maxMs / 1000) * 1000).round().clamp(
+      minMs,
+      maxMs,
+    );
     final d = Duration(milliseconds: ms);
     widget.onChanged(d);
     _ctrl.text = _formatSeconds(d);
@@ -401,7 +398,8 @@ class FilterDropdown extends ConsumerStatefulWidget {
     List<String> names,
     String value,
     ValueChanged<String>? pick,
-  )? inline;
+  )?
+  inline;
 
   const FilterDropdown({
     super.key,
@@ -455,7 +453,11 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
   /// green flash confirms a landing; null restores the theme default.
   Color? _blinkColor(bool busy) {
     if (_landed || busy) {
-      return Color.lerp(AraColors.accentConnected, AraColors.border, _flash.value);
+      return Color.lerp(
+        AraColors.accentConnected,
+        AraColors.border,
+        _flash.value,
+      );
     }
     return null;
   }
@@ -482,7 +484,11 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
         userNotifier(context)(l10n.filterDropdownBusy, refused: true);
       case DeviceCommandRefusal.failed:
         userNotifier(context)(
-          friendlyError(l10n, next.error!, action: l10n.filterDropdownActionChange),
+          friendlyError(
+            l10n,
+            next.error!,
+            action: l10n.filterDropdownActionChange,
+          ),
           error: true,
         );
       case DeviceCommandRefusal.didntMove:
@@ -563,60 +569,63 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
     InputDecoration decoration() {
       final blink = _blinkColor(busy);
       return InputDecoration(
-      labelText: context.l10n.filterDropdownLabel,
-      enabledBorder: blink == null
-          ? null
-          : UnderlineInputBorder(
-              borderSide: BorderSide(color: blink, width: 2)),
-      focusedBorder: blink == null
-          ? null
-          : UnderlineInputBorder(
-              borderSide: BorderSide(color: blink, width: 2)),
-      disabledBorder: blink == null
-          ? null
-          : UnderlineInputBorder(
-              borderSide: BorderSide(color: blink, width: 2)),
+        labelText: context.l10n.filterDropdownLabel,
+        enabledBorder: blink == null
+            ? null
+            : UnderlineInputBorder(
+                borderSide: BorderSide(color: blink, width: 2),
+              ),
+        focusedBorder: blink == null
+            ? null
+            : UnderlineInputBorder(
+                borderSide: BorderSide(color: blink, width: 2),
+              ),
+        disabledBorder: blink == null
+            ? null
+            : UnderlineInputBorder(
+                borderSide: BorderSide(color: blink, width: 2),
+              ),
       );
     }
 
     final ValueChanged<String?>? pick = busy
-          ? null // keep it disabled (showing the picked slot) until it lands
-          : (n) {
-              if (n == null) return;
-              final wheelNow = ref
-                  .read(filterWheelProvider)
-                  .maybeWhen(data: (s) => s, orElse: () => null);
-              // No wheel connected: nothing to move — just tag the capture
-              // (the offline-authoring case; a reconnect re-syncs the picker).
-              if (wheelNow == null || !wheelNow.isConnected) {
-                widget.onChanged(n);
-                return;
-              }
-              final slot = _resolveSlot(ref, wheelNow, n);
-              if (slot == null) {
-                // Connected, but the picked name maps to no physical slot
-                // (local labels and the driver's names can diverge).
-                userNotifier(context)(
-                  context.l10n.filterDropdownNotASlot(n),
-                  error: true,
-                );
-                return;
-              }
-              // currentSlot may be null (unknown/not yet reported) — treat
-              // that as "not the current slot" and command the move; the
-              // driver rejects a redundant move if one slips through.
-              if (slot.position == wheelNow.currentSlot) {
-                widget.onChanged(n);
-                return;
-              }
-              _picked = n;
-              _pickedUnnamed = slot.name.isEmpty;
-              // No onChanged(n) for NAMED target slots — the follow-logic
-              // syncs filterSlot when the wheel reports its new slot.
-              ref
-                  .read(filterWheelCommandProvider.notifier)
-                  .request(slot.position, by: this);
-            };
+        ? null // keep it disabled (showing the picked slot) until it lands
+        : (n) {
+            if (n == null) return;
+            final wheelNow = ref
+                .read(filterWheelProvider)
+                .maybeWhen(data: (s) => s, orElse: () => null);
+            // No wheel connected: nothing to move — just tag the capture
+            // (the offline-authoring case; a reconnect re-syncs the picker).
+            if (wheelNow == null || !wheelNow.isConnected) {
+              widget.onChanged(n);
+              return;
+            }
+            final slot = _resolveSlot(ref, wheelNow, n);
+            if (slot == null) {
+              // Connected, but the picked name maps to no physical slot
+              // (local labels and the driver's names can diverge).
+              userNotifier(context)(
+                context.l10n.filterDropdownNotASlot(n),
+                error: true,
+              );
+              return;
+            }
+            // currentSlot may be null (unknown/not yet reported) — treat
+            // that as "not the current slot" and command the move; the
+            // driver rejects a redundant move if one slips through.
+            if (slot.position == wheelNow.currentSlot) {
+              widget.onChanged(n);
+              return;
+            }
+            _picked = n;
+            _pickedUnnamed = slot.name.isEmpty;
+            // No onChanged(n) for NAMED target slots — the follow-logic
+            // syncs filterSlot when the wheel reports its new slot.
+            ref
+                .read(filterWheelCommandProvider.notifier)
+                .request(slot.position, by: this);
+          };
     final inline = widget.inline;
     if (inline != null) {
       final picker = inline(
@@ -639,8 +648,14 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
             alignment: WrapAlignment.end,
             spacing: AraSpace.s8,
             children: [
-              TextButton(onPressed: cmd.cancel, child: Text(context.l10n.planCancel)),
-              FilledButton(onPressed: cmd.confirm, child: Text(context.l10n.deviceChangeAnyway)),
+              TextButton(
+                onPressed: cmd.cancel,
+                child: Text(context.l10n.planCancel),
+              ),
+              FilledButton(
+                onPressed: cmd.confirm,
+                child: Text(context.l10n.deviceChangeAnyway),
+              ),
             ],
           ),
         ],
@@ -670,7 +685,11 @@ class _FilterDropdownState extends ConsumerState<FilterDropdown>
   /// in the profile labels and take the wheel slot at that position. Returns
   /// null when neither matches (no physical filter behind the picked name),
   /// and skips the position step while the labels are not loaded.
-  FilterSlot? _resolveSlot(WidgetRef ref, FilterWheelStatus wheel, String name) {
+  FilterSlot? _resolveSlot(
+    WidgetRef ref,
+    FilterWheelStatus wheel,
+    String name,
+  ) {
     for (final s in wheel.slots) {
       if (s.name == name) return s;
     }

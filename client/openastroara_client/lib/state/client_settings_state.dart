@@ -8,8 +8,8 @@ import 'saved_server_state.dart';
 /// Builds a [ClientSettingsClient] for a server. Overridable in tests.
 final clientSettingsApiFactoryProvider =
     Provider<ClientSettingsClient Function(AraServer)>(
-  (ref) => ClientSettingsApi.new,
-);
+      (ref) => ClientSettingsApi.new,
+    );
 
 /// [ClientSettingsClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -98,4 +98,5 @@ class ClientSettingsNotifier extends AsyncNotifier<ClientSettings?> {
 
 final clientSettingsProvider =
     AsyncNotifierProvider<ClientSettingsNotifier, ClientSettings?>(
-        ClientSettingsNotifier.new);
+      ClientSettingsNotifier.new,
+    );

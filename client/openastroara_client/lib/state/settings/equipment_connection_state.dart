@@ -54,7 +54,9 @@ class EquipmentConnectionSettings {
   bool autoConnect(EquipmentDeviceType t) => autoConnectOnBoot[t] ?? true;
 
   EquipmentConnectionSettings copyWithAutoConnect(
-      EquipmentDeviceType t, bool v) {
+    EquipmentDeviceType t,
+    bool v,
+  ) {
     return EquipmentConnectionSettings(
       autoConnectOnBoot: {...autoConnectOnBoot, t: v},
     );

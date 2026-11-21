@@ -60,13 +60,18 @@ class RotatorStatus extends EquipmentDeviceStatus {
   factory RotatorStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic>
+        ? runtime
+        : const <String, dynamic>{};
     return RotatorStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
-      capabilities:
-          caps is Map<String, dynamic> ? RotatorCapabilities.fromJson(caps) : null,
+      connectionState: equipmentConnectionStateFromWire(
+        json['state'] as String?,
+      ),
+      capabilities: caps is Map<String, dynamic>
+          ? RotatorCapabilities.fromJson(caps)
+          : null,
       runtimeState: r['state'] as String? ?? '',
       mechanicalAngleDeg: (r['mechanical_angle_deg'] as num?)?.toDouble(),
       skyAngleDeg: (r['sky_angle_deg'] as num?)?.toDouble(),
@@ -88,6 +93,14 @@ class RotatorStatus extends EquipmentDeviceStatus {
           other.reverse == reverse);
 
   @override
-  int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, mechanicalAngleDeg, skyAngleDeg, reverse);
+  int get hashCode => Object.hash(
+    deviceId,
+    name,
+    connectionState,
+    capabilities,
+    runtimeState,
+    mechanicalAngleDeg,
+    skyAngleDeg,
+    reverse,
+  );
 }

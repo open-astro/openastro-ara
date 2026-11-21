@@ -39,58 +39,85 @@ class _FakeSavedServerService implements SavedServerService {
 class _FakeLifecycleClient implements SequenceClient {
   final List<String> calls = [];
   @override
-  Future<String> start(String id) async { calls.add('start $id'); return 'op'; }
+  Future<String> start(String id) async {
+    calls.add('start $id');
+    return 'op';
+  }
+
   @override
-  Future<String> pause(String id) async { calls.add('pause $id'); return 'op'; }
+  Future<String> pause(String id) async {
+    calls.add('pause $id');
+    return 'op';
+  }
+
   @override
-  Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async {
+  Future<String> resume(
+    String id, {
+    bool recenter = true,
+    bool refocus = false,
+  }) async {
     calls.add('resume $id recenter=$recenter refocus=$refocus');
     return 'op';
   }
+
   @override
   Future<SequenceRunStateInfo?> getRunState(String id) async => null;
   @override
   void close() {}
   @override
-  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError('${invocation.memberName}');
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
 }
 
 class _SeededRunState extends SequenceRunStateNotifier {
   _SeededRunState(this.seed);
   final SequenceRunState? seed;
   @override
-  Future<SequenceRunStateInfo?> build() async => SequenceRunStateInfo(sequenceId: 'seq-1', state: seed);
+  Future<SequenceRunStateInfo?> build() async =>
+      SequenceRunStateInfo(sequenceId: 'seq-1', state: seed);
 }
 
 /// Opens the palette over a rig with `seq-1` selected and the run in [state].
-Future<(ProviderContainer, _FakeLifecycleClient)> _pumpRunPalette(WidgetTester tester, SequenceRunState? state,
-    {String? selected = 'seq-1', bool runTabAlive = true}) async {
+Future<(ProviderContainer, _FakeLifecycleClient)> _pumpRunPalette(
+  WidgetTester tester,
+  SequenceRunState? state, {
+  String? selected = 'seq-1',
+  bool runTabAlive = true,
+}) async {
   final client = _FakeLifecycleClient();
-  final container = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    sequenceApiProvider.overrideWithValue(client),
-    sequenceRunStateProvider.overrideWith(() => _SeededRunState(state)),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      sequenceApiProvider.overrideWithValue(client),
+      sequenceRunStateProvider.overrideWith(() => _SeededRunState(state)),
+    ],
+  );
   addTearDown(container.dispose);
-  if (selected != null) container.read(selectedSequenceIdProvider.notifier).select(selected);
+  if (selected != null)
+    container.read(selectedSequenceIdProvider.notifier).select(selected);
   // Keep the autoDispose run state alive, as the Run tab's watch does — or
   // not, for the case where that tab was never built.
   if (runTabAlive) {
     container.listen(sequenceRunStateProvider, (_, _) {});
     await container.read(sequenceRunStateProvider.future);
   }
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => Center(
-            child: ElevatedButton(onPressed: () => showCommandPalette(context), child: const Text('open')),
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showCommandPalette(context),
+                child: const Text('open'),
+              ),
+            ),
           ),
         ),
       ),
     ),
-  ));
+  );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
   return (container, client);
@@ -118,6 +145,7 @@ class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
     if (throwOnCommand) throw Exception('mount offline');
     commands.add(body == null ? subpath : '$subpath $body');
   }
+
   bool throwOnCommand = false;
   @override
   void close() {}
@@ -134,7 +162,8 @@ class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
   @override
   Future<void> disconnect() async {}
   @override
-  Future<void> command(String subpath, [Map<String, dynamic>? body]) async => commands.add('$subpath $body');
+  Future<void> command(String subpath, [Map<String, dynamic>? body]) async =>
+      commands.add('$subpath $body');
   @override
   void close() {}
 }
@@ -146,12 +175,19 @@ class _NoSwitches extends SwitchListNotifier {
 
 /// A palette over a rig with fake mount and camera clients ([connected] false
 /// = no active server, so every notifier action returns false).
-Future<(ProviderContainer, _FakeMountApi, _FakeCameraApi)> _pumpEquipmentPalette(WidgetTester tester,
-    {bool connected = true, bool mountThrows = false}) async {
+Future<(ProviderContainer, _FakeMountApi, _FakeCameraApi)>
+_pumpEquipmentPalette(
+  WidgetTester tester, {
+  bool connected = true,
+  bool mountThrows = false,
+}) async {
   final mountApi = _FakeMountApi()..throwOnCommand = mountThrows;
   final cameraApi = _FakeCameraApi();
   final container = await _pumpPalette(tester, [
-    if (connected) activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1)),
+    if (connected)
+      activeServerProvider.overrideWithValue(
+        const AraServer(hostname: 'rig', port: 1),
+      ),
     mountApiFactoryProvider.overrideWithValue((_) => mountApi),
     cameraStatusApiFactoryProvider.overrideWithValue((_) => cameraApi),
     switchListProvider.overrideWith(_NoSwitches.new),
@@ -163,43 +199,73 @@ Future<(ProviderContainer, _FakeMountApi, _FakeCameraApi)> _pumpEquipmentPalette
 class _FakeSeqClient implements SequenceClient {
   final List<String> created = [];
   @override
-  Future<String> instantiateTemplate(String templateName, String newName) async {
+  Future<String> instantiateTemplate(
+    String templateName,
+    String newName,
+  ) async {
     created.add('$templateName → $newName');
     return 'seq-new';
   }
+
   @override
-  Future<List<SequenceTemplate>> listTemplates() async =>
-      const [SequenceTemplate(name: 'Deep Sky LRGB', category: 'Imaging', description: null, isBuiltIn: true)];
+  Future<List<SequenceTemplate>> listTemplates() async => const [
+    SequenceTemplate(
+      name: 'Deep Sky LRGB',
+      category: 'Imaging',
+      description: null,
+      isBuiltIn: true,
+    ),
+  ];
   @override
   void close() {}
   @override
-  dynamic noSuchMethod(Invocation invocation) => throw UnimplementedError('${invocation.memberName}');
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
 }
 
 final _m31 = TonightSkyObject(
-  id: 'M31', name: 'Andromeda Galaxy', type: 'galaxy', magnitude: 3.4, raDeg: 10.68, decDeg: 41.27,
-  altitudeDeg: 55, maxAltitudeDeg: 60, windowStartUtc: DateTime.utc(2026, 10, 13, 20), windowEndUtc: DateTime.utc(2026, 10, 14, 4),
-  score: 90, hoursFreeScore: 60,
+  id: 'M31',
+  name: 'Andromeda Galaxy',
+  type: 'galaxy',
+  magnitude: 3.4,
+  raDeg: 10.68,
+  decDeg: 41.27,
+  altitudeDeg: 55,
+  maxAltitudeDeg: 60,
+  windowStartUtc: DateTime.utc(2026, 10, 13, 20),
+  windowEndUtc: DateTime.utc(2026, 10, 14, 4),
+  score: 90,
+  hoursFreeScore: 60,
 );
 
-Future<ProviderContainer> _pumpPalette(WidgetTester tester, List<Object> extra) async {
-  final container = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-    ...extra,
-  ].cast());
+Future<ProviderContainer> _pumpPalette(
+  WidgetTester tester,
+  List<Object> extra,
+) async {
+  final container = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
+      ...extra,
+    ].cast(),
+  );
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: MaterialApp(
-      home: Scaffold(
-        body: Builder(
-          builder: (context) => Center(
-            child: ElevatedButton(onPressed: () => showCommandPalette(context), child: const Text('open')),
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: MaterialApp(
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => Center(
+              child: ElevatedButton(
+                onPressed: () => showCommandPalette(context),
+                child: const Text('open'),
+              ),
+            ),
           ),
         ),
       ),
     ),
-  ));
+  );
   await tester.tap(find.text('open'));
   await tester.pumpAndSettle();
   return container;
@@ -207,68 +273,81 @@ Future<ProviderContainer> _pumpPalette(WidgetTester tester, List<Object> extra) 
 
 void main() {
   testWidgets(
-      '§61.10 activating an action hit closes the palette and runs its launcher',
-      (tester) async {
-    // #829 r1 note — the dispatch's context timing is the fragile part: the
-    // launcher must run on the ROOT navigator grabbed BEFORE the palette pops
-    // (the palette's own context dies with the pop). One action proves the
-    // mechanism; the per-action launchers are a 1:1 mirror of app_shell's
-    // top-bar buttons.
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => Center(
-              child: ElevatedButton(
-                onPressed: () => showCommandPalette(context),
-                child: const Text('open'),
+    '§61.10 activating an action hit closes the palette and runs its launcher',
+    (tester) async {
+      // #829 r1 note — the dispatch's context timing is the fragile part: the
+      // launcher must run on the ROOT navigator grabbed BEFORE the palette pops
+      // (the palette's own context dies with the pop). One action proves the
+      // mechanism; the per-action launchers are a 1:1 mirror of app_shell's
+      // top-bar buttons.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(),
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => showCommandPalette(context),
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // A label-prefix query ranks the action first (500 > any keyword tier), so
+      // the row is guaranteed to be built inside the palette's lazy ListView.
+      await tester.enterText(find.byType(TextField), 'back up');
+      await tester.pump();
+      expect(
+        find.text('Back up & restore…'),
+        findsOneWidget,
+        reason: 'the backup action is the top hit for its label prefix',
+      );
+
+      await tester.tap(find.text('Back up & restore…'));
+      await tester.pumpAndSettle();
+
+      // The Backup & Restore dialog is open on the root navigator…
+      expect(find.text('Backup & Restore'), findsOneWidget);
+      // …and the palette itself popped (its search field is gone).
+      expect(find.byType(TextField), findsNothing);
+    },
+  );
+
+  testWidgets('the search field owns focus on open (type-to-search)', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () => showCommandPalette(context),
+                  child: const Text('open'),
+                ),
               ),
             ),
           ),
         ),
       ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-
-    // A label-prefix query ranks the action first (500 > any keyword tier), so
-    // the row is guaranteed to be built inside the palette's lazy ListView.
-    await tester.enterText(find.byType(TextField), 'back up');
-    await tester.pump();
-    expect(find.text('Back up & restore…'), findsOneWidget,
-        reason: 'the backup action is the top hit for its label prefix');
-
-    await tester.tap(find.text('Back up & restore…'));
-    await tester.pumpAndSettle();
-
-    // The Backup & Restore dialog is open on the root navigator…
-    expect(find.text('Backup & Restore'), findsOneWidget);
-    // …and the palette itself popped (its search field is gone).
-    expect(find.byType(TextField), findsNothing);
-  });
-
-  testWidgets('the search field owns focus on open (type-to-search)',
-      (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => Center(
-              child: ElevatedButton(
-                onPressed: () => showCommandPalette(context),
-                child: const Text('open'),
-              ),
-            ),
-          ),
-        ),
-      ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     // Typing with NO click must land in the search box — a competing
@@ -280,89 +359,150 @@ void main() {
     expect(find.widgetWithText(TextField, 'dither'), findsOneWidget);
   });
 
-  testWidgets('#1154 "Plan tonight…" opens the session planner on the root navigator', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService()),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => Center(
-              child: ElevatedButton(
-                onPressed: () => showCommandPalette(context),
-                child: const Text('open'),
+  testWidgets(
+    '#1154 "Plan tonight…" opens the session planner on the root navigator',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(),
+            ),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () => showCommandPalette(context),
+                    child: const Text('open'),
+                  ),
+                ),
               ),
             ),
           ),
         ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'plan tonight');
-    await tester.pump();
-    await tester.tap(find.text('Plan tonight…'));
-    await tester.pumpAndSettle();
-    expect(find.byType(SessionPlanDialog), findsOneWidget);
-    expect(find.text('Plan tonight…'), findsNothing, reason: 'the palette popped');
-  });
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'plan tonight');
+      await tester.pump();
+      await tester.tap(find.text('Plan tonight…'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SessionPlanDialog), findsOneWidget);
+      expect(
+        find.text('Plan tonight…'),
+        findsNothing,
+        reason: 'the palette popped',
+      );
+    },
+  );
 
   group('#1154 run actions dispatch through the Run tab helpers', () {
-    testWidgets('Run on an idle, unaligned rig asks first, then "Run anyway" starts it after the palette is gone',
-        (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.idle);
-      await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
-      expect(find.text('Not polar aligned — run anyway?'), findsOneWidget);
-      expect(find.byType(TextField), findsNothing, reason: 'the palette popped before the dialog');
-      await tester.tap(find.text('Run anyway'));
-      await tester.pumpAndSettle();
-      expect(client.calls, ['start seq-1']);
-    });
+    testWidgets(
+      'Run on an idle, unaligned rig asks first, then "Run anyway" starts it after the palette is gone',
+      (tester) async {
+        final (_, client) = await _pumpRunPalette(
+          tester,
+          SequenceRunState.idle,
+        );
+        await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
+        expect(find.text('Not polar aligned — run anyway?'), findsOneWidget);
+        expect(
+          find.byType(TextField),
+          findsNothing,
+          reason: 'the palette popped before the dialog',
+        );
+        await tester.tap(find.text('Run anyway'));
+        await tester.pumpAndSettle();
+        expect(client.calls, ['start seq-1']);
+      },
+    );
 
     testWidgets('Run while running only says so', (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.running);
+      final (_, client) = await _pumpRunPalette(
+        tester,
+        SequenceRunState.running,
+      );
       await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
       expect(find.textContaining('already running'), findsOneWidget);
       expect(client.calls, isEmpty);
     });
 
-    testWidgets('Run while paused offers the resume choice and resumes with it', (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.paused);
-      await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
-      await tester.tap(find.text('Just resume'));
-      await tester.pumpAndSettle();
-      expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
-    });
+    testWidgets(
+      'Run while paused offers the resume choice and resumes with it',
+      (tester) async {
+        final (_, client) = await _pumpRunPalette(
+          tester,
+          SequenceRunState.paused,
+        );
+        await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
+        await tester.tap(find.text('Just resume'));
+        await tester.pumpAndSettle();
+        expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
+      },
+    );
 
-    testWidgets('a paused run is still seen when the Run tab was never built (run state not yet loaded)',
-        (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.paused, runTabAlive: false);
-      await _pick(tester, 'pause', 'Pause or resume the sequence (Space)');
-      expect(find.text('Resume imaging?'), findsOneWidget, reason: 'the palette waited for the run state');
-      await tester.tap(find.text('Just resume'));
-      await tester.pumpAndSettle();
-      expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
-    });
+    testWidgets(
+      'a paused run is still seen when the Run tab was never built (run state not yet loaded)',
+      (tester) async {
+        final (_, client) = await _pumpRunPalette(
+          tester,
+          SequenceRunState.paused,
+          runTabAlive: false,
+        );
+        await _pick(tester, 'pause', 'Pause or resume the sequence (Space)');
+        expect(
+          find.text('Resume imaging?'),
+          findsOneWidget,
+          reason: 'the palette waited for the run state',
+        );
+        await tester.tap(find.text('Just resume'));
+        await tester.pumpAndSettle();
+        expect(client.calls, ['resume seq-1 recenter=false refocus=false']);
+      },
+    );
 
     for (final (state, query, label) in const [
-      (SequenceRunState.starting, 'run or resume', 'Run or resume the sequence (⌘R)'),
-      (SequenceRunState.aborting, 'run or resume', 'Run or resume the sequence (⌘R)'),
-      (SequenceRunState.starting, 'pause', 'Pause or resume the sequence (Space)'),
-      (SequenceRunState.aborting, 'pause', 'Pause or resume the sequence (Space)'),
+      (
+        SequenceRunState.starting,
+        'run or resume',
+        'Run or resume the sequence (⌘R)',
+      ),
+      (
+        SequenceRunState.aborting,
+        'run or resume',
+        'Run or resume the sequence (⌘R)',
+      ),
+      (
+        SequenceRunState.starting,
+        'pause',
+        'Pause or resume the sequence (Space)',
+      ),
+      (
+        SequenceRunState.aborting,
+        'pause',
+        'Pause or resume the sequence (Space)',
+      ),
     ]) {
-      testWidgets('while ${state.name}, "$label" says to wait (neither key would act)', (tester) async {
-        final (_, client) = await _pumpRunPalette(tester, state);
-        await _pick(tester, query, label);
-        expect(find.textContaining('wait for it to settle'), findsOneWidget);
-        expect(find.textContaining('already running'), findsNothing);
-        expect(find.textContaining('No sequence is running'), findsNothing);
-        expect(client.calls, isEmpty);
-      });
+      testWidgets(
+        'while ${state.name}, "$label" says to wait (neither key would act)',
+        (tester) async {
+          final (_, client) = await _pumpRunPalette(tester, state);
+          await _pick(tester, query, label);
+          expect(find.textContaining('wait for it to settle'), findsOneWidget);
+          expect(find.textContaining('already running'), findsNothing);
+          expect(find.textContaining('No sequence is running'), findsNothing);
+          expect(client.calls, isEmpty);
+        },
+      );
     }
 
     testWidgets('Pause while running pauses', (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, SequenceRunState.running);
+      final (_, client) = await _pumpRunPalette(
+        tester,
+        SequenceRunState.running,
+      );
       await _pick(tester, 'pause', 'Pause or resume the sequence (Space)');
       expect(client.calls, ['pause seq-1']);
     });
@@ -374,12 +514,18 @@ void main() {
       expect(client.calls, isEmpty);
     });
 
-    testWidgets('with nothing selected the palette explains instead of silently doing nothing', (tester) async {
-      final (_, client) = await _pumpRunPalette(tester, null, selected: null);
-      await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
-      expect(find.text('Select a saved sequence on a connected rig first.'), findsOneWidget);
-      expect(client.calls, isEmpty);
-    });
+    testWidgets(
+      'with nothing selected the palette explains instead of silently doing nothing',
+      (tester) async {
+        final (_, client) = await _pumpRunPalette(tester, null, selected: null);
+        await _pick(tester, 'run or resume', 'Run or resume the sequence (⌘R)');
+        expect(
+          find.text('Select a saved sequence on a connected rig first.'),
+          findsOneWidget,
+        );
+        expect(client.calls, isEmpty);
+      },
+    );
   });
   group('#1170 equipment actions go through the chips\' notifiers', () {
     const cases = <(String query, String label, String mountCommand)>[
@@ -398,22 +544,40 @@ void main() {
       });
     }
 
-    testWidgets('"Switch the camera cooler off" sends cooler enabled=false', (tester) async {
+    testWidgets('"Switch the camera cooler off" sends cooler enabled=false', (
+      tester,
+    ) async {
       final (_, mountApi, cameraApi) = await _pumpEquipmentPalette(tester);
       await _pick(tester, 'cooler off', 'Switch the camera cooler off');
-      expect(cameraApi.commands, ['cooler {enabled: false, target_temperature_c: null}']);
+      expect(cameraApi.commands, [
+        'cooler {enabled: false, target_temperature_c: null}',
+      ]);
       expect(mountApi.commands, isEmpty);
     });
 
-    testWidgets('with no rig connected the notifier does nothing and the palette says so', (tester) async {
-      final (_, mountApi, _) = await _pumpEquipmentPalette(tester, connected: false);
-      await _pick(tester, 'park the mount', 'Park the mount');
-      expect(mountApi.commands, isEmpty);
-      expect(find.textContaining('Could not park the mount — the device is not connected'), findsOneWidget);
-    });
+    testWidgets(
+      'with no rig connected the notifier does nothing and the palette says so',
+      (tester) async {
+        final (_, mountApi, _) = await _pumpEquipmentPalette(
+          tester,
+          connected: false,
+        );
+        await _pick(tester, 'park the mount', 'Park the mount');
+        expect(mountApi.commands, isEmpty);
+        expect(
+          find.textContaining(
+            'Could not park the mount — the device is not connected',
+          ),
+          findsOneWidget,
+        );
+      },
+    );
 
     testWidgets('a failing command is reported with its error', (tester) async {
-      final (_, mountApi, _) = await _pumpEquipmentPalette(tester, mountThrows: true);
+      final (_, mountApi, _) = await _pumpEquipmentPalette(
+        tester,
+        mountThrows: true,
+      );
       await _pick(tester, 'park the mount', 'Park the mount');
       expect(mountApi.commands, isEmpty);
       expect(find.textContaining('Could not park the mount: '), findsOneWidget);
@@ -421,35 +585,51 @@ void main() {
     });
   });
 
-  testWidgets('#1170 a daemon template is a "New sequence from template" entry that creates and selects the run', (tester) async {
-    final seq = _FakeSeqClient();
-    final container = await _pumpPalette(tester, [sequenceApiProvider.overrideWithValue(seq)]);
-    await tester.pumpAndSettle(); // the templates future resolves and the index rebuilds
-    await tester.enterText(find.byType(TextField), 'lrgb');
-    await tester.pump();
-    expect(find.text('New sequence from template: Deep Sky LRGB'), findsOneWidget);
-    await tester.tap(find.text('New sequence from template: Deep Sky LRGB'));
-    await tester.pumpAndSettle();
-    expect(seq.created, hasLength(1));
-    expect(seq.created.single, startsWith('Deep Sky LRGB → Deep Sky LRGB 20'));
-    expect(container.read(selectedSequenceIdProvider), 'seq-new');
-    expect(container.read(selectedTabIndexProvider), kRunTabIndex);
-  });
+  testWidgets(
+    '#1170 a daemon template is a "New sequence from template" entry that creates and selects the run',
+    (tester) async {
+      final seq = _FakeSeqClient();
+      final container = await _pumpPalette(tester, [
+        sequenceApiProvider.overrideWithValue(seq),
+      ]);
+      await tester.pumpAndSettle(); // the templates future resolves and the index rebuilds
+      await tester.enterText(find.byType(TextField), 'lrgb');
+      await tester.pump();
+      expect(
+        find.text('New sequence from template: Deep Sky LRGB'),
+        findsOneWidget,
+      );
+      await tester.tap(find.text('New sequence from template: Deep Sky LRGB'));
+      await tester.pumpAndSettle();
+      expect(seq.created, hasLength(1));
+      expect(
+        seq.created.single,
+        startsWith('Deep Sky LRGB → Deep Sky LRGB 20'),
+      );
+      expect(container.read(selectedSequenceIdProvider), 'seq-new');
+      expect(container.read(selectedTabIndexProvider), kRunTabIndex);
+    },
+  );
 
-  testWidgets('#1170 a Tonight\'s Sky row is a "Go to" entry that centres the planetarium', (tester) async {
-    final container = await _pumpPalette(tester, [tonightSkyProvider.overrideWith((ref) async => [_m31])]);
-    // The Planning tab keeps the selection alive by watching it; stand in for it.
-    container.listen(selectedTonightObjectProvider, (_, _) {});
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'andromeda');
-    await tester.pump();
-    await tester.tap(find.text('Go to Andromeda Galaxy'));
-    await tester.pumpAndSettle();
-    final cmd = container.read(planetariumCommandProvider);
-    expect(cmd?['type'], 'goto');
-    expect(cmd?['ra'], 10.68);
-    expect(cmd?['name'], 'Andromeda Galaxy');
-    expect(container.read(selectedTonightObjectProvider), 'M31');
-    expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
-  });
+  testWidgets(
+    '#1170 a Tonight\'s Sky row is a "Go to" entry that centres the planetarium',
+    (tester) async {
+      final container = await _pumpPalette(tester, [
+        tonightSkyProvider.overrideWith((ref) async => [_m31]),
+      ]);
+      // The Planning tab keeps the selection alive by watching it; stand in for it.
+      container.listen(selectedTonightObjectProvider, (_, _) {});
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'andromeda');
+      await tester.pump();
+      await tester.tap(find.text('Go to Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      final cmd = container.read(planetariumCommandProvider);
+      expect(cmd?['type'], 'goto');
+      expect(cmd?['ra'], 10.68);
+      expect(cmd?['name'], 'Andromeda Galaxy');
+      expect(container.read(selectedTonightObjectProvider), 'M31');
+      expect(container.read(selectedTabIndexProvider), kPlanningTabIndex);
+    },
+  );
 }

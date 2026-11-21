@@ -20,7 +20,8 @@ abstract final class BahtinovProblems {
 double _d(Map<String, dynamic> json, String key) =>
     (json[key] as num?)?.toDouble() ?? 0;
 
-int _i(Map<String, dynamic> json, String key) => (json[key] as num?)?.toInt() ?? 0;
+int _i(Map<String, dynamic> json, String key) =>
+    (json[key] as num?)?.toInt() ?? 0;
 
 /// One fitted spike over the star crop, in crop pixels.
 class BahtinovLine {
@@ -42,12 +43,12 @@ class BahtinovLine {
   bool get isCentral => role == 'central';
 
   factory BahtinovLine.fromJson(Map<String, dynamic> json) => BahtinovLine(
-        role: json['role'] is String ? json['role'] as String : 'outer',
-        x1: _d(json, 'x1'),
-        y1: _d(json, 'y1'),
-        x2: _d(json, 'x2'),
-        y2: _d(json, 'y2'),
-      );
+    role: json['role'] is String ? json['role'] as String : 'outer',
+    x1: _d(json, 'x1'),
+    y1: _d(json, 'y1'),
+    x2: _d(json, 'x2'),
+    y2: _d(json, 'y2'),
+  );
 }
 
 /// What to draw over the star crop: the three lines and the X's crossing.
@@ -94,6 +95,7 @@ class BahtinovSample {
   final bool withinZone;
   final double peakAdu;
   final BahtinovOverlay? overlay;
+
   /// The measured star, frame pixels (0 when the daemon sent none).
   final int starX;
   final int starY;
@@ -112,17 +114,17 @@ class BahtinovSample {
   });
 
   factory BahtinovSample.fromJson(Map<String, dynamic> json) => BahtinovSample(
-        seq: _i(json, 'seq'),
-        detected: json['detected'] as bool? ?? false,
-        problem: json['problem'] is String ? json['problem'] as String : null,
-        offsetPx: (json['offset_px'] as num?)?.toDouble(),
-        defocusUm: (json['defocus_um'] as num?)?.toDouble(),
-        withinZone: json['within_zone'] as bool? ?? false,
-        peakAdu: _d(json, 'peak_adu'),
-        overlay: BahtinovOverlay.fromJson(json['overlay']),
-        starX: _i(json, 'star_x'),
-        starY: _i(json, 'star_y'),
-      );
+    seq: _i(json, 'seq'),
+    detected: json['detected'] as bool? ?? false,
+    problem: json['problem'] is String ? json['problem'] as String : null,
+    offsetPx: (json['offset_px'] as num?)?.toDouble(),
+    defocusUm: (json['defocus_um'] as num?)?.toDouble(),
+    withinZone: json['within_zone'] as bool? ?? false,
+    peakAdu: _d(json, 'peak_adu'),
+    overlay: BahtinovOverlay.fromJson(json['overlay']),
+    starX: _i(json, 'star_x'),
+    starY: _i(json, 'star_y'),
+  );
 }
 
 /// What the daemon's picture covers when it is a crop of the frame, in frame
@@ -131,13 +133,21 @@ class BahtinovFrameCrop {
   final int left;
   final int top;
   final int size;
-  const BahtinovFrameCrop({required this.left, required this.top, required this.size});
+  const BahtinovFrameCrop({
+    required this.left,
+    required this.top,
+    required this.size,
+  });
 
   static BahtinovFrameCrop? fromJson(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final size = _i(json, 'size');
     if (size <= 0) return null;
-    return BahtinovFrameCrop(left: _i(json, 'left'), top: _i(json, 'top'), size: size);
+    return BahtinovFrameCrop(
+      left: _i(json, 'left'),
+      top: _i(json, 'top'),
+      size: size,
+    );
   }
 }
 
@@ -150,23 +160,30 @@ class BahtinovFocusStatus {
   final BahtinovSample? latest;
   final List<BahtinovSample> recent;
   final double? bestOffsetPx;
+
   /// The in-focus limit on the offset (px).
   final double zonePx;
+
   /// [zonePx] comes from the optics in the profile (else a fixed half pixel).
   final bool zoneFromOptics;
+
   /// Half the critical focus zone in µm, when the optics are known.
   final double? zoneUm;
   final bool withinZone;
   final String? error;
   final bool hasFrame;
+
   /// The sample the daemon's current frame belongs to. Behind [seq] when a
   /// frame failed to render, so the client compares against this, not [seq].
   final int frameSeq;
+
   /// The analysed frame's size in (binned) camera pixels; 0 before a frame.
   final int frameWidth;
   final int frameHeight;
+
   /// What the picture shows when it is a crop; null for the whole frame.
   final BahtinovFrameCrop? frameCrop;
+
   /// The star the user locked by tapping, in frame pixels.
   final int? pickX;
   final int? pickY;
@@ -223,7 +240,8 @@ class BahtinovFocusStatus {
   BahtinovSample? get lastSteady {
     final history = [
       ...recent,
-      if (latest case final l? when recent.isEmpty || recent.last.seq != l.seq) l,
+      if (latest case final l? when recent.isEmpty || recent.last.seq != l.seq)
+        l,
     ];
     final all = [
       for (final s in history.reversed)
@@ -235,19 +253,28 @@ class BahtinovFocusStatus {
     final star = all.first;
     final measured = [
       for (final s in all)
-        if ((s.starX - star.starX).abs() <= sameStarPx && (s.starY - star.starY).abs() <= sameStarPx) s,
+        if ((s.starX - star.starX).abs() <= sameStarPx &&
+            (s.starY - star.starY).abs() <= sameStarPx)
+          s,
     ];
     // The overlay rides on `latest` only; keep it when latest is the anchor.
-    final anchor = latest != null && latest!.seq == measured.first.seq ? latest! : measured.first;
-    final offsets = [for (final s in measured.take(steadyWindow)) s.offsetPx!]..sort();
+    final anchor = latest != null && latest!.seq == measured.first.seq
+        ? latest!
+        : measured.first;
+    final offsets = [for (final s in measured.take(steadyWindow)) s.offsetPx!]
+      ..sort();
     if (offsets.length < 2) return anchor;
     final mid = offsets.length ~/ 2;
-    final median = offsets.length.isOdd ? offsets[mid] : (offsets[mid - 1] + offsets[mid]) / 2;
+    final median = offsets.length.isOdd
+        ? offsets[mid]
+        : (offsets[mid - 1] + offsets[mid]) / 2;
     // µm per pixel from the zone (both come from the same optics), so an anchor
     // frame at exactly 0 px still yields a µm figure for a non-zero median.
     final umPerPx = zoneUm != null && zonePx > 0
         ? zoneUm! / zonePx
-        : (anchor.defocusUm != null && anchor.offsetPx != 0 ? anchor.defocusUm! / anchor.offsetPx! : null);
+        : (anchor.defocusUm != null && anchor.offsetPx != 0
+              ? anchor.defocusUm! / anchor.offsetPx!
+              : null);
     return BahtinovSample(
       seq: anchor.seq,
       detected: true,
@@ -262,17 +289,22 @@ class BahtinovFocusStatus {
   static const idle = BahtinovFocusStatus();
 
   /// At least one frame measured the pattern this session.
-  bool get hasMeasurement => latest?.detected == true || recent.any((s) => s.detected);
+  bool get hasMeasurement =>
+      latest?.detected == true || recent.any((s) => s.detected);
 
   factory BahtinovFocusStatus.fromJson(Map<String, dynamic> json) {
     final raw = json['recent'];
     final latest = json['latest'];
     return BahtinovFocusStatus(
       active: json['active'] as bool? ?? false,
-      state: json['state'] is String ? json['state'] as String : BahtinovFocusStates.idle,
+      state: json['state'] is String
+          ? json['state'] as String
+          : BahtinovFocusStates.idle,
       exposureSec: _d(json, 'exposure_sec'),
       seq: _i(json, 'seq'),
-      latest: latest is Map<String, dynamic> ? BahtinovSample.fromJson(latest) : null,
+      latest: latest is Map<String, dynamic>
+          ? BahtinovSample.fromJson(latest)
+          : null,
       recent: [
         if (raw is List)
           for (final s in raw)

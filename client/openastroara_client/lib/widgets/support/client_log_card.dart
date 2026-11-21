@@ -46,32 +46,30 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
       child: Padding(
         padding: const EdgeInsets.all(12),
         child: SupportCardRow(
-            icon: Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
-            body: (_) => Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('This app\'s error log', style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 2),
-                  ValueListenableBuilder<ClientErrorLogStatus>(
-                    valueListenable: log.status,
-                    builder: (context, status, _) => Text(
-                      _describe(status),
-                      style: theme.textTheme.bodySmall,
-                    ),
-                  ),
-                ],
+          icon: Icon(Icons.laptop_outlined, color: theme.colorScheme.primary),
+          body: (_) => Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('This app\'s error log', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 2),
+              ValueListenableBuilder<ClientErrorLogStatus>(
+                valueListenable: log.status,
+                builder: (context, status, _) =>
+                    Text(_describe(status), style: theme.textTheme.bodySmall),
               ),
-            action: FilledButton.icon(
-              onPressed: _busy ? null : _save,
-              icon: _busy
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: AdaptiveProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.save_alt, size: 18),
-              label: const Text('Save client log'),
-            ),
+            ],
+          ),
+          action: FilledButton.icon(
+            onPressed: _busy ? null : _save,
+            icon: _busy
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.save_alt, size: 18),
+            label: const Text('Save client log'),
+          ),
         ),
       ),
     );
@@ -86,7 +84,7 @@ class _ClientLogCardState extends ConsumerState<ClientLogCard> {
     final noun = s.entries == 1 ? 'error' : 'errors';
     final session = s.sessionEntries > 0
         ? ' (${s.sessionEntries} since launch'
-            '${s.suppressedRepeats > 0 ? ', ${s.suppressedRepeats} suppressed' : ''})'
+              '${s.suppressedRepeats > 0 ? ', ${s.suppressedRepeats} suppressed' : ''})'
         : '';
     return '${s.entries} $noun recorded$session. $tail';
   }

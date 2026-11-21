@@ -101,7 +101,6 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
   // not the install-command panel (installing a bridge wouldn't help).
   bool _noServer = false;
 
-
   @override
   void initState() {
     super.initState();
@@ -148,15 +147,17 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       // clean response (even an empty list) means the AlpacaBridge path is
       // reachable. The other types only feed the summary, so one failing
       // type doesn't hide the bridge.
-      final camera =
-          api.discover(EquipmentDeviceType.camera, forceRefresh: true);
+      final camera = api.discover(
+        EquipmentDeviceType.camera,
+        forceRefresh: true,
+      );
       final others = [
         for (final t in _summaryTypes.skip(1))
-          api
-              .discover(t, forceRefresh: true)
-              .catchError((Object e) {
-            debugPrint('[wizard] discovery of $t failed, left out of the '
-                'summary: $e');
+          api.discover(t, forceRefresh: true).catchError((Object e) {
+            debugPrint(
+              '[wizard] discovery of $t failed, left out of the '
+              'summary: $e',
+            );
             return const <DiscoveredDevice>[];
           }),
       ];
@@ -183,7 +184,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
       if (!mounted) return;
       setState(() {
         _ok = false;
-        _result = friendlyError(context.l10n, e, action: context.l10n.actionLookForEquipment);
+        _result = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionLookForEquipment,
+        );
       });
       _setValid(_skipped);
     } finally {
@@ -245,7 +250,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                     child: AdaptiveProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.wifi_tethering, size: 18),
-            label: Text(_testing ? context.l10n.wizardDiscoveryDetecting : context.l10n.wizardDiscoveryRetryDetection),
+            label: Text(
+              _testing
+                  ? context.l10n.wizardDiscoveryDetecting
+                  : context.l10n.wizardDiscoveryRetryDetection,
+            ),
           ),
         ),
         if (_ok && _result != null) ...[
@@ -262,12 +271,17 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.check_circle,
-                    size: 18, color: AraColors.accentConnected),
+                const Icon(
+                  Icons.check_circle,
+                  size: 18,
+                  color: AraColors.accentConnected,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(_result!,
-                      style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    _result!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -290,12 +304,17 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.error_outline,
-                    size: 18, color: AraColors.accentError),
+                const Icon(
+                  Icons.error_outline,
+                  size: 18,
+                  color: AraColors.accentError,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(_result!,
-                      style: Theme.of(context).textTheme.bodySmall),
+                  child: Text(
+                    _result!,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
                 ),
               ],
             ),
@@ -316,14 +335,17 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.error_outline,
-                        size: 18, color: AraColors.accentError),
+                    const Icon(
+                      Icons.error_outline,
+                      size: 18,
+                      color: AraColors.accentError,
+                    ),
                     const SizedBox(width: 8),
-                    Text(context.l10n.wizardDiscoveryNotDetected,
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleSmall
-                            ?.copyWith(fontWeight: FontWeight.w600)),
+                    Text(
+                      context.l10n.wizardDiscoveryNotDetected,
+                      style: Theme.of(context).textTheme.titleSmall
+                          ?.copyWith(fontWeight: FontWeight.w600),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -334,8 +356,10 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                 const SizedBox(height: 8),
                 Container(
                   width: double.infinity,
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: AraColors.bgPrimary,
                     borderRadius: BorderRadius.circular(4),
@@ -347,11 +371,11 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text(context.l10n.wizardDiscoveryDetails('$_result'),
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: AraColors.textSecondary)),
+                Text(
+                  context.l10n.wizardDiscoveryDetails('$_result'),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
+                ),
                 const SizedBox(height: 8),
                 // Non-standard install escape hatch: needs the address override
                 // filled in — there's nothing to skip TO otherwise.
@@ -362,11 +386,14 @@ class _ScreenAlpacaConnectState extends ConsumerState<ScreenAlpacaConnect> {
                         ? context.l10n.wizardDiscoverySkipTipOn
                         : context.l10n.wizardDiscoverySkipTipOff,
                     child: TextButton(
-                      onPressed:
-                          _hasAddressOverride && !_skipped ? _skip : null,
-                      child: Text(_skipped
-                          ? context.l10n.wizardDiscoverySkipped
-                          : context.l10n.wizardDiscoverySkip),
+                      onPressed: _hasAddressOverride && !_skipped
+                          ? _skip
+                          : null,
+                      child: Text(
+                        _skipped
+                            ? context.l10n.wizardDiscoverySkipped
+                            : context.l10n.wizardDiscoverySkip,
+                      ),
                     ),
                   ),
                 ),
@@ -445,8 +472,10 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
           children: [
             Row(
               children: [
-                Text(context.l10n.wizardDiscoveryChoose(widget.slotLabel),
-                    style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  context.l10n.wizardDiscoveryChoose(widget.slotLabel),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
                 IconButton(
                   tooltip: context.l10n.wizardDiscoveryRescan,
@@ -497,8 +526,9 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                     itemBuilder: (_, i) {
                       final d = devices[i];
                       final scheme = d.useHttps ? 'https' : 'http';
-                      final host =
-                          d.hostName.isNotEmpty ? d.hostName : d.ipAddress;
+                      final host = d.hostName.isNotEmpty
+                          ? d.hostName
+                          : d.ipAddress;
                       return ListTile(
                         title: Text(d.name),
                         subtitle: Text(
@@ -506,9 +536,8 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
                             '$scheme://$host:${d.ipPort}',
                             d.alpacaDeviceNumber,
                           ),
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: AraColors.textSecondary,
-                              ),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: AraColors.textSecondary),
                         ),
                         trailing: const Icon(Icons.chevron_right),
                         onTap: () => Navigator.of(context).pop(DeviceChoice(d)),
@@ -525,11 +554,11 @@ class _DiscoverySheetState extends State<DiscoverySheet> {
   }
 
   String _describe(Object? error) => switch (error) {
-        DioException e =>
-          '${e.message ?? 'Network error'} (${e.response?.statusCode ?? 'no response'})',
-        Object e => e.toString(),
-        _ => 'Unknown error',
-      };
+    DioException e =>
+      '${e.message ?? 'Network error'} (${e.response?.statusCode ?? 'no response'})',
+    Object e => e.toString(),
+    _ => 'Unknown error',
+  };
 }
 
 class _SheetMessage extends StatelessWidget {
@@ -559,12 +588,12 @@ class _SheetMessage extends StatelessWidget {
           const SizedBox(height: 4),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(detail,
-                textAlign: TextAlign.center,
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AraColors.textSecondary)),
+            child: Text(
+              detail,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
+            ),
           ),
           const SizedBox(height: 12),
           TextButton.icon(

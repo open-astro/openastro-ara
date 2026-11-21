@@ -53,18 +53,16 @@ class FilenamesSettings {
     bool? headerTemperature,
     bool? headerWeather,
     bool? headerEphemeris,
-  }) =>
-      FilenamesSettings(
-        dateSeparator: dateSeparator ?? this.dateSeparator,
-        compressDarksAndBias:
-            compressDarksAndBias ?? this.compressDarksAndBias,
-        headerIdentity: headerIdentity ?? this.headerIdentity,
-        headerSite: headerSite ?? this.headerSite,
-        headerOptics: headerOptics ?? this.headerOptics,
-        headerTemperature: headerTemperature ?? this.headerTemperature,
-        headerWeather: headerWeather ?? this.headerWeather,
-        headerEphemeris: headerEphemeris ?? this.headerEphemeris,
-      );
+  }) => FilenamesSettings(
+    dateSeparator: dateSeparator ?? this.dateSeparator,
+    compressDarksAndBias: compressDarksAndBias ?? this.compressDarksAndBias,
+    headerIdentity: headerIdentity ?? this.headerIdentity,
+    headerSite: headerSite ?? this.headerSite,
+    headerOptics: headerOptics ?? this.headerOptics,
+    headerTemperature: headerTemperature ?? this.headerTemperature,
+    headerWeather: headerWeather ?? this.headerWeather,
+    headerEphemeris: headerEphemeris ?? this.headerEphemeris,
+  );
 }
 
 class FilenamesSettingsNotifier extends SectionNotifier<FilenamesSettings> {

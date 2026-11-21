@@ -11,79 +11,85 @@ SwitchPort _port(
   double max = 1,
   bool canWrite = true,
   double step = 0,
-}) =>
-    SwitchPort(
-      id: id,
-      name: name,
-      value: value,
-      min: min,
-      max: max,
-      canWrite: canWrite,
-      step: step,
-    );
+}) => SwitchPort(
+  id: id,
+  name: name,
+  value: value,
+  min: min,
+  max: max,
+  canWrite: canWrite,
+  step: step,
+);
 
 /// The shape a Gemini Power & Data Hub ADV3 actually reports — the case this
 /// layout exists for: telemetry, two prefix-grouped rails, a dew channel with
 /// its mode companion, and sensor status bits, all in one flat ASCOM list.
 SwitchDevice _powerBox() => SwitchDevice(
-      deviceId: 'PDH',
-      alpacaDeviceNumber: 0,
-      name: 'Gemini Power & Data Hubs Advanced 3',
-      connectionState: SwitchConnectionState.connected,
-      ports: [
-        _port(0, 'USB A', value: 1),
-        _port(1, 'USB B', value: 1),
-        _port(6, 'DC1', value: 1, canWrite: false),
-        _port(7, 'DC2', value: 1),
-        _port(11, 'DEW6', value: 0, max: 100),
-        _port(13, 'DEW6 Mode', value: 1, max: 2),
-        _port(15, 'Input Voltage', value: 12.6, max: 30, canWrite: false),
-        _port(22, 'AHT20 Sensor', value: 1, canWrite: false),
-      ],
-    );
+  deviceId: 'PDH',
+  alpacaDeviceNumber: 0,
+  name: 'Gemini Power & Data Hubs Advanced 3',
+  connectionState: SwitchConnectionState.connected,
+  ports: [
+    _port(0, 'USB A', value: 1),
+    _port(1, 'USB B', value: 1),
+    _port(6, 'DC1', value: 1, canWrite: false),
+    _port(7, 'DC2', value: 1),
+    _port(11, 'DEW6', value: 0, max: 100),
+    _port(13, 'DEW6 Mode', value: 1, max: 2),
+    _port(15, 'Input Voltage', value: 12.6, max: 30, canWrite: false),
+    _port(22, 'AHT20 Sensor', value: 1, canWrite: false),
+  ],
+);
 
 Future<void> _pump(
   WidgetTester tester,
   SwitchDevice device, {
   SwitchPortWriter? onWrite,
 }) async {
-  await tester.pumpWidget(MaterialApp(
-    home: Scaffold(
-      body: SingleChildScrollView(
-        child: SwitchDeviceBody(
-          device: device,
-          onWrite: onWrite ?? (_, _) async => true,
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(
+        body: SingleChildScrollView(
+          child: SwitchDeviceBody(
+            device: device,
+            onWrite: onWrite ?? (_, _) async => true,
+          ),
         ),
       ),
     ),
-  ));
+  );
 }
 
 void main() {
-  testWidgets('telemetry renders as a value tile with its inferred unit',
-      (tester) async {
+  testWidgets('telemetry renders as a value tile with its inferred unit', (
+    tester,
+  ) async {
     await _pump(tester, _powerBox());
     expect(find.text('12.6'), findsOneWidget);
     expect(find.text('V'), findsOneWidget);
     expect(find.text('Input Voltage'), findsOneWidget);
   });
 
-  testWidgets('ports sharing a prefix get their own labelled group',
-      (tester) async {
+  testWidgets('ports sharing a prefix get their own labelled group', (
+    tester,
+  ) async {
     await _pump(tester, _powerBox());
     expect(find.text('USB'), findsOneWidget);
     expect(find.text('DC'), findsOneWidget);
   });
 
-  testWidgets('a read-only rail reads as "Always on", not a dead switch',
-      (tester) async {
+  testWidgets('a read-only rail reads as "Always on", not a dead switch', (
+    tester,
+  ) async {
     await _pump(tester, _powerBox());
     expect(find.text('Always on'), findsOneWidget);
     // Three writable two-state ports (USB A, USB B, DC2) — DC1 contributes none.
     expect(find.byType(Switch), findsNWidgets(3));
   });
 
-  testWidgets('a read-only status bit renders as a sensor pill', (tester) async {
+  testWidgets('a read-only status bit renders as a sensor pill', (
+    tester,
+  ) async {
     await _pump(tester, _powerBox());
     expect(find.text('AHT20 Sensor'), findsOneWidget);
     expect(find.text('Attached'), findsOneWidget);
@@ -131,8 +137,9 @@ void main() {
     expect(writes, [(13, 0.0)]);
   });
 
-  testWidgets('a device with no ports renders nothing rather than throwing',
-      (tester) async {
+  testWidgets('a device with no ports renders nothing rather than throwing', (
+    tester,
+  ) async {
     await _pump(
       tester,
       const SwitchDevice(
@@ -146,8 +153,9 @@ void main() {
     expect(find.byType(Switch), findsNothing);
   });
 
-  testWidgets('a refused write snaps the slider back off the rejected value',
-      (tester) async {
+  testWidgets('a refused write snaps the slider back off the rejected value', (
+    tester,
+  ) async {
     // The safety case: a fan-off refused by the cooling interlock must not
     // leave the thumb parked at "off" while the fan is still running.
     await _pump(
@@ -168,8 +176,9 @@ void main() {
     expect(find.text('100 %'), findsOneWidget);
   });
 
-  testWidgets('a committed write resyncs to the value the device confirms',
-      (tester) async {
+  testWidgets('a committed write resyncs to the value the device confirms', (
+    tester,
+  ) async {
     // The card must NOT keep showing the dragged number after the write is
     // answered: the notifier refreshes before returning and the daemon re-reads
     // the device right after the PUT, so by now the confirmed value has landed.
@@ -193,7 +202,9 @@ void main() {
     expect(find.text('100 %'), findsOneWidget);
   });
 
-  testWidgets('an Auto dew channel is a readout, not a control', (tester) async {
+  testWidgets('an Auto dew channel is a readout, not a control', (
+    tester,
+  ) async {
     // The device regulates from its own dew-point maths in Auto; offering a
     // live control invites the user to fight it, and the help promises a
     // readout.
@@ -271,8 +282,9 @@ void main() {
     expect(tester.widget<Slider>(find.byType(Slider)).divisions, 10);
   });
 
-  testWidgets('an Auto boolean channel reads On/Off, not a bare 1',
-      (tester) async {
+  testWidgets('an Auto boolean channel reads On/Off, not a bare 1', (
+    tester,
+  ) async {
     // The ADV3 reports the output as 0..1 in Auto, where "1" alone means
     // nothing to the reader.
     await _pump(
@@ -295,30 +307,42 @@ void main() {
   testWidgets('the Readings strip survives OS text scaling', (tester) async {
     // A fixed tile height overflowed at 1.15x (Windows 125%, macOS
     // accessibility sizes), striping the whole strip.
-    await tester.pumpWidget(MaterialApp(
-      home: MediaQuery(
-        data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
-        child: Scaffold(
-          body: SingleChildScrollView(
-            child: SwitchDeviceBody(
-              device: SwitchDevice(
-                deviceId: 'scaled',
-                alpacaDeviceNumber: 0,
-                name: 'Scaled',
-                connectionState: SwitchConnectionState.connected,
-                ports: [
-                  _port(15, 'Input Voltage',
-                      value: 12.6, max: 30, canWrite: false),
-                  _port(18, 'Ambient Temperature Probe',
-                      value: 23.5, max: 150, canWrite: false),
-                ],
+    await tester.pumpWidget(
+      MaterialApp(
+        home: MediaQuery(
+          data: const MediaQueryData(textScaler: TextScaler.linear(1.3)),
+          child: Scaffold(
+            body: SingleChildScrollView(
+              child: SwitchDeviceBody(
+                device: SwitchDevice(
+                  deviceId: 'scaled',
+                  alpacaDeviceNumber: 0,
+                  name: 'Scaled',
+                  connectionState: SwitchConnectionState.connected,
+                  ports: [
+                    _port(
+                      15,
+                      'Input Voltage',
+                      value: 12.6,
+                      max: 30,
+                      canWrite: false,
+                    ),
+                    _port(
+                      18,
+                      'Ambient Temperature Probe',
+                      value: 23.5,
+                      max: 150,
+                      canWrite: false,
+                    ),
+                  ],
+                ),
+                onWrite: (_, _) async => true,
               ),
-              onWrite: (_, _) async => true,
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
@@ -358,8 +382,9 @@ void main() {
     await tester.pumpAndSettle();
   });
 
-  testWidgets('an unnamed port still shows an identifying label',
-      (tester) async {
+  testWidgets('an unnamed port still shows an identifying label', (
+    tester,
+  ) async {
     await _pump(
       tester,
       SwitchDevice(
@@ -373,8 +398,9 @@ void main() {
     expect(find.text('Port 4'), findsOneWidget);
   });
 
-  testWidgets('a Switch-mode channel keeps its mode picker and shows a toggle',
-      (tester) async {
+  testWidgets('a Switch-mode channel keeps its mode picker and shows a toggle', (
+    tester,
+  ) async {
     // The ADV3 reports a dew output as 0..1 outside Manual. In Switch mode the
     // channel is a plain on/off the user drives, and it must stay paired with
     // its mode rather than splitting into a row plus an orphan picker.
@@ -396,8 +422,9 @@ void main() {
     expect(find.text('Auto'), findsOneWidget);
   });
 
-  testWidgets('a read-only mode companion is telemetry, not a picker',
-      (tester) async {
+  testWidgets('a read-only mode companion is telemetry, not a picker', (
+    tester,
+  ) async {
     await _pump(
       tester,
       SwitchDevice(

@@ -23,11 +23,39 @@ void main() {
       'step_size': 23,
       'step_size_source': 'measured',
       'probes': [
-        {'index': 1, 'phase': 'coarse', 'position': 10000, 'hfr': 6.1, 'stars': 0, 'kept': true},
-        {'index': 2, 'phase': 'fine', 'position': 10200, 'hfr': 2.9, 'stars': 40, 'kept': true},
-        {'index': 3, 'phase': 'fine', 'position': 10400, 'hfr': 0, 'stars': 1, 'kept': false},
+        {
+          'index': 1,
+          'phase': 'coarse',
+          'position': 10000,
+          'hfr': 6.1,
+          'stars': 0,
+          'kept': true,
+        },
+        {
+          'index': 2,
+          'phase': 'fine',
+          'position': 10200,
+          'hfr': 2.9,
+          'stars': 40,
+          'kept': true,
+        },
+        {
+          'index': 3,
+          'phase': 'fine',
+          'position': 10400,
+          'hfr': 0,
+          'stars': 1,
+          'kept': false,
+        },
         // §59.7 — the backlash probe's return shot sits AT best with an inflated HFR by design.
-        {'index': 4, 'phase': 'backlash', 'position': 9850, 'hfr': 1.9, 'stars': 40, 'kept': true},
+        {
+          'index': 4,
+          'phase': 'backlash',
+          'position': 9850,
+          'hfr': 1.9,
+          'stars': 40,
+          'kept': true,
+        },
       ],
       'fit': {
         'algorithm': 'parabolic',
@@ -55,11 +83,19 @@ void main() {
     expect(run.stepSize, 23);
     expect(run.stepSizeSource, 'measured');
     expect(run.coarseProbes, hasLength(1));
-    expect(run.sweepProbes, hasLength(2), reason: 'the backlash shot is not a V-curve point');
+    expect(
+      run.sweepProbes,
+      hasLength(2),
+      reason: 'the backlash shot is not a V-curve point',
+    );
     expect(run.sweepProbes.last.kept, isFalse);
     expect(run.backlashProbes, hasLength(1));
     expect(run.backlashProbes.single.position, 9850);
-    expect(run.keptCount, 3, reason: "kept counts every phase, the backlash shot included");
+    expect(
+      run.keptCount,
+      3,
+      reason: "kept counts every phase, the backlash shot included",
+    );
     expect(run.fit!.algorithm, 'parabolic');
     expect(run.fit!.curve, hasLength(2));
     expect(run.fit!.curve.last.hfr, 1.44);
@@ -69,7 +105,11 @@ void main() {
   });
 
   test('an idle record parses with defaults', () {
-    final run = AutofocusRun.fromJson({'state': 'idle', 'probes': [], 'fit': null});
+    final run = AutofocusRun.fromJson({
+      'state': 'idle',
+      'probes': [],
+      'fit': null,
+    });
     expect(run.state, AutofocusRunStates.idle);
     expect(run.isRunning, isFalse);
     expect(run.probes, isEmpty);
@@ -89,16 +129,38 @@ void main() {
     expect(run.restoredPosition, 10000);
   });
 
-  test('a probe carries its rim-vs-core asymmetry when the daemon sends one', () {
-    final run = AutofocusRun.fromJson({
-      'state': 'complete',
-      'probes': [
-        {'index': 1, 'phase': 'smart', 'position': 10100, 'hfr': 2.4, 'stars': 80, 'kept': true, 'asymmetry': -0.42},
-        {'index': 2, 'phase': 'coarse', 'position': 9000, 'hfr': 6.1, 'stars': 0, 'kept': true},
-      ],
-      'fit': null,
-    });
-    expect(run.probes[0].asymmetry, -0.42);
-    expect(run.probes[1].asymmetry, isNull, reason: 'coarse probes and older daemons carry none');
-  });
+  test(
+    'a probe carries its rim-vs-core asymmetry when the daemon sends one',
+    () {
+      final run = AutofocusRun.fromJson({
+        'state': 'complete',
+        'probes': [
+          {
+            'index': 1,
+            'phase': 'smart',
+            'position': 10100,
+            'hfr': 2.4,
+            'stars': 80,
+            'kept': true,
+            'asymmetry': -0.42,
+          },
+          {
+            'index': 2,
+            'phase': 'coarse',
+            'position': 9000,
+            'hfr': 6.1,
+            'stars': 0,
+            'kept': true,
+          },
+        ],
+        'fit': null,
+      });
+      expect(run.probes[0].asymmetry, -0.42);
+      expect(
+        run.probes[1].asymmetry,
+        isNull,
+        reason: 'coarse probes and older daemons carry none',
+      );
+    },
+  );
 }

@@ -30,9 +30,14 @@ class ServerApi {
     // older spellings kept as fallbacks.
     final nickname = data['nickname'] as String?;
     return ServerInfo(
-      name: (nickname != null && nickname.isNotEmpty ? nickname : data['name'] as String?) ?? 'OpenAstro Ara',
+      name:
+          (nickname != null && nickname.isNotEmpty
+              ? nickname
+              : data['name'] as String?) ??
+          'OpenAstro Ara',
       version: data['version'] as String? ?? 'unknown',
-      apiVersion: data['api'] as String? ?? data['api_version'] as String? ?? 'unknown',
+      apiVersion:
+          data['api'] as String? ?? data['api_version'] as String? ?? 'unknown',
       uuid: data['server_uuid'] as String?,
     );
   }
@@ -162,13 +167,17 @@ class EmergencyStopResult {
   factory EmergencyStopResult.fromJson(Map<String, dynamic> json) =>
       EmergencyStopResult(
         alreadyInProgress: json['already_in_progress'] == true,
-        runsAborted: json['runs_aborted'] is int ? json['runs_aborted'] as int : 0,
+        runsAborted: json['runs_aborted'] is int
+            ? json['runs_aborted'] as int
+            : 0,
         exposureAborted: json['exposure_aborted'] == true,
         guidingStopped: json['guiding_stopped'] == true,
         mountStopped: json['mount_stopped'] == true,
         flatPanelLightOff: json['flat_panel_light_off'] == true,
         failedRungs: json['failed_rungs'] is List
-            ? (json['failed_rungs'] as List).whereType<String>().toList(growable: false)
+            ? (json['failed_rungs'] as List).whereType<String>().toList(
+                growable: false,
+              )
             : const [],
         coolerOff: json['cooler_off'] == true,
       );

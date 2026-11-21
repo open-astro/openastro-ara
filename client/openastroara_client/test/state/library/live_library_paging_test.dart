@@ -18,25 +18,26 @@ class _PagedFake implements LibraryClient {
   Completer<void>? refreshGate;
 
   LibrarySession _s(String id) => LibrarySession(
-        id: id,
-        targetName: id,
-        sessionStartUtc: DateTime.utc(2026, 7, 1),
-        sessionEndUtc: null,
-        totalFrames: 0,
-        lightFrames: 0,
-        calibrationFrames: 0,
-        filtersUsed: const [],
-      );
+    id: id,
+    targetName: id,
+    sessionStartUtc: DateTime.utc(2026, 7, 1),
+    sessionEndUtc: null,
+    totalFrames: 0,
+    lightFrames: 0,
+    calibrationFrames: 0,
+    filtersUsed: const [],
+  );
 
   @override
-  Future<CursorPage<LibrarySession>> listSessions(
-      {int limit = 200, String? cursor}) async {
+  Future<CursorPage<LibrarySession>> listSessions({
+    int limit = 200,
+    String? cursor,
+  }) async {
     if (cursor == null) {
       firstPageCalls++;
       final g = refreshGate;
       if (g != null) await g.future;
-      return CursorPage(
-          items: [_s('page1')], nextCursor: 'c2', hasMore: true);
+      return CursorPage(items: [_s('page1')], nextCursor: 'c2', hasMore: true);
     }
     pageTwoCalls++;
     await gate.future; // hold the request in flight
@@ -44,9 +45,10 @@ class _PagedFake implements LibraryClient {
   }
 
   @override
-  Future<List<LibraryFrameItem>> sessionFrames(String sessionId,
-          {int limit = 200}) async =>
-      const [];
+  Future<List<LibraryFrameItem>> sessionFrames(
+    String sessionId, {
+    int limit = 200,
+  }) async => const [];
 
   @override
   String thumbnailUrl(String frameId) => 'http://x/$frameId';
@@ -56,25 +58,30 @@ class _PagedFake implements LibraryClient {
       throw UnimplementedError();
 
   @override
-  Future<(List<int>, (double, double, double)?)> fetchPreview(String frameId,
-          {required String stretch,
-          int maxDimensionPx = 2048,
-          double? blackPoint,
-          double? midtonePoint,
-          double? whitePoint}) async =>
-      throw UnimplementedError();
+  Future<(List<int>, (double, double, double)?)> fetchPreview(
+    String frameId, {
+    required String stretch,
+    int maxDimensionPx = 2048,
+    double? blackPoint,
+    double? midtonePoint,
+    double? whitePoint,
+  }) async => throw UnimplementedError();
 
   @override
   Future<void> bulkRate(List<String> frameIds, int rating) async {}
 
   @override
-  Future<void> bulkTag(List<String> frameIds,
-      {List<String> addTags = const [],
-      List<String> removeTags = const []}) async {}
+  Future<void> bulkTag(
+    List<String> frameIds, {
+    List<String> addTags = const [],
+    List<String> removeTags = const [],
+  }) async {}
 
   @override
-  Future<void> bulkDelete(List<String> frameIds,
-      {bool deleteFromDisk = true}) async {}
+  Future<void> bulkDelete(
+    List<String> frameIds, {
+    bool deleteFromDisk = true,
+  }) async {}
 
   @override
   Future<void> bulkMove(List<String> frameIds, String targetSessionId) async {}
@@ -86,7 +93,8 @@ class _PagedFake implements LibraryClient {
   @override
   Future<String> resumeTarget(String sessionId) async => 'x';
   @override
-  Future<List<PaResidual>> sessionPaResiduals(String sessionId) async => const [];
+  Future<List<PaResidual>> sessionPaResiduals(String sessionId) async =>
+      const [];
 
   @override
   void close() {}
@@ -96,7 +104,8 @@ void main() {
   test('r1: concurrent loadMore calls collapse to one page fetch', () async {
     final fake = _PagedFake();
     final container = ProviderContainer(
-        overrides: [libraryApiProvider.overrideWithValue(fake)]);
+      overrides: [libraryApiProvider.overrideWithValue(fake)],
+    );
     addTearDown(container.dispose);
 
     await container.read(liveLibrarySessionsProvider.future);
@@ -109,44 +118,62 @@ void main() {
     fake.gate.complete();
     await Future.wait([first, second]);
 
-    expect(fake.pageTwoCalls, 1, reason: 'the in-flight guard absorbs the second tap');
+    expect(
+      fake.pageTwoCalls,
+      1,
+      reason: 'the in-flight guard absorbs the second tap',
+    );
     final items = container.read(liveLibrarySessionsProvider).value!;
     expect(items.length, 2, reason: 'page 2 appended exactly once');
     expect(notifier.hasMore, isFalse);
   });
 
-  test('§60.9: a frame.complete event refreshes the list after the debounce',
-      () async {
-    final fake = _PagedFake();
-    final controller = StreamController<WsEvent>.broadcast();
-    addTearDown(controller.close);
-    final container = ProviderContainer(overrides: [
-      libraryApiProvider.overrideWithValue(fake),
-      wsEventsProvider.overrideWith((ref) => controller.stream),
-    ]);
-    addTearDown(container.dispose);
+  test(
+    '§60.9: a frame.complete event refreshes the list after the debounce',
+    () async {
+      final fake = _PagedFake();
+      final controller = StreamController<WsEvent>.broadcast();
+      addTearDown(controller.close);
+      final container = ProviderContainer(
+        overrides: [
+          libraryApiProvider.overrideWithValue(fake),
+          wsEventsProvider.overrideWith((ref) => controller.stream),
+        ],
+      );
+      addTearDown(container.dispose);
 
-    // Hold a live subscription — the provider is autoDispose, and a disposed
-    // notifier tears down its ws listener + debounce timer.
-    final sub = container.listen(liveLibrarySessionsProvider, (_, _) {});
-    addTearDown(sub.close);
-    await container.read(liveLibrarySessionsProvider.future);
-    final before = fake.firstPageCalls;
+      // Hold a live subscription — the provider is autoDispose, and a disposed
+      // notifier tears down its ws listener + debounce timer.
+      final sub = container.listen(liveLibrarySessionsProvider, (_, _) {});
+      addTearDown(sub.close);
+      await container.read(liveLibrarySessionsProvider.future);
+      final before = fake.firstPageCalls;
 
-    controller.add(WsEvent(type: 'frame.complete', seq: 1, ts: DateTime.utc(2026, 7, 3), payload: const {}));
-    // Debounce window: no refetch yet.
-    await Future<void>.delayed(const Duration(milliseconds: 500));
-    expect(fake.firstPageCalls, before, reason: 'debounce still open');
-    await Future<void>.delayed(const Duration(milliseconds: 2000));
-    expect(fake.firstPageCalls, before + 1,
-        reason: 'the quiet window elapsed -> one refresh');
-  });
+      controller.add(
+        WsEvent(
+          type: 'frame.complete',
+          seq: 1,
+          ts: DateTime.utc(2026, 7, 3),
+          payload: const {},
+        ),
+      );
+      // Debounce window: no refetch yet.
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(fake.firstPageCalls, before, reason: 'debounce still open');
+      await Future<void>.delayed(const Duration(milliseconds: 2000));
+      expect(
+        fake.firstPageCalls,
+        before + 1,
+        reason: 'the quiet window elapsed -> one refresh',
+      );
+    },
+  );
 
-  test('r5: an append issued during an in-flight refresh supersedes it coherently',
-      () async {
+  test('r5: an append issued during an in-flight refresh supersedes it coherently', () async {
     final fake = _PagedFake();
     final container = ProviderContainer(
-        overrides: [libraryApiProvider.overrideWithValue(fake)]);
+      overrides: [libraryApiProvider.overrideWithValue(fake)],
+    );
     addTearDown(container.dispose);
 
     await container.read(liveLibrarySessionsProvider.future);
@@ -166,9 +193,13 @@ void main() {
     await append;
 
     final items = container.read(liveLibrarySessionsProvider).value!;
-    expect(items.map((s) => s.id), ['page1', 'page2'],
-        reason: 'the append wins coherently — no refresh result was clobbered '
-            'mid-chain, and the list matches the cursor chain that produced it');
+    expect(
+      items.map((s) => s.id),
+      ['page1', 'page2'],
+      reason:
+          'the append wins coherently — no refresh result was clobbered '
+          'mid-chain, and the list matches the cursor chain that produced it',
+    );
     expect(notifier.hasMore, isFalse);
   });
 }

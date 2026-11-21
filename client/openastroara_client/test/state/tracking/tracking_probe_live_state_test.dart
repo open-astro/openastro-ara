@@ -151,7 +151,10 @@ void main() {
           'summary': 'Too few usable rungs',
         }),
       );
-      expect(describeTrackingCeiling(none!), 'Tracking probe: Too few usable rungs');
+      expect(
+        describeTrackingCeiling(none!),
+        'Tracking probe: Too few usable rungs',
+      );
       expect(
         describeTrackingRung(const TrackingProbeRungFixture().unusable),
         'Tracking probe 2.0 min · too few stars',
@@ -183,16 +186,33 @@ void main() {
     });
 
     test('a provider first built mid-run keeps the ladder when the run state lands', () async {
-      run.push(const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running));
+      run.push(
+        const SequenceRunStateInfo(
+          runId: 'r1',
+          state: SequenceRunState.running,
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
       // Rebuild the provider as if the Run tab opened now.
       container.invalidate(trackingProbeLiveProvider);
       container.read(trackingProbeLiveProvider);
-      ws.add(_ev('tracking_probe.started', {'rungs': [10, 30]}));
+      ws.add(
+        _ev('tracking_probe.started', {
+          'rungs': [10, 30],
+        }),
+      );
       await Future<void>.delayed(Duration.zero);
-      run.push(const SequenceRunStateInfo(runId: 'r1', state: SequenceRunState.running));
+      run.push(
+        const SequenceRunStateInfo(
+          runId: 'r1',
+          state: SequenceRunState.running,
+        ),
+      );
       await Future<void>.delayed(Duration.zero);
-      expect(container.read(trackingProbeLiveProvider)!.ladder, [10, 30], reason: 'same run id, no wipe');
+      expect(container.read(trackingProbeLiveProvider)!.ladder, [
+        10,
+        30,
+      ], reason: 'same run id, no wipe');
     });
 
     test('folds the stream and clears on a new run id', () async {
@@ -243,35 +263,56 @@ class _CountingApi extends TrackingApi {
     reads++;
     return record;
   }
+
   @override
   void close() {}
 }
 
 void _calibrationTests() {
-  test('#1264 trackingCalibrationProvider re-reads when a probe completes', () async {
-    final ws = StreamController<WsEvent>.broadcast();
-    final api = _CountingApi(null);
-    final container = ProviderContainer(overrides: [
-      wsEventsProvider.overrideWith((ref) => ws.stream),
-      activeServerProvider.overrideWithValue(const AraServer(hostname: 'x', port: 1)),
-      trackingApiFactoryProvider.overrideWithValue((_) => api),
-    ]);
-    addTearDown(container.dispose);
-    addTearDown(ws.close);
-    container.listen(trackingCalibrationProvider, (_, _) {});
-    expect(await container.read(trackingCalibrationProvider.future), isNull);
-    expect(api.reads, 1);
+  test(
+    '#1264 trackingCalibrationProvider re-reads when a probe completes',
+    () async {
+      final ws = StreamController<WsEvent>.broadcast();
+      final api = _CountingApi(null);
+      final container = ProviderContainer(
+        overrides: [
+          wsEventsProvider.overrideWith((ref) => ws.stream),
+          activeServerProvider.overrideWithValue(
+            const AraServer(hostname: 'x', port: 1),
+          ),
+          trackingApiFactoryProvider.overrideWithValue((_) => api),
+        ],
+      );
+      addTearDown(container.dispose);
+      addTearDown(ws.close);
+      container.listen(trackingCalibrationProvider, (_, _) {});
+      expect(await container.read(trackingCalibrationProvider.future), isNull);
+      expect(api.reads, 1);
 
-    api.record = TrackingCalibration(ceilingSeconds: 20, measuredUtc: DateTime.utc(2026, 10, 12), source: 'measured');
-    ws.add(_ev('tracking_probe.completed', {'ceiling_seconds': 20, 'source': 'measured'}));
-    await Future<void>.delayed(Duration.zero);
-    expect((await container.read(trackingCalibrationProvider.future))!.ceilingSeconds, 20);
-    expect(api.reads, 2, reason: 'one re-read per completed probe');
+      api.record = TrackingCalibration(
+        ceilingSeconds: 20,
+        measuredUtc: DateTime.utc(2026, 10, 12),
+        source: 'measured',
+      );
+      ws.add(
+        _ev('tracking_probe.completed', {
+          'ceiling_seconds': 20,
+          'source': 'measured',
+        }),
+      );
+      await Future<void>.delayed(Duration.zero);
+      expect(
+        (await container.read(trackingCalibrationProvider.future))!
+            .ceilingSeconds,
+        20,
+      );
+      expect(api.reads, 2, reason: 'one re-read per completed probe');
 
-    ws.add(_ev('frame.complete', {}, seq: 3));
-    await Future<void>.delayed(Duration.zero);
-    expect(api.reads, 2, reason: 'other events do not re-read');
-  });
+      ws.add(_ev('frame.complete', {}, seq: 3));
+      await Future<void>.delayed(Duration.zero);
+      expect(api.reads, 2, reason: 'other events do not re-read');
+    },
+  );
 }
 
 /// Keeps the unusable-rung wording pinned without a payload round trip.

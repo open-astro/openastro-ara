@@ -22,12 +22,15 @@ class FrameQualityApi implements FrameQualityClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   FrameQualityApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ));
+            ),
+          );
 
   @override
   Future<FrameQualityDistribution> fetch({String? filter}) async {
@@ -37,7 +40,9 @@ class FrameQualityApi implements FrameQualityClient {
     );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException('stats/frame-quality returned a non-object body (${data.runtimeType})');
+      throw FormatException(
+        'stats/frame-quality returned a non-object body (${data.runtimeType})',
+      );
     }
     return FrameQualityDistribution.fromJson(data);
   }

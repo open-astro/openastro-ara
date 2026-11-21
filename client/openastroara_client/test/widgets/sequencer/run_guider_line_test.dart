@@ -53,34 +53,51 @@ void main() {
     await t.pumpWidget(const SizedBox());
   });
 
-  testWidgets('the line follows the DESIGN.md status rule: green guiding or idle, amber lost, blue changing',
-      (t) async {
-    final expected = {
-      GuiderRuntimeState.guiding: AraColors.accentConnected,
-      GuiderRuntimeState.starLost: AraColors.accentBusy,
-      GuiderRuntimeState.settling: AraColors.accentInfo,
-      GuiderRuntimeState.calibrating: AraColors.accentInfo,
-      GuiderRuntimeState.looping: AraColors.accentInfo,
-      GuiderRuntimeState.stopped: AraColors.accentConnected,
-      GuiderRuntimeState.paused: AraColors.accentInfo,
-    };
-    for (final e in expected.entries) {
-      await _pump(
-        t,
-        GuiderStatus(name: 'G', connectionState: GuiderConnectionState.connected, runtimeState: e.key),
-      );
-      final text = t.widget<Text>(find.byKey(const Key('run-guider-line')));
-      expect(text.style?.color, e.value, reason: '${e.key}');
-      await t.pumpWidget(const SizedBox());
-    }
-  });
+  testWidgets(
+    'the line follows the DESIGN.md status rule: green guiding or idle, amber lost, blue changing',
+    (t) async {
+      final expected = {
+        GuiderRuntimeState.guiding: AraColors.accentConnected,
+        GuiderRuntimeState.starLost: AraColors.accentBusy,
+        GuiderRuntimeState.settling: AraColors.accentInfo,
+        GuiderRuntimeState.calibrating: AraColors.accentInfo,
+        GuiderRuntimeState.looping: AraColors.accentInfo,
+        GuiderRuntimeState.stopped: AraColors.accentConnected,
+        GuiderRuntimeState.paused: AraColors.accentInfo,
+      };
+      for (final e in expected.entries) {
+        await _pump(
+          t,
+          GuiderStatus(
+            name: 'G',
+            connectionState: GuiderConnectionState.connected,
+            runtimeState: e.key,
+          ),
+        );
+        final text = t.widget<Text>(find.byKey(const Key('run-guider-line')));
+        expect(text.style?.color, e.value, reason: '${e.key}');
+        await t.pumpWidget(const SizedBox());
+      }
+    },
+  );
 
   testWidgets('an offstage line does not poll', (t) async {
-    final stub = _Stub(GuiderStatus.fromJson(<String, dynamic>{'state': 'connected', 'runtime': <String, dynamic>{'state': 'guiding'}}));
-    await t.pumpWidget(ProviderScope(
-      overrides: [guiderStatusProvider.overrideWith(() => stub)],
-      child: const MaterialApp(home: Scaffold(body: TickerMode(enabled: false, child: RunGuiderLine()))),
-    ));
+    final stub = _Stub(
+      GuiderStatus.fromJson(<String, dynamic>{
+        'state': 'connected',
+        'runtime': <String, dynamic>{'state': 'guiding'},
+      }),
+    );
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [guiderStatusProvider.overrideWith(() => stub)],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: TickerMode(enabled: false, child: RunGuiderLine()),
+          ),
+        ),
+      ),
+    );
     await t.pump();
     await t.pump(RunGuiderLine.pollInterval * 2);
     expect(stub.refreshes, 0, reason: 'hidden behind another tab: no request');

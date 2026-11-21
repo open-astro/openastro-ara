@@ -209,8 +209,13 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
         _reconcileTimer?.cancel();
         return;
       }
-      if (_reconcileTicks >= 40 || !ref.read(filterWheelProvider).maybeWhen(
-          data: (w) => w != null && w.isConnected, orElse: () => false)) {
+      if (_reconcileTicks >= 40 ||
+          !ref
+              .read(filterWheelProvider)
+              .maybeWhen(
+                data: (w) => w != null && w.isConnected,
+                orElse: () => false,
+              )) {
         _reconcileTimer?.cancel();
         return;
       }
@@ -301,9 +306,9 @@ class _FilterWheelBodyState extends ConsumerState<_FilterWheelBody> {
     final currentText = pending != null
         ? 'Changing…'
         : (current != null
-            ? '${current.name.isEmpty ? 'Slot ${current.position}' : current.name} '
-                  '(slot ${current.position})'
-            : (status.isMoving ? 'Changing…' : '—'));
+              ? '${current.name.isEmpty ? 'Slot ${current.position}' : current.name} '
+                    '(slot ${current.position})'
+              : (status.isMoving ? 'Changing…' : '—'));
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -398,9 +403,8 @@ class _SlotRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondary = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary);
+    final secondary = Theme.of(context).textTheme.bodySmall
+        ?.copyWith(color: AraColors.textSecondary);
     // Same empty-name fallback the "Current filter" header uses, so an unnamed
     // slot reads consistently in both places.
     final name = slot.name.isEmpty ? 'Slot ${slot.position}' : slot.name;
@@ -438,8 +442,10 @@ class _SlotRow extends StatelessWidget {
               if (showOffset)
                 Padding(
                   padding: const EdgeInsets.only(right: 12),
-                  child: Text('focus offset ${slot.focusOffset}',
-                      style: secondary),
+                  child: Text(
+                    'focus offset ${slot.focusOffset}',
+                    style: secondary,
+                  ),
                 ),
               // Trailing affordance: spinner on the pending row, green check
               // on the active row, chevron on selectable rows.
@@ -450,8 +456,11 @@ class _SlotRow extends StatelessWidget {
                   child: AdaptiveProgressIndicator(strokeWidth: 2),
                 )
               else if (isCurrent)
-                const Icon(Icons.check_circle,
-                    size: 20, color: AraColors.accentConnected)
+                const Icon(
+                  Icons.check_circle,
+                  size: 20,
+                  color: AraColors.accentConnected,
+                )
               else
                 Icon(
                   Icons.chevron_right,
@@ -547,18 +556,22 @@ class _FocusOffsetsSection extends ConsumerWidget {
     final running = live.isRunning;
     final picks = defaultOffsetPicks(slots);
     final reference = offsetReference(
-        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ?? '');
+      slots,
+      picks,
+      ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ??
+          '',
+    );
     final all = {...picks, ?reference}.toList()..sort();
     final theme = Theme.of(context).textTheme;
     final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);
     String rowValue(FilterOffsetRow r) => r.isMeasured
         ? '${simpleSigned(r.offset!)} · ${l.focusFitR2} ${r.rSquared?.toStringAsFixed(2) ?? '–'}'
-            ' · ${l.focusOffsetsColPrevious} ${simpleSigned(r.previousOffset)}'
+              ' · ${l.focusOffsetsColPrevious} ${simpleSigned(r.previousOffset)}'
         : r.isFailed
-            ? '${l.focusOffsetsRowFailed}${r.failureReason == null ? '' : ': ${r.failureReason}'}'
-            : running
-                ? l.focusOffsetsRowPending
-                : l.focusOffsetsRowSkipped;
+        ? '${l.focusOffsetsRowFailed}${r.failureReason == null ? '' : ': ${r.failureReason}'}'
+        : running
+        ? l.focusOffsetsRowPending
+        : l.focusOffsetsRowSkipped;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -583,7 +596,8 @@ class _FocusOffsetsSection extends ConsumerWidget {
             reference == null || all.length < 2
                 ? l.focusOffsetsPickOne
                 : l.focusOffsetsReference(
-                    slots.firstWhere((s) => s.position == reference).name),
+                    slots.firstWhere((s) => s.position == reference).name,
+                  ),
             style: dim,
           )
         else ...[
@@ -591,25 +605,44 @@ class _FocusOffsetsSection extends ConsumerWidget {
             Text(
               cal.currentName == null
                   ? l.focusOffsetsStarting
-                  : l.focusOffsetsMeasuring(cal.currentName!, cal.runIndex, cal.runCount),
+                  : l.focusOffsetsMeasuring(
+                      cal.currentName!,
+                      cal.runIndex,
+                      cal.runCount,
+                    ),
             )
           else if (cal.state == 'cancelled')
             Text(l.focusOffsetsStopped, style: dim)
           else if (cal.state == 'failed')
-            Text(cal.reason ?? l.focusOffsetsFailed,
-                style: const TextStyle(color: AraColors.errorText)),
+            Text(
+              cal.reason ?? l.focusOffsetsFailed,
+              style: const TextStyle(color: AraColors.errorText),
+            ),
           for (final r in cal.filters)
-            SettingsRow(label: r.name.isEmpty ? l.deviceSlot(r.position) : r.name, value: rowValue(r)),
-          if (cal.driftWarning && cal.referenceFirstPosition != null && cal.referenceSecondPosition != null)
+            SettingsRow(
+              label: r.name.isEmpty ? l.deviceSlot(r.position) : r.name,
+              value: rowValue(r),
+            ),
+          if (cal.driftWarning &&
+              cal.referenceFirstPosition != null &&
+              cal.referenceSecondPosition != null)
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               spacing: AraSpace.s8,
               children: [
-                const Icon(Icons.warning_amber_rounded, size: 18, color: AraColors.accentWarning),
+                const Icon(
+                  Icons.warning_amber_rounded,
+                  size: 18,
+                  color: AraColors.accentWarning,
+                ),
                 Expanded(
                   child: Text(
                     l.focusOffsetsDrift(
-                        (cal.referenceSecondPosition! - cal.referenceFirstPosition!).abs(), cal.cfzSteps ?? 0),
+                      (cal.referenceSecondPosition! -
+                              cal.referenceFirstPosition!)
+                          .abs(),
+                      cal.cfzSteps ?? 0,
+                    ),
                     style: const TextStyle(color: AraColors.accentWarning),
                   ),
                 ),
@@ -642,8 +675,14 @@ class _FocusOffsetsSection extends ConsumerWidget {
         if (live.error != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Text(friendlyError(l, live.error!, action: l.focusOffsetsStart.toLowerCase()),
-                style: const TextStyle(color: AraColors.errorText)),
+            child: Text(
+              friendlyError(
+                l,
+                live.error!,
+                action: l.focusOffsetsStart.toLowerCase(),
+              ),
+              style: const TextStyle(color: AraColors.errorText),
+            ),
           ),
       ],
     );

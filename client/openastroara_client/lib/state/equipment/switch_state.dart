@@ -188,8 +188,7 @@ class SwitchListNotifier extends AsyncNotifier<List<SwitchDevice>> {
       await api.reconnectDevice(deviceId);
     } on DioException catch (e) {
       if (e.response?.statusCode != 404) rethrow;
-      final device =
-          _knownDevices[deviceId] ?? await _discoverSwitch(deviceId);
+      final device = _knownDevices[deviceId] ?? await _discoverSwitch(deviceId);
       if (device == null) rethrow;
       _knownDevices[deviceId] = device;
       await api.connect(device);

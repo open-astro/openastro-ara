@@ -33,6 +33,9 @@ TonightSkyObject _o(
   TonightFraming framing = TonightFraming.good,
   DateTime? transit,
   double? moonSep,
+  DateTime? start,
+  DateTime? end,
+  bool noWindow = false,
 }) => TonightSkyObject(
   id: id,
   name: name ?? id,
@@ -44,8 +47,10 @@ TonightSkyObject _o(
   maxAltitudeDeg: maxAlt,
   score: score,
   transitUtc: transit,
-  windowStartUtc: _now.subtract(const Duration(hours: 1)),
-  windowEndUtc: _now.add(const Duration(hours: 4)),
+  windowStartUtc: noWindow
+      ? null
+      : start ?? _now.subtract(const Duration(hours: 1)),
+  windowEndUtc: noWindow ? null : end ?? _now.add(const Duration(hours: 4)),
   framing: framing,
   moonSeparationDeg: moonSep,
   moonUpFraction: moonSep == null ? null : 0.5,
@@ -56,10 +61,12 @@ class _Site extends SiteSettingsNotifier {
   _Site(this.set);
   final bool set;
   @override
-  LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: set
-      ? const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297)
-      : const SiteSettings(), source: SectionSource.rig);
+  LoadedSection<SiteSettings> build() => LoadedSection(
+    value: set
+        ? const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297)
+        : const SiteSettings(),
+    source: SectionSource.rig,
+  );
 }
 
 class _Stats extends StatsTargetsNotifier {
@@ -390,6 +397,42 @@ void main() {
   });
 
   testWidgets(
+    'Imaging hours: the pickers set the range, Any time and Clear reset it',
+    (tester) async {
+      // Local hours, so the case holds in any time zone.
+      DateTime local(int day, int h) => DateTime(2026, 11, day, h).toUtc();
+      final w = await _pump(tester, [
+        _o('EVE', start: local(17, 20), end: local(17, 23)),
+        _o('LATE', start: local(18, 3), end: local(18, 5)),
+        _o('NONE', noWindow: true),
+      ]);
+      expect(_order(tester), ['EVE', 'LATE', 'NONE']);
+      // Defaults of the pickers: 21:00 to 01:00.
+      await _tap(tester, 'best-window-pick');
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+      final got = w.container.read(tonightsBestChoicesProvider);
+      expect((got.windowFromMin, got.windowToMin), (21 * 60, 60));
+      expect(find.text('21:00-01:00'), findsOneWidget);
+      expect(_order(tester), ['EVE']);
+      await _tap(tester, 'best-window-any');
+      expect(
+        w.container.read(tonightsBestChoicesProvider).windowFromMin,
+        isNull,
+      );
+      expect(_order(tester), ['EVE', 'LATE', 'NONE']);
+      w.container.read(tonightsBestChoicesProvider.notifier).setWindow(0, 60);
+      await tester.pump();
+      expect(_order(tester), isEmpty);
+      await _tap(tester, 'best-clear-filters');
+      expect(w.container.read(tonightsBestChoicesProvider).windowToMin, isNull);
+      expect(_order(tester), ['EVE', 'LATE', 'NONE']);
+    },
+  );
+
+  testWidgets(
     'Image this with a plan running adds to the Queue, shows the pill, then In Queue disabled',
     (tester) async {
       final w = await _pump(tester, [a, b], run: SequenceRunState.running);
@@ -611,6 +654,8 @@ void main() {
         'best-show-up',
         'best-fits-on',
         'best-peak-30',
+        'best-window-any',
+        'best-window-pick',
         'best-type-galaxy',
         'best-image-NGC 7000',
       ]) {

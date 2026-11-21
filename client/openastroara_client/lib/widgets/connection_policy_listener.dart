@@ -127,18 +127,20 @@ class _ConnectionPolicyListenerState
     _dismissTakeoverDialog?.call();
     final l10n = context.l10n;
     if (ref.read(simpleModeActiveProvider)) {
-      ref.read(simpleMessagesProvider.notifier).show(
-        SimpleMessageKind.question,
-        l10n.sessionTransferredTitle,
-        detail: l10n.sessionTransferredDetail,
-        actions: [
-          SimpleMessageAction(l10n.shellOk, () {}),
-          SimpleMessageAction(
-            l10n.shellReconnect,
-            () => ref.read(wsEventStreamProvider)?.connect(),
-          ),
-        ],
-      );
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.question,
+            l10n.sessionTransferredTitle,
+            detail: l10n.sessionTransferredDetail,
+            actions: [
+              SimpleMessageAction(l10n.shellOk, () {}),
+              SimpleMessageAction(
+                l10n.shellReconnect,
+                () => ref.read(wsEventStreamProvider)?.connect(),
+              ),
+            ],
+          );
       return;
     }
     unawaited(

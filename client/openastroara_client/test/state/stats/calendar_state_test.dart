@@ -55,15 +55,25 @@ class _GatedCalendarClient implements CalendarClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-CalendarStats _stats(int count) => CalendarStats(days: [
-      CalendarDay(date: DateTime(2026, 6, 10), frameCount: count, integrationHours: 1.0),
-    ]);
+CalendarStats _stats(int count) => CalendarStats(
+  days: [
+    CalendarDay(
+      date: DateTime(2026, 6, 10),
+      frameCount: count,
+      integrationHours: 1.0,
+    ),
+  ],
+);
 
 ProviderContainer _container(List<AraServer> servers, CalendarClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    calendarApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      calendarApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -100,39 +110,51 @@ void main() {
     });
 
     test('an initial-load failure lands in the provider error state', () async {
-      final api = _FakeCalendarClient(const CalendarStats())..throwOnFetch = true;
+      final api = _FakeCalendarClient(const CalendarStats())
+        ..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(c.read(calendarProvider.future), throwsA(isA<StateError>()));
+      await expectLater(
+        c.read(calendarProvider.future),
+        throwsA(isA<StateError>()),
+      );
       expect(c.read(calendarProvider).hasError, isTrue);
     });
 
-    test('a failed refresh keeps the prior calendar and rethrows (no blanking)', () async {
-      final api = _FakeCalendarClient(_stats(7));
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(calendarProvider.future);
+    test(
+      'a failed refresh keeps the prior calendar and rethrows (no blanking)',
+      () async {
+        final api = _FakeCalendarClient(_stats(7));
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(calendarProvider.future);
 
-      api.throwOnFetch = true;
-      await expectLater(
-          c.read(calendarProvider.notifier).refresh(), throwsA(isA<StateError>()));
-      expect(c.read(calendarProvider).hasError, isFalse);
-      expect(c.read(calendarProvider).value!.days.single.frameCount, 7);
-    });
+        api.throwOnFetch = true;
+        await expectLater(
+          c.read(calendarProvider.notifier).refresh(),
+          throwsA(isA<StateError>()),
+        );
+        expect(c.read(calendarProvider).hasError, isFalse);
+        expect(c.read(calendarProvider).value!.days.single.frameCount, 7);
+      },
+    );
 
-    test('a successful refresh swaps the new calendar in without a loading flash', () async {
-      final api = _FakeCalendarClient(_stats(1));
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(calendarProvider.future);
+    test(
+      'a successful refresh swaps the new calendar in without a loading flash',
+      () async {
+        final api = _FakeCalendarClient(_stats(1));
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(calendarProvider.future);
 
-      api.value = _stats(9);
-      final future = c.read(calendarProvider.notifier).refresh();
-      expect(c.read(calendarProvider).isLoading, isFalse);
-      expect(c.read(calendarProvider).value!.days.single.frameCount, 1);
-      await future;
-      expect(c.read(calendarProvider).value!.days.single.frameCount, 9);
-    });
+        api.value = _stats(9);
+        final future = c.read(calendarProvider.notifier).refresh();
+        expect(c.read(calendarProvider).isLoading, isFalse);
+        expect(c.read(calendarProvider).value!.days.single.frameCount, 1);
+        await future;
+        expect(c.read(calendarProvider).value!.days.single.frameCount, 9);
+      },
+    );
 
     test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedCalendarClient();
@@ -143,7 +165,8 @@ void main() {
       await built;
 
       final notifier = c.read(calendarProvider.notifier);
-      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier
+          .refresh(); // captures generation; calls[1] pending
       notifier.markBuild(); // stand in for a server-switch build() re-run
       api.calls[1].complete(_stats(99)); // now stale
       await refreshing;

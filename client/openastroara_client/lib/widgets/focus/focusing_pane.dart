@@ -60,10 +60,17 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final focused = ref.watch(
-        autofocusLiveProvider.select((s) => s.focusedThisSession));
-    final running = ref.watch(autofocusLiveProvider.select((s) => s.run.isRunning));
-    final guideLive = ref.watch(guideFocusProvider.select((s) => s.status.active));
-    final guideFocused = ref.watch(guideFocusProvider.select((s) => s.status.focusedThisSession));
+      autofocusLiveProvider.select((s) => s.focusedThisSession),
+    );
+    final running = ref.watch(
+      autofocusLiveProvider.select((s) => s.run.isRunning),
+    );
+    final guideLive = ref.watch(
+      guideFocusProvider.select((s) => s.status.active),
+    );
+    final guideFocused = ref.watch(
+      guideFocusProvider.select((s) => s.status.focusedThisSession),
+    );
     // A short window puts the title beside the tabs, drops the subtitle and
     // tightens the padding so the instruments keep their height.
     final short = AraBreakpoints.isShort(context);
@@ -80,7 +87,12 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
           busy: running,
           height: short ? 40 : null,
         ),
-        _StepTab(label: 'Guide camera', busy: guideLive, done: guideFocused, height: short ? 40 : null),
+        _StepTab(
+          label: 'Guide camera',
+          busy: guideLive,
+          done: guideFocused,
+          height: short ? 40 : null,
+        ),
       ],
     );
     return Column(
@@ -91,7 +103,13 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
               ? const EdgeInsets.fromLTRB(20, 4, 20, 0)
               : const EdgeInsets.fromLTRB(28, 24, 28, 0),
           child: short
-              ? Row(children: [title, const SizedBox(width: 24), Expanded(child: tabs)])
+              ? Row(
+                  children: [
+                    title,
+                    const SizedBox(width: 24),
+                    Expanded(child: tabs),
+                  ],
+                )
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -99,8 +117,9 @@ class _FocusingPaneState extends ConsumerState<FocusingPane>
                     const SizedBox(height: 4),
                     Text(
                       'Main telescope first, then the guide camera.',
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: AraColors.textSecondary),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     tabs,
@@ -127,7 +146,12 @@ class _StepTab extends StatelessWidget {
   final bool done;
   final bool busy;
   final double? height;
-  const _StepTab({required this.label, this.done = false, this.busy = false, this.height});
+  const _StepTab({
+    required this.label,
+    this.done = false,
+    this.busy = false,
+    this.height,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -188,13 +212,18 @@ class ManualFocusControl extends ConsumerStatefulWidget {
 class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
   int _step = 50;
 
-  Future<void> _command(Future<bool> Function(FocuserNotifier) send, String failure) async {
+  Future<void> _command(
+    Future<bool> Function(FocuserNotifier) send,
+    String failure,
+  ) async {
     final messenger = ScaffoldMessenger.of(context);
     final l10n = context.l10n;
     try {
       await send(ref.read(focuserProvider.notifier));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$failure: ${failureReason(l10n, e)}')));
+      messenger.showSnackBar(
+        SnackBar(content: Text('$failure: ${failureReason(l10n, e)}')),
+      );
     }
   }
 
@@ -203,7 +232,8 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
     var target = widget.focuser.position! + direction * _step;
     if (target < (caps?.minPosition ?? 0)) target = caps?.minPosition ?? 0;
     // A device that reports no travel has a max of 0: no upper clamp then.
-    if (caps != null && caps.maxPosition > 0 && target > caps.maxPosition) target = caps.maxPosition;
+    if (caps != null && caps.maxPosition > 0 && target > caps.maxPosition)
+      target = caps.maxPosition;
     _command((n) => n.move(target), context.l10n.focusMoveFailed);
   }
 
@@ -211,9 +241,16 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
   Widget build(BuildContext context) {
     final l10n = context.l10n;
     final moving = widget.focuser.isMoving;
-    final planRunning = ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
-    final autofocusRunning = ref.watch(autofocusLiveProvider.select((l) => l.run.isRunning));
-    final canNudge = !moving && !planRunning && !autofocusRunning && widget.focuser.position != null;
+    final planRunning =
+        ref.watch(sequenceRunStateProvider).value?.state?.isActive ?? false;
+    final autofocusRunning = ref.watch(
+      autofocusLiveProvider.select((l) => l.run.isRunning),
+    );
+    final canNudge =
+        !moving &&
+        !planRunning &&
+        !autofocusRunning &&
+        widget.focuser.position != null;
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -222,7 +259,11 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
         SegmentedButton<int>(
           segments: [
             for (final steps in const [10, 50, 200])
-              ButtonSegment(value: steps, label: Text('$steps'), tooltip: l10n.focusNudgeSteps(steps)),
+              ButtonSegment(
+                value: steps,
+                label: Text('$steps'),
+                tooltip: l10n.focusNudgeSteps(steps),
+              ),
           ],
           selected: {_step},
           showSelectedIcon: false,
@@ -242,13 +283,17 @@ class _ManualFocusControlState extends ConsumerState<ManualFocusControl> {
         ),
         FilledButton.tonalIcon(
           key: const Key('manual-focus-stop'),
-          onPressed: moving ? () => _command((n) => n.halt(), l10n.focusStopFailed) : null,
+          onPressed: moving
+              ? () => _command((n) => n.halt(), l10n.focusStopFailed)
+              : null,
           icon: const Icon(Icons.stop_rounded, size: 18),
           label: Text(l10n.focusNudgeStop),
         ),
         if (planRunning || autofocusRunning)
           Text(
-            planRunning ? l10n.focusNudgePlanRunning : l10n.focusNudgeAutofocusRunning,
+            planRunning
+                ? l10n.focusNudgePlanRunning
+                : l10n.focusNudgeAutofocusRunning,
             style: Theme.of(context).textTheme.bodySmall,
           ),
       ],
@@ -273,12 +318,15 @@ class MainFocusCard extends ConsumerWidget {
     if (method == MainFocusMethod.bahtinov) {
       return BahtinovFocusCard(
         methodSelector: selector,
-        manualFocus: focuserConnected ? ManualFocusControl(focuser: focuser!) : null,
+        manualFocus: focuserConnected
+            ? ManualFocusControl(focuser: focuser!)
+            : null,
       );
     }
     final run = live.run;
     final apiAvailable = ref.watch(autofocusApiProvider) != null;
-    final hasData = run.probes.any((p) => p.kept) || run.fit != null || live.frame != null;
+    final hasData =
+        run.probes.any((p) => p.kept) || run.fit != null || live.frame != null;
 
     final subheadParts = <String>[
       if (focuser != null && focuserConnected) ...[
@@ -304,8 +352,10 @@ class MainFocusCard extends ConsumerWidget {
                 : null,
             icon: live.busy
                 ? const SizedBox(
-                    width: 14, height: 14,
-                    child: AdaptiveProgressIndicator(strokeWidth: 2))
+                    width: 14,
+                    height: 14,
+                    child: AdaptiveProgressIndicator(strokeWidth: 2),
+                  )
                 : const Icon(Icons.center_focus_strong, size: 18),
             label: Text(run.isComplete ? 'Run again' : 'Run autofocus'),
           );
@@ -355,7 +405,10 @@ class MainFocusCard extends ConsumerWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(2),
               child: LinearProgressIndicator(
-                value: run.phase == 'coarse' || run.phase == 'smart' || run.totalSteps == 0
+                value:
+                    run.phase == 'coarse' ||
+                        run.phase == 'smart' ||
+                        run.totalSteps == 0
                     ? null
                     : (run.completedSteps / run.totalSteps).clamp(0.0, 1.0),
                 minHeight: 3,
@@ -364,15 +417,19 @@ class MainFocusCard extends ConsumerWidget {
             const SizedBox(height: 16),
           ],
           if (!hasData && !run.isRunning) ...[
-            FitFill(child: EmptyState(
-              icon: Icons.center_focus_weak,
-              title: run.isFailed || run.isCancelled ? 'Nothing measured' : 'No autofocus yet',
-              message: run.isFailed || run.isCancelled
-                  ? 'No probe found enough stars to plot. Check the sky and the exposure, rough-focus by hand, then run again.'
-                  : focuserConnected
-                      ? 'Run autofocus to see the V-curve, the statistics and the focused field.'
-                      : 'Connect a focuser, then run autofocus to see the V-curve, the statistics and the focused field.',
-            )),
+            FitFill(
+              child: EmptyState(
+                icon: Icons.center_focus_weak,
+                title: run.isFailed || run.isCancelled
+                    ? 'Nothing measured'
+                    : 'No autofocus yet',
+                message: run.isFailed || run.isCancelled
+                    ? 'No probe found enough stars to plot. Check the sky and the exposure, rough-focus by hand, then run again.'
+                    : focuserConnected
+                    ? 'Run autofocus to see the V-curve, the statistics and the focused field.'
+                    : 'Connect a focuser, then run autofocus to see the V-curve, the statistics and the focused field.',
+              ),
+            ),
             if (run.state != AutofocusRunStates.idle)
               DetailsDisclosure(rows: detailsFor(run)),
           ] else ...[
@@ -384,56 +441,64 @@ class MainFocusCard extends ConsumerWidget {
               CollimationCard(verdict: verdict),
             ],
             SizedBox(height: AraBreakpoints.isShort(context) ? 12 : 16),
-            FitFill(child: FitBand(builder: (context, width, height) {
-              final chart = VCurveChart(run: run);
-              Widget frame(double h) => FocusFrameView(
-                frame: live.frame,
-                height: h,
-                badge: run.isComplete ? 'FOCUSED' : run.isRunning ? 'PROBE' : null,
-                badgeColor: run.isComplete
-                    ? AraColors.accentConnected
-                    : AraColors.accentInfo,
-                caption: run.framePosition == null
-                    ? null
-                    : 'at ${run.framePosition}${run.frameHfr != null && run.frameHfr! > 0 ? ' · HFR ${run.frameHfr!.toStringAsFixed(2)}' : ''}',
-                emptyText: run.isRunning
-                    ? 'The first measurable probe appears here.'
-                    : 'No frame from this run.',
-              );
-              if (width >= AraBreakpoints.sideBySide(context)) {
-                // The band takes the height the window leaves. The frame stays
-                // 4:3 and takes up to half the width; past that the band stops
-                // growing rather than turn into a billboard.
-                final band = math.max(height, 160.0);
-                final frameWidth = math.min(band * 4 / 3, (width - 16) / 2);
-                final h = math.min(band, frameWidth * 0.75);
-                return Align(
-                  alignment: Alignment.topCenter,
-                  child: SizedBox(
+            FitFill(
+              child: FitBand(
+                builder: (context, width, height) {
+                  final chart = VCurveChart(run: run);
+                  Widget frame(double h) => FocusFrameView(
+                    frame: live.frame,
                     height: h,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Expanded(child: chart),
-                        const SizedBox(width: 16),
-                        SizedBox(width: frameWidth, child: frame(h)),
-                      ],
-                    ),
-                  ),
-                );
-              }
-              // Narrow: stacked, each half the band; the frame no taller than
-              // its 4:3 at full width.
-              final each = math.max((height - 12) / 2, 180.0);
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  SizedBox(height: each, child: chart),
-                  const SizedBox(height: 12),
-                  frame(math.min(each, width * 0.75)),
-                ],
-              );
-            })),
+                    badge: run.isComplete
+                        ? 'FOCUSED'
+                        : run.isRunning
+                        ? 'PROBE'
+                        : null,
+                    badgeColor: run.isComplete
+                        ? AraColors.accentConnected
+                        : AraColors.accentInfo,
+                    caption: run.framePosition == null
+                        ? null
+                        : 'at ${run.framePosition}${run.frameHfr != null && run.frameHfr! > 0 ? ' · HFR ${run.frameHfr!.toStringAsFixed(2)}' : ''}',
+                    emptyText: run.isRunning
+                        ? 'The first measurable probe appears here.'
+                        : 'No frame from this run.',
+                  );
+                  if (width >= AraBreakpoints.sideBySide(context)) {
+                    // The band takes the height the window leaves. The frame stays
+                    // 4:3 and takes up to half the width; past that the band stops
+                    // growing rather than turn into a billboard.
+                    final band = math.max(height, 160.0);
+                    final frameWidth = math.min(band * 4 / 3, (width - 16) / 2);
+                    final h = math.min(band, frameWidth * 0.75);
+                    return Align(
+                      alignment: Alignment.topCenter,
+                      child: SizedBox(
+                        height: h,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Expanded(child: chart),
+                            const SizedBox(width: 16),
+                            SizedBox(width: frameWidth, child: frame(h)),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                  // Narrow: stacked, each half the band; the frame no taller than
+                  // its 4:3 at full width.
+                  final each = math.max((height - 12) / 2, 180.0);
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(height: each, child: chart),
+                      const SizedBox(height: 12),
+                      frame(math.min(each, width * 0.75)),
+                    ],
+                  );
+                },
+              ),
+            ),
             const SizedBox(height: 8),
             DetailsDisclosure(rows: detailsFor(run)),
           ],
@@ -450,7 +515,9 @@ class MainFocusCard extends ConsumerWidget {
       case AutofocusRunStates.complete:
         final hfr = run.finalHfr;
         return (
-          hfr != null && hfr > 0 ? l.focusCardInFocusHfr(hfr.toStringAsFixed(2)) : l.focusCardInFocus,
+          hfr != null && hfr > 0
+              ? l.focusCardInFocusHfr(hfr.toStringAsFixed(2))
+              : l.focusCardInFocus,
           AraColors.accentConnected,
         );
       case AutofocusRunStates.failed:
@@ -476,7 +543,9 @@ class MainFocusCard extends ConsumerWidget {
     final minHfr = kept.map((p) => p.hfr).reduce((a, b) => a < b ? a : b);
     final sorted = [...kept]..sort((a, b) => a.position.compareTo(b.position));
     final edge = (sorted.first.hfr + sorted.last.hfr) / 2;
-    final plateau = edge > minHfr * 2 && (sorted.first.hfr - sorted.last.hfr).abs() < edge * 0.3;
+    final plateau =
+        edge > minHfr * 2 &&
+        (sorted.first.hfr - sorted.last.hfr).abs() < edge * 0.3;
     final r2 = fit.rSquared.toStringAsFixed(2);
     if (!plateau) {
       return l.focusCardWeakFit(r2);
@@ -484,7 +553,9 @@ class MainFocusCard extends ConsumerWidget {
     // §59.8 — an automatic step size learns the V's width from this very run,
     // so the advice is "run again", not "go change a setting".
     final auto = run.stepSizeSource != null && run.stepSizeSource != 'manual';
-    return auto ? l.focusCardWeakFitPlateauAuto(r2) : l.focusCardWeakFitPlateau(r2);
+    return auto
+        ? l.focusCardWeakFitPlateauAuto(r2)
+        : l.focusCardWeakFitPlateau(r2);
   }
 
   /// §59.8 — the step size row: the number, then where it came from, in words.
@@ -517,15 +588,22 @@ class MainFocusCard extends ConsumerWidget {
 
   /// The one-line phase while running. Pure — unit-tested.
   static String phaseText(AppLocalizations l, AutofocusRun run) {
-    final restored =
-        run.restoredPosition != null ? ' — ${l.focusCardRestoredPosition('${run.restoredPosition}')}' : '';
+    final restored = run.restoredPosition != null
+        ? ' — ${l.focusCardRestoredPosition('${run.restoredPosition}')}'
+        : '';
     switch (run.state) {
       case AutofocusRunStates.running:
         return switch (run.phase) {
-          'smart' => l.focusCardSmart('${run.sweepProbes.length}', '${run.totalSteps > 0 ? run.totalSteps : 5}'),
+          'smart' => l.focusCardSmart(
+            '${run.sweepProbes.length}',
+            '${run.totalSteps > 0 ? run.totalSteps : 5}',
+          ),
           'coarse' => l.focusCardCoarse,
-          'sweep' => l.focusCardSweeping('${run.completedSteps}', '${run.totalSteps}') +
-              (run.sweepAttempt > 1 ? ' ${l.focusCardPass('${run.sweepAttempt}')}' : ''),
+          'sweep' =>
+            l.focusCardSweeping('${run.completedSteps}', '${run.totalSteps}') +
+                (run.sweepAttempt > 1
+                    ? ' ${l.focusCardPass('${run.sweepAttempt}')}'
+                    : ''),
           'fitting' => l.focusCardFitting,
           'moving' => l.focusCardMoving,
           'confirming' => l.focusCardConfirming,
@@ -536,9 +614,12 @@ class MainFocusCard extends ConsumerWidget {
         final hfr = run.finalHfr;
         return l.focusCardInFocusAt('${run.finalPosition}') +
             (hfr != null && hfr > 0 ? ' — HFR ${hfr.toStringAsFixed(2)}' : '') +
-            (run.durationSeconds != null ? ' ${l.focusCardTook(durationText(run.durationSeconds!))}' : '');
+            (run.durationSeconds != null
+                ? ' ${l.focusCardTook(durationText(run.durationSeconds!))}'
+                : '');
       case AutofocusRunStates.failed:
-        return l.focusCardFailedReason(run.reason ?? l.focusCardSeeLogs) + restored;
+        return l.focusCardFailedReason(run.reason ?? l.focusCardSeeLogs) +
+            restored;
       case AutofocusRunStates.cancelled:
         return l.focusCardCancelled + restored;
       default:
@@ -564,15 +645,21 @@ class MainFocusCard extends ConsumerWidget {
     if (run.isRunning) {
       return [
         StatTile(caption: 'Latest HFR', value: n(latest?.hfr), unit: 'px'),
-        StatTile(caption: 'Probe position', value: latest?.position.toString() ?? '—'),
+        StatTile(
+          caption: 'Probe position',
+          value: latest?.position.toString() ?? '—',
+        ),
         StatTile(caption: 'Stars', value: latest?.stars.toString() ?? '—'),
         StatTile(
           caption: 'Progress',
-          value: run.totalSteps > 0 && run.phase != 'coarse' ? '${run.completedSteps} / ${run.totalSteps}' : '…',
+          value: run.totalSteps > 0 && run.phase != 'coarse'
+              ? '${run.completedSteps} / ${run.totalSteps}'
+              : '…',
         ),
       ];
     }
-    final measured = run.isComplete && run.finalHfr != null && run.finalHfr! > 0;
+    final measured =
+        run.isComplete && run.finalHfr != null && run.finalHfr! > 0;
     return [
       StatTile(
         caption: measured ? 'HFR at focus' : 'HFR at focus (predicted)',
@@ -582,15 +669,23 @@ class MainFocusCard extends ConsumerWidget {
       ),
       StatTile(
         caption: 'Best position',
-        value: run.finalPosition?.toString() ??
-            (fit != null && fit.bestPosition > 0 ? fit.bestPosition.round().toString() : '—'),
+        value:
+            run.finalPosition?.toString() ??
+            (fit != null && fit.bestPosition > 0
+                ? fit.bestPosition.round().toString()
+                : '—'),
       ),
       StatTile(
         caption: 'Stars',
         value: run.finalStars?.toString() ?? (latest?.stars.toString() ?? '—'),
       ),
       // A Smart run confirmed by a bracket carries the calibration's curve, not a fit: no R² to show.
-      StatTile(caption: 'Fit R²', value: fit == null || fit.algorithm == 'calibration' ? '—' : n(fit.rSquared, 3)),
+      StatTile(
+        caption: 'Fit R²',
+        value: fit == null || fit.algorithm == 'calibration'
+            ? '—'
+            : n(fit.rSquared, 3),
+      ),
     ];
   }
 
@@ -599,22 +694,50 @@ class MainFocusCard extends ConsumerWidget {
     final fit = run.fit;
     final sweep = run.sweepProbes;
     final kept = sweep.where((p) => p.kept).length;
-    String n(double? v, [int d = 2]) => v == null || !v.isFinite ? '—' : v.toStringAsFixed(d);
+    String n(double? v, [int d = 2]) =>
+        v == null || !v.isFinite ? '—' : v.toStringAsFixed(d);
     return [
-      ('Probes kept', sweep.isEmpty ? '—' : '$kept of ${sweep.length}${run.coarseProbes.isNotEmpty ? ' (+${run.coarseProbes.length} coarse)' : ''}'),
+      (
+        'Probes kept',
+        sweep.isEmpty
+            ? '—'
+            : '$kept of ${sweep.length}${run.coarseProbes.isNotEmpty ? ' (+${run.coarseProbes.length} coarse)' : ''}',
+      ),
       if (run.stepSize != null) ('Step size', stepSizeText(run)),
-      ('Fit', fit == null ? '—' : '${fit.algorithm}${fit.withinSampledRange ? '' : ' · outside the sweep'}'),
+      (
+        'Fit',
+        fit == null
+            ? '—'
+            : '${fit.algorithm}${fit.withinSampledRange ? '' : ' · outside the sweep'}',
+      ),
       ('Predicted HFR', n(fit?.predictedHfr)),
-      ('Start → final', run.startPosition == null
-          ? '—'
-          : run.finalPosition == null
-              ? '${run.startPosition}'
-              : '${run.startPosition} → ${run.finalPosition} (${_signed(run.finalPosition! - run.startPosition!)})'),
-      ('Focuser temperature', run.focuserTemperatureC == null ? '—' : '${n(run.focuserTemperatureC, 1)} °C'),
+      (
+        'Start → final',
+        run.startPosition == null
+            ? '—'
+            : run.finalPosition == null
+            ? '${run.startPosition}'
+            : '${run.startPosition} → ${run.finalPosition} (${_signed(run.finalPosition! - run.startPosition!)})',
+      ),
+      (
+        'Focuser temperature',
+        run.focuserTemperatureC == null
+            ? '—'
+            : '${n(run.focuserTemperatureC, 1)} °C',
+      ),
       ('Filter', run.filter == null || run.filter!.isEmpty ? '—' : run.filter!),
-      ('Mode · trigger', run.mode == null ? '—' : '${run.mode}${run.trigger != null ? ' · ${run.trigger}' : ''}'),
-      ('Duration', run.durationSeconds == null ? '—' : durationText(run.durationSeconds!)),
-      if (run.startedUtc != null) ('Started', _clock(run.startedUtc!.toLocal())),
+      (
+        'Mode · trigger',
+        run.mode == null
+            ? '—'
+            : '${run.mode}${run.trigger != null ? ' · ${run.trigger}' : ''}',
+      ),
+      (
+        'Duration',
+        run.durationSeconds == null ? '—' : durationText(run.durationSeconds!),
+      ),
+      if (run.startedUtc != null)
+        ('Started', _clock(run.startedUtc!.toLocal())),
     ];
   }
 

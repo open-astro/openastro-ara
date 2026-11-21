@@ -25,98 +25,136 @@ class _FixedStats extends StatsTargetsNotifier {
   Future<List<StatsTarget>?> build() async => _v;
 }
 
-TonightSkyObject _allNight(String id, String name, double score, {double? budgetFullHours}) =>
-    TonightSkyObject(
-      id: id,
-      name: name,
-      type: 'HII',
-      magnitude: 7,
-      raDeg: 0,
-      decDeg: 0,
-      altitudeDeg: 50,
-      maxAltitudeDeg: 80,
-      // A dark window that covers any plannable night window.
-      windowStartUtc:
-          DateTime.now().toUtc().subtract(const Duration(hours: 12)),
-      windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 36)),
-      score: score,
-      hoursFreeScore: score - 20,
-      optimalSubS: 120,
-      budgetFullHours: budgetFullHours,
-    );
+TonightSkyObject _allNight(
+  String id,
+  String name,
+  double score, {
+  double? budgetFullHours,
+}) => TonightSkyObject(
+  id: id,
+  name: name,
+  type: 'HII',
+  magnitude: 7,
+  raDeg: 0,
+  decDeg: 0,
+  altitudeDeg: 50,
+  maxAltitudeDeg: 80,
+  // A dark window that covers any plannable night window.
+  windowStartUtc: DateTime.now().toUtc().subtract(const Duration(hours: 12)),
+  windowEndUtc: DateTime.now().toUtc().add(const Duration(hours: 36)),
+  score: score,
+  hoursFreeScore: score - 20,
+  optimalSubS: 120,
+  budgetFullHours: budgetFullHours,
+);
 
 void main() {
-  testWidgets('#1140 P5: the library\'s banked hours reach the plan — a finished tier yields and is noted',
-      (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        statsTargetsProvider.overrideWith(() => _FixedStats(const [
-              StatsTarget(targetName: 'Done Nebula', integrationHours: 12),
-            ])),
-        tonightSkyAtProvider.overrideWith((ref, at) async => [
-              _allNight('done', 'Done Nebula', 90, budgetFullHours: 9),
-              _allNight('fresh', 'Fresh Nebula', 85),
-            ]),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
-    await tester.tap(find.text('Plan it'));
-    await tester.pumpAndSettle();
-    expect(find.text('Fresh Nebula'), findsOneWidget, reason: 'the higher-scored but finished target yields');
-    expect(find.textContaining('Done Nebula'), findsNothing);
-  });
+  testWidgets(
+    '#1140 P5: the library\'s banked hours reach the plan — a finished tier yields and is noted',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            targetPreviewProvider.overrideWith((ref, key) async => null),
+            statsTargetsProvider.overrideWith(
+              () => _FixedStats(const [
+                StatsTarget(targetName: 'Done Nebula', integrationHours: 12),
+              ]),
+            ),
+            tonightSkyAtProvider.overrideWith(
+              (ref, at) async => [
+                _allNight('done', 'Done Nebula', 90, budgetFullHours: 9),
+                _allNight('fresh', 'Fresh Nebula', 85),
+              ],
+            ),
+          ],
+          child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+        ),
+      );
+      await tester.tap(find.text('Plan it'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Fresh Nebula'),
+        findsOneWidget,
+        reason: 'the higher-scored but finished target yields',
+      );
+      expect(find.textContaining('Done Nebula'), findsNothing);
+    },
+  );
 
-  testWidgets('#1140 P5: a slice that completes a tier says so on the card', (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        statsTargetsProvider.overrideWith(() => _FixedStats(const [
+  testWidgets('#1140 P5: a slice that completes a tier says so on the card', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          statsTargetsProvider.overrideWith(
+            () => _FixedStats(const [
               StatsTarget(targetName: 'Near Nebula', integrationHours: 8.5),
-            ])),
-        tonightSkyAtProvider.overrideWith((ref, at) async => [
-              _allNight('near', 'Near Nebula', 80, budgetFullHours: 9),
             ]),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
+          ),
+          tonightSkyAtProvider.overrideWith(
+            (ref, at) async => [
+              _allNight('near', 'Near Nebula', 80, budgetFullHours: 9),
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+      ),
+    );
     await tester.tap(find.text('Plan it'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('this slice completes its full-structure tier'), findsOneWidget);
+    expect(
+      find.textContaining('this slice completes its full-structure tier'),
+      findsOneWidget,
+    );
   });
-  testWidgets('a planned curated region keeps its catalog number on the card: Skull Nebula (NGC 246) (#1957)',
-      (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        tonightSkyAtProvider.overrideWith((ref, at) async => [_allNight('NGC0246', 'Skull Nebula', 80)]),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
-    await tester.tap(find.text('Plan it'));
-    await tester.pumpAndSettle();
-    expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget);
-  });
+  testWidgets(
+    'a planned curated region keeps its catalog number on the card: Skull Nebula (NGC 246) (#1957)',
+    (tester) async {
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            targetPreviewProvider.overrideWith((ref, key) async => null),
+            tonightSkyAtProvider.overrideWith(
+              (ref, at) async => [_allNight('NGC0246', 'Skull Nebula', 80)],
+            ),
+          ],
+          child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+        ),
+      );
+      await tester.tap(find.text('Plan it'));
+      await tester.pumpAndSettle();
+      expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget);
+    },
+  );
 
-  testWidgets('Plan it ranks at the window midpoint and shows a plan card',
-      (tester) async {
+  testWidgets('Plan it ranks at the window midpoint and shows a plan card', (
+    tester,
+  ) async {
     DateTime? rankedAt;
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        tonightSkyAtProvider.overrideWith((ref, at) async {
-          rankedAt = at;
-          return [_allNight('X', 'Test Nebula', 80)];
-        }),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          tonightSkyAtProvider.overrideWith((ref, at) async {
+            rankedAt = at;
+            return [_allNight('X', 'Test Nebula', 80)];
+          }),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+      ),
+    );
 
     await tester.tap(find.text('Plan it'));
     await tester.pumpAndSettle();
 
-    expect(rankedAt, isNotNull,
-        reason: 'planning must rank around the window midpoint');
+    expect(
+      rankedAt,
+      isNotNull,
+      reason: 'planning must rank around the window midpoint',
+    );
     expect(find.text('Test Nebula'), findsOneWidget);
     // Sub counts render (overhead-adjusted, so just assert the shape).
     expect(find.textContaining('subs ×'), findsOneWidget);
@@ -127,19 +165,24 @@ void main() {
     expect(find.byTooltip('Add to a run (3.0 h)'), findsOneWidget);
   });
 
-  testWidgets('Swap offers the other candidates and replaces the target',
-      (tester) async {
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        tonightSkyAtProvider.overrideWith((ref, at) async => [
+  testWidgets('Swap offers the other candidates and replaces the target', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          tonightSkyAtProvider.overrideWith(
+            (ref, at) async => [
               _allNight('X', 'Test Nebula', 80),
               _allNight('Y', 'Runner Up', 70),
               _allNight('Z', 'Third Place', 60),
-            ]),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
+            ],
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+      ),
+    );
     await tester.tap(find.text('Plan it'));
     await tester.pumpAndSettle();
     expect(find.text('Test Nebula'), findsOneWidget);
@@ -149,8 +192,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.textContaining('Runner Up'), findsOneWidget);
     expect(find.textContaining('Third Place'), findsOneWidget);
-    expect(find.textContaining('Test Nebula'), findsOneWidget,
-        reason: 'the planned object is not offered as its own swap');
+    expect(
+      find.textContaining('Test Nebula'),
+      findsOneWidget,
+      reason: 'the planned object is not offered as its own swap',
+    );
 
     await tester.tap(find.textContaining('Third Place'));
     await tester.pumpAndSettle();
@@ -160,67 +206,84 @@ void main() {
     expect(find.byTooltip('Add to a run (3.0 h)'), findsOneWidget);
   });
 
-  testWidgets('Show sends rotation and grid even when untouched, so a previous slot cannot leak',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      targetPreviewProvider.overrideWith((ref, key) async => null),
-      opticsSettingsProvider.overrideWith(() => _FixedOptics()),
-      tonightSkyAtProvider
-          .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
-    ]);
-    addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog<void>(
-                  context: context, builder: (_) => const SessionPlanDialog()),
-              child: const Text('open'),
+  testWidgets(
+    'Show sends rotation and grid even when untouched, so a previous slot cannot leak',
+    (tester) async {
+      final container = ProviderContainer(
+        overrides: [
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          opticsSettingsProvider.overrideWith(() => _FixedOptics()),
+          tonightSkyAtProvider.overrideWith(
+            (ref, at) async => [_allNight('X', 'Test Nebula', 80)],
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: MaterialApp(
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => TextButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    builder: (_) => const SessionPlanDialog(),
+                  ),
+                  child: const Text('open'),
+                ),
+              ),
             ),
           ),
         ),
-      ),
-    ));
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Plan it'));
-    await tester.pumpAndSettle();
-    await tester.ensureVisible(find.byTooltip('Show on the planetarium'));
-    await tester.tap(find.byTooltip('Show on the planetarium'));
-    await tester.pumpAndSettle();
-    final cmd = container.read(planetariumCommandProvider)!;
-    expect(cmd['rot'], 0.0);
-    expect(cmd['cols'], 1);
-    expect(cmd['rows'], 1);
-    expect(cmd['overlap'], 10);
-  });
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Plan it'));
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.byTooltip('Show on the planetarium'));
+      await tester.tap(find.byTooltip('Show on the planetarium'));
+      await tester.pumpAndSettle();
+      final cmd = container.read(planetariumCommandProvider)!;
+      expect(cmd['rot'], 0.0);
+      expect(cmd['cols'], 1);
+      expect(cmd['rows'], 1);
+      expect(cmd['overlap'], 10);
+    },
+  );
 
-  testWidgets('Show on atlas closes the dialog and the plan survives reopen',
-      (tester) async {
-    final container = ProviderContainer(overrides: [
-      targetPreviewProvider.overrideWith((ref, key) async => null),
-      // A configured train so the rotation control is offered.
-      opticsSettingsProvider.overrideWith(() => _FixedOptics()),
-      tonightSkyAtProvider
-          .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
-    ]);
+  testWidgets('Show on atlas closes the dialog and the plan survives reopen', (
+    tester,
+  ) async {
+    final container = ProviderContainer(
+      overrides: [
+        targetPreviewProvider.overrideWith((ref, key) async => null),
+        // A configured train so the rotation control is offered.
+        opticsSettingsProvider.overrideWith(() => _FixedOptics()),
+        tonightSkyAtProvider.overrideWith(
+          (ref, at) async => [_allNight('X', 'Test Nebula', 80)],
+        ),
+      ],
+    );
     addTearDown(container.dispose);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: MaterialApp(
-        home: Scaffold(
-          body: Builder(
-            builder: (context) => TextButton(
-              onPressed: () => showDialog<void>(
-                  context: context, builder: (_) => const SessionPlanDialog()),
-              child: const Text('open'),
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => const SessionPlanDialog(),
+                ),
+                child: const Text('open'),
+              ),
             ),
           ),
         ),
       ),
-    ));
+    );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Plan it'));
@@ -269,30 +332,41 @@ void main() {
 
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
-    expect(find.text('Test Nebula'), findsOneWidget,
-        reason: 'the plan is kept across close/reopen');
+    expect(
+      find.text('Test Nebula'),
+      findsOneWidget,
+      reason: 'the plan is kept across close/reopen',
+    );
     expect(find.text('Plan it again'), findsOneWidget);
     expect(find.text('135°'), findsOneWidget, reason: 'rotation kept too');
-    expect(find.textContaining('(2 panels)'), findsOneWidget, reason: 'grid kept too');
+    expect(
+      find.textContaining('(2 panels)'),
+      findsOneWidget,
+      reason: 'grid kept too',
+    );
   });
 
-  testWidgets('A double-tap on a card\'s add button creates one run, not two',
-      (tester) async {
+  testWidgets('A double-tap on a card\'s add button creates one run, not two', (
+    tester,
+  ) async {
     // No daemon → createImagingRun takes the offline-draft path, whose only
     // side effect is one draft save per run. The store's save hangs until
     // released, so the first add is still in flight when the second tap
     // lands — exactly the double-tap the guard has to absorb.
     final drafts = _HangingDraftService();
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        targetPreviewProvider.overrideWith((ref, key) async => null),
-        tonightSkyAtProvider
-            .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
-        sequenceApiProvider.overrideWith((ref) => null),
-        draftSequenceServiceProvider.overrideWithValue(drafts),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
-    ));
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          targetPreviewProvider.overrideWith((ref, key) async => null),
+          tonightSkyAtProvider.overrideWith(
+            (ref, at) async => [_allNight('X', 'Test Nebula', 80)],
+          ),
+          sequenceApiProvider.overrideWith((ref) => null),
+          draftSequenceServiceProvider.overrideWithValue(drafts),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+      ),
+    );
     await tester.tap(find.text('Plan it'));
     await tester.pumpAndSettle();
 
@@ -303,8 +377,11 @@ void main() {
     expect(drafts.saves, 1, reason: 'the first tap starts a run');
     await tester.tap(add, warnIfMissed: false);
     await tester.pump();
-    expect(drafts.saves, 1,
-        reason: 'a second tap while the first add is in flight must be a no-op');
+    expect(
+      drafts.saves,
+      1,
+      reason: 'a second tap while the first add is in flight must be a no-op',
+    );
 
     drafts.release();
     await tester.pumpAndSettle();
@@ -345,8 +422,8 @@ class _FixedOptics extends OpticsSettingsNotifier {
       sensorWidthPx: 6248,
       sensorHeightPx: 4176,
       pixelSizeUm: 3.76,
-      apertureMm: 51),
+      apertureMm: 51,
+    ),
     source: SectionSource.rig,
   );
-
 }

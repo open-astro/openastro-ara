@@ -8394,6 +8394,38 @@
       }
     }
   },
+  "bestHours": "Imaging hours",
+  "@bestHours": {
+    "description": "Time range control label: keep Targets whose dark window overlaps these local hours"
+  },
+  "bestHoursAny": "Any time",
+  "@bestHoursAny": {
+    "description": "Imaging hours: no range"
+  },
+  "bestHoursPick": "Pick hours",
+  "@bestHoursPick": {
+    "description": "Imaging hours: opens the time pickers"
+  },
+  "bestHoursRange": "{from}-{to}",
+  "@bestHoursRange": {
+    "description": "Imaging hours as set, 24-hour local times",
+    "placeholders": {
+      "from": {
+        "type": "String"
+      },
+      "to": {
+        "type": "String"
+      }
+    }
+  },
+  "bestHoursFromHelp": "Imaging starts",
+  "@bestHoursFromHelp": {
+    "description": "Time picker title for the start of the imaging hours"
+  },
+  "bestHoursToHelp": "Imaging ends",
+  "@bestHoursToHelp": {
+    "description": "Time picker title for the end of the imaging hours"
+  },
   "bestField": "Field",
   "@bestField": {
     "description": "Fits my field control label"

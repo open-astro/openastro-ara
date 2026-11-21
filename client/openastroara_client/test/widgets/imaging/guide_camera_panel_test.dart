@@ -116,6 +116,7 @@ class _FakeGuider implements GuiderClient {
     starts++;
     return null;
   }
+
   @override
   void close() {}
   @override

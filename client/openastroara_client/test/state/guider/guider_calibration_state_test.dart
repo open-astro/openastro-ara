@@ -58,10 +58,13 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
     defectBuilds++;
     if (throwOnBuild) throw StateError('build failed');
   }
+
   @override
-  Future<void> setDarkLibraryEnabled(bool enabled) async => darkEnabled = enabled;
+  Future<void> setDarkLibraryEnabled(bool enabled) async =>
+      darkEnabled = enabled;
   @override
-  Future<void> setDefectMapEnabled(bool enabled) async => defectEnabled = enabled;
+  Future<void> setDefectMapEnabled(bool enabled) async =>
+      defectEnabled = enabled;
   int deletes = 0;
   bool? lastDeleteDarks;
   bool? lastDeleteDefectmap;
@@ -82,16 +85,24 @@ class _FakeCalibrationClient implements GuiderCalibrationClient {
   void close() {}
 }
 
-ProviderContainer _container(List<AraServer> servers, GuiderCalibrationClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    guiderCalibrationApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+ProviderContainer _container(
+  List<AraServer> servers,
+  GuiderCalibrationClient api,
+) {
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      guiderCalibrationApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
 
-CalibrationStatusResponse _resp({bool darkExists = false}) => CalibrationStatusResponse(
+CalibrationStatusResponse _resp({bool darkExists = false}) =>
+    CalibrationStatusResponse(
       connected: true,
       status: CalibrationStatus(profileId: 1, darkLibraryExists: darkExists),
     );
@@ -108,7 +119,9 @@ void main() {
     });
 
     test('active server → exposes the calibration status', () async {
-      final c = _container(const [server], _FakeCalibrationClient(_resp(darkExists: true)));
+      final c = _container(const [
+        server,
+      ], _FakeCalibrationClient(_resp(darkExists: true)));
       await c.read(savedServersProvider.future);
       final r = await c.read(guiderCalibrationProvider.future);
       expect(r!.connected, isTrue);
@@ -122,10 +135,15 @@ void main() {
       await c.read(guiderCalibrationProvider.future);
 
       api.response = _resp(darkExists: true);
-      await c.read(guiderCalibrationProvider.notifier).buildDarkLibrary(frameCount: 10);
+      await c
+          .read(guiderCalibrationProvider.notifier)
+          .buildDarkLibrary(frameCount: 10);
 
       expect(api.darkBuilds, 1);
-      expect(c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists, isTrue);
+      expect(
+        c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists,
+        isTrue,
+      );
     });
 
     test('buildDefectMap forwards to the client then refreshes', () async {
@@ -134,27 +152,37 @@ void main() {
       await c.read(savedServersProvider.future);
       await c.read(guiderCalibrationProvider.future);
 
-      await c.read(guiderCalibrationProvider.notifier).buildDefectMap(exposureMs: 4000);
+      await c
+          .read(guiderCalibrationProvider.notifier)
+          .buildDefectMap(exposureMs: 4000);
 
       expect(api.defectBuilds, 1);
       expect(c.read(guiderCalibrationProvider).hasValue, isTrue);
     });
 
-    test('setDarkLibraryEnabled / setDefectMapEnabled forward the flag', () async {
-      final api = _FakeCalibrationClient(_resp());
-      final c = _container(const [server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(guiderCalibrationProvider.future);
+    test(
+      'setDarkLibraryEnabled / setDefectMapEnabled forward the flag',
+      () async {
+        final api = _FakeCalibrationClient(_resp());
+        final c = _container(const [server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(guiderCalibrationProvider.future);
 
-      await c.read(guiderCalibrationProvider.notifier).setDarkLibraryEnabled(false);
-      await c.read(guiderCalibrationProvider.notifier).setDefectMapEnabled(true);
+        await c
+            .read(guiderCalibrationProvider.notifier)
+            .setDarkLibraryEnabled(false);
+        await c
+            .read(guiderCalibrationProvider.notifier)
+            .setDefectMapEnabled(true);
 
-      expect(api.darkEnabled, isFalse);
-      expect(api.defectEnabled, isTrue);
-    });
+        expect(api.darkEnabled, isFalse);
+        expect(api.defectEnabled, isTrue);
+      },
+    );
 
     test('a second action while one is in flight is ignored (state.isLoading guard)', () async {
-      final api = _FakeCalibrationClient(_resp())..buildGate = Completer<void>();
+      final api = _FakeCalibrationClient(_resp())
+        ..buildGate = Completer<void>();
       final c = _container(const [server], api);
       await c.read(savedServersProvider.future);
       await c.read(guiderCalibrationProvider.future);
@@ -170,22 +198,30 @@ void main() {
     });
 
     test('a server switch mid-action ends on the new server status (generation guard)', () async {
-      final fakeA = _FakeCalibrationClient(_resp())..buildGate = Completer<void>();
+      final fakeA = _FakeCalibrationClient(_resp())
+        ..buildGate = Completer<void>();
       final fakeB = _FakeCalibrationClient(_resp(darkExists: true));
       const serverA = AraServer(hostname: 'a', port: 5555);
       const serverB = AraServer(hostname: 'b', port: 5555);
-      final c = ProviderContainer(overrides: [
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [serverA])),
-        guiderCalibrationApiFactoryProvider
-            .overrideWithValue((s) => s.hostname == 'a' ? fakeA : fakeB),
-      ]);
+      final c = ProviderContainer(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [serverA]),
+          ),
+          guiderCalibrationApiFactoryProvider.overrideWithValue(
+            (s) => s.hostname == 'a' ? fakeA : fakeB,
+          ),
+        ],
+      );
       addTearDown(c.dispose);
       await c.read(savedServersProvider.future);
       final sub = c.listen(guiderCalibrationProvider, (_, _) {});
       addTearDown(sub.close);
       await c.read(guiderCalibrationProvider.future);
 
-      final f = c.read(guiderCalibrationProvider.notifier).buildDarkLibrary(); // gated on fakeA
+      final f = c
+          .read(guiderCalibrationProvider.notifier)
+          .buildDarkLibrary(); // gated on fakeA
       await pumpEventQueue();
       // Switch the active server mid-action → build() re-runs against fakeB.
       await c.read(savedServersProvider.notifier).add(serverB);
@@ -195,8 +231,11 @@ void main() {
       await pumpEventQueue();
 
       final r = c.read(guiderCalibrationProvider).value;
-      expect(r!.status!.darkLibraryExists, isTrue,
-          reason: 'ends on server B status — the stale action refresh is dropped by the gen guard');
+      expect(
+        r!.status!.darkLibraryExists,
+        isTrue,
+        reason: 'ends on server B status — the stale action refresh is dropped by the gen guard',
+      );
     });
 
     test('deleteCalibrationFiles forwards the flags then refreshes', () async {
@@ -213,12 +252,16 @@ void main() {
       expect(api.deletes, 1);
       expect(api.lastDeleteDarks, isTrue);
       expect(api.lastDeleteDefectmap, isFalse);
-      expect(c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists, isFalse,
-          reason: 'the trailing refresh re-read status after the delete');
+      expect(
+        c.read(guiderCalibrationProvider).value!.status!.darkLibraryExists,
+        isFalse,
+        reason: 'the trailing refresh re-read status after the delete',
+      );
     });
 
     test('a failed delete surfaces as AsyncError', () async {
-      final api = _FakeCalibrationClient(_resp(darkExists: true))..throwOnDelete = true;
+      final api = _FakeCalibrationClient(_resp(darkExists: true))
+        ..throwOnDelete = true;
       final c = _container(const [server], api);
       await c.read(savedServersProvider.future);
       await c.read(guiderCalibrationProvider.future);

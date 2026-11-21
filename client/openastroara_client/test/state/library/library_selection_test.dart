@@ -46,8 +46,10 @@ void main() {
       final initial = container.read(librarySelectionProvider);
       notifier.clear();
       // identity-equal because we guarded the no-op path
-      expect(identical(container.read(librarySelectionProvider), initial),
-          isTrue);
+      expect(
+        identical(container.read(librarySelectionProvider), initial),
+        isTrue,
+      );
     });
 
     test('contains reports membership correctly', () {

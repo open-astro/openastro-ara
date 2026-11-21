@@ -116,18 +116,20 @@ void main() {
     }
   });
 
-  testWidgets('selecting a folded row runs the action (Load opens its dialog)',
-      (tester) async {
-    // Without this, _MoreMenu.onSelected could be dropped and every other
-    // test would still pass while the folded actions did nothing.
-    await pumpAt(tester, 400);
-    await tester.tap(moreMenu());
-    await tester.pumpAndSettle();
-    expect(find.text('Load sequence'), findsNothing);
-    await tester.tap(menuRow('Load'));
-    await tester.pumpAndSettle();
-    expect(find.text('Load sequence'), findsOneWidget);
-  });
+  testWidgets(
+    'selecting a folded row runs the action (Load opens its dialog)',
+    (tester) async {
+      // Without this, _MoreMenu.onSelected could be dropped and every other
+      // test would still pass while the folded actions did nothing.
+      await pumpAt(tester, 400);
+      await tester.tap(moreMenu());
+      await tester.pumpAndSettle();
+      expect(find.text('Load sequence'), findsNothing);
+      await tester.tap(menuRow('Load'));
+      await tester.pumpAndSettle();
+      expect(find.text('Load sequence'), findsOneWidget);
+    },
+  );
 
   testWidgets('nothing overflows the row at any width', (tester) async {
     // 320 px is the documented floor (the smallest phone the client targets).

@@ -1,7 +1,9 @@
 import 'dart:async';
+
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../app_locale_state.dart';
+
 import 'dart:io';
 
 import 'package:crypto/crypto.dart';
@@ -68,23 +70,24 @@ class BackupStreamState {
     String? problem,
     bool clearProblem = false,
     bool clearMeasured = false,
-  }) =>
-      BackupStreamState(
-        enabled: enabled ?? this.enabled,
-        active: active ?? this.active,
-        localRoot: localRoot ?? this.localRoot,
-        pendingCount: pendingCount ?? this.pendingCount,
-        syncedThisSession: syncedThisSession ?? this.syncedThisSession,
-        syncedBytesThisSession: syncedBytesThisSession ?? this.syncedBytesThisSession,
-        maxMbps: maxMbps ?? this.maxMbps,
-        measuredMbps: clearMeasured ? null : (measuredMbps ?? this.measuredMbps),
-        problem: clearProblem ? null : (problem ?? this.problem),
-      );
+  }) => BackupStreamState(
+    enabled: enabled ?? this.enabled,
+    active: active ?? this.active,
+    localRoot: localRoot ?? this.localRoot,
+    pendingCount: pendingCount ?? this.pendingCount,
+    syncedThisSession: syncedThisSession ?? this.syncedThisSession,
+    syncedBytesThisSession:
+        syncedBytesThisSession ?? this.syncedBytesThisSession,
+    maxMbps: maxMbps ?? this.maxMbps,
+    measuredMbps: clearMeasured ? null : (measuredMbps ?? this.measuredMbps),
+    problem: clearProblem ? null : (problem ?? this.problem),
+  );
 }
 
 /// Device-local persistence for the toggle + folder (overridable in tests).
-final backupStreamPrefsProvider =
-    Provider<BackupStreamPrefsService>((ref) => BackupStreamPrefsService());
+final backupStreamPrefsProvider = Provider<BackupStreamPrefsService>(
+  (ref) => BackupStreamPrefsService(),
+);
 
 /// The §44 desktop puller: claim the daemon's stream slot, poll the pending
 /// queue (nudged by `frame.complete`), download each frame, verify its
@@ -175,8 +178,15 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   void _persist() {
-    unawaited(ref.read(backupStreamPrefsProvider).save(
-        enabled: state.enabled, root: state.localRoot, maxMbps: state.maxMbps));
+    unawaited(
+      ref
+          .read(backupStreamPrefsProvider)
+          .save(
+            enabled: state.enabled,
+            root: state.localRoot,
+            maxMbps: state.maxMbps,
+          ),
+    );
   }
 
   String get _hostname => (hostnameResolver ?? () => Platform.localHostname)();
@@ -196,7 +206,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         try {
           if (hadSlot) await oldClient.release(_hostname);
         } catch (e) {
-          debugPrint('backup-stream release on server switch failed (best-effort): $e');
+          debugPrint(
+            'backup-stream release on server switch failed (best-effort): $e',
+          );
         }
         oldClient.close();
       }());
@@ -204,7 +216,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     _reclaimedOnce = false;
     _storedUnacked.clear();
     if (state.active || state.pendingCount > 0 || state.measuredMbps != null) {
-      state = state.copyWith(active: false, pendingCount: 0, clearMeasured: true);
+      state = state.copyWith(
+        active: false,
+        pendingCount: 0,
+        clearMeasured: true,
+      );
     }
   }
 
@@ -305,7 +321,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       target = ref.read(activeServerProvider);
       final client = _resolveClient();
       if (target == null || client == null) {
-        state = state.copyWith(active: false, problem: 'Connect to a server first.');
+        state = state.copyWith(
+          active: false,
+          problem: 'Connect to a server first.',
+        );
         return;
       }
       final granted = await client.claim(_hostname);
@@ -318,7 +337,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           try {
             await client.release(_hostname);
           } catch (e) {
-            debugPrint('backup-stream release of a stale mid-switch claim failed (best-effort): $e');
+            debugPrint(
+              'backup-stream release of a stale mid-switch claim failed (best-effort): $e',
+            );
           }
         }
         return;
@@ -329,9 +350,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           holder = (await client.status()).activeTarget;
         } catch (_) {}
         state = state.copyWith(
-            active: false,
-            problem:
-                'Another desktop${holder == null ? '' : ' ($holder)'} is already streaming from this server.');
+          active: false,
+          problem:
+              'Another desktop${holder == null ? '' : ' ($holder)'} is already streaming from this server.',
+        );
         return;
       }
       // NOTE: _reclaimedOnce is deliberately NOT reset here — only a
@@ -342,10 +364,14 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     } catch (e) {
       // A throw from a client the mid-await switch just closed isn't the new
       // server's problem — stay quiet and let the next tick claim fresh.
-      if (target != null && ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
+      if (target != null &&
+          ref.read(activeServerProvider)?.baseUrl != target.baseUrl) {
         return;
       }
-      state = state.copyWith(active: false, problem: _friendly(e, (l) => l.actionStartCopyingFrames));
+      state = state.copyWith(
+        active: false,
+        problem: _friendly(e, (l) => l.actionStartCopyingFrames),
+      );
     } finally {
       _claiming = false;
     }
@@ -400,7 +426,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           state = state.copyWith(
             pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
             syncedThisSession: state.syncedThisSession + 1,
-            syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
+            syncedBytesThisSession:
+                state.syncedBytesThisSession + entry.sizeBytes,
           );
           continue;
         }
@@ -411,7 +438,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         var attempts = 1;
         if (error != null) {
           attempts = 2;
-          (error, downloadTime) = await _pullVerifyStore(client, entry); // one retry
+          (error, downloadTime) = await _pullVerifyStore(
+            client,
+            entry,
+          ); // one retry
         }
         if (error != null) {
           // Surface it and move on — the queue is oldest-first and an
@@ -425,13 +455,20 @@ class BackupStreamController extends Notifier<BackupStreamState> {
           // flatten it to a generic sentence and lose the cause.
           state = state.copyWith(
             problem: l10nFor(ref.read(appLocaleProvider)).backupEntryFailing(
-                entry.id,
-                error is String ? error : _friendly(error, (l) => l.actionBackUpEntry)));
+              entry.id,
+              error is String
+                  ? error
+                  : _friendly(error, (l) => l.actionBackUpEntry),
+            ),
+          );
           // Failed attempts still moved bytes over the link (a checksum
           // mismatch is a full discarded transfer) — the cap must hold on
           // exactly the flaky links that produce failures, so pace the full
           // floor before touching the next entry.
-          final failedFloor = paceFloor(entry.sizeBytes * attempts, state.maxMbps);
+          final failedFloor = paceFloor(
+            entry.sizeBytes * attempts,
+            state.maxMbps,
+          );
           if (failedFloor > Duration.zero) {
             await pacer(failedFloor);
             if (!state.enabled || !state.active) return;
@@ -450,7 +487,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         state = state.copyWith(
           pendingCount: state.pendingCount > 0 ? state.pendingCount - 1 : 0,
           syncedThisSession: state.syncedThisSession + 1,
-          syncedBytesThisSession: state.syncedBytesThisSession + entry.sizeBytes,
+          syncedBytesThisSession:
+              state.syncedBytesThisSession + entry.sizeBytes,
         );
         // downloadTime spans ONLY client.downloadFrame (and only the attempt
         // that succeeded) — sha hashing and disk writes must inflate neither
@@ -480,8 +518,9 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       // Transient transport trouble: surface it, keep the loop; the next
       // tick retries.
       state = state.copyWith(
-          problem: l10nFor(ref.read(appLocaleProvider))
-              .backupStreamHiccup(_friendly(e, (l) => l.actionKeepBackupGoing)));
+        problem: l10nFor(ref.read(appLocaleProvider))
+            .backupStreamHiccup(_friendly(e, (l) => l.actionKeepBackupGoing)),
+      );
     } finally {
       _polling = false;
     }
@@ -494,9 +533,11 @@ class BackupStreamController extends Notifier<BackupStreamState> {
       } else {
         _stopLoop();
         state = state.copyWith(
-            enabled: false,
-            active: false,
-            problem: 'Backup stream stopped — ${slotLost.holder ?? 'another desktop'} took over the slot.');
+          enabled: false,
+          active: false,
+          problem:
+              'Backup stream stopped — ${slotLost.holder ?? 'another desktop'} took over the slot.',
+        );
         _persist();
       }
     }
@@ -507,7 +548,10 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   /// pacing/measurement — else the failure: a `String` description for
   /// checksum mismatch, or the caught exception (disk trouble, transport
   /// error) so the caller can render it; the caller decides whether to retry.
-  Future<(Object?, Duration?)> _pullVerifyStore(BackupStreamClient client, BackupStreamQueueEntry entry) async {
+  Future<(Object?, Duration?)> _pullVerifyStore(
+    BackupStreamClient client,
+    BackupStreamQueueEntry entry,
+  ) async {
     try {
       // Stopwatch, not DateTime.now(): Windows' wall clock ticks ~1-16 ms,
       // coarse enough to read a fast transfer as zero elapsed.
@@ -533,12 +577,16 @@ class BackupStreamController extends Notifier<BackupStreamState> {
         final parts = [hostDir, ...mirrored];
         final filename = parts.removeLast();
         dir = Directory(
-            '${state.localRoot}${Platform.pathSeparator}${parts.join(Platform.pathSeparator)}');
+          '${state.localRoot}${Platform.pathSeparator}${parts.join(Platform.pathSeparator)}',
+        );
         file = File('${dir.path}${Platform.pathSeparator}$filename');
       } else {
         dir = Directory(
-            '${state.localRoot}${Platform.pathSeparator}$hostDir${Platform.pathSeparator}${_sanitize(entry.sessionId)}');
-        file = File('${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}${frameFileExtension(bytes)}');
+          '${state.localRoot}${Platform.pathSeparator}$hostDir${Platform.pathSeparator}${_sanitize(entry.sessionId)}',
+        );
+        file = File(
+          '${dir.path}${Platform.pathSeparator}${_sanitize(entry.id)}${frameFileExtension(bytes)}',
+        );
       }
       await dir.create(recursive: true);
       // Temp + rename so a crash mid-write never leaves a plausible-looking
@@ -556,7 +604,8 @@ class BackupStreamController extends Notifier<BackupStreamState> {
     }
   }
 
-  static bool _digestMatches(String a, String b) => a.toLowerCase() == b.toLowerCase();
+  static bool _digestMatches(String a, String b) =>
+      a.toLowerCase() == b.toLowerCase();
 
   /// The extension an id-named mirror file gets (#1148): the rig writes FITS
   /// or XISF, and with no store-relative path to copy the name from, the
@@ -604,12 +653,13 @@ class BackupStreamController extends Notifier<BackupStreamState> {
   }
 
   void _recordThroughput(int bytes, Duration elapsed) {
-    if (state.measuredMbps != null || bytes <= 0 || elapsed.inMicroseconds <= 0) {
+    if (state.measuredMbps != null ||
+        bytes <= 0 ||
+        elapsed.inMicroseconds <= 0) {
       return;
     }
     // First pull of the session doubles as the §44.4 link measurement.
-    state = state.copyWith(
-        measuredMbps: bytes * 8 / elapsed.inMicroseconds);
+    state = state.copyWith(measuredMbps: bytes * 8 / elapsed.inMicroseconds);
   }
 
   void _stopLoop() {
@@ -627,4 +677,6 @@ class BackupStreamController extends Notifier<BackupStreamState> {
 }
 
 final backupStreamProvider =
-    NotifierProvider<BackupStreamController, BackupStreamState>(BackupStreamController.new);
+    NotifierProvider<BackupStreamController, BackupStreamState>(
+      BackupStreamController.new,
+    );

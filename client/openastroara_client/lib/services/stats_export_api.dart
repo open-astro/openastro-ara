@@ -30,13 +30,16 @@ class StatsExportApi implements StatsExportClient {
   /// [dio] is injectable so tests can supply a mock `HttpClientAdapter`;
   /// production passes nothing and a server-bound Dio is built.
   StatsExportApi(AraServer server, {Dio? dio})
-      : _baseUrl = server.baseUrl,
-        _dio = dio ??
-            Dio(BaseOptions(
+    : _baseUrl = server.baseUrl,
+      _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               receiveTimeout: const Duration(seconds: 10),
-            ));
+            ),
+          );
 
   @override
   Future<String> fetchCsv(String scope) async {
@@ -57,7 +60,9 @@ class StatsExportApi implements StatsExportClient {
     final res = await _dio.get<dynamic>('/api/v1/stats/targets');
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException('stats/targets returned a non-object body (${data.runtimeType})');
+      throw FormatException(
+        'stats/targets returned a non-object body (${data.runtimeType})',
+      );
     }
     final list = data['targets'];
     if (list is! List) {
@@ -76,10 +81,12 @@ class StatsExportApi implements StatsExportClient {
       // Resolve the export path against the base URL via Uri so an origin/port
       // (and any base path) is handled correctly rather than string-spliced; the
       // target is percent-encoded as a query value.
-      Uri.parse(_baseUrl).replace(
-        path: '/api/v1/stats/export/astrobin',
-        queryParameters: <String, String>{'target': target},
-      ).toString();
+      Uri.parse(_baseUrl)
+          .replace(
+            path: '/api/v1/stats/export/astrobin',
+            queryParameters: <String, String>{'target': target},
+          )
+          .toString();
 
   @override
   void close() => _dio.close(force: true);

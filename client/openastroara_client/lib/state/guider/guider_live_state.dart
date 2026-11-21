@@ -60,7 +60,9 @@ class GuiderLiveState {
     calibration: calibration ?? this.calibration,
     busy: busy ?? this.busy,
     error: clearError ? null : (error ?? this.error),
-    findStarFailed: clearError ? false : (error != null ? findStarFailed : this.findStarFailed),
+    findStarFailed: clearError
+        ? false
+        : (error != null ? findStarFailed : this.findStarFailed),
   );
 }
 

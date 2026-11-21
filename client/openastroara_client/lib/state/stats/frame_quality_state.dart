@@ -9,8 +9,8 @@ import 'stats_refresh_mixin.dart';
 /// Builds a [FrameQualityClient] for a server. Overridable in tests.
 final frameQualityApiFactoryProvider =
     Provider<FrameQualityClient Function(AraServer)>(
-  (ref) => FrameQualityApi.new,
-);
+      (ref) => FrameQualityApi.new,
+    );
 
 /// [FrameQualityClient] bound to the active server ([activeServerProvider]), or
 /// `null` when no server is saved. Closes the old Dio on a server change.
@@ -37,11 +37,12 @@ class FrameQualityNotifier extends AsyncNotifier<FrameQualityDistribution?>
   /// Re-reads the distribution, keeping the previous histogram on screen if the
   /// read fails (the chart shows a stale banner). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-        final api = ref.read(frameQualityApiProvider);
-        return api?.fetch();
-      });
+    final api = ref.read(frameQualityApiProvider);
+    return api?.fetch();
+  });
 }
 
 final frameQualityProvider =
     AsyncNotifierProvider<FrameQualityNotifier, FrameQualityDistribution?>(
-        FrameQualityNotifier.new);
+      FrameQualityNotifier.new,
+    );

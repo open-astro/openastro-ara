@@ -77,10 +77,16 @@ void main() {
       expect(s.pushoverUserKey, 'user-key-1');
       expect(s.telegramChatId, '12345');
 
-      const a = NotificationsSettings(pushoverUserKey: 'uk', telegramChatId: 'ch');
+      const a = NotificationsSettings(
+        pushoverUserKey: 'uk',
+        telegramChatId: 'ch',
+      );
       final b = a.copyWith(inAppBanner: false);
-      expect(b.pushoverUserKey, 'uk',
-          reason: 'copyWith must carry the new fields like their token siblings');
+      expect(
+        b.pushoverUserKey,
+        'uk',
+        reason: 'copyWith must carry the new fields like their token siblings',
+      );
       expect(b.telegramChatId, 'ch');
     });
 

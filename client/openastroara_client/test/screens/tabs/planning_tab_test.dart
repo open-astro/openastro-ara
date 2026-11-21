@@ -16,8 +16,9 @@ import 'package:openastroara/widgets/sky_atlas/stellarium_view.dart';
 // the headless test env. Calling build() exercises the tab's contract without
 // that I/O.
 void main() {
-  testWidgets('builds the full-bleed Stellarium planetarium renderer',
-      (tester) async {
+  testWidgets('builds the full-bleed Stellarium planetarium renderer', (
+    tester,
+  ) async {
     late Widget built;
     await tester.pumpWidget(
       MaterialApp(

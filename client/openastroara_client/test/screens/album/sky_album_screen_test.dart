@@ -4,8 +4,10 @@
 import 'dart:async';
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
-import 'package:flutter/cupertino.dart' show CupertinoActionSheet, CupertinoContextMenu;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
+import 'package:flutter/cupertino.dart'
+    show CupertinoActionSheet, CupertinoContextMenu;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
@@ -34,9 +36,24 @@ import 'package:openastroara/widgets/album/album_card.dart';
 /// neither shell, the card front on Art or the Placeholder, the baseball-card
 /// back.
 
-PlanningDso _dso(String id, String name, {int? m, int? c, double ra = 10, List<String> aliases = const []}) =>
-    PlanningDso(id: id, name: name, type: 'G', magnitude: 5, raDeg: ra, decDeg: 20, messierNum: m, caldwellNum: c,
-        aliases: [if (m != null) 'M $m', if (c != null) 'C $c', ...aliases]);
+PlanningDso _dso(
+  String id,
+  String name, {
+  int? m,
+  int? c,
+  double ra = 10,
+  List<String> aliases = const [],
+}) => PlanningDso(
+  id: id,
+  name: name,
+  type: 'G',
+  magnitude: 5,
+  raDeg: ra,
+  decDeg: 20,
+  messierNum: m,
+  caldwellNum: c,
+  aliases: [if (m != null) 'M $m', if (c != null) 'C $c', ...aliases],
+);
 
 final _m1 = _dso('NGC1952', 'Crab Nebula', m: 1, ra: 83.6);
 final _m31 = _dso('NGC0224', 'Andromeda Galaxy', m: 31, ra: 10.68);
@@ -44,8 +61,15 @@ final _m42 = _dso('NGC1976', 'Orion Nebula', m: 42, ra: 83.8);
 final _c14 = _dso('NGC0869', 'Double Cluster', c: 14, ra: 34.7);
 
 TonightSkyObject _tonight(PlanningDso d) => TonightSkyObject(
-    id: d.id, name: d.name, type: d.type, magnitude: d.magnitude, raDeg: d.raDeg, decDeg: d.decDeg,
-    altitudeDeg: 50, maxAltitudeDeg: 70);
+  id: d.id,
+  name: d.name,
+  type: d.type,
+  magnitude: d.magnitude,
+  raDeg: d.raDeg,
+  decDeg: d.decDeg,
+  altitudeDeg: 50,
+  maxAltitudeDeg: 70,
+);
 
 /// The collection cache in memory: no file in widget tests.
 class _MemStore extends AlbumCollectionStore {
@@ -83,70 +107,139 @@ Future<ProviderContainer> _pump(
   addTearDown(tester.view.reset);
   final container = ProviderContainer(
     overrides: [
-      activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1888)),
+      activeServerProvider.overrideWithValue(
+        const AraServer(hostname: 'rig', port: 1888),
+      ),
       albumCollectionStoreProvider.overrideWithValue(
-          _MemStore()..held = AlbumCollection(frames: {if (seen) for (final f in frames) f.frameId: f})),
+        _MemStore()
+          ..held = AlbumCollection(
+            frames: {
+              if (seen)
+                for (final f in frames) f.frameId: f,
+            },
+          ),
+      ),
       albumManifestProvider.overrideWith((ref) async => manifest),
-      bundledCatalogProvider.overrideWith((ref) async => catalog ?? [_m42, _c14, _m31, _m1]),
-      albumFetcherProvider.overrideWithValue(fetcher ??
-          (baseUrl, {since}) async => AlbumFramesPage(totalLights: frames.length, frames: frames)),
-      tonightSkyProvider.overrideWith((ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)]),
-      if (bookPending) albumBookProvider.overrideWith((ref, key) => Completer<AlbumBookView>().future),
+      bundledCatalogProvider.overrideWith(
+        (ref) async => catalog ?? [_m42, _c14, _m31, _m1],
+      ),
+      albumFetcherProvider.overrideWithValue(
+        fetcher ??
+            (baseUrl, {since}) async =>
+                AlbumFramesPage(totalLights: frames.length, frames: frames),
+      ),
+      tonightSkyProvider.overrideWith(
+        (ref) async => tonightRows ?? [for (final d in tonight) _tonight(d)],
+      ),
+      if (bookPending)
+        albumBookProvider.overrideWith(
+          (ref, key) => Completer<AlbumBookView>().future,
+        ),
     ],
   );
   addTearDown(container.dispose);
-  await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(onImageTarget, locale: locale)));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: _app(onImageTarget, locale: locale),
+    ),
+  );
   await tester.pumpAndSettle();
   return container;
 }
 
-Widget _app(void Function(PlanningDso, String)? onImageTarget, {bool open = true, Locale? locale}) => MaterialApp(
-      locale: locale,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: open ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_, _) {}) : const SizedBox(),
-    );
+Widget _app(
+  void Function(PlanningDso, String)? onImageTarget, {
+  bool open = true,
+  Locale? locale,
+}) => MaterialApp(
+  locale: locale,
+  localizationsDelegates: AppLocalizations.localizationsDelegates,
+  supportedLocales: AppLocalizations.supportedLocales,
+  home: open
+      ? SkyAlbumScreen(onImageTarget: onImageTarget ?? (_, _) {})
+      : const SizedBox(),
+);
 
-Finder _onShelf(String text) =>
-    find.descendant(of: find.byKey(const Key('album-shelf-tonight')), matching: find.text(text));
-Finder _onNewShelf(String text) =>
-    find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.text(text));
+Finder _onShelf(String text) => find.descendant(
+  of: find.byKey(const Key('album-shelf-tonight')),
+  matching: find.text(text),
+);
+Finder _onNewShelf(String text) => find.descendant(
+  of: find.byKey(const Key('album-shelf-new')),
+  matching: find.text(text),
+);
 
 // Two hours on M31 (silver), by target name: no pointing stored. One light a night, at local 22:00.
 final _m31Frames = [
   for (var i = 0; i < 4; i++)
-    AlbumFrame(frameId: 'f$i', targetName: 'M 31', exposureSeconds: 1800, filterName: 'L',
-        capturedUtc: DateTime(2026, 3, 2 + i, 22).toUtc()),
+    AlbumFrame(
+      frameId: 'f$i',
+      targetName: 'M 31',
+      exposureSeconds: 1800,
+      filterName: 'L',
+      capturedUtc: DateTime(2026, 3, 2 + i, 22).toUtc(),
+    ),
 ];
 
 Finder albumTierNameFinder(AlbumTier tier) => find.text(switch (tier) {
-      AlbumTier.bronze => 'Bronze',
-      AlbumTier.silver => 'Silver',
-      AlbumTier.gold => 'Gold',
-    });
+  AlbumTier.bronze => 'Bronze',
+  AlbumTier.silver => 'Silver',
+  AlbumTier.gold => 'Gold',
+});
 
 void main() {
-  testWidgets('the reveal fades the tier word in with the border, not in its final colour', (tester) async {
-    final card = AlbumCardData(
-      dso: _m31,
-      label: 'M31',
-      number: 31,
-      bookSize: 110,
-      stats: CardStats(frameCount: 5000, integrationHours: 100, firstCaptureUtc: DateTime.utc(2026), filters: const ['L']),
-    );
-    final tier = card.tier!;
-    final word = albumTierNameFinder(tier);
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: SizedBox(width: 200, height: 280, child: AlbumCardFront(card, reveal: true, revealFrom: AlbumTier.values.first == tier ? null : AlbumTier.values.first)))));
-    Color colour() => tester.widget<Text>(word).style!.color!;
-    expect(colour(), isNot(albumTierColor(tier)), reason: 'first frame');
-    await tester.pumpAndSettle();
-    expect(colour(), albumTierColor(tier));
-  });
+  testWidgets(
+    'the reveal fades the tier word in with the border, not in its final colour',
+    (tester) async {
+      final card = AlbumCardData(
+        dso: _m31,
+        label: 'M31',
+        number: 31,
+        bookSize: 110,
+        stats: CardStats(
+          frameCount: 5000,
+          integrationHours: 100,
+          firstCaptureUtc: DateTime.utc(2026),
+          filters: const ['L'],
+        ),
+      );
+      final tier = card.tier!;
+      final word = albumTierNameFinder(tier);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 200,
+              height: 280,
+              child: AlbumCardFront(
+                card,
+                reveal: true,
+                revealFrom: AlbumTier.values.first == tier
+                    ? null
+                    : AlbumTier.values.first,
+              ),
+            ),
+          ),
+        ),
+      );
+      Color colour() => tester.widget<Text>(word).style!.color!;
+      expect(colour(), isNot(albumTierColor(tier)), reason: 'first frame');
+      await tester.pumpAndSettle();
+      expect(colour(), albumTierColor(tier));
+    },
+  );
 
-  testWidgets('a missing card\'s action calls back with that object', (tester) async {
+  testWidgets('a missing card\'s action calls back with that object', (
+    tester,
+  ) async {
     PlanningDso? picked;
     String? label;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d, l) => (picked, label) = (d, l));
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      onImageTarget: (d, l) => (picked, label) = (d, l),
+    );
 
     await tester.tap(find.text('Crab Nebula'));
     await tester.pumpAndSettle();
@@ -154,79 +247,161 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(picked, same(_m1));
-    expect(label, 'M 1', reason: "the card's label, so the plan names it the same");
-    expect(find.text('Image this target'), findsNothing, reason: 'the card flips back and the album hands over');
+    expect(
+      label,
+      'M 1',
+      reason: "the card's label, so the plan names it the same",
+    );
+    expect(
+      find.text('Image this target'),
+      findsNothing,
+      reason: 'the card flips back and the album hands over',
+    );
   });
 
-  testWidgets('a collected card shows its Nights and totals and offers more time', (tester) async {
-    PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked = d);
+  testWidgets(
+    'a collected card shows its Nights and totals and offers more time',
+    (tester) async {
+      PlanningDso? picked;
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        onImageTarget: (d, _) => picked = d,
+      );
 
-    expect(find.text('1 / 4 collected'), findsOneWidget);
-    await tester.tap(find.text('Andromeda Galaxy'));
-    await tester.pumpAndSettle();
-    expect(find.text('ANDROMEDA GALAXY'), findsOneWidget, reason: 'the banner');
-    expect(find.text('31 / 3'), findsOneWidget, reason: 'catalog number over the Book size');
-    expect(find.text('Total · 4 nights'), findsOneWidget);
-    expect(find.text('2.0 h'), findsOneWidget, reason: 'total hours, with its unit');
-    expect(find.text('1800 s'), findsNWidgets(4), reason: 'one row per Night with its sub');
+      expect(find.text('1 / 4 collected'), findsOneWidget);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('ANDROMEDA GALAXY'),
+        findsOneWidget,
+        reason: 'the banner',
+      );
+      expect(
+        find.text('31 / 3'),
+        findsOneWidget,
+        reason: 'catalog number over the Book size',
+      );
+      expect(find.text('Total · 4 nights'), findsOneWidget);
+      expect(
+        find.text('2.0 h'),
+        findsOneWidget,
+        reason: 'total hours, with its unit',
+      );
+      expect(
+        find.text('1800 s'),
+        findsNWidgets(4),
+        reason: 'one row per Night with its sub',
+      );
 
-    await tester.tap(find.text('Add more time'));
-    await tester.pumpAndSettle();
-    expect(picked, same(_m31));
-  });
+      await tester.tap(find.text('Add more time'));
+      await tester.pumpAndSettle();
+      expect(picked, same(_m31));
+    },
+  );
 
-  testWidgets('the back lists at most four Nights above a totals row with the full count', (tester) async {
-    await _pump(tester, frames: [
-      for (var i = 0; i < 9; i++)
-        AlbumFrame(frameId: 'n$i', targetName: 'M 31', exposureSeconds: 120, capturedUtc: DateTime(2026, 3, 1 + i, 23).toUtc()),
-    ]);
-    await tester.tap(find.text('Andromeda Galaxy'));
-    await tester.pumpAndSettle();
-    expect(find.text('120 s'), findsNWidgets(AlbumCardBack.nightRows));
-    expect(find.text('Total · 9 nights'), findsOneWidget);
-    final latest = MaterialLocalizations.of(tester.element(find.byType(AlbumCardBack)))
-        .formatShortMonthDay(DateTime(2026, 3, 9));
-    expect(find.text(latest), findsOneWidget, reason: 'the latest Night first');
-  });
+  testWidgets(
+    'the back lists at most four Nights above a totals row with the full count',
+    (tester) async {
+      await _pump(
+        tester,
+        frames: [
+          for (var i = 0; i < 9; i++)
+            AlbumFrame(
+              frameId: 'n$i',
+              targetName: 'M 31',
+              exposureSeconds: 120,
+              capturedUtc: DateTime(2026, 3, 1 + i, 23).toUtc(),
+            ),
+        ],
+      );
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(find.text('120 s'), findsNWidgets(AlbumCardBack.nightRows));
+      expect(find.text('Total · 9 nights'), findsOneWidget);
+      final latest = MaterialLocalizations.of(
+        tester.element(find.byType(AlbumCardBack)),
+      ).formatShortMonthDay(DateTime(2026, 3, 9));
+      expect(
+        find.text(latest),
+        findsOneWidget,
+        reason: 'the latest Night first',
+      );
+    },
+  );
 
-  testWidgets('the back carries the bio line, the trivia and the Art credit', (tester) async {
-    await _pump(tester, frames: _m31Frames, manifest: const {
-      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 4.0',
-          distance: '2.5 million ly', trivia: 'It is approaching us.'),
-    });
+  testWidgets('the back carries the bio line, the trivia and the Art credit', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      manifest: const {
+        'M31': AlbumArt(
+          asset: 'assets/album/art/m031.webp',
+          credit: 'ESO',
+          licence: 'CC BY 4.0',
+          distance: '2.5 million ly',
+          trivia: 'It is approaching us.',
+        ),
+      },
+    );
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     expect(find.text('Galaxy · V 5.0 · 2.5 million ly'), findsOneWidget);
     expect(find.text('Did you know?'), findsOneWidget);
     expect(find.text('It is approaching us.'), findsOneWidget);
-    expect(find.text('Art (cropped): ESO · CC BY 4.0', findRichText: true), findsOneWidget);
+    expect(
+      find.text('Art (cropped): ESO · CC BY 4.0', findRichText: true),
+      findsOneWidget,
+    );
   });
 
   testWidgets('tapping the Art credit opens its licence deed', (tester) async {
     final original = UrlLauncherPlatform.instance;
     addTearDown(() => UrlLauncherPlatform.instance = original);
     final launcher = UrlLauncherPlatform.instance = _FakeUrlLauncher();
-    await _pump(tester, frames: _m31Frames, manifest: const {
-      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
-    });
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      manifest: const {
+        'M31': AlbumArt(
+          asset: 'assets/album/art/m031.webp',
+          credit: 'ESO',
+          licence: 'CC BY 2.0',
+        ),
+      },
+    );
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('album-art-credit')));
     await tester.pump();
     expect(launcher.launched, 'https://creativecommons.org/licenses/by/2.0/');
     // A 44 px row, not an inline line of text: a cold hand at the telescope still hits it.
-    expect(tester.getSize(find.byKey(const Key('album-art-credit'))).height, greaterThanOrEqualTo(44));
+    expect(
+      tester.getSize(find.byKey(const Key('album-art-credit'))).height,
+      greaterThanOrEqualTo(44),
+    );
   });
 
-  testWidgets('pulling the collection down runs the same fetch the open runs', (tester) async {
+  testWidgets('pulling the collection down runs the same fetch the open runs', (
+    tester,
+  ) async {
     var fetches = 0;
-    await _pump(tester, frames: _m31Frames, fetcher: (baseUrl, {since}) async {
-      fetches++;
-      return const AlbumFramesPage(totalLights: 0, frames: []);
-    });
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      fetcher: (baseUrl, {since}) async {
+        fetches++;
+        return const AlbumFramesPage(totalLights: 0, frames: []);
+      },
+    );
     expect(fetches, 1, reason: 'the open');
-    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
+    await tester.fling(
+      find.byType(CustomScrollView).first,
+      const Offset(0, 400),
+      1000,
+    );
     await tester.pumpAndSettle();
     expect(fetches, 2);
   });
@@ -242,66 +417,114 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('a long press lists the Card action and runs it', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
-      final picked = <String>[];
-      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
-      await hold(tester, find.text('Andromeda Galaxy'));
-      expect(find.byType(AlbumCardBack), findsNothing, reason: 'a long press does not flip');
-      expect(find.text('Add more time'), findsOneWidget);
-      await tester.tap(find.text('Add more time'));
-      await tester.pumpAndSettle();
-      expect(picked, ['NGC0224']);
-    });
+    testWidgets(
+      'a long press lists the Card action and runs it',
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      (tester) async {
+        final picked = <String>[];
+        await _pump(
+          tester,
+          frames: _m31Frames,
+          onImageTarget: (d, _) => picked.add(d.id),
+        );
+        await hold(tester, find.text('Andromeda Galaxy'));
+        expect(
+          find.byType(AlbumCardBack),
+          findsNothing,
+          reason: 'a long press does not flip',
+        );
+        expect(find.text('Add more time'), findsOneWidget);
+        await tester.tap(find.text('Add more time'));
+        await tester.pumpAndSettle();
+        expect(picked, ['NGC0224']);
+      },
+    );
 
-    testWidgets('a tap still flips the Card', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
-      await _pump(tester, frames: _m31Frames);
-      await tester.tap(find.text('Andromeda Galaxy'));
-      await tester.pumpAndSettle();
-      expect(find.byType(AlbumCardBack), findsOneWidget);
-    });
+    testWidgets(
+      'a tap still flips the Card',
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      (tester) async {
+        await _pump(tester, frames: _m31Frames);
+        await tester.tap(find.text('Andromeda Galaxy'));
+        await tester.pumpAndSettle();
+        expect(find.byType(AlbumCardBack), findsOneWidget);
+      },
+    );
 
-    testWidgets('a missing Card offers Image this target', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
-      await _pump(tester, frames: _m31Frames);
-      await hold(tester, find.text('Crab Nebula'));
-      expect(find.text('Image this target'), findsOneWidget);
-    });
+    testWidgets(
+      'a missing Card offers Image this target',
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      (tester) async {
+        await _pump(tester, frames: _m31Frames);
+        await hold(tester, find.text('Crab Nebula'));
+        expect(find.text('Image this target'), findsOneWidget);
+      },
+    );
 
-    testWidgets('under Reduce Motion the actions come as a sheet, with no zoom', variant: TargetPlatformVariant.only(TargetPlatform.iOS), (tester) async {
-      tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
-      addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
-      final picked = <String>[];
-      await _pump(tester, frames: _m31Frames, onImageTarget: (d, _) => picked.add(d.id));
-      await hold(tester, find.text('Andromeda Galaxy'));
-      expect(find.byType(CupertinoActionSheet), findsOneWidget);
-      expect(find.text('Add more time'), findsOneWidget);
-      // A labelled way out: Cancel closes the sheet and runs no action.
-      await tester.tap(find.text('Cancel'));
-      await tester.pumpAndSettle();
-      expect(find.byType(CupertinoActionSheet), findsNothing);
-      expect(find.byType(AlbumCardBack), findsNothing);
-      expect(picked, isEmpty);
-    });
+    testWidgets(
+      'under Reduce Motion the actions come as a sheet, with no zoom',
+      variant: TargetPlatformVariant.only(TargetPlatform.iOS),
+      (tester) async {
+        tester.platformDispatcher.accessibilityFeaturesTestValue =
+            const FakeAccessibilityFeatures(reduceMotion: true);
+        addTearDown(
+          tester.platformDispatcher.clearAccessibilityFeaturesTestValue,
+        );
+        final picked = <String>[];
+        await _pump(
+          tester,
+          frames: _m31Frames,
+          onImageTarget: (d, _) => picked.add(d.id),
+        );
+        await hold(tester, find.text('Andromeda Galaxy'));
+        expect(find.byType(CupertinoActionSheet), findsOneWidget);
+        expect(find.text('Add more time'), findsOneWidget);
+        // A labelled way out: Cancel closes the sheet and runs no action.
+        await tester.tap(find.text('Cancel'));
+        await tester.pumpAndSettle();
+        expect(find.byType(CupertinoActionSheet), findsNothing);
+        expect(find.byType(AlbumCardBack), findsNothing);
+        expect(picked, isEmpty);
+      },
+    );
 
-    testWidgets('other platforms get no menu', variant: TargetPlatformVariant.only(TargetPlatform.android), (tester) async {
-      await _pump(tester, frames: _m31Frames);
-      await hold(tester, find.text('Andromeda Galaxy'));
-      expect(find.byType(CupertinoContextMenu), findsNothing);
-      expect(find.byType(CupertinoActionSheet), findsNothing);
-    });
+    testWidgets(
+      'other platforms get no menu',
+      variant: TargetPlatformVariant.only(TargetPlatform.android),
+      (tester) async {
+        await _pump(tester, frames: _m31Frames);
+        await hold(tester, find.text('Andromeda Galaxy'));
+        expect(find.byType(CupertinoContextMenu), findsNothing);
+        expect(find.byType(CupertinoActionSheet), findsNothing);
+      },
+    );
   });
 
   testWidgets('the Art credit is announced as a link', (tester) async {
     final handle = tester.ensureSemantics();
-    await _pump(tester, frames: _m31Frames, manifest: const {
-      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
-    });
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      manifest: const {
+        'M31': AlbumArt(
+          asset: 'assets/album/art/m031.webp',
+          credit: 'ESO',
+          licence: 'CC BY 2.0',
+        ),
+      },
+    );
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
     expect(
-        tester.getSemantics(find.byKey(const Key('album-art-credit'))),
-        matchesSemantics(
-            isLink: true, isFocusable: true, hasTapAction: true, hasFocusAction: true,
-            label: 'Art (cropped): ESO · CC BY 2.0'));
+      tester.getSemantics(find.byKey(const Key('album-art-credit'))),
+      matchesSemantics(
+        isLink: true,
+        isFocusable: true,
+        hasTapAction: true,
+        hasFocusAction: true,
+        label: 'Art (cropped): ESO · CC BY 2.0',
+      ),
+    );
     handle.dispose();
   });
 
@@ -313,9 +536,17 @@ void main() {
       final original = UrlLauncherPlatform.instance;
       addTearDown(() => UrlLauncherPlatform.instance = original);
       UrlLauncherPlatform.instance = launcher();
-      await _pump(tester, frames: _m31Frames, manifest: const {
-        'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 2.0'),
-      });
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        manifest: const {
+          'M31': AlbumArt(
+            asset: 'assets/album/art/m031.webp',
+            credit: 'ESO',
+            licence: 'CC BY 2.0',
+          ),
+        },
+      );
       await tester.tap(find.text('Andromeda Galaxy'));
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('album-art-credit')));
@@ -325,57 +556,149 @@ void main() {
     });
   }
 
-  testWidgets('a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',
-      (tester) async {
-    const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
-    await _pump(tester, frames: _m31Frames, manifest: const {'M31': art, 'M1': art});
-    Finder on(String name, String key) => find.descendant(
-        of: find.ancestor(of: find.text(name), matching: find.byType(AlbumCardFront)), matching: find.byKey(Key(key)));
-    expect(on('Andromeda Galaxy', 'album-art'), findsOneWidget, reason: 'collected: in colour');
-    expect(on('Crab Nebula', 'album-art-dimmed'), findsOneWidget, reason: 'missing: dimmed');
-    expect(find.ancestor(of: on('Crab Nebula', 'album-art-dimmed'), matching: find.byType(ColorFiltered)), findsOneWidget,
-        reason: 'greyed');
-    // One compositing layer per missing card: the dimming is in the colour matrix, not an Opacity on top.
-    expect(find.ancestor(of: on('Crab Nebula', 'album-art-dimmed'), matching: find.byType(Opacity)), findsNothing);
-    expect(on('Orion Nebula', 'album-placeholder'), findsOneWidget, reason: 'no Art: the Placeholder');
-  });
+  testWidgets(
+    'a card front: the Placeholder without Art, dimmed Art while missing, colour when collected',
+    (tester) async {
+      const art = AlbumArt(
+        asset: 'assets/album/art/test.webp',
+        credit: 'ESO',
+        licence: 'CC BY 4.0',
+      );
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        manifest: const {'M31': art, 'M1': art},
+      );
+      Finder on(String name, String key) => find.descendant(
+        of: find.ancestor(
+          of: find.text(name),
+          matching: find.byType(AlbumCardFront),
+        ),
+        matching: find.byKey(Key(key)),
+      );
+      expect(
+        on('Andromeda Galaxy', 'album-art'),
+        findsOneWidget,
+        reason: 'collected: in colour',
+      );
+      expect(
+        on('Crab Nebula', 'album-art-dimmed'),
+        findsOneWidget,
+        reason: 'missing: dimmed',
+      );
+      expect(
+        find.ancestor(
+          of: on('Crab Nebula', 'album-art-dimmed'),
+          matching: find.byType(ColorFiltered),
+        ),
+        findsOneWidget,
+        reason: 'greyed',
+      );
+      // One compositing layer per missing card: the dimming is in the colour matrix, not an Opacity on top.
+      expect(
+        find.ancestor(
+          of: on('Crab Nebula', 'album-art-dimmed'),
+          matching: find.byType(Opacity),
+        ),
+        findsNothing,
+      );
+      expect(
+        on('Orion Nebula', 'album-placeholder'),
+        findsOneWidget,
+        reason: 'no Art: the Placeholder',
+      );
+    },
+  );
 
-  testWidgets('in Portuguese the back reads the type, distance and trivia in Portuguese', (tester) async {
-    await _pump(tester, frames: _m31Frames, locale: const Locale('pt', 'BR'), manifest: const {
-      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 4.0',
-          distance: '2.5 million ly', trivia: 'It is approaching us.',
-          pt: AlbumArtText(distance: '2,5 milhões de anos-luz', trivia: 'Está se aproximando de nós.')),
-    });
-    await tester.tap(find.text('Andromeda Galaxy'));
-    await tester.pumpAndSettle();
-    expect(find.text('Galáxia · V 5,0 · 2,5 milhões de anos-luz'), findsOneWidget, reason: 'one decimal separator');
-    expect(find.text('2,0 h'), findsOneWidget, reason: 'the total hours, in the locale');
-    expect(find.text('0,5'), findsNWidgets(4), reason: 'each Night\'s hours, in the locale');
-    expect(find.text('Está se aproximando de nós.'), findsOneWidget);
-  });
+  testWidgets(
+    'in Portuguese the back reads the type, distance and trivia in Portuguese',
+    (tester) async {
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        locale: const Locale('pt', 'BR'),
+        manifest: const {
+          'M31': AlbumArt(
+            asset: 'assets/album/art/m031.webp',
+            credit: 'ESO',
+            licence: 'CC BY 4.0',
+            distance: '2.5 million ly',
+            trivia: 'It is approaching us.',
+            pt: AlbumArtText(
+              distance: '2,5 milhões de anos-luz',
+              trivia: 'Está se aproximando de nós.',
+            ),
+          ),
+        },
+      );
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Galáxia · V 5,0 · 2,5 milhões de anos-luz'),
+        findsOneWidget,
+        reason: 'one decimal separator',
+      );
+      expect(
+        find.text('2,0 h'),
+        findsOneWidget,
+        reason: 'the total hours, in the locale',
+      );
+      expect(
+        find.text('0,5'),
+        findsNWidgets(4),
+        reason: 'each Night\'s hours, in the locale',
+      );
+      expect(find.text('Está se aproximando de nós.'), findsOneWidget);
+    },
+  );
 
-  testWidgets('the Album uses Simple Mode sizes: 44 px controls, 14 px header and back text', (tester) async {
-    await _pump(tester, frames: _m31Frames, manifest: const {
-      'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'ESO', licence: 'CC BY 4.0', trivia: 'Close.'),
-    });
-    for (final chip in find.byType(FilterChip).evaluate()) {
-      expect(tester.getSize(find.byWidget(chip.widget)).height, greaterThanOrEqualTo(44));
-    }
-    expect(tester.getSize(find.byType(SegmentedButton<AlbumFilter>)).height, greaterThanOrEqualTo(44));
-    TextStyle styleOf(Finder f) => DefaultTextStyle.of(tester.element(f)).style.merge(tester.widget<Text>(f).style);
-    expect(styleOf(find.text('1 / 4 collected')).fontSize, 14);
-    await tester.tap(find.text('Andromeda Galaxy'));
-    await tester.pumpAndSettle();
-    expect(styleOf(find.text('Close.')).fontSize, 14);
-  });
+  testWidgets(
+    'the Album uses Simple Mode sizes: 44 px controls, 14 px header and back text',
+    (tester) async {
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        manifest: const {
+          'M31': AlbumArt(
+            asset: 'assets/album/art/m031.webp',
+            credit: 'ESO',
+            licence: 'CC BY 4.0',
+            trivia: 'Close.',
+          ),
+        },
+      );
+      for (final chip in find.byType(FilterChip).evaluate()) {
+        expect(
+          tester.getSize(find.byWidget(chip.widget)).height,
+          greaterThanOrEqualTo(44),
+        );
+      }
+      expect(
+        tester.getSize(find.byType(SegmentedButton<AlbumFilter>)).height,
+        greaterThanOrEqualTo(44),
+      );
+      TextStyle styleOf(Finder f) =>
+          DefaultTextStyle.of(tester.element(f)).style
+              .merge(tester.widget<Text>(f).style);
+      expect(styleOf(find.text('1 / 4 collected')).fontSize, 14);
+      await tester.tap(find.text('Andromeda Galaxy'));
+      await tester.pumpAndSettle();
+      expect(styleOf(find.text('Close.')).fontSize, 14);
+    },
+  );
 
-  testWidgets('the back\'s action draws at 44 px or more on desktop', (tester) async {
+  testWidgets('the back\'s action draws at 44 px or more on desktop', (
+    tester,
+  ) async {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     try {
       await _pump(tester, frames: _m31Frames);
       await tester.tap(find.text('Andromeda Galaxy'));
       await tester.pumpAndSettle();
-      expect(tester.getSize(find.byType(FilledButton)).height, greaterThanOrEqualTo(44));
+      expect(
+        tester.getSize(find.byType(FilledButton)).height,
+        greaterThanOrEqualTo(44),
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
@@ -383,32 +706,75 @@ void main() {
 
   testWidgets('both faces write the Tier, not only colour it', (tester) async {
     await _pump(tester, frames: _m31Frames);
-    Finder inFront(String t) => find.descendant(of: find.byType(AlbumCardFront), matching: find.text(t));
-    expect(inFront('Silver'), findsOneWidget, reason: 'the collected card\'s front');
+    Finder inFront(String t) => find.descendant(
+      of: find.byType(AlbumCardFront),
+      matching: find.text(t),
+    );
+    expect(
+      inFront('Silver'),
+      findsOneWidget,
+      reason: 'the collected card\'s front',
+    );
     expect(inFront('Bronze'), findsNothing);
     await tester.tap(find.text('Andromeda Galaxy'));
     await tester.pumpAndSettle();
-    expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('Silver')), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlbumCardBack),
+        matching: find.text('Silver'),
+      ),
+      findsOneWidget,
+    );
   });
 
-  testWidgets('a new IC Card shows its #1887 nickname on the front and the back', (tester) async {
-    final heart = applyCommonNames([_dso('IC1805', 'IC1805', aliases: ['LBN 654'])]).single;
-    await _pump(tester, catalog: [heart], frames: [
-      AlbumFrame(frameId: 'h', targetName: 'IC 1805', exposureSeconds: 600, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
-    ]);
-    Finder inFront(String t) => find.descendant(of: find.byType(AlbumCardFront), matching: find.text(t));
-    expect(inFront('Heart Nebula'), findsOneWidget);
-    expect(inFront('IC 1805'), findsOneWidget);
-    await tester.tap(find.text('Heart Nebula'));
-    await tester.pumpAndSettle();
-    expect(find.descendant(of: find.byType(AlbumCardBack), matching: find.text('HEART NEBULA')), findsOneWidget);
-  });
+  testWidgets(
+    'a new IC Card shows its #1887 nickname on the front and the back',
+    (tester) async {
+      final heart = applyCommonNames([
+        _dso('IC1805', 'IC1805', aliases: ['LBN 654']),
+      ]).single;
+      await _pump(
+        tester,
+        catalog: [heart],
+        frames: [
+          AlbumFrame(
+            frameId: 'h',
+            targetName: 'IC 1805',
+            exposureSeconds: 600,
+            capturedUtc: DateTime(2026, 3, 2, 22).toUtc(),
+          ),
+        ],
+      );
+      Finder inFront(String t) => find.descendant(
+        of: find.byType(AlbumCardFront),
+        matching: find.text(t),
+      );
+      expect(inFront('Heart Nebula'), findsOneWidget);
+      expect(inFront('IC 1805'), findsOneWidget);
+      await tester.tap(find.text('Heart Nebula'));
+      await tester.pumpAndSettle();
+      expect(
+        find.descendant(
+          of: find.byType(AlbumCardBack),
+          matching: find.text('HEART NEBULA'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
-  testWidgets('the flip keeps one image provider for the front art', (tester) async {
-    await _pump(tester, frames: _m31Frames, manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')});
+  testWidgets('the flip keeps one image provider for the front art', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')},
+    );
     Set<int?> widths() => {
-          for (final img in tester.widgetList<Image>(find.byType(Image))) (img.image as ResizeImage).width,
-        };
+      for (final img in tester.widgetList<Image>(find.byType(Image)))
+        (img.image as ResizeImage).width,
+    };
     final grid = widths();
     await tester.tap(find.text('Andromeda Galaxy'));
     final seen = <int?>{};
@@ -416,18 +782,31 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       seen.addAll(widths());
     }
-    expect(seen.difference(grid), hasLength(1), reason: 'decode widths seen during the flip: $seen');
+    expect(
+      seen.difference(grid),
+      hasLength(1),
+      reason: 'decode widths seen during the flip: $seen',
+    );
     await tester.pumpAndSettle();
   });
 
-  testWidgets('a missing card\'s Placeholder icon reads at 3:1 on its panel', (tester) async {
+  testWidgets('a missing card\'s Placeholder icon reads at 3:1 on its panel', (
+    tester,
+  ) async {
     await _pump(tester, frames: const []);
     double ratio(Color a, Color b) {
       final (x, y) = (a.computeLuminance(), b.computeLuminance());
       return (math.max(x, y) + 0.05) / (math.min(x, y) + 0.05);
     }
 
-    final icon = tester.widget<Icon>(find.descendant(of: find.byKey(const Key('album-placeholder')), matching: find.byType(Icon)).first);
+    final icon = tester.widget<Icon>(
+      find
+          .descendant(
+            of: find.byKey(const Key('album-placeholder')),
+            matching: find.byType(Icon),
+          )
+          .first,
+    );
     expect(ratio(icon.color!, AraColors.bgPanelAlt), greaterThanOrEqualTo(3));
   });
 
@@ -441,131 +820,220 @@ void main() {
     expect(find.text('Image this target'), findsNothing);
   });
 
-  testWidgets('with no lights the grid is grey under one caption, and the shelf still shows', (tester) async {
-    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m1]);
-    expect(find.text('Image a target to collect your first card'), findsOneWidget);
-    expect(find.text('0 / 4 collected'), findsOneWidget);
-    // The shelf keeps the ranker's order, only missing cards of the catalogs shown.
-    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
-  });
-
-  testWidgets('the shelf leaves out collected cards and hides when nothing is left', (tester) async {
-    await _pump(tester, frames: _m31Frames, tonight: [_m31]);
-    expect(find.textContaining('well placed tonight'), findsNothing);
-  });
-
-  testWidgets('the shelf follows a catalog chip and a refresh while the album stays open (#1887)', (tester) async {
-    // The shelf's lookup of missing cards is kept between builds; it must follow what it came from.
-    var served = const <AlbumFrame>[];
-    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m1],
-        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
-    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
-
-    await tester.tap(find.text('Caldwell · 0'));
-    await tester.pumpAndSettle();
-    expect(find.text('1 missing card well placed tonight'), findsOneWidget);
-    expect(_onShelf('Double Cluster'), findsOneWidget);
-    await tester.tap(find.text('Caldwell · 0'));
-    await tester.pumpAndSettle();
-    expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
-
-    // A light of M42 comes in on a pull: the open album takes it off the shelf.
-    served = [
-      AlbumFrame(frameId: 'm42', targetName: 'M 42', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
-    ];
-    await tester.fling(find.byType(CustomScrollView).first, const Offset(0, 400), 1000);
-    await tester.pumpAndSettle();
-    expect(find.text('2 missing cards well placed tonight'), findsOneWidget);
-    expect(_onShelf('Orion Nebula'), findsNothing);
-  });
-
-  testWidgets('each catalog chip shows its collected count, so a card in an unselected catalog shows', (tester) async {
-    await _pump(tester, frames: _m31Frames);
-    expect(find.text('Messier · 1'), findsOneWidget);
-    expect(find.text('Caldwell · 0'), findsOneWidget);
-  });
-
-  testWidgets('six catalog chips wrap at phone width without overflow, each still 44 px (#1887)', (tester) async {
-    await _pump(tester, frames: _m31Frames, size: const Size(360, 740));
-    expect(tester.takeException(), isNull);
-    expect(find.byType(FilterChip), findsNWidgets(6));
-    for (final chip in find.byType(FilterChip).evaluate()) {
-      expect(tester.getSize(find.byWidget(chip.widget)).height, greaterThanOrEqualTo(44));
-      expect(tester.getRect(find.byWidget(chip.widget)).right, lessThanOrEqualTo(360));
-    }
-  });
-
-  testWidgets('the Book switch has six segments: Messier, Caldwell, RCW, NGC, IC, Sharpless (#1629, #1887)', (tester) async {
-    await _pump(tester, frames: _m31Frames);
-    expect(find.byType(FilterChip), findsNWidgets(6));
-    expect(find.text('RCW · 0'), findsOneWidget);
-    expect(find.text('NGC · 1'), findsOneWidget, reason: 'M 31 is NGC 224');
-    expect(find.text('IC · 0'), findsOneWidget);
-    expect(find.text('Sharpless (Sh2) · 0'), findsOneWidget);
-  });
-
-  testWidgets('an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
-      (tester) async {
-    final m8 = _dso('NGC6523', 'Lagoon Nebula', m: 8, aliases: ['RCW 146']);
-    final m8Frames = [
-      AlbumFrame(frameId: 'l', targetName: 'M 8', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
-    ];
-    const art = AlbumArt(asset: 'assets/album/art/m008.webp', credit: 'ESO', licence: 'CC BY 4.0');
-    await _pump(tester, frames: m8Frames, catalog: [m8, _m42], tonight: [m8, _m42], manifest: const {'M8': art});
-    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
-    expect(find.text('Messier · 1'), findsOneWidget);
-    expect(find.text('RCW · 1'), findsOneWidget);
-    expect(inGrid('Lagoon Nebula'), findsOneWidget, reason: 'every catalog shown: no duplicate Card');
-    expect(inGrid('M 8'), findsOneWidget);
-    expect(find.text('1 / 2 collected'), findsOneWidget);
-
-    await tester.tap(find.text('RCW · 1'));
-    await tester.pumpAndSettle();
-    expect(inGrid('RCW 146'), findsOneWidget);
-    expect(find.text('1 / 1 collected'), findsOneWidget);
-    expect(
-        find.descendant(
-            of: find.ancestor(of: inGrid('RCW 146'), matching: find.byType(AlbumCardFront)),
-            matching: find.byKey(const Key('album-art'))),
+  testWidgets(
+    'with no lights the grid is grey under one caption, and the shelf still shows',
+    (tester) async {
+      await _pump(tester, frames: const [], tonight: [_m42, _c14, _m1]);
+      expect(
+        find.text('Image a target to collect your first card'),
         findsOneWidget,
-        reason: 'the RCW Card carries the Messier Art');
-  });
+      );
+      expect(find.text('0 / 4 collected'), findsOneWidget);
+      // The shelf keeps the ranker's order, only missing cards of the catalogs shown.
+      expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+    },
+  );
 
-  testWidgets('with no catalog selected every catalog shows, Messier first', (tester) async {
+  testWidgets(
+    'the shelf leaves out collected cards and hides when nothing is left',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames, tonight: [_m31]);
+      expect(find.textContaining('well placed tonight'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the shelf follows a catalog chip and a refresh while the album stays open (#1887)',
+    (tester) async {
+      // The shelf's lookup of missing cards is kept between builds; it must follow what it came from.
+      var served = const <AlbumFrame>[];
+      await _pump(
+        tester,
+        frames: const [],
+        tonight: [_m42, _c14, _m1],
+        fetcher: (baseUrl, {since}) async =>
+            AlbumFramesPage(totalLights: served.length, frames: served),
+      );
+      expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+      await tester.tap(find.text('Caldwell · 0'));
+      await tester.pumpAndSettle();
+      expect(find.text('1 missing card well placed tonight'), findsOneWidget);
+      expect(_onShelf('Double Cluster'), findsOneWidget);
+      await tester.tap(find.text('Caldwell · 0'));
+      await tester.pumpAndSettle();
+      expect(find.text('3 missing cards well placed tonight'), findsOneWidget);
+
+      // A light of M42 comes in on a pull: the open album takes it off the shelf.
+      served = [
+        AlbumFrame(
+          frameId: 'm42',
+          targetName: 'M 42',
+          exposureSeconds: 900,
+          capturedUtc: DateTime(2026, 3, 2, 22).toUtc(),
+        ),
+      ];
+      await tester.fling(
+        find.byType(CustomScrollView).first,
+        const Offset(0, 400),
+        1000,
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('2 missing cards well placed tonight'), findsOneWidget);
+      expect(_onShelf('Orion Nebula'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'each catalog chip shows its collected count, so a card in an unselected catalog shows',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      expect(find.text('Messier · 1'), findsOneWidget);
+      expect(find.text('Caldwell · 0'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'six catalog chips wrap at phone width without overflow, each still 44 px (#1887)',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames, size: const Size(360, 740));
+      expect(tester.takeException(), isNull);
+      expect(find.byType(FilterChip), findsNWidgets(6));
+      for (final chip in find.byType(FilterChip).evaluate()) {
+        expect(
+          tester.getSize(find.byWidget(chip.widget)).height,
+          greaterThanOrEqualTo(44),
+        );
+        expect(
+          tester.getRect(find.byWidget(chip.widget)).right,
+          lessThanOrEqualTo(360),
+        );
+      }
+    },
+  );
+
+  testWidgets(
+    'the Book switch has six segments: Messier, Caldwell, RCW, NGC, IC, Sharpless (#1629, #1887)',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      expect(find.byType(FilterChip), findsNWidgets(6));
+      expect(find.text('RCW · 0'), findsOneWidget);
+      expect(find.text('NGC · 1'), findsOneWidget, reason: 'M 31 is NGC 224');
+      expect(find.text('IC · 0'), findsOneWidget);
+      expect(find.text('Sharpless (Sh2) · 0'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'an object in two Books counts in both chips and shows once, as its first Book\'s Card (#1629)',
+    (tester) async {
+      final m8 = _dso('NGC6523', 'Lagoon Nebula', m: 8, aliases: ['RCW 146']);
+      final m8Frames = [
+        AlbumFrame(
+          frameId: 'l',
+          targetName: 'M 8',
+          exposureSeconds: 900,
+          capturedUtc: DateTime(2026, 3, 2, 22).toUtc(),
+        ),
+      ];
+      const art = AlbumArt(
+        asset: 'assets/album/art/m008.webp',
+        credit: 'ESO',
+        licence: 'CC BY 4.0',
+      );
+      await _pump(
+        tester,
+        frames: m8Frames,
+        catalog: [m8, _m42],
+        tonight: [m8, _m42],
+        manifest: const {'M8': art},
+      );
+      Finder inGrid(String t) =>
+          find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+      expect(find.text('Messier · 1'), findsOneWidget);
+      expect(find.text('RCW · 1'), findsOneWidget);
+      expect(
+        inGrid('Lagoon Nebula'),
+        findsOneWidget,
+        reason: 'every catalog shown: no duplicate Card',
+      );
+      expect(inGrid('M 8'), findsOneWidget);
+      expect(find.text('1 / 2 collected'), findsOneWidget);
+
+      await tester.tap(find.text('RCW · 1'));
+      await tester.pumpAndSettle();
+      expect(inGrid('RCW 146'), findsOneWidget);
+      expect(find.text('1 / 1 collected'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.ancestor(
+            of: inGrid('RCW 146'),
+            matching: find.byType(AlbumCardFront),
+          ),
+          matching: find.byKey(const Key('album-art')),
+        ),
+        findsOneWidget,
+        reason: 'the RCW Card carries the Messier Art',
+      );
+    },
+  );
+
+  testWidgets('with no catalog selected every catalog shows, Messier first', (
+    tester,
+  ) async {
     await _pump(tester, frames: _m31Frames);
-    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+    Finder inGrid(String t) =>
+        find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
     expect(inGrid('Andromeda Galaxy'), findsOneWidget);
     expect(inGrid('Double Cluster'), findsOneWidget);
     expect(find.text('1 / 4 collected'), findsOneWidget);
     final m = tester.getTopLeft(inGrid('Orion Nebula'));
     final c = tester.getTopLeft(inGrid('Double Cluster'));
-    expect(c.dy > m.dy || (c.dy == m.dy && c.dx > m.dx), isTrue, reason: 'Caldwell after Messier');
+    expect(
+      c.dy > m.dy || (c.dy == m.dy && c.dx > m.dx),
+      isTrue,
+      reason: 'Caldwell after Messier',
+    );
   });
 
-  testWidgets('selecting a catalog shows only its cards; selecting both shows all again', (tester) async {
-    await _pump(tester, frames: _m31Frames);
-    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
-    await tester.tap(find.text('Caldwell · 0'));
-    await tester.pumpAndSettle();
-    expect(inGrid('Double Cluster'), findsOneWidget);
-    expect(inGrid('Andromeda Galaxy'), findsNothing);
-    expect(find.text('0 / 1 collected'), findsOneWidget);
+  testWidgets(
+    'selecting a catalog shows only its cards; selecting both shows all again',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      Finder inGrid(String t) =>
+          find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+      await tester.tap(find.text('Caldwell · 0'));
+      await tester.pumpAndSettle();
+      expect(inGrid('Double Cluster'), findsOneWidget);
+      expect(inGrid('Andromeda Galaxy'), findsNothing);
+      expect(find.text('0 / 1 collected'), findsOneWidget);
 
-    await tester.tap(find.text('Messier · 1'));
-    await tester.pumpAndSettle();
-    expect(inGrid('Andromeda Galaxy'), findsOneWidget);
-    expect(find.text('1 / 4 collected'), findsOneWidget);
+      await tester.tap(find.text('Messier · 1'));
+      await tester.pumpAndSettle();
+      expect(inGrid('Andromeda Galaxy'), findsOneWidget);
+      expect(find.text('1 / 4 collected'), findsOneWidget);
 
-    await tester.tap(find.text('Caldwell · 0'));
-    await tester.pumpAndSettle();
-    expect(inGrid('Double Cluster'), findsNothing);
-    expect(find.text('1 / 3 collected'), findsOneWidget);
-  });
+      await tester.tap(find.text('Caldwell · 0'));
+      await tester.pumpAndSettle();
+      expect(inGrid('Double Cluster'), findsNothing);
+      expect(find.text('1 / 3 collected'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a shelf card fires the same callback, in ranker order', (tester) async {
+  testWidgets('a shelf card fires the same callback, in ranker order', (
+    tester,
+  ) async {
     PlanningDso? picked;
-    await _pump(tester, frames: _m31Frames, tonight: [_m42, _c14, _m1], onImageTarget: (d, _) => picked = d);
-    expect(tester.getTopLeft(_onShelf('Orion Nebula')).dx, lessThan(tester.getTopLeft(_onShelf('Crab Nebula')).dx));
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      tonight: [_m42, _c14, _m1],
+      onImageTarget: (d, _) => picked = d,
+    );
+    expect(
+      tester.getTopLeft(_onShelf('Orion Nebula')).dx,
+      lessThan(tester.getTopLeft(_onShelf('Crab Nebula')).dx),
+    );
 
     await tester.tap(_onShelf('Orion Nebula'));
     await tester.pumpAndSettle();
@@ -574,38 +1042,70 @@ void main() {
     expect(picked, same(_m42));
   });
 
-  testWidgets('a failed first fetch shows grey cards and an error, hides the shelf, and retries on reopen',
-      (tester) async {
-    var fail = true;
-    Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async {
-      if (fail) throw StateError('rig away');
-      return AlbumFramesPage(totalLights: _m31Frames.length, frames: _m31Frames);
-    }
+  testWidgets(
+    'a failed first fetch shows grey cards and an error, hides the shelf, and retries on reopen',
+    (tester) async {
+      var fail = true;
+      Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async {
+        if (fail) throw StateError('rig away');
+        return AlbumFramesPage(
+          totalLights: _m31Frames.length,
+          frames: _m31Frames,
+        );
+      }
 
-    final container = await _pump(tester, frames: const [], tonight: [_m42], fetcher: fetcher);
-    expect(find.textContaining("Couldn't load the album"), findsOneWidget);
-    expect(find.text('0 / 4 collected'), findsOneWidget);
-    expect(find.textContaining('well placed tonight'), findsNothing,
-        reason: 'without rows every card looks missing, so the shelf would mislead');
+      final container = await _pump(
+        tester,
+        frames: const [],
+        tonight: [_m42],
+        fetcher: fetcher,
+      );
+      expect(find.textContaining("Couldn't load the album"), findsOneWidget);
+      expect(find.text('0 / 4 collected'), findsOneWidget);
+      expect(
+        find.textContaining('well placed tonight'),
+        findsNothing,
+        reason:
+            'without rows every card looks missing, so the shelf would mislead',
+      );
 
-    fail = false;
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
-    await tester.pumpAndSettle();
-    expect(find.text('1 / 4 collected'), findsOneWidget);
-    expect(find.textContaining("Couldn't load the album"), findsNothing);
-  });
+      fail = false;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _app(null, open: false),
+        ),
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: _app(null)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('1 / 4 collected'), findsOneWidget);
+      expect(find.textContaining("Couldn't load the album"), findsNothing);
+    },
+  );
 
-  testWidgets('the filter shows only collected or only missing cards', (tester) async {
+  testWidgets('the filter shows only collected or only missing cards', (
+    tester,
+  ) async {
     await _pump(tester, frames: _m31Frames, tonight: [_m42]);
-    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+    Finder inGrid(String t) =>
+        find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
 
     await tester.tap(find.text('Collected'));
     await tester.pumpAndSettle();
     expect(inGrid('Andromeda Galaxy'), findsOneWidget);
     expect(inGrid('Crab Nebula'), findsNothing);
-    expect(find.textContaining('well placed tonight'), findsNothing, reason: 'the shelf is missing cards');
-    expect(find.text('1 / 4 collected'), findsOneWidget, reason: 'the count is the catalogs shown, not the filter');
+    expect(
+      find.textContaining('well placed tonight'),
+      findsNothing,
+      reason: 'the shelf is missing cards',
+    );
+    expect(
+      find.text('1 / 4 collected'),
+      findsOneWidget,
+      reason: 'the count is the catalogs shown, not the filter',
+    );
 
     await tester.tap(find.text('Missing'));
     await tester.pumpAndSettle();
@@ -618,37 +1118,66 @@ void main() {
     expect(inGrid('Andromeda Galaxy'), findsOneWidget);
   });
 
-  testWidgets('a Card under 15 min of lights is not collected: Missing, not counted, no Tier', (tester) async {
-    // One stray 60 s frame on M 42, two hours on M 31.
-    await _pump(tester, frames: [
-      ..._m31Frames,
-      AlbumFrame(frameId: 'stray', targetName: 'M 42', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
-    ]);
-    Finder inGrid(String t) => find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
-    expect(find.text('Messier · 1'), findsOneWidget);
-    expect(find.text('1 / 4 collected'), findsOneWidget);
-    expect(albumTierNameFinder(AlbumTier.bronze), findsNothing);
+  testWidgets(
+    'a Card under 15 min of lights is not collected: Missing, not counted, no Tier',
+    (tester) async {
+      // One stray 60 s frame on M 42, two hours on M 31.
+      await _pump(
+        tester,
+        frames: [
+          ..._m31Frames,
+          AlbumFrame(
+            frameId: 'stray',
+            targetName: 'M 42',
+            exposureSeconds: 60,
+            capturedUtc: DateTime(2026, 3, 2, 22).toUtc(),
+          ),
+        ],
+      );
+      Finder inGrid(String t) =>
+          find.descendant(of: find.byType(SliverGrid), matching: find.text(t));
+      expect(find.text('Messier · 1'), findsOneWidget);
+      expect(find.text('1 / 4 collected'), findsOneWidget);
+      expect(albumTierNameFinder(AlbumTier.bronze), findsNothing);
 
-    await tester.tap(find.text('Collected'));
-    await tester.pumpAndSettle();
-    expect(inGrid('Orion Nebula'), findsNothing);
+      await tester.tap(find.text('Collected'));
+      await tester.pumpAndSettle();
+      expect(inGrid('Orion Nebula'), findsNothing);
 
-    await tester.tap(find.text('Missing'));
-    await tester.pumpAndSettle();
-    expect(inGrid('Orion Nebula'), findsOneWidget);
-  });
+      await tester.tap(find.text('Missing'));
+      await tester.pumpAndSettle();
+      expect(inGrid('Orion Nebula'), findsOneWidget);
+    },
+  );
 
-  testWidgets('the tonight shelf offers a Card under 15 min of lights', (tester) async {
-    await _pump(tester, frames: [
-      AlbumFrame(frameId: 'stray', targetName: 'M 42', exposureSeconds: 60, capturedUtc: DateTime(2026, 3, 2, 22).toUtc()),
-    ], tonight: [_m42]);
+  testWidgets('the tonight shelf offers a Card under 15 min of lights', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      frames: [
+        AlbumFrame(
+          frameId: 'stray',
+          targetName: 'M 42',
+          exposureSeconds: 60,
+          capturedUtc: DateTime(2026, 3, 2, 22).toUtc(),
+        ),
+      ],
+      tonight: [_m42],
+    );
     expect(find.text('1 missing card well placed tonight'), findsOneWidget);
     expect(_onShelf('Orion Nebula'), findsOneWidget);
   });
 
   testWidgets('the title carries the album icon', (tester) async {
     await _pump(tester, frames: const []);
-    expect(find.descendant(of: find.byType(AppBar), matching: find.byIcon(Icons.style_outlined)), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AppBar),
+        matching: find.byIcon(Icons.style_outlined),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('tapping the flipped card again flips it back', (tester) async {
@@ -663,199 +1192,398 @@ void main() {
   testWidgets('the tier counts sit on the right of the header', (tester) async {
     await _pump(tester, frames: _m31Frames);
     final width = tester.view.physicalSize.width;
-    expect(tester.getTopLeft(find.text('1 / 4 collected')).dx, lessThan(width / 2));
-    expect(tester.getTopRight(find.text('Bronze 0')).dx, greaterThan(width - 40));
+    expect(
+      tester.getTopLeft(find.text('1 / 4 collected')).dx,
+      lessThan(width / 2),
+    );
+    expect(
+      tester.getTopRight(find.text('Bronze 0')).dx,
+      greaterThan(width - 40),
+    );
   });
 
-  testWidgets('the catalogs sit left of the filter on one row, the count below', (tester) async {
-    await _pump(tester, frames: _m31Frames, size: const Size(2400, 900));
-    final filter = find.byType(SegmentedButton<AlbumFilter>);
-    expect(tester.getCenter(find.text('Messier · 1')).dy, closeTo(tester.getCenter(filter).dy, 4));
-    expect(tester.getCenter(find.text('Caldwell · 0')).dx, lessThan(tester.getTopLeft(filter).dx));
-    expect(tester.getTopLeft(find.text('1 / 4 collected')).dy, greaterThan(tester.getBottomLeft(filter).dy));
-    expect(tester.getCenter(find.text('Gold 0')).dy, closeTo(tester.getCenter(find.text('1 / 4 collected')).dy, 4));
-  });
+  testWidgets(
+    'the catalogs sit left of the filter on one row, the count below',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames, size: const Size(2400, 900));
+      final filter = find.byType(SegmentedButton<AlbumFilter>);
+      expect(
+        tester.getCenter(find.text('Messier · 1')).dy,
+        closeTo(tester.getCenter(filter).dy, 4),
+      );
+      expect(
+        tester.getCenter(find.text('Caldwell · 0')).dx,
+        lessThan(tester.getTopLeft(filter).dx),
+      );
+      expect(
+        tester.getTopLeft(find.text('1 / 4 collected')).dy,
+        greaterThan(tester.getBottomLeft(filter).dy),
+      );
+      expect(
+        tester.getCenter(find.text('Gold 0')).dy,
+        closeTo(tester.getCenter(find.text('1 / 4 collected')).dy, 4),
+      );
+    },
+  );
 
-  testWidgets('at 1200 px six chips fill the row and the filter wraps below them, nothing overflows (#1887)',
-      (tester) async {
-    await _pump(tester, frames: _m31Frames);
-    expect(tester.takeException(), isNull);
-    final filter = find.byType(SegmentedButton<AlbumFilter>);
-    expect(tester.getTopLeft(filter).dy, greaterThan(tester.getBottomLeft(find.text('Messier · 1')).dy));
-    expect(tester.getTopLeft(find.text('1 / 4 collected')).dy, greaterThan(tester.getBottomLeft(filter).dy));
-  });
+  testWidgets(
+    'at 1200 px six chips fill the row and the filter wraps below them, nothing overflows (#1887)',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames);
+      expect(tester.takeException(), isNull);
+      final filter = find.byType(SegmentedButton<AlbumFilter>);
+      expect(
+        tester.getTopLeft(filter).dy,
+        greaterThan(tester.getBottomLeft(find.text('Messier · 1')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text('1 / 4 collected')).dy,
+        greaterThan(tester.getBottomLeft(filter).dy),
+      );
+    },
+  );
 
-  testWidgets('a phone keeps the catalogs and the filter above the count, out of the bar', (tester) async {
-    await _pump(tester, frames: _m31Frames, size: const Size(400, 900));
-    final countTop = tester.getTopLeft(find.text('1 / 4 collected')).dy;
-    expect(tester.getBottomLeft(find.byType(SegmentedButton<AlbumFilter>)).dy, lessThan(countTop));
-    expect(tester.getBottomLeft(find.text('Messier · 1')).dy, lessThan(countTop));
-    expect(find.descendant(of: find.byType(AppBar), matching: find.text('Messier · 1')), findsNothing);
-  });
+  testWidgets(
+    'a phone keeps the catalogs and the filter above the count, out of the bar',
+    (tester) async {
+      await _pump(tester, frames: _m31Frames, size: const Size(400, 900));
+      final countTop = tester.getTopLeft(find.text('1 / 4 collected')).dy;
+      expect(
+        tester.getBottomLeft(find.byType(SegmentedButton<AlbumFilter>)).dy,
+        lessThan(countTop),
+      );
+      expect(
+        tester.getBottomLeft(find.text('Messier · 1')).dy,
+        lessThan(countTop),
+      );
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('Messier · 1'),
+        ),
+        findsNothing,
+      );
+    },
+  );
 
-  testWidgets('the shelf finds a card the ranker lists under another designation', (tester) async {
-    // The ranker's row is M42 and the Book's object NGC1976 (alias "M 42"); another row names C 14 only as an alias.
-    await _pump(tester, frames: _m31Frames, tonightRows: [
-      const TonightSkyObject(id: 'M42', name: 'Orion Nebula', type: 'HII', magnitude: 4, raDeg: 83.8, decDeg: -5,
-          altitudeDeg: 50, maxAltitudeDeg: 70),
-      const TonightSkyObject(id: 'Double', name: 'h and chi Persei', type: 'OCl', magnitude: 4, raDeg: 34.7, decDeg: 57,
-          altitudeDeg: 40, maxAltitudeDeg: 60, aliases: ['C 14']),
-    ]);
-    expect(_onShelf('Orion Nebula'), findsOneWidget);
-    await tester.tap(find.text('Caldwell · 0'));
-    await tester.pumpAndSettle();
-    expect(_onShelf('Double Cluster'), findsOneWidget);
-  });
+  testWidgets(
+    'the shelf finds a card the ranker lists under another designation',
+    (tester) async {
+      // The ranker's row is M42 and the Book's object NGC1976 (alias "M 42"); another row names C 14 only as an alias.
+      await _pump(
+        tester,
+        frames: _m31Frames,
+        tonightRows: [
+          const TonightSkyObject(
+            id: 'M42',
+            name: 'Orion Nebula',
+            type: 'HII',
+            magnitude: 4,
+            raDeg: 83.8,
+            decDeg: -5,
+            altitudeDeg: 50,
+            maxAltitudeDeg: 70,
+          ),
+          const TonightSkyObject(
+            id: 'Double',
+            name: 'h and chi Persei',
+            type: 'OCl',
+            magnitude: 4,
+            raDeg: 34.7,
+            decDeg: 57,
+            altitudeDeg: 40,
+            maxAltitudeDeg: 60,
+            aliases: ['C 14'],
+          ),
+        ],
+      );
+      expect(_onShelf('Orion Nebula'), findsOneWidget);
+      await tester.tap(find.text('Caldwell · 0'));
+      await tester.pumpAndSettle();
+      expect(_onShelf('Double Cluster'), findsOneWidget);
+    },
+  );
 
-  testWidgets('a failed refresh keeps the cached cards under the error', (tester) async {
+  testWidgets('a failed refresh keeps the cached cards under the error', (
+    tester,
+  ) async {
     var fail = false;
     Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async {
       if (fail) throw StateError('rig away');
-      return AlbumFramesPage(totalLights: _m31Frames.length, frames: _m31Frames);
+      return AlbumFramesPage(
+        totalLights: _m31Frames.length,
+        frames: _m31Frames,
+      );
     }
 
     final container = await _pump(tester, frames: const [], fetcher: fetcher);
     expect(find.text('1 / 4 collected'), findsOneWidget);
 
     fail = true;
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: _app(null, open: false),
+      ),
+    );
+    await tester.pumpWidget(
+      UncontrolledProviderScope(container: container, child: _app(null)),
+    );
     await tester.pumpAndSettle();
     expect(find.text('1 / 4 collected'), findsOneWidget);
     expect(find.textContaining("Couldn't load the album"), findsOneWidget);
   });
 
-  testWidgets('cards new or up a tier since the last open turn to colour once, and the header says so',
-      (tester) async {
-    var served = [_m31Frames.first];
-    Future<AlbumFramesPage> fetcher(String baseUrl, {DateTime? since}) async =>
-        AlbumFramesPage(totalLights: served.length, frames: served);
-    late final ProviderContainer container;
-    Future<void> reopen() async {
-      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-      await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
-      await tester.pump();
-      await tester.pump();
-    }
-
-    container = await _pump(tester, frames: const [], fetcher: fetcher);
-    // First open: the cache was empty, so the whole collection is new to the album. It shows
-    // on a shelf at the top, so a card far down the grid (C 63 under 110 Messier cards) is seen.
-    expect(find.text('1 new card'), findsOneWidget);
-    expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
-
-    // A night later: M31 reached silver and M1 is new.
-    served = [
-      ..._m31Frames,
-      AlbumFrame(frameId: 'm1', targetName: 'M 1', exposureSeconds: 900, capturedUtc: DateTime(2026, 3, 9, 22).toUtc()),
-    ];
-    await reopen();
-    expect(find.byKey(const Key('album-card-reveal')), findsNWidgets(2), reason: 'M31 and M1 animate');
-    await tester.pumpAndSettle();
-    expect(find.text('1 new card · 1 tier up since your last visit'), findsOneWidget);
-    expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
-    expect(_onNewShelf('Crab Nebula'), findsOneWidget);
-    expect(find.byKey(const Key('album-card-reveal')), findsNothing, reason: 'played once, then a plain card');
-
-    // Nothing changed since: no line, no reveal.
-    await reopen();
-    expect(find.byKey(const Key('album-card-reveal')), findsNothing);
-    await tester.pumpAndSettle();
-    expect(find.textContaining('since your last visit'), findsNothing);
-    expect(find.byKey(const Key('album-shelf-new')), findsNothing);
-  });
-
-  testWidgets('a new card holds grey while the album opens, then turns to colour', (tester) async {
-    // The rig answers in about 60 ms, so the reveal must wait out the page coming in.
-    const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
-    var served = const <AlbumFrame>[];
-    final container = await _pump(tester,
-        frames: const [],
-        manifest: const {'M31': art},
-        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
-    served = _m31Frames;
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
-    await tester.pump();
-    await tester.pump();
-    final colourArt = find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byKey(const Key('album-art')));
-    // The fade is the Image's own opacity: an Opacity widget would add a layer per fading card.
-    double colour() => tester.widget<Image>(colourArt).opacity!.value;
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(colour(), lessThan(0.05), reason: 'still grey while the page settles');
-    expect(find.ancestor(of: colourArt, matching: find.byType(Opacity)), findsNothing);
-    await tester.pump(const Duration(milliseconds: 800));
-    expect(colour(), allOf(greaterThan(0.2), lessThan(0.95)), reason: 'fading in where the eye can follow it');
-    await tester.pumpAndSettle();
-  });
-
-  testWidgets('the reveal decodes the Art once: its decode width holds through the fade', (tester) async {
-    // A width that changes mid-fade re-decodes the Art, and the card shows black until it lands.
-    const art = AlbumArt(asset: 'assets/album/art/test.webp', credit: 'ESO', licence: 'CC BY 4.0');
-    var served = const <AlbumFrame>[];
-    final container = await _pump(tester,
-        frames: const [],
-        manifest: const {'M31': art},
-        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
-    served = _m31Frames;
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
-    final widths = <int?>{};
-    for (var i = 0; i < 25; i++) {
-      await tester.pump(const Duration(milliseconds: 100));
-      for (final img in tester.widgetList<Image>(
-          find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byType(Image)))) {
-        widths.add((img.image as ResizeImage).width);
+  testWidgets(
+    'cards new or up a tier since the last open turn to colour once, and the header says so',
+    (tester) async {
+      var served = [_m31Frames.first];
+      Future<AlbumFramesPage> fetcher(
+        String baseUrl, {
+        DateTime? since,
+      }) async => AlbumFramesPage(totalLights: served.length, frames: served);
+      late final ProviderContainer container;
+      Future<void> reopen() async {
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: _app(null, open: false),
+          ),
+        );
+        await tester.pumpWidget(
+          UncontrolledProviderScope(container: container, child: _app(null)),
+        );
+        await tester.pump();
+        await tester.pump();
       }
-    }
-    expect(widths, hasLength(1));
-  });
 
-  testWidgets('tapping a card mid-reveal finishes it, so the flip shows the card as it ends', (tester) async {
-    // The flip draws a plain front; a reveal still running underneath would jump to colour.
-    var served = const <AlbumFrame>[];
-    final container = await _pump(tester,
+      container = await _pump(tester, frames: const [], fetcher: fetcher);
+      // First open: the cache was empty, so the whole collection is new to the album. It shows
+      // on a shelf at the top, so a card far down the grid (C 63 under 110 Messier cards) is seen.
+      expect(find.text('1 new card'), findsOneWidget);
+      expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
+
+      // A night later: M31 reached silver and M1 is new.
+      served = [
+        ..._m31Frames,
+        AlbumFrame(
+          frameId: 'm1',
+          targetName: 'M 1',
+          exposureSeconds: 900,
+          capturedUtc: DateTime(2026, 3, 9, 22).toUtc(),
+        ),
+      ];
+      await reopen();
+      expect(
+        find.byKey(const Key('album-card-reveal')),
+        findsNWidgets(2),
+        reason: 'M31 and M1 animate',
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('1 new card · 1 tier up since your last visit'),
+        findsOneWidget,
+      );
+      expect(_onNewShelf('Andromeda Galaxy'), findsOneWidget);
+      expect(_onNewShelf('Crab Nebula'), findsOneWidget);
+      expect(
+        find.byKey(const Key('album-card-reveal')),
+        findsNothing,
+        reason: 'played once, then a plain card',
+      );
+
+      // Nothing changed since: no line, no reveal.
+      await reopen();
+      expect(find.byKey(const Key('album-card-reveal')), findsNothing);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('since your last visit'), findsNothing);
+      expect(find.byKey(const Key('album-shelf-new')), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a new card holds grey while the album opens, then turns to colour',
+    (tester) async {
+      // The rig answers in about 60 ms, so the reveal must wait out the page coming in.
+      const art = AlbumArt(
+        asset: 'assets/album/art/test.webp',
+        credit: 'ESO',
+        licence: 'CC BY 4.0',
+      );
+      var served = const <AlbumFrame>[];
+      final container = await _pump(
+        tester,
         frames: const [],
-        fetcher: (baseUrl, {since}) async => AlbumFramesPage(totalLights: served.length, frames: served));
-    served = _m31Frames;
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null, open: false)));
-    await tester.pumpWidget(UncontrolledProviderScope(container: container, child: _app(null)));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 400));
-    expect(find.byKey(const Key('album-card-reveal')), findsOneWidget);
-    await tester.tap(_onNewShelf('Andromeda Galaxy'));
-    await tester.pump();
-    expect(find.byKey(const Key('album-card-reveal')), findsNothing);
-    await tester.pumpAndSettle();
-  });
+        manifest: const {'M31': art},
+        fetcher: (baseUrl, {since}) async =>
+            AlbumFramesPage(totalLights: served.length, frames: served),
+      );
+      served = _m31Frames;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _app(null, open: false),
+        ),
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: _app(null)),
+      );
+      await tester.pump();
+      await tester.pump();
+      final colourArt = find.descendant(
+        of: find.byKey(const Key('album-shelf-new')),
+        matching: find.byKey(const Key('album-art')),
+      );
+      // The fade is the Image's own opacity: an Opacity widget would add a layer per fading card.
+      double colour() => tester.widget<Image>(colourArt).opacity!.value;
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(
+        colour(),
+        lessThan(0.05),
+        reason: 'still grey while the page settles',
+      );
+      expect(
+        find.ancestor(of: colourArt, matching: find.byType(Opacity)),
+        findsNothing,
+      );
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(
+        colour(),
+        allOf(greaterThan(0.2), lessThan(0.95)),
+        reason: 'fading in where the eye can follow it',
+      );
+      await tester.pumpAndSettle();
+    },
+  );
 
-  testWidgets('a screen reader hears that a card on the new shelf is new or up a tier', (tester) async {
-    final handle = tester.ensureSemantics();
-    await _pump(tester, frames: _m31Frames, seen: false);
-    final onShelf = find.descendant(of: find.byKey(const Key('album-shelf-new')), matching: find.byType(AlbumCard));
-    expect(tester.getSemantics(onShelf).label, 'M 31 Andromeda Galaxy, Silver, new');
-    handle.dispose();
-  });
+  testWidgets(
+    'the reveal decodes the Art once: its decode width holds through the fade',
+    (tester) async {
+      // A width that changes mid-fade re-decodes the Art, and the card shows black until it lands.
+      const art = AlbumArt(
+        asset: 'assets/album/art/test.webp',
+        credit: 'ESO',
+        licence: 'CC BY 4.0',
+      );
+      var served = const <AlbumFrame>[];
+      final container = await _pump(
+        tester,
+        frames: const [],
+        manifest: const {'M31': art},
+        fetcher: (baseUrl, {since}) async =>
+            AlbumFramesPage(totalLights: served.length, frames: served),
+      );
+      served = _m31Frames;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _app(null, open: false),
+        ),
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: _app(null)),
+      );
+      final widths = <int?>{};
+      for (var i = 0; i < 25; i++) {
+        await tester.pump(const Duration(milliseconds: 100));
+        for (final img in tester.widgetList<Image>(
+          find.descendant(
+            of: find.byKey(const Key('album-shelf-new')),
+            matching: find.byType(Image),
+          ),
+        )) {
+          widths.add((img.image as ResizeImage).width);
+        }
+      }
+      expect(widths, hasLength(1));
+    },
+  );
+
+  testWidgets(
+    'tapping a card mid-reveal finishes it, so the flip shows the card as it ends',
+    (tester) async {
+      // The flip draws a plain front; a reveal still running underneath would jump to colour.
+      var served = const <AlbumFrame>[];
+      final container = await _pump(
+        tester,
+        frames: const [],
+        fetcher: (baseUrl, {since}) async =>
+            AlbumFramesPage(totalLights: served.length, frames: served),
+      );
+      served = _m31Frames;
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: _app(null, open: false),
+        ),
+      );
+      await tester.pumpWidget(
+        UncontrolledProviderScope(container: container, child: _app(null)),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.byKey(const Key('album-card-reveal')), findsOneWidget);
+      await tester.tap(_onNewShelf('Andromeda Galaxy'));
+      await tester.pump();
+      expect(find.byKey(const Key('album-card-reveal')), findsNothing);
+      await tester.pumpAndSettle();
+    },
+  );
+
+  testWidgets(
+    'a screen reader hears that a card on the new shelf is new or up a tier',
+    (tester) async {
+      final handle = tester.ensureSemantics();
+      await _pump(tester, frames: _m31Frames, seen: false);
+      final onShelf = find.descendant(
+        of: find.byKey(const Key('album-shelf-new')),
+        matching: find.byType(AlbumCard),
+      );
+      expect(
+        tester.getSemantics(onShelf).label,
+        'M 31 Andromeda Galaxy, Silver, new',
+      );
+      handle.dispose();
+    },
+  );
 
   testWidgets('a mouse drags the shelves sideways on desktop', (tester) async {
     // A plain wheel scrolls the page, so dragging is the mouse's way along a shelf.
-    await _pump(tester, frames: const [], tonight: [_m42, _c14, _m31, _m1], size: const Size(400, 900));
+    await _pump(
+      tester,
+      frames: const [],
+      tonight: [_m42, _c14, _m31, _m1],
+      size: const Size(400, 900),
+    );
     final shelf = find.byKey(const Key('album-shelf-tonight'));
-    await tester.dragFrom(tester.getCenter(shelf), const Offset(-200, 0), kind: PointerDeviceKind.mouse);
+    await tester.dragFrom(
+      tester.getCenter(shelf),
+      const Offset(-200, 0),
+      kind: PointerDeviceKind.mouse,
+    );
     await tester.pumpAndSettle();
-    final position = tester.state<ScrollableState>(find.descendant(of: shelf, matching: find.byType(Scrollable))).position;
+    final position = tester
+        .state<ScrollableState>(
+          find.descendant(of: shelf, matching: find.byType(Scrollable)),
+        )
+        .position;
     expect(position.pixels, greaterThan(0));
   });
 
-  testWidgets('with reduced motion a new card shows in colour at once', (tester) async {
-    tester.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(reduceMotion: true);
+  testWidgets('with reduced motion a new card shows in colour at once', (
+    tester,
+  ) async {
+    tester.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(reduceMotion: true);
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
     await _pump(tester, frames: _m31Frames, seen: false);
     expect(find.text('1 new card'), findsOneWidget);
     expect(find.byKey(const Key('album-card-reveal')), findsNothing);
   });
 
-  testWidgets('the shelf waits until the Book is matched against the rows', (tester) async {
+  testWidgets('the shelf waits until the Book is matched against the rows', (
+    tester,
+  ) async {
     // Rows loaded but the Book not yet matched: every card would look missing, M31 included.
     await _pump(tester, frames: _m31Frames, tonight: [_m31], bookPending: true);
     expect(_onShelf('Andromeda Galaxy'), findsNothing);
@@ -868,34 +1596,55 @@ void main() {
     (const Size(400, 900), 2.0),
     (const Size(800, 400), 2.0),
   ]) {
-    testWidgets('nothing overflows at ${size.width.toInt()} px and text ${scale}x', (tester) async {
-      await _pump(tester, frames: _m31Frames, size: size, textScale: scale);
-      expect(tester.takeException(), isNull);
-      expect(find.text('Messier · 1'), findsOneWidget, reason: 'the catalog chips stay reachable');
-    });
+    testWidgets(
+      'nothing overflows at ${size.width.toInt()} px and text ${scale}x',
+      (tester) async {
+        await _pump(tester, frames: _m31Frames, size: size, textScale: scale);
+        expect(tester.takeException(), isNull);
+        expect(
+          find.text('Messier · 1'),
+          findsOneWidget,
+          reason: 'the catalog chips stay reachable',
+        );
+      },
+    );
   }
 
   for (final scale in [1.0, 1.3, 2.0]) {
-    testWidgets('a flipped back with every part fits a landscape phone at text ${scale}x', (tester) async {
-      PlanningDso? picked;
-      await _pump(tester, frames: _m31Frames, size: const Size(800, 400), textScale: scale, onImageTarget: (d, _) => picked = d, manifest: const {
-        'M31': AlbumArt(asset: 'assets/album/art/m031.webp', credit: 'NASA, ESA, and the Hubble Heritage Team',
-            licence: 'Public domain', distance: '2.5 million ly',
-            trivia: 'The nearest large galaxy to the Milky Way, it is approaching us at about 110 km/s.'),
-      });
-      // Large text stacks the header, pushing the grid (built lazily) below the fold.
-      await tester.scrollUntilVisible(find.text('Andromeda Galaxy'), 100);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Andromeda Galaxy'));
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: 'no overflow');
-      // A back taller than the card scrolls to its action (the test font is wider than any real one).
-      await tester.ensureVisible(find.text('Add more time'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Add more time'));
-      await tester.pumpAndSettle();
-      expect(picked, same(_m31), reason: 'and reachable');
-    });
+    testWidgets(
+      'a flipped back with every part fits a landscape phone at text ${scale}x',
+      (tester) async {
+        PlanningDso? picked;
+        await _pump(
+          tester,
+          frames: _m31Frames,
+          size: const Size(800, 400),
+          textScale: scale,
+          onImageTarget: (d, _) => picked = d,
+          manifest: const {
+            'M31': AlbumArt(
+              asset: 'assets/album/art/m031.webp',
+              credit: 'NASA, ESA, and the Hubble Heritage Team',
+              licence: 'Public domain',
+              distance: '2.5 million ly',
+              trivia: 'The nearest large galaxy to the Milky Way, it is approaching us at about 110 km/s.',
+            ),
+          },
+        );
+        // Large text stacks the header, pushing the grid (built lazily) below the fold.
+        await tester.scrollUntilVisible(find.text('Andromeda Galaxy'), 100);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Andromeda Galaxy'));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull, reason: 'no overflow');
+        // A back taller than the card scrolls to its action (the test font is wider than any real one).
+        await tester.ensureVisible(find.text('Add more time'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Add more time'));
+        await tester.pumpAndSettle();
+        expect(picked, same(_m31), reason: 'and reachable');
+      },
+    );
   }
 
   testWidgets('a flipped card stays inside a landscape phone', (tester) async {
@@ -911,14 +1660,21 @@ void main() {
   });
 
   testWidgets('the last grid row clears the home indicator', (tester) async {
-    await _pump(tester, frames: _m31Frames, size: const Size(400, 600), bottomInset: 34);
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      size: const Size(400, 600),
+      bottomInset: 34,
+    );
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -2000));
     await tester.pumpAndSettle();
     final last = tester.getRect(find.byType(AlbumCardFront).last);
     expect(last.bottom, lessThanOrEqualTo(600 - 34));
   });
 
-  testWidgets('a missing card\'s label and name read at 4.5:1 on the card', (tester) async {
+  testWidgets('a missing card\'s label and name read at 4.5:1 on the card', (
+    tester,
+  ) async {
     // A missing card is tappable (its back offers "Image this target"), so WCAG 1.4.3 applies.
     await _pump(tester, frames: _m31Frames);
     double ratio(Color a, Color b) {
@@ -927,12 +1683,25 @@ void main() {
     }
 
     for (final text in ['M 1', 'Crab Nebula']) {
-      final style = tester.widget<Text>(find.descendant(of: find.byType(SliverGrid), matching: find.text(text))).style!;
-      expect(ratio(style.color!, AraColors.bgPanel), greaterThanOrEqualTo(4.5), reason: text);
+      final style = tester
+          .widget<Text>(
+            find.descendant(
+              of: find.byType(SliverGrid),
+              matching: find.text(text),
+            ),
+          )
+          .style!;
+      expect(
+        ratio(style.color!, AraColors.bgPanel),
+        greaterThanOrEqualTo(4.5),
+        reason: text,
+      );
     }
   });
 
-  testWidgets('a card is announced as one button with its label said once', (tester) async {
+  testWidgets('a card is announced as one button with its label said once', (
+    tester,
+  ) async {
     final handle = tester.ensureSemantics();
     await _pump(tester, frames: _m31Frames);
     final node = tester.getSemantics(find.byType(AlbumCard).first);
@@ -944,7 +1713,9 @@ void main() {
     // second, unlabelled close target.
     await tester.tap(find.text('Crab Nebula'));
     await tester.pumpAndSettle();
-    final back = tester.getSemantics(find.byType(AlbumCardBack)).getSemanticsData();
+    final back = tester
+        .getSemantics(find.byType(AlbumCardBack))
+        .getSemanticsData();
     expect(back.hasAction(SemanticsAction.tap), isFalse);
     handle.dispose();
   });
@@ -957,21 +1728,41 @@ void main() {
     }
 
     for (final t in AlbumTier.values) {
-      expect(ratio(albumTierColor(t), AraColors.bgPanel), greaterThanOrEqualTo(4.5), reason: '$t');
-      expect(ratio(albumTierColor(t), AraColors.bgPrimary), greaterThanOrEqualTo(4.5), reason: '$t');
+      expect(
+        ratio(albumTierColor(t), AraColors.bgPanel),
+        greaterThanOrEqualTo(4.5),
+        reason: '$t',
+      );
+      expect(
+        ratio(albumTierColor(t), AraColors.bgPrimary),
+        greaterThanOrEqualTo(4.5),
+        reason: '$t',
+      );
     }
   });
 
-  testWidgets('Art decodes at the card\'s width, not the file\'s', (tester) async {
-    await _pump(tester, frames: _m31Frames, manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')});
+  testWidgets('Art decodes at the card\'s width, not the file\'s', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      frames: _m31Frames,
+      manifest: const {'M31': AlbumArt(asset: 'assets/album/art/test.webp')},
+    );
     final image = tester.widget<Image>(find.byType(Image).first);
     expect(image.image, isA<ResizeImage>());
     final width = tester.getSize(find.byType(Image).first).width;
-    expect((image.image as ResizeImage).width, width.round(), reason: 'device pixel ratio 1 in tests');
+    expect(
+      (image.image as ResizeImage).width,
+      width.round(),
+      reason: 'device pixel ratio 1 in tests',
+    );
   });
 }
 
-class _FakeUrlLauncher extends Fake with MockPlatformInterfaceMixin implements UrlLauncherPlatform {
+class _FakeUrlLauncher extends Fake
+    with MockPlatformInterfaceMixin
+    implements UrlLauncherPlatform {
   _FakeUrlLauncher({this.result = true, this.throws = false});
   final bool result;
   final bool throws;

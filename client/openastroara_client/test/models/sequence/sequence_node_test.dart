@@ -11,11 +11,13 @@ void main() {
       );
       expect(() => node.params['k'] = 'v', throwsUnsupportedError);
       expect(
-        () => node.children.add(SequenceNode(
-          id: 'x',
-          kind: SequenceNodeKind.instruction,
-          displayName: 'X',
-        )),
+        () => node.children.add(
+          SequenceNode(
+            id: 'x',
+            kind: SequenceNodeKind.instruction,
+            displayName: 'X',
+          ),
+        ),
         throwsUnsupportedError,
       );
     });
@@ -48,13 +50,13 @@ void main() {
 
     test('equality is deep over nested lists', () {
       SequenceNode build() => SequenceNode(
-            id: 'loop',
-            kind: SequenceNodeKind.loopContainer,
-            displayName: 'Filter loop',
-            params: const <String, Object?>{
-              'filters': <String>['L', 'R', 'G', 'B'],
-            },
-          );
+        id: 'loop',
+        kind: SequenceNodeKind.loopContainer,
+        displayName: 'Filter loop',
+        params: const <String, Object?>{
+          'filters': <String>['L', 'R', 'G', 'B'],
+        },
+      );
       final a = build();
       final b = build();
       expect(a, equals(b));

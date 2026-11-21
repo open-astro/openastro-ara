@@ -29,7 +29,11 @@ class AlbumFrame {
   /// Whether the frame can be matched by position: J2000 pointing, a pixel
   /// scale and a size. Without, it falls back to its target name.
   bool get hasPosition =>
-      raDeg != null && decDeg != null && (pixelScaleArcsec ?? 0) > 0 && width > 0 && height > 0;
+      raDeg != null &&
+      decDeg != null &&
+      (pixelScaleArcsec ?? 0) > 0 &&
+      width > 0 &&
+      height > 0;
 
   /// When the daemon last changed the row; the newest one is the next fetch's `since`.
   final DateTime? updatedUtc;
@@ -49,31 +53,31 @@ class AlbumFrame {
   });
 
   factory AlbumFrame.fromJson(Map<String, dynamic> json) => AlbumFrame(
-        frameId: _str(json['frame_id']) ?? '',
-        raDeg: _dbl(json['ra_deg']),
-        decDeg: _dbl(json['dec_deg']),
-        width: _int(json['width']),
-        height: _int(json['height']),
-        pixelScaleArcsec: _dbl(json['pixel_scale_arcsec']),
-        capturedUtc: parseStatsUtc(json['captured_utc']),
-        exposureSeconds: _dbl(json['exposure_seconds']) ?? 0,
-        filterName: _str(json['filter_name']),
-        targetName: _str(json['target_name']) ?? '',
-        updatedUtc: parseStatsUtc(json['updated_utc']),
-      );
+    frameId: _str(json['frame_id']) ?? '',
+    raDeg: _dbl(json['ra_deg']),
+    decDeg: _dbl(json['dec_deg']),
+    width: _int(json['width']),
+    height: _int(json['height']),
+    pixelScaleArcsec: _dbl(json['pixel_scale_arcsec']),
+    capturedUtc: parseStatsUtc(json['captured_utc']),
+    exposureSeconds: _dbl(json['exposure_seconds']) ?? 0,
+    filterName: _str(json['filter_name']),
+    targetName: _str(json['target_name']) ?? '',
+    updatedUtc: parseStatsUtc(json['updated_utc']),
+  );
 
   /// The wire shape again, for the collection cache file.
   Map<String, dynamic> toJson() => {
-        'frame_id': frameId,
-        'ra_deg': raDeg,
-        'dec_deg': decDeg,
-        'width': width,
-        'height': height,
-        'pixel_scale_arcsec': pixelScaleArcsec,
-        'captured_utc': capturedUtc?.toUtc().toIso8601String(),
-        'exposure_seconds': exposureSeconds,
-        'filter_name': filterName,
-        'target_name': targetName,
-        'updated_utc': updatedUtc?.toUtc().toIso8601String(),
-      };
+    'frame_id': frameId,
+    'ra_deg': raDeg,
+    'dec_deg': decDeg,
+    'width': width,
+    'height': height,
+    'pixel_scale_arcsec': pixelScaleArcsec,
+    'captured_utc': capturedUtc?.toUtc().toIso8601String(),
+    'exposure_seconds': exposureSeconds,
+    'filter_name': filterName,
+    'target_name': targetName,
+    'updated_utc': updatedUtc?.toUtc().toIso8601String(),
+  };
 }

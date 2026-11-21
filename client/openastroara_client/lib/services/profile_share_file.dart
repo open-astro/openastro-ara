@@ -14,11 +14,13 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
     decoded = jsonDecode(utf8.decode(bytes));
   } catch (_) {
     throw const FormatException(
-        "That file isn't a profile share — it couldn't be read as JSON.");
+      "That file isn't a profile share — it couldn't be read as JSON.",
+    );
   }
   if (decoded is! Map<String, dynamic>) {
     throw const FormatException(
-        "That file isn't a profile share — expected a JSON object.");
+      "That file isn't a profile share — expected a JSON object.",
+    );
   }
   return decoded;
 }
@@ -31,8 +33,11 @@ Map<String, dynamic> parseShareManifest(List<int> bytes) {
 ///
 /// Defaults produce a profile share (`<name>.araprofile.json`); the §70.5
 /// sequence export passes `fallbackBase: 'sequence', extension: 'araseq.json'`.
-String shareFileName(String name,
-    {String fallbackBase = 'profile', String extension = 'araprofile.json'}) {
+String shareFileName(
+  String name, {
+  String fallbackBase = 'profile',
+  String extension = 'araprofile.json',
+}) {
   final cleaned = name
       // filename-illegal chars + control chars (incl. tab/LF/CR) → dash.
       .replaceAll(RegExp(r'[\/\\:*?"<>|\x00-\x1f]'), '-')
@@ -48,8 +53,10 @@ String shareFileName(String name,
   return '$base.$extension';
 }
 
-final RegExp _windowsReserved =
-    RegExp(r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$', caseSensitive: false);
+final RegExp _windowsReserved = RegExp(
+  r'^(con|prn|aux|nul|com[1-9]|lpt[1-9])$',
+  caseSensitive: false,
+);
 
 /// A relative "import within ~N minutes" note for the import confirm dialog, or
 /// null when there's no expiry. Relative (computed against the current instant)
@@ -58,8 +65,9 @@ final RegExp _windowsReserved =
 /// for tests; both sides are normalized to UTC before comparing.
 String? shareExpiryNote(DateTime? expiresUtc, {DateTime? now}) {
   if (expiresUtc == null) return null;
-  final remaining =
-      expiresUtc.toUtc().difference((now ?? DateTime.now()).toUtc());
+  final remaining = expiresUtc.toUtc().difference(
+    (now ?? DateTime.now()).toUtc(),
+  );
   if (remaining.inSeconds <= 0) {
     return 'This preview has expired — pick the file again to import.';
   }
@@ -67,7 +75,7 @@ String? shareExpiryNote(DateTime? expiresUtc, {DateTime? now}) {
   final label = mins < 1
       ? 'less than a minute'
       : mins == 1
-          ? 'about a minute'
-          : 'about $mins minutes';
+      ? 'about a minute'
+      : 'about $mins minutes';
   return 'Import within $label — this preview expires after that.';
 }

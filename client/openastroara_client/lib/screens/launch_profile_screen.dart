@@ -42,113 +42,134 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   Widget build(BuildContext context) {
     final async = ref.watch(profileManagementProvider);
     final server = ref.watch(activeServerProvider);
-    final serverLabel =
-        server == null ? null : (server.mdnsName ?? server.hostname);
+    final serverLabel = server == null
+        ? null
+        : (server.mdnsName ?? server.hostname);
 
     return Scaffold(
       body: Center(
         // Scrolls when the card is taller than the window (phone landscape,
         // the compact desktop launch window).
         child: SingleChildScrollView(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(context.l10n.launchTitle,
-                      style: Theme.of(context).textTheme.headlineSmall),
-                  if (serverLabel != null) ...[
-                    const SizedBox(height: 4),
-                    // The profile list below is what proves the rig answers;
-                    // this line only names which rig was chosen (#1129: it
-                    // said "Connected to" while the rig was unreachable).
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      context.l10n.launchTitle,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    if (serverLabel != null) ...[
+                      const SizedBox(height: 4),
+                      // The profile list below is what proves the rig answers;
+                      // this line only names which rig was chosen (#1129: it
+                      // said "Connected to" while the rig was unreachable).
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              context.l10n.launchRig(serverLabel),
+                              style: const TextStyle(
+                                color: AraColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                          // A rig that went away mid-launch left this screen a
+                          // dead end: Retry, offline, or a new profile on the
+                          // same unreachable rig (#1129). Back to the network
+                          // scan — the same chooser the shell's Launchpad opens.
+                          TextButton(
+                            onPressed: () => ref
+                                .read(serverChooserRequestedProvider.notifier)
+                                .request(),
+                            child: Text(context.l10n.launchChooseRig),
+                          ),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 24),
+                    ...async.when(
+                      loading: () => const [
+                        Center(child: AdaptiveProgressIndicator()),
+                      ],
+                      error: (e, _) => [
+                        Text(
+                          friendlyDaemonError(
+                            e,
+                            fallback: "Couldn't load the profiles",
+                          ),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: AraColors.textSecondary,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () =>
+                              ref.invalidate(profileManagementProvider),
+                          icon: const Icon(Icons.refresh, size: 18),
+                          label: Text(context.l10n.launchRetry),
+                        ),
+                        const SizedBox(height: 8),
+                        // §2 — the daemon being down must not block planning:
+                        // enter the shell offline; drafts push once it's back.
+                        // Self-gated on a cached profile existing.
+                        const PlanOfflineButton(),
+                      ],
+                      data: (list) => _profileControls(list),
+                    ),
+                    const SizedBox(height: 24),
+                    Row(
+                      children: [
+                        const Expanded(child: Divider()),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          child: Text(
+                            context.l10n.launchOr,
+                            style: const TextStyle(
+                              color: AraColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                        const Expanded(child: Divider()),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    // §30.2: Add / Import are ALWAYS visible — never gated behind
+                    // picking an existing profile, so users can experiment freely.
                     Row(
                       children: [
                         Expanded(
-                          child: Text(context.l10n.launchRig(serverLabel),
-                              style: const TextStyle(
-                                  color: AraColors.textSecondary)),
+                          child: OutlinedButton.icon(
+                            onPressed: _addProfile,
+                            icon: const Icon(Icons.add, size: 18),
+                            label: Text(context.l10n.launchAddProfile),
+                          ),
                         ),
-                        // A rig that went away mid-launch left this screen a
-                        // dead end: Retry, offline, or a new profile on the
-                        // same unreachable rig (#1129). Back to the network
-                        // scan — the same chooser the shell's Launchpad opens.
-                        TextButton(
-                          onPressed: () => ref
-                              .read(serverChooserRequestedProvider.notifier)
-                              .request(),
-                          child: Text(context.l10n.launchChooseRig),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () =>
+                                unawaited(runProfileImportFlow(context, ref)),
+                            icon: const Icon(
+                              Icons.file_download_outlined,
+                              size: 18,
+                            ),
+                            label: Text(context.l10n.launchImportProfile),
+                          ),
                         ),
                       ],
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  ...async.when(
-                    loading: () => const [
-                      Center(child: AdaptiveProgressIndicator()),
-                    ],
-                    error: (e, _) => [
-                      Text(
-                        friendlyDaemonError(e,
-                            fallback: "Couldn't load the profiles"),
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: AraColors.textSecondary),
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        onPressed: () =>
-                            ref.invalidate(profileManagementProvider),
-                        icon: const Icon(Icons.refresh, size: 18),
-                        label: Text(context.l10n.launchRetry),
-                      ),
-                      const SizedBox(height: 8),
-                      // §2 — the daemon being down must not block planning:
-                      // enter the shell offline; drafts push once it's back.
-                      // Self-gated on a cached profile existing.
-                      const PlanOfflineButton(),
-                    ],
-                    data: (list) => _profileControls(list),
-                  ),
-                  const SizedBox(height: 24),
-                  Row(children: [
-                    const Expanded(child: Divider()),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      child: Text(context.l10n.launchOr,
-                          style: const TextStyle(color: AraColors.textSecondary)),
-                    ),
-                    const Expanded(child: Divider()),
-                  ]),
-                  const SizedBox(height: 16),
-                  // §30.2: Add / Import are ALWAYS visible — never gated behind
-                  // picking an existing profile, so users can experiment freely.
-                  Row(children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _addProfile,
-                        icon: const Icon(Icons.add, size: 18),
-                        label: Text(context.l10n.launchAddProfile),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            unawaited(runProfileImportFlow(context, ref)),
-                        icon: const Icon(Icons.file_download_outlined, size: 18),
-                        label: Text(context.l10n.launchImportProfile),
-                      ),
-                    ),
-                  ]),
-                ],
+                ),
               ),
             ),
           ),
-        ),
         ),
       ),
     );
@@ -159,9 +180,11 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   List<Widget> _profileControls(ProfileList list) {
     if (list.profiles.isEmpty) {
       return [
-        Text(context.l10n.launchNoProfiles,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AraColors.textSecondary)),
+        Text(
+          context.l10n.launchNoProfiles,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: AraColors.textSecondary),
+        ),
       ];
     }
     // Follow the daemon's active profile unless the user picked another entry
@@ -172,52 +195,63 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
     final selected = (_pickedId != null && ids.contains(_pickedId))
         ? _pickedId!
         : (list.activeId != null && ids.contains(list.activeId)
-            ? list.activeId!
-            : list.profiles.first.id);
+              ? list.activeId!
+              : list.profiles.first.id);
     // Any profile is deletable: the daemon falls back to the newest remaining
     // profile when the active one is deleted, and returns to the zero-profile
     // state when the last one goes (this box then shows the setup actions).
     final selectedIsActive = selected == list.activeId;
     final onlyOne = list.profiles.length == 1;
-    final selectedName =
-        list.profiles.firstWhere((p) => p.id == selected).name;
+    final selectedName = list.profiles.firstWhere((p) => p.id == selected).name;
     return [
-      Text(context.l10n.launchActiveProfile,
-          style: Theme.of(context).textTheme.titleSmall),
+      Text(
+        context.l10n.launchActiveProfile,
+        style: Theme.of(context).textTheme.titleSmall,
+      ),
       const SizedBox(height: 8),
-      Row(children: [
-        Expanded(
-          child: DropdownButtonFormField<String>(
-            // FormFields consume initialValue only on first mount, so key on
-            // the daemon's active id: when the wizard returns with a new
-            // active profile the dropdown remounts and actually shows it
-            // (review #844).
-            key: ValueKey('launch-profile-dropdown-${list.activeId}'),
-            initialValue: selected,
-            items: [
-              for (final p in list.profiles)
-                DropdownMenuItem(value: p.id, child: Text(p.name)),
-            ],
-            onChanged: (v) => setState(() => _pickedId = v),
+      Row(
+        children: [
+          Expanded(
+            child: DropdownButtonFormField<String>(
+              // FormFields consume initialValue only on first mount, so key on
+              // the daemon's active id: when the wizard returns with a new
+              // active profile the dropdown remounts and actually shows it
+              // (review #844).
+              key: ValueKey('launch-profile-dropdown-${list.activeId}'),
+              initialValue: selected,
+              items: [
+                for (final p in list.profiles)
+                  DropdownMenuItem(value: p.id, child: Text(p.name)),
+              ],
+              onChanged: (v) => setState(() => _pickedId = v),
+            ),
           ),
-        ),
-        const SizedBox(width: 4),
-        IconButton(
-          icon: const Icon(Icons.delete_outline, size: 20),
-          tooltip: context.l10n.launchDeleteProfile(selectedName),
-          onPressed: _entering
-              ? null
-              : () => unawaited(_deleteProfile(selected, selectedName,
-                  isActive: selectedIsActive, isLast: onlyOne)),
-        ),
-      ]),
+          const SizedBox(width: 4),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, size: 20),
+            tooltip: context.l10n.launchDeleteProfile(selectedName),
+            onPressed: _entering
+                ? null
+                : () => unawaited(
+                    _deleteProfile(
+                      selected,
+                      selectedName,
+                      isActive: selectedIsActive,
+                      isLast: onlyOne,
+                    ),
+                  ),
+          ),
+        ],
+      ),
       const SizedBox(height: 16),
       FilledButton(
         onPressed: _entering ? null : () => unawaited(_enter(selected)),
         child: _entering
             ? const SizedBox(
-                width: 18, height: 18,
-                child: AdaptiveProgressIndicator(strokeWidth: 2))
+                width: 18,
+                height: 18,
+                child: AdaptiveProgressIndicator(strokeWidth: 2),
+              )
             : Text(context.l10n.launchImage),
       ),
     ];
@@ -241,11 +275,14 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
       }
       ref.read(profileGatePassedProvider.notifier).pass();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text(
-            friendlyDaemonError(e, fallback: "Couldn't switch profile")),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyDaemonError(e, fallback: "Couldn't switch profile"),
+          ),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _entering = false);
     }
@@ -255,28 +292,39 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
   /// fallback when the active/last profile is going away and asks about the
   /// guider profile (§63.4); on success the dropdown falls back to whatever the
   /// daemon now reports active and a snackbar says what the guider did.
-  Future<void> _deleteProfile(String id, String name,
-      {required bool isActive, required bool isLast}) async {
+  Future<void> _deleteProfile(
+    String id,
+    String name, {
+    required bool isActive,
+    required bool isLast,
+  }) async {
     final messenger = ScaffoldMessenger.of(context);
     final notifier = ref.read(profileManagementProvider.notifier);
-    final choice = await showDeleteProfileDialog(context,
-        name: name,
-        isActive: isActive,
-        isLast: isLast,
-        preview: () => notifier.guiderTwin(id));
+    final choice = await showDeleteProfileDialog(
+      context,
+      name: name,
+      isActive: isActive,
+      isLast: isLast,
+      preview: () => notifier.guiderTwin(id),
+    );
     if (choice == null || !mounted) return;
     try {
-      final result = await notifier.delete(id,
-          deleteGuiderProfile: choice.deleteGuiderProfile);
+      final result = await notifier.delete(
+        id,
+        deleteGuiderProfile: choice.deleteGuiderProfile,
+      );
       // The deleted profile may be the local pick — fall back to active.
       if (mounted) setState(() => _pickedId = null);
       showGuiderTwinOutcome(messenger, result);
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content:
-            Text(friendlyDaemonError(e, fallback: "Couldn't delete profile")),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            friendlyDaemonError(e, fallback: "Couldn't delete profile"),
+          ),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 
@@ -285,7 +333,10 @@ class _LaunchProfileScreenState extends ConsumerState<LaunchProfileScreen> {
     // the new profile becomes active on the daemon (§30.4), so on return the
     // dropdown pre-selects it — clear any stale manual pick so that shows.
     await Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => const WizardShell(), fullscreenDialog: true),
+      MaterialPageRoute(
+        builder: (_) => const WizardShell(),
+        fullscreenDialog: true,
+      ),
     );
     if (mounted) setState(() => _pickedId = null);
   }

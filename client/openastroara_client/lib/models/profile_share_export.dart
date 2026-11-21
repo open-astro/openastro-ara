@@ -11,10 +11,7 @@ class ProfileShareExport {
   final String profileName;
   final Map<String, dynamic> manifest;
 
-  const ProfileShareExport({
-    required this.profileName,
-    required this.manifest,
-  });
+  const ProfileShareExport({required this.profileName, required this.manifest});
 
   factory ProfileShareExport.fromJson(Map<String, dynamic> json) {
     // Daemon serializes with SnakeCaseLower (see Program.cs). Fail loudly if the
@@ -23,7 +20,8 @@ class ProfileShareExport {
     final rawManifest = json['manifest'];
     if (rawManifest is! Map || rawManifest.isEmpty) {
       throw const FormatException(
-          'Export response did not include a profile-share manifest.');
+        'Export response did not include a profile-share manifest.',
+      );
     }
     return ProfileShareExport(
       profileName: json['profile_name']?.toString() ?? '',

@@ -9,7 +9,10 @@ void main() {
     tearDown(() => container.dispose());
 
     test('defaults to bySession', () {
-      expect(container.read(libraryGroupingProvider), LibraryGrouping.bySession);
+      expect(
+        container.read(libraryGroupingProvider),
+        LibraryGrouping.bySession,
+      );
     });
 
     test('set switches grouping', () {
@@ -19,8 +22,10 @@ void main() {
       n.set(LibraryGrouping.byDate);
       expect(container.read(libraryGroupingProvider), LibraryGrouping.byDate);
       n.set(LibraryGrouping.bySession);
-      expect(container.read(libraryGroupingProvider), LibraryGrouping.bySession);
+      expect(
+        container.read(libraryGroupingProvider),
+        LibraryGrouping.bySession,
+      );
     });
   });
-
 }

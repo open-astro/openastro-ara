@@ -4,7 +4,10 @@ import 'dart:math' as math;
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, kSecondaryMouseButton;
 import 'package:flutter/cupertino.dart'
-    show CupertinoActivityIndicator, CupertinoAlertDialog, CupertinoDialogAction;
+    show
+        CupertinoActivityIndicator,
+        CupertinoAlertDialog,
+        CupertinoDialogAction;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,10 +84,22 @@ void main() {
     final pt = AppLocalizationsPtBr().estopConfirmBody.toLowerCase();
     expect(en, isNot(contains('park')));
     expect(pt, isNot(contains('estacion')));
-    for (final step in ['where it is', 'tracking', 'bahtinov', 'autofocus', 'polar']) {
+    for (final step in [
+      'where it is',
+      'tracking',
+      'bahtinov',
+      'autofocus',
+      'polar',
+    ]) {
       expect(en, contains(step));
     }
-    for (final step in ['onde ela', 'rastreamento', 'bahtinov', 'autofoco', 'polar']) {
+    for (final step in [
+      'onde ela',
+      'rastreamento',
+      'bahtinov',
+      'autofoco',
+      'polar',
+    ]) {
       expect(pt, contains(step));
     }
   });
@@ -112,7 +127,15 @@ void main() {
           home: Scaffold(
             body: pills
                 // The pill the stop's message lands in, as Simple Mode shows it.
-                ? Column(children: [const SizedBox(width: 420, child: SimpleMessagePills(maxHeight: 600)), button])
+                ? Column(
+                    children: [
+                      const SizedBox(
+                        width: 420,
+                        child: SimpleMessagePills(maxHeight: 600),
+                      ),
+                      button,
+                    ],
+                  )
                 : button,
           ),
         ),
@@ -161,8 +184,16 @@ void main() {
             .style!;
         final fill = style.backgroundColor!.resolve({})!;
         final text = style.foregroundColor!.resolve({})!;
-        expect(fill, AraColors.emergencyStop, reason: 'every Stop shares one red');
-        expect(text, Colors.white, reason: 'the label is white, not the scheme\'s black');
+        expect(
+          fill,
+          AraColors.emergencyStop,
+          reason: 'every Stop shares one red',
+        );
+        expect(
+          text,
+          Colors.white,
+          reason: 'the label is white, not the scheme\'s black',
+        );
         expect(ratio(fill, text), greaterThanOrEqualTo(4.5), reason: 'at rest');
         final g = await tester.startGesture(
           tester.getCenter(find.byType(EmergencyStopButton)),
@@ -188,28 +219,47 @@ void main() {
     );
   }
 
-  testWidgets('Simple Mode: a failed rung leads the message, so its two lines show what failed', (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
-    fake.result = const EmergencyStopResult(
-      alreadyInProgress: false,
-      runsAborted: 1,
-      exposureAborted: true,
-      guidingStopped: true,
-      mountStopped: false,
-      flatPanelLightOff: true,
-      failedRungs: ['stop_mount'],
-    );
-    await activateWithoutPointer(tester);
-    await activateWithoutPointer(tester);
-    await tester.pumpAndSettle();
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    final title = container.read(simpleMessagesProvider).first.title;
-    expect(title, startsWith('CHECK THE RIG: MOUNT STOP FAILED'));
-    expect(title, contains('1 sequence run(s) aborted'), reason: 'what worked still follows');
-  });
+  testWidgets(
+    'Simple Mode: a failed rung leads the message, so its two lines show what failed',
+    (tester) async {
+      await pumpButton(
+        tester,
+        button: const EmergencyStopButton(compact: true),
+        simpleMode: true,
+      );
+      fake.result = const EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 1,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: false,
+        flatPanelLightOff: true,
+        failedRungs: ['stop_mount'],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EmergencyStopButton)),
+      );
+      final title = container.read(simpleMessagesProvider).first.title;
+      expect(title, startsWith('CHECK THE RIG: MOUNT STOP FAILED'));
+      expect(
+        title,
+        contains('1 sequence run(s) aborted'),
+        reason: 'what worked still follows',
+      );
+    },
+  );
 
-  testWidgets('a rotator that would not halt is called out by name (#1671)', (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+  testWidgets('a rotator that would not halt is called out by name (#1671)', (
+    tester,
+  ) async {
+    await pumpButton(
+      tester,
+      button: const EmergencyStopButton(compact: true),
+      simpleMode: true,
+    );
     fake.result = const EmergencyStopResult(
       alreadyInProgress: false,
       runsAborted: 0,
@@ -222,28 +272,46 @@ void main() {
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
     await tester.pumpAndSettle();
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: ROTATOR HALT FAILED'));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(EmergencyStopButton)),
+    );
+    expect(
+      container.read(simpleMessagesProvider).first.title,
+      startsWith('CHECK THE RIG: ROTATOR HALT FAILED'),
+    );
   });
 
-  testWidgets('a Polar Aligner that would not stop is called out by name (#1971)', (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
-    fake.result = const EmergencyStopResult(
-      alreadyInProgress: false,
-      runsAborted: 0,
-      exposureAborted: true,
-      guidingStopped: true,
-      mountStopped: true,
-      flatPanelLightOff: false,
-      failedRungs: ['stop_polar_aligner'],
-    );
-    await activateWithoutPointer(tester);
-    await activateWithoutPointer(tester);
-    await tester.pumpAndSettle();
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    expect(container.read(simpleMessagesProvider).first.title,
-        startsWith('CHECK THE RIG: POLAR ALIGNER MAY STILL BE MOVING (stop failed)'));
-  });
+  testWidgets(
+    'a Polar Aligner that would not stop is called out by name (#1971)',
+    (tester) async {
+      await pumpButton(
+        tester,
+        button: const EmergencyStopButton(compact: true),
+        simpleMode: true,
+      );
+      fake.result = const EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 0,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: true,
+        flatPanelLightOff: false,
+        failedRungs: ['stop_polar_aligner'],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EmergencyStopButton)),
+      );
+      expect(
+        container.read(simpleMessagesProvider).first.title,
+        startsWith(
+          'CHECK THE RIG: POLAR ALIGNER MAY STILL BE MOVING (stop failed)',
+        ),
+      );
+    },
+  );
 
   for (final (rung, phrase) in const [
     ('stop_guide_focus', 'GUIDE-CAMERA FOCUS LOOP MAY STILL BE RUNNING'),
@@ -251,8 +319,14 @@ void main() {
     ('cancel_autofocus', 'AUTOFOCUS MAY STILL BE RUNNING'),
     ('stop_polar_align', 'POLAR ALIGNMENT MAY STILL BE RUNNING'),
   ]) {
-    testWidgets('a failed $rung is called out in words, not its wire token', (tester) async {
-      await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true);
+    testWidgets('a failed $rung is called out in words, not its wire token', (
+      tester,
+    ) async {
+      await pumpButton(
+        tester,
+        button: const EmergencyStopButton(compact: true),
+        simpleMode: true,
+      );
       fake.result = EmergencyStopResult(
         alreadyInProgress: false,
         runsAborted: 0,
@@ -265,40 +339,64 @@ void main() {
       await activateWithoutPointer(tester);
       await activateWithoutPointer(tester);
       await tester.pumpAndSettle();
-      final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-      expect(container.read(simpleMessagesProvider).first.title, startsWith('CHECK THE RIG: $phrase'));
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EmergencyStopButton)),
+      );
+      expect(
+        container.read(simpleMessagesProvider).first.title,
+        startsWith('CHECK THE RIG: $phrase'),
+      );
     });
   }
 
-  testWidgets('Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
-      (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
-    fake.result = const EmergencyStopResult(
-      alreadyInProgress: false,
-      runsAborted: 1,
-      exposureAborted: true,
-      guidingStopped: true,
-      mountStopped: true,
-      flatPanelLightOff: true,
-      failedRungs: [],
-    );
-    await activateWithoutPointer(tester);
-    await activateWithoutPointer(tester);
-    await tester.pumpAndSettle();
-    await tester.pump(const Duration(minutes: 1));
-    final pill = find.byKey(const Key('simple-message-0'));
-    expect(pill, findsOneWidget, reason: 'a safety summary waits to be read');
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.warning,
-        reason: 'amber: done, but the rig needs a look');
-    await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
-    await tester.pump();
-    expect(pill, findsNothing);
-  });
+  testWidgets(
+    'Simple Mode: a stop that went through stays in its pill until closed (user, 2026-11-04: 6 s was too fast)',
+    (tester) async {
+      await pumpButton(
+        tester,
+        button: const EmergencyStopButton(compact: true),
+        simpleMode: true,
+        pills: true,
+      );
+      fake.result = const EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 1,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: true,
+        flatPanelLightOff: true,
+        failedRungs: [],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      await tester.pump(const Duration(minutes: 1));
+      final pill = find.byKey(const Key('simple-message-0'));
+      expect(pill, findsOneWidget, reason: 'a safety summary waits to be read');
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(EmergencyStopButton)),
+      );
+      expect(
+        container.read(simpleMessagesProvider).single.kind,
+        SimpleMessageKind.warning,
+        reason: 'amber: done, but the rig needs a look',
+      );
+      await tester.tap(
+        find.descendant(of: pill, matching: find.byTooltip('Dismiss')),
+      );
+      await tester.pump();
+      expect(pill, findsNothing);
+    },
+  );
 
   testWidgets('Simple Mode: a stop with a failed rung is a red pill that outlives the 20 s error fade, until × '
       '(review, #1490: the fade had taken it)', (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    await pumpButton(
+      tester,
+      button: const EmergencyStopButton(compact: true),
+      simpleMode: true,
+      pills: true,
+    );
     fake.result = const EmergencyStopResult(
       alreadyInProgress: false,
       runsAborted: 1,
@@ -314,51 +412,86 @@ void main() {
     await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
     final pill = find.byKey(const Key('simple-message-0'));
     expect(pill, findsOneWidget, reason: 'a failed rung waits to be read');
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error, reason: 'red');
-    await tester.tap(find.descendant(of: pill, matching: find.byTooltip('Dismiss')));
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(EmergencyStopButton)),
+    );
+    expect(
+      container.read(simpleMessagesProvider).single.kind,
+      SimpleMessageKind.error,
+      reason: 'red',
+    );
+    await tester.tap(
+      find.descendant(of: pill, matching: find.byTooltip('Dismiss')),
+    );
     await tester.pump();
     expect(pill, findsNothing);
   });
 
   testWidgets('Simple Mode: a stop that never reached the daemon is a red pill that waits to be read, past the '
       '20 s fade (ALP-5016)', (tester) async {
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
+    await pumpButton(
+      tester,
+      button: const EmergencyStopButton(compact: true),
+      simpleMode: true,
+      pills: true,
+    );
     fake.error = Exception('connection refused');
     await activateWithoutPointer(tester);
     await activateWithoutPointer(tester);
     await tester.pumpAndSettle();
     await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
     final pill = find.byKey(const Key('simple-message-0'));
-    expect(pill, findsOneWidget, reason: 'the stop did NOT happen: nobody may have read it yet');
-    final container = ProviderScope.containerOf(tester.element(find.byType(EmergencyStopButton)));
-    expect(container.read(simpleMessagesProvider).single.kind, SimpleMessageKind.error);
+    expect(
+      pill,
+      findsOneWidget,
+      reason: 'the stop did NOT happen: nobody may have read it yet',
+    );
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(EmergencyStopButton)),
+    );
+    expect(
+      container.read(simpleMessagesProvider).single.kind,
+      SimpleMessageKind.error,
+    );
   });
 
-  testWidgets('Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',
-      (tester) async {
-    tester.view.physicalSize = const Size(1024, 768);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await pumpButton(tester, button: const EmergencyStopButton(compact: true), simpleMode: true, pills: true);
-    fake.result = const EmergencyStopResult(
-      alreadyInProgress: false,
-      runsAborted: 1,
-      exposureAborted: true,
-      guidingStopped: true,
-      mountStopped: true,
-      flatPanelLightOff: true,
-      failedRungs: ['stop_mount'],
-    );
-    await activateWithoutPointer(tester);
-    await activateWithoutPointer(tester);
-    await tester.pumpAndSettle();
-    final pill = find.byKey(const Key('simple-message-0'));
-    expect(pill, findsOneWidget);
-    for (final p in tester.renderObjectList<RenderParagraph>(find.descendant(of: pill, matching: find.byType(RichText)))) {
-      expect(p.didExceedMaxLines, isFalse, reason: '"${p.text.toPlainText()}" is cut short');
-    }
-  });
+  testWidgets(
+    'Simple Mode: the stop\'s message shows whole in its pill, every line (user, 2026-11-04: it was cut)',
+    (tester) async {
+      tester.view.physicalSize = const Size(1024, 768);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await pumpButton(
+        tester,
+        button: const EmergencyStopButton(compact: true),
+        simpleMode: true,
+        pills: true,
+      );
+      fake.result = const EmergencyStopResult(
+        alreadyInProgress: false,
+        runsAborted: 1,
+        exposureAborted: true,
+        guidingStopped: true,
+        mountStopped: true,
+        flatPanelLightOff: true,
+        failedRungs: ['stop_mount'],
+      );
+      await activateWithoutPointer(tester);
+      await activateWithoutPointer(tester);
+      await tester.pumpAndSettle();
+      final pill = find.byKey(const Key('simple-message-0'));
+      expect(pill, findsOneWidget);
+      for (final p in tester.renderObjectList<RenderParagraph>(
+        find.descendant(of: pill, matching: find.byType(RichText)),
+      )) {
+        expect(
+          p.didExceedMaxLines,
+          isFalse,
+          reason: '"${p.text.toPlainText()}" is cut short',
+        );
+      }
+    },
+  );
 
   group('Simple Mode: keyboard and screen readers press again, no dialog', () {
     testWidgets(
@@ -665,10 +798,13 @@ void main() {
       );
     }
 
-    Future<TestGesture> press(WidgetTester tester) =>
-        tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+    Future<TestGesture> press(WidgetTester tester) => tester.startGesture(
+      tester.getCenter(find.byKey(const Key('simple-shutter'))),
+    );
 
-    testWidgets('a release at 99 ms is one tap and sends no stop', (tester) async {
+    testWidgets('a release at 99 ms is one tap and sends no stop', (
+      tester,
+    ) async {
       await pumpShutter(tester);
       final g = await press(tester);
       await tester.pump(const Duration(milliseconds: 99));
@@ -679,7 +815,9 @@ void main() {
       expect(find.text('HOLD'), findsNothing);
     });
 
-    testWidgets('the red fill and HOLD start at 500 ms, not before', (tester) async {
+    testWidgets('the red fill and HOLD start at 500 ms, not before', (
+      tester,
+    ) async {
       await pumpShutter(tester);
       final g = await press(tester);
       await tester.pump(const Duration(milliseconds: 499));
@@ -690,19 +828,24 @@ void main() {
       await tester.pump(const Duration(seconds: 3));
     });
 
-    testWidgets('a release at 1000 ms, after the fill started, fires nothing and is no tap', (tester) async {
-      await pumpShutter(tester);
-      final g = await press(tester);
-      await tester.pump(const Duration(milliseconds: 1000));
-      expect(find.text('HOLD'), findsOneWidget);
-      await g.up();
-      await tester.pump(const Duration(seconds: 3));
-      expect(taps, 0);
-      expect(fake.calls, 0);
-      expect(find.text('HOLD'), findsNothing, reason: 'the fill is gone');
-    });
+    testWidgets(
+      'a release at 1000 ms, after the fill started, fires nothing and is no tap',
+      (tester) async {
+        await pumpShutter(tester);
+        final g = await press(tester);
+        await tester.pump(const Duration(milliseconds: 1000));
+        expect(find.text('HOLD'), findsOneWidget);
+        await g.up();
+        await tester.pump(const Duration(seconds: 3));
+        expect(taps, 0);
+        expect(fake.calls, 0);
+        expect(find.text('HOLD'), findsNothing, reason: 'the fill is gone');
+      },
+    );
 
-    testWidgets('1999 ms sends no stop; 2000 ms sends exactly one', (tester) async {
+    testWidgets('1999 ms sends no stop; 2000 ms sends exactly one', (
+      tester,
+    ) async {
       await pumpShutter(tester);
       final g = await press(tester);
       await tester.pump(const Duration(milliseconds: 1999));
@@ -717,39 +860,48 @@ void main() {
       expect(taps, 0, reason: 'the release after a stop is no tap');
     });
 
-    testWidgets('sliding off the shutter after the fill started cancels and fires nothing', (tester) async {
-      await pumpShutter(tester);
-      final g = await press(tester);
-      await tester.pump(const Duration(milliseconds: 800));
-      expect(find.text('HOLD'), findsOneWidget);
-      await g.moveBy(const Offset(200, 0));
-      await tester.pump();
-      expect(find.text('HOLD'), findsNothing);
-      await tester.pump(const Duration(seconds: 3));
-      await g.up();
-      await tester.pump(const Duration(seconds: 3));
-      expect(fake.calls, 0);
-      expect(taps, 0);
-    });
+    testWidgets(
+      'sliding off the shutter after the fill started cancels and fires nothing',
+      (tester) async {
+        await pumpShutter(tester);
+        final g = await press(tester);
+        await tester.pump(const Duration(milliseconds: 800));
+        expect(find.text('HOLD'), findsOneWidget);
+        await g.moveBy(const Offset(200, 0));
+        await tester.pump();
+        expect(find.text('HOLD'), findsNothing);
+        await tester.pump(const Duration(seconds: 3));
+        await g.up();
+        await tester.pump(const Duration(seconds: 3));
+        expect(fake.calls, 0);
+        expect(taps, 0);
+      },
+    );
 
-    testWidgets('a shutter greyed out for its own mode still holds for Emergency Stop', (tester) async {
-      await pumpShutter(tester, enabled: false);
-      final g = await press(tester);
-      await tester.pump(const Duration(seconds: 2));
-      await tester.pump();
-      await g.up();
-      await tester.pump(const Duration(seconds: 3));
-      expect(fake.calls, 1);
-    });
+    testWidgets(
+      'a shutter greyed out for its own mode still holds for Emergency Stop',
+      (tester) async {
+        await pumpShutter(tester, enabled: false);
+        final g = await press(tester);
+        await tester.pump(const Duration(seconds: 2));
+        await tester.pump();
+        await g.up();
+        await tester.pump(const Duration(seconds: 3));
+        expect(fake.calls, 1);
+      },
+    );
 
-    testWidgets('a keyboard or screen-reader activation is still a tap and never a stop', (tester) async {
-      await pumpShutter(tester);
-      final handle = tester.ensureSemantics();
-      tester.semantics.tap(find.semantics.byLabel('Take a frame'));
-      await tester.pump(const Duration(seconds: 3));
-      expect(taps, 1);
-      expect(fake.calls, 0);
-      handle.dispose();
-    });
+    testWidgets(
+      'a keyboard or screen-reader activation is still a tap and never a stop',
+      (tester) async {
+        await pumpShutter(tester);
+        final handle = tester.ensureSemantics();
+        tester.semantics.tap(find.semantics.byLabel('Take a frame'));
+        await tester.pump(const Duration(seconds: 3));
+        expect(taps, 1);
+        expect(fake.calls, 0);
+        handle.dispose();
+      },
+    );
   });
 }

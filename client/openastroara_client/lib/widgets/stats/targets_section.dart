@@ -61,14 +61,20 @@ class _TargetsSectionState extends ConsumerState<TargetsSection>
         Row(
           children: [
             Expanded(
-              child: Text('Targets',
-                  style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                'Targets',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             // The page's pull down refreshes; this shows it running.
             if (spinning)
               const Padding(
                 padding: EdgeInsets.all(8),
-                child: SizedBox(width: 16, height: 16, child: AdaptiveProgressIndicator(strokeWidth: 2)),
+                child: SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
+                ),
               ),
           ],
         ),
@@ -101,11 +107,11 @@ class _TargetsSectionState extends ConsumerState<TargetsSection>
       return const _Hint('Connect to a server to see your imaged targets.');
     }
     if (targets.isEmpty) {
-      return const _Hint('No targets imaged yet — they appear here once you capture light frames.');
+      return const _Hint(
+        'No targets imaged yet — they appear here once you capture light frames.',
+      );
     }
-    return Column(
-      children: [for (final t in targets) _TargetTile(target: t)],
-    );
+    return Column(children: [for (final t in targets) _TargetTile(target: t)]);
   }
 }
 
@@ -123,9 +129,8 @@ class _StaleBanner extends StatelessWidget {
           const SizedBox(width: 6),
           Text(
             'Couldn’t refresh — showing the last loaded targets.',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: AraColors.accentBusy,
-                ),
+            style: Theme.of(context).textTheme.labelSmall
+                ?.copyWith(color: AraColors.accentBusy),
           ),
         ],
       ),
@@ -159,8 +164,10 @@ class _TargetTile extends StatelessWidget {
         leading: const Icon(Icons.gps_fixed, color: AraColors.textSecondary),
         title: Text(target.targetName),
         subtitle: Text(subtitle),
-        trailing:
-            const Icon(Icons.chevron_right, color: AraColors.textDisabled),
+        trailing: const Icon(
+          Icons.chevron_right,
+          color: AraColors.textDisabled,
+        ),
         onTap: null, // per-target detail drill-down lands in a later slice
       ),
     );
@@ -176,8 +183,10 @@ class _Hint extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Text(message,
-          style: const TextStyle(color: AraColors.textSecondary)),
+      child: Text(
+        message,
+        style: const TextStyle(color: AraColors.textSecondary),
+      ),
     );
   }
 }

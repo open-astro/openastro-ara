@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/server_maintenance_api.dart';
@@ -23,8 +25,10 @@ class DaemonRestartCard extends ConsumerStatefulWidget {
 class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
   bool _busy = false;
 
-  Future<void> _run(Future<void> Function(ServerMaintenanceApi) action,
-      String successMessage) async {
+  Future<void> _run(
+    Future<void> Function(ServerMaintenanceApi) action,
+    String successMessage,
+  ) async {
     final server = ref.read(activeServerProvider);
     if (server == null) {
       return;
@@ -40,7 +44,16 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
     } on Exception catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRestartRig))));
+          SnackBar(
+            content: Text(
+              friendlyError(
+                context.l10n,
+                e,
+                action: context.l10n.actionRestartRig,
+              ),
+            ),
+          ),
+        );
       }
     } finally {
       api.close();
@@ -62,10 +75,13 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AraColors.accentBusy),
+            style: FilledButton.styleFrom(
+              backgroundColor: AraColors.accentBusy,
+            ),
             onPressed: () => Navigator.of(ctx).pop(true),
             child: const Text('Restart now'),
           ),
@@ -84,7 +100,11 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
         children: [
-          const Icon(Icons.restart_alt, size: 18, color: AraColors.textSecondary),
+          const Icon(
+            Icons.restart_alt,
+            size: 18,
+            color: AraColors.textSecondary,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -95,8 +115,10 @@ class _DaemonRestartCardState extends ConsumerState<DaemonRestartCard> {
           OutlinedButton(
             onPressed: !connected || _busy
                 ? null
-                : () => _run((api) => api.restartOnIdle(),
-                    'Queued — the server restarts once it is idle.'),
+                : () => _run(
+                    (api) => api.restartOnIdle(),
+                    'Queued — the server restarts once it is idle.',
+                  ),
             child: const Text('Restart when idle'),
           ),
           const SizedBox(width: 8),

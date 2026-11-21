@@ -1,4 +1,5 @@
-import 'package:flutter/foundation.dart' show debugDefaultTargetPlatformOverride;
+import 'package:flutter/foundation.dart'
+    show debugDefaultTargetPlatformOverride;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -235,7 +236,9 @@ void main() {
     debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
     addTearDown(() => debugDefaultTargetPlatformOverride = null);
     final (c, _) = await _pump(tester);
-    c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.error, 'Failed');
+    c
+        .read(simpleMessagesProvider.notifier)
+        .show(SimpleMessageKind.error, 'Failed');
     await tester.pumpAndSettle();
     final size = tester.getSize(find.byType(IconButton));
     expect(size.height, greaterThanOrEqualTo(44));
@@ -244,20 +247,33 @@ void main() {
     await tester.pump(kSimpleErrorLife);
   });
 
-  testWidgets("a pill over a pushed page keeps Simple Mode's 44 px, readable buttons", (tester) async {
-    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
-    final (c, _) = await _pump(tester);
-    c.read(simpleMessagesProvider.notifier).show(
-      SimpleMessageKind.question,
-      'Q',
-      actions: [SimpleMessageAction('Later', () {}), SimpleMessageAction('Allow', () {})],
-    );
-    await tester.pumpAndSettle();
-    final later = find.ancestor(of: find.text('Later'), matching: find.byType(TextButton));
-    expect(tester.getSize(later).height, greaterThanOrEqualTo(44));
-    final label = tester.widget<RichText>(find.descendant(of: later, matching: find.byType(RichText)).first);
-    expect(label.text.style!.color, AraColors.linkText);
-    debugDefaultTargetPlatformOverride = null;
-  });
+  testWidgets(
+    "a pill over a pushed page keeps Simple Mode's 44 px, readable buttons",
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final (c, _) = await _pump(tester);
+      c
+          .read(simpleMessagesProvider.notifier)
+          .show(
+            SimpleMessageKind.question,
+            'Q',
+            actions: [
+              SimpleMessageAction('Later', () {}),
+              SimpleMessageAction('Allow', () {}),
+            ],
+          );
+      await tester.pumpAndSettle();
+      final later = find.ancestor(
+        of: find.text('Later'),
+        matching: find.byType(TextButton),
+      );
+      expect(tester.getSize(later).height, greaterThanOrEqualTo(44));
+      final label = tester.widget<RichText>(
+        find.descendant(of: later, matching: find.byType(RichText)).first,
+      );
+      expect(label.text.style!.color, AraColors.linkText);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
 }

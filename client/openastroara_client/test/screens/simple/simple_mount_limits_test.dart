@@ -23,18 +23,26 @@ class _Rig extends ProfileApi {
 
   // The sections load from the rig and save back with their tag (ADR 0015).
   @override
-  Future<({SiteSettings value, String? etag})> getSiteSection() async => (value: site, etag: _etag);
+  Future<({SiteSettings value, String? etag})> getSiteSection() async =>
+      (value: site, etag: _etag);
   @override
-  Future<({SiteSettings value, String? etag})> putSiteSection(SiteSettings value, {String? ifMatch}) async {
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings value, {
+    String? ifMatch,
+  }) async {
     if (failPut) throw StateError('rig unreachable');
     _version++;
     return (value: site = value, etag: _etag);
   }
 
   @override
-  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => (value: safety, etag: _etag);
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: safety, etag: _etag);
   @override
-  Future<({SafetyPolicies value, String? etag})> putSafetySection(SafetyPolicies value, {String? ifMatch}) async {
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies value, {
+    String? ifMatch,
+  }) async {
     if (failPut) throw StateError('rig unreachable');
     _version++;
     return (value: safety = value, etag: _etag);
@@ -76,7 +84,9 @@ Future<(ProviderContainer, _Rig)> _pump(
       container: c,
       child: const MaterialApp(
         home: Scaffold(
-          body: SingleChildScrollView(child: SizedBox(width: 400, child: SimpleMountLimits())),
+          body: SingleChildScrollView(
+            child: SizedBox(width: 400, child: SimpleMountLimits()),
+          ),
         ),
       ),
     ),
@@ -92,37 +102,58 @@ bool _enabled(WidgetTester tester, String key) =>
     tester.widget<IconButton>(find.byKey(Key(key))).onPressed != null;
 
 void main() {
-  testWidgets('a measured horizon makes Lowest altitude read-only and says where to change it', (tester) async {
-    await _pump(tester, measured: true);
-    expect(find.text('Your measured horizon'), findsOneWidget);
-    expect(find.text('Change it in Advanced Mode › Settings › Site.'), findsOneWidget);
-    expect(find.byKey(const Key('simple-mount-lowest-up')), findsNothing);
-    expect(find.byKey(const Key('simple-mount-lowest-down')), findsNothing);
-  });
+  testWidgets(
+    'a measured horizon makes Lowest altitude read-only and says where to change it',
+    (tester) async {
+      await _pump(tester, measured: true);
+      expect(find.text('Your measured horizon'), findsOneWidget);
+      expect(
+        find.text('Change it in Advanced Mode › Settings › Site.'),
+        findsOneWidget,
+      );
+      expect(find.byKey(const Key('simple-mount-lowest-up')), findsNothing);
+      expect(find.byKey(const Key('simple-mount-lowest-down')), findsNothing);
+    },
+  );
 
-  testWidgets('the flip switch swaps At the meridian for Stop before meridian', (tester) async {
-    final (c, _) = await _pump(tester, flipAuto: true, after: 5);
-    expect(find.text('At the meridian'), findsOneWidget);
-    expect(find.text('Stop before meridian'), findsNothing);
-    expect(_value(tester, 'simple-mount-meridian'), '5 min after');
-    c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(false);
-    await tester.pump();
-    expect(find.text('At the meridian'), findsNothing);
-    expect(find.text('Stop before meridian'), findsOneWidget);
-    expect(_value(tester, 'simple-mount-stop-before'), 'Off');
-  });
+  testWidgets(
+    'the flip switch swaps At the meridian for Stop before meridian',
+    (tester) async {
+      final (c, _) = await _pump(tester, flipAuto: true, after: 5);
+      expect(find.text('At the meridian'), findsOneWidget);
+      expect(find.text('Stop before meridian'), findsNothing);
+      expect(_value(tester, 'simple-mount-meridian'), '5 min after');
+      c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(false);
+      await tester.pump();
+      expect(find.text('At the meridian'), findsNothing);
+      expect(find.text('Stop before meridian'), findsOneWidget);
+      expect(_value(tester, 'simple-mount-stop-before'), 'Off');
+    },
+  );
 
-  testWidgets('a tap saves at once to the rig with a sentence pill', (tester) async {
+  testWidgets('a tap saves at once to the rig with a sentence pill', (
+    tester,
+  ) async {
     final (c, rig) = await _pump(tester, lowest: 20, after: 5);
     await tester.tap(find.byKey(const Key('simple-mount-lowest-up')));
     await tester.pumpAndSettle();
     expect(rig.site.defaultHorizonAltitudeDeg, 25);
-    expect(rig.site.latitudeDeg, -33.856784, reason: 'the rest of the site is kept');
+    expect(
+      rig.site.latitudeDeg,
+      -33.856784,
+      reason: 'the rest of the site is kept',
+    );
     expect(_value(tester, 'simple-mount-lowest'), '25°');
     await tester.tap(find.byKey(const Key('simple-mount-meridian-down')));
     await tester.pumpAndSettle();
-    expect((rig.safety.meridianPauseMin, rig.safety.minutesAfterMeridian), (0, 0));
-    expect(c.read(simpleMessagesProvider).map((m) => m.title), ['Flips at the meridian', 'Lowest altitude 25°']);
+    expect(
+      (rig.safety.meridianPauseMin, rig.safety.minutesAfterMeridian),
+      (0, 0),
+    );
+    expect(c.read(simpleMessagesProvider).map((m) => m.title), [
+      'Flips at the meridian',
+      'Lowest altitude 25°',
+    ]);
     await tester.pump(kSimpleResultLife); // the pills fade
   });
 
@@ -135,32 +166,45 @@ void main() {
     expect(_enabled(tester, 'simple-mount-meridian-up'), isTrue);
   });
 
-  testWidgets('the other ends: lowest 0, flip after 30, stop-before Off and 30', (tester) async {
-    final (c, _) = await _pump(tester, lowest: 0, after: 30);
-    expect(_enabled(tester, 'simple-mount-lowest-down'), isFalse);
-    expect(_enabled(tester, 'simple-mount-meridian-up'), isFalse);
-    c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(false);
-    await tester.pump();
-    expect(_enabled(tester, 'simple-mount-stop-before-down'), isFalse, reason: 'Off is the lowest');
-    for (var i = 0; i < 6; i++) {
-      await tester.tap(find.byKey(const Key('simple-mount-stop-before-up')));
-      await tester.pumpAndSettle();
-    }
-    expect(_value(tester, 'simple-mount-stop-before'), '30 min');
-    expect(_enabled(tester, 'simple-mount-stop-before-up'), isFalse);
-    await tester.pump(kSimpleResultLife); // the pills fade
-  });
+  testWidgets(
+    'the other ends: lowest 0, flip after 30, stop-before Off and 30',
+    (tester) async {
+      final (c, _) = await _pump(tester, lowest: 0, after: 30);
+      expect(_enabled(tester, 'simple-mount-lowest-down'), isFalse);
+      expect(_enabled(tester, 'simple-mount-meridian-up'), isFalse);
+      c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(false);
+      await tester.pump();
+      expect(
+        _enabled(tester, 'simple-mount-stop-before-down'),
+        isFalse,
+        reason: 'Off is the lowest',
+      );
+      for (var i = 0; i < 6; i++) {
+        await tester.tap(find.byKey(const Key('simple-mount-stop-before-up')));
+        await tester.pumpAndSettle();
+      }
+      expect(_value(tester, 'simple-mount-stop-before'), '30 min');
+      expect(_enabled(tester, 'simple-mount-stop-before-up'), isFalse);
+      await tester.pump(kSimpleResultLife); // the pills fade
+    },
+  );
 
-  testWidgets('a failed save puts the old value back and says it could not save', (tester) async {
-    final (c, rig) = await _pump(tester, lowest: 20);
-    rig.failPut = true;
-    await tester.tap(find.byKey(const Key('simple-mount-lowest-up')));
-    await tester.pumpAndSettle();
-    expect(_value(tester, 'simple-mount-lowest'), '20°');
-    expect(c.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg, 20);
-    final pill = c.read(simpleMessagesProvider).single;
-    expect((pill.kind, pill.title), (SimpleMessageKind.error, "Couldn't save the limit"));
-  });
+  testWidgets(
+    'a failed save puts the old value back and says it could not save',
+    (tester) async {
+      final (c, rig) = await _pump(tester, lowest: 20);
+      rig.failPut = true;
+      await tester.tap(find.byKey(const Key('simple-mount-lowest-up')));
+      await tester.pumpAndSettle();
+      expect(_value(tester, 'simple-mount-lowest'), '20°');
+      expect(c.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg, 20);
+      final pill = c.read(simpleMessagesProvider).single;
+      expect(
+        (pill.kind, pill.title),
+        (SimpleMessageKind.error, "Couldn't save the limit"),
+      );
+    },
+  );
 
   testWidgets('each stepper button says what it changes', (tester) async {
     await _pump(tester);

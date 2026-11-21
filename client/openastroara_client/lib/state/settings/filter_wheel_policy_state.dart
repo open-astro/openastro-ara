@@ -20,14 +20,17 @@ class FilterWheelPolicy {
   });
 
   Map<String, dynamic> toJson() => {
-        'home_on_first_connect': homeOnFirstConnect,
-        'use_filter_wheel_offsets': useFilterWheelOffsets,
-      };
+    'home_on_first_connect': homeOnFirstConnect,
+    'use_filter_wheel_offsets': useFilterWheelOffsets,
+  };
 
-  FilterWheelPolicy copyWith({bool? homeOnFirstConnect, bool? useFilterWheelOffsets}) => FilterWheelPolicy(
-        homeOnFirstConnect: homeOnFirstConnect ?? this.homeOnFirstConnect,
-        useFilterWheelOffsets: useFilterWheelOffsets ?? this.useFilterWheelOffsets,
-      );
+  FilterWheelPolicy copyWith({
+    bool? homeOnFirstConnect,
+    bool? useFilterWheelOffsets,
+  }) => FilterWheelPolicy(
+    homeOnFirstConnect: homeOnFirstConnect ?? this.homeOnFirstConnect,
+    useFilterWheelOffsets: useFilterWheelOffsets ?? this.useFilterWheelOffsets,
+  );
 
   @override
   bool operator ==(Object other) =>

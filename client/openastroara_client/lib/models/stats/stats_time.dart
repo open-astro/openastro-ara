@@ -18,6 +18,14 @@ DateTime? parseStatsUtc(dynamic v) {
   final parsed = DateTime.tryParse(v);
   if (parsed == null) return null;
   if (parsed.isUtc) return parsed;
-  return DateTime.utc(parsed.year, parsed.month, parsed.day, parsed.hour,
-      parsed.minute, parsed.second, parsed.millisecond, parsed.microsecond);
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  );
 }

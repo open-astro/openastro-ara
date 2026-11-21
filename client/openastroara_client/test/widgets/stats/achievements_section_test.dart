@@ -9,6 +9,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/achievements_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/stats/achievements_section.dart';
+
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -41,110 +42,187 @@ class _FakeAchievementsClient implements AchievementsClient {
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-Widget _app(List<AraServer> servers, AchievementsClient api, {bool dashboard = false}) {
+Widget _app(
+  List<AraServer> servers,
+  AchievementsClient api, {
+  bool dashboard = false,
+}) {
   return ProviderScope(
     overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
       achievementsApiFactoryProvider.overrideWithValue((_) => api),
     ],
     child: MaterialApp(
       home: Scaffold(
-        body: SingleChildScrollView(child: AchievementsSection(dashboard: dashboard)),
+        body: SingleChildScrollView(
+          child: AchievementsSection(dashboard: dashboard),
+        ),
       ),
     ),
   );
 }
 
 void main() {
-  testWidgets('renders record tiles + a milestone badge when data is present',
-      (tester) async {
-    final api = _FakeAchievementsClient(const StatsAchievements(
-      totalLightFrames: 1340,
-      totalNightsImaged: 12,
-      currentStreakNights: 2,
-      uniqueTargetsImaged: 7,
-      milestones: [
-        StatsMilestone(
+  testWidgets('renders record tiles + a milestone badge when data is present', (
+    tester,
+  ) async {
+    final api = _FakeAchievementsClient(
+      const StatsAchievements(
+        totalLightFrames: 1340,
+        totalNightsImaged: 12,
+        currentStreakNights: 2,
+        uniqueTargetsImaged: 7,
+        milestones: [
+          StatsMilestone(
             id: 'hours_10',
             title: '10 Hours',
             description: 'Image for 10 hours',
             achieved: true,
             threshold: 10,
-            current: 42),
-      ],
-    ));
+            current: 42,
+          ),
+        ],
+      ),
+    );
     await tester.pumpWidget(_app(const [_server], api, dashboard: true));
     await tester.pumpAndSettle();
 
     expect(find.text('Achievements'), findsOneWidget);
     expect(find.text('Nights imaged'), findsOneWidget);
     expect(find.text('10 Hours'), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsOneWidget, reason: 'the medal ring only, no loading spinner');
+    expect(
+      find.byType(CircularProgressIndicator),
+      findsOneWidget,
+      reason: 'the medal ring only, no loading spinner',
+    );
   });
 
-  testWidgets('an earned badge is a medal the size of one in progress, first on the shelf', (tester) async {
-    tester.view.physicalSize = const Size(1600, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final api = _FakeAchievementsClient(const StatsAchievements(
-      totalLightFrames: 906,
-      milestones: [
-        StatsMilestone(id: 'hours_10', title: 'Getting started', description: '10 hours of integration',
-            achieved: false, threshold: 10, current: 7.2),
-        StatsMilestone(id: 'targets_10', title: 'Explorer', description: '10 unique targets imaged',
-            achieved: true, threshold: 10, current: 10),
-      ],
-    ));
-    await tester.pumpWidget(_app(const [_server], api, dashboard: true));
-    await tester.pumpAndSettle();
-    Size badge(String id) => tester.getSize(find.byKey(Key('stats-medal-$id')));
-    expect(badge('targets_10'), badge('hours_10'));
-    expect(find.text('Earned'), findsOneWidget);
-    expect(tester.getTopLeft(find.byKey(const Key('stats-medal-targets_10'))).dx,
-        lessThan(tester.getTopLeft(find.byKey(const Key('stats-medal-hours_10'))).dx),
-        reason: 'earned medals first on the shelf');
-  });
-
-  testWidgets('a medal keeps its title and progress at large text, and the progress reads', (tester) async {
-    tester.view.physicalSize = const Size(1600, 1200);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    final api = _FakeAchievementsClient(const StatsAchievements(
-      totalLightFrames: 906,
-      milestones: [
-        StatsMilestone(id: 'hours_100', title: 'A long title on two lines', description: '100 hours',
-            achieved: false, threshold: 100, current: 7),
-      ],
-    ));
-    for (final scale in [1.0, 1.5, 2.0]) {
-      await tester.pumpWidget(MediaQuery(
-        data: MediaQueryData(textScaler: TextScaler.linear(scale)),
-        child: _app(const [_server], api, dashboard: true),
-      ));
+  testWidgets(
+    'an earned badge is a medal the size of one in progress, first on the shelf',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakeAchievementsClient(
+        const StatsAchievements(
+          totalLightFrames: 906,
+          milestones: [
+            StatsMilestone(
+              id: 'hours_10',
+              title: 'Getting started',
+              description: '10 hours of integration',
+              achieved: false,
+              threshold: 10,
+              current: 7.2,
+            ),
+            StatsMilestone(
+              id: 'targets_10',
+              title: 'Explorer',
+              description: '10 unique targets imaged',
+              achieved: true,
+              threshold: 10,
+              current: 10,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(_app(const [_server], api, dashboard: true));
       await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull, reason: 'no overflow at ${scale}x text');
-    }
-    final progress = tester.widget<Text>(find.text('7 / 100'));
-    expect(progress.style!.color, AraColors.textSecondary,
-        reason: 'information, not a disabled control: 4.5:1 on the panel');
-  });
+      Size badge(String id) =>
+          tester.getSize(find.byKey(Key('stats-medal-$id')));
+      expect(badge('targets_10'), badge('hours_10'));
+      expect(find.text('Earned'), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(const Key('stats-medal-targets_10'))).dx,
+        lessThan(
+          tester.getTopLeft(find.byKey(const Key('stats-medal-hours_10'))).dx,
+        ),
+        reason: 'earned medals first on the shelf',
+      );
+    },
+  );
+
+  testWidgets(
+    'a medal keeps its title and progress at large text, and the progress reads',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 1200);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakeAchievementsClient(
+        const StatsAchievements(
+          totalLightFrames: 906,
+          milestones: [
+            StatsMilestone(
+              id: 'hours_100',
+              title: 'A long title on two lines',
+              description: '100 hours',
+              achieved: false,
+              threshold: 100,
+              current: 7,
+            ),
+          ],
+        ),
+      );
+      for (final scale in [1.0, 1.5, 2.0]) {
+        await tester.pumpWidget(
+          MediaQuery(
+            data: MediaQueryData(textScaler: TextScaler.linear(scale)),
+            child: _app(const [_server], api, dashboard: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+        expect(
+          tester.takeException(),
+          isNull,
+          reason: 'no overflow at ${scale}x text',
+        );
+      }
+      final progress = tester.widget<Text>(find.text('7 / 100'));
+      expect(
+        progress.style!.color,
+        AraColors.textSecondary,
+        reason: 'information, not a disabled control: 4.5:1 on the panel',
+      );
+    },
+  );
 
   // Falsified by: achievements_section.dart building medals without dashboard: true.
-  testWidgets('Advanced Mode keeps its tiles and badge cards: medals are Simple Mode only', (tester) async {
-    final api = _FakeAchievementsClient(const StatsAchievements(
-      totalLightFrames: 906,
-      milestones: [
-        StatsMilestone(id: 'hours_10', title: 'Getting started', description: '10 hours of integration',
-            achieved: false, threshold: 10, current: 7.2),
-      ],
-    ));
-    await tester.pumpWidget(_app(const [_server], api));
-    await tester.pumpAndSettle();
-    expect(find.byKey(const Key('stats-medal-hours_10')), findsNothing);
-    expect(find.text('10 hours of integration'), findsOneWidget, reason: 'the description on the card');
-    expect(find.byType(LinearProgressIndicator), findsOneWidget);
-    expect(find.text('Total integration'), findsOneWidget, reason: 'its own totals, as before');
-  });
+  testWidgets(
+    'Advanced Mode keeps its tiles and badge cards: medals are Simple Mode only',
+    (tester) async {
+      final api = _FakeAchievementsClient(
+        const StatsAchievements(
+          totalLightFrames: 906,
+          milestones: [
+            StatsMilestone(
+              id: 'hours_10',
+              title: 'Getting started',
+              description: '10 hours of integration',
+              achieved: false,
+              threshold: 10,
+              current: 7.2,
+            ),
+          ],
+        ),
+      );
+      await tester.pumpWidget(_app(const [_server], api));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('stats-medal-hours_10')), findsNothing);
+      expect(
+        find.text('10 hours of integration'),
+        findsOneWidget,
+        reason: 'the description on the card',
+      );
+      expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      expect(
+        find.text('Total integration'),
+        findsOneWidget,
+        reason: 'its own totals, as before',
+      );
+    },
+  );
 
   testWidgets('shows the connect hint when no server is saved', (tester) async {
     final api = _FakeAchievementsClient(const StatsAchievements());
@@ -154,8 +232,9 @@ void main() {
     expect(find.textContaining('Connect to a server'), findsOneWidget);
   });
 
-  testWidgets('shows the empty state when the catalog has no light frames',
-      (tester) async {
+  testWidgets('shows the empty state when the catalog has no light frames', (
+    tester,
+  ) async {
     final api = _FakeAchievementsClient(const StatsAchievements());
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();
@@ -163,23 +242,27 @@ void main() {
     expect(find.textContaining('No light frames yet'), findsOneWidget);
   });
 
-  testWidgets('a failed manual refresh shows the stale banner over the records',
-      (tester) async {
-    final api = _FakeAchievementsClient(const StatsAchievements(totalLightFrames: 5));
-    await tester.pumpWidget(_app(const [_server], api));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'a failed manual refresh shows the stale banner over the records',
+    (tester) async {
+      final api = _FakeAchievementsClient(
+        const StatsAchievements(totalLightFrames: 5),
+      );
+      await tester.pumpWidget(_app(const [_server], api));
+      await tester.pumpAndSettle();
 
-    // Records visible, no banner yet.
-    expect(find.text('Nights imaged'), findsOneWidget);
-    expect(find.textContaining('Couldn’t refresh'), findsNothing);
+      // Records visible, no banner yet.
+      expect(find.text('Nights imaged'), findsOneWidget);
+      expect(find.textContaining('Couldn’t refresh'), findsNothing);
 
-    // Next fetch fails; pull down to refresh.
-    api.throwOnFetch = true;
-    pullRefresh(tester);
-    await tester.pumpAndSettle();
+      // Next fetch fails; pull down to refresh.
+      api.throwOnFetch = true;
+      pullRefresh(tester);
+      await tester.pumpAndSettle();
 
-    // Banner shown AND records still on screen (not blanked).
-    expect(find.textContaining('Couldn’t refresh'), findsOneWidget);
-    expect(find.text('Nights imaged'), findsOneWidget);
-  });
+      // Banner shown AND records still on screen (not blanked).
+      expect(find.textContaining('Couldn’t refresh'), findsOneWidget);
+      expect(find.text('Nights imaged'), findsOneWidget);
+    },
+  );
 }

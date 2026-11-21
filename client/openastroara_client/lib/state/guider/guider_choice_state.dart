@@ -32,11 +32,14 @@ final alpacaDeviceNamesApiProvider = Provider<AlpacaDeviceNamesClient>((ref) {
 /// unreachable management API). [alpacaType] is the Alpaca device type for
 /// this slot (camera / telescope / rotator). Pure — unit-tested.
 String friendlyAlpacaChoiceLabel(
-    String choice, String alpacaType, Map<String, String> namesByEndpoint) {
+  String choice,
+  String alpacaType,
+  Map<String, String> namesByEndpoint,
+) {
   final endpoint = parseAlpacaChoiceEndpoint(choice);
   if (endpoint == null) return choice;
-  final name = namesByEndpoint[
-      '${endpoint.host}:${endpoint.port}|$alpacaType/${endpoint.device}'];
+  final name =
+      namesByEndpoint['${endpoint.host}:${endpoint.port}|$alpacaType/${endpoint.device}'];
   if (name == null || name.isEmpty) return choice;
   return '$name (${endpoint.host}:${endpoint.port}/${endpoint.device})';
 }
@@ -51,9 +54,13 @@ String friendlyAlpacaChoiceLabel(
 /// the guider has a SINGLE Alpaca server per profile, derived from the
 /// CAMERA's endpoint, so mount/rotator slots must only offer that server.
 /// Pure — unit-testable.
-List<String> mergedAlpacaOptions(List<String> daemonChoices, String alpacaType,
-    String slotWord, Map<String, String> namesByEndpoint,
-    {String? onlyEndpoint}) {
+List<String> mergedAlpacaOptions(
+  List<String> daemonChoices,
+  String alpacaType,
+  String slotWord,
+  Map<String, String> namesByEndpoint, {
+  String? onlyEndpoint,
+}) {
   final merged = <String>[...daemonChoices];
   for (final key in namesByEndpoint.keys) {
     final bar = key.indexOf('|');
@@ -97,8 +104,8 @@ String? describeUnservedAlpacaSelection(Phd2Settings s) {
   final missing = !hasHost && !hasPort
       ? 'host and port'
       : !hasHost
-          ? 'host'
-          : 'port';
+      ? 'host'
+      : 'port';
   for (final (slot, selection) in slots) {
     if (!isAlpacaChoice(selection)) continue;
     final name = selection.trim();
@@ -142,7 +149,8 @@ bool isAlpacaChoice(String selection) =>
 
 /// True for the daemon's generic "Alpaca …" choice string with no endpoint.
 bool isBareAlpacaChoice(String selection) =>
-    isAlpacaChoice(selection) && parseAlpacaChoiceEndpoint(selection.trim()) == null;
+    isAlpacaChoice(selection) &&
+    parseAlpacaChoiceEndpoint(selection.trim()) == null;
 
 /// True when the guide-camera [guideChoice] is the same Alpaca device as one of
 /// the Main Camera's [mainEndpoints] ("host:port/N"): same port, device number
@@ -157,6 +165,7 @@ bool guideCameraIsMainCamera(String? guideChoice, List<String> mainEndpoints) {
     final t = h.trim().toLowerCase().replaceAll(RegExp(r'\.$'), '');
     return t == '127.0.0.1' || t == '::1' ? 'localhost' : t;
   }
+
   for (final e in mainEndpoints) {
     final main = parseAlpacaChoiceEndpoint('[$e]');
     if (main != null &&
@@ -252,7 +261,8 @@ class GuiderAlpacaDevicesNotifier extends Notifier<GuiderAlpacaDevices> {
     final buildRef = ref;
     final targets = <({String endpoint, String host, int port})>[];
     for (final endpoint in endpoints.toSet()) {
-      if ((!fresh && _named.contains(endpoint)) || _resolving.contains(endpoint)) {
+      if ((!fresh && _named.contains(endpoint)) ||
+          _resolving.contains(endpoint)) {
         continue;
       }
       final parsed = parseHostPort(endpoint);

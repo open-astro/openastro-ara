@@ -11,8 +11,14 @@ const _cases = [
   ('M42', 83.82208, -5.39111, '2026-10-04T22:00:00Z', 84.154866, -5.370485),
   ('Polaris', 37.95456, 89.26411, '2026-10-04T22:00:00Z', 47.077181, 89.373951),
   ('AB Cas', 39.38133, 71.30444, '2026-03-01T03:00:00Z', 39.982116, 71.422501),
-  ('southern', 201.29824, -43.01899, '2031-07-15T12:00:00Z', 201.768472,
-      -43.186398),
+  (
+    'southern',
+    201.29824,
+    -43.01899,
+    '2031-07-15T12:00:00Z',
+    201.768472,
+    -43.186398,
+  ),
   ('origin', 0.0, 0.0, '2000-01-01T12:00:00Z', 359.995493, -0.001960),
 ];
 
@@ -20,7 +26,8 @@ const _cases = [
 double _sepArcsec(double ra1, double dec1, double ra2, double dec2) {
   const d2r = math.pi / 180;
   final a = dec1 * d2r, b = dec2 * d2r, dra = (ra1 - ra2) * d2r;
-  final h = math.pow(math.sin((a - b) / 2), 2) +
+  final h =
+      math.pow(math.sin((a - b) / 2), 2) +
       math.cos(a) * math.cos(b) * math.pow(math.sin(dra / 2), 2);
   return 2 * math.asin(math.sqrt(h)) / d2r * 3600;
 }

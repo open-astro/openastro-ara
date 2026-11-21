@@ -73,8 +73,10 @@ void main() {
     Future<void> prime() async {
       container.listen(mountProvider, (_, _) {});
       await container.read(mountProvider.future);
-      expect(container.read(mountProvider).value?.connectionState,
-          EquipmentConnectionState.connected);
+      expect(
+        container.read(mountProvider).value?.connectionState,
+        EquipmentConnectionState.connected,
+      );
     }
 
     Future<void> failReads(int n) async {
@@ -90,8 +92,11 @@ void main() {
       await failReads(EquipmentDeviceNotifier.staleAfterFailures - 1);
 
       final state = container.read(mountProvider);
-      expect(state.hasError, isFalse,
-          reason: 'a couple of lost polls must not flip anything');
+      expect(
+        state.hasError,
+        isFalse,
+        reason: 'a couple of lost polls must not flip anything',
+      );
       expect(state.value?.connectionState, EquipmentConnectionState.connected);
     });
 
@@ -116,37 +121,45 @@ void main() {
       expect(state.value?.connectionState, EquipmentConnectionState.connected);
     });
 
-    test('the failure count resets, so blips never accumulate into an error',
-        () async {
-      await prime();
-      for (var round = 0; round < 3; round++) {
-        await failReads(EquipmentDeviceNotifier.staleAfterFailures - 1);
-        api.failing = false;
-        await container.read(mountProvider.notifier).refresh();
-        await pumpEventQueue();
-        expect(container.read(mountProvider).hasError, isFalse,
-            reason: 'round $round: a recovered blip must clear the count');
-      }
-    });
+    test(
+      'the failure count resets, so blips never accumulate into an error',
+      () async {
+        await prime();
+        for (var round = 0; round < 3; round++) {
+          await failReads(EquipmentDeviceNotifier.staleAfterFailures - 1);
+          api.failing = false;
+          await container.read(mountProvider.notifier).refresh();
+          await pumpEventQueue();
+          expect(
+            container.read(mountProvider).hasError,
+            isFalse,
+            reason: 'round $round: a recovered blip must clear the count',
+          );
+        }
+      },
+    );
   });
 
-  test('a busy reading outlasting the settle-poll falls back to the liveness poll',
-      () {
+  test('a busy reading outlasting the settle-poll falls back to the liveness poll', () {
     // An exposure longer than the ~60 s settle cap (or a rig restarted
     // mid-exposure) used to leave the device unpolled, so the chip blinked
     // "exposing" forever. The reading must keep refreshing at the live cadence.
     fakeAsync((async) {
       final api = _FlakyMountApi()..runtimeState = 'slewing';
-      final container = ProviderContainer(overrides: [
-        mountApiProvider.overrideWithValue(api),
-        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          mountApiProvider.overrideWithValue(api),
+          wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
+        ],
+      );
       container.listen(mountProvider, (_, _) {});
       async.flushMicrotasks();
       expect(container.read(mountProvider).value?.isBusy, isTrue);
 
-      async.elapse(EquipmentDeviceNotifier.settleInterval *
-          (EquipmentDeviceNotifier.maxSettlePolls + 2));
+      async.elapse(
+        EquipmentDeviceNotifier.settleInterval *
+            (EquipmentDeviceNotifier.maxSettlePolls + 2),
+      );
       api.runtimeState = 'idle';
       async.elapse(EquipmentDeviceNotifier.livePollInterval * 2);
 
@@ -155,37 +168,51 @@ void main() {
     });
   });
 
-  test('a device still busy after the settle cap stays on the liveness cadence',
-      () {
-    // Once the cap is spent, a still-busy reading must not re-arm a fresh
-    // settle budget: a long exposure (or a dome stuck "slewing") would otherwise
-    // be read every 1.5 s for most of the session.
-    fakeAsync((async) {
-      final api = _FlakyMountApi()..runtimeState = 'slewing';
-      final container = ProviderContainer(overrides: [
-        mountApiProvider.overrideWithValue(api),
-        wsEventsProvider.overrideWith((ref) => const Stream<WsEvent>.empty()),
-      ]);
-      container.listen(mountProvider, (_, _) {});
-      async.flushMicrotasks();
-      async.elapse(EquipmentDeviceNotifier.settleInterval *
-          (EquipmentDeviceNotifier.maxSettlePolls + 1));
+  test(
+    'a device still busy after the settle cap stays on the liveness cadence',
+    () {
+      // Once the cap is spent, a still-busy reading must not re-arm a fresh
+      // settle budget: a long exposure (or a dome stuck "slewing") would otherwise
+      // be read every 1.5 s for most of the session.
+      fakeAsync((async) {
+        final api = _FlakyMountApi()..runtimeState = 'slewing';
+        final container = ProviderContainer(
+          overrides: [
+            mountApiProvider.overrideWithValue(api),
+            wsEventsProvider.overrideWith(
+              (ref) => const Stream<WsEvent>.empty(),
+            ),
+          ],
+        );
+        container.listen(mountProvider, (_, _) {});
+        async.flushMicrotasks();
+        async.elapse(
+          EquipmentDeviceNotifier.settleInterval *
+              (EquipmentDeviceNotifier.maxSettlePolls + 1),
+        );
 
-      final readsAtCap = api.statusReads;
-      async.elapse(EquipmentDeviceNotifier.livePollInterval * 4);
-      expect(api.statusReads - readsAtCap, 4,
-          reason: 'one read per liveness tick while the device stays busy');
+        final readsAtCap = api.statusReads;
+        async.elapse(EquipmentDeviceNotifier.livePollInterval * 4);
+        expect(
+          api.statusReads - readsAtCap,
+          4,
+          reason: 'one read per liveness tick while the device stays busy',
+        );
 
-      // Going idle and then busy again (a new slew) gets the fast poll back.
-      api.runtimeState = 'idle';
-      async.elapse(EquipmentDeviceNotifier.livePollInterval);
-      api.runtimeState = 'slewing';
-      async.elapse(EquipmentDeviceNotifier.livePollInterval);
-      final readsAtNewSlew = api.statusReads;
-      async.elapse(EquipmentDeviceNotifier.settleInterval * 4);
-      expect(api.statusReads - readsAtNewSlew, 4,
-          reason: 'a new busy period starts a fresh settle budget');
-      container.dispose();
-    });
-  });
+        // Going idle and then busy again (a new slew) gets the fast poll back.
+        api.runtimeState = 'idle';
+        async.elapse(EquipmentDeviceNotifier.livePollInterval);
+        api.runtimeState = 'slewing';
+        async.elapse(EquipmentDeviceNotifier.livePollInterval);
+        final readsAtNewSlew = api.statusReads;
+        async.elapse(EquipmentDeviceNotifier.settleInterval * 4);
+        expect(
+          api.statusReads - readsAtNewSlew,
+          4,
+          reason: 'a new busy period starts a fresh settle budget',
+        );
+        container.dispose();
+      });
+    },
+  );
 }

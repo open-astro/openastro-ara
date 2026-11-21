@@ -45,11 +45,7 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   /// One-liner compact chip for the target presets (the °C unit lives in the
   /// section label so the chips stay short enough to sit on a single line in
   /// the narrow Imaging rail).
-  static Widget _presetChip(
-    int p,
-    bool selected,
-    VoidCallback onSelected,
-  ) =>
+  static Widget _presetChip(int p, bool selected, VoidCallback onSelected) =>
       ChoiceChip(
         label: Text(p <= 0 ? '$p' : '+$p'),
         selected: selected,
@@ -70,10 +66,9 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   Widget build(BuildContext context) {
     // The cooler↔fan sync lives in CameraStatusNotifier.setCooler (the single
     // cooler entry point) — see camera_state.dart.
-    final s = ref.watch(cameraStatusProvider).maybeWhen(
-          data: (v) => v,
-          orElse: () => null,
-        );
+    final s = ref
+        .watch(cameraStatusProvider)
+        .maybeWhen(data: (v) => v, orElse: () => null);
     if (s == null) return const SizedBox.shrink();
     final caps = s.capabilities;
     if (caps == null) return const SizedBox.shrink();
@@ -88,10 +83,12 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _row('Sensor temperature',
-              s.ccdTemperature == null
-                  ? '—'
-                  : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+          _row(
+            'Sensor temperature',
+            s.ccdTemperature == null
+                ? '—'
+                : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
+          ),
           const Padding(
             padding: EdgeInsets.only(top: 4),
             child: Text(
@@ -111,8 +108,12 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SettingsSectionHeader('Cooling target'),
-          _row('Sensor temperature',
-              s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+          _row(
+            'Sensor temperature',
+            s.ccdTemperature == null
+                ? '—'
+                : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
+          ),
           Padding(
             padding: const EdgeInsets.only(top: 8, bottom: 4),
             child: Row(
@@ -183,8 +184,12 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SettingsSectionHeader('Cooling'),
-        _row('Sensor temperature',
-            s.ccdTemperature == null ? '—' : '${s.ccdTemperature!.toStringAsFixed(1)} °C'),
+        _row(
+          'Sensor temperature',
+          s.ccdTemperature == null
+              ? '—'
+              : '${s.ccdTemperature!.toStringAsFixed(1)} °C',
+        ),
         if (s.coolerPowerPct != null)
           _row('Cooler power', '${s.coolerPowerPct!.toStringAsFixed(0)} %'),
         if (s.coolerOn && s.coolerSetpointC != null)
@@ -229,7 +234,8 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
                     for (final p in presets)
                       _presetChip(
                         p,
-                        s.coolerOn && ((s.coolerSetpointC ?? 999) - p).abs() < 0.001,
+                        s.coolerOn &&
+                            ((s.coolerSetpointC ?? 999) - p).abs() < 0.001,
                         () => _setTarget(p.toDouble()),
                       ),
                   ],
@@ -237,7 +243,8 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
               ),
               const SizedBox(width: 8),
               SizedBox(
-                width: 130, // app-standard field width (matches the other panels)
+                width:
+                    130, // app-standard field width (matches the other panels)
                 child: TextField(
                   controller: _target,
                   keyboardType: const TextInputType.numberWithOptions(
@@ -271,23 +278,25 @@ class _CoolerControlsState extends ConsumerState<CoolerControls> {
   /// Label/value row matching the app's panel row rhythm (2 pt vertical
   /// padding, label left / value right).
   static Widget _row(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            Expanded(child: Text(label)),
-            Text(value),
-          ],
-        ),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(child: Text(label)),
+        Text(value),
+      ],
+    ),
+  );
 
   Future<void> _setCooler(bool on) =>
       _run(() => ref.read(cameraStatusProvider.notifier).setCooler(on));
 
   Future<void> _setTarget(double celsius) async {
     // Setting a target turns the cooler on (daemon auto-starts the fan).
-    await _run(() => ref
-        .read(cameraStatusProvider.notifier)
-        .setCooler(true, targetTemperatureC: celsius));
+    await _run(
+      () => ref
+          .read(cameraStatusProvider.notifier)
+          .setCooler(true, targetTemperatureC: celsius),
+    );
   }
 
   Future<void> _setCustomTarget() async {

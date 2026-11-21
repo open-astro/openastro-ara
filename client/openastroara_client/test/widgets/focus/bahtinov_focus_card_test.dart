@@ -14,7 +14,8 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/fit_pane.dart';
 import 'package:openastroara/widgets/focus/bahtinov_focus_card.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
-import 'package:openastroara/widgets/focus/guide_focus_card.dart' show TurnAdvice;
+import 'package:openastroara/widgets/focus/guide_focus_card.dart'
+    show TurnAdvice;
 
 class _StubAutofocus extends AutofocusLiveNotifier {
   @override
@@ -33,11 +34,18 @@ class _StubBahtinov extends BahtinovFocusNotifier {
   @override
   Future<void> refresh() async {}
   @override
-  Future<void> start({double? exposureSec}) async => calls.add('start $exposureSec');
+  Future<void> start({double? exposureSec}) async =>
+      calls.add('start $exposureSec');
   @override
   Future<void> stop() async {
     calls.add('stop');
-    state = state.copyWith(status: BahtinovFocusStatus.fromJson({..._json(state.status), 'active': false, 'state': 'stopped'}));
+    state = state.copyWith(
+      status: BahtinovFocusStatus.fromJson({
+        ..._json(state.status),
+        'active': false,
+        'state': 'stopped',
+      }),
+    );
   }
 }
 
@@ -49,25 +57,26 @@ class _StubFocuser extends FocuserNotifier {
 }
 
 Map<String, dynamic> _json(BahtinovFocusStatus s) => {
-      'active': s.active,
-      'state': s.state,
-      'zone_px': s.zonePx,
-      'zone_from_optics': s.zoneFromOptics,
-      'zone_um': s.zoneUm,
-      'seq': s.seq,
-      'latest': s.latest == null ? null : _sampleJson(s.latest!),
-      'recent': [for (final r in s.recent) _sampleJson(r)],
-    };
+  'active': s.active,
+  'state': s.state,
+  'zone_px': s.zonePx,
+  'zone_from_optics': s.zoneFromOptics,
+  'zone_um': s.zoneUm,
+  'seq': s.seq,
+  'latest': s.latest == null ? null : _sampleJson(s.latest!),
+  'recent': [for (final r in s.recent) _sampleJson(r)],
+};
 
 Map<String, dynamic> _sampleJson(BahtinovSample s) => {
-      'seq': s.seq,
-      'detected': s.detected,
-      'problem': s.problem,
-      'offset_px': s.offsetPx,
-      'within_zone': s.withinZone,
-    };
+  'seq': s.seq,
+  'detected': s.detected,
+  'problem': s.problem,
+  'offset_px': s.offsetPx,
+  'within_zone': s.withinZone,
+};
 
-BahtinovSample _sample(int seq, double? offset, {double zone = 0.3}) => BahtinovSample(
+BahtinovSample _sample(int seq, double? offset, {double zone = 0.3}) =>
+    BahtinovSample(
       seq: seq,
       detected: offset != null,
       problem: offset == null ? BahtinovProblems.noPattern : null,
@@ -76,8 +85,16 @@ BahtinovSample _sample(int seq, double? offset, {double zone = 0.3}) => Bahtinov
     );
 
 /// A running readout whose recent offsets are [offsets] (null = no pattern).
-BahtinovFocusStatus _running(List<double?> offsets, {double zone = 0.3, double? zoneUm = 13, bool active = true}) {
-  final recent = [for (var i = 0; i < offsets.length; i++) _sample(i + 1, offsets[i], zone: zone)];
+BahtinovFocusStatus _running(
+  List<double?> offsets, {
+  double zone = 0.3,
+  double? zoneUm = 13,
+  bool active = true,
+}) {
+  final recent = [
+    for (var i = 0; i < offsets.length; i++)
+      _sample(i + 1, offsets[i], zone: zone),
+  ];
   return BahtinovFocusStatus(
     active: active,
     state: active ? BahtinovFocusStates.running : BahtinovFocusStates.stopped,
@@ -93,15 +110,15 @@ BahtinovFocusStatus _running(List<double?> offsets, {double zone = 0.3, double? 
 }
 
 FocuserStatus _focuser() => FocuserStatus(
-      deviceId: 'f1',
-      name: 'EAF',
-      connectionState: EquipmentConnectionState.connected,
-      capabilities: null,
-      runtimeState: 'idle',
-      position: 12000,
-      temperature: null,
-      tempCompEnabled: false,
-    );
+  deviceId: 'f1',
+  name: 'EAF',
+  connectionState: EquipmentConnectionState.connected,
+  capabilities: null,
+  runtimeState: 'idle',
+  position: 12000,
+  temperature: null,
+  tempCompEnabled: false,
+);
 
 Widget _harness({
   BahtinovFocusLive bahtinov = BahtinovFocusLive.idle,
@@ -109,22 +126,30 @@ Widget _harness({
   List<String>? calls,
   double width = 1200,
   double height = 3200,
-}) =>
-    ProviderScope(
-      overrides: [
-        autofocusLiveProvider.overrideWith(_StubAutofocus.new),
-        bahtinovFocusProvider.overrideWith(() => _StubBahtinov(bahtinov, calls ?? [])),
-        focuserProvider.overrideWith(() => _StubFocuser(focuser)),
-      ],
-      child: MaterialApp(home: Scaffold(body: SizedBox(width: width, height: height, child: const FocusingPane()))),
-    );
+}) => ProviderScope(
+  overrides: [
+    autofocusLiveProvider.overrideWith(_StubAutofocus.new),
+    bahtinovFocusProvider.overrideWith(
+      () => _StubBahtinov(bahtinov, calls ?? []),
+    ),
+    focuserProvider.overrideWith(() => _StubFocuser(focuser)),
+  ],
+  child: MaterialApp(
+    home: Scaffold(
+      body: SizedBox(width: width, height: height, child: const FocusingPane()),
+    ),
+  ),
+);
 
 final _en = lookupAppLocalizations(const Locale('en'));
 
 void main() {
   group('bahtinovHint', () {
     test('waits, then explains a missing pattern', () {
-      expect(bahtinovHint(_en, BahtinovFocusStatus.idle).advice, TurnAdvice.wait);
+      expect(
+        bahtinovHint(_en, BahtinovFocusStatus.idle).advice,
+        TurnAdvice.wait,
+      );
       final none = bahtinovHint(_en, _running([null]));
       expect(none.title, 'No spikes');
       expect(none.detail, contains('Fit the mask'));
@@ -151,25 +176,51 @@ void main() {
       // 1.2 → −0.6: a 1.8 px move overshot by 0.6 — back a third.
       final h = bahtinovHint(_en, _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]));
       expect(h.advice, TurnAdvice.turnBack);
-      expect(h.detail, 'You passed focus. Turn back about a third of your last move.');
+      expect(
+        h.detail,
+        'You passed focus. Turn back about a third of your last move.',
+      );
     });
 
     test('a frame taken mid-move does not size the next move', () {
       // 2.9 → (1.4 while turning) → 0.77: about a third of the last move to go.
-      final h = bahtinovHint(_en, _running([2.9, 2.9, 2.9, 2.9, 1.4, 0.77, 0.77, 0.77, 0.77, 0.77]));
+      final h = bahtinovHint(
+        _en,
+        _running([2.9, 2.9, 2.9, 2.9, 1.4, 0.77, 0.77, 0.77, 0.77, 0.77]),
+      );
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.detail, 'Same way — about a third of your last move again.');
     });
 
     test('the advice holds after the move until the next one', () {
       // Ten fast frames at the new position: still the same advice.
-      final h = bahtinovHint(_en, _running([3.0, 3.0, 3.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0, 2.0]));
+      final h = bahtinovHint(
+        _en,
+        _running([
+          3.0,
+          3.0,
+          3.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+          2.0,
+        ]),
+      );
       expect(h.advice, TurnAdvice.keepGoing);
       expect(h.detail, 'Same way — about twice your last move again.');
     });
 
     test('jitter is not a move; in focus inside the zone', () {
-      expect(bahtinovHint(_en, _running([2.0, 2.05, 1.95, 2.0, 2.02, 1.98])).title, 'Make a move');
+      expect(
+        bahtinovHint(_en, _running([2.0, 2.05, 1.95, 2.0, 2.02, 1.98])).title,
+        'Make a move',
+      );
       final h = bahtinovHint(_en, _running([2.0, 1.0, 0.1]));
       expect(h.advice, TurnAdvice.atBest);
       expect(h.detail, contains('±13 µm'));
@@ -178,27 +229,70 @@ void main() {
 
   group('headline', () {
     test('follows the readout', () {
-      expect(BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive.idle).$1, 'Fit the mask, then Start');
+      expect(
+        BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive.idle).$1,
+        'Fit the mask, then Start',
+      );
       // The headline is the median of the last five measured frames, so one
       // early 1.0 px frame does not pull it; three at 0.1 px read in focus.
-      final inFocus = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])));
+      final inFocus = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(status: _running([1.0, 0.1, 0.1, 0.1])),
+      );
       expect(inFocus, ('In focus · 0.10 px', AraColors.accentConnected));
-      final jitter = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])));
-      expect(jitter.$1, 'In focus · 0.10 px', reason: 'one seeing-blown frame does not move the readout');
-      final passed = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])));
+      final jitter = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5])),
+      );
+      expect(
+        jitter.$1,
+        'In focus · 0.10 px',
+        reason: 'one seeing-blown frame does not move the readout',
+      );
+      final passed = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6])),
+      );
       expect(passed, ('Go back · 0.60 px from focus', AraColors.accentWarning));
-      final stopped = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([1.5], active: false)));
+      final stopped = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(status: _running([1.5], active: false)),
+      );
       expect(stopped.$1, 'Stopped · last 1.50 px from focus');
-      final off = BahtinovFocusCard.headlineFor(_en, BahtinovFocusLive(status: _running([0.1], active: false), finished: true));
+      final off = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(
+          status: _running([0.1], active: false),
+          finished: true,
+        ),
+      );
       expect(off.$1, 'In focus · mask off');
       // Finish reads the same median as the live headline, never one frame:
       // a last frame blown by seeing does not deny focus, a lucky one does not
       // grant it, and mask-off frames after the last measurement do not count.
-      final jitterOff = BahtinovFocusCard.headlineFor(_en, 
-          BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5, null, null], active: false), finished: true));
+      final jitterOff = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(
+          status: _running([
+            0.1,
+            0.1,
+            0.1,
+            0.1,
+            2.5,
+            null,
+            null,
+          ], active: false),
+          finished: true,
+        ),
+      );
       expect(jitterOff.$1, 'In focus · mask off');
-      final luckyOff = BahtinovFocusCard.headlineFor(_en, 
-          BahtinovFocusLive(status: _running([2.5, 2.5, 2.5, 2.5, 0.1], active: false), finished: true));
+      final luckyOff = BahtinovFocusCard.headlineFor(
+        _en,
+        BahtinovFocusLive(
+          status: _running([2.5, 2.5, 2.5, 2.5, 0.1], active: false),
+          finished: true,
+        ),
+      );
       expect(luckyOff.$1, 'Mask off');
     });
   });
@@ -244,16 +338,24 @@ void main() {
     expect(s.hasMeasurement, isTrue);
   });
 
-  testWidgets('without a focuser the main card opens on the Bahtinov mask', (t) async {
+  testWidgets('without a focuser the main card opens on the Bahtinov mask', (
+    t,
+  ) async {
     await t.pumpWidget(_harness());
     await t.pump();
     expect(find.text('Fit the mask, then Start'), findsWidgets);
     expect(find.textContaining('Manual focuser'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Start'), findsOneWidget);
-    expect(find.text('Autofocus'), findsOneWidget, reason: 'the picker offers the other method');
+    expect(
+      find.text('Autofocus'),
+      findsOneWidget,
+      reason: 'the picker offers the other method',
+    );
   });
 
-  testWidgets('with a focuser it opens on autofocus, and the picker switches', (t) async {
+  testWidgets('with a focuser it opens on autofocus, and the picker switches', (
+    t,
+  ) async {
     await t.pumpWidget(_harness(focuser: _focuser()));
     await t.pump();
     await t.pump();
@@ -263,12 +365,20 @@ void main() {
     expect(find.text('Fit the mask, then Start'), findsWidgets);
   });
 
-  testWidgets('a live readout shows the offset, the advice and the overlay', (t) async {
+  testWidgets('a live readout shows the offset, the advice and the overlay', (
+    t,
+  ) async {
     final calls = <String>[];
-    await t.pumpWidget(_harness(
-      calls: calls,
-      bahtinov: BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]), frame: _png, frameSeq: 6),
-    ));
+    await t.pumpWidget(
+      _harness(
+        calls: calls,
+        bahtinov: BahtinovFocusLive(
+          status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]),
+          frame: _png,
+          frameSeq: 6,
+        ),
+      ),
+    );
     await t.pump();
     expect(find.text('Go back · 0.60 px from focus'), findsOneWidget);
     expect(find.text('−0.60'), findsOneWidget);
@@ -281,22 +391,32 @@ void main() {
 
   // A 1080p laptop at 150 % leaves a ≈ 1280×640 window; the Setup shell takes
   // 362 px of width and 104 of height around the pane.
-  testWidgets('a live readout fits a laptop window without scrolling', (t) async {
+  testWidgets('a live readout fits a laptop window without scrolling', (
+    t,
+  ) async {
     t.view.physicalSize = const Size(1280, 640);
     t.view.devicePixelRatio = 1;
     addTearDown(t.view.reset);
-    await t.pumpWidget(_harness(
-      width: 1280 - 362,
-      height: 640 - 104,
-      bahtinov: BahtinovFocusLive(
-        status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]),
-        frame: _png,
-        frameSeq: 6,
+    await t.pumpWidget(
+      _harness(
+        width: 1280 - 362,
+        height: 640 - 104,
+        bahtinov: BahtinovFocusLive(
+          status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]),
+          frame: _png,
+          frameSeq: 6,
+        ),
       ),
-    ));
+    );
     await t.pump();
     final scroll = t.state<ScrollableState>(
-        find.descendant(of: find.byType(FitPane), matching: find.byType(Scrollable)).first);
+      find
+          .descendant(
+            of: find.byType(FitPane),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     expect(scroll.position.maxScrollExtent, 0);
   });
 
@@ -304,38 +424,63 @@ void main() {
     t.view.physicalSize = const Size(390 * 3, 3200 * 3);
     t.view.devicePixelRatio = 3;
     addTearDown(t.view.reset);
-    await t.pumpWidget(_harness(
-      width: 390,
-      bahtinov: BahtinovFocusLive(status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]), frame: _png, frameSeq: 6),
-    ));
+    await t.pumpWidget(
+      _harness(
+        width: 390,
+        bahtinov: BahtinovFocusLive(
+          status: _running([1.2, 1.2, 1.2, -0.6, -0.6, -0.6]),
+          frame: _png,
+          frameSeq: 6,
+        ),
+      ),
+    );
     await t.pump();
     expect(t.takeException(), isNull);
     expect(find.text('−0.60'), findsOneWidget);
   });
 
-  testWidgets('Finish asks for the mask, then marks the scope focused', (t) async {
-  // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
-  t.platformDispatcher.accessibilityFeaturesTestValue = const FakeAccessibilityFeatures(disableAnimations: true);
-  addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
+  testWidgets('Finish asks for the mask, then marks the scope focused', (
+    t,
+  ) async {
+    // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
+    t.platformDispatcher.accessibilityFeaturesTestValue =
+        const FakeAccessibilityFeatures(disableAnimations: true);
+    addTearDown(t.platformDispatcher.clearAccessibilityFeaturesTestValue);
     final calls = <String>[];
     late WidgetRef ref;
-    await t.pumpWidget(ProviderScope(
-      overrides: [
-        autofocusLiveProvider.overrideWith(_StubAutofocus.new),
-        bahtinovFocusProvider.overrideWith(
+    await t.pumpWidget(
+      ProviderScope(
+        overrides: [
+          autofocusLiveProvider.overrideWith(_StubAutofocus.new),
+          bahtinovFocusProvider.overrideWith(
             // The last frame is out of the zone; the median of the last five is in it.
-            () => _StubBahtinov(BahtinovFocusLive(status: _running([0.1, 0.1, 0.1, 0.1, 2.5]), frame: _png, frameSeq: 5), calls)),
-        focuserProvider.overrideWith(() => _StubFocuser(null)),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: Consumer(builder: (context, r, _) {
-            ref = r;
-            return const SizedBox(width: 1200, height: 3200, child: FocusingPane());
-          }),
+            () => _StubBahtinov(
+              BahtinovFocusLive(
+                status: _running([0.1, 0.1, 0.1, 0.1, 2.5]),
+                frame: _png,
+                frameSeq: 5,
+              ),
+              calls,
+            ),
+          ),
+          focuserProvider.overrideWith(() => _StubFocuser(null)),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: Consumer(
+              builder: (context, r, _) {
+                ref = r;
+                return const SizedBox(
+                  width: 1200,
+                  height: 3200,
+                  child: FocusingPane(),
+                );
+              },
+            ),
+          ),
         ),
       ),
-    ));
+    );
     await t.pump();
     await t.tap(find.widgetWithText(FilledButton, 'Finish'));
     await t.pumpAndSettle();
@@ -354,17 +499,29 @@ void main() {
     expect(find.text('In focus · mask off'), findsOneWidget);
   });
 
-  testWidgets('leaving Bahtinov with the mask possibly on asks first', (t) async {
-    await t.pumpWidget(_harness(
-      bahtinov: BahtinovFocusLive(status: _running([1.5], active: false), frame: _png, frameSeq: 1),
-    ));
+  testWidgets('leaving Bahtinov with the mask possibly on asks first', (
+    t,
+  ) async {
+    await t.pumpWidget(
+      _harness(
+        bahtinov: BahtinovFocusLive(
+          status: _running([1.5], active: false),
+          frame: _png,
+          frameSeq: 1,
+        ),
+      ),
+    );
     await t.pump();
     await t.tap(find.text('Autofocus'));
     await t.pumpAndSettle();
     expect(find.text('Remove the Bahtinov mask'), findsOneWidget);
     await t.tap(find.text('Not yet'));
     await t.pumpAndSettle();
-    expect(find.text('Stopped · last 1.50 px from focus'), findsOneWidget, reason: 'still on the Bahtinov card');
+    expect(
+      find.text('Stopped · last 1.50 px from focus'),
+      findsOneWidget,
+      reason: 'still on the Bahtinov card',
+    );
     await t.tap(find.text('Autofocus'));
     await t.pumpAndSettle();
     await t.tap(find.text('Mask removed'));
@@ -375,9 +532,71 @@ void main() {
 
 /// A 1×1 transparent PNG: enough for Image.memory.
 final _png = Uint8List.fromList(const [
-  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-  0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-  0x42, 0x60, 0x82,
+  0x89,
+  0x50,
+  0x4E,
+  0x47,
+  0x0D,
+  0x0A,
+  0x1A,
+  0x0A,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x48,
+  0x44,
+  0x52,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x00,
+  0x01,
+  0x08,
+  0x06,
+  0x00,
+  0x00,
+  0x00,
+  0x1F,
+  0x15,
+  0xC4,
+  0x89,
+  0x00,
+  0x00,
+  0x00,
+  0x0D,
+  0x49,
+  0x44,
+  0x41,
+  0x54,
+  0x78,
+  0x9C,
+  0x63,
+  0x00,
+  0x01,
+  0x00,
+  0x00,
+  0x05,
+  0x00,
+  0x01,
+  0x0D,
+  0x0A,
+  0x2D,
+  0xB4,
+  0x00,
+  0x00,
+  0x00,
+  0x00,
+  0x49,
+  0x45,
+  0x4E,
+  0x44,
+  0xAE,
+  0x42,
+  0x60,
+  0x82,
 ]);

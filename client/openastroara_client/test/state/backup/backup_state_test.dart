@@ -46,13 +46,21 @@ class _FakeBackupClient implements BackupClient {
   Future<String> createBackup() async {
     creates++;
     if (throwOnCreate) throw StateError('nothing to archive');
-    final snap = BackupSnapshot(backupId: 'b${snapshots.length + 1}', downloadUrl: '/dl/${snapshots.length + 1}');
+    final snap = BackupSnapshot(
+      backupId: 'b${snapshots.length + 1}',
+      downloadUrl: '/dl/${snapshots.length + 1}',
+    );
     snapshots = [snap, ...snapshots];
     return 'op-create';
   }
 
   @override
-  Future<String> restore({required String sourceUrl, required bool profiles, required bool sequences, required bool frameMetadata}) async {
+  Future<String> restore({
+    required String sourceUrl,
+    required bool profiles,
+    required bool sequences,
+    required bool frameMetadata,
+  }) async {
     lastRestoreSource = sourceUrl;
     lastRestoreProfiles = profiles;
     lastRestoreSequences = sequences;
@@ -98,7 +106,8 @@ class _FakeBackupClient implements BackupClient {
   }
 
   @override
-  String absoluteDownloadUrl(BackupSnapshot snapshot) => 'http://h:5555${snapshot.downloadUrl}';
+  String absoluteDownloadUrl(BackupSnapshot snapshot) =>
+      'http://h:5555${snapshot.downloadUrl}';
 
   @override
   void close() {}
@@ -107,10 +116,14 @@ class _FakeBackupClient implements BackupClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 ProviderContainer _container(List<AraServer> servers, BackupClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    backupApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      backupApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -132,51 +145,74 @@ void main() {
       expect(list!.single.backupId, 'b1');
     });
 
-    test('createBackup creates then refreshes so the new snapshot appears', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')]);
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'createBackup creates then refreshes so the new snapshot appears',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')]);
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      final id = await c.read(backupSnapshotsProvider.notifier).createBackup();
-      expect(id, 'op-create');
-      expect(api.creates, 1);
-      final list = c.read(backupSnapshotsProvider).value;
-      expect(list, isNotNull);
-      expect(list!.length, 2, reason: 'the new snapshot is visible after the post-create refresh');
-    });
+        final id = await c
+            .read(backupSnapshotsProvider.notifier)
+            .createBackup();
+        expect(id, 'op-create');
+        expect(api.creates, 1);
+        final list = c.read(backupSnapshotsProvider).value;
+        expect(list, isNotNull);
+        expect(
+          list!.length,
+          2,
+          reason: 'the new snapshot is visible after the post-create refresh',
+        );
+      },
+    );
 
-    test('createBackup propagates a failure (the 422 nothing-to-archive contract)', () async {
-      final api = _FakeBackupClient(const [])..throwOnCreate = true;
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'createBackup propagates a failure (the 422 nothing-to-archive contract)',
+      () async {
+        final api = _FakeBackupClient(const [])..throwOnCreate = true;
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      await expectLater(
-        c.read(backupSnapshotsProvider.notifier).createBackup(),
-        throwsA(isA<StateError>()),
-      );
-    });
+        await expectLater(
+          c.read(backupSnapshotsProvider.notifier).createBackup(),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
 
-    test('createBackup polls create-status past running to done, then refreshes', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
-        ..createStatusSequence = const [
-          CloneStatus(state: 'running'),
-          CloneStatus(state: 'running'),
-          CloneStatus(state: 'done'),
-        ];
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'createBackup polls create-status past running to done, then refreshes',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+          ..createStatusSequence = const [
+            CloneStatus(state: 'running'),
+            CloneStatus(state: 'running'),
+            CloneStatus(state: 'done'),
+          ];
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      final id = await c
-          .read(backupSnapshotsProvider.notifier)
-          .createBackup(interval: Duration.zero);
-      expect(id, 'op-create');
-      expect(api.createStatusCalls, 3, reason: 'polled through both running ticks to the terminal');
-      final list = c.read(backupSnapshotsProvider).value;
-      expect(list!.length, 2, reason: 'the refresh runs only after the worker finished');
-    });
+        final id = await c
+            .read(backupSnapshotsProvider.notifier)
+            .createBackup(interval: Duration.zero);
+        expect(id, 'op-create');
+        expect(
+          api.createStatusCalls,
+          3,
+          reason: 'polled through both running ticks to the terminal',
+        );
+        final list = c.read(backupSnapshotsProvider).value;
+        expect(
+          list!.length,
+          2,
+          reason: 'the refresh runs only after the worker finished',
+        );
+      },
+    );
 
     test('createBackup surfaces a worker-side failure as a StateError with the daemon message', () async {
       final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
@@ -189,143 +225,217 @@ void main() {
       await c.read(backupSnapshotsProvider.future);
 
       await expectLater(
-        c.read(backupSnapshotsProvider.notifier).createBackup(interval: Duration.zero),
-        throwsA(isA<StateError>().having((e) => e.message, 'message', contains('disk exploded'))),
+        c
+            .read(backupSnapshotsProvider.notifier)
+            .createBackup(interval: Duration.zero),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('disk exploded'),
+          ),
+        ),
       );
       // A failed create must not refresh — the list still shows the pre-create single snapshot.
       expect(c.read(backupSnapshotsProvider).value!.length, 1);
     });
 
-    test('createBackup stops polling when cancelled and skips the refresh', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
-        ..createStatusSequence = const [CloneStatus(state: 'running')];
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'createBackup stops polling when cancelled and skips the refresh',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+          ..createStatusSequence = const [CloneStatus(state: 'running')];
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      var polls = 0;
-      final id = await c.read(backupSnapshotsProvider.notifier).createBackup(
-            interval: Duration.zero,
-            isCancelled: () => ++polls > 2,
-          );
-      expect(id, 'op-create', reason: 'the accepted id is still returned');
-      expect(c.read(backupSnapshotsProvider).value!.length, 1, reason: 'no refresh after a cancelled poll');
-    });
+        var polls = 0;
+        final id = await c
+            .read(backupSnapshotsProvider.notifier)
+            .createBackup(
+              interval: Duration.zero,
+              isCancelled: () => ++polls > 2,
+            );
+        expect(id, 'op-create', reason: 'the accepted id is still returned');
+        expect(
+          c.read(backupSnapshotsProvider).value!.length,
+          1,
+          reason: 'no refresh after a cancelled poll',
+        );
+      },
+    );
 
-    test('restore forwards the source url + area flags and returns the op id', () async {
-      final snap = const BackupSnapshot(backupId: 'b1', downloadUrl: '/api/v1/backup/snapshot/b1/download');
-      final api = _FakeBackupClient([snap]);
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'restore forwards the source url + area flags and returns the op id',
+      () async {
+        final snap = const BackupSnapshot(
+          backupId: 'b1',
+          downloadUrl: '/api/v1/backup/snapshot/b1/download',
+        );
+        final api = _FakeBackupClient([snap]);
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      final id = await c
-          .read(backupSnapshotsProvider.notifier)
-          .restore(snap, profiles: true, sequences: false, frameMetadata: false);
-      expect(id, 'op-restore');
-      expect(api.lastRestoreSource, '/api/v1/backup/snapshot/b1/download');
-      expect(api.lastRestoreProfiles, isTrue);
-      expect(api.lastRestoreSequences, isFalse);
-    });
+        final id = await c
+            .read(backupSnapshotsProvider.notifier)
+            .restore(
+              snap,
+              profiles: true,
+              sequences: false,
+              frameMetadata: false,
+            );
+        expect(id, 'op-restore');
+        expect(api.lastRestoreSource, '/api/v1/backup/snapshot/b1/download');
+        expect(api.lastRestoreProfiles, isTrue);
+        expect(api.lastRestoreSequences, isFalse);
+      },
+    );
 
-    test('restore propagates a failure (404/422 contract) without refreshing', () async {
-      final snap = const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1');
-      final api = _FakeBackupClient([snap])..throwOnRestore = true;
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
-      final listsBefore = api.lists;
+    test(
+      'restore propagates a failure (404/422 contract) without refreshing',
+      () async {
+        final snap = const BackupSnapshot(
+          backupId: 'b1',
+          downloadUrl: '/dl/b1',
+        );
+        final api = _FakeBackupClient([snap])..throwOnRestore = true;
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
+        final listsBefore = api.lists;
 
-      await expectLater(
-        c.read(backupSnapshotsProvider.notifier).restore(snap, profiles: true, sequences: true, frameMetadata: false),
-        throwsA(isA<StateError>()),
-      );
-      expect(api.lists, listsBefore, reason: 'restore does not refresh the snapshot list');
-    });
+        await expectLater(
+          c
+              .read(backupSnapshotsProvider.notifier)
+              .restore(
+                snap,
+                profiles: true,
+                sequences: true,
+                frameMetadata: false,
+              ),
+          throwsA(isA<StateError>()),
+        );
+        expect(
+          api.lists,
+          listsBefore,
+          reason: 'restore does not refresh the snapshot list',
+        );
+      },
+    );
 
     test('awaitRestoreTerminal polls past running to a done status', () async {
       final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
         ..cloneStatusSequence = const [
           CloneStatus(state: 'running'),
           CloneStatus(state: 'running'),
-          CloneStatus(state: 'done', progressPct: 100, message: 'Restored: profiles'),
+          CloneStatus(
+            state: 'done',
+            progressPct: 100,
+            message: 'Restored: profiles',
+          ),
         ];
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(backupSnapshotsProvider.future);
 
-      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
-            interval: const Duration(milliseconds: 1),
-          ))!;
+      final status = (await c
+          .read(backupSnapshotsProvider.notifier)
+          .awaitRestoreTerminal(interval: const Duration(milliseconds: 1)))!;
       expect(status.state, 'done');
       expect(status.isFailed, isFalse);
       expect(api.cloneStatusCalls, 3);
     });
 
-    test('awaitRestoreTerminal surfaces a failed status with its message', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
-        ..cloneStatusSequence = const [
-          CloneStatus(state: 'running'),
-          CloneStatus(state: 'failed', message: 'disk gone'),
-        ];
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'awaitRestoreTerminal surfaces a failed status with its message',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+          ..cloneStatusSequence = const [
+            CloneStatus(state: 'running'),
+            CloneStatus(state: 'failed', message: 'disk gone'),
+          ];
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      final status = (await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
-            interval: const Duration(milliseconds: 1),
-          ))!;
-      expect(status.isFailed, isTrue);
-      expect(status.message, 'disk gone');
-    });
+        final status = (await c
+            .read(backupSnapshotsProvider.notifier)
+            .awaitRestoreTerminal(interval: const Duration(milliseconds: 1)))!;
+        expect(status.isFailed, isTrue);
+        expect(status.message, 'disk gone');
+      },
+    );
 
-    test('awaitRestoreTerminal times out if the restore never finishes', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
-        ..cloneStatusSequence = const [CloneStatus(state: 'running')]; // held forever
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'awaitRestoreTerminal times out if the restore never finishes',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+          ..cloneStatusSequence = const [
+            CloneStatus(state: 'running'),
+          ]; // held forever
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      await expectLater(
-        c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
+        await expectLater(
+          c
+              .read(backupSnapshotsProvider.notifier)
+              .awaitRestoreTerminal(
+                interval: const Duration(milliseconds: 1),
+                timeout: const Duration(milliseconds: 30),
+              ),
+          throwsA(isA<TimeoutException>()),
+        );
+      },
+    );
+
+    test(
+      'awaitRestoreTerminal stops polling and returns null once cancelled',
+      () async {
+        final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
+          ..cloneStatusSequence = const [
+            CloneStatus(state: 'running'),
+          ]; // never terminal
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
+
+        var cancelled = false;
+        final status = await c
+            .read(backupSnapshotsProvider.notifier)
+            .awaitRestoreTerminal(
               interval: const Duration(milliseconds: 1),
-              timeout: const Duration(milliseconds: 30),
-            ),
-        throwsA(isA<TimeoutException>()),
-      );
-    });
+              isCancelled: () {
+                // Cancel after the first poll so we exercise the in-loop check.
+                final c = cancelled;
+                cancelled = true;
+                return c;
+              },
+            );
+        expect(
+          status,
+          isNull,
+          reason:
+              'cancellation returns null instead of running to the deadline',
+        );
+        expect(api.cloneStatusCalls, 1, reason: 'polling stops once cancelled');
+      },
+    );
 
-    test('awaitRestoreTerminal stops polling and returns null once cancelled', () async {
-      final api = _FakeBackupClient(const [BackupSnapshot(backupId: 'b1')])
-        ..cloneStatusSequence = const [CloneStatus(state: 'running')]; // never terminal
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
+    test(
+      'awaitRestoreTerminal throws StateError when no server is bound',
+      () async {
+        final c = _container(const [], _FakeBackupClient(const []));
+        await c.read(savedServersProvider.future);
+        await c.read(backupSnapshotsProvider.future);
 
-      var cancelled = false;
-      final status = await c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(
-            interval: const Duration(milliseconds: 1),
-            isCancelled: () {
-              // Cancel after the first poll so we exercise the in-loop check.
-              final c = cancelled;
-              cancelled = true;
-              return c;
-            },
-          );
-      expect(status, isNull, reason: 'cancellation returns null instead of running to the deadline');
-      expect(api.cloneStatusCalls, 1, reason: 'polling stops once cancelled');
-    });
-
-    test('awaitRestoreTerminal throws StateError when no server is bound', () async {
-      final c = _container(const [], _FakeBackupClient(const []));
-      await c.read(savedServersProvider.future);
-      await c.read(backupSnapshotsProvider.future);
-
-      await expectLater(
-        c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(),
-        throwsA(isA<StateError>()),
-      );
-    });
+        await expectLater(
+          c.read(backupSnapshotsProvider.notifier).awaitRestoreTerminal(),
+          throwsA(isA<StateError>()),
+        );
+      },
+    );
 
     test('actions are no-ops (return null) when no server is bound', () async {
       final c = _container(const [], _FakeBackupClient(const []));
@@ -334,8 +444,12 @@ void main() {
       final notifier = c.read(backupSnapshotsProvider.notifier);
       expect(await notifier.createBackup(), isNull);
       expect(
-        await notifier.restore(const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1'),
-            profiles: true, sequences: true, frameMetadata: false),
+        await notifier.restore(
+          const BackupSnapshot(backupId: 'b1', downloadUrl: '/dl/b1'),
+          profiles: true,
+          sequences: true,
+          frameMetadata: false,
+        ),
         isNull,
       );
     });

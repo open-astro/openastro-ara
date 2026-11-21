@@ -27,8 +27,11 @@ void main() {
       final helpHits = index.where((e) => e.helpKey != null).toList();
       expect(helpHits, isNotEmpty, reason: 'the §69 help registry is indexed');
       expect(helpHits.every((e) => e.groupLabel == 'Help'), isTrue);
-      expect(helpHits.every((e) => e.panelId == null && e.settingId == null),
-          isTrue, reason: 'help hits open the sheet, never navigate');
+      expect(
+        helpHits.every((e) => e.panelId == null && e.settingId == null),
+        isTrue,
+        reason: 'help hits open the sheet, never navigate',
+      );
     });
 
     test('§68.4 "equipment hub down" surfaces the AlpacaBridge troubleshoot '
@@ -40,8 +43,10 @@ void main() {
 
     test('§68.4 a help TITLE search finds the entry too', () {
       final results = searchSettings(index, 'alpacabridge not detected');
-      expect(results.map((e) => e.helpKey),
-          contains('equipment.alpacabridge.troubleshoot'));
+      expect(
+        results.map((e) => e.helpKey),
+        contains('equipment.alpacabridge.troubleshoot'),
+      );
     });
 
     test('keyword "dither" surfaces Guider panel', () {
@@ -50,7 +55,10 @@ void main() {
     });
 
     test('keyword "park" surfaces both Mount and Safety Policies', () {
-      final results = searchSettings(index, 'park').map((e) => e.panelId).toSet();
+      final results = searchSettings(
+        index,
+        'park',
+      ).map((e) => e.panelId).toSet();
       expect(results, containsAll(['eq.mount', 'safety.policies']));
     });
 
@@ -77,14 +85,17 @@ void main() {
       expect(entries.length, greaterThan(20)); // 22 panels in Phase 12h.2
       // Spot-check a few known panels exist.
       final ids = entries.map((e) => e.panelId).toSet();
-      expect(ids, containsAll([
-        'eq.camera',
-        'eq.mount',
-        'img.defaults',
-        'session.storage',
-        'safety.diagnostics',
-        'profile.active',
-      ]));
+      expect(
+        ids,
+        containsAll([
+          'eq.camera',
+          'eq.mount',
+          'img.defaults',
+          'session.storage',
+          'safety.diagnostics',
+          'profile.active',
+        ]),
+      );
     });
 
     test('Advanced Mode search has no Advanced settings hit (#2036)', () {
@@ -106,11 +117,38 @@ void main() {
 
     test('each main tab is reachable by an intent word', () {
       final index = buildSearchIndex();
-      expect(searchSettings(index, 'planning').any((e) => e.tabIndex == 0), isTrue);
-      expect(searchSettings(index, 'sequencer').any((e) => e.tabIndex == kRunTabIndex), isTrue);
-      expect(searchSettings(index, 'live view').any((e) => e.tabIndex == kLiveTabIndex), isTrue);
-      expect(searchSettings(index, 'checklist').any((e) => e.tabIndex == kSetupTabIndex), isTrue);
-      expect(searchSettings(index, 'preferences').any((e) => e.tabIndex == kOptionsTabIndex), isTrue);
+      expect(
+        searchSettings(index, 'planning').any((e) => e.tabIndex == 0),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'sequencer',
+        ).any((e) => e.tabIndex == kRunTabIndex),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'live view',
+        ).any((e) => e.tabIndex == kLiveTabIndex),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'checklist',
+        ).any((e) => e.tabIndex == kSetupTabIndex),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'preferences',
+        ).any((e) => e.tabIndex == kOptionsTabIndex),
+        isTrue,
+      );
     });
 
     test('navigation hits carry a stable synthetic id', () {
@@ -132,12 +170,48 @@ void main() {
 
     test('actions are reachable by intent words', () {
       final index = buildSearchIndex();
-      expect(searchSettings(index, 'image library').any((e) => e.actionId == 'action.library'), isTrue);
-      expect(searchSettings(index, 'dark library').any((e) => e.actionId == 'action.calibration'), isTrue);
-      expect(searchSettings(index, 'best frames').any((e) => e.actionId == 'action.stats'), isTrue);
-      expect(searchSettings(index, 'backup').any((e) => e.actionId == 'action.backup'), isTrue);
-      expect(searchSettings(index, 'wizard').any((e) => e.actionId == 'action.wizard'), isTrue);
-      expect(searchSettings(index, 'unread').any((e) => e.actionId == 'action.notifications'), isTrue);
+      expect(
+        searchSettings(
+          index,
+          'image library',
+        ).any((e) => e.actionId == 'action.library'),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'dark library',
+        ).any((e) => e.actionId == 'action.calibration'),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'best frames',
+        ).any((e) => e.actionId == 'action.stats'),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'backup',
+        ).any((e) => e.actionId == 'action.backup'),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'wizard',
+        ).any((e) => e.actionId == 'action.wizard'),
+        isTrue,
+      );
+      expect(
+        searchSettings(
+          index,
+          'unread',
+        ).any((e) => e.actionId == 'action.notifications'),
+        isTrue,
+      );
     });
   });
 
@@ -146,33 +220,73 @@ void main() {
     String? actionFor(String label) =>
         index.where((e) => e.label == label).map((e) => e.actionId).firstOrNull;
     expect(actionFor('Run or resume the sequence (⌘R)'), 'action.run.start');
-    expect(actionFor('Pause or resume the sequence (Space)'), 'action.run.pause');
+    expect(
+      actionFor('Pause or resume the sequence (Space)'),
+      'action.run.pause',
+    );
     expect(actionFor('Plan tonight…'), 'action.plan.tonight');
     // Searching the key itself finds the shortcut (the palette is the cheat sheet).
-    expect(searchSettings(index, 'cmd r', limit: 5).map((e) => e.actionId), contains('action.run.start'));
-    expect(searchSettings(index, 'space', limit: 5).map((e) => e.actionId), contains('action.run.pause'));
-    expect(searchSettings(index, 'plan tonight', limit: 5).first.actionId, 'action.plan.tonight');
+    expect(
+      searchSettings(index, 'cmd r', limit: 5).map((e) => e.actionId),
+      contains('action.run.start'),
+    );
+    expect(
+      searchSettings(index, 'space', limit: 5).map((e) => e.actionId),
+      contains('action.run.pause'),
+    );
+    expect(
+      searchSettings(index, 'plan tonight', limit: 5).first.actionId,
+      'action.plan.tonight',
+    );
   });
 
   test('#1170 equipment operations are palette actions', () {
     final index = buildSearchIndex();
-    expect(searchSettings(index, 'park', limit: 10).map((e) => e.actionId), contains('action.mount.park'));
-    expect(searchSettings(index, 'warm up', limit: 10).map((e) => e.actionId), contains('action.camera.cooler_off'));
-    expect(searchSettings(index, 'tracking', limit: 10).map((e) => e.actionId),
-        containsAll(['action.mount.tracking_on', 'action.mount.tracking_off']));
+    expect(
+      searchSettings(index, 'park', limit: 10).map((e) => e.actionId),
+      contains('action.mount.park'),
+    );
+    expect(
+      searchSettings(index, 'warm up', limit: 10).map((e) => e.actionId),
+      contains('action.camera.cooler_off'),
+    );
+    expect(
+      searchSettings(index, 'tracking', limit: 10).map((e) => e.actionId),
+      containsAll(['action.mount.tracking_on', 'action.mount.tracking_off']),
+    );
   });
 
   test('#1170 templates and tonight\'s targets become entries when the palette is given them', () {
     final index = buildSearchIndex(
       templateNames: ['Deep Sky LRGB', 'Narrowband SHO'],
-      targets: [('M31', 'Andromeda Galaxy', 'galaxy'), ('NGC7000', 'North America Nebula', 'HII')],
+      targets: [
+        ('M31', 'Andromeda Galaxy', 'galaxy'),
+        ('NGC7000', 'North America Nebula', 'HII'),
+      ],
     );
-    expect(searchSettings(index, 'lrgb', limit: 5).first.actionId, '${templateActionPrefix}Deep Sky LRGB');
-    expect(searchSettings(index, 'andromeda', limit: 5).first.actionId, '${gotoActionPrefix}M31');
-    expect(searchSettings(index, 'andromeda', limit: 5).first.label, 'Go to Andromeda Galaxy');
-    expect(searchSettings(index, 'north america', limit: 5).first.description, 'HII');
-    expect(buildSearchIndex().where((e) => e.actionId?.startsWith(gotoActionPrefix) ?? false), isEmpty,
-        reason: 'nothing dynamic without data');
+    expect(
+      searchSettings(index, 'lrgb', limit: 5).first.actionId,
+      '${templateActionPrefix}Deep Sky LRGB',
+    );
+    expect(
+      searchSettings(index, 'andromeda', limit: 5).first.actionId,
+      '${gotoActionPrefix}M31',
+    );
+    expect(
+      searchSettings(index, 'andromeda', limit: 5).first.label,
+      'Go to Andromeda Galaxy',
+    );
+    expect(
+      searchSettings(index, 'north america', limit: 5).first.description,
+      'HII',
+    );
+    expect(
+      buildSearchIndex().where(
+        (e) => e.actionId?.startsWith(gotoActionPrefix) ?? false,
+      ),
+      isEmpty,
+      reason: 'nothing dynamic without data',
+    );
   });
 
   test('#1774 Companion Mode search has no hit that opens the full UI', () {

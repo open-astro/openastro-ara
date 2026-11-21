@@ -37,6 +37,7 @@ class _FakeSwitchClient implements SwitchClient {
     calls.add('getAll');
     return devices;
   }
+
   @override
   Future<void> connect(DiscoveredDevice device) async {}
   @override
@@ -76,21 +77,28 @@ class _FailingSwitchListNotifier extends SwitchListNotifier {
 }
 
 SwitchDevice _fanDevice({double value = 0.0}) => SwitchDevice(
-      deviceId: 'switch-5',
-      alpacaDeviceNumber: 5,
-      name: 'ToupTek Thermal Switch',
-      connectionState: SwitchConnectionState.connected,
-      ports: [
-        SwitchPort(
-            id: 1, name: 'Fan', value: value, min: 0, max: 1, canWrite: true),
-      ],
-    );
+  deviceId: 'switch-5',
+  alpacaDeviceNumber: 5,
+  name: 'ToupTek Thermal Switch',
+  connectionState: SwitchConnectionState.connected,
+  ports: [
+    SwitchPort(
+      id: 1,
+      name: 'Fan',
+      value: value,
+      min: 0,
+      max: 1,
+      canWrite: true,
+    ),
+  ],
+);
 
 class _FakeCameraApi implements EquipmentDeviceClient<CameraStatus> {
   @override
   Future<void> forget() async {
     calls.add('forget');
   }
+
   _FakeCameraApi(this.status);
   CameraStatus? status;
   final List<String> calls = [];
@@ -118,36 +126,35 @@ CameraStatus _status({
   bool? hasCooler,
   bool coolerOn = false,
   double? coolerSetpointC,
-}) =>
-    CameraStatus(
-      deviceId: 'cam-0',
-      name: 'ATR2600M',
-      connectionState: EquipmentConnectionState.connected,
-      capabilities: CameraCapabilities(
-        sensorWidth: 6208,
-        sensorHeight: 4176,
-        pixelSizeUm: 3.45,
-        canSetTemperature: canSetTemperature,
-        hasCooler: hasCooler ?? canSetTemperature,
-        minGain: 0,
-        maxGain: 400,
-        minOffset: 0,
-        maxOffset: 100,
-        minBinX: 1,
-        maxBinX: 1,
-        minBinY: 1,
-        maxBinY: 1,
-        minExposureSec: 0.001,
-        maxExposureSec: 2000,
-        bayerPattern: 'RGGB',
-      ),
-      runtimeState: 'idle',
-      ccdTemperature: 17.9,
-      coolerPowerPct: 0,
-      coolerOn: coolerOn,
-      exposureProgressPct: null,
-      coolerSetpointC: coolerSetpointC,
-    );
+}) => CameraStatus(
+  deviceId: 'cam-0',
+  name: 'ATR2600M',
+  connectionState: EquipmentConnectionState.connected,
+  capabilities: CameraCapabilities(
+    sensorWidth: 6208,
+    sensorHeight: 4176,
+    pixelSizeUm: 3.45,
+    canSetTemperature: canSetTemperature,
+    hasCooler: hasCooler ?? canSetTemperature,
+    minGain: 0,
+    maxGain: 400,
+    minOffset: 0,
+    maxOffset: 100,
+    minBinX: 1,
+    maxBinX: 1,
+    minBinY: 1,
+    maxBinY: 1,
+    minExposureSec: 0.001,
+    maxExposureSec: 2000,
+    bayerPattern: 'RGGB',
+  ),
+  runtimeState: 'idle',
+  ccdTemperature: 17.9,
+  coolerPowerPct: 0,
+  coolerOn: coolerOn,
+  exposureProgressPct: null,
+  coolerSetpointC: coolerSetpointC,
+);
 
 Future<_FakeCameraApi> _pump(
   WidgetTester tester,
@@ -190,8 +197,9 @@ Future<_FakeCameraApi> _pump(
 }
 
 void main() {
-  testWidgets('renders the cooler switch, presets and custom field',
-      (tester) async {
+  testWidgets('renders the cooler switch, presets and custom field', (
+    tester,
+  ) async {
     await _pump(tester, _status(coolerOn: true, coolerSetpointC: -5));
     expect(find.text('Cooler'), findsOneWidget);
     // Presets −10 / −5 / 0 / +5.
@@ -204,51 +212,62 @@ void main() {
     expect(find.text('Custom (°C)'), findsOneWidget);
   });
 
-  testWidgets('tapping a preset turns cooling on at that target', (tester) async {
+  testWidgets('tapping a preset turns cooling on at that target', (
+    tester,
+  ) async {
     final api = await _pump(tester, _status());
     await tester.tap(find.text('-10'));
     await tester.pumpAndSettle();
-    expect(api.calls,
-        contains('command:cooler:enabled=true:target=-10.0:fan=null'));
+    expect(
+      api.calls,
+      contains('command:cooler:enabled=true:target=-10.0:fan=null'),
+    );
   });
 
-  testWidgets('custom target + Set sends the entered temperature',
-      (tester) async {
+  testWidgets('custom target + Set sends the entered temperature', (
+    tester,
+  ) async {
     final api = await _pump(tester, _status());
     await tester.enterText(find.byType(TextField), '-7.5');
     await tester.tap(find.widgetWithText(OutlinedButton, 'Set'));
     await tester.pumpAndSettle();
-    expect(api.calls,
-        contains('command:cooler:enabled=true:target=-7.5:fan=null'));
+    expect(
+      api.calls,
+      contains('command:cooler:enabled=true:target=-7.5:fan=null'),
+    );
   });
 
   testWidgets(
-      'compact (Imaging tab) shows only the target picker — no toggles or '
-      'readouts', (tester) async {
-    await _pump(
-      tester,
-      _status(coolerOn: true, coolerSetpointC: -5),
-      compact: true,
-    );
-    expect(find.text('Cooling target'), findsOneWidget);
-    expect(find.text('-10'), findsOneWidget);
-    expect(find.text('+5'), findsOneWidget);
-    expect(find.text('Custom (°C)'), findsOneWidget);
-    expect(find.text('Target temperature (°C)'), findsOneWidget);
-    // Only the sensor-temp readout — the other readouts and on/off toggles
-    // stay in Settings → Camera.
-    expect(find.text('Sensor temperature'), findsOneWidget);
-    expect(find.text('17.9 °C'), findsOneWidget);
-    expect(find.text('Cooler power'), findsNothing);
-    expect(find.text('Cooling to'), findsNothing);
-    expect(find.byType(Switch), findsNothing);
-    // The presets still arm cooling at that target.
-    final api = await _pump(tester, _status(), compact: true);
-    await tester.tap(find.text('-10'));
-    await tester.pumpAndSettle();
-    expect(api.calls,
-        contains('command:cooler:enabled=true:target=-10.0:fan=null'));
-  });
+    'compact (Imaging tab) shows only the target picker — no toggles or '
+    'readouts',
+    (tester) async {
+      await _pump(
+        tester,
+        _status(coolerOn: true, coolerSetpointC: -5),
+        compact: true,
+      );
+      expect(find.text('Cooling target'), findsOneWidget);
+      expect(find.text('-10'), findsOneWidget);
+      expect(find.text('+5'), findsOneWidget);
+      expect(find.text('Custom (°C)'), findsOneWidget);
+      expect(find.text('Target temperature (°C)'), findsOneWidget);
+      // Only the sensor-temp readout — the other readouts and on/off toggles
+      // stay in Settings → Camera.
+      expect(find.text('Sensor temperature'), findsOneWidget);
+      expect(find.text('17.9 °C'), findsOneWidget);
+      expect(find.text('Cooler power'), findsNothing);
+      expect(find.text('Cooling to'), findsNothing);
+      expect(find.byType(Switch), findsNothing);
+      // The presets still arm cooling at that target.
+      final api = await _pump(tester, _status(), compact: true);
+      await tester.tap(find.text('-10'));
+      await tester.pumpAndSettle();
+      expect(
+        api.calls,
+        contains('command:cooler:enabled=true:target=-10.0:fan=null'),
+      );
+    },
+  );
 
   testWidgets('turning the cooler on never writes the fan from the client '
       '(the daemon syncs it — #1065) but re-reads the switch list so the fan '
@@ -259,9 +278,11 @@ void main() {
     await tester.tap(find.byType(Switch).first); // cooler switch
     await tester.pumpAndSettle();
     expect(sw.calls.where((c) => c.startsWith('setValue')), isEmpty);
-    expect(sw.calls.where((c) => c == 'getAll').length,
-        greaterThan(readsBefore),
-        reason: 'the list is pull-on-demand; refresh after the cooler command');
+    expect(
+      sw.calls.where((c) => c == 'getAll').length,
+      greaterThan(readsBefore),
+      reason: 'the list is pull-on-demand; refresh after the cooler command',
+    );
   });
 
   testWidgets('a fan designation not loaded: the cooler command still goes, '
@@ -284,36 +305,49 @@ void main() {
   });
 
   testWidgets(
-      'uncooled camera still shows the sensor temperature + a no-cooling note',
-      (tester) async {
-    await _pump(tester, _status(hasCooler: false));
-    expect(find.text('Sensor temperature'), findsOneWidget);
-    expect(find.text('17.9 °C'), findsOneWidget);
-    expect(find.text('Does not support cooling'), findsOneWidget);
-    expect(find.byType(Switch), findsNothing);
-  });
-
-  testWidgets('compact (Imaging tab) collapses entirely for an uncooled camera',
-      (tester) async {
-    await _pump(tester, _status(hasCooler: false), compact: true);
-    expect(find.text('Cooling target'), findsNothing);
-    expect(find.text('Sensor temperature'), findsNothing);
-    expect(find.text('Does not support cooling'), findsNothing);
-    expect(find.byType(TextField), findsNothing);
-  });
+    'uncooled camera still shows the sensor temperature + a no-cooling note',
+    (tester) async {
+      await _pump(tester, _status(hasCooler: false));
+      expect(find.text('Sensor temperature'), findsOneWidget);
+      expect(find.text('17.9 °C'), findsOneWidget);
+      expect(find.text('Does not support cooling'), findsOneWidget);
+      expect(find.byType(Switch), findsNothing);
+    },
+  );
 
   testWidgets(
-      'a switch-list read failure does not alarm the cooler toggle — the '
-      'cooler command succeeds and the fan sync is a no-op', (tester) async {
-    final api = await _pump(tester, _status(coolerOn: false),
-        switchListFails: true);
-    await tester.tap(find.byType(Switch).first); // cooler switch
-    await tester.pumpAndSettle();
-    expect(api.calls,
-        contains('command:cooler:enabled=true:target=null:fan=null'));
-    expect(find.textContaining("Couldn't change that"), findsNothing);
-    expect(find.textContaining('could not read the switch state'), findsNothing);
-  });
+    'compact (Imaging tab) collapses entirely for an uncooled camera',
+    (tester) async {
+      await _pump(tester, _status(hasCooler: false), compact: true);
+      expect(find.text('Cooling target'), findsNothing);
+      expect(find.text('Sensor temperature'), findsNothing);
+      expect(find.text('Does not support cooling'), findsNothing);
+      expect(find.byType(TextField), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a switch-list read failure does not alarm the cooler toggle — the '
+    'cooler command succeeds and the fan sync is a no-op',
+    (tester) async {
+      final api = await _pump(
+        tester,
+        _status(coolerOn: false),
+        switchListFails: true,
+      );
+      await tester.tap(find.byType(Switch).first); // cooler switch
+      await tester.pumpAndSettle();
+      expect(
+        api.calls,
+        contains('command:cooler:enabled=true:target=null:fan=null'),
+      );
+      expect(find.textContaining("Couldn't change that"), findsNothing);
+      expect(
+        find.textContaining('could not read the switch state'),
+        findsNothing,
+      );
+    },
+  );
 }
 
 class _FixedFan extends CoolingFanNotifier {

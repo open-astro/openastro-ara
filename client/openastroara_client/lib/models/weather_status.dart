@@ -55,7 +55,9 @@ class WeatherStatus extends EquipmentDeviceStatus {
     return WeatherStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
+      connectionState: equipmentConnectionStateFromWire(
+        json['state'] as String?,
+      ),
       temperatureC: d('temperature_c'),
       humidityPct: d('humidity_pct'),
       dewPointC: d('dew_point_c'),
@@ -67,8 +69,9 @@ class WeatherStatus extends EquipmentDeviceStatus {
       rainRate: d('rain_rate'),
       skyQualityMagArcsec2: d('sky_quality_mag_arcsec2'),
       skyTemperatureC: d('sky_temperature_c'),
-      capturedAt:
-          rawCaptured is String ? DateTime.tryParse(rawCaptured)?.toUtc() : null,
+      capturedAt: rawCaptured is String
+          ? DateTime.tryParse(rawCaptured)?.toUtc()
+          : null,
     );
   }
 
@@ -94,20 +97,20 @@ class WeatherStatus extends EquipmentDeviceStatus {
 
   @override
   int get hashCode => Object.hash(
-        deviceId,
-        name,
-        connectionState,
-        temperatureC,
-        humidityPct,
-        dewPointC,
-        pressureHpa,
-        cloudCoverPct,
-        windSpeedMs,
-        windGustMs,
-        windDirectionDeg,
-        rainRate,
-        skyQualityMagArcsec2,
-        skyTemperatureC,
-        capturedAt,
-      );
+    deviceId,
+    name,
+    connectionState,
+    temperatureC,
+    humidityPct,
+    dewPointC,
+    pressureHpa,
+    cloudCoverPct,
+    windSpeedMs,
+    windGustMs,
+    windDirectionDeg,
+    rainRate,
+    skyQualityMagArcsec2,
+    skyTemperatureC,
+    capturedAt,
+  );
 }

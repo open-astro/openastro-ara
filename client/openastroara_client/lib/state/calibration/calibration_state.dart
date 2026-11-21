@@ -13,12 +13,13 @@ import '../ws/ws_providers.dart';
 
 /// Builds a [CalibrationClient] for a server. Overridable in tests.
 final calibrationApiFactoryProvider =
-    Provider<CalibrationClient Function(AraServer)>((ref) => CalibrationApi.new);
+    Provider<CalibrationClient Function(AraServer)>(
+      (ref) => CalibrationApi.new,
+    );
 
 /// [CalibrationClient] bound to the active server, or null when none is saved.
 final calibrationApiProvider = Provider.autoDispose<CalibrationClient?>((ref) {
-  final server =
-      ref.watch(activeServerProvider);
+  final server = ref.watch(activeServerProvider);
   if (server == null) return null;
   final api = ref.watch(calibrationApiFactoryProvider)(server);
   ref.onDispose(api.close);
@@ -62,7 +63,6 @@ class CalibrationSessionsNotifier
   /// True when the most recent [loadMore] failed; the UI surfaces a retry.
   bool get loadMoreFailed => _loadMoreFailed;
 
-
   @override
   Future<List<CalibrationSession>?> build() async {
     final gen = ++_refreshGen;
@@ -91,7 +91,7 @@ class CalibrationSessionsNotifier
       if (gen == _refreshGen) {
         _nextCursor = page.nextCursor;
         // A has_more without a cursor would render a dead button — treat as end.
-      _hasMore = page.hasMore && page.nextCursor != null;
+        _hasMore = page.hasMore && page.nextCursor != null;
       }
       return page.items;
     });
@@ -145,9 +145,11 @@ class CalibrationSessionsNotifier
 /// autoDispose (like sequenceListProvider): torn down when the Calibration
 /// screen pops, so reopening it always refetches instead of showing a stale
 /// cached list — and the api provider's onDispose(close) actually fires.
-final calibrationSessionsProvider = AsyncNotifierProvider.autoDispose<
-    CalibrationSessionsNotifier,
-    List<CalibrationSession>?>(CalibrationSessionsNotifier.new);
+final calibrationSessionsProvider =
+    AsyncNotifierProvider.autoDispose<
+      CalibrationSessionsNotifier,
+      List<CalibrationSession>?
+    >(CalibrationSessionsNotifier.new);
 
 /// Dark-library status + entries. Null data = no server bound.
 class DarkLibraryStatusNotifier extends AsyncNotifier<DarkLibraryState?> {
@@ -187,5 +189,7 @@ class DarkLibraryStatusNotifier extends AsyncNotifier<DarkLibraryState?> {
 }
 
 final darkLibraryStatusProvider =
-    AsyncNotifierProvider.autoDispose<DarkLibraryStatusNotifier, DarkLibraryState?>(
-        DarkLibraryStatusNotifier.new);
+    AsyncNotifierProvider.autoDispose<
+      DarkLibraryStatusNotifier,
+      DarkLibraryState?
+    >(DarkLibraryStatusNotifier.new);

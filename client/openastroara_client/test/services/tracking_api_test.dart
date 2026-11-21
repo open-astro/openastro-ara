@@ -105,12 +105,16 @@ void main() {
   });
 
   test('#1264 readPrior parses seconds + source; a daemon without the route answers nothing', () async {
-    final daemon = _Daemon(200, {'seconds': 13.8, 'source': "the mount's spec sheet (manufacturer)"});
+    final daemon = _Daemon(200, {
+      'seconds': 13.8,
+      'source': "the mount's spec sheet (manufacturer)",
+    });
     final p = await _api(daemon).readPrior();
     expect(daemon.seen!.path, '/api/v1/tracking/prior');
     expect(p.seconds, 13.8);
     expect(p.source, "the mount's spec sheet (manufacturer)");
-    final none = await _api(_Daemon(200, {'seconds': null, 'source': null})).readPrior();
+    final none = await _api(_Daemon(200, {'seconds': null, 'source': null}))
+        .readPrior();
     expect(none.seconds, isNull);
     final old = await _api(_Daemon(404, {})).readPrior();
     expect(old.seconds, isNull);

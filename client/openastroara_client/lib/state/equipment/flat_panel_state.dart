@@ -62,8 +62,10 @@ class FlatPanelNotifier extends EquipmentDeviceNotifier<FlatPanelStatus> {
       }),
     );
     if (performed) {
-      _lastApplyConfirmed =
-          await _confirm(lightOn: lightOn, brightness: brightness);
+      _lastApplyConfirmed = await _confirm(
+        lightOn: lightOn,
+        brightness: brightness,
+      );
     }
     return performed;
   }

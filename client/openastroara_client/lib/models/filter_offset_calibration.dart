@@ -31,16 +31,17 @@ class FilterOffsetRow {
   /// The full UI's weak-fit line: a fit under R² 0.8 (`MainFocusCard`).
   bool get isWeak => isMeasured && rSquared != null && rSquared! < 0.8;
 
-  factory FilterOffsetRow.fromJson(Map<String, dynamic> json) => FilterOffsetRow(
-    position: (json['position'] as num?)?.toInt() ?? 0,
-    name: json['name'] as String? ?? '',
-    status: json['status'] as String? ?? 'pending',
-    bestPosition: (json['best_position'] as num?)?.toInt(),
-    offset: (json['offset'] as num?)?.toInt(),
-    rSquared: (json['r_squared'] as num?)?.toDouble(),
-    previousOffset: (json['previous_offset'] as num?)?.toInt() ?? 0,
-    failureReason: json['failure_reason'] as String?,
-  );
+  factory FilterOffsetRow.fromJson(Map<String, dynamic> json) =>
+      FilterOffsetRow(
+        position: (json['position'] as num?)?.toInt() ?? 0,
+        name: json['name'] as String? ?? '',
+        status: json['status'] as String? ?? 'pending',
+        bestPosition: (json['best_position'] as num?)?.toInt(),
+        offset: (json['offset'] as num?)?.toInt(),
+        rSquared: (json['r_squared'] as num?)?.toDouble(),
+        previousOffset: (json['previous_offset'] as num?)?.toInt() ?? 0,
+        failureReason: json['failure_reason'] as String?,
+      );
 }
 
 /// #1675 — the daemon's offset calibration: running, or its results waiting
@@ -90,7 +91,9 @@ class FilterOffsetCalibration {
     for (final f in filters) {
       if (f.position == p && f.name.isNotEmpty) return f.name;
     }
-    return p == referencePosition && referenceName.isNotEmpty ? referenceName : null;
+    return p == referencePosition && referenceName.isNotEmpty
+        ? referenceName
+        : null;
   }
 
   factory FilterOffsetCalibration.fromJson(Map<String, dynamic> json) {
@@ -100,8 +103,10 @@ class FilterOffsetCalibration {
       jobId: json['job_id'] as String? ?? '',
       referencePosition: (json['reference_position'] as num?)?.toInt() ?? 0,
       referenceName: json['reference_name'] as String? ?? '',
-      referenceFirstPosition: (json['reference_first_position'] as num?)?.toInt(),
-      referenceSecondPosition: (json['reference_second_position'] as num?)?.toInt(),
+      referenceFirstPosition: (json['reference_first_position'] as num?)
+          ?.toInt(),
+      referenceSecondPosition: (json['reference_second_position'] as num?)
+          ?.toInt(),
       cfzSteps: (json['cfz_steps'] as num?)?.toInt(),
       driftChecked: json['drift_checked'] as bool? ?? false,
       driftWarning: json['drift_warning'] as bool? ?? false,
@@ -110,7 +115,10 @@ class FilterOffsetCalibration {
       runCount: (json['run_count'] as num?)?.toInt() ?? 0,
       reason: json['reason'] as String?,
       filters: rows is List
-          ? rows.whereType<Map<String, dynamic>>().map(FilterOffsetRow.fromJson).toList(growable: false)
+          ? rows
+                .whereType<Map<String, dynamic>>()
+                .map(FilterOffsetRow.fromJson)
+                .toList(growable: false)
           : const [],
     );
   }
@@ -120,7 +128,8 @@ class FilterOffsetCalibration {
 /// except a dark. Pure — unit-tested through the panel.
 Set<int> defaultOffsetPicks(List<FilterSlot> slots) => {
   for (final s in slots)
-    if (s.name.trim().isNotEmpty && !s.name.toLowerCase().contains('dark')) s.position,
+    if (s.name.trim().isNotEmpty && !s.name.toLowerCase().contains('dark'))
+      s.position,
 };
 
 /// The reference filter the daemon will choose: the profile's autofocus

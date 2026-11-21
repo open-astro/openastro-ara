@@ -118,7 +118,8 @@ List<SimpleSearchHit> simpleSearch(
     ].take(limit),
     for (final m in SimpleModeScreen.values)
       if (hit(m.labelOf(l10n)) ||
-          (m == SimpleModeScreen.calibration && hit(l10n.searchCalibrationWords)))
+          (m == SimpleModeScreen.calibration &&
+              hit(l10n.searchCalibrationWords)))
         SimpleModeHit(m),
     if (hit(l10n.focusOffsetsTitle) || hit(l10n.searchFocusOffsetsWords))
       const SimpleModeHit(SimpleModeScreen.focus, focusOffsets: true),

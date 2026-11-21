@@ -59,10 +59,14 @@ class _GatedAchievementsClient implements AchievementsClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 ProviderContainer _container(List<AraServer> servers, AchievementsClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    achievementsApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      achievementsApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -79,7 +83,8 @@ void main() {
 
     test('fetches the active server achievements', () async {
       final api = _FakeAchievementsClient(
-          const StatsAchievements(totalLightFrames: 5, totalNightsImaged: 3));
+        const StatsAchievements(totalLightFrames: 5, totalNightsImaged: 3),
+      );
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       final a = await c.read(achievementsProvider.future);
@@ -90,7 +95,9 @@ void main() {
     });
 
     test('refresh re-reads from the server', () async {
-      final api = _FakeAchievementsClient(const StatsAchievements(totalLightFrames: 1));
+      final api = _FakeAchievementsClient(
+        const StatsAchievements(totalLightFrames: 1),
+      );
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
       await c.read(achievementsProvider.future);
@@ -101,29 +108,49 @@ void main() {
       expect(api.fetches, 2);
     });
 
-    test('an initial fetch failure lands in the provider error state', () async {
-      final api = _FakeAchievementsClient(const StatsAchievements())..throwOnFetch = true;
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await expectLater(c.read(achievementsProvider.future), throwsA(isA<StateError>()));
-      expect(c.read(achievementsProvider).hasError, isTrue);
-    });
+    test(
+      'an initial fetch failure lands in the provider error state',
+      () async {
+        final api = _FakeAchievementsClient(const StatsAchievements())
+          ..throwOnFetch = true;
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await expectLater(
+          c.read(achievementsProvider.future),
+          throwsA(isA<StateError>()),
+        );
+        expect(c.read(achievementsProvider).hasError, isTrue);
+      },
+    );
 
-    test('a refresh failure rethrows and keeps the last-good data on screen', () async {
-      final api = _FakeAchievementsClient(const StatsAchievements(totalLightFrames: 4));
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(achievementsProvider.future);
+    test(
+      'a refresh failure rethrows and keeps the last-good data on screen',
+      () async {
+        final api = _FakeAchievementsClient(
+          const StatsAchievements(totalLightFrames: 4),
+        );
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(achievementsProvider.future);
 
-      api.throwOnFetch = true;
-      await expectLater(
-        c.read(achievementsProvider.notifier).refresh(),
-        throwsA(isA<StateError>()),
-      );
-      final state = c.read(achievementsProvider);
-      expect(state.hasError, isFalse, reason: 'refresh failure must not blank the records');
-      expect(state.value!.totalLightFrames, 4, reason: 'last-good data is retained');
-    });
+        api.throwOnFetch = true;
+        await expectLater(
+          c.read(achievementsProvider.notifier).refresh(),
+          throwsA(isA<StateError>()),
+        );
+        final state = c.read(achievementsProvider);
+        expect(
+          state.hasError,
+          isFalse,
+          reason: 'refresh failure must not blank the records',
+        );
+        expect(
+          state.value!.totalLightFrames,
+          4,
+          reason: 'last-good data is retained',
+        );
+      },
+    );
 
     test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedAchievementsClient();
@@ -134,9 +161,12 @@ void main() {
       await built;
 
       final notifier = c.read(achievementsProvider.notifier);
-      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier
+          .refresh(); // captures generation; calls[1] pending
       notifier.markBuild(); // stand in for a server-switch build() re-run
-      api.calls[1].complete(const StatsAchievements(totalLightFrames: 9)); // now stale
+      api.calls[1].complete(
+        const StatsAchievements(totalLightFrames: 9),
+      ); // now stale
       await refreshing;
 
       expect(c.read(achievementsProvider).value!.totalLightFrames, 1);

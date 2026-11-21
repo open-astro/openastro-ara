@@ -70,17 +70,23 @@ class _SeededCalibration extends SkyModelCalibrationNotifier {
 
 void main() {
   test('no server + cached site → ranks locally', () async {
-    final c = ProviderContainer(overrides: [
-      savedServersProvider.overrideWith(_NoServers.new),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
-            siteName: 'cached',
-            latitudeDeg: 34.0,
-            longitudeDeg: -84.0,
-            bortleClass: 6,
-            defaultHorizonAltitudeDeg: 20,
-            twilightDefinition: TwilightDefinition.astronomical,
-          ))),
-    ]);
+    final c = ProviderContainer(
+      overrides: [
+        savedServersProvider.overrideWith(_NoServers.new),
+        siteSettingsProvider.overrideWith(
+          () => _SeededSite(
+            const SiteSettings(
+              siteName: 'cached',
+              latitudeDeg: 34.0,
+              longitudeDeg: -84.0,
+              bortleClass: 6,
+              defaultHorizonAltitudeDeg: 20,
+              twilightDefinition: TwilightDefinition.astronomical,
+            ),
+          ),
+        ),
+      ],
+    );
     addTearDown(c.dispose);
     // Hold the autoDispose ranker alive across its awaits (the planning
     // catalog now loads the bundled CSVs first, which takes real time) —
@@ -94,68 +100,141 @@ void main() {
     expect(list.first.scoreReasons!.join(' '), contains('offline ranking'));
   });
 
-  test('no server + unset site (0,0) → empty, never a Gulf-of-Guinea ranking',
-      () async {
-    final c = ProviderContainer(overrides: [
-      savedServersProvider.overrideWith(_NoServers.new),
-    ]);
-    addTearDown(c.dispose);
-    expect(await c.read(tonightSkyProvider.future), isEmpty);
-  });
-
+  test(
+    'no server + unset site (0,0) → empty, never a Gulf-of-Guinea ranking',
+    () async {
+      final c = ProviderContainer(
+        overrides: [savedServersProvider.overrideWith(_NoServers.new)],
+      );
+      addTearDown(c.dispose);
+      expect(await c.read(tonightSkyProvider.future), isEmpty);
+    },
+  );
 
   test('#1140 the saved noise-tolerance knob reaches the ranker (a tighter knob = longer subs)', () async {
     Future<double> subAt(double pct) async {
-      final c = ProviderContainer(overrides: [
-        savedServersProvider.overrideWith(_NoServers.new),
-        planningPrefsServiceProvider
-            .overrideWithValue(_SavedPrefs(PlanningPrefs(noiseTolerancePct: pct))),
-        siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
-              siteName: 'cached',
-              latitudeDeg: 34.0,
-              longitudeDeg: -84.0,
-              bortleClass: 6,
-              defaultHorizonAltitudeDeg: 20,
-              twilightDefinition: TwilightDefinition.astronomical,
-            ))),
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
-              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
-              sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
-              readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
-        filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
-              filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
-      ]);
+      final c = ProviderContainer(
+        overrides: [
+          savedServersProvider.overrideWith(_NoServers.new),
+          planningPrefsServiceProvider.overrideWithValue(
+            _SavedPrefs(PlanningPrefs(noiseTolerancePct: pct)),
+          ),
+          siteSettingsProvider.overrideWith(
+            () => _SeededSite(
+              const SiteSettings(
+                siteName: 'cached',
+                latitudeDeg: 34.0,
+                longitudeDeg: -84.0,
+                bortleClass: 6,
+                defaultHorizonAltitudeDeg: 20,
+                twilightDefinition: TwilightDefinition.astronomical,
+              ),
+            ),
+          ),
+          opticsSettingsProvider.overrideWith(
+            () => _SeededOptics(
+              const OpticsSettings(
+                focalLengthMm: 447,
+                reducerFactor: 1.0,
+                sensorWidthPx: 6248,
+                sensorHeightPx: 4176,
+                pixelSizeUm: 3.76,
+                apertureMm: 91,
+              ),
+            ),
+          ),
+          cameraElectronicsProvider.overrideWith(
+            () => _SeededElectronics(
+              const CameraElectronics(
+                readNoiseE: 1.5,
+                fullWellE: 50000,
+                electronsPerAdu: 0.8,
+                quantumEfficiencyPeak: 0.8,
+              ),
+            ),
+          ),
+          filterSetProvider.overrideWith(
+            () => _SeededFilters(
+              const FilterSetSettings(
+                filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+              ),
+            ),
+          ),
+        ],
+      );
       addTearDown(c.dispose);
       final keep = c.listen(tonightSkyProvider, (_, _) {});
       addTearDown(keep.close);
       final list = await c.read(tonightSkyProvider.future);
       final withSub = list.where((o) => o.optimalSubS != null).toList();
-      expect(withSub, isNotEmpty, reason: 'a configured rig yields an optimal sub');
+      expect(
+        withSub,
+        isNotEmpty,
+        reason: 'a configured rig yields an optimal sub',
+      );
       return withSub.first.optimalSubS!;
     }
 
     final loose = await subAt(5);
     final tight = await subAt(2);
-    expect(tight, greaterThan(loose), reason: 'the knob was read from the saved prefs, not the default');
+    expect(
+      tight,
+      greaterThan(loose),
+      reason: 'the knob was read from the saved prefs, not the default',
+    );
   });
 
   test('#1140 P2 the rig\'s fitted sky-model k reaches the ranker (k 0.5 = longer subs, longer hours)', () async {
     Future<TonightSkyObject> firstAt(SkyModelCalibration? record) async {
-      final c = ProviderContainer(overrides: [
-        savedServersProvider.overrideWith(_NoServers.new),
-        skyModelCalibrationProvider.overrideWith(() => _SeededCalibration(record)),
-        siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
-              siteName: 'cached', latitudeDeg: 34.0, longitudeDeg: -84.0, bortleClass: 6,
-              defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
-              focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
-              sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
-              readNoiseE: 1.5, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
-        filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
-              filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
-      ]);
+      final c = ProviderContainer(
+        overrides: [
+          savedServersProvider.overrideWith(_NoServers.new),
+          skyModelCalibrationProvider.overrideWith(
+            () => _SeededCalibration(record),
+          ),
+          siteSettingsProvider.overrideWith(
+            () => _SeededSite(
+              const SiteSettings(
+                siteName: 'cached',
+                latitudeDeg: 34.0,
+                longitudeDeg: -84.0,
+                bortleClass: 6,
+                defaultHorizonAltitudeDeg: 20,
+                twilightDefinition: TwilightDefinition.astronomical,
+              ),
+            ),
+          ),
+          opticsSettingsProvider.overrideWith(
+            () => _SeededOptics(
+              const OpticsSettings(
+                focalLengthMm: 447,
+                reducerFactor: 1.0,
+                sensorWidthPx: 6248,
+                sensorHeightPx: 4176,
+                pixelSizeUm: 3.76,
+                apertureMm: 91,
+              ),
+            ),
+          ),
+          cameraElectronicsProvider.overrideWith(
+            () => _SeededElectronics(
+              const CameraElectronics(
+                readNoiseE: 1.5,
+                fullWellE: 50000,
+                electronsPerAdu: 0.8,
+                quantumEfficiencyPeak: 0.8,
+              ),
+            ),
+          ),
+          filterSetProvider.overrideWith(
+            () => _SeededFilters(
+              const FilterSetSettings(
+                filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+              ),
+            ),
+          ),
+        ],
+      );
       addTearDown(c.dispose);
       final keep = c.listen(tonightSkyProvider, (_, _) {});
       addTearDown(keep.close);
@@ -164,28 +243,67 @@ void main() {
     }
 
     final spec = await firstAt(null);
-    final fitted = await firstAt(SkyModelCalibration(
-      fittedUtc: DateTime.utc(2026, 10, 13),
-      framesConsidered: 30,
-      filters: const [SkyModelFilterCalibration(kind: 'l', bin: 1, k: 0.5, frameCount: 30, passed: true)],
-    ));
+    final fitted = await firstAt(
+      SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13),
+        framesConsidered: 30,
+        filters: const [
+          SkyModelFilterCalibration(
+            kind: 'l',
+            bin: 1,
+            k: 0.5,
+            frameCount: 30,
+            passed: true,
+          ),
+        ],
+      ),
+    );
     // The sub length is the ranker output every object carries; the hours' 1/k
     // scaling is pinned in integration_budget_test (the same input feeds both).
-    expect(fitted.optimalSubS!, greaterThan(spec.optimalSubS!), reason: 'half the sky rate: the Glover floor moves out');
+    expect(
+      fitted.optimalSubS!,
+      greaterThan(spec.optimalSubS!),
+      reason: 'half the sky rate: the Glover floor moves out',
+    );
   });
 
   test('camera electronics not loaded: ranks with unset electronics, no optimal sub', () async {
-    final c = ProviderContainer(overrides: [
-      savedServersProvider.overrideWith(_NoServers.new),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(
-            siteName: 'cached', latitudeDeg: -33.856784, longitudeDeg: 151.215297, bortleClass: 6,
-            defaultHorizonAltitudeDeg: 20, twilightDefinition: TwilightDefinition.astronomical))),
-      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
-            focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248,
-            sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-      filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(
-            filters: [PlanningFilter(name: 'L', kind: FilterKind.l)]))),
-    ]);
+    final c = ProviderContainer(
+      overrides: [
+        savedServersProvider.overrideWith(_NoServers.new),
+        siteSettingsProvider.overrideWith(
+          () => _SeededSite(
+            const SiteSettings(
+              siteName: 'cached',
+              latitudeDeg: -33.856784,
+              longitudeDeg: 151.215297,
+              bortleClass: 6,
+              defaultHorizonAltitudeDeg: 20,
+              twilightDefinition: TwilightDefinition.astronomical,
+            ),
+          ),
+        ),
+        opticsSettingsProvider.overrideWith(
+          () => _SeededOptics(
+            const OpticsSettings(
+              focalLengthMm: 447,
+              reducerFactor: 1.0,
+              sensorWidthPx: 6248,
+              sensorHeightPx: 4176,
+              pixelSizeUm: 3.76,
+              apertureMm: 91,
+            ),
+          ),
+        ),
+        filterSetProvider.overrideWith(
+          () => _SeededFilters(
+            const FilterSetSettings(
+              filters: [PlanningFilter(name: 'L', kind: FilterKind.l)],
+            ),
+          ),
+        ),
+      ],
+    );
     addTearDown(c.dispose);
     expect(c.read(cameraElectronicsProvider).value, isNull);
     final keep = c.listen(tonightSkyProvider, (_, _) {});

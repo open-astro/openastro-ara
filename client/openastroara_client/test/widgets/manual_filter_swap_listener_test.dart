@@ -91,7 +91,9 @@ Future<(List<String>, StreamController<WsEvent>)> _pump(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
-        home: const ManualFilterSwapListener(child: Scaffold(body: Text('shell'))),
+        home: const ManualFilterSwapListener(
+          child: Scaffold(body: Text('shell')),
+        ),
       ),
     ),
   );
@@ -206,23 +208,41 @@ void main() {
 
   group('Simple Mode', () {
     List<SimpleMessage> pills(WidgetTester tester) =>
-        ProviderScope.containerOf(tester.element(find.text('shell'))).read(simpleMessagesProvider);
+        ProviderScope.containerOf(tester.element(find.text('shell')))
+            .read(simpleMessagesProvider);
 
-    testWidgets('the prompt is a question pill, no dialog; its answer reports the filter', (tester) async {
-      final (calls, _) = await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true);
-      expect(find.byType(AlertDialog), findsNothing);
-      final pill = pills(tester).single;
-      expect(pill.kind, SimpleMessageKind.question);
-      expect(pill.title, 'Install the Ha filter');
-      expect(pill.detail, contains('Take out L'));
-      expect(pill.actions.map((a) => a.label), ['Cancel swap', 'Later', 'Ha is in']);
-      pill.actions.last.onPressed();
-      await tester.pumpAndSettle();
-      expect(calls, contains('installed:1'));
-    });
+    testWidgets(
+      'the prompt is a question pill, no dialog; its answer reports the filter',
+      (tester) async {
+        final (calls, _) = await _pump(
+          tester,
+          _manual(currentSlot: 0, pendingSlot: 1),
+          simple: true,
+        );
+        expect(find.byType(AlertDialog), findsNothing);
+        final pill = pills(tester).single;
+        expect(pill.kind, SimpleMessageKind.question);
+        expect(pill.title, 'Install the Ha filter');
+        expect(pill.detail, contains('Take out L'));
+        expect(pill.actions.map((a) => a.label), [
+          'Cancel swap',
+          'Later',
+          'Ha is in',
+        ]);
+        pill.actions.last.onPressed();
+        await tester.pumpAndSettle();
+        expect(calls, contains('installed:1'));
+      },
+    );
 
-    testWidgets('a swap resolved elsewhere takes its pill away', (tester) async {
-      final (_, ws) = await _pump(tester, _manual(currentSlot: 0), simple: true);
+    testWidgets('a swap resolved elsewhere takes its pill away', (
+      tester,
+    ) async {
+      final (_, ws) = await _pump(
+        tester,
+        _manual(currentSlot: 0),
+        simple: true,
+      );
       ws.add(_swap(pending: 1, pendingName: 'Ha', current: 'L'));
       await tester.pumpAndSettle();
       expect(pills(tester), hasLength(1));
@@ -232,11 +252,24 @@ void main() {
     });
   });
 
-  testWidgets('the filter swap pill is in Brazilian Portuguese', (tester) async {
-    await _pump(tester, _manual(currentSlot: 0, pendingSlot: 1), simple: true, locale: const Locale('pt', 'BR'));
-    final c = ProviderScope.containerOf(tester.element(find.byType(ManualFilterSwapListener)));
+  testWidgets('the filter swap pill is in Brazilian Portuguese', (
+    tester,
+  ) async {
+    await _pump(
+      tester,
+      _manual(currentSlot: 0, pendingSlot: 1),
+      simple: true,
+      locale: const Locale('pt', 'BR'),
+    );
+    final c = ProviderScope.containerOf(
+      tester.element(find.byType(ManualFilterSwapListener)),
+    );
     final pill = c.read(simpleMessagesProvider).single;
     expect(pill.title, 'Coloque o filtro Ha');
-    expect(pill.actions.map((a) => a.label), ['Cancelar troca', 'Depois', 'Ha colocado']);
+    expect(pill.actions.map((a) => a.label), [
+      'Cancelar troca',
+      'Depois',
+      'Ha colocado',
+    ]);
   });
 }

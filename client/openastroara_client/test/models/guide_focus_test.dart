@@ -9,7 +9,14 @@ void main() {
       'exposure_sec': 2.0,
       'seq': 12,
       'started_utc': '2026-10-03T04:00:00+00:00',
-      'latest': {'seq': 12, 'captured_utc': '2026-10-03T04:00:30+00:00', 'hfr': 2.31, 'stars': 6, 'peak_adu': 21000, 'fwhm': 3.9},
+      'latest': {
+        'seq': 12,
+        'captured_utc': '2026-10-03T04:00:30+00:00',
+        'hfr': 2.31,
+        'stars': 6,
+        'peak_adu': 21000,
+        'fwhm': 3.9,
+      },
       'best_hfr': 2.1,
       'best_seq': 9,
       'recent': [
@@ -30,7 +37,11 @@ void main() {
   });
 
   test('an idle status parses with defaults', () {
-    final status = GuideFocusStatus.fromJson({'active': false, 'state': 'idle', 'recent': []});
+    final status = GuideFocusStatus.fromJson({
+      'active': false,
+      'state': 'idle',
+      'recent': [],
+    });
     expect(status.active, isFalse);
     expect(status.latest, isNull);
     expect(status.bestHfr, isNull);
@@ -50,11 +61,30 @@ void main() {
   });
 
   test('status carries the expected in-focus HFR and plate scale when the daemon sends them', () {
-    final s = GuideFocusStatus.fromJson({'active': true, 'state': 'running', 'expected_hfr': 0.7, 'plate_scale_arcsec': 6.45});
+    final s = GuideFocusStatus.fromJson({
+      'active': true,
+      'state': 'running',
+      'expected_hfr': 0.7,
+      'plate_scale_arcsec': 6.45,
+    });
     expect(s.expectedHfr, 0.7);
     expect(s.plateScaleArcsec, 6.45);
-    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'idle'}).expectedHfr, isNull);
-    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped', 'stop_reason': 'in_focus'}).stopReason, 'in_focus');
-    expect(GuideFocusStatus.fromJson({'active': false, 'state': 'stopped'}).stopReason, isNull);
+    expect(
+      GuideFocusStatus.fromJson({'active': false, 'state': 'idle'}).expectedHfr,
+      isNull,
+    );
+    expect(
+      GuideFocusStatus.fromJson({
+        'active': false,
+        'state': 'stopped',
+        'stop_reason': 'in_focus',
+      }).stopReason,
+      'in_focus',
+    );
+    expect(
+      GuideFocusStatus.fromJson({'active': false, 'state': 'stopped'})
+          .stopReason,
+      isNull,
+    );
   });
 }

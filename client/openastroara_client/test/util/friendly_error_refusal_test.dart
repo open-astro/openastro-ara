@@ -93,19 +93,24 @@ void main() {
     }
   });
 
-  test('an unverified mount position read too early says to try again (#2070)', () {
-    for (final l in [_en, _pt]) {
-      const early = Refusal(
-        cause: RefusalCause.mountPositionUnverified,
-        reason: 'mount-position-unverified',
-        detail: 'The daemon detail.',
-        parameters: {'position_unverified_reason': 'not_read_yet'},
-      );
-      expect(failureReason(l, early), l.refusalMountPositionNotReadYet);
-      expect(failureReason(l, _known(RefusalCause.mountPositionUnverified)),
-          l.refusalMountPositionUnverified);
-    }
-  });
+  test(
+    'an unverified mount position read too early says to try again (#2070)',
+    () {
+      for (final l in [_en, _pt]) {
+        const early = Refusal(
+          cause: RefusalCause.mountPositionUnverified,
+          reason: 'mount-position-unverified',
+          detail: 'The daemon detail.',
+          parameters: {'position_unverified_reason': 'not_read_yet'},
+        );
+        expect(failureReason(l, early), l.refusalMountPositionNotReadYet);
+        expect(
+          failureReason(l, _known(RefusalCause.mountPositionUnverified)),
+          l.refusalMountPositionUnverified,
+        );
+      }
+    },
+  );
 
   test('a position left unverified by an unconfirmed stop says so, in both languages (#2066)', () {
     for (final l in [_en, _pt]) {
@@ -117,7 +122,10 @@ void main() {
       );
       expect(failureReason(l, stop), l.refusalMountPositionStopUnconfirmed);
     }
-    expect(_pt.refusalMountPositionStopUnconfirmed, isNot(_en.refusalMountPositionStopUnconfirmed));
+    expect(
+      _pt.refusalMountPositionStopUnconfirmed,
+      isNot(_en.refusalMountPositionStopUnconfirmed),
+    );
   });
   test(
     'the counterweight sentence names the hour angle, the angle and the limit',

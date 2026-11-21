@@ -36,10 +36,12 @@ class StatusIndicator extends StatelessWidget {
               // Flexible so a long label ("1 issue — critical") shrinks with
               // ellipsis in a tight row instead of overflowing it.
               Flexible(
-                child: Text(label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.bodySmall),
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ),
             ],
           ),
@@ -94,12 +96,15 @@ class StatusDot extends StatelessWidget {
 
 enum StatusLevel {
   connected(AraColors.accentConnected),
+
   /// Connected and working (exposing, slewing, moving): green, shown blinking
   /// on the top-bar chips. Amber ([busy]) is kept for states that need a look.
   active(AraColors.accentConnected),
+
   /// Changing: on its way between two states (connecting, starting,
   /// calibrating, settling, cooling, parking). Blue (DESIGN.md status rule).
   changing(AraColors.accentInfo),
+
   /// A warning: needs a look, nothing has failed. Amber; an in-between state
   /// is [changing], never this (DESIGN.md status rule, 2026-11-04).
   busy(AraColors.accentBusy),

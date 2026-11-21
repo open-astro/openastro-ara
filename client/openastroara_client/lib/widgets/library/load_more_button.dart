@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../adaptive_controls.dart';
 
 /// Load-more with a local in-flight spinner; the paging notifiers' own
@@ -29,7 +30,10 @@ class _LoadMoreButtonState extends State<LoadMoreButton> {
       onPressed: _busy ? null : _tap,
       icon: _busy
           ? const SizedBox(
-              width: 14, height: 14, child: AdaptiveProgressIndicator(strokeWidth: 2))
+              width: 14,
+              height: 14,
+              child: AdaptiveProgressIndicator(strokeWidth: 2),
+            )
           : const Icon(Icons.expand_more, size: 16),
       label: const Text('Load more sessions'),
     );

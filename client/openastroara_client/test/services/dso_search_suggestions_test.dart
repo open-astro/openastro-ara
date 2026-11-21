@@ -1,8 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 
-PlanningDso _o(String id, String name, double? mag, {List<String> aliases = const []}) => PlanningDso(
-    id: id, name: name, type: 'G', magnitude: mag, raDeg: 0, decDeg: 0, aliases: aliases);
+PlanningDso _o(
+  String id,
+  String name,
+  double? mag, {
+  List<String> aliases = const [],
+}) => PlanningDso(
+  id: id,
+  name: name,
+  type: 'G',
+  magnitude: mag,
+  raDeg: 0,
+  decDeg: 0,
+  aliases: aliases,
+);
 
 final _catalog = [
   _o('NGC0224', 'Andromeda Galaxy', 3.4, aliases: ['M 31']),
@@ -28,17 +40,26 @@ void main() {
 
   test('spacing and case don\'t matter; a typed dash still matches only dashed designations', () {
     expect(searchSuggestions(_catalog, 'm31').first.label, 'M 31');
-    expect(searchSuggestions(_catalog, 'sh2 1').map((e) => e.label), containsAll(['Sh2-117', 'Sh2-129']));
+    expect(
+      searchSuggestions(_catalog, 'sh2 1').map((e) => e.label),
+      containsAll(['Sh2-117', 'Sh2-129']),
+    );
   });
 
   test('common names match by any word\'s start', () {
     expect(searchSuggestions(_catalog, 'andro').single.dso.id, 'NGC0224');
-    expect(searchSuggestions(_catalog, 'nebula').map((e) => e.dso.id), containsAll(['NGC7000', 'Sh2-129', 'NGC1976']));
+    expect(
+      searchSuggestions(_catalog, 'nebula').map((e) => e.dso.id),
+      containsAll(['NGC7000', 'Sh2-129', 'NGC1976']),
+    );
   });
 
   test('at most [limit] suggestions, brighter first within a rank', () {
     final s = searchSuggestions(_catalog, 'nebula', limit: 2);
     expect(s, hasLength(2));
-    expect(s.first.dso.magnitude, lessThanOrEqualTo(s.last.dso.magnitude ?? 99));
+    expect(
+      s.first.dso.magnitude,
+      lessThanOrEqualTo(s.last.dso.magnitude ?? 99),
+    );
   });
 }

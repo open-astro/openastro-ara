@@ -45,7 +45,8 @@ class RunCompletionSheet extends ConsumerWidget {
         context: context,
         backgroundColor: AraColors.bgPanel,
         shape: const RoundedRectangleBorder(
-            borderRadius: BorderRadius.vertical(top: Radius.circular(14))),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
+        ),
         builder: (_) => RunCompletionSheet(run: run),
       );
 
@@ -88,8 +89,15 @@ class RunCompletionSheet extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Icon(skipped ? Icons.warning_amber_rounded : ok ? Icons.check_circle : Icons.error_outline,
-                    color: color, size: 28),
+                Icon(
+                  skipped
+                      ? Icons.warning_amber_rounded
+                      : ok
+                      ? Icons.check_circle
+                      : Icons.error_outline,
+                  color: color,
+                  size: 28,
+                ),
                 const SizedBox(width: AraSpace.s12),
                 Text(title, style: AraText.title.copyWith(fontSize: 18)),
                 const Spacer(),
@@ -131,12 +139,17 @@ class RunCompletionSheet extends ConsumerWidget {
                   for (final e in perFilter.entries)
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: AraSpace.s8, vertical: 3),
+                        horizontal: AraSpace.s8,
+                        vertical: 3,
+                      ),
                       decoration: BoxDecoration(
                         color: AraColors.bgInput,
                         borderRadius: BorderRadius.circular(6),
                       ),
-                      child: Text('${e.key} × ${e.value}', style: AraText.caption),
+                      child: Text(
+                        '${e.key} × ${e.value}',
+                        style: AraText.caption,
+                      ),
                     ),
                 ],
               ),

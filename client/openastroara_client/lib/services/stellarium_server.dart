@@ -94,6 +94,7 @@ class StellariumServer {
   /// cache nor read what is in it (#1143). The page builds the same prefix
   /// from its own `?token=`.
   late final String _dssPathPrefix = '/dss-$token/';
+
   /// The bare `/dss/` of older pages and a wrong token are refused here,
   /// never handed to the asset handler.
   static bool _isDssPath(String path) =>
@@ -104,7 +105,9 @@ class StellariumServer {
   bool _hasDssPrefix(String path) =>
       path.length >= _dssPathPrefix.length &&
       _constantTimeEquals(
-          path.substring(0, _dssPathPrefix.length), _dssPathPrefix);
+        path.substring(0, _dssPathPrefix.length),
+        _dssPathPrefix,
+      );
 
   /// Route prefix the page must use for tiles, e.g. `/dss-<token>/`.
   @visibleForTesting
@@ -132,6 +135,7 @@ class StellariumServer {
   /// First-byte deadline for an upstream fetch (connect is bounded separately).
   @visibleForTesting
   static Duration dssHeadersTimeout = const Duration(seconds: 10);
+
   /// Upstream HiPS root (trailing slash: tile paths resolve beneath it).
   /// Static + overridable so a test can point the cache at a local stub.
   @visibleForTesting
@@ -199,7 +203,7 @@ class StellariumServer {
   // set — no daemon, no network. Same wire shapes as the daemon endpoints.
   static Future<List<Map<String, Object?>>> Function()? catalogListResolver;
   static Future<List<Map<String, Object?>>?> Function(String id, int limit)?
-      catalogObjectsResolver;
+  catalogObjectsResolver;
 
   static Future<StellariumServer>? _instance;
 
@@ -257,7 +261,9 @@ class StellariumServer {
         try {
           await e.delete();
           removed++;
-        } catch (_) {/* a write in progress, or gone: leave it */}
+        } catch (_) {
+          /* a write in progress, or gone: leave it */
+        }
       }
     }
     return removed;
@@ -290,7 +296,10 @@ class StellariumServer {
   /// launch would 404 on `properties` with hundreds of MB of tiles still on
   /// disk (review on #1296). Static so a test can run it on any directory.
   @visibleForTesting
-  static Future<int> pruneDssCache(Directory dir, {required int maxBytes}) async {
+  static Future<int> pruneDssCache(
+    Directory dir, {
+    required int maxBytes,
+  }) async {
     if (!await dir.exists()) return 0;
     final files = <({File file, int size, DateTime modified})>[];
     var total = 0;
@@ -303,7 +312,9 @@ class StellariumServer {
         final rel = e.path.substring(root).replaceAll(r'\', '/');
         if (isDssRootResource(rel)) continue; // counted, never evicted
         files.add((file: e, size: st.size, modified: st.modified));
-      } catch (_) {/* vanished mid-scan */}
+      } catch (_) {
+        /* vanished mid-scan */
+      }
     }
     if (total <= maxBytes) return 0;
     files.sort((a, b) => a.modified.compareTo(b.modified));
@@ -314,7 +325,9 @@ class StellariumServer {
       try {
         await f.file.delete();
         freed += f.size;
-      } catch (_) {/* in use or gone */}
+      } catch (_) {
+        /* in use or gone */
+      }
     }
     return freed;
   }
@@ -325,9 +338,14 @@ class StellariumServer {
     _dssPruning = true;
     _dssBytesSincePrune = 0;
     try {
-      final freed = await pruneDssCache(_dssCacheDir, maxBytes: maxDssCacheBytes);
+      final freed = await pruneDssCache(
+        _dssCacheDir,
+        maxBytes: maxDssCacheBytes,
+      );
       if (freed > 0) {
-        debugPrint('StellariumServer: DSS cache over cap, evicted $freed bytes');
+        debugPrint(
+          'StellariumServer: DSS cache over cap, evicted $freed bytes',
+        );
       }
     } on FileSystemException {
       // Disposed (temp cache removed) mid-scan: nothing left to prune.
@@ -382,7 +400,9 @@ class StellariumServer {
         try {
           bytes += (await e.stat()).size;
           files++;
-        } catch (_) {/* vanished mid-scan */}
+        } catch (_) {
+          /* vanished mid-scan */
+        }
       }
     }
     return (files: files, bytes: bytes);
@@ -399,13 +419,17 @@ class StellariumServer {
     if (running != null) {
       try {
         (await running)._dssBytesSincePrune = 0;
-      } catch (_) {/* a failed start */}
+      } catch (_) {
+        /* a failed start */
+      }
     }
     if (await dir.exists()) {
       await for (final e in dir.list(followLinks: false)) {
         try {
           await e.delete(recursive: true);
-        } catch (_) {/* a write in progress: the next clean gets it */}
+        } catch (_) {
+          /* a write in progress: the next clean gets it */
+        }
       }
     }
     return before;
@@ -418,7 +442,9 @@ class StellariumServer {
     if (running != null) {
       try {
         return (await running)._dssCacheDir;
-      } catch (_) {/* a failed start: fall through */}
+      } catch (_) {
+        /* a failed start: fall through */
+      }
     }
     final support = await getApplicationSupportDirectory();
     return Directory('${support.path}/$dssCacheDirName');
@@ -440,7 +466,10 @@ class StellariumServer {
       // provider plugin is unavailable. A fresh private (mkdtemp, 0700) dir per
       // run — never a fixed shared path another user could pre-create or
       // symlink on a multi-user host. Nothing here touches the SBC.
-      return (await Directory.systemTemp.createTemp('openastroara-dss2-'), true);
+      return (
+        await Directory.systemTemp.createTemp('openastroara-dss2-'),
+        true,
+      );
     }
   }
 
@@ -606,7 +635,8 @@ class StellariumServer {
           payload = await catalogListResolver?.call();
         } else {
           final id = Uri.decodeComponent(path.substring('/aracat/'.length));
-          final limit = int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 500;
+          final limit =
+              int.tryParse(request.uri.queryParameters['limit'] ?? '') ?? 500;
           payload = await catalogObjectsResolver?.call(id, limit);
         }
         if (payload == null) {
@@ -614,8 +644,11 @@ class StellariumServer {
           await response.close();
           return;
         }
-        response.headers.contentType =
-            ContentType('application', 'json', charset: 'utf-8');
+        response.headers.contentType = ContentType(
+          'application',
+          'json',
+          charset: 'utf-8',
+        );
         response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
         response.write(jsonEncode(payload));
         await response.close();
@@ -687,8 +720,11 @@ class StellariumServer {
     // Page → "is the photo backdrop expected to be blank?" (see [_dssOffline]).
     // (Shadows an upstream resource literally named `status`; HiPS has none.)
     if (path == '${_dssPathPrefix}status') {
-      response.headers.contentType =
-          ContentType('application', 'json', charset: 'utf-8');
+      response.headers.contentType = ContentType(
+        'application',
+        'json',
+        charset: 'utf-8',
+      );
       response.headers.set(HttpHeaders.cacheControlHeader, 'no-store');
       response.write(jsonEncode({'offline': _dssOffline}));
       await response.close();
@@ -706,8 +742,9 @@ class StellariumServer {
     // ignored, as before.
     final rawBuster = request.uri.queryParameters['v'];
     // Validated once; only this value reaches the key and the upstream URL.
-    final buster =
-        rawBuster != null && _dssSegment.hasMatch(rawBuster) ? rawBuster : null;
+    final buster = rawBuster != null && _dssSegment.hasMatch(rawBuster)
+        ? rawBuster
+        : null;
     final key = buster == null ? rel : '$rel@$buster';
     final file = File('${_dssCacheDir.path}/$key');
     Uint8List? bytes;
@@ -721,7 +758,9 @@ class StellariumServer {
         if (await legacy.exists()) {
           try {
             await legacy.rename(file.path);
-          } catch (_) {/* raced with a write: fall through to a fetch */}
+          } catch (_) {
+            /* raced with a write: fall through to a fetch */
+          }
         }
       }
       if (await file.exists()) {
@@ -808,7 +847,9 @@ class StellariumServer {
   Future<Uint8List?> _fetchDss(String key, String? buster, File file) async {
     // The cache key carries the buster suffix; upstream gets it as the query
     // the engine sent (CDS serves the same bytes either way).
-    final relative = buster == null ? key : key.substring(0, key.length - buster.length - 1);
+    final relative = buster == null
+        ? key
+        : key.substring(0, key.length - buster.length - 1);
     final uri = dssOrigin
         .resolve(relative)
         .replace(queryParameters: buster == null ? null : {'v': buster});
@@ -855,7 +896,9 @@ class StellariumServer {
         // body streaming into nowhere. Neither a success nor an outage.
         try {
           req.abort();
-        } catch (_) {/* already finished */}
+        } catch (_) {
+          /* already finished */
+        }
         return null;
       }
       _dssLastSuccess = DateTime.now();
@@ -869,7 +912,9 @@ class StellariumServer {
       // A timed-out request/response must not linger on the socket.
       try {
         req?.abort();
-      } catch (_) {/* already finished */}
+      } catch (_) {
+        /* already finished */
+      }
       debugPrint('StellariumServer: DSS fetch failed for $relative: $e');
       return null;
     }
@@ -1006,7 +1051,9 @@ class StellariumServer {
     if (_dssCacheIsTemp) {
       try {
         await _dssCacheDir.delete(recursive: true);
-      } catch (_) {/* already gone, or a straggling write: leave it */}
+      } catch (_) {
+        /* already gone, or a straggling write: leave it */
+      }
     }
   }
 }

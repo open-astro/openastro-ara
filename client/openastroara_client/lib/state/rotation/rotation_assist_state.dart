@@ -279,8 +279,7 @@ RotationHint rotationHint(RotationAssistStatus status) {
     return RotationHint(
       RotateAdvice.noSolve,
       'Camera unavailable',
-      status.error ??
-          'The camera stopped responding. Check its USB cable and power, then try again.',
+      status.error ?? 'The camera stopped responding. Check its USB cable and power, then try again.',
     );
   }
   if (status.state == RotationAssistStates.error) {

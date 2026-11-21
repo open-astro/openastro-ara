@@ -80,12 +80,16 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final server = ref.read(activeServerProvider);
     if (!mounted || server == null) return;
     Future<Map<String, AlbumTier>> tiers() async => {
-          for (final b in AlbumBook.values)
-            for (final MapEntry(:key, :value) in (await ref.read(albumBookProvider(b).future)).stats.entries)
-              key: ?value.tier,
-        };
+      for (final b in AlbumBook.values)
+        for (final MapEntry(:key, :value) in (await ref.read(
+          albumBookProvider(b).future,
+        )).stats.entries)
+          key: ?value.tier,
+    };
     try {
-      final firstOpen = (await ref.read(albumFramesProvider.future)).frames.isEmpty;
+      final firstOpen = (await ref.read(albumFramesProvider.future))
+          .frames
+          .isEmpty;
       final before = await tiers();
       await ref.read(albumFramesProvider.notifier).refresh(server.baseUrl);
       final after = await tiers();
@@ -109,14 +113,18 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   Widget build(BuildContext context) {
     final l = context.l10n;
     final server = ref.watch(activeServerProvider);
-    final catalog = ref.watch(bundledCatalogProvider).value ?? const <PlanningDso>[];
+    final catalog =
+        ref.watch(bundledCatalogProvider).value ?? const <PlanningDso>[];
     final collection = ref.watch(albumFramesProvider).value;
     // Every catalog with none selected, else the selected ones; Messier first.
     final books = [
       for (final b in AlbumBook.values)
         if (_catalogs.isEmpty || _catalogs.contains(b)) b,
     ];
-    final views = {for (final b in AlbumBook.values) b: ref.watch(albumBookProvider(b)).value};
+    final views = {
+      for (final b in AlbumBook.values)
+        b: ref.watch(albumBookProvider(b)).value,
+    };
     // Before a Book is matched its cards still show, all grey. An object in two Books
     // shows once, as its first Book's Card.
     final bookOf = <String, AlbumBook>{};
@@ -135,7 +143,8 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       for (final b in books) ...?views[b]?.stats,
     };
     final view = books.every((b) => views[b] != null) ? views : null;
-    final manifest = ref.watch(albumManifestProvider).value ?? const <String, AlbumArt>{};
+    final manifest =
+        ref.watch(albumManifestProvider).value ?? const <String, AlbumArt>{};
 
     AlbumCardData cardFor(PlanningDso d) {
       final book = bookOf[d.id]!;
@@ -180,10 +189,15 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           if (stats[d.id]?.tier == null) d,
       ],
     };
-    final tiers = {for (final t in AlbumTier.values) t: stats.values.where((s) => s.tier == t).length};
+    final tiers = {
+      for (final t in AlbumTier.values)
+        t: stats.values.where((s) => s.tier == t).length,
+    };
 
-    void imageTarget(PlanningDso d) => widget.onImageTarget(d, bookLabel(d, bookOf[d.id]!));
-    Widget card(PlanningDso d) => AlbumCard(cardFor(d), onAction: () => imageTarget(d));
+    void imageTarget(PlanningDso d) =>
+        widget.onImageTarget(d, bookLabel(d, bookOf[d.id]!));
+    Widget card(PlanningDso d) =>
+        AlbumCard(cardFor(d), onAction: () => imageTarget(d));
     // The new-cards shelf: the catalogs shown, in Book order, and only cards that are
     // collected, so it hides under Missing. Its cards play their reveal once.
     final fresh = _filter == AlbumFilter.missing
@@ -198,37 +212,49 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       if (fresh.length > newCards) l.albumTiersUp(fresh.length - newCards),
     ].join(' · ');
     Widget freshCard(PlanningDso d) => AlbumCard(
-          cardFor(d),
-          onAction: () => imageTarget(d),
-          reveal: !_revealed.contains(d.id),
-          revealFrom: _revealFrom[d.id],
-          onRevealed: () => setState(() => _revealed.add(d.id)),
-          news: _revealFrom[d.id] == null ? l.albumCardNew : l.albumCardTierUp,
-        );
+      cardFor(d),
+      onAction: () => imageTarget(d),
+      reveal: !_revealed.contains(d.id),
+      revealFrom: _revealFrom[d.id],
+      onRevealed: () => setState(() => _revealed.add(d.id)),
+      news: _revealFrom[d.id] == null ? l.albumCardNew : l.albumCardTierUp,
+    );
     // A titled row of cards above the grid: the new cards, then tonight's missing ones.
-    List<Widget> shelfRow(Key key, String title, List<PlanningDso> cards, Widget Function(PlanningDso) build) => [
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-            sliver: SliverToBoxAdapter(child: Text(title, style: kSimpleText.copyWith(fontWeight: FontWeight.w600))),
+    List<Widget> shelfRow(
+      Key key,
+      String title,
+      List<PlanningDso> cards,
+      Widget Function(PlanningDso) build,
+    ) => [
+      SliverPadding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+        sliver: SliverToBoxAdapter(
+          child: Text(
+            title,
+            style: kSimpleText.copyWith(fontWeight: FontWeight.w600),
           ),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 130 / albumCardAspect,
-              // A plain wheel scrolls the page, so a mouse drags the shelf sideways.
-              child: ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(dragDevices: PointerDeviceKind.values.toSet()),
-                child: ListView.separated(
-                  key: key,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  itemCount: cards.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 10),
-                  itemBuilder: (_, i) => SizedBox(width: 130, child: build(cards[i])),
-                ),
-              ),
+        ),
+      ),
+      SliverToBoxAdapter(
+        child: SizedBox(
+          height: 130 / albumCardAspect,
+          // A plain wheel scrolls the page, so a mouse drags the shelf sideways.
+          child: ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context)
+                .copyWith(dragDevices: PointerDeviceKind.values.toSet()),
+            child: ListView.separated(
+              key: key,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              scrollDirection: Axis.horizontal,
+              itemCount: cards.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
+              itemBuilder: (_, i) =>
+                  SizedBox(width: 130, child: build(cards[i])),
             ),
           ),
-        ];
+        ),
+      ),
+    ];
 
     // Simple Mode density (DESIGN.md, Two Densities Rule): 44 px controls, 14 px text.
     const headerText = kSimpleText;
@@ -238,28 +264,37 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
       runSpacing: 8,
       crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        Text(l.albumCatalogs, style: headerText.copyWith(color: AraColors.textSecondary)),
+        Text(
+          l.albumCatalogs,
+          style: headerText.copyWith(color: AraColors.textSecondary),
+        ),
         for (final b in AlbumBook.values)
           // 44 px drawn, not only hit: the chip is the target the eye aims at.
           SizedBox(
             height: 44,
             child: FilterChip(
-              label: Text(l.albumBookCount(
-                  switch (b) {
-                    AlbumBook.messier => l.albumBookMessier,
-                    AlbumBook.caldwell => l.albumBookCaldwell,
-                    AlbumBook.rcw => l.albumBookRcw,
-                    AlbumBook.ngc => l.albumBookNgc,
-                    AlbumBook.ic => l.albumBookIc,
-                    AlbumBook.sharpless => l.albumBookSharpless,
-                  },
-                  views[b]?.collected ?? 0)),
+              label: Text(
+                l.albumBookCount(switch (b) {
+                  AlbumBook.messier => l.albumBookMessier,
+                  AlbumBook.caldwell => l.albumBookCaldwell,
+                  AlbumBook.rcw => l.albumBookRcw,
+                  AlbumBook.ngc => l.albumBookNgc,
+                  AlbumBook.ic => l.albumBookIc,
+                  AlbumBook.sharpless => l.albumBookSharpless,
+                }, views[b]?.collected ?? 0),
+              ),
               selected: _catalogs.contains(b),
               labelStyle: headerText,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               padding: const EdgeInsets.symmetric(horizontal: 8),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-              onSelected: (on) => setState(() => _catalogs = on ? {..._catalogs, b} : ({..._catalogs}..remove(b))),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+              ),
+              onSelected: (on) => setState(
+                () => _catalogs = on
+                    ? {..._catalogs, b}
+                    : ({..._catalogs}..remove(b)),
+              ),
             ),
           ),
       ],
@@ -273,7 +308,9 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           children: [
             const Icon(albumIcon),
             const SizedBox(width: 8),
-            Flexible(child: Text(l.albumTitle, overflow: TextOverflow.ellipsis)),
+            Flexible(
+              child: Text(l.albumTitle, overflow: TextOverflow.ellipsis),
+            ),
           ],
         ),
       ),
@@ -286,7 +323,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
               child: LayoutBuilder(
                 builder: (context, box) {
                   final count = Text(
-                    l.albumCollected(stats.values.where((s) => s.tier != null).length, objects.length),
+                    l.albumCollected(
+                      stats.values.where((s) => s.tier != null).length,
+                      objects.length,
+                    ),
                     style: headerText.copyWith(fontWeight: FontWeight.w600),
                   );
                   final tierCounts = Wrap(
@@ -295,16 +335,28 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                     children: [
                       for (final t in AlbumTier.values.reversed)
                         Text(
-                          l.albumTierCount(albumTierName(context, t), tiers[t]!),
+                          l.albumTierCount(
+                            albumTierName(context, t),
+                            tiers[t]!,
+                          ),
                           style: headerText.copyWith(color: albumTierColor(t)),
                         ),
                     ],
                   );
                   final filter = SegmentedButton<AlbumFilter>(
                     segments: [
-                      ButtonSegment(value: AlbumFilter.all, label: Text(l.albumFilterAll)),
-                      ButtonSegment(value: AlbumFilter.collected, label: Text(l.albumFilterCollected)),
-                      ButtonSegment(value: AlbumFilter.missing, label: Text(l.albumFilterMissing)),
+                      ButtonSegment(
+                        value: AlbumFilter.all,
+                        label: Text(l.albumFilterAll),
+                      ),
+                      ButtonSegment(
+                        value: AlbumFilter.collected,
+                        label: Text(l.albumFilterCollected),
+                      ),
+                      ButtonSegment(
+                        value: AlbumFilter.missing,
+                        label: Text(l.albumFilterMissing),
+                      ),
                     ],
                     selected: {_filter},
                     showSelectedIcon: false,
@@ -314,20 +366,21 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       textStyle: WidgetStatePropertyAll(kSimpleText),
                     ),
-                    onSelectionChanged: (s) => setState(() => _filter = s.single),
+                    onSelectionChanged: (s) =>
+                        setState(() => _filter = s.single),
                   );
                   // Catalogs left and the filter right while they fit, the count and tier counts
                   // below; a narrow window or large text wraps each line instead of overflowing.
                   Widget line(List<Widget> children) => SizedBox(
-                        width: double.infinity,
-                        child: Wrap(
-                          alignment: WrapAlignment.spaceBetween,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          spacing: 16,
-                          runSpacing: 8,
-                          children: children,
-                        ),
-                      );
+                    width: double.infinity,
+                    child: Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: children,
+                    ),
+                  );
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -343,7 +396,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
           if (error != null)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: DecoratedBox(
@@ -353,18 +409,33 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                       border: Border.all(color: AraColors.accentError),
                     ),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: Text(error, style: kSimpleText.copyWith(color: AraColors.errorText)),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 6,
+                      ),
+                      child: Text(
+                        error,
+                        style: kSimpleText.copyWith(color: AraColors.errorText),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
           if (fresh.isNotEmpty)
-            ...shelfRow(const Key('album-shelf-new'), _firstOpen ? changes : l.albumSinceLastVisit(changes), fresh,
-                freshCard),
+            ...shelfRow(
+              const Key('album-shelf-new'),
+              _firstOpen ? changes : l.albumSinceLastVisit(changes),
+              fresh,
+              freshCard,
+            ),
           if (shelf.isNotEmpty)
-            ...shelfRow(const Key('album-shelf-tonight'), l.albumShelfTitle(shelf.length), shelf, card),
+            ...shelfRow(
+              const Key('album-shelf-tonight'),
+              l.albumShelfTitle(shelf.length),
+              shelf,
+              card,
+            ),
           if (noLights)
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
@@ -378,7 +449,12 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
             ),
           SliverPadding(
             // The last row clears the home indicator.
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.paddingOf(context).bottom),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              16,
+              16,
+              16 + MediaQuery.paddingOf(context).bottom,
+            ),
             sliver: SliverGrid(
               gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
                 maxCrossAxisExtent: 130,
@@ -386,7 +462,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
                 mainAxisSpacing: 10,
                 crossAxisSpacing: 10,
               ),
-              delegate: SliverChildBuilderDelegate((_, i) => card(shown[i]), childCount: shown.length),
+              delegate: SliverChildBuilderDelegate(
+                (_, i) => card(shown[i]),
+                childCount: shown.length,
+              ),
             ),
           ),
         ],
@@ -397,7 +476,11 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
   /// Tonight's Sky ranking filtered to this Book's missing cards, in ranker
   /// order, capped. Empty (so hidden) when the ranker has nothing. [objects] and
   /// [stats] come from [shown], the views of the Books shown.
-  List<PlanningDso> _shelf(List<PlanningDso> objects, Map<String, CardStats> stats, List<AlbumBookView> shown) {
+  List<PlanningDso> _shelf(
+    List<PlanningDso> objects,
+    Map<String, CardStats> stats,
+    List<AlbumBookView> shown,
+  ) {
     final ranked = ref.watch(tonightSkyProvider).value ?? const [];
     // By any designation: the ranker's row may carry the object under another id. Built again
     // only when the Books shown, or a match against new rows, give other views.
@@ -414,7 +497,10 @@ class _SkyAlbumScreenState extends ConsumerState<SkyAlbumScreen> {
     final missing = _missing!.byKey;
     final out = <PlanningDso>[];
     for (final t in ranked) {
-      final d = [t.id, ...t.aliases].map((n) => missing[designationKey(n)]).nonNulls.firstOrNull;
+      final d = [
+        t.id,
+        ...t.aliases,
+      ].map((n) => missing[designationKey(n)]).nonNulls.firstOrNull;
       if (d != null && !out.contains(d)) out.add(d);
       if (out.length == albumShelfCap) break;
     }

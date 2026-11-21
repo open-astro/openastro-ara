@@ -7,8 +7,7 @@ import '../saved_server_state.dart';
 import 'stats_refresh_mixin.dart';
 
 /// Builds a [CalendarClient] for a server. Overridable in tests.
-final calendarApiFactoryProvider =
-    Provider<CalendarClient Function(AraServer)>(
+final calendarApiFactoryProvider = Provider<CalendarClient Function(AraServer)>(
   (ref) => CalendarApi.new,
 );
 
@@ -37,11 +36,12 @@ class CalendarNotifier extends AsyncNotifier<CalendarStats?>
   /// Re-reads the calendar, keeping the previous heatmap on screen if the read
   /// fails (the chart shows a stale chip). See [StatsRefreshMixin].
   Future<void> refresh() => refreshUsing(() async {
-        final api = ref.read(calendarApiProvider);
-        return api?.fetch();
-      });
+    final api = ref.read(calendarApiProvider);
+    return api?.fetch();
+  });
 }
 
 final calendarProvider =
     AsyncNotifierProvider<CalendarNotifier, CalendarStats?>(
-        CalendarNotifier.new);
+      CalendarNotifier.new,
+    );

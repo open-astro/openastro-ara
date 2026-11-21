@@ -17,13 +17,14 @@ final filterOffsetCalibrationApiFactoryProvider =
     );
 
 /// The offset calibration client bound to the **active** server, or `null`.
-final filterOffsetCalibrationApiProvider = Provider<FilterOffsetCalibrationApi?>((ref) {
-  final server = ref.watch(activeServerProvider);
-  if (server == null) return null;
-  final api = ref.watch(filterOffsetCalibrationApiFactoryProvider)(server);
-  ref.onDispose(api.close);
-  return api;
-});
+final filterOffsetCalibrationApiProvider =
+    Provider<FilterOffsetCalibrationApi?>((ref) {
+      final server = ref.watch(activeServerProvider);
+      if (server == null) return null;
+      final api = ref.watch(filterOffsetCalibrationApiFactoryProvider)(server);
+      ref.onDispose(api.close);
+      return api;
+    });
 
 /// What the Offsets routine renders: the daemon's calibration (null when it
 /// has none), the user's picks (null: the defaults), a request in flight, the
@@ -35,7 +36,13 @@ class FilterOffsetLive {
   final Object? error;
   final bool saved;
 
-  const FilterOffsetLive({this.calibration, this.picks, this.busy = false, this.error, this.saved = false});
+  const FilterOffsetLive({
+    this.calibration,
+    this.picks,
+    this.busy = false,
+    this.error,
+    this.saved = false,
+  });
 
   static const idle = FilterOffsetLive();
 
@@ -77,7 +84,10 @@ class FilterOffsetCalibrationNotifier extends Notifier<FilterOffsetLive> {
     ref.onDispose(() => _poll?.cancel());
     final api = ref.watch(filterOffsetCalibrationApiProvider);
     if (api == null) return FilterOffsetLive.idle;
-    ref.listen(autofocusLiveProvider.select((l) => l.run.isRunning), (_, _) => unawaited(refresh()));
+    ref.listen(
+      autofocusLiveProvider.select((l) => l.run.isRunning),
+      (_, _) => unawaited(refresh()),
+    );
     Future<void>.microtask(refresh);
     return FilterOffsetLive.idle;
   }
@@ -92,7 +102,11 @@ class FilterOffsetCalibrationNotifier extends Notifier<FilterOffsetLive> {
     try {
       final calibration = await api.calibration();
       if (!ref.mounted || gen != _generation) return;
-      state = state.copyWith(calibration: calibration, clearCalibration: calibration == null, clearError: true);
+      state = state.copyWith(
+        calibration: calibration,
+        clearCalibration: calibration == null,
+        clearError: true,
+      );
       _armPoll(calibration?.isRunning ?? false);
     } catch (e) {
       if (!ref.mounted || gen != _generation) return;
@@ -112,7 +126,10 @@ class FilterOffsetCalibrationNotifier extends Notifier<FilterOffsetLive> {
   /// The filters to measure this time (the panel passes the defaults first).
   void setPicks(Set<int> picks) => state = state.copyWith(picks: picks);
 
-  Future<void> _act(Future<void> Function(FilterOffsetCalibrationApi api) action, {bool saved = false}) async {
+  Future<void> _act(
+    Future<void> Function(FilterOffsetCalibrationApi api) action, {
+    bool saved = false,
+  }) async {
     final api = ref.read(filterOffsetCalibrationApiProvider);
     if (api == null || state.busy) return;
     state = state.copyWith(busy: true, clearError: true, saved: false);
@@ -128,7 +145,8 @@ class FilterOffsetCalibrationNotifier extends Notifier<FilterOffsetLive> {
   }
 
   /// Start a calibration over [positions]; a refusal's reason lands in error.
-  Future<void> start(List<int> positions) => _act((api) => api.start(positions));
+  Future<void> start(List<int> positions) =>
+      _act((api) => api.start(positions));
 
   Future<void> cancel() => _act((api) => api.cancel());
 
@@ -142,4 +160,6 @@ class FilterOffsetCalibrationNotifier extends Notifier<FilterOffsetLive> {
 }
 
 final filterOffsetCalibrationProvider =
-    NotifierProvider<FilterOffsetCalibrationNotifier, FilterOffsetLive>(FilterOffsetCalibrationNotifier.new);
+    NotifierProvider<FilterOffsetCalibrationNotifier, FilterOffsetLive>(
+      FilterOffsetCalibrationNotifier.new,
+    );

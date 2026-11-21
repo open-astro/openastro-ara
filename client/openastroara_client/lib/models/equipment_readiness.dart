@@ -112,16 +112,15 @@ class DeviceReadiness {
     List<DeviceGap>? gaps,
     String? label,
     Uri? setupUri,
-  }) =>
-      DeviceReadiness(
-        type: type,
-        label: label ?? this.label,
-        state: state ?? this.state,
-        facts: facts ?? this.facts,
-        gaps: gaps ?? this.gaps,
-        setupUri: setupUri ?? this.setupUri,
-        payload: payload,
-      );
+  }) => DeviceReadiness(
+    type: type,
+    label: label ?? this.label,
+    state: state ?? this.state,
+    facts: facts ?? this.facts,
+    gaps: gaps ?? this.gaps,
+    setupUri: setupUri ?? this.setupUri,
+    payload: payload,
+  );
 }
 
 /// The device's browser setup page per the ASCOM Alpaca spec
@@ -129,12 +128,12 @@ class DeviceReadiness {
 /// conformant server, so the wizard's "fix it in AlpacaBridge" deep link works
 /// against AlpacaBridge and third-party servers alike.
 Uri alpacaDeviceSetupUri(DiscoveredDevice d) => Uri(
-      scheme: d.useHttps ? 'https' : 'http',
-      host: d.ipAddress.isNotEmpty ? d.ipAddress : d.hostName,
-      port: d.ipPort,
-      path:
-          '/setup/v1/${DiscoveredDevice.pathSegmentFor(d.deviceType)}/${d.alpacaDeviceNumber}/setup',
-    );
+  scheme: d.useHttps ? 'https' : 'http',
+  host: d.ipAddress.isNotEmpty ? d.ipAddress : d.hostName,
+  port: d.ipPort,
+  path:
+      '/setup/v1/${DiscoveredDevice.pathSegmentFor(d.deviceType)}/${d.alpacaDeviceNumber}/setup',
+);
 
 /// Trim a double for display: "3.76", "530", "2.9".
 String _num(double v) {
@@ -149,7 +148,11 @@ const String _fixInBridge = 'Set it in AlpacaBridge, then Recheck.';
 /// but reported nothing usable" (transport failures never reach a classifier —
 /// the notifier maps those to [ReadinessState.unreachable]).
 abstract final class ReadinessRules {
-  static DeviceReadiness camera(String label, Uri? setupUri, CameraGeometry? g) {
+  static DeviceReadiness camera(
+    String label,
+    Uri? setupUri,
+    CameraGeometry? g,
+  ) {
     if (g == null) {
       return DeviceReadiness(
         type: EquipmentDeviceType.camera,
@@ -158,8 +161,11 @@ abstract final class ReadinessRules {
         setupUri: setupUri,
         payload: const DeviceFactsPayload(),
         gaps: const [
-          DeviceGap('Pixel size + sensor geometry', FactNeed.required,
-              'The camera did not report a usable sensor. $_fixInBridge'),
+          DeviceGap(
+            'Pixel size + sensor geometry',
+            FactNeed.required,
+            'The camera did not report a usable sensor. $_fixInBridge',
+          ),
         ],
       );
     }
@@ -172,14 +178,19 @@ abstract final class ReadinessRules {
       facts: [
         DeviceFact('Pixel size', '${_num(g.pixelSizeUm)} µm'),
         DeviceFact('Sensor', '${g.sensorWidthPx}×${g.sensorHeightPx}'),
-        if (g.maxBin > 1) DeviceFact('Binning', 'up to ${g.maxBin}×${g.maxBin}'),
+        if (g.maxBin > 1)
+          DeviceFact('Binning', 'up to ${g.maxBin}×${g.maxBin}'),
       ],
     );
   }
 
-  static DeviceReadiness mount(String label, Uri? setupUri,
-      TelescopeOptics? optics, MountProps? props,
-      {TrackingCalibration? tracking}) {
+  static DeviceReadiness mount(
+    String label,
+    Uri? setupUri,
+    TelescopeOptics? optics,
+    MountProps? props, {
+    TrackingCalibration? tracking,
+  }) {
     final facts = <DeviceFact>[];
     final gaps = <DeviceGap>[];
     final fl = optics?.focalLengthMm;
@@ -187,14 +198,24 @@ abstract final class ReadinessRules {
     if (fl != null) {
       facts.add(DeviceFact('Focal length', '${_num(fl)} mm'));
     } else {
-      gaps.add(const DeviceGap('Focal length', FactNeed.required,
-          'The driver does not report it. $_fixInBridge'));
+      gaps.add(
+        const DeviceGap(
+          'Focal length',
+          FactNeed.required,
+          'The driver does not report it. $_fixInBridge',
+        ),
+      );
     }
     if (ap != null) {
       facts.add(DeviceFact('Aperture', '${_num(ap)} mm'));
     } else {
-      gaps.add(const DeviceGap('Aperture', FactNeed.required,
-          'The driver does not report it. $_fixInBridge'));
+      gaps.add(
+        const DeviceGap(
+          'Aperture',
+          FactNeed.required,
+          'The driver does not report it. $_fixInBridge',
+        ),
+      );
     }
     final rate = props?.maxSlewRateDegPerSec;
     if (rate != null) {
@@ -213,10 +234,13 @@ abstract final class ReadinessRules {
     // unguided one measures it on its first run, so its absence is no gap.
     if (tracking != null) {
       final when = formatCalibrationDate(tracking.measuredUtc);
-      facts.add(DeviceFact(
+      facts.add(
+        DeviceFact(
           'Unguided ceiling',
           '${formatExposureSeconds(tracking.ceilingSeconds)} · '
-              '${tracking.measured ? 'measured' : 'prior kept'} $when'));
+              '${tracking.measured ? 'measured' : 'prior kept'} $when',
+        ),
+      );
     }
     return DeviceReadiness(
       type: EquipmentDeviceType.mount,
@@ -230,7 +254,10 @@ abstract final class ReadinessRules {
   }
 
   static DeviceReadiness filterWheel(
-      String label, Uri? setupUri, FilterWheelSlots? slots) {
+    String label,
+    Uri? setupUri,
+    FilterWheelSlots? slots,
+  ) {
     final list = slots?.slots ?? const <FilterWheelSlot>[];
     final named = list.where((s) => s.name.trim().isNotEmpty).toList();
     if (named.isEmpty) {
@@ -242,11 +269,12 @@ abstract final class ReadinessRules {
         payload: DeviceFactsPayload(filterWheelSlots: slots),
         gaps: [
           DeviceGap(
-              'Filter names',
-              FactNeed.required,
-              slots == null
-                  ? 'The wheel reported no slots. $_fixInBridge'
-                  : 'No slot has a name. $_fixInBridge'),
+            'Filter names',
+            FactNeed.required,
+            slots == null
+                ? 'The wheel reported no slots. $_fixInBridge'
+                : 'No slot has a name. $_fixInBridge',
+          ),
         ],
       );
     }
@@ -265,7 +293,10 @@ abstract final class ReadinessRules {
   }
 
   static DeviceReadiness focuser(
-      String label, Uri? setupUri, FocuserProps? props) {
+    String label,
+    Uri? setupUri,
+    FocuserProps? props,
+  ) {
     final facts = <DeviceFact>[];
     final gaps = <DeviceGap>[];
     final um = props?.stepSizeUm;
@@ -274,11 +305,20 @@ abstract final class ReadinessRules {
     } else {
       // Most focusers (e.g. the ZWO EAF) don't report it — workable, autofocus
       // operates in steps; the µm figure only refines seeding.
-      gaps.add(const DeviceGap('Step size', FactNeed.informational,
-          'Not reported (common — e.g. ZWO EAF). Autofocus works in steps.'));
+      gaps.add(
+        const DeviceGap(
+          'Step size',
+          FactNeed.informational,
+          'Not reported (common — e.g. ZWO EAF). Autofocus works in steps.',
+        ),
+      );
     }
-    facts.add(DeviceFact('Temperature compensation',
-        (props?.canTempComp ?? false) ? 'available' : 'not available'));
+    facts.add(
+      DeviceFact(
+        'Temperature compensation',
+        (props?.canTempComp ?? false) ? 'available' : 'not available',
+      ),
+    );
     return DeviceReadiness(
       type: EquipmentDeviceType.focuser,
       label: label,
@@ -291,19 +331,28 @@ abstract final class ReadinessRules {
   }
 
   static DeviceReadiness rotator(
-      String label, Uri? setupUri, RotatorProps? props) {
+    String label,
+    Uri? setupUri,
+    RotatorProps? props,
+  ) {
     final facts = <DeviceFact>[];
     final gaps = <DeviceGap>[];
     final step = props?.stepDeg;
     if (step != null) {
       facts.add(DeviceFact('Step size', '${_num(step)}°'));
     } else {
-      gaps.add(const DeviceGap('Step size', FactNeed.informational,
-          'Not reported (common — e.g. ZWO CAA).'));
+      gaps.add(
+        const DeviceGap(
+          'Step size',
+          FactNeed.informational,
+          'Not reported (common — e.g. ZWO CAA).',
+        ),
+      );
     }
     if (props?.canReverse ?? false) {
       facts.add(
-          DeviceFact('Reverse', (props?.reverse ?? false) ? 'on' : 'off'));
+        DeviceFact('Reverse', (props?.reverse ?? false) ? 'on' : 'off'),
+      );
     }
     return DeviceReadiness(
       type: EquipmentDeviceType.rotator,

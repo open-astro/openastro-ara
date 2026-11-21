@@ -25,13 +25,12 @@ class _FakeWheelNotifier extends FilterWheelNotifier {
   void park(FilterWheelStatus status) => state = AsyncData(status);
 
   /// A transient read failure (failed poll) while the wheel stays connected.
-  void failPoll(Object error) =>
-      state = AsyncError(error, StackTrace.current);
+  void failPoll(Object error) => state = AsyncError(error, StackTrace.current);
 }
 
-ProviderContainer _container() => ProviderContainer(overrides: [
-      filterWheelProvider.overrideWith(_FakeWheelNotifier.new),
-    ]);
+ProviderContainer _container() => ProviderContainer(
+  overrides: [filterWheelProvider.overrideWith(_FakeWheelNotifier.new)],
+);
 
 /// Initializes the wheel provider and lets its async build complete, so a
 /// subsequent [park] is never overwritten by the pending build result.
@@ -83,15 +82,19 @@ void main() {
       final notifier = container.read(exposureControllerProvider.notifier);
       notifier.setExposure(Duration.zero);
       notifier.setExposure(const Duration(seconds: -1));
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(seconds: 5));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(seconds: 5),
+      );
     });
 
     test('setExposure accepts a positive duration', () {
       final notifier = container.read(exposureControllerProvider.notifier);
       notifier.setExposure(const Duration(seconds: 30));
-      expect(container.read(exposureControllerProvider).exposure,
-          const Duration(seconds: 30));
+      expect(
+        container.read(exposureControllerProvider).exposure,
+        const Duration(seconds: 30),
+      );
     });
 
     test('setGain + setOffset reject negative', () {
@@ -122,8 +125,10 @@ void main() {
     test('setFrameKind accepts any enum value', () {
       final notifier = container.read(exposureControllerProvider.notifier);
       notifier.setFrameKind(FrameKind.dark);
-      expect(container.read(exposureControllerProvider).frameKind,
-          FrameKind.dark);
+      expect(
+        container.read(exposureControllerProvider).frameKind,
+        FrameKind.dark,
+      );
     });
 
     test('follows the physical wheel slot into filterSlot', () async {
@@ -145,28 +150,30 @@ void main() {
       expect(container.read(exposureControllerProvider).filterSlot, 'B');
     });
 
-    test('a manual picker choice is not clobbered until the wheel moves',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      final notifier = container.read(exposureControllerProvider.notifier);
+    test(
+      'a manual picker choice is not clobbered until the wheel moves',
+      () async {
+        container.read(exposureControllerProvider);
+        final wheel = await _initWheel(container);
+        final notifier = container.read(exposureControllerProvider.notifier);
 
-      wheel.park(_wheelAt(2));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+        wheel.park(_wheelAt(2));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'G');
 
-      // Manual override (wheel still on slot 2) — survives further polls.
-      notifier.setFilterSlot('Ha');
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-      wheel.park(_wheelAt(2));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+        // Manual override (wheel still on slot 2) — survives further polls.
+        notifier.setFilterSlot('Ha');
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+        wheel.park(_wheelAt(2));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
-      // The wheel actually moves to slot 3 (B) — the picker follows again.
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'B');
-    });
+        // The wheel actually moves to slot 3 (B) — the picker follows again.
+        wheel.park(_wheelAt(3));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'B');
+      },
+    );
 
     test('a disconnected wheel never touches filterSlot', () async {
       container.read(exposureControllerProvider);
@@ -176,42 +183,46 @@ void main() {
       expect(container.read(exposureControllerProvider).filterSlot, 'L');
     });
 
-    test('an unnamed current slot leaves filterSlot alone — until a name arrives',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      final unnamed = FilterWheelStatus(
-        deviceId: 'fw',
-        name: 'FILTERWHEEL',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: 1,
-        slots: const [
-          FilterSlot(position: 0, name: 'L', focusOffset: 0),
-          FilterSlot(position: 1, name: '', focusOffset: 0),
-        ],
-      );
-      wheel.park(unnamed);
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'L');
+    test(
+      'an unnamed current slot leaves filterSlot alone — until a name arrives',
+      () async {
+        container.read(exposureControllerProvider);
+        final wheel = await _initWheel(container);
+        final unnamed = FilterWheelStatus(
+          deviceId: 'fw',
+          name: 'FILTERWHEEL',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: 1,
+          slots: const [
+            FilterSlot(position: 0, name: 'L', focusOffset: 0),
+            FilterSlot(position: 1, name: '', focusOffset: 0),
+          ],
+        );
+        wheel.park(unnamed);
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'L');
 
-      // Same position, same physical slot — but the driver now reports its
-      // name. The picker must sync even though the wheel never "moved" (the
-      // latch may only engage once a named slot was actually found).
-      wheel.park(FilterWheelStatus(
-        deviceId: 'fw',
-        name: 'FILTERWHEEL',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: 1,
-        slots: const [
-          FilterSlot(position: 0, name: 'L', focusOffset: 0),
-          FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
-        ],
-      ));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    });
+        // Same position, same physical slot — but the driver now reports its
+        // name. The picker must sync even though the wheel never "moved" (the
+        // latch may only engage once a named slot was actually found).
+        wheel.park(
+          FilterWheelStatus(
+            deviceId: 'fw',
+            name: 'FILTERWHEEL',
+            connectionState: EquipmentConnectionState.connected,
+            runtimeState: 'idle',
+            currentSlot: 1,
+            slots: const [
+              FilterSlot(position: 0, name: 'L', focusOffset: 0),
+              FilterSlot(position: 1, name: 'Ha', focusOffset: 0),
+            ],
+          ),
+        );
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+      },
+    );
     test('a pick made while disconnected re-syncs after reconnect', () async {
       container.read(exposureControllerProvider);
       final wheel = await _initWheel(container);
@@ -236,67 +247,76 @@ void main() {
       expect(container.read(exposureControllerProvider).filterSlot, 'L');
     });
 
-    test('a transient read error does not clear the latch or clobber a pick',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      final notifier = container.read(exposureControllerProvider.notifier);
+    test(
+      'a transient read error does not clear the latch or clobber a pick',
+      () async {
+        container.read(exposureControllerProvider);
+        final wheel = await _initWheel(container);
+        final notifier = container.read(exposureControllerProvider.notifier);
 
-      wheel.park(_wheelAt(0)); // on L → filterSlot L, latch 0
-      await _settle();
-      notifier.setFilterSlot('Ha'); // manual pick while the wheel stays on L
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+        wheel.park(_wheelAt(0)); // on L → filterSlot L, latch 0
+        await _settle();
+        notifier.setFilterSlot('Ha'); // manual pick while the wheel stays on L
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
-      // A failed poll (AsyncError) is transient — the wheel never moved, so
-      // the manual pick must survive.
-      wheel.failPoll(StateError('transient read failure'));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+        // A failed poll (AsyncError) is transient — the wheel never moved, so
+        // the manual pick must survive.
+        wheel.failPoll(StateError('transient read failure'));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
-      // Next successful poll, same physical slot — still no clobber.
-      wheel.park(_wheelAt(0));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
-    });
+        // Next successful poll, same physical slot — still no clobber.
+        wheel.park(_wheelAt(0));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+      },
+    );
 
-    test('re-entering the Live tab re-syncs to the wheel\'s current slot',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      final notifier = container.read(exposureControllerProvider.notifier);
+    test(
+      're-entering the Live tab re-syncs to the wheel\'s current slot',
+      () async {
+        container.read(exposureControllerProvider);
+        final wheel = await _initWheel(container);
+        final notifier = container.read(exposureControllerProvider.notifier);
 
-      wheel.park(_wheelAt(2)); // on G → picker G, latch 2
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'G');
+        wheel.park(_wheelAt(2)); // on G → picker G, latch 2
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'G');
 
-      // A stale pick made while the wheel stays put — the latch keeps it
-      // alive while away from the Live tab.
-      notifier.setFilterSlot('Ha');
-      expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
+        // A stale pick made while the wheel stays put — the latch keeps it
+        // alive while away from the Live tab.
+        notifier.setFilterSlot('Ha');
+        expect(container.read(exposureControllerProvider).filterSlot, 'Ha');
 
-      // Entering the Live tab forces the wheel's CURRENT slot to win.
-      container.read(selectedTabIndexProvider.notifier).select(kLiveTabIndex);
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'G');
-    });
+        // Entering the Live tab forces the wheel's CURRENT slot to win.
+        container.read(selectedTabIndexProvider.notifier).select(kLiveTabIndex);
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'G');
+      },
+    );
 
-    test('the client never homes the wheel — that is daemon policy (#1066)',
-        () async {
-      container.read(exposureControllerProvider);
-      final wheel = await _initWheel(container);
-      // Wheel connects already parked on slot 3 (B): the picker follows it.
-      wheel.park(_wheelAt(3));
-      await _settle();
-      expect(wheel.changeCalls, isEmpty,
-          reason: 'no client-side home command on first connect');
-      expect(container.read(exposureControllerProvider).filterSlot, 'B');
-      // The daemon homes it: observed moving, then on slot 0 — the picker
-      // follows like any other move.
-      wheel.park(_wheelAt(0));
-      await _settle();
-      expect(container.read(exposureControllerProvider).filterSlot, 'L');
-      expect(wheel.changeCalls, isEmpty);
-    });
+    test(
+      'the client never homes the wheel — that is daemon policy (#1066)',
+      () async {
+        container.read(exposureControllerProvider);
+        final wheel = await _initWheel(container);
+        // Wheel connects already parked on slot 3 (B): the picker follows it.
+        wheel.park(_wheelAt(3));
+        await _settle();
+        expect(
+          wheel.changeCalls,
+          isEmpty,
+          reason: 'no client-side home command on first connect',
+        );
+        expect(container.read(exposureControllerProvider).filterSlot, 'B');
+        // The daemon homes it: observed moving, then on slot 0 — the picker
+        // follows like any other move.
+        wheel.park(_wheelAt(0));
+        await _settle();
+        expect(container.read(exposureControllerProvider).filterSlot, 'L');
+        expect(wheel.changeCalls, isEmpty);
+      },
+    );
 
     test('a different wheel device resets the latch too', () async {
       container.read(exposureControllerProvider);
@@ -308,16 +328,16 @@ void main() {
 
       // A second wheel (different device id), parked at the same position 0
       // with a different slot name — the latch must not carry over.
-      wheel.park(FilterWheelStatus(
-        deviceId: 'fw2',
-        name: 'FILTERWHEEL2',
-        connectionState: EquipmentConnectionState.connected,
-        runtimeState: 'idle',
-        currentSlot: 0,
-        slots: const [
-          FilterSlot(position: 0, name: 'UV', focusOffset: 0),
-        ],
-      ));
+      wheel.park(
+        FilterWheelStatus(
+          deviceId: 'fw2',
+          name: 'FILTERWHEEL2',
+          connectionState: EquipmentConnectionState.connected,
+          runtimeState: 'idle',
+          currentSlot: 0,
+          slots: const [FilterSlot(position: 0, name: 'UV', focusOffset: 0)],
+        ),
+      );
       await _settle();
       expect(container.read(exposureControllerProvider).filterSlot, 'UV');
     });

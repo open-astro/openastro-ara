@@ -16,7 +16,9 @@ class PlanOfflineButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final hasProfiles = ref.watch(cachedProfilesProvider).maybeWhen(
+    final hasProfiles = ref
+        .watch(cachedProfilesProvider)
+        .maybeWhen(
           data: (cached) => cached.profiles.isNotEmpty,
           orElse: () => false,
         );
@@ -36,7 +38,8 @@ class PlanOfflineButton extends ConsumerWidget {
     );
     if (hasProfiles) return button;
     return Tooltip(
-      message: 'Offline planning needs a profile — connect to your server '
+      message:
+          'Offline planning needs a profile — connect to your server '
           'once and set one up first.',
       child: button,
     );

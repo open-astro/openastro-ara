@@ -134,7 +134,10 @@ void main() {
       );
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pump();
-      expect(container.read(siteSettingsProvider).value!.sqmMagPerArcsec2, 21.9);
+      expect(
+        container.read(siteSettingsProvider).value!.sqmMagPerArcsec2,
+        21.9,
+      );
       await expectDerived(tester, 1);
     },
   );

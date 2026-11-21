@@ -37,8 +37,10 @@ class LogsApi implements LogsClient {
   /// [dio] is injectable so tests can supply a stub adapter; production passes
   /// nothing and a server-bound Dio is built.
   LogsApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               // Small request bodies, but bound the send so a frozen daemon can't
@@ -46,7 +48,8 @@ class LogsApi implements LogsClient {
               sendTimeout: const Duration(seconds: 10),
               // A whole-file download can be a few MB; give it room.
               receiveTimeout: const Duration(seconds: 30),
-            ));
+            ),
+          );
 
   @override
   Future<List<LogEntry>> tail({
@@ -72,7 +75,9 @@ class LogsApi implements LogsClient {
       // A 2xx with a non-array body means the wire contract changed (or an error
       // envelope slipped through). Throw rather than return [] so the Support tab
       // surfaces an error state instead of a silently-empty log list.
-      throw FormatException('logs/tail returned a non-array body (${data.runtimeType})');
+      throw FormatException(
+        'logs/tail returned a non-array body (${data.runtimeType})',
+      );
     }
     return data
         .whereType<Map<String, dynamic>>()
@@ -102,7 +107,8 @@ class LogsApi implements LogsClient {
       throw StateError('Log download returned an empty body.');
     }
     return fileNameFromContentDisposition(
-            res.headers.value('content-disposition')) ??
+          res.headers.value('content-disposition'),
+        ) ??
         'openastroara-server.log';
   }
 

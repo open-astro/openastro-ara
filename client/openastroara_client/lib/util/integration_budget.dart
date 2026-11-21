@@ -63,8 +63,11 @@ class IntegrationTier {
   final String label;
   final double hours;
   final bool practical;
-  const IntegrationTier(
-      {required this.label, required this.hours, required this.practical});
+  const IntegrationTier({
+    required this.label,
+    required this.hours,
+    required this.practical,
+  });
 }
 
 /// The budget for one target through one filter approach.
@@ -185,7 +188,8 @@ String formatBudgetHours(double h) {
 double kastenYoungAirmass(double altitudeDeg) {
   final alt = altitudeDeg.clamp(0.0, 90.0);
   final zenith = 90.0 - alt;
-  final x = 1.0 /
+  final x =
+      1.0 /
       (math.cos(zenith * math.pi / 180.0) +
           0.50572 * math.pow(alt + 6.07995, -1.6364));
   // The fit dips a hair below 1 at zenith — an airmass under one atmosphere
@@ -213,16 +217,15 @@ double moonBrighteningMag({
 
   // K&S eq. 20 — the moon's illuminance (their I*), log scale.
   final iStar = math.pow(
-      10.0,
-      -0.4 *
-          (3.84 +
-              0.026 * alphaDeg.abs() +
-              4.0e-9 * math.pow(alphaDeg, 4)));
+    10.0,
+    -0.4 * (3.84 + 0.026 * alphaDeg.abs() + 4.0e-9 * math.pow(alphaDeg, 4)),
+  );
 
   // K&S eq. 21 — the scattering function of separation ρ (Rayleigh + Mie).
   final rho = separationDeg.clamp(0.0, 180.0);
   final cosRho = math.cos(rho * math.pi / 180.0);
-  final fRho = math.pow(10.0, 5.36) * (1.06 + cosRho * cosRho) +
+  final fRho =
+      math.pow(10.0, 5.36) * (1.06 + cosRho * cosRho) +
       math.pow(10.0, 6.15 - rho / 40.0);
 
   // K&S eq. 15 — moon sky brightness in nanoLamberts: scattered moonlight
@@ -233,7 +236,8 @@ double moonBrighteningMag({
   // we evaluate at the moon-lit sky patch, approximated by the target patch
   // being at a generic mid-sky airmass of 1.2 when not otherwise known.
   const xTarget = 1.2;
-  final bMoonNl = fRho *
+  final bMoonNl =
+      fRho *
       iStar *
       math.pow(10.0, -0.4 * extinctionMagPerAirmass * xMoon) *
       (1 - math.pow(10.0, -0.4 * extinctionMagPerAirmass * xTarget));
@@ -249,7 +253,9 @@ double moonBrighteningMag({
 /// Flux-space sum of two sky brightnesses (mag/arcsec²) — you cannot add
 /// magnitudes; you add the light.
 double combineSkyMags(double a, double b) =>
-    -2.5 * math.log(math.pow(10, -0.4 * a) + math.pow(10, -0.4 * b)) / math.ln10;
+    -2.5 *
+    math.log(math.pow(10, -0.4 * a) + math.pow(10, -0.4 * b)) /
+    math.ln10;
 
 /// THEOREM: the integration [snr] needs, in seconds, when the target delivers
 /// [targetRate] and the sky [skyRate] (same units, e.g. e⁻/s per pixel or per
@@ -262,10 +268,9 @@ double requiredIntegrationSeconds({
   required double snr,
   required double targetRate,
   required double skyRate,
-}) =>
-    targetRate > 0
-        ? snr * snr * (targetRate + skyRate) / (targetRate * targetRate)
-        : double.infinity;
+}) => targetRate > 0
+    ? snr * snr * (targetRate + skyRate) / (targetRate * targetRate)
+    : double.infinity;
 
 /// THEOREM, solved for SNR: the stack SNR after [seconds] of integration,
 /// S_t·√T / √(S_t + S_sky) — the inverse of [requiredIntegrationSeconds],
@@ -274,10 +279,9 @@ double stackSnr({
   required double seconds,
   required double targetRate,
   required double skyRate,
-}) =>
-    targetRate > 0 && seconds > 0
-        ? targetRate * math.sqrt(seconds) / math.sqrt(targetRate + skyRate)
-        : 0.0;
+}) => targetRate > 0 && seconds > 0
+    ? targetRate * math.sqrt(seconds) / math.sqrt(targetRate + skyRate)
+    : 0.0;
 
 /// The budget. [input] carries the rig + filter + the MOONLESS sky brightness
 /// (the same [OptimalSubInput] the Glover advisor builds — one flux chain);
@@ -298,7 +302,8 @@ IntegrationBudget computeIntegrationBudget({
 }) {
   final airmass = kastenYoungAirmass(peakAltitudeDeg);
 
-  final moonMag = (moonIlluminatedFraction != null &&
+  final moonMag =
+      (moonIlluminatedFraction != null &&
           moonAltitudeDeg != null &&
           moonSeparationDeg != null)
       ? moonBrighteningMag(
@@ -323,7 +328,10 @@ IntegrationBudget computeIntegrationBudget({
     final sb = surfaceBrightnessMagArcsec2 + offsetMag + extinctionMag;
     final sTarget = skyFluxEPerSecPerPx(_withSkyMag(input, sb));
     final tSec = requiredIntegrationSeconds(
-        snr: snrGoal, targetRate: sTarget, skyRate: sSky);
+      snr: snrGoal,
+      targetRate: sTarget,
+      skyRate: sSky,
+    );
     final hours = tSec / 3600.0;
     return IntegrationTier(
       label: label,
@@ -343,7 +351,8 @@ IntegrationBudget computeIntegrationBudget({
     filterBandwidthNm: input.filterBandwidthNm,
     skyFluxEPerSecPx: sSky,
     coreTargetFluxEPerSecPx: skyFluxEPerSecPerPx(
-        _withSkyMag(input, surfaceBrightnessMagArcsec2 + extinctionMag)),
+      _withSkyMag(input, surfaceBrightnessMagArcsec2 + extinctionMag),
+    ),
     tuning: tuning,
     skyCalibrationK: input.skyCalibrationK,
   );
@@ -373,13 +382,12 @@ class TierProgress {
   /// The one-line row text. (Nothing banked yet is [tierProgress] returning
   /// null — the plain "needs ~N h" line already says it.)
   String get line => switch (standing) {
-        TierStanding.complete =>
-          'Full-structure tier complete — diminishing returns; consider a new target.',
-        TierStanding.finishesTonight =>
-          '${_fmt(hoursToGo)} to go — finishes tonight.',
-        TierStanding.needsMoreNights =>
-          '${_fmt(hoursToGo)} to go — needs another night.',
-      };
+    TierStanding.complete => 'Full-structure tier complete — diminishing returns; consider a new target.',
+    TierStanding.finishesTonight =>
+      '${_fmt(hoursToGo)} to go — finishes tonight.',
+    TierStanding.needsMoreNights =>
+      '${_fmt(hoursToGo)} to go — needs another night.',
+  };
 
   static String _fmt(double h) => formatBudgetHours(h);
 }
@@ -404,17 +412,17 @@ TierProgress? tierProgress({
 }
 
 OptimalSubInput _withSkyMag(OptimalSubInput i, double mag) => OptimalSubInput(
-      readNoiseE: i.readNoiseE,
-      fullWellE: i.fullWellE,
-      electronsPerAdu: i.electronsPerAdu,
-      pixelSizeUm: i.pixelSizeUm,
-      apertureMm: i.apertureMm,
-      focalLengthMm: i.focalLengthMm,
-      reducerFactor: i.reducerFactor,
-      quantumEfficiency: i.quantumEfficiency,
-      skyMagPerArcsec2: mag,
-      filterBandwidthNm: i.filterBandwidthNm,
-      noiseTolerancePct: i.noiseTolerancePct,
-      saturationHeadroomFraction: i.saturationHeadroomFraction,
-      skyCalibrationK: i.skyCalibrationK,
-    );
+  readNoiseE: i.readNoiseE,
+  fullWellE: i.fullWellE,
+  electronsPerAdu: i.electronsPerAdu,
+  pixelSizeUm: i.pixelSizeUm,
+  apertureMm: i.apertureMm,
+  focalLengthMm: i.focalLengthMm,
+  reducerFactor: i.reducerFactor,
+  quantumEfficiency: i.quantumEfficiency,
+  skyMagPerArcsec2: mag,
+  filterBandwidthNm: i.filterBandwidthNm,
+  noiseTolerancePct: i.noiseTolerancePct,
+  saturationHeadroomFraction: i.saturationHeadroomFraction,
+  skyCalibrationK: i.skyCalibrationK,
+);

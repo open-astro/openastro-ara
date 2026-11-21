@@ -110,7 +110,11 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
     try {
       final info = await ref.read(serverHandshakeProvider.future);
       if (info != null) {
-        unawaited(ref.read(lastRigServiceProvider).save(LastRig(info.name, uuid: info.uuid)));
+        unawaited(
+          ref
+              .read(lastRigServiceProvider)
+              .save(LastRig(info.name, uuid: info.uuid)),
+        );
       }
       final offline = ref.read(offlineModeProvider);
       await ref.read(savedServersProvider.notifier).add(server);
@@ -140,7 +144,8 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
   Widget build(BuildContext context) {
     ref.listen(discoveredServersProvider, (_, next) {
       // AsyncData only: a rescan's loading state still carries the last rig, which is no new sighting.
-      if (next case AsyncData(:final value, isLoading: false)) setState(() => _seen[value] = _scan);
+      if (next case AsyncData(:final value, isLoading: false))
+        setState(() => _seen[value] = _scan);
     });
     final found = {
       for (final e in _seen.entries)
@@ -162,7 +167,12 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
       return Container(
         key: Key('simple-rig-card-row-${s.hostname}:${s.port}'),
         constraints: const BoxConstraints(minHeight: 52),
-        padding: const EdgeInsets.fromLTRB(AraSpace.s12, AraSpace.s4, AraSpace.s4, AraSpace.s4),
+        padding: const EdgeInsets.fromLTRB(
+          AraSpace.s12,
+          AraSpace.s4,
+          AraSpace.s4,
+          AraSpace.s4,
+        ),
         decoration: BoxDecoration(
           color: AraColors.tileFill,
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
@@ -175,40 +185,75 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
             final words = Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(name(s), style: kSimpleText.copyWith(fontWeight: FontWeight.w500)),
+                Text(
+                  name(s),
+                  style: kSimpleText.copyWith(fontWeight: FontWeight.w500),
+                ),
                 Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                      text: isFound ? l10n.simpleRigFound : l10n.simpleRigSavedNotSeen,
-                      style: TextStyle(color: isFound ? AraColors.linkText : AraColors.accentWarning),
-                    ),
-                    TextSpan(text: ' · ${s.hostname}:${s.port}'),
-                  ]),
-                  style: kSimpleCaption.copyWith(color: AraColors.textSecondary),
+                  TextSpan(
+                    children: [
+                      TextSpan(
+                        text: isFound
+                            ? l10n.simpleRigFound
+                            : l10n.simpleRigSavedNotSeen,
+                        style: TextStyle(
+                          color: isFound
+                              ? AraColors.linkText
+                              : AraColors.accentWarning,
+                        ),
+                      ),
+                      TextSpan(text: ' · ${s.hostname}:${s.port}'),
+                    ],
+                  ),
+                  style: kSimpleCaption.copyWith(
+                    color: AraColors.textSecondary,
+                  ),
                 ),
               ],
             );
             final button = isSession
                 ? FilledButton(
                     key: const Key('simple-rig-card-reconnect'),
-                    style: FilledButton.styleFrom(minimumSize: const Size(0, 44)),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
                     onPressed: busy ? null : () => _connect(s, session: true),
-                    child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.shellReconnect),
+                    child: Text(
+                      _connecting == s
+                          ? l10n.simpleRigConnecting
+                          : l10n.shellReconnect,
+                    ),
                   )
                 : OutlinedButton(
                     key: Key('simple-rig-card-connect-${s.hostname}:${s.port}'),
-                    style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 44),
+                    ),
                     onPressed: busy ? null : () => _connect(s, session: false),
-                    child: Text(_connecting == s ? l10n.simpleRigConnecting : l10n.simpleRigConnect),
+                    child: Text(
+                      _connecting == s
+                          ? l10n.simpleRigConnecting
+                          : l10n.simpleRigConnect,
+                    ),
                   );
-            if (box.maxWidth >= MediaQuery.textScalerOf(context).scale(_kRowBesideWidth)) {
-              return Row(spacing: AraSpace.s12, children: [Expanded(child: words), button]);
+            if (box.maxWidth >=
+                MediaQuery.textScalerOf(context).scale(_kRowBesideWidth)) {
+              return Row(
+                spacing: AraSpace.s12,
+                children: [
+                  Expanded(child: words),
+                  button,
+                ],
+              );
             }
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               spacing: AraSpace.s4,
               children: [
-                Padding(padding: const EdgeInsets.only(right: AraSpace.s8), child: words),
+                Padding(
+                  padding: const EdgeInsets.only(right: AraSpace.s8),
+                  child: words,
+                ),
                 Align(alignment: Alignment.centerRight, child: button),
               ],
             );
@@ -219,7 +264,10 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
 
     // No spinner: the scan never ends while the card shows, and "Looking
     // for rigs…" says it when nothing is found.
-    Widget heading(String text) => Semantics(header: true, child: Text(text.toUpperCase(), style: AraText.section));
+    Widget heading(String text) => Semantics(
+      header: true,
+      child: Text(text.toUpperCase(), style: AraText.section),
+    );
 
     final failed = _failed;
     return ConstrainedBox(
@@ -239,7 +287,9 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                     child: Semantics(
                       header: true,
                       child: Text(
-                        offline ? l10n.simpleRigGoOnline : l10n.simpleRigConnectTitle,
+                        offline
+                            ? l10n.simpleRigGoOnline
+                            : l10n.simpleRigConnectTitle,
                         style: kSimpleReading,
                       ),
                     ),
@@ -248,23 +298,31 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                     IconButton(
                       key: const Key('simple-rig-card-close'),
                       focusNode: _closeFocus,
-                      tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
+                      tooltip: MaterialLocalizations.of(context)
+                          .closeButtonTooltip,
                       icon: const Icon(Icons.close, size: 18),
                       onPressed: widget.onClose,
                     ),
                 ],
               ),
               Text(
-                offline || session == null ? l10n.simpleRigOfflineHint : l10n.simpleRigDropped(name(session)),
+                offline || session == null
+                    ? l10n.simpleRigOfflineHint
+                    : l10n.simpleRigDropped(name(session)),
                 style: kSimpleText.copyWith(color: AraColors.textSecondary),
               ),
               if (session != null) ...[
                 heading(l10n.simpleRigThisSession),
                 row(session, isSession: true),
               ],
-              heading(session == null ? l10n.simpleRigRigs : l10n.simpleRigOthers),
+              heading(
+                session == null ? l10n.simpleRigRigs : l10n.simpleRigOthers,
+              ),
               if (others.isEmpty)
-                Text(l10n.simpleRigLooking, style: kSimpleText.copyWith(color: AraColors.textSecondary))
+                Text(
+                  l10n.simpleRigLooking,
+                  style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                )
               else
                 for (final s in others) row(s, isSession: false),
               if (failed != null)
@@ -299,7 +357,9 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                         decoration: InputDecoration(
                           labelText: l10n.simpleRigAddByAddress,
                           hintText: l10n.simpleRigAddressHint,
-                          errorText: _badAddress ? l10n.simpleRigAddressInvalid : null,
+                          errorText: _badAddress
+                              ? l10n.simpleRigAddressInvalid
+                              : null,
                           errorMaxLines: 3,
                         ),
                         onChanged: (_) {
@@ -310,9 +370,15 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
                     ),
                     OutlinedButton(
                       key: const Key('simple-rig-card-address-connect'),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size(0, 44)),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 44),
+                      ),
                       onPressed: _connecting != null ? null : _connectAddress,
-                      child: Text(_connectingAddress ? l10n.simpleRigConnecting : l10n.simpleRigConnect),
+                      child: Text(
+                        _connectingAddress
+                            ? l10n.simpleRigConnecting
+                            : l10n.simpleRigConnect,
+                      ),
                     ),
                   ],
                 ),
@@ -327,7 +393,9 @@ class _SimpleRigCardState extends ConsumerState<SimpleRigCard> {
     final server = parseRigAddress(_address.text);
     setState(() => _badAddress = server == null);
     if (server == null) return;
-    final session = ref.read(offlineModeProvider) ? null : ref.read(activeServerProvider);
+    final session = ref.read(offlineModeProvider)
+        ? null
+        : ref.read(activeServerProvider);
     _connectingAddress = true;
     unawaited(_connect(server, session: server == session));
   }
@@ -348,7 +416,12 @@ class SimpleRigBar extends ConsumerWidget {
     final l10n = context.l10n;
     return SimplePanel(
       key: const Key('simple-rig-bar'),
-      padding: const EdgeInsets.fromLTRB(AraSpace.s12, AraSpace.s4, AraSpace.s4, AraSpace.s4),
+      padding: const EdgeInsets.fromLTRB(
+        AraSpace.s12,
+        AraSpace.s4,
+        AraSpace.s4,
+        AraSpace.s4,
+      ),
       // Connect drops under the words when large text leaves no room beside them.
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -357,7 +430,9 @@ class SimpleRigBar extends ConsumerWidget {
         runSpacing: AraSpace.s4,
         children: [
           Text(
-            ref.watch(offlineModeProvider) ? l10n.simpleRigGoOnline : l10n.shellRigNotConnected,
+            ref.watch(offlineModeProvider)
+                ? l10n.simpleRigGoOnline
+                : l10n.shellRigNotConnected,
             style: kSimpleText.copyWith(color: AraColors.accentWarning),
           ),
           FilledButton(

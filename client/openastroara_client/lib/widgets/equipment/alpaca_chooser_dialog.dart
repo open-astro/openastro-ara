@@ -63,8 +63,7 @@ class AlpacaDeviceChooser extends ConsumerStatefulWidget {
 class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
   bool get _inline => widget.onClose != null;
 
-  void _close() =>
-      _inline ? widget.onClose!() : Navigator.of(context).pop();
+  void _close() => _inline ? widget.onClose!() : Navigator.of(context).pop();
 
   late Future<List<DiscoveredDevice>> _future;
 
@@ -103,7 +102,10 @@ class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
     future: _future,
     builder: (context, snap) {
       if (snap.connectionState == ConnectionState.waiting) {
-        return const Center(heightFactor: 2, child: AdaptiveProgressIndicator());
+        return const Center(
+          heightFactor: 2,
+          child: AdaptiveProgressIndicator(),
+        );
       }
       if (snap.hasError) {
         return _ErrorState(error: snap.error, onRetry: _refresh);
@@ -117,10 +119,8 @@ class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
         itemCount: devices.length,
         separatorBuilder: (_, _) =>
             const Divider(height: 1, color: AraColors.border),
-        itemBuilder: (_, i) => _DeviceTile(
-          device: devices[i],
-          onTap: () => _pick(devices[i]),
-        ),
+        itemBuilder: (_, i) =>
+            _DeviceTile(device: devices[i], onTap: () => _pick(devices[i])),
       );
     },
   );
@@ -144,7 +144,12 @@ class _AlpacaDeviceChooserState extends ConsumerState<AlpacaDeviceChooser> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Row(children: [Expanded(child: title), rescan]),
+              Row(
+                children: [
+                  Expanded(child: title),
+                  rescan,
+                ],
+              ),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 320),
                 child: _list(),
@@ -191,10 +196,9 @@ class _DeviceTile extends StatelessWidget {
         device.isManualFilterWheel
             ? context.l10n.deviceChooserManualWheel
             : '$scheme://${device.hostName.isNotEmpty ? device.hostName : device.ipAddress}:${device.ipPort}'
-                ' ·  device #${device.alpacaDeviceNumber}',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: AraColors.textSecondary,
-            ),
+                  ' ·  device #${device.alpacaDeviceNumber}',
+        style: Theme.of(context).textTheme.bodySmall
+            ?.copyWith(color: AraColors.textSecondary),
       ),
       trailing: const Icon(Icons.chevron_right),
       onTap: onTap,
@@ -218,16 +222,23 @@ class _EmptyState extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search_off, size: 48, color: AraColors.textDisabled),
+            const Icon(
+              Icons.search_off,
+              size: 48,
+              color: AraColors.textDisabled,
+            ),
             const SizedBox(height: 12),
-            Text(context.l10n.deviceChooserNoneTitle, style: theme.textTheme.titleMedium),
+            Text(
+              context.l10n.deviceChooserNoneTitle,
+              style: theme.textTheme.titleMedium,
+            ),
             const SizedBox(height: 4),
             Text(
               context.l10n.deviceChooserNoneBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                color: AraColors.textSecondary,
+              ),
             ),
             const SizedBox(height: 8),
             Container(
@@ -239,8 +250,9 @@ class _EmptyState extends StatelessWidget {
               child: Text(
                 'sudo apt install alpaca-bridge\n'
                 'systemctl status alpaca-bridge',
-                style: theme.textTheme.bodySmall
-                    ?.copyWith(fontFamily: 'monospace'),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontFamily: 'monospace',
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -248,8 +260,8 @@ class _EmptyState extends StatelessWidget {
               context.l10n.deviceChooserOtherHost,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                color: AraColors.textSecondary,
+              ),
             ),
           ],
         ),
@@ -268,39 +280,45 @@ class _ErrorState extends StatelessWidget {
   Widget build(BuildContext context) {
     final message = switch (error) {
       _NotConnected() => context.l10n.deviceChooserNotConnected,
-      Object e => friendlyError(context.l10n, e, action: context.l10n.deviceChooserFindAction),
+      Object e => friendlyError(
+        context.l10n,
+        e,
+        action: context.l10n.deviceChooserFindAction,
+      ),
       _ => 'Unknown error',
     };
     return Center(
       child: SingleChildScrollView(
         child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline,
-              size: 48, color: AraColors.accentError),
-          const SizedBox(height: 12),
-          Text(
-            context.l10n.deviceChooserFailed,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.error_outline,
+              size: 48,
+              color: AraColors.accentError,
             ),
-          ),
-          const SizedBox(height: 12),
-          TextButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: Text(context.l10n.deviceChooserRetry),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              context.l10n.deviceChooserFailed,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: AraColors.textSecondary),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text(context.l10n.deviceChooserRetry),
+            ),
+          ],
         ),
       ),
     );

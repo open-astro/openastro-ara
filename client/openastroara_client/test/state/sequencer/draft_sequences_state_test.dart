@@ -12,11 +12,12 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 /// else is unused by the drafts notifier.
 class _FakeSeqClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(String id,
-          {required List<int> parentPath,
-          int? index,
-          required Map<String, dynamic> item}) =>
-      throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) => throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -29,8 +30,12 @@ class _FakeSeqClient implements SequenceClient {
   Object? createError;
 
   @override
-  Future<String> create(String name, Map<String, dynamic> body,
-      {String? description, String? idempotencyKey}) async {
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+    String? idempotencyKey,
+  }) async {
     if (createError != null) throw createError!;
     created.add((name, body));
     keys.add(idempotencyKey);
@@ -54,20 +59,23 @@ void main() {
   });
 
   ProviderContainer container({SequenceClient? api}) {
-    final c = ProviderContainer(overrides: [
-      draftSequenceServiceProvider.overrideWithValue(
-          DraftSequenceService(supportDir: () async => tmp)),
-      sequenceApiProvider.overrideWith((ref) => api),
-    ]);
+    final c = ProviderContainer(
+      overrides: [
+        draftSequenceServiceProvider.overrideWithValue(
+          DraftSequenceService(supportDir: () async => tmp),
+        ),
+        sequenceApiProvider.overrideWith((ref) => api),
+      ],
+    );
     addTearDown(c.dispose);
     return c;
   }
 
   test('create stores a draft and returns a namespaced id', () async {
     final c = container();
-    final id = await c
-        .read(draftSequencesProvider.notifier)
-        .create('M 31', {'items': []});
+    final id = await c.read(draftSequencesProvider.notifier).create('M 31', {
+      'items': [],
+    });
     expect(id, startsWith('draft:'));
     final drafts = await c.read(draftSequencesProvider.future);
     expect(drafts.single.name, 'M 31');
@@ -123,28 +131,32 @@ void main() {
     expect(await c.read(draftSequencesProvider.future), isEmpty);
   });
 
-  test('push sends a stable idempotency key: the stamped pushKey, else the id',
-      () async {
-    final api = _FakeSeqClient();
-    final c = container(api: api);
-    final notifier = c.read(draftSequencesProvider.notifier);
-    await c.read(draftSequencesProvider.future);
-    // Born-offline draft → key falls back to the draft id.
-    final plain = await notifier.create('M 31', {'v': 1});
-    await notifier.push(plain);
-    expect(api.keys.single, plain);
-    // Degraded-create draft → the ORIGINAL create key is reused.
-    final stamped =
-        await notifier.create('M 42', {'v': 2}, pushKey: 'run-original-key');
-    await notifier.push(stamped);
-    expect(api.keys.last, 'run-original-key');
-  });
+  test(
+    'push sends a stable idempotency key: the stamped pushKey, else the id',
+    () async {
+      final api = _FakeSeqClient();
+      final c = container(api: api);
+      final notifier = c.read(draftSequencesProvider.notifier);
+      await c.read(draftSequencesProvider.future);
+      // Born-offline draft → key falls back to the draft id.
+      final plain = await notifier.create('M 31', {'v': 1});
+      await notifier.push(plain);
+      expect(api.keys.single, plain);
+      // Degraded-create draft → the ORIGINAL create key is reused.
+      final stamped = await notifier.create('M 42', {
+        'v': 2,
+      }, pushKey: 'run-original-key');
+      await notifier.push(stamped);
+      expect(api.keys.last, 'run-original-key');
+    },
+  );
 
   test('saveBody preserves the stamped pushKey', () async {
     final c = container();
     final notifier = c.read(draftSequencesProvider.notifier);
-    final id =
-        await notifier.create('M 31', {'v': 1}, pushKey: 'run-original-key');
+    final id = await notifier.create('M 31', {
+      'v': 1,
+    }, pushKey: 'run-original-key');
     await notifier.saveBody(id, {'v': 2});
     final drafts = await c.read(draftSequencesProvider.future);
     expect(drafts.single.pushKey, 'run-original-key');

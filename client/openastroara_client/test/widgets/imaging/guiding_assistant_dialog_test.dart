@@ -231,7 +231,9 @@ Future<_Fake> _pump(
         activeServerProvider.overrideWith((ref) => ref.watch(_server)),
         guidingAssistantApiFactoryProvider.overrideWithValue((_) => fake!),
         guiderLiveApiFactoryProvider.overrideWithValue((_) => live!),
-        guiderStatusProvider.overrideWith(() => _GuiderAt(guider, guiderConnection)),
+        guiderStatusProvider.overrideWith(
+          () => _GuiderAt(guider, guiderConnection),
+        ),
         profileApiProvider.overrideWithValue(profile ?? _Profile()),
       ],
       child: MaterialApp(
@@ -263,7 +265,6 @@ ProviderContainer _container(WidgetTester t) =>
 String _text(WidgetTester t, Key key) => t.widget<Text>(find.byKey(key)).data!;
 
 void main() {
-
   Future<void> pumpGated(
     WidgetTester t,
     GuiderLive view,
@@ -276,23 +277,26 @@ void main() {
 
   bool startEnabled(WidgetTester t) =>
       t
-          .widget<FilledButton>(find.byKey(const Key('guiding-assistant-start')))
+          .widget<FilledButton>(
+            find.byKey(const Key('guiding-assistant-start')),
+          )
           .onPressed !=
       null;
 
-  testWidgets('Start is disabled with no star selected and names what is missing', (
-    t,
-  ) async {
-    await pumpGated(t, _looping, _calibrated);
-    expect(startEnabled(t), isFalse);
-    expect(
-      _text(t, const Key('guiding-assistant-missing')),
-      contains('a selected star'),
-    );
-    expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
-    expect(find.byKey(const Key('ga-req-star-missing')), findsOneWidget);
-    expect(find.byKey(const Key('ga-req-calibrated-ok')), findsOneWidget);
-  });
+  testWidgets(
+    'Start is disabled with no star selected and names what is missing',
+    (t) async {
+      await pumpGated(t, _looping, _calibrated);
+      expect(startEnabled(t), isFalse);
+      expect(
+        _text(t, const Key('guiding-assistant-missing')),
+        contains('a selected star'),
+      );
+      expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
+      expect(find.byKey(const Key('ga-req-star-missing')), findsOneWidget);
+      expect(find.byKey(const Key('ga-req-calibrated-ok')), findsOneWidget);
+    },
+  );
 
   testWidgets('Start is disabled while the guider is not looping', (t) async {
     await pumpGated(t, _stopped, _calibrated);
@@ -314,70 +318,74 @@ void main() {
     );
   });
 
-  testWidgets('Start is enabled when looping, a star is selected and calibrated', (
-    t,
-  ) async {
-    await pumpGated(t, _selected, _calibrated);
-    expect(startEnabled(t), isTrue);
-    expect(find.byKey(const Key('guiding-assistant-missing')), findsNothing);
-  });
+  testWidgets(
+    'Start is enabled when looping, a star is selected and calibrated',
+    (t) async {
+      await pumpGated(t, _selected, _calibrated);
+      expect(startEnabled(t), isTrue);
+      expect(find.byKey(const Key('guiding-assistant-missing')), findsNothing);
+    },
+  );
 
-  testWidgets('Find star from a stopped guider loops, locks a star and shows the picture', (
-    t,
-  ) async {
-    final live = _Live(_stopped, _calibrated);
-    await _pump(
-      t,
-      const GuidingAssistantStatus(connected: true, state: 'idle'),
-      live: live,
-    );
-    expect(find.byType(GuideCameraView), findsNothing);
-    await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
-    await t.pump();
-    await t.pump();
-    await t.pump();
-    expect(live.calls, ['loop', 'find_star']);
-    expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
-    expect(find.byKey(const Key('ga-req-star-ok')), findsOneWidget);
-    expect(_text(t, const Key('ga-lock-position')), '640, 480');
-    expect(find.byType(GuideCameraView), findsOneWidget);
-    expect(startEnabled(t), isTrue);
-  });
+  testWidgets(
+    'Find star from a stopped guider loops, locks a star and shows the picture',
+    (t) async {
+      final live = _Live(_stopped, _calibrated);
+      await _pump(
+        t,
+        const GuidingAssistantStatus(connected: true, state: 'idle'),
+        live: live,
+      );
+      expect(find.byType(GuideCameraView), findsNothing);
+      await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
+      await t.pump();
+      await t.pump();
+      await t.pump();
+      expect(live.calls, ['loop', 'find_star']);
+      expect(find.byKey(const Key('ga-req-looping-ok')), findsOneWidget);
+      expect(find.byKey(const Key('ga-req-star-ok')), findsOneWidget);
+      expect(_text(t, const Key('ga-lock-position')), '640, 480');
+      expect(find.byType(GuideCameraView), findsOneWidget);
+      expect(startEnabled(t), isTrue);
+    },
+  );
 
-  testWidgets('Find star with no usable star says so plainly, with the guider\'s reason', (
-    t,
-  ) async {
-    final live = _Live(_looping, _calibrated)
-      ..findStarRefusal = 'no star found - exposure too short';
-    await _pump(
-      t,
-      const GuidingAssistantStatus(connected: true, state: 'idle'),
-      live: live,
-    );
-    await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
-    await t.pump();
-    await t.pump();
-    await t.pump();
-    final msg = _text(t, const Key('guiding-assistant-error'));
-    expect(msg, contains("Couldn't find a star"));
-    expect(msg, contains('exposure too short'));
-  });
+  testWidgets(
+    'Find star with no usable star says so plainly, with the guider\'s reason',
+    (t) async {
+      final live = _Live(_looping, _calibrated)
+        ..findStarRefusal = 'no star found - exposure too short';
+      await _pump(
+        t,
+        const GuidingAssistantStatus(connected: true, state: 'idle'),
+        live: live,
+      );
+      await t.tap(find.byKey(const Key('guiding-assistant-find-star')));
+      await t.pump();
+      await t.pump();
+      await t.pump();
+      final msg = _text(t, const Key('guiding-assistant-error'));
+      expect(msg, contains("Couldn't find a star"));
+      expect(msg, contains('exposure too short'));
+    },
+  );
 
-  testWidgets('a start refused for no star shows a plain message, not the raw 422', (
-    t,
-  ) async {
-    final fake = await _pump(
-      t,
-      const GuidingAssistantStatus(connected: true, state: 'idle'),
-    );
-    fake.refuseStart = true;
-    await t.tap(find.byKey(const Key('guiding-assistant-start')));
-    await t.pump();
-    await t.pump();
-    final msg = _text(t, const Key('guiding-assistant-error'));
-    expect(msg, isNot(contains('loop + find_star')));
-    expect(msg, contains('Find star'));
-  });
+  testWidgets(
+    'a start refused for no star shows a plain message, not the raw 422',
+    (t) async {
+      final fake = await _pump(
+        t,
+        const GuidingAssistantStatus(connected: true, state: 'idle'),
+      );
+      fake.refuseStart = true;
+      await t.tap(find.byKey(const Key('guiding-assistant-start')));
+      await t.pump();
+      await t.pump();
+      final msg = _text(t, const Key('guiding-assistant-error'));
+      expect(msg, isNot(contains('loop + find_star')));
+      expect(msg, contains('Find star'));
+    },
+  );
   testWidgets('idle: Start sends the chosen duration and backlash flag', (
     t,
   ) async {
@@ -627,7 +635,9 @@ void main() {
     expect(find.textContaining('· applied'), findsNothing);
     expect(
       t
-          .widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-exposure')))
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('ga-suggest-exposure')),
+          )
           .value,
       isTrue,
       reason: 'the new run offers everything again',
@@ -651,7 +661,9 @@ void main() {
     expect(find.textContaining('· applied'), findsNothing);
     expect(
       t
-          .widget<CheckboxListTile>(find.byKey(const Key('ga-suggest-exposure')))
+          .widget<CheckboxListTile>(
+            find.byKey(const Key('ga-suggest-exposure')),
+          )
           .value,
       isTrue,
     );
@@ -693,17 +705,23 @@ void main() {
     expect(_text(t, const Key('ga-figure-2')), '0.30 px');
   });
 
-  testWidgets('a guider no longer connected is not "guiding", whatever phase it last reported', (t) async {
-    await _pump(
-      t,
-      const GuidingAssistantStatus(connected: true, state: 'idle'),
-      guider: GuiderRuntimeState.guiding,
-      guiderConnection: GuiderConnectionState.disconnected,
-    );
-    // Only the guiding refusal is pinned: the rest of this setup (assistant still
-    // connected, a live star) is not a state a dropped guider leaves behind.
-    expect(_text(t, const Key('guiding-assistant-headline')), isNot(startsWith('Stop guiding first')));
-  });
+  testWidgets(
+    'a guider no longer connected is not "guiding", whatever phase it last reported',
+    (t) async {
+      await _pump(
+        t,
+        const GuidingAssistantStatus(connected: true, state: 'idle'),
+        guider: GuiderRuntimeState.guiding,
+        guiderConnection: GuiderConnectionState.disconnected,
+      );
+      // Only the guiding refusal is pinned: the rest of this setup (assistant still
+      // connected, a live star) is not a state a dropped guider leaves behind.
+      expect(
+        _text(t, const Key('guiding-assistant-headline')),
+        isNot(startsWith('Stop guiding first')),
+      );
+    },
+  );
 
   testWidgets('Start waits while the guider is guiding', (t) async {
     await _pump(

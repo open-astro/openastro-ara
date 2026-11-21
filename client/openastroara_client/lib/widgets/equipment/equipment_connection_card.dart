@@ -78,26 +78,26 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         child: !ref.watch(serverLinkUpProvider)
             ? _serverOffline(context)
             : switch (status) {
-          // A device that's never been connected 404s (null) → the bare
-          // "nothing known" row (Reconnect + Connect…). One disconnected after a
-          // session reports a NON-null status with state == disconnected: the
-          // daemon still knows it, so it keeps its card — name, chip, Connect
-          // (that device, no chooser) and Remove — like a Switch card does.
-          AsyncData(:final value) => value == null
-              ? _noDevice(context)
-              : _device(context, value),
-          AsyncError(:final error) => _MessageRow(
-              icon: Icons.error_outline,
-              color: AraColors.accentError,
-              text: "Couldn't read the $deviceTypeLabel: "
-                  '${failureReason(context.l10n, error)}',
-              onRetry: onRetry,
-            ),
-          _ => const Padding(
-              padding: EdgeInsets.all(12),
-              child: Center(child: AdaptiveProgressIndicator()),
-            ),
-        },
+                // A device that's never been connected 404s (null) → the bare
+                // "nothing known" row (Reconnect + Connect…). One disconnected after a
+                // session reports a NON-null status with state == disconnected: the
+                // daemon still knows it, so it keeps its card — name, chip, Connect
+                // (that device, no chooser) and Remove — like a Switch card does.
+                AsyncData(:final value) =>
+                  value == null ? _noDevice(context) : _device(context, value),
+                AsyncError(:final error) => _MessageRow(
+                  icon: Icons.error_outline,
+                  color: AraColors.accentError,
+                  text:
+                      "Couldn't read the $deviceTypeLabel: "
+                      '${failureReason(context.l10n, error)}',
+                  onRetry: onRetry,
+                ),
+                _ => const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Center(child: AdaptiveProgressIndicator()),
+                ),
+              },
       ),
     );
   }
@@ -148,9 +148,11 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     try {
       final performed = await onReconnect!();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another connect/disconnect is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Another connect/disconnect is still in progress.'),
+          ),
+        );
       }
     } catch (e) {
       // 404 = nothing has ever been connected for this type, so there's no
@@ -158,10 +160,9 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
       final text = isNotFoundEquipmentError(e)
           ? 'No previous $deviceTypeLabel to reconnect — use Connect… first.'
           : "Couldn't reconnect: ${failureReason(l10n, e)}";
-      messenger.showSnackBar(SnackBar(
-        content: Text(text),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
+      );
     }
   }
 
@@ -178,15 +179,22 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         Row(
           children: [
             Expanded(
-              child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             EquipmentStateChip(state: value.connectionState),
             if (live)
               IconButton(
                 // While connecting, the same action aborts the in-progress connect.
-                tooltip: value.isConnecting ? 'Cancel connecting' : 'Disconnect',
-                icon: Icon(value.isConnecting ? Icons.close : Icons.link_off,
-                    size: 18),
+                tooltip: value.isConnecting
+                    ? 'Cancel connecting'
+                    : 'Disconnect',
+                icon: Icon(
+                  value.isConnecting ? Icons.close : Icons.link_off,
+                  size: 18,
+                ),
                 onPressed: () => _disconnect(context),
               )
             else ...[
@@ -211,9 +219,7 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         if (value.isDisconnected)
           Text(
             'Not connected.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
+            style: Theme.of(context).textTheme.bodySmall
                 ?.copyWith(color: AraColors.textSecondary),
           )
         else
@@ -265,21 +271,22 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     try {
       final performed = await onForget!();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another connect/disconnect is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Another connect/disconnect is still in progress.'),
+          ),
+        );
       }
     } catch (e) {
       // 404 = a daemon older than this client (no DELETE /equipment/{type}
       // route yet) — say so rather than showing a bare "not found".
       final text = isNotFoundEquipmentError(e)
           ? 'The server could not remove this $deviceTypeLabel — it may need '
-              'updating.'
+                'updating.'
           : "Couldn't remove: ${failureReason(l10n, e)}";
-      messenger.showSnackBar(SnackBar(
-        content: Text(text),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
+      );
     }
   }
 
@@ -301,16 +308,23 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
         try {
           final performed = await onConnect(device);
           if (!performed) {
-            messenger.showSnackBar(const SnackBar(
-              content: Text('Another connect/disconnect is still in progress.'),
-            ));
+            messenger.showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Another connect/disconnect is still in progress.',
+                ),
+              ),
+            );
           }
         } catch (e) {
-          messenger.showSnackBar(SnackBar(
-            content:
-                Text("Couldn't connect ${device.name}: ${failureReason(l10n, e)}"),
-            backgroundColor: AraColors.accentError,
-          ));
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(
+                "Couldn't connect ${device.name}: ${failureReason(l10n, e)}",
+              ),
+              backgroundColor: AraColors.accentError,
+            ),
+          );
         }
       },
     );
@@ -322,15 +336,19 @@ class EquipmentConnectionCard<T extends EquipmentDeviceStatus>
     try {
       final performed = await onDisconnect();
       if (!performed) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Another connect/disconnect is still in progress.'),
-        ));
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Another connect/disconnect is still in progress.'),
+          ),
+        );
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(
-        content: Text("Couldn't disconnect: ${failureReason(l10n, e)}"),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text("Couldn't disconnect: ${failureReason(l10n, e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
   }
 }

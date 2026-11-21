@@ -125,30 +125,32 @@ class _SimpleMessagePillsState extends ConsumerState<SimpleMessagePills> {
             child: _framed(
               inCard,
               Material(
-              color: inCard ? Colors.transparent : AraColors.overlayScrim,
-              shape: RoundedRectangleBorder(
-                side: inCard
-                    ? BorderSide.none
-                    : const BorderSide(color: AraColors.border),
-                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-              ),
-              child: InkWell(
-                key: const Key('simple-messages-more'),
-                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                onTap: toggle,
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 44),
-                  padding: const EdgeInsets.symmetric(horizontal: 14),
-                  alignment: Alignment.center,
-                  child: Text(
-                    folded
-                        ? context.l10n.pillsMore(more)
-                        : context.l10n.pillsShowFewer,
-                    style: kSimpleText.copyWith(color: AraColors.textSecondary),
+                color: inCard ? Colors.transparent : AraColors.overlayScrim,
+                shape: RoundedRectangleBorder(
+                  side: inCard
+                      ? BorderSide.none
+                      : const BorderSide(color: AraColors.border),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                ),
+                child: InkWell(
+                  key: const Key('simple-messages-more'),
+                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                  onTap: toggle,
+                  child: Container(
+                    constraints: const BoxConstraints(minHeight: 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    alignment: Alignment.center,
+                    child: Text(
+                      folded
+                          ? context.l10n.pillsMore(more)
+                          : context.l10n.pillsShowFewer,
+                      style: kSimpleText.copyWith(
+                        color: AraColors.textSecondary,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
             ),
           ),
         ],
@@ -233,151 +235,166 @@ class _Pill extends ConsumerWidget {
       child: SimpleTapTarget(
         onTap: onOpen,
         child: _framed(
-        inCard,
-        Container(
-        key: Key('simple-message-${m.id}'),
-        constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
-        padding: const EdgeInsets.only(left: 14, right: 4),
-        decoration: inCard
-            ? null
-            : BoxDecoration(
-                color: AraColors.overlayScrim,
-                borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                border: Border.all(color: outline ?? AraColors.border),
-              ),
-        child: Stack(
-          children: [
-            Row(
-              spacing: 10,
-              crossAxisAlignment: stacked
-                  ? CrossAxisAlignment.start
-                  : CrossAxisAlignment.center,
-              children: [
-                Padding(
-                  padding: EdgeInsets.only(top: stacked ? firstLineCentre - 5 : 0),
-                  child: Icon(Icons.circle, size: 10, color: dot),
-                ),
-                Expanded(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                    // A warning's first line sits level with its ×.
-                    padding: EdgeInsets.only(top: stacked ? 14 : 6, bottom: 6),
-                    child: Text.rich(
-                      TextSpan(
-                        text: m.title,
-                        children: [
-                          if (m.detail != null) ...[
-                            const TextSpan(
-                              text: ' · ',
-                              style: TextStyle(color: AraColors.textDisabled),
-                            ),
-                            TextSpan(
-                              text: m.detail,
-                              style: TextStyle(
-                                color: m.kind == SimpleMessageKind.error
-                                    ? AraColors.errorText
-                                    : AraColors.textSecondary,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      // Whole, however long: an Emergency Stop's summary
-                      // was cut at two lines (user, 2026-11-04).
-                      style: kSimpleText,
-                    ),
+          inCard,
+          Container(
+            key: Key('simple-message-${m.id}'),
+            constraints: const BoxConstraints(minHeight: kSimpleMessageHeight),
+            padding: const EdgeInsets.only(left: 14, right: 4),
+            decoration: inCard
+                ? null
+                : BoxDecoration(
+                    color: AraColors.overlayScrim,
+                    borderRadius: BorderRadius.circular(AraRadius.simplePanel),
+                    border: Border.all(color: outline ?? AraColors.border),
                   ),
-                      if (question && actionBelow)
-                        Padding(
-                          padding: const EdgeInsets.only(right: 10, bottom: 10),
-                          // Measures its own width (LayoutBuilder): the card is
-                          // the full 420 px while a question holds actions.
-                          child: NoIntrinsicWidth(
-                            child: _QuestionAnswers(
-                              labels: [for (final a in m.actions) a.label],
-                              onAnswer: (i) => _answer(notifier, i),
+            child: Stack(
+              children: [
+                Row(
+                  spacing: 10,
+                  crossAxisAlignment: stacked
+                      ? CrossAxisAlignment.start
+                      : CrossAxisAlignment.center,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.only(
+                        top: stacked ? firstLineCentre - 5 : 0,
+                      ),
+                      child: Icon(Icons.circle, size: 10, color: dot),
+                    ),
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            // A warning's first line sits level with its ×.
+                            padding: EdgeInsets.only(
+                              top: stacked ? 14 : 6,
+                              bottom: 6,
+                            ),
+                            child: Text.rich(
+                              TextSpan(
+                                text: m.title,
+                                children: [
+                                  if (m.detail != null) ...[
+                                    const TextSpan(
+                                      text: ' · ',
+                                      style: TextStyle(
+                                        color: AraColors.textDisabled,
+                                      ),
+                                    ),
+                                    TextSpan(
+                                      text: m.detail,
+                                      style: TextStyle(
+                                        color: m.kind == SimpleMessageKind.error
+                                            ? AraColors.errorText
+                                            : AraColors.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              // Whole, however long: an Emergency Stop's summary
+                              // was cut at two lines (user, 2026-11-04).
+                              style: kSimpleText,
                             ),
                           ),
-                        )
-                      else if (actionBelow)
-                        Wrap(
-                          children: [
-                            for (var i = 0; i < m.actions.length; i++)
-                              TextButton(
-                                onPressed: () => _answer(notifier, i),
-                                // Shrinks in a narrow pill rather than breaking the word.
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(m.actions[i].label, softWrap: false),
+                          if (question && actionBelow)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: 10,
+                                bottom: 10,
+                              ),
+                              // Measures its own width (LayoutBuilder): the card is
+                              // the full 420 px while a question holds actions.
+                              child: NoIntrinsicWidth(
+                                child: _QuestionAnswers(
+                                  labels: [for (final a in m.actions) a.label],
+                                  onAnswer: (i) => _answer(notifier, i),
                                 ),
                               ),
-                          ],
+                            )
+                          else if (actionBelow)
+                            Wrap(
+                              children: [
+                                for (var i = 0; i < m.actions.length; i++)
+                                  TextButton(
+                                    onPressed: () => _answer(notifier, i),
+                                    // Shrinks in a narrow pill rather than breaking the word.
+                                    child: FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      child: Text(
+                                        m.actions[i].label,
+                                        softWrap: false,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (more != null)
+                      TextButton(
+                        key: const Key('simple-messages-more'),
+                        onPressed: onMore,
+                        child: Text(
+                          context.l10n.pillsMoreShort(more!),
+                          semanticsLabel: context.l10n.pillsMoreSemantics(
+                            more!,
+                          ),
                         ),
-                    ],
-                  ),
+                      ),
+                    if (m.kind == SimpleMessageKind.error ||
+                        m.kind == SimpleMessageKind.warning)
+                      Padding(
+                        padding: EdgeInsets.only(
+                          top: warning ? math.max(0, firstLineCentre - 24) : 0,
+                        ),
+                        child: IconButton(
+                          tooltip: context.l10n.pillsDismiss,
+                          icon: const Icon(Icons.close, size: 18),
+                          onPressed: () => notifier.dismiss(m.id),
+                        ),
+                      ),
+                    if (m.actions.isNotEmpty && !actionBelow)
+                      // A message's one action (Undo), there while the pill lasts.
+                      TextButton(
+                        onPressed: () => _answer(notifier, 0),
+                        child: Text(m.actions.first.label),
+                      )
+                    else if (m.kind == SimpleMessageKind.result ||
+                        m.kind == SimpleMessageKind.refused)
+                      const SizedBox(width: kSimpleInset - 4),
+                  ],
                 ),
-                if (more != null)
-                  TextButton(
-                    key: const Key('simple-messages-more'),
-                    onPressed: onMore,
-                    child: Text(
-                      context.l10n.pillsMoreShort(more!),
-                      semanticsLabel: context.l10n.pillsMoreSemantics(more!),
-                    ),
-                  ),
-                if (m.kind == SimpleMessageKind.error ||
-                    m.kind == SimpleMessageKind.warning)
-                  Padding(
-                    padding: EdgeInsets.only(
-                      top: warning ? math.max(0, firstLineCentre - 24) : 0,
-                    ),
-                    child: IconButton(
-                      tooltip: context.l10n.pillsDismiss,
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => notifier.dismiss(m.id),
-                    ),
-                  ),
-                if (m.actions.isNotEmpty && !actionBelow)
-                  // A message's one action (Undo), there while the pill lasts.
-                  TextButton(
-                    onPressed: () => _answer(notifier, 0),
-                    child: Text(m.actions.first.label),
-                  )
-                else if (m.kind == SimpleMessageKind.result ||
-                    m.kind == SimpleMessageKind.refused)
-                  const SizedBox(width: kSimpleInset - 4),
-              ],
-            ),
-            // A result's time left, as a line along its foot.
-            if ((m.kind == SimpleMessageKind.result ||
-                    m.kind == SimpleMessageKind.refused) &&
-                !reduced)
-              Positioned(
-                left: 0,
-                right: 14,
-                bottom: 4,
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 1, end: 0),
-                  duration: kSimpleResultLife,
-                  builder: (_, v, _) => Align(
-                    alignment: Alignment.centerLeft,
-                    child: FractionallySizedBox(
-                      widthFactor: v,
-                      child: Container(
-                        height: 2,
-                        color: dot.withValues(alpha: 0.6),
+                // A result's time left, as a line along its foot.
+                if ((m.kind == SimpleMessageKind.result ||
+                        m.kind == SimpleMessageKind.refused) &&
+                    !reduced)
+                  Positioned(
+                    left: 0,
+                    right: 14,
+                    bottom: 4,
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 1, end: 0),
+                      duration: kSimpleResultLife,
+                      builder: (_, v, _) => Align(
+                        alignment: Alignment.centerLeft,
+                        child: FractionallySizedBox(
+                          widthFactor: v,
+                          child: Container(
+                            height: 2,
+                            color: dot.withValues(alpha: 0.6),
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
-          ],
+              ],
+            ),
+          ),
         ),
-      ),
-      ),
       ),
     );
   }
@@ -404,9 +421,8 @@ class _QuestionAnswers extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = DefaultTextStyle.of(context).style.merge(
-      Theme.of(context).textTheme.labelLarge,
-    );
+    final style = DefaultTextStyle.of(context).style
+        .merge(Theme.of(context).textTheme.labelLarge);
     final scaler = MediaQuery.textScalerOf(context);
     double width(String label) {
       final p = TextPainter(
@@ -435,14 +451,16 @@ class _QuestionAnswers extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, box) {
-        final needed = labels.fold<double>(0, (sum, l) => sum + width(l)) +
+        final needed =
+            labels.fold<double>(0, (sum, l) => sum + width(l)) +
             _gap * (labels.length - 1);
         if (needed <= box.maxWidth) {
           return Row(
             spacing: _gap,
             children: [
               // Shared by need, so each label keeps the width it was measured at.
-              for (var i = 0; i < labels.length; i++) Expanded(flex: width(labels[i]).ceil(), child: button(i)),
+              for (var i = 0; i < labels.length; i++)
+                Expanded(flex: width(labels[i]).ceil(), child: button(i)),
             ],
           );
         }

@@ -562,8 +562,9 @@ class _RotationAssistPanelState extends ConsumerState<RotationAssistPanel> {
     };
     String deg(double? v, [int d = 1]) =>
         v == null ? '—' : '${v.toStringAsFixed(d)}°';
-    final error =
-        live.error == null ? status.error : failureReason(context.l10n, live.error!);
+    final error = live.error == null
+        ? status.error
+        : failureReason(context.l10n, live.error!);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [

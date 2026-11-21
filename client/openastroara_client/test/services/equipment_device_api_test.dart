@@ -8,13 +8,19 @@ void main() {
     return DioException.badResponse(
       statusCode: status,
       requestOptions: request,
-      response: Response(requestOptions: request, statusCode: status, data: data),
+      response: Response(
+        requestOptions: request,
+        statusCode: status,
+        data: data,
+      ),
     );
   }
 
   test('a 409 titled run_in_progress is the run refusal, nothing else is', () {
     expect(
-      isRunInProgressRefusal(refusal(409, {'title': 'run_in_progress', 'detail': 'a run'})),
+      isRunInProgressRefusal(
+        refusal(409, {'title': 'run_in_progress', 'detail': 'a run'}),
+      ),
       isTrue,
     );
     expect(
@@ -22,8 +28,14 @@ void main() {
       isTrue,
       reason: 'an undecoded problem+json body',
     );
-    expect(isRunInProgressRefusal(refusal(409, {'title': 'not_connected'})), isFalse);
-    expect(isRunInProgressRefusal(refusal(422, {'title': 'run_in_progress'})), isFalse);
+    expect(
+      isRunInProgressRefusal(refusal(409, {'title': 'not_connected'})),
+      isFalse,
+    );
+    expect(
+      isRunInProgressRefusal(refusal(422, {'title': 'run_in_progress'})),
+      isFalse,
+    );
     expect(isRunInProgressRefusal(StateError('x')), isFalse);
     expect(isRunInProgressRefusal(null), isFalse);
   });

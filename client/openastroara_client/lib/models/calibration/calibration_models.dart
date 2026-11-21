@@ -42,9 +42,11 @@ class CalibrationSession {
     return CalibrationSession(
       id: (json['id'] as String?) ?? '',
       targetName: (json['target_name'] as String?) ?? '(unknown)',
-      sessionStartUtc: DateTime.tryParse(json['session_start_utc'] as String? ?? '') ??
+      sessionStartUtc:
+          DateTime.tryParse(json['session_start_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-      sessionEndUtc: DateTime.tryParse(json['session_end_utc'] as String? ?? '') ??
+      sessionEndUtc:
+          DateTime.tryParse(json['session_end_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       lightFrameCount: (json['light_frame_count'] as num?)?.toInt() ?? 0,
       filtersUsed: ((json['filters_used'] as List?) ?? const [])
@@ -91,8 +93,7 @@ class CalibrationFilterSummary {
       lightFrameCount: (json['light_frame_count'] as num?)?.toInt() ?? 0,
       meanExposureSeconds:
           (json['mean_exposure_seconds'] as num?)?.toDouble() ?? 0,
-      matchingFlatFrames:
-          (json['matching_flat_frames'] as num?)?.toInt() ?? 0,
+      matchingFlatFrames: (json['matching_flat_frames'] as num?)?.toInt() ?? 0,
       matchingFlatsNewestUtc: DateTime.tryParse(
         json['matching_flats_newest_utc'] as String? ?? '',
       ),
@@ -163,7 +164,8 @@ class DarkLibraryEntry {
       gain: (json['gain'] as num?)?.toInt(),
       temperatureC: (json['temperature_c'] as num?)?.toDouble() ?? 0,
       frameCount: (json['frame_count'] as num?)?.toInt() ?? 0,
-      capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
+      capturedUtc:
+          DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt() ?? 0,
       camera: json['camera'] as String?,
@@ -203,7 +205,8 @@ class BiasLibraryEntry {
       offset: (json['offset'] as num?)?.toInt(),
       bin: (json['bin'] as num?)?.toInt() ?? 1,
       frameCount: (json['frame_count'] as num?)?.toInt() ?? 0,
-      capturedUtc: DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
+      capturedUtc:
+          DateTime.tryParse(json['captured_utc'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
       fileSizeBytes: (json['file_size_bytes'] as num?)?.toInt() ?? 0,
       camera: json['camera'] as String?,
@@ -273,10 +276,10 @@ class DarkLibraryBuildRequest {
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-        'exposure_seconds_list': exposureSecondsList,
-        'gain_list': gainList,
-        'target_temperature_c_list': targetTemperatureCList,
-        'frames_per_combination': framesPerCombination,
-        'reuse_existing_frames': reuseExistingFrames,
-      };
+    'exposure_seconds_list': exposureSecondsList,
+    'gain_list': gainList,
+    'target_temperature_c_list': targetTemperatureCList,
+    'frames_per_combination': framesPerCombination,
+    'reuse_existing_frames': reuseExistingFrames,
+  };
 }

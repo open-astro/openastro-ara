@@ -49,8 +49,15 @@ class FocuserCapabilities {
           other.canCalibrate == canCalibrate);
 
   @override
-  int get hashCode => Object.hash(minPosition, maxPosition, stepSizeUm,
-      canTempComp, absoluteFocuser, canSetZero, canCalibrate);
+  int get hashCode => Object.hash(
+    minPosition,
+    maxPosition,
+    stepSizeUm,
+    canTempComp,
+    absoluteFocuser,
+    canSetZero,
+    canCalibrate,
+  );
 }
 
 /// Live status of the connected ASCOM Focuser
@@ -96,13 +103,18 @@ class FocuserStatus extends EquipmentDeviceStatus {
   factory FocuserStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic>
+        ? runtime
+        : const <String, dynamic>{};
     return FocuserStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
-      capabilities:
-          caps is Map<String, dynamic> ? FocuserCapabilities.fromJson(caps) : null,
+      connectionState: equipmentConnectionStateFromWire(
+        json['state'] as String?,
+      ),
+      capabilities: caps is Map<String, dynamic>
+          ? FocuserCapabilities.fromJson(caps)
+          : null,
       runtimeState: r['state'] as String? ?? '',
       position: (r['position'] as num?)?.toInt(),
       temperature: (r['temperature'] as num?)?.toDouble(),
@@ -126,6 +138,15 @@ class FocuserStatus extends EquipmentDeviceStatus {
           other.calibration == calibration);
 
   @override
-  int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, position, temperature, tempCompEnabled, calibration);
+  int get hashCode => Object.hash(
+    deviceId,
+    name,
+    connectionState,
+    capabilities,
+    runtimeState,
+    position,
+    temperature,
+    tempCompEnabled,
+    calibration,
+  );
 }

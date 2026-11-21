@@ -47,7 +47,9 @@ class _FakeDiscoveryApi implements EquipmentDiscoveryApi {
     scannedTypes.add(type);
     if (failing || failingTypes.contains(type)) {
       throw DioException(
-        requestOptions: RequestOptions(path: '/api/v1/equipment/discover/camera'),
+        requestOptions: RequestOptions(
+          path: '/api/v1/equipment/discover/camera',
+        ),
         message: 'connection refused',
       );
     }
@@ -70,23 +72,32 @@ class _NoCatalog extends FoundDevicesNotifier {
   Future<void> redetect() async {}
 }
 
-Future<ProviderContainer> _pump(WidgetTester tester, _FakeDiscoveryApi api,
-    {List<AraServer> servers = const [_server]}) async {
-  final container = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => api),
-    foundDevicesProvider.overrideWith(_NoCatalog.new),
-  ]);
+Future<ProviderContainer> _pump(
+  WidgetTester tester,
+  _FakeDiscoveryApi api, {
+  List<AraServer> servers = const [_server],
+}) async {
+  final container = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      equipmentDiscoveryApiFactoryProvider.overrideWithValue((_) => api),
+      foundDevicesProvider.overrideWith(_NoCatalog.new),
+    ],
+  );
   addTearDown(container.dispose);
   // Keep the autoDispose validity provider alive the way the live WizardShell
   // does (it watches it) — otherwise it resets across each pump.
   container.listen(wizardStepValidProvider, (_, _) {});
   // Pre-warm the saved servers so the screen's synchronous read sees data.
   await container.read(savedServersProvider.future);
-  await tester.pumpWidget(UncontrolledProviderScope(
-    container: container,
-    child: const MaterialApp(home: Scaffold(body: ScreenAlpacaConnect())),
-  ));
+  await tester.pumpWidget(
+    UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: ScreenAlpacaConnect())),
+    ),
+  );
   // First pump mounts + runs the post-frame gate/auto-probe; the second lets
   // the (synchronously-completing) fake probe's continuations apply.
   await tester.pump();
@@ -95,9 +106,9 @@ Future<ProviderContainer> _pump(WidgetTester tester, _FakeDiscoveryApi api,
 }
 
 Finder _addressField() => find.ancestor(
-      of: find.text('AlpacaBridge address'),
-      matching: find.byType(TextField),
-    );
+  of: find.text('AlpacaBridge address'),
+  matching: find.byType(TextField),
+);
 
 void main() {
   testWidgets('§68.2 happy path: auto-probe succeeds and Next unblocks with '
@@ -108,8 +119,10 @@ void main() {
     expect(api.scans, 1, reason: 'the probe runs automatically on entry');
     expect(api.closes, 1, reason: 'the one-shot probe client is closed (r3)');
     expect(container.read(wizardStepValidProvider), isTrue);
-    expect(find.textContaining('AlpacaBridge found — no devices yet'),
-        findsOneWidget);
+    expect(
+      find.textContaining('AlpacaBridge found — no devices yet'),
+      findsOneWidget,
+    );
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
     // HIG: a clean reachability result renders as SUCCESS (green check).
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
@@ -130,21 +143,25 @@ void main() {
 
   testWidgets('the summary counts every device type, not just cameras, and '
       'reads as success', (tester) async {
-    final api = _FakeDiscoveryApi(devices: {
-      EquipmentDeviceType.camera: [
-        device(EquipmentDeviceType.camera, 'main'),
-        device(EquipmentDeviceType.camera, 'guide'),
-      ],
-      EquipmentDeviceType.mount: [device(EquipmentDeviceType.mount, 'eq6')],
-      EquipmentDeviceType.focuser: [
-        device(EquipmentDeviceType.focuser, 'eaf'),
-      ],
-      // The daemon's driverless manual wheel is not bridge gear.
-      EquipmentDeviceType.filterWheel: [
-        device(EquipmentDeviceType.filterWheel,
-            DiscoveredDevice.manualFilterWheelId),
-      ],
-    });
+    final api = _FakeDiscoveryApi(
+      devices: {
+        EquipmentDeviceType.camera: [
+          device(EquipmentDeviceType.camera, 'main'),
+          device(EquipmentDeviceType.camera, 'guide'),
+        ],
+        EquipmentDeviceType.mount: [device(EquipmentDeviceType.mount, 'eq6')],
+        EquipmentDeviceType.focuser: [
+          device(EquipmentDeviceType.focuser, 'eaf'),
+        ],
+        // The daemon's driverless manual wheel is not bridge gear.
+        EquipmentDeviceType.filterWheel: [
+          device(
+            EquipmentDeviceType.filterWheel,
+            DiscoveredDevice.manualFilterWheelId,
+          ),
+        ],
+      },
+    );
     final container = await _pump(tester, api);
 
     expect(api.scannedTypes, isNot(contains(EquipmentDeviceType.guider)));
@@ -164,11 +181,13 @@ void main() {
     // A registered bridge slot with NO hardware behind it: the bridge
     // advertises a vendor name, /connected is false. The banner is green
     // (the bridge is reachable) but must say the device is unverified.
-    final api = _FakeDiscoveryApi(devices: {
-      EquipmentDeviceType.camera: [
-        device(EquipmentDeviceType.camera, 'PLAYERONE_SN_0'),
-      ],
-    });
+    final api = _FakeDiscoveryApi(
+      devices: {
+        EquipmentDeviceType.camera: [
+          device(EquipmentDeviceType.camera, 'PLAYERONE_SN_0'),
+        ],
+      },
+    );
     final container = await _pump(tester, api);
 
     expect(container.read(wizardStepValidProvider), isTrue);
@@ -182,8 +201,9 @@ void main() {
     expect(find.byIcon(Icons.check_circle), findsOneWidget);
   });
 
-  testWidgets('a non-camera type failing does not hide a reachable bridge',
-      (tester) async {
+  testWidgets('a non-camera type failing does not hide a reachable bridge', (
+    tester,
+  ) async {
     final api = _FakeDiscoveryApi(
       devices: {
         EquipmentDeviceType.camera: [
@@ -195,8 +215,10 @@ void main() {
     final container = await _pump(tester, api);
 
     expect(container.read(wizardStepValidProvider), isTrue);
-    expect(find.textContaining('AlpacaBridge found — offering 1 camera.'),
-        findsOneWidget);
+    expect(
+      find.textContaining('AlpacaBridge found — offering 1 camera.'),
+      findsOneWidget,
+    );
     expect(find.text('AlpacaBridge not detected.'), findsNothing);
   });
 
@@ -220,8 +242,11 @@ void main() {
     final api = _FakeDiscoveryApi(failing: true);
     final container = await _pump(tester, api);
 
-    expect(container.read(wizardStepValidProvider), isFalse,
-        reason: 'no handshake → Next gated');
+    expect(
+      container.read(wizardStepValidProvider),
+      isFalse,
+      reason: 'no handshake → Next gated',
+    );
     expect(find.text('AlpacaBridge not detected.'), findsOneWidget);
     expect(find.text('sudo apt install alpaca-bridge'), findsOneWidget);
 
@@ -240,10 +265,15 @@ void main() {
     final container = await _pump(tester, api);
 
     final skip = find.widgetWithText(
-        TextButton, 'Skip — I\'m using a non-standard bridge address');
+      TextButton,
+      'Skip — I\'m using a non-standard bridge address',
+    );
     expect(skip, findsOneWidget);
-    expect(tester.widget<TextButton>(skip).onPressed, isNull,
-        reason: 'nothing to skip TO without an address override');
+    expect(
+      tester.widget<TextButton>(skip).onPressed,
+      isNull,
+      reason: 'nothing to skip TO without an address override',
+    );
     expect(container.read(wizardStepValidProvider), isFalse);
 
     await tester.enterText(_addressField(), '10.0.0.5:11111');
@@ -255,8 +285,11 @@ void main() {
     await tester.pump();
     await tester.tap(skip);
     await tester.pump();
-    expect(container.read(wizardStepValidProvider), isTrue,
-        reason: 'explicit skip with an override unblocks Next');
+    expect(
+      container.read(wizardStepValidProvider),
+      isTrue,
+      reason: 'explicit skip with an override unblocks Next',
+    );
     expect(find.text('Continuing with the address override.'), findsOneWidget);
   });
 
@@ -268,7 +301,9 @@ void main() {
     await tester.enterText(_addressField(), '10.0.0.5:11111');
     await tester.pump();
     final skip = find.widgetWithText(
-        TextButton, 'Skip — I\'m using a non-standard bridge address');
+      TextButton,
+      'Skip — I\'m using a non-standard bridge address',
+    );
     await tester.ensureVisible(skip);
     await tester.pump();
     await tester.tap(skip);
@@ -278,29 +313,40 @@ void main() {
     // The skip was granted FOR that override — clearing it re-gates Next.
     await tester.enterText(_addressField(), '');
     await tester.pump();
-    expect(container.read(wizardStepValidProvider), isFalse,
-        reason: 'no handshake and no override left to skip to');
+    expect(
+      container.read(wizardStepValidProvider),
+      isFalse,
+      reason: 'no handshake and no override left to skip to',
+    );
   });
 
-  testWidgets('§68.2 a failed retry AFTER a success re-gates Next (r2 fix)',
-      (tester) async {
+  testWidgets('§68.2 a failed retry AFTER a success re-gates Next (r2 fix)', (
+    tester,
+  ) async {
     final api = _FakeDiscoveryApi();
     final container = await _pump(tester, api);
-    expect(container.read(wizardStepValidProvider), isTrue,
-        reason: 'auto-probe succeeded');
+    expect(
+      container.read(wizardStepValidProvider),
+      isTrue,
+      reason: 'auto-probe succeeded',
+    );
 
     // The bridge goes down; the user retries — Next must re-lock.
     api.failing = true;
     await tester.tap(find.text('Retry detection'));
     await tester.pump();
     await tester.pump();
-    expect(container.read(wizardStepValidProvider), isFalse,
-        reason: 'a failed retry must not inherit the earlier success');
+    expect(
+      container.read(wizardStepValidProvider),
+      isFalse,
+      reason: 'a failed retry must not inherit the earlier success',
+    );
     expect(find.text('AlpacaBridge not detected.'), findsOneWidget);
   });
 
-  testWidgets('no active server: gated with the failure panel, no crash',
-      (tester) async {
+  testWidgets('no active server: gated with the failure panel, no crash', (
+    tester,
+  ) async {
     final api = _FakeDiscoveryApi();
     final container = await _pump(tester, api, servers: const []);
 

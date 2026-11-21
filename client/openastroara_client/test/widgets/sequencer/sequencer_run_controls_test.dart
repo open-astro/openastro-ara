@@ -21,11 +21,12 @@ import 'toolbar_surface.dart';
 /// record which action fired so the gating wiring can be asserted.
 class _FakeClient implements SequenceClient {
   @override
-  Future<SequenceDetail> addRunItem(String id,
-          {required List<int> parentPath,
-          int? index,
-          required Map<String, dynamic> item}) =>
-      throw UnimplementedError();
+  Future<SequenceDetail> addRunItem(
+    String id, {
+    required List<int> parentPath,
+    int? index,
+    required Map<String, dynamic> item,
+  }) => throw UnimplementedError();
   @override
   Future<SequenceDetail> removeRunItem(String id, List<int> path) =>
       throw UnimplementedError();
@@ -34,9 +35,11 @@ class _FakeClient implements SequenceClient {
       throw UnimplementedError();
 
   @override
-  Future<String> decideAutoFlats(String id,
-          {required String choice, required bool remember}) =>
-      throw UnimplementedError();
+  Future<String> decideAutoFlats(
+    String id, {
+    required String choice,
+    required bool remember,
+  }) => throw UnimplementedError();
   @override
   Future<bool> deleteSequence(String id) => throw UnimplementedError();
   @override
@@ -45,6 +48,7 @@ class _FakeClient implements SequenceClient {
   _FakeClient({this.runState, this.throwOnStart = false, this.startRefusal});
   final SequenceRunStateInfo? runState;
   final bool throwOnStart;
+
   /// The daemon's Problem body for a refused start (409), when set.
   final Map<String, dynamic>? startRefusal;
   final List<String> calls = [];
@@ -55,14 +59,26 @@ class _FakeClient implements SequenceClient {
   Future<SequenceDetail> getSequenceDetail(String id) async =>
       SequenceDetail(id: id, name: id, body: const {});
   @override
-  Future<SequenceDetail> updateSequence(String id,
-          {String? name, String? description, Map<String, dynamic>? body}) async =>
-      SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
+  Future<SequenceDetail> updateSequence(
+    String id, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? body,
+  }) async => SequenceDetail(
+    id: id,
+    name: name ?? id,
+    description: description,
+    body: body ?? const {},
+  );
   @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
-      id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
+    id: 'root',
+    kind: SequenceNodeKind.root,
+    displayName: 'fake',
+  );
   @override
-  Future<SequencePage> list({int limit = 50, String? cursor}) async => const SequencePage(items: []);
+  Future<SequencePage> list({int limit = 50, String? cursor}) async =>
+      const SequencePage(items: []);
   @override
   Future<String> start(String id) async {
     calls.add('start');
@@ -72,38 +88,49 @@ class _FakeClient implements SequenceClient {
     if (startRefusal case final body?) {
       final req = RequestOptions(path: '/api/v1/sequences/$id/start');
       throw DioException(
-          requestOptions: req,
-          type: DioExceptionType.badResponse,
-          response: Response(requestOptions: req, statusCode: 409, data: body));
+        requestOptions: req,
+        type: DioExceptionType.badResponse,
+        response: Response(requestOptions: req, statusCode: 409, data: body),
+      );
     }
     return 'op';
   }
+
   @override
   Future<String> pause(String id) async => (calls..add('pause')).last;
   (bool, bool)? resumeFlags;
   @override
-  Future<String> resume(String id,
-      {bool recenter = true, bool refocus = false}) async {
+  Future<String> resume(
+    String id, {
+    bool recenter = true,
+    bool refocus = false,
+  }) async {
     resumeFlags = (recenter, refocus);
     calls.add('resume');
     return 'op';
   }
+
   @override
-  Future<String> skipCurrent(String id) async => (calls..add('skip-current')).last;
+  Future<String> skipCurrent(String id) async =>
+      (calls..add('skip-current')).last;
   @override
   Future<String> abort(String id) async => (calls..add('abort')).last;
   @override
   Future<String> stop(String id) async => (calls..add('stop')).last;
   @override
-  Future<SequenceShareExport> exportShare(String id) async => throw UnimplementedError();
+  Future<SequenceShareExport> exportShare(String id) async =>
+      throw UnimplementedError();
   @override
   Future<List<SequenceTemplate>> listTemplates() async => const [];
   @override
   Future<String> instantiateTemplate(String t, String n) async => 'new-seq';
   @override
-  Future<String> create(String name, Map<String, dynamic> body,
-          {String? description, String? idempotencyKey}) async =>
-      'new-seq';
+  Future<String> create(
+    String name,
+    Map<String, dynamic> body, {
+    String? description,
+    String? idempotencyKey,
+  }) async => 'new-seq';
   @override
   void close() {}
 }
@@ -117,23 +144,36 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
 }
 
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
-    SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
+    SequenceRunStateInfo(
+      state: s,
+      instructionsCompleted: done,
+      instructionsTotal: total,
+    );
 
 void main() {
   group('run-state provider', () {
     test('null when nothing selected', () async {
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient(runState: _info(SequenceRunState.running))),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(
+            _FakeClient(runState: _info(SequenceRunState.running)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       expect(await container.read(sequenceRunStateProvider.future), isNull);
     });
 
     test('reads run state for the selected sequence', () async {
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider
-            .overrideWithValue(_FakeClient(runState: _info(SequenceRunState.running, done: 3, total: 9))),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(
+            _FakeClient(
+              runState: _info(SequenceRunState.running, done: 3, total: 9),
+            ),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       final info = await container.read(sequenceRunStateProvider.future);
@@ -147,15 +187,19 @@ void main() {
       WidgetTester tester, {
       SequenceRunStateInfo? run,
     }) async {
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient()),
-        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(run)),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(_FakeClient()),
+          sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(run)),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       return container;
@@ -164,21 +208,36 @@ void main() {
     // Lifecycle buttons vary by kind since S2 (filled Run, outlined Abort,
     // text Pause) — match any ButtonStyleButton carrying the label.
     ButtonStyleButton btn(WidgetTester tester, String label) =>
-        tester.widget<ButtonStyleButton>(find.ancestor(
+        tester.widget<ButtonStyleButton>(
+          find.ancestor(
             of: find.text(label),
-            matching: find.bySubtype<ButtonStyleButton>()));
+            matching: find.bySubtype<ButtonStyleButton>(),
+          ),
+        );
 
-    testWidgets('the status line counts INSTRUCTIONS, never "frames" (r1 on the '
-        'frames_*→instructions_* rename)', (tester) async {
-      await wideSurface(tester);
-      await pump(tester, run: _info(SequenceRunState.running, done: 3, total: 9));
-      expect(find.textContaining('3/9 instructions'), findsOneWidget,
-          reason: 'the counters are sequence-tree leaves — slews and autofocus '
-              'steps included — not camera exposures');
-      expect(find.textContaining('frames'), findsNothing);
-    });
+    testWidgets(
+      'the status line counts INSTRUCTIONS, never "frames" (r1 on the '
+      'frames_*→instructions_* rename)',
+      (tester) async {
+        await wideSurface(tester);
+        await pump(
+          tester,
+          run: _info(SequenceRunState.running, done: 3, total: 9),
+        );
+        expect(
+          find.textContaining('3/9 instructions'),
+          findsOneWidget,
+          reason:
+              'the counters are sequence-tree leaves — slews and autofocus '
+              'steps included — not camera exposures',
+        );
+        expect(find.textContaining('frames'), findsNothing);
+      },
+    );
 
-    testWidgets('no active run → Run enabled, Pause/Abort disabled', (tester) async {
+    testWidgets('no active run → Run enabled, Pause/Abort disabled', (
+      tester,
+    ) async {
       await wideSurface(tester);
       await pump(tester, run: null);
       expect(btn(tester, 'Run').onPressed, isNotNull);
@@ -186,7 +245,9 @@ void main() {
       expect(btn(tester, 'Abort').onPressed, isNull);
     });
 
-    testWidgets('running → Pause + Abort enabled, Run disabled', (tester) async {
+    testWidgets('running → Pause + Abort enabled, Run disabled', (
+      tester,
+    ) async {
       await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.running));
       expect(btn(tester, 'Run').onPressed, isNull);
@@ -194,35 +255,40 @@ void main() {
       expect(btn(tester, 'Abort').onPressed, isNotNull);
     });
 
-    testWidgets('paused → Run shows Resume (enabled), Abort enabled, Pause disabled',
-        (tester) async {
-      await wideSurface(tester);
-      // The daemon's §38 instruction-boundary pause is real now: Paused means
-      // the engine actually suspended, Resume releases it.
-      await pump(tester, run: _info(SequenceRunState.paused));
-      expect(find.text('Resume'), findsOneWidget);
-      expect(btn(tester, 'Resume').onPressed, isNotNull);
-      expect(btn(tester, 'Pause').onPressed, isNull);
-      expect(btn(tester, 'Abort').onPressed, isNotNull);
-    });
+    testWidgets(
+      'paused → Run shows Resume (enabled), Abort enabled, Pause disabled',
+      (tester) async {
+        await wideSurface(tester);
+        // The daemon's §38 instruction-boundary pause is real now: Paused means
+        // the engine actually suspended, Resume releases it.
+        await pump(tester, run: _info(SequenceRunState.paused));
+        expect(find.text('Resume'), findsOneWidget);
+        expect(btn(tester, 'Resume').onPressed, isNotNull);
+        expect(btn(tester, 'Pause').onPressed, isNull);
+        expect(btn(tester, 'Abort').onPressed, isNotNull);
+      },
+    );
 
     testWidgets(
-        'pausedAwaitingUser → Resume enabled, needs-attention status, Pause disabled',
-        (tester) async {
-      await wideSurface(tester);
-      // §58.12 — the engine paused ITSELF after an urgent failure (a failed
-      // meridian flip, mount in safe rest). Same controls as an operator
-      // pause — Resume releases the same gate — but the status line says the
-      // rig needs a human, not that someone chose to pause.
-      await pump(tester, run: _info(SequenceRunState.pausedAwaitingUser));
-      expect(find.text('Resume'), findsOneWidget);
-      expect(btn(tester, 'Resume').onPressed, isNotNull);
-      expect(btn(tester, 'Pause').onPressed, isNull);
-      expect(btn(tester, 'Abort').onPressed, isNotNull);
-      expect(find.textContaining('needs your attention'), findsOneWidget);
-    });
+      'pausedAwaitingUser → Resume enabled, needs-attention status, Pause disabled',
+      (tester) async {
+        await wideSurface(tester);
+        // §58.12 — the engine paused ITSELF after an urgent failure (a failed
+        // meridian flip, mount in safe rest). Same controls as an operator
+        // pause — Resume releases the same gate — but the status line says the
+        // rig needs a human, not that someone chose to pause.
+        await pump(tester, run: _info(SequenceRunState.pausedAwaitingUser));
+        expect(find.text('Resume'), findsOneWidget);
+        expect(btn(tester, 'Resume').onPressed, isNotNull);
+        expect(btn(tester, 'Pause').onPressed, isNull);
+        expect(btn(tester, 'Abort').onPressed, isNotNull);
+        expect(find.textContaining('needs your attention'), findsOneWidget);
+      },
+    );
 
-    testWidgets('starting → Run + Pause disabled, Abort enabled', (tester) async {
+    testWidgets('starting → Run + Pause disabled, Abort enabled', (
+      tester,
+    ) async {
       await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.starting));
       expect(btn(tester, 'Run').onPressed, isNull);
@@ -237,7 +303,9 @@ void main() {
       expect(btn(tester, 'Run').onPressed, isNull);
     });
 
-    testWidgets('completed → Run re-enabled (re-run), Pause disabled', (tester) async {
+    testWidgets('completed → Run re-enabled (re-run), Pause disabled', (
+      tester,
+    ) async {
       await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.completed));
       expect(btn(tester, 'Run').onPressed, isNotNull);
@@ -257,8 +325,9 @@ void main() {
       expect(btn(tester, 'Skip').onPressed, isNull);
     });
 
-    testWidgets('aborting → Skip disabled (teardown already underway)',
-        (tester) async {
+    testWidgets('aborting → Skip disabled (teardown already underway)', (
+      tester,
+    ) async {
       await wideSurface(tester);
       await pump(tester, run: _info(SequenceRunState.aborting));
       expect(btn(tester, 'Skip').onPressed, isNull);
@@ -277,16 +346,21 @@ void main() {
 
     testWidgets('pressing Skip fires skip-current', (tester) async {
       await wideSurface(tester);
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient()),
-        sequenceRunStateProvider
-            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.running))),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(_FakeClient()),
+          sequenceRunStateProvider.overrideWith(
+            () => _FakeRunNotifier(_info(SequenceRunState.running)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       btn(tester, 'Skip').onPressed!();
@@ -295,14 +369,17 @@ void main() {
       expect(fake.calls, contains('skip-current'));
     });
 
-    testWidgets('the icon-only Skip (phone width) fires skip-current too',
-        (tester) async {
+    testWidgets('the icon-only Skip (phone width) fires skip-current too', (
+      tester,
+    ) async {
       // Skip is the one run verb rendered by _CompactToolButton below the
       // labelled threshold; prove that branch forwards onPressed.
       await tester.binding.setSurfaceSize(const Size(400, 800));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      final container =
-          await pump(tester, run: _info(SequenceRunState.running));
+      final container = await pump(
+        tester,
+        run: _info(SequenceRunState.running),
+      );
       expect(find.text('Skip'), findsNothing); // icon-only at this width
       await tester.tap(find.byTooltip('Skip'));
       await tester.pumpAndSettle();
@@ -321,8 +398,9 @@ void main() {
       expect(btn(tester, 'Run').onPressed, isNull);
     });
 
-    testWidgets('the icon-only Run (phone width) starts the sequence too',
-        (tester) async {
+    testWidgets('the icon-only Run (phone width) starts the sequence too', (
+      tester,
+    ) async {
       // The compact _LifecycleButton branch must wire onPressed like the
       // labelled one: tap the tooltip'd icon and expect the same pre-flight.
       await tester.binding.setSurfaceSize(const Size(400, 800));
@@ -350,19 +428,24 @@ void main() {
       expect(fake.calls, contains('start'));
     });
 
-    testWidgets('an aligned session starts without the pre-flight confirm',
-        (tester) async {
+    testWidgets('an aligned session starts without the pre-flight confirm', (
+      tester,
+    ) async {
       await wideSurface(tester);
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient()),
-        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
-        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(_FakeClient()),
+          sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+          polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       btn(tester, 'Run').onPressed!();
@@ -372,60 +455,82 @@ void main() {
       expect(fake.calls, contains('start'));
     });
 
-    testWidgets('a non-Dio lifecycle failure surfaces a SnackBar, not a crash',
-        (tester) async {
-      await wideSurface(tester);
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient(throwOnStart: true)),
-        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
-      ]);
-      addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
-      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
-      await tester.pumpAndSettle();
-      btn(tester, 'Run').onPressed!(); // start() throws FormatException
-      await tester.pumpAndSettle(); // pre-flight confirm (unaligned session)
-      await tester.tap(find.text('Run anyway'));
-      await tester.pump(); // flush the async handler's microtasks
-      await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
-      expect(find.text('Sequence command failed.'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+    testWidgets(
+      'a non-Dio lifecycle failure surfaces a SnackBar, not a crash',
+      (tester) async {
+        await wideSurface(tester);
+        final container = ProviderContainer(
+          overrides: [
+            sequenceApiProvider.overrideWithValue(
+              _FakeClient(throwOnStart: true),
+            ),
+            sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+          ],
+        );
+        addTearDown(container.dispose);
+        await tester.pumpWidget(
+          UncontrolledProviderScope(
+            container: container,
+            child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+          ),
+        );
+        container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        await tester.pumpAndSettle();
+        btn(tester, 'Run').onPressed!(); // start() throws FormatException
+        await tester.pumpAndSettle(); // pre-flight confirm (unaligned session)
+        await tester.tap(find.text('Run anyway'));
+        await tester.pump(); // flush the async handler's microtasks
+        await tester.pump(
+          const Duration(milliseconds: 400),
+        ); // SnackBar entrance
+        expect(find.text('Sequence command failed.'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     Future<ProviderContainer> pumpRefusing(
-        WidgetTester tester, Map<String, dynamic> refusal) async {
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient(startRefusal: refusal)),
-        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
-        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
-      ]);
+      WidgetTester tester,
+      Map<String, dynamic> refusal,
+    ) async {
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(
+            _FakeClient(startRefusal: refusal),
+          ),
+          sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+          polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       return container;
     }
 
-    testWidgets('no storage disk: a dialog says so and opens Storage',
-        (tester) async {
+    testWidgets('no storage disk: a dialog says so and opens Storage', (
+      tester,
+    ) async {
       // 2026-10-16: a run started without its drive and failed every frame.
       await wideSurface(tester);
       final container = await pumpRefusing(tester, const {
         'title': 'store_unavailable',
-        'detail': 'No storage disk: nothing is mounted at /media/openastroara, '
+        'detail':
+            'No storage disk: nothing is mounted at /media/openastroara, '
             'so there is nowhere to save frames.',
       });
       btn(tester, 'Run').onPressed!();
       await tester.pumpAndSettle();
       expect(find.text('No storage disk'), findsOneWidget);
-      expect(find.textContaining('nothing is mounted at /media/openastroara'),
-          findsOneWidget);
+      expect(
+        find.textContaining('nothing is mounted at /media/openastroara'),
+        findsOneWidget,
+      );
       await tester.tap(find.text('Open Storage'));
       await tester.pumpAndSettle();
       expect(container.read(selectedTabIndexProvider), kOptionsTabIndex);
@@ -436,20 +541,28 @@ void main() {
       await wideSurface(tester);
       await pumpRefusing(tester, const {
         'title': 'bahtinov_focus_active',
-        'detail': 'The Bahtinov focus readout is running. Finish it and remove '
+        'detail':
+            'The Bahtinov focus readout is running. Finish it and remove '
             'the mask before starting a sequence.',
       });
       btn(tester, 'Run').onPressed!();
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400)); // SnackBar entrance
       expect(find.textContaining('remove the mask'), findsOneWidget);
-      expect(find.text("Command not valid in the sequence's current state."),
-          findsNothing);
+      expect(
+        find.text("Command not valid in the sequence's current state."),
+        findsNothing,
+      );
     });
 
-    testWidgets('Abort asks for confirmation; Keep running cancels', (tester) async {
+    testWidgets('Abort asks for confirmation; Keep running cancels', (
+      tester,
+    ) async {
       await wideSurface(tester);
-      await pump(tester, run: _info(SequenceRunState.running, done: 1, total: 9));
+      await pump(
+        tester,
+        run: _info(SequenceRunState.running, done: 1, total: 9),
+      );
       btn(tester, 'Abort').onPressed!();
       await tester.pumpAndSettle();
       expect(find.text('Abort this run?'), findsOneWidget);
@@ -464,16 +577,21 @@ void main() {
   group('resume refinement dialog', () {
     Future<_FakeClient> pumpPaused(WidgetTester tester) async {
       final client = _FakeClient();
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(client),
-        sequenceRunStateProvider
-            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.paused))),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(client),
+          sequenceRunStateProvider.overrideWith(
+            () => _FakeRunNotifier(_info(SequenceRunState.paused)),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-      ));
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       return client;
@@ -484,16 +602,20 @@ void main() {
       // viewport, so a coordinate tap can't reach it (same technique as the
       // gating group's btn() assertions).
       tester
-          .widget<ButtonStyleButton>(find.ancestor(
+          .widget<ButtonStyleButton>(
+            find.ancestor(
               of: find.text('Resume'),
-              matching: find.bySubtype<ButtonStyleButton>()))
+              matching: find.bySubtype<ButtonStyleButton>(),
+            ),
+          )
           .onPressed!();
       await tester.pumpAndSettle();
       expect(find.text('Resume imaging?'), findsOneWidget);
     }
 
-    testWidgets('the default action resumes with re-center only',
-        (tester) async {
+    testWidgets('the default action resumes with re-center only', (
+      tester,
+    ) async {
       await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
@@ -521,8 +643,9 @@ void main() {
       expect(client.resumeFlags, (false, false));
     });
 
-    testWidgets('dismissing the dialog resumes nothing (user backed out)',
-        (tester) async {
+    testWidgets('dismissing the dialog resumes nothing (user backed out)', (
+      tester,
+    ) async {
       await wideSurface(tester);
       final client = await pumpPaused(tester);
       await tapResume(tester);
@@ -534,32 +657,43 @@ void main() {
   });
   group('Run on a rig clock that could not be set (#1945)', () {
     Future<ProviderContainer> pump(WidgetTester tester) async {
-      final container = ProviderContainer(overrides: [
-        sequenceApiProvider.overrideWithValue(_FakeClient()),
-        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
-        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
-        timeSyncClockErrorProvider.overrideWith(
-            (ref) async => const TimeSyncClockError(seconds: 120, slow: true)),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          sequenceApiProvider.overrideWithValue(_FakeClient()),
+          sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+          polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+          timeSyncClockErrorProvider.overrideWith(
+            (ref) async => const TimeSyncClockError(seconds: 120, slow: true),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
-      await tester.pumpWidget(UncontrolledProviderScope(
-        container: container,
-        child: const MaterialApp(
+      await tester.pumpWidget(
+        UncontrolledProviderScope(
+          container: container,
+          child: const MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(body: SequencerToolbar())),
-      ));
+            home: Scaffold(body: SequencerToolbar()),
+          ),
+        ),
+      );
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
-      final run = tester.widget<ButtonStyleButton>(find.ancestor(
-          of: find.text('Run'), matching: find.bySubtype<ButtonStyleButton>()));
+      final run = tester.widget<ButtonStyleButton>(
+        find.ancestor(
+          of: find.text('Run'),
+          matching: find.bySubtype<ButtonStyleButton>(),
+        ),
+      );
       run.onPressed!();
       await tester.pumpAndSettle();
       return container;
     }
 
-    testWidgets('Run asks first, saying by how much; Not now starts nothing',
-        (tester) async {
+    testWidgets('Run asks first, saying by how much; Not now starts nothing', (
+      tester,
+    ) async {
       await wideSurface(tester);
       final container = await pump(tester);
       expect(find.textContaining('2 min slow'), findsOneWidget);
@@ -584,5 +718,8 @@ void main() {
 class _AlignedLiveNotifier extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive(
-      phase: PolarAlignStates.stopped, zone: 'green', totalErrorArcmin: 0.5);
+    phase: PolarAlignStates.stopped,
+    zone: 'green',
+    totalErrorArcmin: 0.5,
+  );
 }

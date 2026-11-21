@@ -13,10 +13,10 @@ import 'package:openastroara/widgets/support/client_log_card.dart';
 /// fake-async zone, so exportTo just records the path it was asked for.
 class _MemLog extends ClientErrorLog {
   _MemLog()
-      : super(
-          supportDir: () async => throw const FileSystemException('no disk'),
-          appVersion: () async => 'v',
-        );
+    : super(
+        supportDir: () async => throw const FileSystemException('no disk'),
+        appVersion: () async => 'v',
+      );
   final exports = <String>[];
   bool failExport = false;
   final statusNotifier = ValueNotifier(const ClientErrorLogStatus());
@@ -32,24 +32,29 @@ class _MemLog extends ClientErrorLog {
   }
 }
 
-Widget _host(_MemLog log, {String? Function(String name)? picker, bool simple = false}) =>
-    ProviderScope(
-      overrides: [
-        clientErrorLogProvider.overrideWithValue(log),
-        if (simple) simpleModeActiveProvider.overrideWithValue(true),
-      ],
-      child: MaterialApp(
-        home: Scaffold(
-          body: ClientLogCard(
-            savePathPicker: (_, name) async =>
-                picker == null ? '/tmp/$name' : picker(name),
-          ),
-        ),
+Widget _host(
+  _MemLog log, {
+  String? Function(String name)? picker,
+  bool simple = false,
+}) => ProviderScope(
+  overrides: [
+    clientErrorLogProvider.overrideWithValue(log),
+    if (simple) simpleModeActiveProvider.overrideWithValue(true),
+  ],
+  child: MaterialApp(
+    home: Scaffold(
+      body: ClientLogCard(
+        savePathPicker: (_, name) async =>
+            picker == null ? '/tmp/$name' : picker(name),
       ),
-    );
+    ),
+  ),
+);
 
 void main() {
-  testWidgets('the action moves under the text in a phone-width column', (tester) async {
+  testWidgets('the action moves under the text in a phone-width column', (
+    tester,
+  ) async {
     // Inline in Simple Mode's Settings on a phone, the column is this narrow.
     tester.view.physicalSize = const Size(360, 800);
     tester.view.devicePixelRatio = 1;
@@ -59,15 +64,21 @@ void main() {
 
     expect(tester.takeException(), isNull, reason: 'nothing overflows');
     final action = find.widgetWithText(FilledButton, 'Save client log');
-    expect(tester.getTopLeft(action).dy, greaterThan(tester.getBottomLeft(find.text("This app's error log")).dy),
-        reason: 'the action sits under the text');
+    expect(
+      tester.getTopLeft(action).dy,
+      greaterThan(tester.getBottomLeft(find.text("This app's error log")).dy),
+      reason: 'the action sits under the text',
+    );
   });
 
   testWidgets('renders with no server and no errors recorded', (tester) async {
     await tester.pumpWidget(_host(_MemLog()));
     expect(find.text("This app's error log"), findsOneWidget);
     expect(find.textContaining('No errors recorded'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Save client log'), findsOneWidget);
+    expect(
+      find.widgetWithText(FilledButton, 'Save client log'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the status line follows the log', (tester) async {
@@ -78,16 +89,20 @@ void main() {
       sessionEntries: 1,
     );
     await tester.pump();
-    expect(find.textContaining('3 errors recorded (1 since launch)'),
-        findsOneWidget);
+    expect(
+      find.textContaining('3 errors recorded (1 since launch)'),
+      findsOneWidget,
+    );
     log.statusNotifier.value = const ClientErrorLogStatus(
       entries: 1,
       sessionEntries: 1,
       suppressedRepeats: 40,
     );
     await tester.pump();
-    expect(find.textContaining('1 error recorded (1 since launch, 40 suppressed)'),
-        findsOneWidget);
+    expect(
+      find.textContaining('1 error recorded (1 since launch, 40 suppressed)'),
+      findsOneWidget,
+    );
     log.statusNotifier.value = const ClientErrorLogStatus(available: false);
     await tester.pump();
     expect(find.textContaining('could not be written'), findsOneWidget);
@@ -99,8 +114,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Save client log'));
     await tester.pumpAndSettle();
     expect(log.exports, ['/tmp/${ClientLogCard.suggestedFileName}']);
-    expect(find.textContaining('Saved /tmp/openastroara-client.log'),
-        findsOneWidget);
+    expect(
+      find.textContaining('Saved /tmp/openastroara-client.log'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('cancelling the picker exports nothing', (tester) async {
@@ -122,16 +139,22 @@ void main() {
     expect(find.textContaining('Saved'), findsNothing);
   });
 
-  testWidgets('in Simple Mode a save and a failure are pills, not snackbars', (tester) async {
+  testWidgets('in Simple Mode a save and a failure are pills, not snackbars', (
+    tester,
+  ) async {
     final log = _MemLog();
     await tester.pumpWidget(_host(log, simple: true));
     List<SimpleMessage> pills() =>
-        ProviderScope.containerOf(tester.element(find.byType(ClientLogCard))).read(simpleMessagesProvider);
+        ProviderScope.containerOf(tester.element(find.byType(ClientLogCard)))
+            .read(simpleMessagesProvider);
     await tester.tap(find.text('Save client log'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     expect(find.byType(SnackBar), findsNothing);
-    expect(pills().single.title, 'Saved /tmp/${ClientLogCard.suggestedFileName}');
+    expect(
+      pills().single.title,
+      'Saved /tmp/${ClientLogCard.suggestedFileName}',
+    );
     expect(pills().single.kind, SimpleMessageKind.result);
 
     log.failExport = true;

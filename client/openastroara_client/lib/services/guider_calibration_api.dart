@@ -40,14 +40,16 @@ class GuiderCalibrationApi implements GuiderCalibrationClient {
   final Dio _dio;
 
   GuiderCalibrationApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           sendTimeout: const Duration(seconds: 5),
           // Base budget for the 202-Accepted build POSTs (they return fast);
           // getStatus() overrides with a more generous read budget below.
           receiveTimeout: const Duration(seconds: 5),
-        ));
+        ),
+      );
 
   @override
   Future<CalibrationStatusResponse> getStatus() async {
@@ -131,7 +133,10 @@ class GuiderCalibrationApi implements GuiderCalibrationClient {
   }) async {
     final res = await _dio.delete<dynamic>(
       '/api/v1/equipment/guider/darklibrary',
-      queryParameters: <String, dynamic>{'darks': darks, 'defectmap': defectmap},
+      queryParameters: <String, dynamic>{
+        'darks': darks,
+        'defectmap': defectmap,
+      },
     );
     final data = res.data;
     if (data is! Map<String, dynamic>) {

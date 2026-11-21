@@ -57,9 +57,8 @@ void main() {
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(
-              context,
-            ).copyWith(textScaler: const TextScaler.linear(0.5)),
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(0.5)),
             child: child!,
           ),
           home: const Scaffold(body: SafetySitePanel()),
@@ -83,7 +82,11 @@ void main() {
     (tester) async {
       final section = await pumpOnRig(tester, loaded: false);
       expect(find.textContaining('Not loaded'), findsOneWidget);
-      expect(find.text('Latitude (°)'), findsNothing, reason: 'no default shows');
+      expect(
+        find.text('Latitude (°)'),
+        findsNothing,
+        reason: 'no default shows',
+      );
       expect(find.text('Bortle class (1..9)'), findsNothing);
       expect(find.text('Permanent pier'), findsOneWidget);
       await save(tester);

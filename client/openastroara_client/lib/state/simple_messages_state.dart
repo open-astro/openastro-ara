@@ -28,7 +28,9 @@ enum SimpleMessageKind {
 }
 
 /// How long a result pill stays.
-const kSimpleResultLife = Duration(seconds: 10); // 6 until 2026-11-04 (user: too fast)
+const kSimpleResultLife = Duration(
+  seconds: 10,
+); // 6 until 2026-11-04 (user: too fast)
 
 /// How long an error pill stays: longer than a result, but it fades too
 /// (user, 2026-11-04: not a sticky pill); × closes it sooner.

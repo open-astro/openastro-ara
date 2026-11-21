@@ -57,8 +57,9 @@ class SequenceEditorState {
     required this.body,
     required this.originalBody,
     this.selectedPath,
-  }) : isDirty = !identical(body, originalBody) &&
-            !_bodyEquality.equals(body, originalBody);
+  }) : isDirty =
+           !identical(body, originalBody) &&
+           !_bodyEquality.equals(body, originalBody);
 
   SequenceEditorState _copyWith({
     Map<String, dynamic>? body,
@@ -66,8 +67,10 @@ class SequenceEditorState {
     NodePath? selectedPath,
     bool clearSelection = false,
   }) {
-    assert(!(clearSelection && selectedPath != null),
-        'pass either clearSelection or selectedPath, not both');
+    assert(
+      !(clearSelection && selectedPath != null),
+      'pass either clearSelection or selectedPath, not both',
+    );
     return SequenceEditorState(
       id: id,
       body: body ?? this.body,
@@ -190,7 +193,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// A fresh sequential group holding [leaf] — the daemon's live-add accepts
   /// container nodes, so a bare instruction rides in one, named after itself.
   static Map<String, dynamic> _wrapInGroup(
-      Map<String, dynamic> leaf, String label) {
+    Map<String, dynamic> leaf,
+    String label,
+  ) {
     final group = instructionForType(sequentialContainerType)!.build();
     group['Name'] = label;
     return withChildren(group, [leaf]);
@@ -199,7 +204,11 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// Shared live reorder: lock-check both the item and its destination slot,
   /// then send the daemon's same-parent move ([newIndex] is post-removal).
   void _liveMove(
-      SequenceEditorState s, NodePath parentPath, int oldIndex, int newIndex) {
+    SequenceEditorState s,
+    NodePath parentPath,
+    int oldIndex,
+    int newIndex,
+  ) {
     if (_liveBusy()) return;
     final path = <int>[...parentPath, oldIndex];
     if (!isLiveEditable(path) ||
@@ -215,7 +224,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// also clears undo history — live edits are server-authoritative and not
   /// locally undoable); on refusal, surface the daemon's reason.
   Future<void> _applyLive(
-      Future<SequenceDetail> Function(SequenceClient api) send) async {
+    Future<SequenceDetail> Function(SequenceClient api) send,
+  ) async {
     final s = state;
     if (s == null) return;
     final api = ref.read(sequenceApiProvider);
@@ -230,9 +240,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
       final detail = data is Map<String, dynamic>
           ? (data['detail'] ?? data['error'])
           : null;
-      _notice(detail is String && detail.isNotEmpty
-          ? detail
-          : "The running plan couldn't be changed. Check the connection and try again.");
+      _notice(
+        detail is String && detail.isNotEmpty ? detail : "The running plan couldn't be changed. Check the connection and try again.",
+      );
       debugPrint('[sequencer] live edit refused/failed: $e');
     } finally {
       _liveEditInFlight = false;
@@ -242,16 +252,21 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// Route for every body mutation: snapshot the pre-edit body, clear redo,
   /// then apply. [coalesceKey] marks a scalar-field edit; repeats on the same
   /// key reuse the existing snapshot.
-  void _commitBody(SequenceEditorState prev, SequenceEditorState next,
-      {String? coalesceKey}) {
+  void _commitBody(
+    SequenceEditorState prev,
+    SequenceEditorState next, {
+    String? coalesceKey,
+  }) {
     // §38.9 — every LOCAL body mutation funnels through here; in live mood the
     // structural ops route to the daemon before reaching this, so anything that
     // does arrive (field/condition/trigger edits, or a routed op's local
     // fallback) would silently not join the executing run. Refuse with a notice
     // instead of quietly forking the working copy from the live plan.
     if (_liveRunActive) {
-      _notice('The sequence is running — pause-proof edits only: add, remove, '
-          'or reorder upcoming items. Field changes need the run to finish.');
+      _notice(
+        'The sequence is running — pause-proof edits only: add, remove, '
+        'or reorder upcoming items. Field changes need the run to finish.',
+      );
       return;
     }
     final coalesce = coalesceKey != null && coalesceKey == _lastCoalesceKey;
@@ -372,19 +387,26 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         _notice('That spot has already run — add after the current item.');
         return;
       }
-      final node =
-          def.isContainer ? def.build() : _wrapInGroup(def.build(), def.label);
-      unawaited(_applyLive((api) => api.addRunItem(s.id,
-          parentPath: List<int>.of(parentPath), index: landed, item: node)));
+      final node = def.isContainer
+          ? def.build()
+          : _wrapInGroup(def.build(), def.label);
+      unawaited(
+        _applyLive(
+          (api) => api.addRunItem(
+            s.id,
+            parentPath: List<int>.of(parentPath),
+            index: landed,
+            item: node,
+          ),
+        ),
+      );
       return;
     }
     final newBody = insertChild(s.body, parentPath, landed, def.build());
     _commitBody(
-        s,
-        s._copyWith(
-          body: newBody,
-          selectedPath: <int>[...parentPath, landed],
-        ));
+      s,
+      s._copyWith(body: newBody, selectedPath: <int>[...parentPath, landed]),
+    );
   }
 
   /// Add [def] relative to the current selection — the palette's tap-to-add
@@ -424,15 +446,21 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (_liveRunActive) {
       if (_liveBusy()) return;
       if (!isLiveEditable(path)) {
-        _notice('That item has already started — use Skip to drop the current '
-            'one, or wait for it to finish.');
+        _notice(
+          'That item has already started — use Skip to drop the current '
+          'one, or wait for it to finish.',
+        );
         return;
       }
       unawaited(
-          _applyLive((api) => api.removeRunItem(s.id, List<int>.of(path))));
+        _applyLive((api) => api.removeRunItem(s.id, List<int>.of(path))),
+      );
       return;
     }
-    _commitBody(s, s._copyWith(body: removeAt(s.body, path), clearSelection: true));
+    _commitBody(
+      s,
+      s._copyWith(body: removeAt(s.body, path), clearSelection: true),
+    );
   }
 
   /// Reorder a child of the container at [parentPath]. [oldIndex]/[newIndex]
@@ -448,18 +476,23 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (parent == null) return;
     if (oldIndex < 0 || oldIndex >= childrenOf(parent).length) return;
     if (_liveRunActive) {
-      _liveMove(s, parentPath, oldIndex,
-          // reorderChild's Flutter onReorder convention is pre-removal; the
-          // daemon's move takes a post-removal destination.
-          newIndex > oldIndex ? newIndex - 1 : newIndex);
+      _liveMove(
+        s,
+        parentPath,
+        oldIndex,
+        // reorderChild's Flutter onReorder convention is pre-removal; the
+        // daemon's move takes a post-removal destination.
+        newIndex > oldIndex ? newIndex - 1 : newIndex,
+      );
       return;
     }
     _commitBody(
-        s,
-        s._copyWith(
-          body: reorderChild(s.body, parentPath, oldIndex, newIndex),
-          clearSelection: true,
-        ));
+      s,
+      s._copyWith(
+        body: reorderChild(s.body, parentPath, oldIndex, newIndex),
+        clearSelection: true,
+      ),
+    );
   }
 
   /// Move the node at [path] one slot up or down among its siblings, keeping it
@@ -485,11 +518,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     // past the destination; moving up it's the destination itself.
     final preRemoval = up ? newIndex : newIndex + 1;
     _commitBody(
-        s,
-        s._copyWith(
-          body: reorderChild(s.body, parentPath, i, preRemoval),
-          selectedPath: <int>[...parentPath, newIndex],
-        ));
+      s,
+      s._copyWith(
+        body: reorderChild(s.body, parentPath, i, preRemoval),
+        selectedPath: <int>[...parentPath, newIndex],
+      ),
+    );
   }
 
   /// Move the subtree at [fromPath] into the container at [toParentPath] at
@@ -507,25 +541,34 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     // A leaf can't take children, and a node can't move inside itself.
     if (isAncestorOrSelf(fromPath, toParentPath)) return;
     if (_liveRunActive) {
-      final sameParent = const ListEquality<int>()
-          .equals(fromPath.sublist(0, fromPath.length - 1), toParentPath);
+      final sameParent = const ListEquality<int>().equals(
+        fromPath.sublist(0, fromPath.length - 1),
+        toParentPath,
+      );
       if (!sameParent) {
         // v1 live moves are same-parent only (the daemon's move op contract);
         // reparenting mid-run stays a compose-mood edit.
-        _notice("While running, items can be reordered within their group — "
-            "moving into a different group needs the run to finish.");
+        _notice(
+          "While running, items can be reordered within their group — "
+          "moving into a different group needs the run to finish.",
+        );
         return;
       }
-      _liveMove(s, toParentPath, fromPath.last,
-          toIndex.clamp(0, childrenOf(dest).length - 1));
+      _liveMove(
+        s,
+        toParentPath,
+        fromPath.last,
+        toIndex.clamp(0, childrenOf(dest).length - 1),
+      );
       return;
     }
     _commitBody(
-        s,
-        s._copyWith(
-          body: moveSubtree(s.body, fromPath, toParentPath, toIndex),
-          clearSelection: true,
-        ));
+      s,
+      s._copyWith(
+        body: moveSubtree(s.body, fromPath, toParentPath, toIndex),
+        clearSelection: true,
+      ),
+    );
   }
 
   /// Set scalar field [key] to [value] on the node at [path], keeping selection
@@ -533,8 +576,11 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   void setNodeField(NodePath path, String key, Object? value) {
     final s = state;
     if (s == null || nodeAt(s.body, path) == null) return;
-    _commitBody(s, s._copyWith(body: setField(s.body, path, key, value)),
-        coalesceKey: 'f:${path.join('.')}/$key');
+    _commitBody(
+      s,
+      s._copyWith(body: setField(s.body, path, key, value)),
+      coalesceKey: 'f:${path.join('.')}/$key',
+    );
   }
 
   /// Append a fresh condition built from [def] to the container at
@@ -549,7 +595,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null || !isContainer(container)) return;
     _commitBody(
-        s, s._copyWith(body: addCondition(s.body, containerPath, def.build())));
+      s,
+      s._copyWith(body: addCondition(s.body, containerPath, def.build())),
+    );
   }
 
   /// Remove the condition at [index] from the container at [containerPath];
@@ -562,24 +610,32 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (container == null) return;
     if (index < 0 || index >= conditionsOf(container).length) return;
     _commitBody(
-        s, s._copyWith(body: removeConditionAt(s.body, containerPath, index)));
+      s,
+      s._copyWith(body: removeConditionAt(s.body, containerPath, index)),
+    );
   }
 
   /// Set scalar field [key] to [value] on the condition at [index] of the
   /// container at [containerPath]; keeps selection. No-op for an unresolvable
   /// container or an out-of-range [index].
   void setConditionFieldOn(
-      NodePath containerPath, int index, String key, Object? value) {
+    NodePath containerPath,
+    int index,
+    String key,
+    Object? value,
+  ) {
     final s = state;
     if (s == null) return;
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= conditionsOf(container).length) return;
     _commitBody(
-        s,
-        s._copyWith(
-            body: setConditionField(s.body, containerPath, index, key, value)),
-        coalesceKey: 'c:${containerPath.join('.')}/$index/$key');
+      s,
+      s._copyWith(
+        body: setConditionField(s.body, containerPath, index, key, value),
+      ),
+      coalesceKey: 'c:${containerPath.join('.')}/$index/$key',
+    );
   }
 
   /// Append a fresh trigger built from [def] to the container at [containerPath];
@@ -592,7 +648,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null || !isContainer(container)) return;
     _commitBody(
-        s, s._copyWith(body: addTrigger(s.body, containerPath, def.build())));
+      s,
+      s._copyWith(body: addTrigger(s.body, containerPath, def.build())),
+    );
   }
 
   /// Remove the trigger at [index] from the container at [containerPath]; keeps
@@ -604,24 +662,32 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (container == null) return;
     if (index < 0 || index >= triggersOf(container).length) return;
     _commitBody(
-        s, s._copyWith(body: removeTriggerAt(s.body, containerPath, index)));
+      s,
+      s._copyWith(body: removeTriggerAt(s.body, containerPath, index)),
+    );
   }
 
   /// Set scalar field [key] to [value] on the trigger at [index] of the container
   /// at [containerPath]; keeps selection. No-op for an unresolvable container or
   /// an out-of-range [index].
   void setTriggerFieldOn(
-      NodePath containerPath, int index, String key, Object? value) {
+    NodePath containerPath,
+    int index,
+    String key,
+    Object? value,
+  ) {
     final s = state;
     if (s == null) return;
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= triggersOf(container).length) return;
     _commitBody(
-        s,
-        s._copyWith(
-            body: setTriggerField(s.body, containerPath, index, key, value)),
-        coalesceKey: 't:${containerPath.join('.')}/$index/$key');
+      s,
+      s._copyWith(
+        body: setTriggerField(s.body, containerPath, index, key, value),
+      ),
+      coalesceKey: 't:${containerPath.join('.')}/$index/$key',
+    );
   }
 
   /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just
@@ -640,7 +706,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
 /// The editor working-state for the open sequence (null when none is loaded).
 final sequenceEditorProvider =
     NotifierProvider<SequenceEditorController, SequenceEditorState?>(
-        SequenceEditorController.new);
+      SequenceEditorController.new,
+    );
 
 /// §38.9 — transient user-facing message from a refused/failed live edit; the
 /// Run tab listens and surfaces it as a SnackBar, then clears it. (Riverpod
@@ -652,5 +719,6 @@ class LiveEditNotice extends Notifier<String?> {
   void clear() => state = null;
 }
 
-final liveEditNoticeProvider =
-    NotifierProvider<LiveEditNotice, String?>(LiveEditNotice.new);
+final liveEditNoticeProvider = NotifierProvider<LiveEditNotice, String?>(
+  LiveEditNotice.new,
+);

@@ -83,8 +83,7 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
         (d) => d.isConnected && d.ports.any((p) => !p.canWrite),
       );
       _tick++;
-      final telemetryDue =
-          hasTelemetry && _tick % _telemetryEveryNTicks == 0;
+      final telemetryDue = hasTelemetry && _tick % _telemetryEveryNTicks == 0;
       if (anyConnecting || keepWaiting || telemetryDue) {
         ref.read(switchListProvider.notifier).refresh();
       }
@@ -172,7 +171,8 @@ class _EquipmentSwitchPanelState extends ConsumerState<EquipmentSwitchPanel> {
                   icon: Icons.sync_problem,
                   color: AraColors.accentWarning,
                   text: "Switch status may be stale: ${_msg(error)}",
-                  onRetry: () => ref.read(switchListProvider.notifier).refresh(),
+                  onRetry: () =>
+                      ref.read(switchListProvider.notifier).refresh(),
                 ),
               if (value.isEmpty)
                 const _EmptyState()
@@ -313,9 +313,8 @@ class _SwitchCard extends ConsumerWidget {
             ),
             Text(
               'device #${device.alpacaDeviceNumber}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
             const Divider(height: 20, color: AraColors.border),
             if (device.isConnected && device.ports.isNotEmpty)
@@ -330,9 +329,8 @@ class _SwitchCard extends ConsumerWidget {
                   device.isConnected
                       ? 'No ports reported by this switch.'
                       : 'Ports appear once the switch is connected.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AraColors.textSecondary,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall
+                      ?.copyWith(color: AraColors.textSecondary),
                 ),
               ),
           ],
@@ -365,11 +363,7 @@ class _SwitchCard extends ConsumerWidget {
       // instead of letting the control silently snap back.
       final performed = await ref
           .read(switchListProvider.notifier)
-          .setValue(
-            deviceId: device.deviceId,
-            portId: port.id,
-            value: value,
-          );
+          .setValue(deviceId: device.deviceId, portId: port.id, value: value);
       if (!performed) {
         // _act returns false both for the re-entrancy guard and for "no active
         // server", so word this for either — claiming another change is in
@@ -454,7 +448,7 @@ class _SwitchCard extends ConsumerWidget {
     } catch (e) {
       final text = isNotFoundEquipmentError(e)
           ? 'The server could not reconnect this switch — it may need updating; '
-              'otherwise use Add switch.'
+                'otherwise use Add switch.'
           : "Couldn't connect: ${_msg(e)}";
       messenger.showSnackBar(
         SnackBar(content: Text(text), backgroundColor: AraColors.accentError),
@@ -529,9 +523,8 @@ class _EmptyState extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               'Use “Add switch” to discover and connect a power/relay box.',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: AraColors.textSecondary),
+              style: Theme.of(context).textTheme.bodySmall
+                  ?.copyWith(color: AraColors.textSecondary),
             ),
           ],
         ),

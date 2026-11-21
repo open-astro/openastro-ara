@@ -51,7 +51,9 @@ class PolarAlignApi implements PolarAlignClient {
   @override
   Future<PolarAlignStatus?> getStatus() async {
     try {
-      final res = await _dio.get<dynamic>('/api/v1/equipment/polaralign/status');
+      final res = await _dio.get<dynamic>(
+        '/api/v1/equipment/polaralign/status',
+      );
       final data = res.data;
       if (data is! Map<String, dynamic>) return null;
       return PolarAlignStatus.fromJson(data);
@@ -70,7 +72,9 @@ class PolarAlignApi implements PolarAlignClient {
     try {
       res = await _dio.get<dynamic>(
         '/api/v1/equipment/polaralign/start-plan',
-        queryParameters: stage == null ? null : <String, dynamic>{'stage': stage},
+        queryParameters: stage == null
+            ? null
+            : <String, dynamic>{'stage': stage},
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
@@ -104,7 +108,9 @@ class PolarAlignApi implements PolarAlignClient {
           // #2083 — only when the user chose it: the rig then moves nothing.
           if (plan.handTurn) 'hand_turn': true,
         },
-        options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
+        options: plan.stage == PolarAlignStages.check
+            ? Options(receiveTimeout: endTimeout)
+            : null,
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
@@ -226,10 +232,12 @@ class PolarAlignerApi implements PolarAlignerClient {
   Future<void> home() => _dio.post<void>('/api/v1/equipment/polaraligner/home');
 
   @override
-  Future<void> stopInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/stop');
+  Future<void> stopInRoutine() =>
+      _dio.post<void>('/api/v1/equipment/polaralign/correction/stop');
 
   @override
-  Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
+  Future<void> resumeInRoutine() =>
+      _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
 
   @override
   void close() => _dio.close(force: true);

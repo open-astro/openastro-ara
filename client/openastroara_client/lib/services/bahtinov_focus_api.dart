@@ -12,11 +12,14 @@ abstract interface class BahtinovFocusClient {
   /// [exposureSec] null = the server takes the profile's autofocus exposure.
   Future<void> start({double? exposureSec});
   Future<void> stop();
+
   /// Lock the readout on the star at (x, y) frame pixels.
   Future<void> pick({required int x, required int y});
+
   /// Forget the picked star.
   Future<void> clearPick();
   Future<BahtinovFocusStatus> status();
+
   /// The latest star crop (or whole frame); [GuideFocusFrame] carries the
   /// JPEG and its `X-Frame-Seq`.
   Future<GuideFocusFrame?> fetchFrame();
@@ -28,12 +31,14 @@ class BahtinovFocusApi implements BahtinovFocusClient {
   final Dio _dio;
 
   BahtinovFocusApi(AraServer server)
-      : _dio = Dio(BaseOptions(
+    : _dio = Dio(
+        BaseOptions(
           baseUrl: server.baseUrl,
           connectTimeout: const Duration(seconds: 3),
           // Stop drains the in-flight frame (≤ exposure + 30 s on the daemon).
           receiveTimeout: const Duration(seconds: 65),
-        ));
+        ),
+      );
 
   @override
   Future<void> start({double? exposureSec}) async {

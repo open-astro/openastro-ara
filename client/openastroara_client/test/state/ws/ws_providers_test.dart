@@ -40,34 +40,55 @@ class _FakeConnector {
   }
 }
 
-String _envelope(int seq) =>
-    jsonEncode({'type': 'e', 'ts': '2026-06-12T12:00:00.000Z', 'seq': seq, 'payload': const {}});
+String _envelope(int seq) => jsonEncode({
+  'type': 'e',
+  'ts': '2026-06-12T12:00:00.000Z',
+  'seq': seq,
+  'payload': const {},
+});
 
 void main() {
   group('ws_providers', () {
-    test('no saved server → stream is null and state is disconnected', () async {
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(const [])),
-      ]);
-      addTearDown(container.dispose);
-      await container.read(savedServersProvider.future);
+    test(
+      'no saved server → stream is null and state is disconnected',
+      () async {
+        final container = ProviderContainer(
+          overrides: [
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(const []),
+            ),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container.read(savedServersProvider.future);
 
-      // Keep the autoDispose providers alive while we read them.
-      final sub = container.listen(wsConnectionStateProvider, (_, _) {});
-      addTearDown(sub.close);
-      await pumpEventQueue();
+        // Keep the autoDispose providers alive while we read them.
+        final sub = container.listen(wsConnectionStateProvider, (_, _) {});
+        addTearDown(sub.close);
+        await pumpEventQueue();
 
-      expect(container.read(wsEventStreamProvider), isNull);
-      expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.disconnected);
-    });
+        expect(container.read(wsEventStreamProvider), isNull);
+        expect(
+          container.read(wsConnectionStateProvider).asData?.value,
+          WsConnectionState.disconnected,
+        );
+      },
+    );
 
     test('active server → factory builds the stream, connects, and reaches connected on a frame', () async {
       final conn = _FakeConnector();
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider
-            .overrideWithValue(_FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          wsEventStreamFactoryProvider.overrideWithValue(
+            (s) => WsEventStream(s, connect: conn.connect),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       await container.read(savedServersProvider.future);
 
@@ -80,25 +101,41 @@ void main() {
 
       final stream = sub.read();
       expect(stream, isNotNull);
-      expect(stream!.connectionState, WsConnectionState.connecting,
-          reason: 'creating the provider connects the stream');
+      expect(
+        stream!.connectionState,
+        WsConnectionState.connecting,
+        reason: 'creating the provider connects the stream',
+      );
       // The provider must surface that state too (guards the snapshot→subscribe race).
-      expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.connecting);
+      expect(
+        container.read(wsConnectionStateProvider).asData?.value,
+        WsConnectionState.connecting,
+      );
 
       conn.legs.first.incoming.add(_envelope(1));
       await pumpEventQueue();
       expect(stream.connectionState, WsConnectionState.connected);
-      expect(container.read(wsConnectionStateProvider).asData?.value, WsConnectionState.connected,
-          reason: 'the provider follows the transition to connected (no dropped state)');
+      expect(
+        container.read(wsConnectionStateProvider).asData?.value,
+        WsConnectionState.connected,
+        reason: 'the provider follows the transition to connected (no dropped state)',
+      );
     });
 
     test('disposing the providers while connected does not throw (close-race guard)', () async {
       final conn = _FakeConnector();
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider
-            .overrideWithValue(_FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        wsEventStreamFactoryProvider.overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          wsEventStreamFactoryProvider.overrideWithValue(
+            (s) => WsEventStream(s, connect: conn.connect),
+          ),
+        ],
+      );
       await container.read(savedServersProvider.future);
       final streamSub = container.listen(wsEventStreamProvider, (_, _) {});
       final connSub = container.listen(wsConnectionStateProvider, (_, _) {});

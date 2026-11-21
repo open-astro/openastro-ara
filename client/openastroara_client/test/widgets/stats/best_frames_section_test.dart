@@ -8,6 +8,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/best_frames_state.dart';
 import 'package:openastroara/widgets/stats/best_frames_section.dart';
+
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -43,21 +44,24 @@ const _server = AraServer(hostname: 'h', port: 5555);
 Widget _app(List<AraServer> servers, BestFramesClient api) {
   return ProviderScope(
     overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
       bestFramesApiFactoryProvider.overrideWithValue((_) => api),
     ],
     child: const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: BestFramesSection()),
-      ),
+      home: Scaffold(body: SingleChildScrollView(child: BestFramesSection())),
     ),
   );
 }
 
 void main() {
-  testWidgets('renders the best-frame tiles when data is present', (tester) async {
-    final api = _FakeBestFramesClient(
-        const [BestFrame(frameId: 'a', targetName: 'M31', compositeScore: 0.93)]);
+  testWidgets('renders the best-frame tiles when data is present', (
+    tester,
+  ) async {
+    final api = _FakeBestFramesClient(const [
+      BestFrame(frameId: 'a', targetName: 'M31', compositeScore: 0.93),
+    ]);
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();
 
@@ -65,10 +69,12 @@ void main() {
     expect(find.textContaining('Couldn’t refresh'), findsNothing);
   });
 
-  testWidgets('a failed manual refresh shows the stale banner over the list',
-      (tester) async {
-    final api = _FakeBestFramesClient(
-        const [BestFrame(frameId: 'a', targetName: 'M31', compositeScore: 0.93)]);
+  testWidgets('a failed manual refresh shows the stale banner over the list', (
+    tester,
+  ) async {
+    final api = _FakeBestFramesClient(const [
+      BestFrame(frameId: 'a', targetName: 'M31', compositeScore: 0.93),
+    ]);
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();
 

@@ -34,7 +34,8 @@ typedef WsConnector = WsSocket Function(Uri url, Map<String, String> headers);
 /// The production dial, exposed for the #1129 test that a failed connect
 /// surfaces no uncaught error.
 @visibleForTesting
-WsSocket defaultWsConnect(Uri url, Map<String, String> headers) => _defaultConnect(url, headers);
+WsSocket defaultWsConnect(Uri url, Map<String, String> headers) =>
+    _defaultConnect(url, headers);
 
 WsSocket _defaultConnect(Uri url, Map<String, String> headers) {
   // Cross-platform dial: native uses IOWebSocketChannel (dart:io) so the
@@ -187,7 +188,9 @@ class WsEventStream {
        // WebSockets can't set request headers, so the server accepts either
        // (header wins when both are sent) — carrying both keeps this URL shape
        // correct for a future web transport without an io-vs-web fork here.
-       _url = Uri.parse('ws://${server.hostname}:${server.port}/api/v1/ws?ws_version=$wsVersion'),
+       _url = Uri.parse(
+         'ws://${server.hostname}:${server.port}/api/v1/ws?ws_version=$wsVersion',
+       ),
        _connect = connect ?? _defaultConnect,
        _backoff = backoff ?? defaultBackoff;
 
@@ -249,8 +252,10 @@ class WsEventStream {
       _silentTicks++;
       if (_silentTicks * silenceCheckEvery.inMilliseconds >=
           silenceTimeout.inMilliseconds) {
-        debugPrint('[ws] no frames for $silenceTimeout — link presumed dead; '
-            'closing to reconnect');
+        debugPrint(
+          '[ws] no frames for $silenceTimeout — link presumed dead; '
+          'closing to reconnect',
+        );
         // Stop the watchdog before closing: close() completes asynchronously
         // (on a vanished network it can sit there a while), and _onClosed is
         // what would otherwise cancel this — so leaving it armed re-fires the
@@ -500,8 +505,7 @@ class WsEventStream {
     _connectGraceTimer = null;
     final sub = _sub;
     final socket = _socket;
-    _sub =
-        null; // drop references so the cancelled sub / closed socket can be GC'd promptly
+    _sub = null; // drop references so the cancelled sub / closed socket can be GC'd promptly
     _socket = null;
     await sub?.cancel();
     await socket?.close();

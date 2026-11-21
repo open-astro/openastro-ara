@@ -91,17 +91,20 @@ void main() {
     );
   });
 
-  test('a 422 without detail is a Refusal with none, for the app to word', () async {
-    final daemon = _Daemon(422, <String, dynamic>{});
-    expect(
-      () => _api(daemon).solve('f'),
-      throwsA(
-        isA<Refusal>()
-            .having((e) => e.detail, 'detail', isNull)
-            .having((e) => e.status, 'status', 422),
-      ),
-    );
-  });
+  test(
+    'a 422 without detail is a Refusal with none, for the app to word',
+    () async {
+      final daemon = _Daemon(422, <String, dynamic>{});
+      expect(
+        () => _api(daemon).solve('f'),
+        throwsA(
+          isA<Refusal>()
+              .having((e) => e.detail, 'detail', isNull)
+              .having((e) => e.status, 'status', 422),
+        ),
+      );
+    },
+  );
 
   test('any other failure is rethrown as the transport error', () async {
     final daemon = _Daemon(500, {'title': 'boom'});

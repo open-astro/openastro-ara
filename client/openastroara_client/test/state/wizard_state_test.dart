@@ -27,8 +27,10 @@ void main() {
       final notifier = container.read(wizardControllerProvider.notifier);
       notifier.jumpTo(ProfileWizard.totalSteps);
       notifier.next();
-      expect(container.read(wizardControllerProvider).step,
-          ProfileWizard.totalSteps);
+      expect(
+        container.read(wizardControllerProvider).step,
+        ProfileWizard.totalSteps,
+      );
     });
 
     test('back decrements step but never below 1', () {
@@ -45,8 +47,10 @@ void main() {
       notifier.jumpTo(-5);
       expect(container.read(wizardControllerProvider).step, 1);
       notifier.jumpTo(ProfileWizard.totalSteps + 100);
-      expect(container.read(wizardControllerProvider).step,
-          ProfileWizard.totalSteps);
+      expect(
+        container.read(wizardControllerProvider).step,
+        ProfileWizard.totalSteps,
+      );
       notifier.jumpTo(3);
       expect(container.read(wizardControllerProvider).step, 3);
     });
@@ -56,8 +60,10 @@ void main() {
       notifier.jumpTo(3);
       notifier.skipCurrent();
       expect(container.read(wizardControllerProvider).step, 4);
-      expect(container.read(wizardControllerProvider).draft.skippedScreens,
-          contains(3));
+      expect(
+        container.read(wizardControllerProvider).draft.skippedScreens,
+        contains(3),
+      );
     });
 
     test('skipCurrent on last step still notifies listeners', () {
@@ -77,8 +83,7 @@ void main() {
   group('ProfileWizard catalog', () {
     test('has entries for every step 1..totalSteps', () {
       for (var i = 1; i <= ProfileWizard.totalSteps; i++) {
-        expect(ProfileWizard.steps[i], isNotNull,
-            reason: 'missing step $i');
+        expect(ProfileWizard.steps[i], isNotNull, reason: 'missing step $i');
       }
     });
   });

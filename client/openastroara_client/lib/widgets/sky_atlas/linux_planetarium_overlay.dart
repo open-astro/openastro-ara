@@ -116,7 +116,9 @@ class _LinuxPlanetariumOverlayState
   void didPopNext() => setState(() => _routeOnTop = false);
 
   // ARA_OVERLAY_DEBUG=1 (with the native side's logging) traces each push.
-  static final bool _debug = Platform.environment.containsKey('ARA_OVERLAY_DEBUG');
+  static final bool _debug = Platform.environment.containsKey(
+    'ARA_OVERLAY_DEBUG',
+  );
 
   void _pushBounds() {
     final box = context.findRenderObject();
@@ -125,7 +127,8 @@ class _LinuxPlanetariumOverlayState
       return;
     }
     final rect = box.localToGlobal(Offset.zero) & box.size;
-    if (_debug) debugPrint('planetarium_overlay: push $rect (last $_lastBounds)');
+    if (_debug)
+      debugPrint('planetarium_overlay: push $rect (last $_lastBounds)');
     if (rect == _lastBounds) return;
     _lastBounds = rect;
     _overlay.setBounds(rect);

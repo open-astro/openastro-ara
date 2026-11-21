@@ -40,13 +40,13 @@ class StatsMilestone {
   }
 
   factory StatsMilestone.fromJson(Map<String, dynamic> json) => StatsMilestone(
-        id: _str(json['id']),
-        title: _str(json['title']),
-        description: _str(json['description']),
-        achieved: _bool(json['achieved']),
-        threshold: _dbl(json['threshold']),
-        current: _dbl(json['current']),
-      );
+    id: _str(json['id']),
+    title: _str(json['title']),
+    description: _str(json['description']),
+    achieved: _bool(json['achieved']),
+    threshold: _dbl(json['threshold']),
+    current: _dbl(json['current']),
+  );
 }
 
 /// Cumulative imaging records + milestone badges for the active profile.
@@ -92,9 +92,9 @@ class StatsAchievements {
       firstLightUtc: parseStatsUtc(json['first_light_utc']),
       milestones: raw is List
           ? raw
-              .whereType<Map<String, dynamic>>()
-              .map(StatsMilestone.fromJson)
-              .toList(growable: false)
+                .whereType<Map<String, dynamic>>()
+                .map(StatsMilestone.fromJson)
+                .toList(growable: false)
           : const <StatsMilestone>[],
     );
   }

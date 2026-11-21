@@ -3,7 +3,8 @@
 /// binning that scales the spec-sheet sky flux to what this rig's frames
 /// measured. Null on the wire means "never fitted".
 class SkyModelFilterCalibration {
-  final String kind; // the daemon's wire token: l, r, g, b, osc, ha, oiii, sii, duo, tri
+  final String
+  kind; // the daemon's wire token: l, r, g, b, osc, ha, oiii, sii, duo, tri
   final int bin;
   final double? k;
   final double? scatterPct;

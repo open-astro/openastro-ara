@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../util/stream_save_location.dart';
@@ -23,7 +25,7 @@ class SupportTab extends ConsumerStatefulWidget {
   /// Production leaves it null → [pickStreamSavePath] (directory picker +
   /// collision-safe file name, so the download can stream to the path).
   final Future<String?> Function(String dialogTitle, String suggestedName)?
-      savePathPicker;
+  savePathPicker;
 
   const SupportTab({super.key, this.savePathPicker});
 
@@ -34,7 +36,13 @@ class SupportTab extends ConsumerStatefulWidget {
 class _SupportTabState extends ConsumerState<SupportTab> {
   // "All" maps to no min-level filter; the rest are Serilog level names the
   // daemon's LogService ranks.
-  static const _levels = <String>['All', 'Debug', 'Information', 'Warning', 'Error'];
+  static const _levels = <String>[
+    'All',
+    'Debug',
+    'Information',
+    'Warning',
+    'Error',
+  ];
   static const _maxLines = 200;
 
   final _substringCtl = TextEditingController();
@@ -99,7 +107,13 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionLoadLogs));
+      setState(
+        () => _error = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionLoadLogs,
+        ),
+      );
     } finally {
       if (mounted && gen == _refreshGen) setState(() => _loading = false);
     }
@@ -116,7 +130,10 @@ class _SupportTabState extends ConsumerState<SupportTab> {
     // falls back to the epoch for an unparseable one, and a 1970 cursor would
     // end paging early with an empty page.
     final cursor = held
-        .lastWhere((e) => e.timestamp.millisecondsSinceEpoch > 0, orElse: () => held.last)
+        .lastWhere(
+          (e) => e.timestamp.millisecondsSinceEpoch > 0,
+          orElse: () => held.last,
+        )
         .timestamp;
     setState(() => _loadingMore = true);
     try {
@@ -135,7 +152,13 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       });
     } catch (e) {
       if (!mounted || gen != _refreshGen) return;
-      setState(() => _error = friendlyError(context.l10n, e, action: context.l10n.actionLoadOlderLogs));
+      setState(
+        () => _error = friendlyError(
+          context.l10n,
+          e,
+          action: context.l10n.actionLoadOlderLogs,
+        ),
+      );
     } finally {
       // Only this call's own spinner: a refresh that superseded it already cleared the flag.
       if (mounted && gen == _refreshGen) setState(() => _loadingMore = false);
@@ -150,18 +173,23 @@ class _SupportTabState extends ConsumerState<SupportTab> {
       // Path first, then STREAM the download to it — the log is written chunk
       // by chunk instead of being buffered whole in memory (§29.9 follow-up).
       final pick = widget.savePathPicker ?? pickStreamSavePath;
-      final savePath =
-          await pick('Choose where to save the log', 'openastroara-server.log');
+      final savePath = await pick(
+        'Choose where to save the log',
+        'openastroara-server.log',
+      );
       if (!mounted || savePath == null) return;
       final name = await api.downloadLogTo(savePath);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Saved $name')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Saved $name')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionDownload))),
+        SnackBar(
+          content: Text(
+            friendlyError(context.l10n, e, action: context.l10n.actionDownload),
+          ),
+        ),
       );
     } finally {
       if (mounted) setState(() => _downloading = false);
@@ -323,7 +351,9 @@ class _SupportTabState extends ConsumerState<SupportTab> {
                                   ? const SizedBox(
                                       width: 20,
                                       height: 20,
-                                      child: AdaptiveProgressIndicator(strokeWidth: 2),
+                                      child: AdaptiveProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     )
                                   : OutlinedButton.icon(
                                       onPressed: _loading ? null : _loadOlder,
@@ -347,8 +377,11 @@ class _SupportTabState extends ConsumerState<SupportTab> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            Icon(Icons.error_outline,
-                size: 18, color: theme.colorScheme.onErrorContainer),
+            Icon(
+              Icons.error_outline,
+              size: 18,
+              color: theme.colorScheme.onErrorContainer,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
@@ -382,16 +415,19 @@ class _LogRow extends StatelessWidget {
             width: 64,
             child: Text(
               _hms(entry.timestamp),
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: AraColors.textDisabled),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AraColors.textDisabled,
+              ),
             ),
           ),
           SizedBox(
             width: 80,
             child: Text(
               entry.level,
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: color, fontWeight: FontWeight.w600),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: color,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           Expanded(
@@ -403,7 +439,9 @@ class _LogRow extends StatelessWidget {
                   Text(
                     entry.source,
                     style: theme.textTheme.bodySmall?.copyWith(
-                        color: AraColors.textDisabled, fontSize: 11),
+                      color: AraColors.textDisabled,
+                      fontSize: 11,
+                    ),
                   ),
               ],
             ),
@@ -416,11 +454,11 @@ class _LogRow extends StatelessWidget {
   // The app's fixed dark palette (AraColors) — same semantic accents the §51
   // diagnostics panel uses, so log levels read consistently across the app.
   static Color _levelColor(String level) => switch (level) {
-        'Error' || 'Fatal' => AraColors.accentError,
-        'Warning' => AraColors.accentBusy,
-        'Debug' || 'Verbose' => AraColors.textDisabled,
-        _ => AraColors.textPrimary,
-      };
+    'Error' || 'Fatal' => AraColors.accentError,
+    'Warning' => AraColors.accentBusy,
+    'Debug' || 'Verbose' => AraColors.textDisabled,
+    _ => AraColors.textPrimary,
+  };
 
   // Local wall-clock HH:mm:ss; the daemon stamps UTC.
   static String _hms(DateTime utc) {

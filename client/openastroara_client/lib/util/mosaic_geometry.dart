@@ -23,10 +23,7 @@ extension MosaicGridX on MosaicGrid {
 /// The whole grid's footprint (width, height arcmin) before rotation.
 (double, double) mosaicExtentArcmin((double, double) fovArcmin, MosaicGrid g) {
   final (sw, sh) = _step(fovArcmin, g.overlapPct);
-  return (
-    fovArcmin.$1 + sw * (g.cols - 1),
-    fovArcmin.$2 + sh * (g.rows - 1),
-  );
+  return (fovArcmin.$1 + sw * (g.cols - 1), fovArcmin.$2 + sh * (g.rows - 1));
 }
 
 /// Panel offsets in the tangent plane (arcmin, x east-west / y north-south
@@ -54,7 +51,11 @@ List<(double, double)> mosaicPanelOffsetsArcmin(
 /// Gnomonic (TAN) inverse: tangent-plane offsets (degrees) → J2000 RA/Dec,
 /// identical to the page's `tanToRaDec`.
 ({double raDeg, double decDeg}) tanToRaDec(
-    double xiDeg, double etaDeg, double ra0Deg, double dec0Deg) {
+  double xiDeg,
+  double etaDeg,
+  double ra0Deg,
+  double dec0Deg,
+) {
   const d2r = math.pi / 180;
   final xi = xiDeg * d2r, eta = etaDeg * d2r;
   final rho = math.sqrt(xi * xi + eta * eta);
@@ -62,7 +63,8 @@ List<(double, double)> mosaicPanelOffsetsArcmin(
   final c = math.atan(rho), sinC = math.sin(c), cosC = math.cos(c);
   final d0 = dec0Deg * d2r, sin0 = math.sin(d0), cos0 = math.cos(d0);
   final dec = math.asin(cosC * sin0 + (eta * sinC * cos0) / rho);
-  final ra = ra0Deg * d2r +
+  final ra =
+      ra0Deg * d2r +
       math.atan2(xi * sinC, rho * cos0 * cosC - eta * sin0 * sinC);
   var raOut = ra / d2r;
   raOut = ((raOut % 360) + 360) % 360;
@@ -78,18 +80,24 @@ List<({double raDeg, double decDeg})> mosaicPanelCentres({
   required (double, double) fovArcmin,
   required MosaicGrid g,
   double rotationDeg = 0,
-}) =>
-    [
-      for (final (dx, dy) in mosaicPanelOffsetsArcmin(fovArcmin, g,
-          rotationDeg: rotationDeg))
-        tanToRaDec(dx / 60, dy / 60, raDeg, decDeg),
-    ];
+}) => [
+  for (final (dx, dy) in mosaicPanelOffsetsArcmin(
+    fovArcmin,
+    g,
+    rotationDeg: rotationDeg,
+  ))
+    tanToRaDec(dx / 60, dy / 60, raDeg, decDeg),
+];
 
 /// The smallest grid whose footprint covers an object [sizeMajArcmin] across
 /// with the default overlap, up to 4×4 — the "Suggest" behind an overflowing
 /// target. Null when a single frame already covers it (or the size is unknown).
-MosaicGrid? suggestMosaic(double? sizeMajArcmin, (double, double) fovArcmin,
-    {int overlapPct = 10, int maxTiles = 4}) {
+MosaicGrid? suggestMosaic(
+  double? sizeMajArcmin,
+  (double, double) fovArcmin, {
+  int overlapPct = 10,
+  int maxTiles = 4,
+}) {
   if (sizeMajArcmin == null || sizeMajArcmin <= 0) return null;
   final need = sizeMajArcmin * 1.1; // a little sky around it
   for (var n = 1; n <= maxTiles; n++) {

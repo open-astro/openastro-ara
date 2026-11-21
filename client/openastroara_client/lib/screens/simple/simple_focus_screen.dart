@@ -32,7 +32,8 @@ class SimpleFocusScreen extends SimpleScreen {
   Widget get shutter => const SimpleFocusShutter();
 
   @override
-  String caption(BuildContext context, WidgetRef ref) => simpleFocusSummary(ref);
+  String caption(BuildContext context, WidgetRef ref) =>
+      simpleFocusSummary(ref);
 
   /// The run's frame, measured stars circled, when asked; Manual's Bahtinov
   /// crop, spikes and all; on the guide camera the guider's frames.

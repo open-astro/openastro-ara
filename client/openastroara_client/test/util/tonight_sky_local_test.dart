@@ -150,7 +150,10 @@ void main() {
     test('a start at dusk (Wait for dark) gets it; a start a minute earlier, in daylight, does not', () {
       final dark = darkStart(site, DateTime.utc(2026, 1, 14, 20))!;
       expect(dawnStopFor(site, dark), 'Astronomical Dawn');
-      expect(dawnStopFor(site, dark.subtract(const Duration(minutes: 1))), isNull);
+      expect(
+        dawnStopFor(site, dark.subtract(const Duration(minutes: 1))),
+        isNull,
+      );
     });
 
     test('daylight and after dawn: no dawn stop (an indoor test runs on)', () {
@@ -161,17 +164,29 @@ void main() {
 
     test('follows the twilight definition', () {
       SiteSettings at(TwilightDefinition d) => SiteSettings(
-          latitudeDeg: site.latitudeDeg, longitudeDeg: site.longitudeDeg, twilightDefinition: d);
+        latitudeDeg: site.latitudeDeg,
+        longitudeDeg: site.longitudeDeg,
+        twilightDefinition: d,
+      );
       final night = DateTime.utc(2026, 1, 15, 3);
       expect(dawnStopFor(at(TwilightDefinition.civil), night), 'Civil Dawn');
-      expect(dawnStopFor(at(TwilightDefinition.nautical), night), 'Nautical Dawn');
+      expect(
+        dawnStopFor(at(TwilightDefinition.nautical), night),
+        'Nautical Dawn',
+      );
     });
 
     test('no dawn to stop at: a site never astronomically dark (high-latitude summer), or no site', () {
       const north = SiteSettings(
-          latitudeDeg: 51.477833, longitudeDeg: -0.001500, twilightDefinition: TwilightDefinition.astronomical);
+        latitudeDeg: 51.477833,
+        longitudeDeg: -0.001500,
+        twilightDefinition: TwilightDefinition.astronomical,
+      );
       expect(dawnStopFor(north, DateTime.utc(2026, 6, 21, 23)), isNull);
-      expect(dawnStopFor(const SiteSettings(), DateTime.utc(2026, 1, 15, 3)), isNull);
+      expect(
+        dawnStopFor(const SiteSettings(), DateTime.utc(2026, 1, 15, 3)),
+        isNull,
+      );
     });
   });
 
@@ -1447,8 +1462,15 @@ void main() {
       final c = ProviderContainer(
         overrides: [
           clockProvider.overrideWithValue(() => now),
-          siteSettingsProvider.overrideWith(() => _SeededSite(SiteSettings(
-              latitudeDeg: 35.08, longitudeDeg: -106.65, twilightDefinition: twilight))),
+          siteSettingsProvider.overrideWith(
+            () => _SeededSite(
+              SiteSettings(
+                latitudeDeg: 35.08,
+                longitudeDeg: -106.65,
+                twilightDefinition: twilight,
+              ),
+            ),
+          ),
         ],
       );
       addTearDown(c.dispose);
@@ -1456,9 +1478,21 @@ void main() {
     }
 
     final dusk = DateTime.utc(2026, 11, 6, 1, 17);
-    expect(at(TwilightDefinition.astronomical, dusk).read(tonightSkyUpNowProvider), isFalse);
-    expect(at(TwilightDefinition.nautical, dusk).read(tonightSkyUpNowProvider), isTrue);
-    expect(at(TwilightDefinition.astronomical, DateTime.utc(2026, 11, 6, 2, 0)).read(tonightSkyUpNowProvider), isTrue);
+    expect(
+      at(TwilightDefinition.astronomical, dusk).read(tonightSkyUpNowProvider),
+      isFalse,
+    );
+    expect(
+      at(TwilightDefinition.nautical, dusk).read(tonightSkyUpNowProvider),
+      isTrue,
+    );
+    expect(
+      at(
+        TwilightDefinition.astronomical,
+        DateTime.utc(2026, 11, 6, 2, 0),
+      ).read(tonightSkyUpNowProvider),
+      isTrue,
+    );
   });
   test('a Wolf-Rayet star never enters the ranked list, however bright', () {
     // Review #1105: a WR* row has no size, so the framing score is the

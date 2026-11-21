@@ -34,13 +34,18 @@ Future<FakePolarAlignSection> _pump(
 }
 
 void main() {
-  testWidgets('there is no Home switch: polar align never sends the mount Home (#2048)', (
-    tester,
-  ) async {
-    await _pump(tester);
-    expect(find.textContaining('Home'), findsNothing);
-    expect(find.byType(Switch), findsNWidgets(2), reason: 'the Polar Aligner and stop-tracking switches only');
-  });
+  testWidgets(
+    'there is no Home switch: polar align never sends the mount Home (#2048)',
+    (tester) async {
+      await _pump(tester);
+      expect(find.textContaining('Home'), findsNothing);
+      expect(
+        find.byType(Switch),
+        findsNWidgets(2),
+        reason: 'the Polar Aligner and stop-tracking switches only',
+      );
+    },
+  );
 
   testWidgets(
     'the turn, verify step, rough exposure and tolerance each save their own field (#1736)',
@@ -99,12 +104,19 @@ void main() {
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
       }
-      expect(rig.puts, hasLength(1), reason: 'out of range or not whole: nothing sent');
+      expect(
+        rig.puts,
+        hasLength(1),
+        reason: 'out of range or not whole: nothing sent',
+      );
       await tester.enterText(frames, '5');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
-      expect((rig.puts.last.framesPerPoint, rig.puts.last.camera), (5, PolarAlignCameras.main),
-          reason: 'saved over the rig copy the camera change left');
+      expect(
+        (rig.puts.last.framesPerPoint, rig.puts.last.camera),
+        (5, PolarAlignCameras.main),
+        reason: 'saved over the rig copy the camera change left',
+      );
     },
   );
 
@@ -151,20 +163,36 @@ void main() {
     'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
     (tester) async {
       final rig = FakePolarAlignSection(
-        initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15, polarAlignerAuto: false),
+        initial: rigPolarAlign.copyWith(
+          exposureSeconds: 4,
+          checkStepDeg: 15,
+          polarAlignerAuto: false,
+        ),
       );
       await _pump(tester, rig: rig);
-      expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
-      expect(find.text('Off: Polar align shows the turns and you make them'), findsOneWidget);
+      expect(
+        find.text("Correct with the Polar Aligner's motors"),
+        findsOneWidget,
+      );
+      expect(
+        find.text('Off: Polar align shows the turns and you make them'),
+        findsOneWidget,
+      );
       final aligner = find.byType(Switch).at(0);
       expect(tester.widget<Switch>(aligner).value, isFalse);
       await tester.tap(aligner);
       await tester.pumpAndSettle();
       final saved = rig.puts.single;
       expect(saved.polarAlignerAuto, isTrue);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
-        find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
+        (saved.exposureSeconds, saved.checkStepDeg),
+        (4.0, 15.0),
+        reason: 'saved over the loaded section',
+      );
+      expect(
+        find.text(
+          'On a rig with a Polar Aligner, Polar align turns its motors after each measurement',
+        ),
         findsOneWidget,
       );
     },
@@ -173,19 +201,30 @@ void main() {
   testWidgets(
     'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
     (tester) async {
-      final rig = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15));
+      final rig = FakePolarAlignSection(
+        initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15),
+      );
       await _pump(tester, rig: rig);
       expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
-      expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
+      expect(
+        find.text('Every end of a run turns tracking off'),
+        findsOneWidget,
+      );
       final stopTracking = find.byType(Switch).at(1);
       expect(tester.widget<Switch>(stopTracking).value, isTrue);
       await tester.tap(stopTracking);
       await tester.pumpAndSettle();
       final saved = rig.puts.single;
       expect(saved.stopTrackingWhenDone, isFalse);
-      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
-        find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
+        (saved.exposureSeconds, saved.checkStepDeg),
+        (4.0, 15.0),
+        reason: 'saved over the loaded section',
+      );
+      expect(
+        find.text(
+          'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off',
+        ),
         findsOneWidget,
       );
     },
@@ -235,13 +274,21 @@ void main() {
       await tester.tap(stopTracking);
       await tester.pumpAndSettle();
       expect(rig.puts, isEmpty);
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isFalse, reason: 'the change stays on screen');
+      expect(
+        tester.widget<Switch>(find.byType(Switch).at(1)).value,
+        isFalse,
+        reason: 'the change stays on screen',
+      );
       expect(find.byKey(const Key('section-reload')), findsOneWidget);
 
       rig.refuse = null;
       await tester.tap(find.byKey(const Key('section-reload')));
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isTrue, reason: "the rig's copy again");
+      expect(
+        tester.widget<Switch>(find.byType(Switch).at(1)).value,
+        isTrue,
+        reason: "the rig's copy again",
+      );
       expect(find.byKey(const Key('section-reload')), findsNothing);
     },
   );

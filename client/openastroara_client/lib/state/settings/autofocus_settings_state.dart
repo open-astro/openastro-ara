@@ -18,22 +18,22 @@ enum TelescopeType { refractor, sct, mak, rc, newtonian, other }
 
 /// §59.13 wire strings (exact; the daemon treats anything else as `other`).
 TelescopeType telescopeTypeFromWire(String? s) => switch (s) {
-      'refractor' => TelescopeType.refractor,
-      'sct' => TelescopeType.sct,
-      'mak' => TelescopeType.mak,
-      'rc' => TelescopeType.rc,
-      'newtonian' => TelescopeType.newtonian,
-      _ => TelescopeType.other,
-    };
+  'refractor' => TelescopeType.refractor,
+  'sct' => TelescopeType.sct,
+  'mak' => TelescopeType.mak,
+  'rc' => TelescopeType.rc,
+  'newtonian' => TelescopeType.newtonian,
+  _ => TelescopeType.other,
+};
 
 String telescopeTypeToWire(TelescopeType t) => switch (t) {
-      TelescopeType.refractor => 'refractor',
-      TelescopeType.sct => 'sct',
-      TelescopeType.mak => 'mak',
-      TelescopeType.rc => 'rc',
-      TelescopeType.newtonian => 'newtonian',
-      TelescopeType.other => 'other',
-    };
+  TelescopeType.refractor => 'refractor',
+  TelescopeType.sct => 'sct',
+  TelescopeType.mak => 'mak',
+  TelescopeType.rc => 'rc',
+  TelescopeType.newtonian => 'newtonian',
+  TelescopeType.other => 'other',
+};
 
 class AutofocusSettings {
   final AutofocusMethod method;
@@ -97,28 +97,26 @@ class AutofocusSettings {
     TelescopeType? telescopeType,
     int? backlashInSteps,
     int? backlashOutSteps,
-  }) =>
-      AutofocusSettings(
-        method: method ?? this.method,
-        steps: steps ?? this.steps,
-        stepSize: stepSize ?? this.stepSize,
-        stepSizeAuto: stepSizeAuto ?? this.stepSizeAuto,
-        exposureSeconds: exposureSeconds ?? this.exposureSeconds,
-        binning: binning ?? this.binning,
-        afFilter: afFilter ?? this.afFilter,
-        runAfterFilterChange:
-            runAfterFilterChange ?? this.runAfterFilterChange,
-        triggerTempDeltaC: triggerTempDeltaC ?? this.triggerTempDeltaC,
-        triggerHfrDriftPct: triggerHfrDriftPct ?? this.triggerHfrDriftPct,
-        everyNHours: everyNHours ?? this.everyNHours,
-        abortSequenceOnAfFailure:
-            abortSequenceOnAfFailure ?? this.abortSequenceOnAfFailure,
-        restorePositionOnFailure:
-            restorePositionOnFailure ?? this.restorePositionOnFailure,
-        telescopeType: telescopeType ?? this.telescopeType,
-        backlashInSteps: backlashInSteps ?? this.backlashInSteps,
-        backlashOutSteps: backlashOutSteps ?? this.backlashOutSteps,
-      );
+  }) => AutofocusSettings(
+    method: method ?? this.method,
+    steps: steps ?? this.steps,
+    stepSize: stepSize ?? this.stepSize,
+    stepSizeAuto: stepSizeAuto ?? this.stepSizeAuto,
+    exposureSeconds: exposureSeconds ?? this.exposureSeconds,
+    binning: binning ?? this.binning,
+    afFilter: afFilter ?? this.afFilter,
+    runAfterFilterChange: runAfterFilterChange ?? this.runAfterFilterChange,
+    triggerTempDeltaC: triggerTempDeltaC ?? this.triggerTempDeltaC,
+    triggerHfrDriftPct: triggerHfrDriftPct ?? this.triggerHfrDriftPct,
+    everyNHours: everyNHours ?? this.everyNHours,
+    abortSequenceOnAfFailure:
+        abortSequenceOnAfFailure ?? this.abortSequenceOnAfFailure,
+    restorePositionOnFailure:
+        restorePositionOnFailure ?? this.restorePositionOnFailure,
+    telescopeType: telescopeType ?? this.telescopeType,
+    backlashInSteps: backlashInSteps ?? this.backlashInSteps,
+    backlashOutSteps: backlashOutSteps ?? this.backlashOutSteps,
+  );
 }
 
 /// ADR 0015 — a value only once the rig has answered. Loads itself: Simple

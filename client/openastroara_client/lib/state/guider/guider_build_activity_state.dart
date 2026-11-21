@@ -77,10 +77,14 @@ Map<CalibrationArtifact, CalibrationBuildActivity>? foldGuiderBuildEvent(
   final String phaseToken;
   if (event.type.startsWith(GuiderBuildWsEvents.darkLibraryPrefix)) {
     artifact = CalibrationArtifact.darkLibrary;
-    phaseToken = event.type.substring(GuiderBuildWsEvents.darkLibraryPrefix.length);
+    phaseToken = event.type.substring(
+      GuiderBuildWsEvents.darkLibraryPrefix.length,
+    );
   } else if (event.type.startsWith(GuiderBuildWsEvents.defectMapPrefix)) {
     artifact = CalibrationArtifact.defectMap;
-    phaseToken = event.type.substring(GuiderBuildWsEvents.defectMapPrefix.length);
+    phaseToken = event.type.substring(
+      GuiderBuildWsEvents.defectMapPrefix.length,
+    );
   } else {
     return null;
   }
@@ -110,7 +114,9 @@ Map<CalibrationArtifact, CalibrationBuildActivity>? foldGuiderBuildEvent(
       return null; // a future subtype this build of the app doesn't know
   }
   final error = phase == CalibrationBuildPhase.failed
-      ? (event.payload['error'] is String ? event.payload['error'] as String : null)
+      ? (event.payload['error'] is String
+            ? event.payload['error'] as String
+            : null)
       : null;
   return {
     ...current,
@@ -191,15 +197,15 @@ class GuiderDarkLibraryInvalidationNotifier extends Notifier<bool> {
 /// a dark library / defect map exists; no rebuild has completed since).
 final guiderDarkLibraryInvalidatedProvider =
     NotifierProvider<GuiderDarkLibraryInvalidationNotifier, bool>(
-  GuiderDarkLibraryInvalidationNotifier.new,
-);
+      GuiderDarkLibraryInvalidationNotifier.new,
+    );
 
 /// Per-artifact build activity for the §63.6 calibration dialog. Deliberately
 /// **not** autoDispose: a build runs for minutes and the user will close the
 /// dialog — the terminal complete/failed event must still be folded (and the
 /// status refreshed) while no widget is watching.
-final guiderBuildActivityProvider = NotifierProvider<
-    GuiderBuildActivityNotifier,
-    Map<CalibrationArtifact, CalibrationBuildActivity>>(
-  GuiderBuildActivityNotifier.new,
-);
+final guiderBuildActivityProvider =
+    NotifierProvider<
+      GuiderBuildActivityNotifier,
+      Map<CalibrationArtifact, CalibrationBuildActivity>
+    >(GuiderBuildActivityNotifier.new);

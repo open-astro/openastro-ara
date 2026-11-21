@@ -17,8 +17,11 @@ class RunTickerEvent {
   final DateTime at;
   final RunTickerKind kind;
   final String label;
-  const RunTickerEvent(
-      {required this.at, required this.kind, required this.label});
+  const RunTickerEvent({
+    required this.at,
+    required this.kind,
+    required this.label,
+  });
 }
 
 class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
@@ -50,8 +53,8 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
       if (s != null && s != _lastState) {
         _lastState = s;
         final label = switch (s) {
-          SequenceRunState.starting || SequenceRunState.running =>
-            'Run started',
+          SequenceRunState.starting ||
+          SequenceRunState.running => 'Run started',
           SequenceRunState.paused => 'Paused',
           SequenceRunState.pausedAwaitingUser => 'Waiting for you',
           SequenceRunState.aborting => 'Aborting…',
@@ -62,13 +65,17 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
         };
         if (label != null) {
           // Resumed reads better than a second "Run started".
-          final resumed = label == 'Run started' &&
-              state.any((e) => e.label == 'Paused' || e.label == 'Waiting for you');
+          final resumed =
+              label == 'Run started' &&
+              state.any(
+                (e) => e.label == 'Paused' || e.label == 'Waiting for you',
+              );
           _push(
-              s == SequenceRunState.pausedAwaitingUser
-                  ? RunTickerKind.attention
-                  : RunTickerKind.lifecycle,
-              resumed ? 'Resumed' : label);
+            s == SequenceRunState.pausedAwaitingUser
+                ? RunTickerKind.attention
+                : RunTickerKind.lifecycle,
+            resumed ? 'Resumed' : label,
+          );
         }
       }
       final instruction = run.currentInstructionDescription;
@@ -90,7 +97,8 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
       // autofocus lines: one entry per rung, one for the chosen ceiling.
       if (event.type == 'tracking_probe.rung_complete') {
         final rung = TrackingProbeRung.fromJson(event.payload);
-        if (rung != null) _push(RunTickerKind.instruction, describeTrackingRung(rung));
+        if (rung != null)
+          _push(RunTickerKind.instruction, describeTrackingRung(rung));
         return;
       }
       if (event.type == 'tracking_probe.completed') {
@@ -103,10 +111,11 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
       if (event.type != 'frame.complete') return;
       final filter = event.payload['filter_name'];
       _push(
-          RunTickerKind.frame,
-          filter is String && filter.isNotEmpty
-              ? 'Frame captured · $filter'
-              : 'Frame captured');
+        RunTickerKind.frame,
+        filter is String && filter.isNotEmpty
+            ? 'Frame captured · $filter'
+            : 'Frame captured',
+      );
     });
     return const [];
   }
@@ -114,4 +123,5 @@ class RunEventTickerNotifier extends Notifier<List<RunTickerEvent>> {
 
 final runEventTickerProvider =
     NotifierProvider<RunEventTickerNotifier, List<RunTickerEvent>>(
-        RunEventTickerNotifier.new);
+      RunEventTickerNotifier.new,
+    );

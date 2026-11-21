@@ -27,7 +27,9 @@ void main() {
   late ProviderContainer c;
   setUp(() {
     ws = StreamController<WsEvent>();
-    c = ProviderContainer(overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)]);
+    c = ProviderContainer(
+      overrides: [wsEventsProvider.overrideWith((ref) => ws.stream)],
+    );
     c.listen(simpleMountLimitProvider, (_, _) {});
   });
   tearDown(() {
@@ -38,9 +40,13 @@ void main() {
   test('a meridian stop that paused the plan is an error pill and the run reason', () async {
     ws.add(_limit());
     await Future<void>.delayed(Duration.zero);
-    const text = "Tracking stopped 10 min before the meridian. Plan paused. Ara didn't move the mount.";
+    const text =
+        "Tracking stopped 10 min before the meridian. Plan paused. Ara didn't move the mount.";
     final pill = c.read(simpleMessagesProvider).single;
-    expect((pill.kind, pill.title, pill.origin), (SimpleMessageKind.error, text, SimpleStatusOrigin.mount));
+    expect(
+      (pill.kind, pill.title, pill.origin),
+      (SimpleMessageKind.error, text, SimpleStatusOrigin.mount),
+    );
     expect(c.read(simpleMountLimitProvider), text);
   });
 

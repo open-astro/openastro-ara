@@ -8,6 +8,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/widgets/stats/charts/guiding_rms_chart.dart';
+
 import 'pull_refresh.dart';
 
 class _FakeSavedServerService implements SavedServerService {
@@ -41,27 +42,30 @@ class _FakeGuidingRmsClient implements GuidingRmsClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 final _series = GuidingRmsSeries(
-  samples: [GuidingRmsPoint(timestamp: DateTime.utc(2026, 1, 1), rmsArcsec: 0.8)],
+  samples: [
+    GuidingRmsPoint(timestamp: DateTime.utc(2026, 1, 1), rmsArcsec: 0.8),
+  ],
   meanRmsArcsec: 0.8,
 );
 
 Widget _app(List<AraServer> servers, GuidingRmsClient api) {
   return ProviderScope(
     overrides: [
-      savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
       guidingRmsApiFactoryProvider.overrideWithValue((_) => api),
     ],
     child: const MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(child: GuidingRmsChart()),
-      ),
+      home: Scaffold(body: SingleChildScrollView(child: GuidingRmsChart())),
     ),
   );
 }
 
 void main() {
-  testWidgets('a failed manual refresh shows the stale chip over the chart',
-      (tester) async {
+  testWidgets('a failed manual refresh shows the stale chip over the chart', (
+    tester,
+  ) async {
     final api = _FakeGuidingRmsClient(_series);
     await tester.pumpWidget(_app(const [_server], api));
     await tester.pumpAndSettle();

@@ -39,8 +39,11 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: Row(
                 children: [
-                  Icon(_expanded ? Icons.expand_more : Icons.chevron_right,
-                      size: 18, color: AraColors.textSecondary),
+                  Icon(
+                    _expanded ? Icons.expand_more : Icons.chevron_right,
+                    size: 18,
+                    color: AraColors.textSecondary,
+                  ),
                   const SizedBox(width: 4),
                   // Expanded (left-aligned), not a Spacer: the chip owns all
                   // the slack so its label is never squeezed while there is
@@ -49,7 +52,10 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: StatusIndicator(level: diag.level, label: diag.label),
+                      child: StatusIndicator(
+                        level: diag.level,
+                        label: diag.label,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -61,9 +67,8 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                       '${diag.events.length} event${diag.events.length == 1 ? '' : 's'}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: AraColors.textSecondary),
                     ),
                 ],
               ),
@@ -87,19 +92,19 @@ class _DiagnosticPanelState extends ConsumerState<DiagnosticPanel> {
                         shape: BoxShape.circle,
                       ),
                     ),
-                    title: Text(ev.message,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    title: Text(
+                      ev.message,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     subtitle: Text(
                       ev.source,
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AraColors.textDisabled,
-                          ),
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AraColors.textDisabled),
                     ),
                     trailing: Text(
                       _formatTime(ev.timestamp),
-                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                            color: AraColors.textDisabled,
-                          ),
+                      style: Theme.of(context).textTheme.labelSmall
+                          ?.copyWith(color: AraColors.textDisabled),
                     ),
                   );
                 },

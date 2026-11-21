@@ -76,7 +76,9 @@ class OptimalSubResult {
       starFloorSec: _optDouble(json['star_floor_sec']),
       starsDetectedPerSub: _optDouble(json['stars_detected_per_sub']),
       starsRegistrationPerSub: _optDouble(json['stars_registration_per_sub']),
-      starReason: json['star_reason'] is String ? json['star_reason'] as String : null,
+      starReason: json['star_reason'] is String
+          ? json['star_reason'] as String
+          : null,
     );
   }
 

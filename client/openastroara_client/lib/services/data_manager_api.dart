@@ -15,7 +15,9 @@ abstract interface class DataManagerClient {
   /// `POST /api/v1/data-manager/solver-recommendation` — which ASTAP star
   /// database(s) this rig needs (§36.10), from the optics the wizard holds;
   /// the daemon fills anything missing from the active profile.
-  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request);
+  Future<SolverRecommendation> solverRecommendation(
+    SolverRecommendationRequest request,
+  );
 
   /// Start a download. Returns the download id (the accepted operation's id),
   /// used to [cancel] it. A non-force request for an already-installed package
@@ -44,7 +46,11 @@ abstract interface class DataManagerClient {
   /// retained wire contract for the §36 Catalogs-overlay panel against the
   /// Stellarium planetarium (see PORT_TODO "OBSOLETE ... do NOT
   /// remove SkyCatalogService" entry before sweeping it).
-  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit});
+  Future<List<CatalogObject>?> getCatalog(
+    String packageId, {
+    double? maxMag,
+    int? limit,
+  });
 
   void close();
 }
@@ -70,23 +76,30 @@ class DataManagerApi implements DataManagerClient {
   /// [dio] is injectable so tests can stub the transport with a fake adapter;
   /// production callers pass only the server and get a configured one-shot Dio.
   DataManagerApi(AraServer server, {Dio? dio})
-      : _dio = dio ??
-            Dio(BaseOptions(
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
               baseUrl: server.baseUrl,
               connectTimeout: const Duration(seconds: 3),
               sendTimeout: const Duration(seconds: 5),
               receiveTimeout: const Duration(seconds: 12),
-            ));
+            ),
+          );
 
   @override
-  Future<SolverRecommendation> solverRecommendation(SolverRecommendationRequest request) async {
+  Future<SolverRecommendation> solverRecommendation(
+    SolverRecommendationRequest request,
+  ) async {
     final res = await _dio.post<dynamic>(
       '/api/v1/data-manager/solver-recommendation',
       data: request.toJson(),
     );
     final data = res.data;
     if (data is! Map<String, dynamic>) {
-      throw FormatException('solver-recommendation returned a non-object body (${data.runtimeType})');
+      throw FormatException(
+        'solver-recommendation returned a non-object body (${data.runtimeType})',
+      );
     }
     return SolverRecommendation.fromJson(data);
   }
@@ -100,7 +113,9 @@ class DataManagerApi implements DataManagerClient {
       // envelope slipped through). Throw rather than return [] — the AsyncNotifier
       // surfaces this as an error state the UI can show, instead of a silently-empty
       // catalog. (Dio already throws on 4xx/5xx; this is the 200-wrong-shape case.)
-      throw FormatException('data-manager/packages returned a non-array body (${data.runtimeType})');
+      throw FormatException(
+        'data-manager/packages returned a non-array body (${data.runtimeType})',
+      );
     }
     return data
         .whereType<Map<String, dynamic>>()
@@ -112,7 +127,10 @@ class DataManagerApi implements DataManagerClient {
   }
 
   @override
-  Future<String> download(String packageId, {bool forceReinstall = false}) async {
+  Future<String> download(
+    String packageId, {
+    bool forceReinstall = false,
+  }) async {
     assert(packageId.isNotEmpty, 'packageId must not be empty');
     final res = await _dio.post<dynamic>(
       '/api/v1/data-manager/download',
@@ -124,7 +142,9 @@ class DataManagerApi implements DataManagerClient {
     final data = res.data;
     final id = data is Map<String, dynamic> ? data['operation_id'] : null;
     if (id is! String) {
-      throw const FormatException('download accepted but no operation_id was returned');
+      throw const FormatException(
+        'download accepted but no operation_id was returned',
+      );
     }
     return id;
   }
@@ -133,7 +153,9 @@ class DataManagerApi implements DataManagerClient {
   Future<void> cancel(String downloadId) async {
     assert(downloadId.isNotEmpty, 'downloadId must not be empty');
     try {
-      await _dio.post<void>('/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}');
+      await _dio.post<void>(
+        '/api/v1/data-manager/cancel/${Uri.encodeComponent(downloadId)}',
+      );
     } on DioException catch (e) {
       // 404 → the download already finished/was removed between the user tapping
       // Cancel and the request landing. Nothing to cancel — a no-op, not an error.
@@ -150,7 +172,9 @@ class DataManagerApi implements DataManagerClient {
       // `data.MapDelete("/{packageId}")` under `MapGroup("/api/v1/data-manager")`
       // (SystemEndpoints.cs). It is intentionally NOT `/packages/{id}`: `/packages`
       // is only the GET collection route; the delete item route sits at the group root.
-      await _dio.delete<void>('/api/v1/data-manager/${Uri.encodeComponent(packageId)}');
+      await _dio.delete<void>(
+        '/api/v1/data-manager/${Uri.encodeComponent(packageId)}',
+      );
       // Dio throws on any non-2xx, so reaching here means the delete succeeded (files freed).
       return true;
     } on DioException catch (e) {
@@ -159,25 +183,29 @@ class DataManagerApi implements DataManagerClient {
       // and STILL ON DISK — a typed throw so the UI says "retry", never treating a
       // blocked delete as removed. Anything else propagates.
       if (e.response?.statusCode == 404) return false;
-      if (e.response?.statusCode == 409) throw const PackageDeleteBlockedException();
+      if (e.response?.statusCode == 409)
+        throw const PackageDeleteBlockedException();
       rethrow;
     }
   }
 
   @override
-  Future<List<CatalogObject>?> getCatalog(String packageId, {double? maxMag, int? limit}) async {
+  Future<List<CatalogObject>?> getCatalog(
+    String packageId, {
+    double? maxMag,
+    int? limit,
+  }) async {
     assert(packageId.isNotEmpty, 'packageId must not be empty');
     try {
       final res = await _dio.get<dynamic>(
         '/api/v1/data-manager/${Uri.encodeComponent(packageId)}/catalog',
-        queryParameters: <String, dynamic>{
-          'max_mag': ?maxMag,
-          'limit': ?limit,
-        },
+        queryParameters: <String, dynamic>{'max_mag': ?maxMag, 'limit': ?limit},
       );
       final data = res.data;
       if (data is! List) {
-        throw FormatException('catalog returned a non-array body (${data.runtimeType})');
+        throw FormatException(
+          'catalog returned a non-array body (${data.runtimeType})',
+        );
       }
       return data
           .whereType<Map<String, dynamic>>()

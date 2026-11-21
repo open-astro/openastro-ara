@@ -44,8 +44,12 @@ class _FakeClient implements BackupStreamClient {
   Future<void> Function()? onClaim;
   Uint8List Function(String frameId)? corruptor;
 
-  BackupStreamQueueEntry addFrame(String id, String payload,
-      {bool withSha = true, String? relativePath}) {
+  BackupStreamQueueEntry addFrame(
+    String id,
+    String payload, {
+    bool withSha = true,
+    String? relativePath,
+  }) {
     final bytes = Uint8List.fromList(payload.codeUnits);
     frames[id] = bytes;
     final entry = BackupStreamQueueEntry(
@@ -72,11 +76,20 @@ class _FakeClient implements BackupStreamClient {
 
   @override
   Future<BackupStreamStatus> status() async => BackupStreamStatus(
-      enabled: true, activeTarget: 'other-desk', pendingCount: pending.length, syncedCount: 0, queueSizeBytes: 0);
+    enabled: true,
+    activeTarget: 'other-desk',
+    pendingCount: pending.length,
+    syncedCount: 0,
+    queueSizeBytes: 0,
+  );
 
   @override
-  Future<List<BackupStreamQueueEntry>> queue(String hostname, {int limit = 50}) async {
-    if (throwSlotLostOnQueue) throw const BackupStreamSlotLostException('other-desk');
+  Future<List<BackupStreamQueueEntry>> queue(
+    String hostname, {
+    int limit = 50,
+  }) async {
+    if (throwSlotLostOnQueue)
+      throw const BackupStreamSlotLostException('other-desk');
     if (slotLostBudget > 0) {
       slotLostBudget--;
       throw const BackupStreamSlotLostException('other-desk');
@@ -113,22 +126,27 @@ void main() {
   late _FakeClient fake;
   late ProviderContainer container;
 
-  ProviderContainer buildContainer() => ProviderContainer(overrides: [
-        savedServersProvider.overrideWith(_FixedServers.new),
-        // No real socket in tests — the controller's frame.complete nudge is a
-        // convenience over the poll loop, which these tests drive directly.
-        wsEventStreamProvider.overrideWith((ref) => null),
-        // Prefs land in a per-test temp dir, never the real app-support dir.
-        backupStreamPrefsProvider.overrideWithValue(
-            BackupStreamPrefsService(supportDir: () async => prefsDir)),
-      ]);
+  ProviderContainer buildContainer() => ProviderContainer(
+    overrides: [
+      savedServersProvider.overrideWith(_FixedServers.new),
+      // No real socket in tests — the controller's frame.complete nudge is a
+      // convenience over the poll loop, which these tests drive directly.
+      wsEventStreamProvider.overrideWith((ref) => null),
+      // Prefs land in a per-test temp dir, never the real app-support dir.
+      backupStreamPrefsProvider.overrideWithValue(
+        BackupStreamPrefsService(supportDir: () async => prefsDir),
+      ),
+    ],
+  );
 
   BackupStreamController controller() {
     final c = container.read(backupStreamProvider.notifier);
     c.clientFactory = (_) => fake;
     c.hostnameResolver = () => 'test-desk';
     c.defaultRootResolver = () async => tempDir.path;
-    c.pollInterval = const Duration(hours: 1); // ticks driven manually via setEnabled's first poll
+    c.pollInterval = const Duration(
+      hours: 1,
+    ); // ticks driven manually via setEnabled's first poll
     return c;
   }
 
@@ -160,7 +178,8 @@ void main() {
     for (var i = 0; i < 40; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
       if (!container.read(backupStreamProvider).enabled) break;
-      if (container.read(backupStreamProvider).active && fake.pending.isEmpty) break;
+      if (container.read(backupStreamProvider).active && fake.pending.isEmpty)
+        break;
     }
   }
 
@@ -177,10 +196,19 @@ void main() {
     expect(state.syncedThisSession, 1);
     expect(state.syncedBytesThisSession, entry.sizeBytes);
     final stored = File(
-        '${tempDir.path}${Platform.pathSeparator}pi-test${Platform.pathSeparator}session-1${Platform.pathSeparator}frame-1.fits');
-    expect(stored.existsSync(), isTrue, reason: 'the verified frame lands under <root>/<server>/<session>/');
+      '${tempDir.path}${Platform.pathSeparator}pi-test${Platform.pathSeparator}session-1${Platform.pathSeparator}frame-1.fits',
+    );
+    expect(
+      stored.existsSync(),
+      isTrue,
+      reason: 'the verified frame lands under <root>/<server>/<session>/',
+    );
     expect(stored.readAsStringSync(), 'FITS-DATA-1');
-    expect(File('${stored.path}.tmp').existsSync(), isFalse, reason: 'temp file renamed away');
+    expect(
+      File('${stored.path}.tmp').existsSync(),
+      isFalse,
+      reason: 'temp file renamed away',
+    );
   });
 
   test('a corrupted download retries once then surfaces the problem without acking', () async {
@@ -194,28 +222,38 @@ void main() {
     expect(fake.acked, isEmpty, reason: 'a sha mismatch must never ack');
     final state = container.read(backupStreamProvider);
     expect(state.syncedThisSession, 0);
-    expect(state.problem, contains('checksum mismatch'),
-        reason: 'a persistently failing frame must surface the actual cause, '
-            'not a generic sentence, and never be silently retried');
+    expect(
+      state.problem,
+      contains('checksum mismatch'),
+      reason:
+          'a persistently failing frame must surface the actual cause, '
+          'not a generic sentence, and never be silently retried',
+    );
   });
 
-  test('one persistently-bad frame does not block newer frames from mirroring', () async {
-    final c = controller();
-    fake.addFrame('frame-bad', 'GOOD-BYTES');
-    fake.corruptor = (id) => id == 'frame-bad'
-        ? Uint8List.fromList('TAMPERED'.codeUnits)
-        : fake.frames[id]!;
-    fake.addFrame('frame-good', 'FITS-DATA-2');
+  test(
+    'one persistently-bad frame does not block newer frames from mirroring',
+    () async {
+      final c = controller();
+      fake.addFrame('frame-bad', 'GOOD-BYTES');
+      fake.corruptor = (id) => id == 'frame-bad'
+          ? Uint8List.fromList('TAMPERED'.codeUnits)
+          : fake.frames[id]!;
+      fake.addFrame('frame-good', 'FITS-DATA-2');
 
-    await c.setEnabled(true);
-    await settle();
+      await c.setEnabled(true);
+      await settle();
 
-    final state = container.read(backupStreamProvider);
-    expect(fake.acked, contains('frame-good'),
-        reason: 'the queue is oldest-first — a stuck head frame must not freeze the mirror');
-    expect(fake.acked, isNot(contains('frame-bad')));
-    expect(state.problem, contains('frame-bad'));
-  });
+      final state = container.read(backupStreamProvider);
+      expect(
+        fake.acked,
+        contains('frame-good'),
+        reason: 'the queue is oldest-first — a stuck head frame must not freeze the mirror',
+      );
+      expect(fake.acked, isNot(contains('frame-bad')));
+      expect(state.problem, contains('frame-bad'));
+    },
+  );
 
   test('an unwritable backup folder surfaces the problem instead of looping silently', () async {
     final c = controller();
@@ -230,15 +268,19 @@ void main() {
 
     final state = container.read(backupStreamProvider);
     expect(fake.acked, isEmpty);
-    expect(state.problem, isNotNull, reason: 'disk trouble must reach the panel');
+    expect(
+      state.problem,
+      isNotNull,
+      reason: 'disk trouble must reach the panel',
+    );
   });
 
   test('a claim that fails reads wholly in the picked language, action included (#1751)', () async {
     container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
     fake.onClaim = () async => throw DioException(
-          requestOptions: RequestOptions(path: '/api/v1/backup-stream/claim'),
-          type: DioExceptionType.connectionTimeout,
-        );
+      requestOptions: RequestOptions(path: '/api/v1/backup-stream/claim'),
+      type: DioExceptionType.connectionTimeout,
+    );
     final c = controller();
 
     await c.setEnabled(true);
@@ -249,33 +291,39 @@ void main() {
     expect(problem, isNot(contains('start copying')));
   });
 
-  test('a frame that keeps failing reads wholly in the picked language (#1751)', () async {
-    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
-    final c = controller();
-    fake.corruptor = (_) => Uint8List.fromList('TAMPERED'.codeUnits);
-    fake.addFrame('frame-bad', 'FITS-DATA-1');
+  test(
+    'a frame that keeps failing reads wholly in the picked language (#1751)',
+    () async {
+      container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+      final c = controller();
+      fake.corruptor = (_) => Uint8List.fromList('TAMPERED'.codeUnits);
+      fake.addFrame('frame-bad', 'FITS-DATA-1');
 
-    await c.setEnabled(true);
-    await settle();
+      await c.setEnabled(true);
+      await settle();
 
-    final problem = container.read(backupStreamProvider).problem;
-    expect(problem, startsWith('Backup de frame-bad falhando: '));
-    expect(problem, isNot(contains('failing')));
-  });
+      final problem = container.read(backupStreamProvider).problem;
+      expect(problem, startsWith('Backup de frame-bad falhando: '));
+      expect(problem, isNot(contains('failing')));
+    },
+  );
 
-  test('transport trouble mid-pass reads wholly in the picked language (#1751)', () async {
-    container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
-    final c = controller();
-    fake.addFrame('frame-1', 'FITS-DATA-1');
-    fake.ackFailBudget = 1;
+  test(
+    'transport trouble mid-pass reads wholly in the picked language (#1751)',
+    () async {
+      container.read(appLocaleProvider.notifier).set(const Locale('pt', 'BR'));
+      final c = controller();
+      fake.addFrame('frame-1', 'FITS-DATA-1');
+      fake.ackFailBudget = 1;
 
-    await c.setEnabled(true);
-    await settle();
+      await c.setEnabled(true);
+      await settle();
 
-    final problem = container.read(backupStreamProvider).problem;
-    expect(problem, startsWith('Falha momentânea no backup: '));
-    expect(problem, isNot(contains('hiccup')));
-  });
+      final problem = container.read(backupStreamProvider).problem;
+      expect(problem, startsWith('Falha momentânea no backup: '));
+      expect(problem, isNot(contains('hiccup')));
+    },
+  );
 
   test('a claim denied at enable time retries on the next tick without a manual off/on', () async {
     final c = controller();
@@ -294,29 +342,41 @@ void main() {
     await settle();
 
     state = container.read(backupStreamProvider);
-    expect(state.active, isTrue, reason: 'the freed slot is picked up by the loop itself');
+    expect(
+      state.active,
+      isTrue,
+      reason: 'the freed slot is picked up by the loop itself',
+    );
     expect(fake.acked, contains('frame-1'));
   });
 
-  test('a stale exposure-in-flight flag self-heals past the watchdog', () async {
-    final c = controller();
-    fake.addFrame('frame-1', 'FITS-DATA-1');
-    await c.setEnabled(true);
-    await settle();
+  test(
+    'a stale exposure-in-flight flag self-heals past the watchdog',
+    () async {
+      final c = controller();
+      fake.addFrame('frame-1', 'FITS-DATA-1');
+      await c.setEnabled(true);
+      await settle();
 
-    fake.addFrame('frame-2', 'FITS-DATA-2');
-    c.markExposureStarted(); // fresh — poll must hold off
-    await c.tickNow();
-    expect(fake.acked, isNot(contains('frame-2')),
-        reason: 'an in-flight exposure pauses pulls');
+      fake.addFrame('frame-2', 'FITS-DATA-2');
+      c.markExposureStarted(); // fresh — poll must hold off
+      await c.tickNow();
+      expect(
+        fake.acked,
+        isNot(contains('frame-2')),
+        reason: 'an in-flight exposure pauses pulls',
+      );
 
-    // Age the flag past the 15-minute watchdog: a missed completion event
-    // must not stall the stream until app restart.
-    c.markExposureStarted(DateTime.now().subtract(const Duration(minutes: 16)));
-    await c.tickNow();
-    await settle();
-    expect(fake.acked, contains('frame-2'));
-  });
+      // Age the flag past the 15-minute watchdog: a missed completion event
+      // must not stall the stream until app restart.
+      c.markExposureStarted(
+        DateTime.now().subtract(const Duration(minutes: 16)),
+      );
+      await c.tickNow();
+      await settle();
+      expect(fake.acked, contains('frame-2'));
+    },
+  );
 
   test('the toggle and folder persist and a persisted-on stream resumes after restart', () async {
     final c = controller();
@@ -332,13 +392,21 @@ void main() {
     await container.read(savedServersProvider.future);
     final c2 = controller();
     // The async prefs restore lands before the first tick.
-    for (var i = 0; i < 40 && !container.read(backupStreamProvider).enabled; i++) {
+    for (
+      var i = 0;
+      i < 40 && !container.read(backupStreamProvider).enabled;
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
 
     var state = container.read(backupStreamProvider);
     expect(state.enabled, isTrue, reason: 'the toggle survives a restart');
-    expect(state.localRoot, tempDir.path, reason: 'the folder survives a restart');
+    expect(
+      state.localRoot,
+      tempDir.path,
+      reason: 'the folder survives a restart',
+    );
 
     await c2.tickNow(); // resume rides the first loop beat
     await settle();
@@ -347,16 +415,23 @@ void main() {
     expect(fake.acked, contains('frame-2'));
   });
 
-  test('entries without a sha are skipped until the daemon hashes them', () async {
-    final c = controller();
-    fake.addFrame('frame-nosha', 'BYTES', withSha: false);
+  test(
+    'entries without a sha are skipped until the daemon hashes them',
+    () async {
+      final c = controller();
+      fake.addFrame('frame-nosha', 'BYTES', withSha: false);
 
-    await c.setEnabled(true);
-    await settle();
+      await c.setEnabled(true);
+      await settle();
 
-    expect(fake.acked, isEmpty);
-    expect(container.read(backupStreamProvider).active, isTrue, reason: 'skipping is not an error');
-  });
+      expect(fake.acked, isEmpty);
+      expect(
+        container.read(backupStreamProvider).active,
+        isTrue,
+        reason: 'skipping is not an error',
+      );
+    },
+  );
 
   test('a lost slot reclaims once, a second loss disables with the holder surfaced', () async {
     final c = controller();
@@ -365,12 +440,20 @@ void main() {
     await c.setEnabled(true);
     await settle();
     // First loss → re-claim (claim called again) → second loss → disabled.
-    for (var i = 0; i < 40 && container.read(backupStreamProvider).enabled; i++) {
+    for (
+      var i = 0;
+      i < 40 && container.read(backupStreamProvider).enabled;
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
 
     final state = container.read(backupStreamProvider);
-    expect(fake.claimCalls, greaterThanOrEqualTo(2), reason: 'one idempotent re-claim attempt');
+    expect(
+      fake.claimCalls,
+      greaterThanOrEqualTo(2),
+      reason: 'one idempotent re-claim attempt',
+    );
     expect(state.enabled, isFalse);
     expect(state.problem, contains('other-desk'));
   });
@@ -393,8 +476,11 @@ void main() {
     for (var i = 0; i < 20; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
-    expect(fake.acked, isNot(contains('frame-2')),
-        reason: 'the recovered pass was interrupted by the exposure');
+    expect(
+      fake.acked,
+      isNot(contains('frame-2')),
+      reason: 'the recovered pass was interrupted by the exposure',
+    );
     expect(container.read(backupStreamProvider).enabled, isTrue);
 
     // Flap 2 after the exposure ages out: must reclaim again, not disable.
@@ -405,8 +491,11 @@ void main() {
     await settle();
 
     final state = container.read(backupStreamProvider);
-    expect(state.enabled, isTrue,
-        reason: 'an interrupted-but-clean pass must not leave the reclaim spent');
+    expect(
+      state.enabled,
+      isTrue,
+      reason: 'an interrupted-but-clean pass must not leave the reclaim spent',
+    );
     expect(state.active, isTrue);
     expect(fake.acked, contains('frame-2'));
     expect(fake.claimCalls, 3, reason: 'enable + one reclaim per flap');
@@ -416,12 +505,13 @@ void main() {
     expect(BackupStreamController.paceFloor(1000, 0), Duration.zero);
     expect(BackupStreamController.paceFloor(0, 10), Duration.zero);
     // 1 MB at 8 Mbps = 1 second.
-    expect(BackupStreamController.paceFloor(1000000, 8),
-        const Duration(seconds: 1));
+    expect(
+      BackupStreamController.paceFloor(1000000, 8),
+      const Duration(seconds: 1),
+    );
   });
 
-  test('a bandwidth cap paces between frames via the seam; first pull measures the link',
-      () async {
+  test('a bandwidth cap paces between frames via the seam; first pull measures the link', () async {
     final c = controller();
     final requested = <Duration>[];
     c.pacer = (d) async => requested.add(d);
@@ -437,11 +527,18 @@ void main() {
 
     expect(fake.acked, containsAll(['frame-1', 'frame-2', 'frame-3']));
     expect(requested, isNotEmpty, reason: 'the capped pull must pace');
-    expect(requested.first.inMilliseconds, greaterThanOrEqualTo(4),
-        reason: 'the requested wait is the 8 ms floor minus the (tiny) real elapsed');
+    expect(
+      requested.first.inMilliseconds,
+      greaterThanOrEqualTo(4),
+      reason:
+          'the requested wait is the 8 ms floor minus the (tiny) real elapsed',
+    );
     final state = container.read(backupStreamProvider);
-    expect(state.measuredMbps, isNotNull,
-        reason: 'the first pull doubles as the link measurement');
+    expect(
+      state.measuredMbps,
+      isNotNull,
+      reason: 'the first pull doubles as the link measurement',
+    );
   });
 
   test('the bandwidth cap persists across restarts', () async {
@@ -451,7 +548,9 @@ void main() {
     c.setMaxMbps(25);
     // The persist is fire-and-forget — wait for the chained write to land
     // before "restarting" (CI runners lost this race).
-    final prefsProbe = BackupStreamPrefsService(supportDir: () async => prefsDir);
+    final prefsProbe = BackupStreamPrefsService(
+      supportDir: () async => prefsDir,
+    );
     for (var i = 0; i < 40 && (await prefsProbe.load()).maxMbps != 25; i++) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
@@ -461,7 +560,11 @@ void main() {
     container = buildContainer();
     await container.read(savedServersProvider.future);
     controller();
-    for (var i = 0; i < 40 && !container.read(backupStreamProvider).enabled; i++) {
+    for (
+      var i = 0;
+      i < 40 && !container.read(backupStreamProvider).enabled;
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
 
@@ -477,20 +580,28 @@ void main() {
     await settle();
     expect(fake.acked, isEmpty, reason: 'the first ack attempt failed');
     expect(fake.downloadCalls, 1);
-    expect(container.read(backupStreamProvider).syncedThisSession, 0,
-        reason: 'un-acked = not yet counted, so the memo pass counts it exactly once');
+    expect(
+      container.read(backupStreamProvider).syncedThisSession,
+      0,
+      reason:
+          'un-acked = not yet counted, so the memo pass counts it exactly once',
+    );
 
     await c.tickNow();
     await settle();
 
     expect(fake.acked, contains('frame-1'));
-    expect(fake.downloadCalls, 1,
-        reason: 'the stored-but-unacked memo must ack directly, never re-pull verified bytes');
+    expect(
+      fake.downloadCalls,
+      1,
+      reason: 'the stored-but-unacked memo must ack directly, never re-pull verified bytes',
+    );
     final state = container.read(backupStreamProvider);
     expect(state.syncedThisSession, 1);
     expect(state.syncedBytesThisSession, entry.sizeBytes);
     final stored = File(
-        '${tempDir.path}${Platform.pathSeparator}pi-test${Platform.pathSeparator}session-1${Platform.pathSeparator}frame-1.fits');
+      '${tempDir.path}${Platform.pathSeparator}pi-test${Platform.pathSeparator}session-1${Platform.pathSeparator}frame-1.fits',
+    );
     expect(stored.existsSync(), isTrue);
   });
 
@@ -503,25 +614,50 @@ void main() {
     expect(container.read(backupStreamProvider).measuredMbps, isNotNull);
     final claimsBefore = fake.claimCalls;
 
-    (container.read(savedServersProvider.notifier) as _FixedServers)
-        .switchTo(const AraServer(hostname: 'pi-two', port: 5555));
+    (container.read(savedServersProvider.notifier) as _FixedServers).switchTo(
+      const AraServer(hostname: 'pi-two', port: 5555),
+    );
     // The ref.listen callback + best-effort release land async.
-    for (var i = 0; i < 40 && container.read(backupStreamProvider).active; i++) {
+    for (
+      var i = 0;
+      i < 40 && container.read(backupStreamProvider).active;
+      i++
+    ) {
       await Future<void>.delayed(const Duration(milliseconds: 25));
     }
 
     var state = container.read(backupStreamProvider);
-    expect(state.active, isFalse, reason: 'the held slot belonged to the previous server');
-    expect(state.enabled, isTrue, reason: 'a server switch is not a user disable');
-    expect(state.measuredMbps, isNull, reason: 'the link measurement was the old link\'s');
-    expect(fake.releaseCalls, 1, reason: 'the old slot is released best-effort');
+    expect(
+      state.active,
+      isFalse,
+      reason: 'the held slot belonged to the previous server',
+    );
+    expect(
+      state.enabled,
+      isTrue,
+      reason: 'a server switch is not a user disable',
+    );
+    expect(
+      state.measuredMbps,
+      isNull,
+      reason: 'the link measurement was the old link\'s',
+    );
+    expect(
+      fake.releaseCalls,
+      1,
+      reason: 'the old slot is released best-effort',
+    );
 
     fake.addFrame('frame-2', 'FITS-DATA-2');
     await c.tickNow();
     await settle();
     state = container.read(backupStreamProvider);
     expect(state.active, isTrue);
-    expect(fake.claimCalls, greaterThan(claimsBefore), reason: 'a fresh claim on the new server');
+    expect(
+      fake.claimCalls,
+      greaterThan(claimsBefore),
+      reason: 'a fresh claim on the new server',
+    );
     expect(fake.acked, contains('frame-2'));
   });
 
@@ -530,8 +666,9 @@ void main() {
     fake.addFrame('frame-1', 'FITS-DATA-1');
     fake.onClaim = () async {
       fake.onClaim = null; // only the first claim straddles the switch
-      (container.read(savedServersProvider.notifier) as _FixedServers)
-          .switchTo(const AraServer(hostname: 'pi-two', port: 5555));
+      (container.read(savedServersProvider.notifier) as _FixedServers).switchTo(
+        const AraServer(hostname: 'pi-two', port: 5555),
+      );
     };
 
     await c.setEnabled(true);
@@ -541,15 +678,27 @@ void main() {
     }
 
     var state = container.read(backupStreamProvider);
-    expect(state.active, isFalse,
-        reason: 'a grant that resolved after the switch belongs to the old server');
-    expect(fake.releaseCalls, 1, reason: 'the stale mid-switch claim is handed back');
+    expect(
+      state.active,
+      isFalse,
+      reason:
+          'a grant that resolved after the switch belongs to the old server',
+    );
+    expect(
+      fake.releaseCalls,
+      1,
+      reason: 'the stale mid-switch claim is handed back',
+    );
     expect(state.enabled, isTrue);
 
     await c.tickNow();
     await settle();
     state = container.read(backupStreamProvider);
-    expect(state.active, isTrue, reason: 'the next tick claims cleanly on the new server');
+    expect(
+      state.active,
+      isTrue,
+      reason: 'the next tick claims cleanly on the new server',
+    );
     expect(fake.acked, contains('frame-1'));
   });
 
@@ -564,50 +713,74 @@ void main() {
     expect(container.read(backupStreamProvider).enabled, isFalse);
   });
   test('a frame with a store-relative path mirrors the rig layout', () async {
-    fake.addFrame('frame-1', 'payload-1',
-        relativePath: '2026-08-05/Light/M31_180s_0001.fits');
+    fake.addFrame(
+      'frame-1',
+      'payload-1',
+      relativePath: '2026-08-05/Light/M31_180s_0001.fits',
+    );
     final c = controller();
     await c.setEnabled(true);
     await settle();
 
-    final mirrored = File([
-      tempDir.path,
-      'pi-test',
-      '2026-08-05',
-      'Light',
-      'M31_180s_0001.fits'
-    ].join(Platform.pathSeparator));
-    expect(mirrored.existsSync(), isTrue,
-        reason: 'the backup should read like the original, not a UUID dump');
+    final mirrored = File(
+      [
+        tempDir.path,
+        'pi-test',
+        '2026-08-05',
+        'Light',
+        'M31_180s_0001.fits',
+      ].join(Platform.pathSeparator),
+    );
+    expect(
+      mirrored.existsSync(),
+      isTrue,
+      reason: 'the backup should read like the original, not a UUID dump',
+    );
   });
 
   group('mirrorRelativeSegments', () {
     test('normal path splits into sanitized segments', () {
       expect(
-          BackupStreamController.mirrorRelativeSegments(
-              '2026-08-05/Light/M31_0001.fits'),
-          ['2026-08-05', 'Light', 'M31_0001.fits']);
+        BackupStreamController.mirrorRelativeSegments(
+          '2026-08-05/Light/M31_0001.fits',
+        ),
+        ['2026-08-05', 'Light', 'M31_0001.fits'],
+      );
     });
     test('traversal, absolute and extension-less paths are rejected', () {
-      expect(BackupStreamController.mirrorRelativeSegments('../../etc/passwd'),
-          isNull);
-      expect(BackupStreamController.mirrorRelativeSegments('/etc/passwd.fits'),
-          isNull);
-      expect(BackupStreamController.mirrorRelativeSegments('C:\\x\\y.fits'),
-          isNull);
-      expect(BackupStreamController.mirrorRelativeSegments('a/b/noext'), isNull);
+      expect(
+        BackupStreamController.mirrorRelativeSegments('../../etc/passwd'),
+        isNull,
+      );
+      expect(
+        BackupStreamController.mirrorRelativeSegments('/etc/passwd.fits'),
+        isNull,
+      );
+      expect(
+        BackupStreamController.mirrorRelativeSegments('C:\\x\\y.fits'),
+        isNull,
+      );
+      expect(
+        BackupStreamController.mirrorRelativeSegments('a/b/noext'),
+        isNull,
+      );
       expect(BackupStreamController.mirrorRelativeSegments(null), isNull);
       expect(BackupStreamController.mirrorRelativeSegments(''), isNull);
     });
     test('dot segments vanish instead of climbing', () {
-      expect(BackupStreamController.mirrorRelativeSegments('a/./b/../c.fits'),
-          ['a', 'b', 'c.fits']);
+      expect(BackupStreamController.mirrorRelativeSegments('a/./b/../c.fits'), [
+        'a',
+        'b',
+        'c.fits',
+      ]);
     });
     test('an XISF path keeps its extension', () {
       expect(
-          BackupStreamController.mirrorRelativeSegments(
-              '2026-10-27/Light/M31_0001.xisf'),
-          ['2026-10-27', 'Light', 'M31_0001.xisf']);
+        BackupStreamController.mirrorRelativeSegments(
+          '2026-10-27/Light/M31_0001.xisf',
+        ),
+        ['2026-10-27', 'Light', 'M31_0001.xisf'],
+      );
     });
   });
 
@@ -616,15 +789,25 @@ void main() {
   group('frameFileExtension', () {
     test('an XISF signature names an .xisf file', () {
       expect(
-          BackupStreamController.frameFileExtension(
-              [...'XISF0100'.codeUnits, 0, 1, 2, 3]),
-          '.xisf');
+        BackupStreamController.frameFileExtension([
+          ...'XISF0100'.codeUnits,
+          0,
+          1,
+          2,
+          3,
+        ]),
+        '.xisf',
+      );
     });
     test('FITS, or anything too short to tell, stays .fits', () {
       expect(
-          BackupStreamController.frameFileExtension('SIMPLE  =    T'.codeUnits),
-          '.fits');
-      expect(BackupStreamController.frameFileExtension('XISF'.codeUnits), '.fits');
+        BackupStreamController.frameFileExtension('SIMPLE  =    T'.codeUnits),
+        '.fits',
+      );
+      expect(
+        BackupStreamController.frameFileExtension('XISF'.codeUnits),
+        '.fits',
+      );
       expect(BackupStreamController.frameFileExtension(const []), '.fits');
     });
   });
@@ -634,7 +817,9 @@ void main() {
 /// active server (the provider's convention is "last entry wins").
 class _FixedServers extends SavedServersNotifier {
   @override
-  Future<List<AraServer>> build() async => const [AraServer(hostname: 'pi-test', port: 5555)];
+  Future<List<AraServer>> build() async => const [
+    AraServer(hostname: 'pi-test', port: 5555),
+  ];
 
   void switchTo(AraServer server) => state = AsyncValue.data([server]);
 }

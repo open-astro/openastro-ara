@@ -42,8 +42,10 @@ class _StubGuideFocus extends GuideFocusNotifier {
 
 class _StubPrompt extends PreflightPromptNotifier {
   @override
-  Future<PreflightPromptState> build() async =>
-      const PreflightPromptState(shouldPrompt: false, acknowledgedTonight: false);
+  Future<PreflightPromptState> build() async => const PreflightPromptState(
+    shouldPrompt: false,
+    acknowledgedTonight: false,
+  );
 }
 
 class _StubChecklist extends PreflightChecklistNotifier {
@@ -55,11 +57,14 @@ class _StubChecklist extends PreflightChecklistNotifier {
 
 class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
   @override
-  LoadedSection<Phd2Settings> build() => LoadedSection(value: const Phd2Settings(
+  LoadedSection<Phd2Settings> build() => LoadedSection(
+    value: const Phd2Settings(
       guiderCamera: 'Alpaca Camera [rc91.lan:6800/0]',
       guideFocalLength: 240,
-      guidePixelSize: 2.9),
-      source: SectionSource.rig);
+      guidePixelSize: 2.9,
+    ),
+    source: SectionSource.rig,
+  );
 }
 
 // Guide optics entered but no camera picked: the profile a fresh-install
@@ -67,8 +72,9 @@ class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
 class _OpticsOnlyPhd2Notifier extends Phd2SettingsNotifier {
   @override
   LoadedSection<Phd2Settings> build() => LoadedSection(
-      value: const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9),
-      source: SectionSource.rig);
+    value: const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9),
+    source: SectionSource.rig,
+  );
 }
 
 Widget _harness({
@@ -99,7 +105,9 @@ Widget _harness({
 }
 
 void main() {
-  testWidgets('shows the checklist with all four steps, no "Tonight" header', (t) async {
+  testWidgets('shows the checklist with all four steps, no "Tonight" header', (
+    t,
+  ) async {
     await t.pumpWidget(_harness());
     await t.pump();
     expect(find.text('Tonight'), findsNothing);
@@ -125,12 +133,18 @@ void main() {
   });
 
   testWidgets('a focused session shows the in-focus subtitle', (t) async {
-    await t.pumpWidget(_harness(
-      autofocus: const AutofocusLive(
-        focusedThisSession: true,
-        run: AutofocusRun(state: AutofocusRunStates.complete, finalPosition: 9850, finalHfr: 1.42),
+    await t.pumpWidget(
+      _harness(
+        autofocus: const AutofocusLive(
+          focusedThisSession: true,
+          run: AutofocusRun(
+            state: AutofocusRunStates.complete,
+            finalPosition: 9850,
+            finalHfr: 1.42,
+          ),
+        ),
       ),
-    ));
+    );
     await t.pump();
     expect(find.text('In focus — HFR 1.42 at 9850'), findsOneWidget);
   });
@@ -144,13 +158,15 @@ void main() {
   });
 
   testWidgets('aligned session shows the green-check subtitle', (t) async {
-    await t.pumpWidget(_harness(
-      live: const PolarAlignLive(
-        phase: PolarAlignStates.stopped,
-        zone: 'green',
-        totalErrorArcmin: 0.8,
+    await t.pumpWidget(
+      _harness(
+        live: const PolarAlignLive(
+          phase: PolarAlignStates.stopped,
+          zone: 'green',
+          totalErrorArcmin: 0.8,
+        ),
       ),
-    ));
+    );
     await t.pump();
     expect(find.text('Aligned — 0.8′ from the pole'), findsOneWidget);
   });
@@ -161,8 +177,9 @@ void main() {
     expect(find.text('Not aligned this session'), findsOneWidget);
   });
 
-  testWidgets('selecting Calibration frames shows the shortcut pane',
-      (t) async {
+  testWidgets('selecting Calibration frames shows the shortcut pane', (
+    t,
+  ) async {
     await t.pumpWidget(_harness());
     await t.pump();
     await t.tap(find.text('Calibration frames'));
@@ -170,64 +187,90 @@ void main() {
     expect(find.text('Open Calibration'), findsOneWidget);
   });
 
-  testWidgets('unconfigured guider gets the first-run wizard callout',
-      (t) async {
+  testWidgets('unconfigured guider gets the first-run wizard callout', (
+    t,
+  ) async {
     await t.pumpWidget(_harness());
     await t.pump();
     expect(find.text('Set up the guider…'), findsOneWidget);
     expect(find.text('Re-run guider wizard…'), findsNothing);
   });
 
-  testWidgets('Guider: the set-up verdict waits for the rig\'s copy, never a default (ADR 0015)',
-      (t) async {
-    await t.pumpWidget(ProviderScope(
-      overrides: [
-        preflightPromptProvider.overrideWith(_StubPrompt.new),
-        preflightChecklistProvider.overrideWith(() => _StubChecklist(null)),
-        polarAlignLiveProvider.overrideWith(() => _StubLiveNotifier(const PolarAlignLive())),
-        autofocusLiveProvider.overrideWith(() => _StubAutofocus(AutofocusLive.idle)),
-        guideFocusProvider.overrideWith(_StubGuideFocus.new),
-        // A rig that does not answer: the guider settings stay not loaded.
-        phd2SettingsProvider.overrideWith(() => FakePhd2Section(initial: null)),
-      ],
-      child: const MaterialApp(home: Scaffold(body: SetupTab())),
-    ));
-    await t.pump();
-    expect(find.text('Set up the guider…'), findsNothing);
-    expect(find.text('Re-run guider wizard…'), findsOneWidget);
-  });
+  testWidgets(
+    'Guider: the set-up verdict waits for the rig\'s copy, never a default (ADR 0015)',
+    (t) async {
+      await t.pumpWidget(
+        ProviderScope(
+          overrides: [
+            preflightPromptProvider.overrideWith(_StubPrompt.new),
+            preflightChecklistProvider.overrideWith(() => _StubChecklist(null)),
+            polarAlignLiveProvider.overrideWith(
+              () => _StubLiveNotifier(const PolarAlignLive()),
+            ),
+            autofocusLiveProvider.overrideWith(
+              () => _StubAutofocus(AutofocusLive.idle),
+            ),
+            guideFocusProvider.overrideWith(_StubGuideFocus.new),
+            // A rig that does not answer: the guider settings stay not loaded.
+            phd2SettingsProvider.overrideWith(
+              () => FakePhd2Section(initial: null),
+            ),
+          ],
+          child: const MaterialApp(home: Scaffold(body: SetupTab())),
+        ),
+      );
+      await t.pump();
+      expect(find.text('Set up the guider…'), findsNothing);
+      expect(find.text('Re-run guider wizard…'), findsOneWidget);
+    },
+  );
 
-  testWidgets('guide optics without a guide camera still get the callout',
-      (t) async {
+  testWidgets('guide optics without a guide camera still get the callout', (
+    t,
+  ) async {
     await t.pumpWidget(_harness(opticsOnly: true));
     await t.pump();
     expect(find.text('Set up the guider…'), findsOneWidget);
   });
 
-  testWidgets('configured guider demotes the wizard to a re-run link',
-      (t) async {
+  testWidgets('configured guider demotes the wizard to a re-run link', (
+    t,
+  ) async {
     await t.pumpWidget(_harness(guiderConfigured: true));
     await t.pump();
     expect(find.text('Re-run guider wizard…'), findsOneWidget);
     expect(find.text('Set up the guider…'), findsNothing);
   });
 
-  testWidgets('#1138 §58.14 Before you sleep is the fifth row and shows the checklist pane', (t) async {
-    final checklist = PreflightChecklist(
-      generatedUtc: DateTime.utc(2026, 7, 19, 5),
-      items: const [PreflightItem(key: 'mount', status: 'fail', title: 'Mount safety', detail: 'Mount is parked.')],
-      allGood: false,
-    );
-    await t.pumpWidget(_harness(checklist: checklist));
-    await t.pumpAndSettle();
-    expect(find.text('Before you sleep'), findsOneWidget);
-    expect(find.text('Something needs attention — see the panel'), findsOneWidget);
-    await t.tap(find.text('Before you sleep'));
-    await t.pumpAndSettle();
-    expect(find.textContaining('Mount is parked.'), findsOneWidget);
-    expect(find.text('Refresh'), findsOneWidget);
-    expect(find.text('All good for tonight'), findsOneWidget);
-  });
+  testWidgets(
+    '#1138 §58.14 Before you sleep is the fifth row and shows the checklist pane',
+    (t) async {
+      final checklist = PreflightChecklist(
+        generatedUtc: DateTime.utc(2026, 7, 19, 5),
+        items: const [
+          PreflightItem(
+            key: 'mount',
+            status: 'fail',
+            title: 'Mount safety',
+            detail: 'Mount is parked.',
+          ),
+        ],
+        allGood: false,
+      );
+      await t.pumpWidget(_harness(checklist: checklist));
+      await t.pumpAndSettle();
+      expect(find.text('Before you sleep'), findsOneWidget);
+      expect(
+        find.text('Something needs attention — see the panel'),
+        findsOneWidget,
+      );
+      await t.tap(find.text('Before you sleep'));
+      await t.pumpAndSettle();
+      expect(find.textContaining('Mount is parked.'), findsOneWidget);
+      expect(find.text('Refresh'), findsOneWidget);
+      expect(find.text('All good for tonight'), findsOneWidget);
+    },
+  );
 
   testWidgets('#1138 without a daemon checklist the pane says so', (t) async {
     await t.pumpWidget(_harness());

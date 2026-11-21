@@ -55,9 +55,8 @@ void main() {
               // in ways real fonts don't — scale text down instead of asserting
               // around cosmetic overflow exceptions.
               builder: (context, child) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: const TextScaler.linear(0.5)),
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: const TextScaler.linear(0.5)),
                 child: child!,
               ),
               home: const Scaffold(body: SafetySitePanel()),

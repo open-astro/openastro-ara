@@ -17,7 +17,11 @@ class SafetyAlarmListener extends ConsumerStatefulWidget {
   /// Simple Mode: no dialog; the shell shows its own full-screen alarm.
   final bool quiet;
 
-  const SafetyAlarmListener({super.key, required this.child, this.quiet = false});
+  const SafetyAlarmListener({
+    super.key,
+    required this.child,
+    this.quiet = false,
+  });
 
   @override
   ConsumerState<SafetyAlarmListener> createState() =>
@@ -56,16 +60,22 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
         // an explicit choice.
         barrierDismissible: false,
         builder: (dialogContext) => AlertDialog(
-          icon: Icon(Icons.notifications_active,
-              color: AraColors.accentError, size: 32),
+          icon: Icon(
+            Icons.notifications_active,
+            color: AraColors.accentError,
+            size: 32,
+          ),
           title: Text(dialogContext.l10n.safetyAlertTitle),
           // Live-read: an emergency stop arriving mid-episode escalates the
           // reason in place — the open modal must show it.
-          content: Consumer(builder: (context, ref, _) {
-            final reason =
-                ref.watch(safetyAlarmProvider.select((s) => s.reason));
-            return Text(reason.isEmpty ? context.l10n.safetyUnsafe : reason);
-          }),
+          content: Consumer(
+            builder: (context, ref, _) {
+              final reason = ref.watch(
+                safetyAlarmProvider.select((s) => s.reason),
+              );
+              return Text(reason.isEmpty ? context.l10n.safetyUnsafe : reason);
+            },
+          ),
           actions: [
             FilledButton(
               style: FilledButton.styleFrom(
@@ -73,8 +83,7 @@ class _SafetyAlarmListenerState extends ConsumerState<SafetyAlarmListener> {
               ),
               // Only mutates state — the ref.listen branch above owns the
               // pop, so Silence and safety.safe share one dismissal path.
-              onPressed: () =>
-                  ref.read(safetyAlarmProvider.notifier).silence(),
+              onPressed: () => ref.read(safetyAlarmProvider.notifier).silence(),
               child: Text(dialogContext.l10n.safetySilence),
             ),
           ],

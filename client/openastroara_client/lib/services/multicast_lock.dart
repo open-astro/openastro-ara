@@ -14,7 +14,8 @@ class MulticastLock {
 
   /// Platform gate; a test seam.
   @visibleForTesting
-  static bool Function() isAndroid = () => defaultTargetPlatform == TargetPlatform.android;
+  static bool Function() isAndroid = () =>
+      defaultTargetPlatform == TargetPlatform.android;
 
   static Future<void> acquire() => _call('acquire');
 

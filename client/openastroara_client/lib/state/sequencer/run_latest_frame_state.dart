@@ -8,8 +8,11 @@ class RunLatestFrame {
   final String frameId;
   final String? filterName;
   final DateTime at;
-  const RunLatestFrame(
-      {required this.frameId, this.filterName, required this.at});
+  const RunLatestFrame({
+    required this.frameId,
+    this.filterName,
+    required this.at,
+  });
 }
 
 /// Fed directly from the `frame.complete` WS payload (`frame_id` /
@@ -49,4 +52,5 @@ class RunLatestFrameNotifier extends Notifier<RunLatestFrame?> {
 
 final runLatestFrameProvider =
     NotifierProvider<RunLatestFrameNotifier, RunLatestFrame?>(
-        RunLatestFrameNotifier.new);
+      RunLatestFrameNotifier.new,
+    );

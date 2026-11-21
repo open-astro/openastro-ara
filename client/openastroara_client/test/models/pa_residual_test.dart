@@ -138,10 +138,20 @@ void main() {
       'align_error_arcmin': 0.9,
       'reliable': false,
     };
-    expect(PaResidual.fromJson(far)!.aboveAlign, isTrue, reason: 'an older daemon: 17 − 1 > 0.9 + 2');
-    expect(PaResidual.fromJson({...far, 'above_align': false})!.aboveAlign, isFalse,
-        reason: "the daemon's call wins over the copy of its rule");
-    expect(PaResidual.fromJson({...done, 'above_align': true})!.aboveAlign, isTrue);
+    expect(
+      PaResidual.fromJson(far)!.aboveAlign,
+      isTrue,
+      reason: 'an older daemon: 17 − 1 > 0.9 + 2',
+    );
+    expect(
+      PaResidual.fromJson({...far, 'above_align': false})!.aboveAlign,
+      isFalse,
+      reason: "the daemon's call wins over the copy of its rule",
+    );
+    expect(
+      PaResidual.fromJson({...done, 'above_align': true})!.aboveAlign,
+      isTrue,
+    );
     expect(PaResidual.fromJson(done)!.aboveAlign, isFalse);
   });
 
@@ -155,9 +165,17 @@ void main() {
       'above_align': true,
     })!;
     final en = paResidualDetail(_en, far);
-    expect(en, contains('Polar Align and guiding disagree (12″ vs at least 17′)'));
+    expect(
+      en,
+      contains('Polar Align and guiding disagree (12″ vs at least 17′)'),
+    );
     expect(en, contains('Dec backlash'));
-    expect(en, contains('the mount shifted since the alignment or its reference was wrong'));
+    expect(
+      en,
+      contains(
+        'the mount shifted since the alignment or its reference was wrong',
+      ),
+    );
     expect(en, contains('Run Polar Align again'));
     expect(en, contains("Guiding's figure"));
     final pt = paResidualDetail(_pt, far);

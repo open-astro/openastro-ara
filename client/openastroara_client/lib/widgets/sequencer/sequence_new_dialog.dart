@@ -17,9 +17,9 @@ class SequenceNewDialog extends ConsumerStatefulWidget {
 
   /// Show the dialog. Returns the created sequence id, or null if dismissed.
   static Future<String?> show(BuildContext context) => showDialog<String>(
-        context: context,
-        builder: (_) => const SequenceNewDialog(),
-      );
+    context: context,
+    builder: (_) => const SequenceNewDialog(),
+  );
 
   @override
   ConsumerState<SequenceNewDialog> createState() => _SequenceNewDialogState();
@@ -59,8 +59,12 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
     setState(() => _busy = true);
     var created = false;
     try {
-      final id = await createSequenceFromTemplate(context, ProviderScope.containerOf(context),
-          templateName: templateName, newName: newName);
+      final id = await createSequenceFromTemplate(
+        context,
+        ProviderScope.containerOf(context),
+        templateName: templateName,
+        newName: newName,
+      );
       // Gate on this State's `mounted`, not navigator.mounted: the dialog is
       // barrierDismissible, so it can be tapped away mid-create. Once the dialog
       // route is disposed `mounted` is false, but the parent navigator is still
@@ -78,7 +82,8 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
   @override
   Widget build(BuildContext context) {
     final async = ref.watch(sequenceTemplatesProvider);
-    final canCreate = !_busy &&
+    final canCreate =
+        !_busy &&
         _selectedTemplate != null &&
         _nameController.text.trim().isNotEmpty;
     return AlertDialog(
@@ -93,11 +98,14 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
           error: (e, st) {
             debugPrint('[sequencer] template list load failed: $e\n$st');
             return const _Message(
-                'Couldn\'t load templates from the server. Check the connection and try again.');
+              'Couldn\'t load templates from the server. Check the connection and try again.',
+            );
           },
           data: (templates) {
             if (templates == null) {
-              return const _Message('Connect to your rig to start a new sequence.');
+              return const _Message(
+                'Connect to your rig to start a new sequence.',
+              );
             }
             if (templates.isEmpty) {
               return const _Message('No sequence templates available.');
@@ -106,8 +114,10 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Start from a template:',
-                    style: TextStyle(color: AraColors.textSecondary)),
+                const Text(
+                  'Start from a template:',
+                  style: TextStyle(color: AraColors.textSecondary),
+                ),
                 const SizedBox(height: 8),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxHeight: 280),
@@ -120,7 +130,9 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
                       if (_busy || name == null) return;
                       // firstWhereOrNull (not firstWhere): the list could have
                       // refreshed between render and tap, leaving `name` absent.
-                      final t = templates.firstWhereOrNull((t) => t.name == name);
+                      final t = templates.firstWhereOrNull(
+                        (t) => t.name == name,
+                      );
                       if (t != null) _select(t);
                     },
                     child: ListView.builder(
@@ -169,7 +181,8 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
               ? const SizedBox(
                   width: 18,
                   height: 18,
-                  child: AdaptiveProgressIndicator(strokeWidth: 2))
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
+                )
               : const Text('Create'),
         ),
       ],
@@ -184,8 +197,10 @@ class _SequenceNewDialogState extends ConsumerState<SequenceNewDialog> {
         t.description!.trim(),
     ];
     if (parts.isEmpty) return null;
-    return Text(parts.join(' · '),
-        style: const TextStyle(color: AraColors.textSecondary));
+    return Text(
+      parts.join(' · '),
+      style: const TextStyle(color: AraColors.textSecondary),
+    );
   }
 }
 
@@ -220,11 +235,14 @@ Future<String?> createSequenceFromTemplate(
   } catch (e, st) {
     debugPrint('[sequencer] template instantiate failed: $e\n$st');
     if (context.mounted) {
-      messenger.showSnackBar(const SnackBar(
-        content: Text(
-            "Couldn't create the sequence. Check the connection and try again."),
-        backgroundColor: AraColors.accentError,
-      ));
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            "Couldn't create the sequence. Check the connection and try again.",
+          ),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
     }
     return null;
   }
@@ -245,7 +263,7 @@ class _Message extends StatelessWidget {
   final String text;
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24),
-        child: Text(text, style: const TextStyle(color: AraColors.textSecondary)),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 24),
+    child: Text(text, style: const TextStyle(color: AraColors.textSecondary)),
+  );
 }

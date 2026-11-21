@@ -50,8 +50,9 @@ mixin SettingsSyncMixin<T> on Notifier<T> {
   Future<T> persistGuarded(Future<T> Function(T sent) put) {
     // A failed predecessor must not wedge the chain — its error already went to
     // ITS caller; this persist proceeds regardless.
-    final previous =
-        (_persistChain ?? Future<void>.value()).catchError((Object _) {});
+    final previous = (_persistChain ?? Future<void>.value()).catchError(
+      (Object _) {},
+    );
     final run = previous.then((_) async {
       final sent = state;
       final genAtSend = _syncGeneration;

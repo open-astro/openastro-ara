@@ -46,7 +46,10 @@ void main() {
       n.setLongitudeDeg(181);
       expect(container.read(siteSettingsProvider).value!.longitudeDeg, 0);
       n.setLongitudeDeg(-118.2437);
-      expect(container.read(siteSettingsProvider).value!.longitudeDeg, -118.2437);
+      expect(
+        container.read(siteSettingsProvider).value!.longitudeDeg,
+        -118.2437,
+      );
     });
 
     test('setElevationM clamps to [-500, 9000]', () {
@@ -64,7 +67,10 @@ void main() {
       expect(container.read(siteSettingsProvider).value!.elevationM, 71);
       n.setElevationM(-2.5);
       expect(container.read(siteSettingsProvider).value!.elevationM, -3);
-      expect(ProfileApi.siteSettingsFromJson({'elevation_m': 71.6}).elevationM, 72);
+      expect(
+        ProfileApi.siteSettingsFromJson({'elevation_m': 71.6}).elevationM,
+        72,
+      );
     });
 
     test('setSkyBortle rejects out-of-range and clears the SQM', () {
@@ -72,11 +78,18 @@ void main() {
       n.setSkySqm(20.3);
       n.setSkyBortle(0);
       n.setSkyBortle(10);
-      expect(container.read(siteSettingsProvider).value!.sqmMagPerArcsec2, 20.3);
+      expect(
+        container.read(siteSettingsProvider).value!.sqmMagPerArcsec2,
+        20.3,
+      );
       n.setSkyBortle(2);
       final s = container.read(siteSettingsProvider).value!;
       expect(s.bortleClass, 2);
-      expect(s.sqmMagPerArcsec2, 0, reason: 'no hidden reading after the switch');
+      expect(
+        s.sqmMagPerArcsec2,
+        0,
+        reason: 'no hidden reading after the switch',
+      );
     });
 
     test('setSkySqm stores the reading and the derived class; rejects 0 and out-of-range', () {
@@ -98,45 +111,70 @@ void main() {
       n.setTypicalSeeingArcsec(0);
       n.setTypicalSeeingArcsec(-1);
       n.setTypicalSeeingArcsec(30);
-      expect(container.read(siteSettingsProvider).value!.typicalSeeingArcsec, 2.5);
+      expect(
+        container.read(siteSettingsProvider).value!.typicalSeeingArcsec,
+        2.5,
+      );
       n.setTypicalSeeingArcsec(1.8);
-      expect(container.read(siteSettingsProvider).value!.typicalSeeingArcsec, 1.8);
+      expect(
+        container.read(siteSettingsProvider).value!.typicalSeeingArcsec,
+        1.8,
+      );
     });
 
-    test('setSiteName + setTimeZone trim + reject empty or whitespace-only',
-        () {
-      final n = container.read(siteSettingsProvider.notifier);
-      n.setSiteName('');
-      n.setSiteName('   ');
-      n.setTimeZone('');
-      n.setTimeZone('\t');
-      expect(container.read(siteSettingsProvider).value!.siteName, 'Backyard');
-      expect(container.read(siteSettingsProvider).value!.timeZone, 'UTC');
-      n.setSiteName('  Observatory  ');
-      n.setTimeZone('  America/Los_Angeles  ');
-      expect(container.read(siteSettingsProvider).value!.siteName, 'Observatory');
-      expect(container.read(siteSettingsProvider).value!.timeZone,
-          'America/Los_Angeles');
-    });
+    test(
+      'setSiteName + setTimeZone trim + reject empty or whitespace-only',
+      () {
+        final n = container.read(siteSettingsProvider.notifier);
+        n.setSiteName('');
+        n.setSiteName('   ');
+        n.setTimeZone('');
+        n.setTimeZone('\t');
+        expect(
+          container.read(siteSettingsProvider).value!.siteName,
+          'Backyard',
+        );
+        expect(container.read(siteSettingsProvider).value!.timeZone, 'UTC');
+        n.setSiteName('  Observatory  ');
+        n.setTimeZone('  America/Los_Angeles  ');
+        expect(
+          container.read(siteSettingsProvider).value!.siteName,
+          'Observatory',
+        );
+        expect(
+          container.read(siteSettingsProvider).value!.timeZone,
+          'America/Los_Angeles',
+        );
+      },
+    );
 
     test('setDefaultHorizonAltitudeDeg clamps to [0, 90]', () {
       final n = container.read(siteSettingsProvider.notifier);
       n.setDefaultHorizonAltitudeDeg(-1);
       n.setDefaultHorizonAltitudeDeg(91);
-      expect(container.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg,
-          20);
+      expect(
+        container.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg,
+        20,
+      );
       n.setDefaultHorizonAltitudeDeg(30);
-      expect(container.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg,
-          30);
+      expect(
+        container.read(siteSettingsProvider).value!.defaultHorizonAltitudeDeg,
+        30,
+      );
     });
 
     test('twilight + custom horizon toggles update directly', () {
       final n = container.read(siteSettingsProvider.notifier);
       n.setTwilightDefinition(TwilightDefinition.nautical);
       n.setUseCustomHorizon(true);
-      expect(container.read(siteSettingsProvider).value!.twilightDefinition,
-          TwilightDefinition.nautical);
-      expect(container.read(siteSettingsProvider).value!.useCustomHorizon, isTrue);
+      expect(
+        container.read(siteSettingsProvider).value!.twilightDefinition,
+        TwilightDefinition.nautical,
+      );
+      expect(
+        container.read(siteSettingsProvider).value!.useCustomHorizon,
+        isTrue,
+      );
     });
   });
 }

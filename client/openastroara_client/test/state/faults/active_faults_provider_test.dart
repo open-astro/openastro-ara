@@ -77,11 +77,12 @@ class _FakeFaultsClient implements FaultsClient {
 // Live frames carry a current server timestamp — the clear-vs-seed ordering
 // guard compares it against history rows' detected_utc, so a fixed past ts
 // would misorder a clear against a now-relative seeded row.
-String _frame(String type, Map<String, dynamic> payload, int seq) => jsonEncode({
+String _frame(String type, Map<String, dynamic> payload, int seq) =>
+    jsonEncode({
       'type': type,
       'ts': DateTime.now().toUtc().toIso8601String(),
       'seq': seq,
-      'payload': payload
+      'payload': payload,
     });
 
 // Uses `pumpEventQueue()` like diagnostics_provider_test — the fake socket and
@@ -89,44 +90,58 @@ String _frame(String type, Map<String, dynamic> payload, int seq) => jsonEncode(
 // fires inside a drained event queue.
 void main() {
   group('activeFaultsProvider', () {
-    test('seeds the standing set from unresolved fault history on build',
-        () async {
-      final conn = _FakeConnector();
-      final fakeApi = _FakeFaultsClient([
-        FaultRow(
-          id: 'f1',
-          sessionId: null,
-          detectedUtc: DateTime.now().toUtc().subtract(const Duration(hours: 6)),
-          equipmentType: 'telescope',
-          equipmentId: 'dev-1',
-          equipmentName: 'Overnight Mount',
-          faultType: 'tracking_lost',
-          details: 'tracking off for 3 ticks',
-          actionTaken: 'gave_up:pause_sequence',
-          resolvedUtc: null,
-        ),
-      ]);
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        wsEventStreamFactoryProvider
-            .overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
-        faultsApiFactoryProvider.overrideWithValue((server) => fakeApi),
-      ]);
-      addTearDown(container.dispose);
-      await container.read(savedServersProvider.future);
+    test(
+      'seeds the standing set from unresolved fault history on build',
+      () async {
+        final conn = _FakeConnector();
+        final fakeApi = _FakeFaultsClient([
+          FaultRow(
+            id: 'f1',
+            sessionId: null,
+            detectedUtc: DateTime.now().toUtc().subtract(
+              const Duration(hours: 6),
+            ),
+            equipmentType: 'telescope',
+            equipmentId: 'dev-1',
+            equipmentName: 'Overnight Mount',
+            faultType: 'tracking_lost',
+            details: 'tracking off for 3 ticks',
+            actionTaken: 'gave_up:pause_sequence',
+            resolvedUtc: null,
+          ),
+        ]);
+        final container = ProviderContainer(
+          overrides: [
+            savedServerServiceProvider.overrideWithValue(
+              _FakeSavedServerService(const [
+                AraServer(hostname: 'h', port: 5555),
+              ]),
+            ),
+            wsEventStreamFactoryProvider.overrideWithValue(
+              (s) => WsEventStream(s, connect: conn.connect),
+            ),
+            faultsApiFactoryProvider.overrideWithValue((server) => fakeApi),
+          ],
+        );
+        addTearDown(container.dispose);
+        await container.read(savedServersProvider.future);
 
-      final sub = container.listen(activeFaultsProvider, (_, _) {});
-      addTearDown(sub.close);
-      await pumpEventQueue();
+        final sub = container.listen(activeFaultsProvider, (_, _) {});
+        addTearDown(sub.close);
+        await pumpEventQueue();
 
-      expect(fakeApi.listCalls, 1);
-      expect(fakeApi.lastUnresolvedOnly, isTrue);
-      final snap = container.read(activeFaultsProvider);
-      expect(snap.byDeviceType['telescope']!.level, StatusLevel.error,
-          reason: 'a fault that fired while the client was closed seeds the chip');
-      expect(snap.worstFor(const {'telescope'}), StatusLevel.error);
-    });
+        expect(fakeApi.listCalls, 1);
+        expect(fakeApi.lastUnresolvedOnly, isTrue);
+        final snap = container.read(activeFaultsProvider);
+        expect(
+          snap.byDeviceType['telescope']!.level,
+          StatusLevel.error,
+          reason:
+              'a fault that fired while the client was closed seeds the chip',
+        );
+        expect(snap.worstFor(const {'telescope'}), StatusLevel.error);
+      },
+    );
 
     test('a live recovered action clears a seeded fault', () async {
       final conn = _FakeConnector();
@@ -134,7 +149,9 @@ void main() {
         FaultRow(
           id: 'f1',
           sessionId: null,
-          detectedUtc: DateTime.now().toUtc().subtract(const Duration(hours: 1)),
+          detectedUtc: DateTime.now().toUtc().subtract(
+            const Duration(hours: 1),
+          ),
           equipmentType: 'camera',
           equipmentId: 'dev-1',
           equipmentName: 'Cam',
@@ -144,28 +161,44 @@ void main() {
           resolvedUtc: null,
         ),
       ]);
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider.overrideWithValue(
-            _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-        wsEventStreamFactoryProvider
-            .overrideWithValue((s) => WsEventStream(s, connect: conn.connect)),
-        faultsApiFactoryProvider.overrideWithValue((server) => fakeApi),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const [
+              AraServer(hostname: 'h', port: 5555),
+            ]),
+          ),
+          wsEventStreamFactoryProvider.overrideWithValue(
+            (s) => WsEventStream(s, connect: conn.connect),
+          ),
+          faultsApiFactoryProvider.overrideWithValue((server) => fakeApi),
+        ],
+      );
       addTearDown(container.dispose);
       await container.read(savedServersProvider.future);
 
       final sub = container.listen(activeFaultsProvider, (_, _) {});
       addTearDown(sub.close);
       await pumpEventQueue();
-      expect(container.read(activeFaultsProvider).worstFor(const {'camera'}),
-          StatusLevel.error);
+      expect(
+        container.read(activeFaultsProvider).worstFor(const {'camera'}),
+        StatusLevel.error,
+      );
 
-      conn.legs.first.incoming.add(_frame('equipment.fault_action_taken',
-          {'device_type': 'camera', 'kind': 'disconnected', 'action': 'recovered'}, 1));
+      conn.legs.first.incoming.add(
+        _frame('equipment.fault_action_taken', {
+          'device_type': 'camera',
+          'kind': 'disconnected',
+          'action': 'recovered',
+        }, 1),
+      );
       await pumpEventQueue();
 
-      expect(container.read(activeFaultsProvider).worstFor(const {'camera'}),
-          isNull, reason: 'the live episode outcome clears the seeded fault');
+      expect(
+        container.read(activeFaultsProvider).worstFor(const {'camera'}),
+        isNull,
+        reason: 'the live episode outcome clears the seeded fault',
+      );
     });
   });
 }

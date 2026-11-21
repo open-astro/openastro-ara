@@ -29,12 +29,15 @@ class VCurveChart extends StatelessWidget {
     final finalPosition = empty ? null : run.finalPosition;
     if (empty && !simple) return _emptyText(context);
 
-    final xs = <double>[if (empty) ...[0, 1]];
+    final xs = <double>[
+      if (empty) ...[0, 1],
+    ];
     final ys = <double>[];
     void include(double x, double y) {
       xs.add(x);
       if (y > 0) ys.add(y);
     }
+
     for (final p in sweep) {
       include(p.position.toDouble(), p.hfr);
     }
@@ -43,15 +46,26 @@ class VCurveChart extends StatelessWidget {
     // curve keeps its scale — the rest are in Details as a count.
     final sweepMin = sweep.isEmpty
         ? null
-        : sweep.map((p) => p.position).reduce((a, b) => a < b ? a : b).toDouble();
+        : sweep
+              .map((p) => p.position)
+              .reduce((a, b) => a < b ? a : b)
+              .toDouble();
     final sweepMax = sweep.isEmpty
         ? null
-        : sweep.map((p) => p.position).reduce((a, b) => a > b ? a : b).toDouble();
-    final span = sweepMin != null && sweepMax != null ? (sweepMax - sweepMin) : 0.0;
-    final coarseShown = coarse.where((p) {
-      if (sweepMin == null || sweepMax == null) return true;
-      return p.position >= sweepMin - span * 0.25 && p.position <= sweepMax + span * 0.25;
-    }).toList(growable: false);
+        : sweep
+              .map((p) => p.position)
+              .reduce((a, b) => a > b ? a : b)
+              .toDouble();
+    final span = sweepMin != null && sweepMax != null
+        ? (sweepMax - sweepMin)
+        : 0.0;
+    final coarseShown = coarse
+        .where((p) {
+          if (sweepMin == null || sweepMax == null) return true;
+          return p.position >= sweepMin - span * 0.25 &&
+              p.position <= sweepMax + span * 0.25;
+        })
+        .toList(growable: false);
     for (final p in coarseShown) {
       include(p.position.toDouble(), p.hfr);
     }
@@ -74,11 +88,12 @@ class VCurveChart extends StatelessWidget {
     maxX += padX;
     final maxY = ys.isEmpty ? 5.0 : ys.reduce((a, b) => a > b ? a : b) * 1.15;
 
-    List<FlSpot> spots(Iterable<AutofocusProbe> probes) => probes
-        .where((p) => p.hfr > 0)
-        .map((p) => FlSpot(p.position.toDouble(), p.hfr))
-        .toList()
-      ..sort((a, b) => a.x.compareTo(b.x));
+    List<FlSpot> spots(Iterable<AutofocusProbe> probes) =>
+        probes
+            .where((p) => p.hfr > 0)
+            .map((p) => FlSpot(p.position.toDouble(), p.hfr))
+            .toList()
+          ..sort((a, b) => a.x.compareTo(b.x));
 
     final kept = spots(sweep.where((p) => p.kept));
     final dropped = spots(sweep.where((p) => !p.kept));
@@ -86,10 +101,10 @@ class VCurveChart extends StatelessWidget {
     final curve = fit == null
         ? const <FlSpot>[]
         : (fit.curve
-            .where((c) => c.hfr > 0)
-            .map((c) => FlSpot(c.position, c.hfr))
-            .toList()
-          ..sort((a, b) => a.x.compareTo(b.x)));
+              .where((c) => c.hfr > 0)
+              .map((c) => FlSpot(c.position, c.hfr))
+              .toList()
+            ..sort((a, b) => a.x.compareTo(b.x)));
 
     final bars = <LineChartBarData>[
       if (curve.length >= 2)
@@ -101,42 +116,64 @@ class VCurveChart extends StatelessWidget {
           dotData: const FlDotData(show: false),
         ),
       if (coarseSpots.isNotEmpty)
-        _dots(coarseSpots, radius: 2.5, fill: AraColors.textDisabled, stroke: AraColors.textDisabled),
+        _dots(
+          coarseSpots,
+          radius: 2.5,
+          fill: AraColors.textDisabled,
+          stroke: AraColors.textDisabled,
+        ),
       if (dropped.isNotEmpty)
-        _dots(dropped, radius: 4, fill: Colors.transparent, stroke: AraColors.textSecondary),
+        _dots(
+          dropped,
+          radius: 4,
+          fill: Colors.transparent,
+          stroke: AraColors.textSecondary,
+        ),
       if (kept.isNotEmpty)
-        _dots(kept, radius: 4.5, fill: AraColors.textPrimary, stroke: AraColors.bgPanel),
+        _dots(
+          kept,
+          radius: 4.5,
+          fill: AraColors.textPrimary,
+          stroke: AraColors.bgPanel,
+        ),
     ];
 
     final verticals = <VerticalLine>[];
     if (fit != null && fit.bestPosition > 0) {
-      verticals.add(VerticalLine(
-        x: fit.bestPosition,
-        color: AraColors.accentInfo,
-        strokeWidth: 1,
-        dashArray: const [4, 4],
-        label: VerticalLineLabel(
-          show: true,
-          alignment: Alignment.topRight,
-          style: const TextStyle(fontSize: 10, color: AraColors.accentInfo),
-          labelResolver: (_) => fit.algorithm == 'calibration'
-              ? l10n.focusChartCalibrated(fit.bestPosition.round())
-              : l10n.focusChartFit(fit.bestPosition.round()),
+      verticals.add(
+        VerticalLine(
+          x: fit.bestPosition,
+          color: AraColors.accentInfo,
+          strokeWidth: 1,
+          dashArray: const [4, 4],
+          label: VerticalLineLabel(
+            show: true,
+            alignment: Alignment.topRight,
+            style: const TextStyle(fontSize: 10, color: AraColors.accentInfo),
+            labelResolver: (_) => fit.algorithm == 'calibration'
+                ? l10n.focusChartCalibrated(fit.bestPosition.round())
+                : l10n.focusChartFit(fit.bestPosition.round()),
+          ),
         ),
-      ));
+      );
     }
     if (finalPosition != null && run.isComplete) {
-      verticals.add(VerticalLine(
-        x: finalPosition.toDouble(),
-        color: AraColors.accentConnected,
-        strokeWidth: 1.5,
-        label: VerticalLineLabel(
-          show: true,
-          alignment: Alignment.bottomRight,
-          style: const TextStyle(fontSize: 10, color: AraColors.accentConnected),
-          labelResolver: (_) => l10n.focusChartFocus(finalPosition),
+      verticals.add(
+        VerticalLine(
+          x: finalPosition.toDouble(),
+          color: AraColors.accentConnected,
+          strokeWidth: 1.5,
+          label: VerticalLineLabel(
+            show: true,
+            alignment: Alignment.bottomRight,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AraColors.accentConnected,
+            ),
+            labelResolver: (_) => l10n.focusChartFocus(finalPosition),
+          ),
         ),
-      ));
+      );
     }
 
     final chart = Padding(
@@ -161,15 +198,23 @@ class VCurveChart extends StatelessWidget {
           ),
           titlesData: FlTitlesData(
             leftTitles: AxisTitles(
-              axisNameWidget: const Text('HFR (px)', style: TextStyle(fontSize: 11)),
+              axisNameWidget: const Text(
+                'HFR (px)',
+                style: TextStyle(fontSize: 11),
+              ),
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 36,
-                getTitlesWidget: empty ? (_, _) => const SizedBox.shrink() : defaultGetTitle,
+                getTitlesWidget: empty
+                    ? (_, _) => const SizedBox.shrink()
+                    : defaultGetTitle,
               ),
             ),
             bottomTitles: AxisTitles(
-              axisNameWidget: Text(l10n.focusChartPosition, style: const TextStyle(fontSize: 11)),
+              axisNameWidget: Text(
+                l10n.focusChartPosition,
+                style: const TextStyle(fontSize: 11),
+              ),
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 26,
@@ -193,10 +238,15 @@ class VCurveChart extends StatelessWidget {
           lineTouchData: LineTouchData(
             touchTooltipData: LineTouchTooltipData(
               getTooltipItems: (touched) => touched
-                  .map((t) => LineTooltipItem(
-                        tooltipText(t.x, t.y, sweep),
-                        const TextStyle(fontSize: 11, color: AraColors.textPrimary),
-                      ))
+                  .map(
+                    (t) => LineTooltipItem(
+                      tooltipText(t.x, t.y, sweep),
+                      const TextStyle(
+                        fontSize: 11,
+                        color: AraColors.textPrimary,
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -216,14 +266,14 @@ class VCurveChart extends StatelessWidget {
   }
 
   Widget _emptyText(BuildContext context) => Center(
-        child: Text(
-          run.isRunning ? context.l10n.focusChartFirstProbe : context.l10n.focusChartEmpty,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: AraColors.textSecondary),
-        ),
-      );
+    child: Text(
+      run.isRunning
+          ? context.l10n.focusChartFirstProbe
+          : context.l10n.focusChartEmpty,
+      style: Theme.of(context).textTheme.bodySmall
+          ?.copyWith(color: AraColors.textSecondary),
+    ),
+  );
 
   /// A touched point's tooltip: position and HFR, plus the probe's rim-vs-core
   /// asymmetry when the point is a probe that carries one (#1139) — which side
@@ -234,7 +284,9 @@ class VCurveChart extends StatelessWidget {
     for (final p in probes) {
       // Within half a step and a hair of HFR, not exact equality: the spot is built from the probe, but a
       // future rounding of the spots must not silently lose the match.
-      if ((p.position - x).abs() < 0.5 && (p.hfr - y).abs() < 1e-6 && p.asymmetry != null) {
+      if ((p.position - x).abs() < 0.5 &&
+          (p.hfr - y).abs() < 1e-6 &&
+          p.asymmetry != null) {
         final a = p.asymmetry!;
         return '$base · rim/core ${a >= 0 ? '+' : ''}${a.toStringAsFixed(2)}';
       }
@@ -242,22 +294,25 @@ class VCurveChart extends StatelessWidget {
     return base;
   }
 
-  static LineChartBarData _dots(List<FlSpot> spots,
-          {required double radius, required Color fill, required Color stroke}) =>
-      LineChartBarData(
-        spots: spots,
-        color: Colors.transparent,
-        barWidth: 0,
-        dotData: FlDotData(
-          show: true,
-          getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
-            radius: radius,
-            color: fill,
-            strokeColor: stroke,
-            strokeWidth: 1.5,
-          ),
-        ),
-      );
+  static LineChartBarData _dots(
+    List<FlSpot> spots, {
+    required double radius,
+    required Color fill,
+    required Color stroke,
+  }) => LineChartBarData(
+    spots: spots,
+    color: Colors.transparent,
+    barWidth: 0,
+    dotData: FlDotData(
+      show: true,
+      getDotPainter: (spot, pct, bar, index) => FlDotCirclePainter(
+        radius: radius,
+        color: fill,
+        strokeColor: stroke,
+        strokeWidth: 1.5,
+      ),
+    ),
+  );
 
   /// ~5 labels across whatever the range is, rounded to 1/2/5 × 10ⁿ steps.
   static double _niceInterval(double range) {

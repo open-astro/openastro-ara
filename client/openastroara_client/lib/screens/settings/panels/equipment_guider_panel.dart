@@ -2,8 +2,10 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/guider_equipment_choices.dart';
@@ -31,14 +33,20 @@ import '../../../widgets/adaptive_controls.dart';
 /// The guider Profile picker's entries: Automatic first, naming the profile the
 /// guider is on when nothing is pinned, then the guider's own profiles. A pinned
 /// profile the guider no longer lists (or a guider not connected) stays visible.
-Map<int, String> guiderProfileItems(int pinned, Map<int, String> profiles, String? current) => {
-      // Name the guider's profile only when Automatic is what put it there.
-      0: pinned != 0 || current == null || current.isEmpty ? 'Automatic' : 'Automatic ($current)',
-      // The server maps a guider profile without an id to 0, which would replace Automatic.
-      for (final e in profiles.entries)
-        if (e.key > 0) e.key: e.value,
-      if (pinned != 0 && !profiles.containsKey(pinned)) pinned: 'Profile #$pinned',
-    };
+Map<int, String> guiderProfileItems(
+  int pinned,
+  Map<int, String> profiles,
+  String? current,
+) => {
+  // Name the guider's profile only when Automatic is what put it there.
+  0: pinned != 0 || current == null || current.isEmpty
+      ? 'Automatic'
+      : 'Automatic ($current)',
+  // The server maps a guider profile without an id to 0, which would replace Automatic.
+  for (final e in profiles.entries)
+    if (e.key > 0) e.key: e.value,
+  if (pinned != 0 && !profiles.containsKey(pinned)) pinned: 'Profile #$pinned',
+};
 
 /// §63 OpenAstro Guider panel — editable. Phase 12h.6k added the daemon
 /// round-trip for the §63 OpenAstro Guider fields (host/port/profile + dithering +
@@ -73,7 +81,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   // §63.19 — the guide focal length of an OAG is derived from the main
   // optics, so a guider Save needs the optics in from the rig too.
   @override
-  List<PanelSection> get sections => [phd2SettingsProvider, opticsSettingsProvider];
+  List<PanelSection> get sections => [
+    phd2SettingsProvider,
+    opticsSettingsProvider,
+  ];
 
   String _json() {
     final v = ref.read(phd2SettingsProvider).value;
@@ -246,10 +257,9 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   Future<void> _discoverAlpaca() async {
     setState(() => _equipmentStatus = null);
     try {
-      final servers =
-          await ref
-              .read(guiderAlpacaDevicesProvider.notifier)
-              .discover(fresh: false);
+      final servers = await ref
+          .read(guiderAlpacaDevicesProvider.notifier)
+          .discover(fresh: false);
       if (!mounted) return;
       setState(() {
         _equipmentStatus = servers.isEmpty
@@ -315,7 +325,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     } catch (e) {
       if (!saved) _savedJson = previous;
       if (!mounted) return;
-      final msg = e is SectionNotLoadedException || e is SectionConflictException
+      final msg =
+          e is SectionNotLoadedException || e is SectionConflictException
           ? e.toString()
           : friendlyDaemonError(e, fallback: "Couldn't apply to the guider");
       setState(() => _equipmentStatus = msg);
@@ -375,7 +386,11 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Profile',
           helpKey: 'eq.guider.profile',
           value: phd2.guiderProfileId,
-          items: guiderProfileItems(phd2.guiderProfileId, guiderStatus?.profiles ?? const {}, guiderStatus?.currentProfile),
+          items: guiderProfileItems(
+            phd2.guiderProfileId,
+            guiderStatus?.profiles ?? const {},
+            guiderStatus?.currentProfile,
+          ),
           onChanged: (v) {
             if (v != null) phd2N.setGuiderProfileId(v);
           },
@@ -394,8 +409,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Dither every N frames',
           helpKey: 'eq.guider.dither_every_n',
           currentValue: phd2.ditherEveryNFrames.toString(),
-          getCanonical: () =>
-              now().ditherEveryNFrames.toString(),
+          getCanonical: () => now().ditherEveryNFrames.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setDitherEveryNFrames(v);
@@ -405,8 +419,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Dither pixels',
           helpKey: 'eq.guider.dither_pixels',
           currentValue: phd2.ditherPixels.toString(),
-          getCanonical: () =>
-              now().ditherPixels.toString(),
+          getCanonical: () => now().ditherPixels.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDitherPixels(v);
@@ -416,8 +429,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Settle threshold (pixels)',
           helpKey: 'eq.guider.settle_pixels',
           currentValue: phd2.settlePixels.toString(),
-          getCanonical: () =>
-              now().settlePixels.toString(),
+          getCanonical: () => now().settlePixels.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setSettlePixels(v);
@@ -427,8 +439,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Settle time (s)',
           helpKey: 'eq.guider.settle_time',
           currentValue: phd2.settleTimeSec.toString(),
-          getCanonical: () =>
-              now().settleTimeSec.toString(),
+          getCanonical: () => now().settleTimeSec.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setSettleTimeSec(v);
@@ -438,8 +449,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Settle timeout (s)',
           helpKey: 'eq.guider.settle_timeout_sec',
           currentValue: phd2.settleTimeoutSec.toString(),
-          getCanonical: () =>
-              now().settleTimeoutSec.toString(),
+          getCanonical: () => now().settleTimeoutSec.toString(),
           parse: (s) {
             final v = int.tryParse(s);
             if (v != null) phd2N.setSettleTimeoutSec(v);
@@ -504,8 +514,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
             label: 'Guide focal length (mm)',
             helpKey: 'eq.guider.guide_focal_length',
             currentValue: phd2.guideFocalLength.toString(),
-            getCanonical: () =>
-                now().guideFocalLength.toString(),
+            getCanonical: () => now().guideFocalLength.toString(),
             parse: (s) {
               final v = int.tryParse(s);
               if (v != null) phd2N.setGuideFocalLength(v);
@@ -532,8 +541,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Guide pixel size (µm)',
           helpKey: 'eq.guider.guide_pixel_size',
           currentValue: phd2.guidePixelSize.toString(),
-          getCanonical: () =>
-              now().guidePixelSize.toString(),
+          getCanonical: () => now().guidePixelSize.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setGuidePixelSize(v);
@@ -543,8 +551,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'RA aggressiveness (0–1)',
           helpKey: 'eq.guider.ra_aggressiveness',
           currentValue: phd2.raAggressiveness.toString(),
-          getCanonical: () =>
-              now().raAggressiveness.toString(),
+          getCanonical: () => now().raAggressiveness.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setRaAggressiveness(v);
@@ -554,8 +561,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Dec aggressiveness (0–1)',
           helpKey: 'eq.guider.dec_aggressiveness',
           currentValue: phd2.decAggressiveness.toString(),
-          getCanonical: () =>
-              now().decAggressiveness.toString(),
+          getCanonical: () => now().decAggressiveness.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDecAggressiveness(v);
@@ -565,8 +571,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'RA minimum move (px)',
           helpKey: 'eq.guider.minimum_move',
           currentValue: phd2.minimumMove.toString(),
-          getCanonical: () =>
-              now().minimumMove.toString(),
+          getCanonical: () => now().minimumMove.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setMinimumMove(v);
@@ -576,8 +581,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Dec minimum move (px)',
           helpKey: 'eq.guider.dec_minimum_move',
           currentValue: phd2.decMinimumMove.toString(),
-          getCanonical: () =>
-              now().decMinimumMove.toString(),
+          getCanonical: () => now().decMinimumMove.toString(),
           parse: (s) {
             final v = double.tryParse(s);
             if (v != null) phd2N.setDecMinimumMove(v);
@@ -624,15 +628,20 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
   /// list it (disconnected, or a stale selection) — so hydrated state is
   /// always representable and never silently coerced.
   Map<String, String> _slotItems(
-      List<String> choices, String current, String alpacaType,
-      {String blankLabel = '(use the guider\'s own setting)'}) {
+    List<String> choices,
+    String current,
+    String alpacaType, {
+    String blankLabel = '(use the guider\'s own setting)',
+  }) {
     final items = <String, String>{'': blankLabel};
     for (final c in choices) {
       items[c] = friendlyAlpacaChoiceLabel(c, alpacaType, _alpacaNames);
     }
     if (current.isNotEmpty) {
       items.putIfAbsent(
-          current, () => friendlyAlpacaChoiceLabel(current, alpacaType, _alpacaNames));
+        current,
+        () => friendlyAlpacaChoiceLabel(current, alpacaType, _alpacaNames),
+      );
     }
     return items;
   }
@@ -666,21 +675,39 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
     ref.listen(guiderEquipmentProvider, (_, next) {
       final c = next.value?.choices;
       if (c != null) {
-        ref.read(guiderAlpacaDevicesProvider.notifier).resolve(choiceEndpoints(c));
+        ref
+            .read(guiderAlpacaDevicesProvider.notifier)
+            .resolve(choiceEndpoints(c));
       }
     });
     final serving = _servingEndpoint(phd2);
-    final cameraOptions =
-        mergedAlpacaOptions(choices.cameras, 'camera', 'Camera', _alpacaNames);
+    final cameraOptions = mergedAlpacaOptions(
+      choices.cameras,
+      'camera',
+      'Camera',
+      _alpacaNames,
+    );
     final mountOptions = mergedAlpacaOptions(
-        choices.mounts, 'telescope', 'Mount', _alpacaNames,
-        onlyEndpoint: serving);
+      choices.mounts,
+      'telescope',
+      'Mount',
+      _alpacaNames,
+      onlyEndpoint: serving,
+    );
     final auxOptions = mergedAlpacaOptions(
-        choices.auxMounts, 'telescope', 'Mount', _alpacaNames,
-        onlyEndpoint: serving);
+      choices.auxMounts,
+      'telescope',
+      'Mount',
+      _alpacaNames,
+      onlyEndpoint: serving,
+    );
     final rotatorOptions = mergedAlpacaOptions(
-        choices.rotators, 'rotator', 'Rotator', _alpacaNames,
-        onlyEndpoint: serving);
+      choices.rotators,
+      'rotator',
+      'Rotator',
+      _alpacaNames,
+      onlyEndpoint: serving,
+    );
     final unserved = describeUnservedAlpacaSelection(phd2);
     // A hydrated mount/aux/rotator on a server other than the camera's: the
     // push keeps the camera's server and drops that device number (the
@@ -695,9 +722,10 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         if (!isCrossServerPick(serving, sel)) continue;
         final e = parseAlpacaChoiceEndpoint(sel)!;
         crossServer.add(
-            '$slot is on ${e.host}:${e.port}, a different Alpaca server than the '
-            'guide camera ($serving); the guider uses one server, so pick it '
-            'from the camera\'s server.');
+          '$slot is on ${e.host}:${e.port}, a different Alpaca server than the '
+          'guide camera ($serving); the guider uses one server, so pick it '
+          'from the camera\'s server.',
+        );
       }
     }
 
@@ -773,12 +801,17 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         value: phd2.guiderCamera,
         // A new guider has no camera of its own, so the blank entry is
         // "nothing picked", not a working default.
-        items: _slotItems(cameraOptions, phd2.guiderCamera, 'camera',
-            blankLabel: 'None picked'),
+        items: _slotItems(
+          cameraOptions,
+          phd2.guiderCamera,
+          'camera',
+          blankLabel: 'None picked',
+        ),
         onChanged: (v) {
           if (v == null) return;
           phd2N.applyPick(
-              ref.read(guiderAlpacaDevicesProvider.notifier).pick(v));
+            ref.read(guiderAlpacaDevicesProvider.notifier).pick(v),
+          );
         },
       ),
       if (phd2.guiderCamera.trim().isEmpty)
@@ -787,9 +820,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           child: Text(
             kNoGuideCameraWarning,
             key: const ValueKey('guider_no_camera'),
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall!
+            style: Theme.of(context).textTheme.bodySmall!
                 .copyWith(color: Theme.of(context).colorScheme.error),
           ),
         ),
@@ -841,7 +872,8 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           label: 'Rotator',
           helpKey: 'eq.guider.rotator',
           value: 'Not used',
-          hint: 'A separate guide scope does not turn with the camera rotator; '
+          hint:
+              'A separate guide scope does not turn with the camera rotator; '
               'the guider is told "None". Choose Off-axis guider above if it does.',
         ),
       for (final warning in crossServer)
@@ -850,9 +882,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           child: Text(
             warning,
             key: const ValueKey('guider_cross_server'),
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall!
+            style: Theme.of(context).textTheme.bodySmall!
                 .copyWith(color: Theme.of(context).colorScheme.error),
           ),
         ),
@@ -862,9 +892,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
           child: Text(
             unserved,
             key: const ValueKey('guider_unserved_alpaca'),
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall!
+            style: Theme.of(context).textTheme.bodySmall!
                 .copyWith(color: Theme.of(context).colorScheme.error),
           ),
         ),
@@ -880,8 +908,7 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         label: 'Alpaca port',
         helpKey: 'eq.guider.alpaca_port',
         currentValue: phd2.guiderAlpacaPort.toString(),
-        getCanonical: () =>
-            now().guiderAlpacaPort.toString(),
+        getCanonical: () => now().guiderAlpacaPort.toString(),
         parse: (s) {
           final v = int.tryParse(s);
           if (v != null) phd2N.setGuiderAlpacaPort(v);

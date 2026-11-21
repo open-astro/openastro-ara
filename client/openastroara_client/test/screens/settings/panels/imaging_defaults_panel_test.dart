@@ -71,7 +71,11 @@ void main() {
         EditableNumberRow,
         'Optimal-sub noise tolerance (%)',
       );
-      await tester.scrollUntilVisible(row, 200, scrollable: find.byType(Scrollable).first);
+      await tester.scrollUntilVisible(
+        row,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
       expect(row, findsOneWidget);
       final field = find.descendant(of: row, matching: find.byType(TextField));
       await tester.enterText(field, '2.5');
@@ -171,41 +175,75 @@ void main() {
     }
   });
 
-  testWidgets('#1140 P2 the sky-model section lists each filter kind\'s standing; offline it says to connect', (tester) async {
-    tester.view.physicalSize = const Size(1600, 2400);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-    final record = SkyModelCalibration(
-      fittedUtc: DateTime.utc(2026, 10, 13, 6),
-      framesConsidered: 42,
-      filters: const [
-        SkyModelFilterCalibration(kind: 'l', bin: 1, k: 0.82, scatterPct: 6.5, frameCount: 30, passed: true),
-        SkyModelFilterCalibration(kind: 'ha', bin: 1, frameCount: 4, passed: false, note: 'All 4 frames share one exposure length (300 s) and the library has no bias frame to pin the pedestal; vary the exposure or shoot a bias.'),
-      ],
-    );
-    // Offline: no server → the section asks to connect and the button is disabled.
-    await tester.pumpWidget(ProviderScope(
-      overrides: [
-        activeServerProvider.overrideWithValue(null),
-        planningPrefsServiceProvider.overrideWithValue(_MemPrefs()),
-        skyModelCalibrationProvider.overrideWith(() => _Seeded(record)),
-      ],
-      child: const MaterialApp(home: Scaffold(body: ImagingDefaultsPanel())),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.text('Sky model calibration'), findsOneWidget);
-    expect(find.textContaining('Connect to the rig'), findsOneWidget);
-    final button = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Recalibrate from recent frames'));
-    expect(button.onPressed, isNull);
+  testWidgets(
+    '#1140 P2 the sky-model section lists each filter kind\'s standing; offline it says to connect',
+    (tester) async {
+      tester.view.physicalSize = const Size(1600, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+      final record = SkyModelCalibration(
+        fittedUtc: DateTime.utc(2026, 10, 13, 6),
+        framesConsidered: 42,
+        filters: const [
+          SkyModelFilterCalibration(
+            kind: 'l',
+            bin: 1,
+            k: 0.82,
+            scatterPct: 6.5,
+            frameCount: 30,
+            passed: true,
+          ),
+          SkyModelFilterCalibration(
+            kind: 'ha',
+            bin: 1,
+            frameCount: 4,
+            passed: false,
+            note: 'All 4 frames share one exposure length (300 s) and the library has no bias frame to pin the pedestal; vary the exposure or shoot a bias.',
+          ),
+        ],
+      );
+      // Offline: no server → the section asks to connect and the button is disabled.
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            activeServerProvider.overrideWithValue(null),
+            planningPrefsServiceProvider.overrideWithValue(_MemPrefs()),
+            skyModelCalibrationProvider.overrideWith(() => _Seeded(record)),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(body: ImagingDefaultsPanel()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Sky model calibration'), findsOneWidget);
+      expect(find.textContaining('Connect to the rig'), findsOneWidget);
+      final button = tester.widget<OutlinedButton>(
+        find.widgetWithText(OutlinedButton, 'Recalibrate from recent frames'),
+      );
+      expect(button.onPressed, isNull);
 
-    // The record's rows (rendered on their own: the panel's hydration needs a live server).
-    await tester.pumpWidget(const SizedBox());
-    await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListView(children: [
-      for (final f in record.filters) Text(f.standing),
-    ]))));
-    expect(find.text('k 0.82 · scatter 7 % · 30 frames · applies'), findsOneWidget);
-    expect(find.textContaining('All 4 frames share one exposure length'), findsOneWidget);
-  });
+      // The record's rows (rendered on their own: the panel's hydration needs a live server).
+      await tester.pumpWidget(const SizedBox());
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ListView(
+              children: [for (final f in record.filters) Text(f.standing)],
+            ),
+          ),
+        ),
+      );
+      expect(
+        find.text('k 0.82 · scatter 7 % · 30 frames · applies'),
+        findsOneWidget,
+      );
+      expect(
+        find.textContaining('All 4 frames share one exposure length'),
+        findsOneWidget,
+      );
+    },
+  );
 
   Future<FakeImagingDefaultsSection> pumpOnRig(
     WidgetTester tester, {
@@ -243,11 +281,15 @@ void main() {
     (tester) async {
       final section = await pumpOnRig(tester, loaded: false);
       expect(find.textContaining('Not loaded'), findsOneWidget);
-      expect(find.text('Default gain'), findsNothing, reason: 'no default shows');
+      expect(
+        find.text('Default gain'),
+        findsNothing,
+        reason: 'no default shows',
+      );
       expect(find.text('Planning'), findsOneWidget);
-      final panel =
-          tester.state(find.byType(ImagingDefaultsPanel))
-              as PanelSaveRegistration;
+      final panel = tester.state(
+        find.byType(ImagingDefaultsPanel),
+      ) as PanelSaveRegistration;
       await panel.panelSave();
       await tester.pump();
       expect(section.puts, isEmpty);
@@ -258,19 +300,23 @@ void main() {
     },
   );
 
-  testWidgets('Imaging defaults: Save sends the edit made on the rig copy (ADR 0015)', (
-    tester,
-  ) async {
-    final section = await pumpOnRig(tester);
-    final row = find.widgetWithText(SettingsSwitchRow, 'Warm-up cooler at session end');
-    await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
-    await tester.pump();
-    final panel =
-        tester.state(find.byType(ImagingDefaultsPanel))
-            as PanelSaveRegistration;
-    await panel.panelSave();
-    await tester.pump();
-    expect(section.puts.single.warmupAtSessionEnd, isTrue);
-    expect(find.text('Saved.'), findsOneWidget);
-  });
+  testWidgets(
+    'Imaging defaults: Save sends the edit made on the rig copy (ADR 0015)',
+    (tester) async {
+      final section = await pumpOnRig(tester);
+      final row = find.widgetWithText(
+        SettingsSwitchRow,
+        'Warm-up cooler at session end',
+      );
+      await tester.tap(find.descendant(of: row, matching: find.byType(Switch)));
+      await tester.pump();
+      final panel = tester.state(
+        find.byType(ImagingDefaultsPanel),
+      ) as PanelSaveRegistration;
+      await panel.panelSave();
+      await tester.pump();
+      expect(section.puts.single.warmupAtSessionEnd, isTrue);
+      expect(find.text('Saved.'), findsOneWidget);
+    },
+  );
 }

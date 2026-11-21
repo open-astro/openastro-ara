@@ -70,7 +70,11 @@ class UnguidedSettings {
 
   /// The ladder as "10, 30, 60, 120" for the settings row.
   String get probeRungsText => effectiveProbeRungsSeconds
-      .map((r) => r == r.roundToDouble() ? r.toStringAsFixed(0) : r.toStringAsFixed(1))
+      .map(
+        (r) => r == r.roundToDouble()
+            ? r.toStringAsFixed(0)
+            : r.toStringAsFixed(1),
+      )
       .join(', ');
 
   /// Parse "10, 30, 60" into an ascending positive ladder; null when it is

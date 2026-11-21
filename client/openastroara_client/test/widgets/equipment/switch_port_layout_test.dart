@@ -10,16 +10,15 @@ SwitchPort _port(
   double max = 1,
   bool canWrite = true,
   double step = 0,
-}) =>
-    SwitchPort(
-      id: id,
-      name: name,
-      value: value,
-      min: min,
-      max: max,
-      canWrite: canWrite,
-      step: step,
-    );
+}) => SwitchPort(
+  id: id,
+  name: name,
+  value: value,
+  min: min,
+  max: max,
+  canWrite: canWrite,
+  step: step,
+);
 
 void main() {
   group('classifySwitchPort', () {
@@ -37,7 +36,8 @@ void main() {
     test('read-only telemetry is a reading', () {
       expect(
         classifySwitchPort(
-            _port(0, 'Input Voltage', value: 12.6, max: 30, canWrite: false)),
+          _port(0, 'Input Voltage', value: 12.6, max: 30, canWrite: false),
+        ),
         SwitchPortKind.reading,
       );
     });
@@ -86,9 +86,13 @@ void main() {
       expect(switchPortUnit(_port(0, 'Output Current', canWrite: false)), 'A');
       expect(switchPortUnit(_port(0, 'Output Power', canWrite: false)), 'W');
       expect(
-          switchPortUnit(_port(0, 'Ambient Humidity', canWrite: false)), '%');
+        switchPortUnit(_port(0, 'Ambient Humidity', canWrite: false)),
+        '%',
+      );
       expect(
-          switchPortUnit(_port(0, 'Lens Temperature', canWrite: false)), '°C');
+        switchPortUnit(_port(0, 'Lens Temperature', canWrite: false)),
+        '°C',
+      );
       expect(switchPortUnit(_port(0, 'Dew Point', canWrite: false)), '°C');
     });
 
@@ -141,23 +145,22 @@ void main() {
     });
 
     test('groups appear in device order, not alphabetical order', () {
-      final groups = groupSwitchPorts(
-        [_port(0, 'ZZ 1'), _port(1, 'ZZ 2'), _port(2, 'AA 1'), _port(3, 'AA 2')],
-        fallbackTitle: 'Switches',
-      );
+      final groups = groupSwitchPorts([
+        _port(0, 'ZZ 1'),
+        _port(1, 'ZZ 2'),
+        _port(2, 'AA 1'),
+        _port(3, 'AA 2'),
+      ], fallbackTitle: 'Switches');
       expect(groups.map((g) => g.title), ['ZZ', 'AA']);
     });
 
     test('read-only bits sharing a prefix are not a control group', () {
       // "USB2 Status"/"USB3 Status" are presence bits; as toggle rows they
       // would each read "Always on".
-      final groups = groupSwitchPorts(
-        [
-          _port(0, 'USB2 Status', canWrite: false),
-          _port(1, 'USB3 Status', canWrite: false),
-        ],
-        fallbackTitle: 'Switches',
-      );
+      final groups = groupSwitchPorts([
+        _port(0, 'USB2 Status', canWrite: false),
+        _port(1, 'USB3 Status', canWrite: false),
+      ], fallbackTitle: 'Switches');
       expect(groups.map((g) => g.title), ['Switches']);
       expect(groups.single.ports, hasLength(2));
     });
@@ -166,33 +169,33 @@ void main() {
       // "USB1 Status" carries a descriptor its switchable siblings lack, so it
       // is a bit ABOUT the port, not the port — as a toggle row it would read
       // "Always on".
-      final groups = groupSwitchPorts(
-        [
-          _port(0, 'USB1'),
-          _port(1, 'USB2'),
-          _port(2, 'USB1 Status', canWrite: false),
-        ],
-        fallbackTitle: 'Switches',
-      );
+      final groups = groupSwitchPorts([
+        _port(0, 'USB1'),
+        _port(1, 'USB2'),
+        _port(2, 'USB1 Status', canWrite: false),
+      ], fallbackTitle: 'Switches');
       expect(groups.map((g) => g.title), ['USB', 'Switches']);
       expect(groups[0].ports.map((p) => p.name), ['USB1', 'USB2']);
       expect(groups[1].ports.single.name, 'USB1 Status');
     });
 
-    test('a read-only rail still joins a prefix that has writable siblings', () {
-      final groups = groupSwitchPorts(
-        [_port(0, 'DC1', canWrite: false), _port(1, 'DC2')],
-        fallbackTitle: 'Switches',
-      );
-      expect(groups.map((g) => g.title), ['DC']);
-      expect(groups.single.ports, hasLength(2));
-    });
+    test(
+      'a read-only rail still joins a prefix that has writable siblings',
+      () {
+        final groups = groupSwitchPorts([
+          _port(0, 'DC1', canWrite: false),
+          _port(1, 'DC2'),
+        ], fallbackTitle: 'Switches');
+        expect(groups.map((g) => g.title), ['DC']);
+        expect(groups.single.ports, hasLength(2));
+      },
+    );
 
     test('no fallback group is emitted when every port is grouped', () {
-      final groups = groupSwitchPorts(
-        [_port(0, 'USB A'), _port(1, 'USB B')],
-        fallbackTitle: 'Switches',
-      );
+      final groups = groupSwitchPorts([
+        _port(0, 'USB A'),
+        _port(1, 'USB B'),
+      ], fallbackTitle: 'Switches');
       expect(groups.map((g) => g.title), ['USB']);
     });
   });
@@ -243,21 +246,45 @@ void main() {
     });
 
     test("snaps to the device's step when it reports one (#1680)", () {
-      expect(quantiseSwitchWrite(_port(0, 'Light Box', max: 100, step: 10), 37), 40);
+      expect(
+        quantiseSwitchWrite(_port(0, 'Light Box', max: 100, step: 10), 37),
+        40,
+      );
       // Exact: 0.1 * 85 is 8.500000000000002 in floating point.
-      expect(quantiseSwitchWrite(_port(0, 'Temperature', max: 15, step: 0.1), 8.47), 8.5);
-      expect(quantiseSwitchWrite(_port(0, 'Odd', min: 0.5, max: 3.5, step: 0.5), 1.8), 2);
+      expect(
+        quantiseSwitchWrite(_port(0, 'Temperature', max: 15, step: 0.1), 8.47),
+        8.5,
+      );
+      expect(
+        quantiseSwitchWrite(
+          _port(0, 'Odd', min: 0.5, max: 3.5, step: 0.5),
+          1.8,
+        ),
+        2,
+      );
     });
 
-    test('a max off the step grid is never sent: the top stops on the last step', () {
-      final p = _port(0, 'Coarse', max: 100, step: 40);
-      expect(quantiseSwitchWrite(p, 99), 80);
-      expect(quantiseSwitchWrite(p, 100), 80);
-    });
+    test(
+      'a max off the step grid is never sent: the top stops on the last step',
+      () {
+        final p = _port(0, 'Coarse', max: 100, step: 40);
+        expect(quantiseSwitchWrite(p, 99), 80);
+        expect(quantiseSwitchWrite(p, 100), 80);
+      },
+    );
 
-    test('a step finer than 1000 stops over the range is treated as unknown', () {
-      expect(quantiseSwitchWrite(_port(0, 'Big', max: 65535, step: 0.01), 41234.87), 41235);
-    });
+    test(
+      'a step finer than 1000 stops over the range is treated as unknown',
+      () {
+        expect(
+          quantiseSwitchWrite(
+            _port(0, 'Big', max: 65535, step: 0.01),
+            41234.87,
+          ),
+          41235,
+        );
+      },
+    );
 
     test('never escapes the port bounds', () {
       final p = _port(0, 'DEW6', max: 100);
@@ -268,14 +295,24 @@ void main() {
 
   group('switchSliderDivisions', () {
     test("one stop per device step when the step is known (#1680)", () {
-      expect(switchSliderDivisions(_port(0, 'Light Box', max: 100, step: 10)), 10);
-      expect(switchSliderDivisions(_port(0, 'Temperature', max: 15, step: 0.1)), 150);
+      expect(
+        switchSliderDivisions(_port(0, 'Light Box', max: 100, step: 10)),
+        10,
+      );
+      expect(
+        switchSliderDivisions(_port(0, 'Temperature', max: 15, step: 0.1)),
+        150,
+      );
     });
 
     test('without a step: one stop per whole unit on a whole range, else continuous', () {
       expect(switchSliderDivisions(_port(0, 'DEW6', max: 100)), 100);
       expect(switchSliderDivisions(_port(0, 'Fine', max: 1.5)), isNull);
-      expect(switchSliderDivisions(_port(0, 'Big', max: 65535)), isNull, reason: 'capped at 1000');
+      expect(
+        switchSliderDivisions(_port(0, 'Big', max: 65535)),
+        isNull,
+        reason: 'capped at 1000',
+      );
     });
   });
 
@@ -288,10 +325,16 @@ void main() {
 
     test('Auto is mode 0 on a dew channel', () {
       expect(isAutoRegulating(_port(0, 'DEW6 Mode', value: 0, max: 2)), isTrue);
-      expect(isAutoRegulating(_port(0, 'DEW6 Mode', value: 1, max: 2)), isFalse);
+      expect(
+        isAutoRegulating(_port(0, 'DEW6 Mode', value: 1, max: 2)),
+        isFalse,
+      );
       expect(isAutoRegulating(null), isFalse);
       // A 0..3 fan speed at 0 is "off", not "self-regulating".
-      expect(isAutoRegulating(_port(0, 'Fan Speed', value: 0, max: 3)), isFalse);
+      expect(
+        isAutoRegulating(_port(0, 'Fan Speed', value: 0, max: 3)),
+        isFalse,
+      );
     });
   });
 

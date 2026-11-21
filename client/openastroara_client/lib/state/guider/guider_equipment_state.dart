@@ -8,8 +8,8 @@ import '../saved_server_state.dart';
 /// Builds a [GuiderEquipmentClient] for a server. Overridable in tests.
 final guiderEquipmentApiFactoryProvider =
     Provider<GuiderEquipmentClient Function(AraServer)>(
-  (ref) => GuiderEquipmentApi.new,
-);
+      (ref) => GuiderEquipmentApi.new,
+    );
 
 /// [GuiderEquipmentClient] bound to the active server ([activeServerProvider]),
 /// or `null` when no server is saved. Closes the old Dio on a server change.
@@ -52,10 +52,11 @@ class GuiderEquipmentNotifier
       final gen = _generation;
       final api = ref.read(guiderEquipmentApiProvider);
       final next = await AsyncValue.guard<GuiderEquipmentChoicesResponse?>(
-          () async {
-        if (api == null) return null;
-        return api.getChoices();
-      });
+        () async {
+          if (api == null) return null;
+          return api.getChoices();
+        },
+      );
       // Skip the write if disposed or rebuilt for a new server mid-flight.
       if (ref.mounted && gen == _generation) state = next;
     } finally {
@@ -76,7 +77,9 @@ class GuiderEquipmentNotifier
       throw StateError('Not connected — connect to your rig to save this.');
     }
     return api.discoverAlpaca(
-        numQueries: numQueries, timeoutSeconds: timeoutSeconds);
+      numQueries: numQueries,
+      timeoutSeconds: timeoutSeconds,
+    );
   }
 
   /// On-demand §63.17 profile push (202-Accepted; the daemon reports the
@@ -91,5 +94,8 @@ class GuiderEquipmentNotifier
   }
 }
 
-final guiderEquipmentProvider = AsyncNotifierProvider<GuiderEquipmentNotifier,
-    GuiderEquipmentChoicesResponse?>(GuiderEquipmentNotifier.new);
+final guiderEquipmentProvider =
+    AsyncNotifierProvider<
+      GuiderEquipmentNotifier,
+      GuiderEquipmentChoicesResponse?
+    >(GuiderEquipmentNotifier.new);

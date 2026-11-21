@@ -29,29 +29,42 @@ class _MemDrafts extends DraftSequenceService {
 const _id = '${draftIdPrefix}abc';
 
 TextButton _deleteButton(WidgetTester tester) => tester.widget<TextButton>(
-      find.ancestor(of: find.text('Delete sequence'), matching: find.byType(TextButton)),
-    );
+  find.ancestor(
+    of: find.text('Delete sequence'),
+    matching: find.byType(TextButton),
+  ),
+);
 
 void main() {
-  testWidgets('an open offline draft can be deleted from the toolbar',
-      (tester) async {
+  testWidgets('an open offline draft can be deleted from the toolbar', (
+    tester,
+  ) async {
     await wideSurface(tester);
     final drafts = _MemDrafts()
       ..store[_id] = DraftSequence(
-          id: _id, name: 'M 31 night', updatedUtc: DateTime.utc(2026), body: const {});
-    final container = ProviderContainer(overrides: [
-      sequenceApiProvider.overrideWithValue(null), // no server at all
-      draftSequenceServiceProvider.overrideWithValue(drafts),
-    ]);
+        id: _id,
+        name: 'M 31 night',
+        updatedUtc: DateTime.utc(2026),
+        body: const {},
+      );
+    final container = ProviderContainer(
+      overrides: [
+        sequenceApiProvider.overrideWithValue(null), // no server at all
+        draftSequenceServiceProvider.overrideWithValue(drafts),
+      ],
+    );
     addTearDown(container.dispose);
     await container.read(draftSequencesProvider.future);
     container.read(selectedSequenceIdProvider.notifier).select(_id);
-    container.read(sequenceEditorProvider.notifier).load(
-        SequenceDetail(id: _id, name: 'M 31 night', body: const {}));
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-    ));
+    container
+        .read(sequenceEditorProvider.notifier)
+        .load(SequenceDetail(id: _id, name: 'M 31 night', body: const {}));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ),
+    );
     await tester.pump();
 
     // Before #1106 this was `: null` for any draft.
@@ -71,8 +84,11 @@ void main() {
     // The toolbar names a draft "<name> (offline draft)"; the SnackBar echoes it.
     expect(find.text('Deleted "M 31 night (offline draft)".'), findsOneWidget);
     expect(container.read(selectedSequenceIdProvider), isNull);
-    expect(container.read(sequenceEditorProvider), isNull,
-        reason: 'the Run tab must not keep editing a ghost');
+    expect(
+      container.read(sequenceEditorProvider),
+      isNull,
+      reason: 'the Run tab must not keep editing a ghost',
+    );
     await tester.pumpAndSettle();
   });
 
@@ -80,18 +96,26 @@ void main() {
     await wideSurface(tester);
     final drafts = _MemDrafts()
       ..store[_id] = DraftSequence(
-          id: _id, name: 'M 31 night', updatedUtc: DateTime.utc(2026), body: const {});
-    final container = ProviderContainer(overrides: [
-      sequenceApiProvider.overrideWithValue(null),
-      draftSequenceServiceProvider.overrideWithValue(drafts),
-    ]);
+        id: _id,
+        name: 'M 31 night',
+        updatedUtc: DateTime.utc(2026),
+        body: const {},
+      );
+    final container = ProviderContainer(
+      overrides: [
+        sequenceApiProvider.overrideWithValue(null),
+        draftSequenceServiceProvider.overrideWithValue(drafts),
+      ],
+    );
     addTearDown(container.dispose);
     await container.read(draftSequencesProvider.future);
     container.read(selectedSequenceIdProvider.notifier).select(_id);
-    await tester.pumpWidget(UncontrolledProviderScope(
-      container: container,
-      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
-    ));
+    await tester.pumpWidget(
+      UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ),
+    );
     await tester.pump();
     await tester.tap(find.text('Delete sequence'));
     await tester.pumpAndSettle();

@@ -29,7 +29,11 @@ final mainCameraTakingFramesProvider = Provider.autoDispose<bool>(
 final mainCameraBusyProvider = Provider.autoDispose<bool>(
   (ref) =>
       ref.watch(mainCameraTakingFramesProvider) ||
-      ref.watch(sequenceRunStateProvider.select((s) => s.value?.state?.isAnyPaused ?? false)),
+      ref.watch(
+        sequenceRunStateProvider.select(
+          (s) => s.value?.state?.isAnyPaused ?? false,
+        ),
+      ),
 );
 
 /// Something this app shows explains the main camera's exposure, so it needs

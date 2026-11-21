@@ -23,17 +23,17 @@ class _FakeSavedServerService implements SavedServerService {
 }
 
 FaultRow _row(String id, {String? sessionId}) => FaultRow(
-      id: id,
-      sessionId: sessionId,
-      detectedUtc: DateTime.utc(2026, 7, 10, 4),
-      equipmentType: 'camera',
-      equipmentId: 'dev-1',
-      equipmentName: 'Cam',
-      faultType: 'disconnected',
-      details: null,
-      actionTaken: null,
-      resolvedUtc: null,
-    );
+  id: id,
+  sessionId: sessionId,
+  detectedUtc: DateTime.utc(2026, 7, 10, 4),
+  equipmentType: 'camera',
+  equipmentId: 'dev-1',
+  equipmentName: 'Cam',
+  faultType: 'disconnected',
+  details: null,
+  actionTaken: null,
+  resolvedUtc: null,
+);
 
 /// Serves two fixed pages so pagination can be exercised; records the filters
 /// each call carried.
@@ -52,13 +52,17 @@ class _FakePagedFaultsClient implements FaultsClient {
     calls.add({'cursor': cursor, 'sessionId': sessionId});
     if (sessionId != null) {
       return CursorPage(
-          items: [_row('s1', sessionId: sessionId)],
-          nextCursor: null,
-          hasMore: false);
+        items: [_row('s1', sessionId: sessionId)],
+        nextCursor: null,
+        hasMore: false,
+      );
     }
     return cursor == null
         ? CursorPage(
-            items: [_row('f1'), _row('f2')], nextCursor: '2', hasMore: true)
+            items: [_row('f1'), _row('f2')],
+            nextCursor: '2',
+            hasMore: true,
+          )
         : CursorPage(items: [_row('f3')], nextCursor: null, hasMore: false);
   }
 
@@ -70,11 +74,14 @@ class _FakePagedFaultsClient implements FaultsClient {
 }
 
 ProviderContainer _container(FaultsClient api) {
-  final container = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(
-        _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
-    faultsApiFactoryProvider.overrideWithValue((server) => api),
-  ]);
+  final container = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
+      ),
+      faultsApiFactoryProvider.overrideWithValue((server) => api),
+    ],
+  );
   addTearDown(container.dispose);
   return container;
 }
@@ -93,20 +100,28 @@ void main() {
       expect(container.read(faultFeedProvider.notifier).hasMore, isTrue);
 
       await container.read(faultFeedProvider.notifier).loadMore();
-      expect(container.read(faultFeedProvider).value!.map((f) => f.id),
-          ['f1', 'f2', 'f3']);
+      expect(container.read(faultFeedProvider).value!.map((f) => f.id), [
+        'f1',
+        'f2',
+        'f3',
+      ]);
       expect(container.read(faultFeedProvider.notifier).hasMore, isFalse);
 
       await container.read(faultFeedProvider.notifier).refresh();
-      expect(container.read(faultFeedProvider).value!.map((f) => f.id),
-          ['f1', 'f2'], reason: 'refresh restarts from page 1');
+      expect(container.read(faultFeedProvider).value!.map((f) => f.id), [
+        'f1',
+        'f2',
+      ], reason: 'refresh restarts from page 1');
     });
 
     test('no saved server → null data', () async {
-      final container = ProviderContainer(overrides: [
-        savedServerServiceProvider
-            .overrideWithValue(_FakeSavedServerService(const [])),
-      ]);
+      final container = ProviderContainer(
+        overrides: [
+          savedServerServiceProvider.overrideWithValue(
+            _FakeSavedServerService(const []),
+          ),
+        ],
+      );
       addTearDown(container.dispose);
       await container.read(savedServersProvider.future);
       final sub = container.listen(faultFeedProvider, (_, _) {});
@@ -121,8 +136,7 @@ void main() {
       final container = _container(api);
       await container.read(savedServersProvider.future);
 
-      final rows =
-          await container.read(sessionFaultsProvider('sess-9').future);
+      final rows = await container.read(sessionFaultsProvider('sess-9').future);
       expect(rows.single.sessionId, 'sess-9');
       expect(api.calls.single['sessionId'], 'sess-9');
     });

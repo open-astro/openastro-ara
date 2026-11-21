@@ -63,48 +63,52 @@ class MountCapabilities {
 
   static double? _mm(Object? v) => v is num && v > 0 ? v.toDouble() : null;
 
-  factory MountCapabilities.fromJson(Map<String, dynamic> json) => MountCapabilities(
-        canSlew: json['can_slew'] as bool? ?? false,
-        canSync: json['can_sync'] as bool? ?? false,
-        canPark: json['can_park'] as bool? ?? false,
-        canUnpark: json['can_unpark'] as bool? ?? false,
-        canSetTracking: json['can_set_tracking'] as bool? ?? false,
-        canFindHome: json['can_find_home'] as bool? ?? false,
-        canMoveAxis: json['can_move_axis'] as bool? ?? false,
-        trackingRates: [
-          for (final r in json['supported_sidereal_rates'] as List<dynamic>? ?? const [])
-            if (r is String) r,
-        ],
-        specs: MountSpecSheet.fromJson(json['mount_specs']),
-        focalLengthMm: _mm(json['focal_length_mm']),
-        apertureMm: _mm(json['aperture_diameter_mm']),
-        axisRatesDegPerSec: (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)
-                ?.map((e) {
-                  if (e is! num) {
-                    throw FormatException(
-                        'mount "move_axis_rates_deg_per_sec" element is not a num (${e.runtimeType})');
-                  }
-                  return e.toDouble();
-                })
-                .toList() ??
-            const [],
-        axisRateBands: (json['move_axis_rate_bands_deg_per_sec'] as List<dynamic>?)
-                ?.map((e) {
-                  if (e is! Map<String, dynamic>) {
-                    throw FormatException(
-                        'mount "move_axis_rate_bands_deg_per_sec" element is not an object (${e.runtimeType})');
-                  }
-                  final min = e['min'];
-                  final max = e['max'];
-                  if (min is! num || max is! num) {
-                    throw const FormatException(
-                        'mount "move_axis_rate_bands_deg_per_sec" band needs numeric "min" and "max"');
-                  }
-                  return SlewRateBand(min.toDouble(), max.toDouble());
-                })
-                .toList() ??
-            const [],
-      );
+  factory MountCapabilities.fromJson(
+    Map<String, dynamic> json,
+  ) => MountCapabilities(
+    canSlew: json['can_slew'] as bool? ?? false,
+    canSync: json['can_sync'] as bool? ?? false,
+    canPark: json['can_park'] as bool? ?? false,
+    canUnpark: json['can_unpark'] as bool? ?? false,
+    canSetTracking: json['can_set_tracking'] as bool? ?? false,
+    canFindHome: json['can_find_home'] as bool? ?? false,
+    canMoveAxis: json['can_move_axis'] as bool? ?? false,
+    trackingRates: [
+      for (final r
+          in json['supported_sidereal_rates'] as List<dynamic>? ?? const [])
+        if (r is String) r,
+    ],
+    specs: MountSpecSheet.fromJson(json['mount_specs']),
+    focalLengthMm: _mm(json['focal_length_mm']),
+    apertureMm: _mm(json['aperture_diameter_mm']),
+    axisRatesDegPerSec:
+        (json['move_axis_rates_deg_per_sec'] as List<dynamic>?)?.map((e) {
+          if (e is! num) {
+            throw FormatException(
+              'mount "move_axis_rates_deg_per_sec" element is not a num (${e.runtimeType})',
+            );
+          }
+          return e.toDouble();
+        }).toList() ??
+        const [],
+    axisRateBands:
+        (json['move_axis_rate_bands_deg_per_sec'] as List<dynamic>?)?.map((e) {
+          if (e is! Map<String, dynamic>) {
+            throw FormatException(
+              'mount "move_axis_rate_bands_deg_per_sec" element is not an object (${e.runtimeType})',
+            );
+          }
+          final min = e['min'];
+          final max = e['max'];
+          if (min is! num || max is! num) {
+            throw const FormatException(
+              'mount "move_axis_rate_bands_deg_per_sec" band needs numeric "min" and "max"',
+            );
+          }
+          return SlewRateBand(min.toDouble(), max.toDouble());
+        }).toList() ??
+        const [],
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -131,10 +135,19 @@ class MountCapabilities {
   }
 
   @override
-  int get hashCode => Object.hash(canSlew, canSync, canPark, canUnpark,
-      canSetTracking, canFindHome, canMoveAxis, Object.hashAll(trackingRates),
-      Object.hashAll(axisRatesDegPerSec),
-      Object.hashAll(axisRateBands), specs);
+  int get hashCode => Object.hash(
+    canSlew,
+    canSync,
+    canPark,
+    canUnpark,
+    canSetTracking,
+    canFindHome,
+    canMoveAxis,
+    Object.hashAll(trackingRates),
+    Object.hashAll(axisRatesDegPerSec),
+    Object.hashAll(axisRateBands),
+    specs,
+  );
 }
 
 /// Live status of the connected ASCOM Telescope
@@ -152,6 +165,7 @@ class MountStatus extends EquipmentDeviceStatus {
   final String runtimeState;
   final double? rightAscensionHours;
   final double? declinationDegrees;
+
   /// The destination of the last equatorial slew/sync — the mount's own
   /// TargetRA/TargetDec bookkeeping (null when the mount can't report it or
   /// no target has been commanded yet).
@@ -212,20 +226,25 @@ class MountStatus extends EquipmentDeviceStatus {
   factory MountStatus.fromJson(Map<String, dynamic> json) {
     final caps = json['capabilities'];
     final runtime = json['runtime'];
-    final r = runtime is Map<String, dynamic> ? runtime : const <String, dynamic>{};
+    final r = runtime is Map<String, dynamic>
+        ? runtime
+        : const <String, dynamic>{};
     return MountStatus(
       deviceId: json['device_id'] as String? ?? '',
       name: json['name'] as String? ?? '',
-      connectionState: equipmentConnectionStateFromWire(json['state'] as String?),
-      capabilities:
-          caps is Map<String, dynamic> ? MountCapabilities.fromJson(caps) : null,
+      connectionState: equipmentConnectionStateFromWire(
+        json['state'] as String?,
+      ),
+      capabilities: caps is Map<String, dynamic>
+          ? MountCapabilities.fromJson(caps)
+          : null,
       runtimeState: r['state'] as String? ?? '',
       rightAscensionHours: (r['right_ascension_hours'] as num?)?.toDouble(),
       declinationDegrees: (r['declination_degrees'] as num?)?.toDouble(),
-      targetRightAscensionHours:
-          (r['target_right_ascension_hours'] as num?)?.toDouble(),
-      targetDeclinationDegrees:
-          (r['target_declination_degrees'] as num?)?.toDouble(),
+      targetRightAscensionHours: (r['target_right_ascension_hours'] as num?)
+          ?.toDouble(),
+      targetDeclinationDegrees: (r['target_declination_degrees'] as num?)
+          ?.toDouble(),
       tracking: r['tracking'] as bool? ?? false,
       parked: r['parked'] as bool? ?? false,
       atHome: r['at_home'] as bool? ?? false,
@@ -256,10 +275,23 @@ class MountStatus extends EquipmentDeviceStatus {
           other.positionUnverifiedReason == positionUnverifiedReason);
 
   @override
-  int get hashCode => Object.hash(deviceId, name, connectionState, capabilities,
-      runtimeState, rightAscensionHours, declinationDegrees,
-      targetRightAscensionHours, targetDeclinationDegrees, tracking, parked,
-      atHome, trackingRate, positionUnverified, positionUnverifiedReason);
+  int get hashCode => Object.hash(
+    deviceId,
+    name,
+    connectionState,
+    capabilities,
+    runtimeState,
+    rightAscensionHours,
+    declinationDegrees,
+    targetRightAscensionHours,
+    targetDeclinationDegrees,
+    tracking,
+    parked,
+    atHome,
+    trackingRate,
+    positionUnverified,
+    positionUnverifiedReason,
+  );
 }
 
 /// Format right ascension (decimal hours, [0, 24)) as `HHh MMm SSs`. Clamped to

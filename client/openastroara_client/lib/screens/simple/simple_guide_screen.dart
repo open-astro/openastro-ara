@@ -23,5 +23,6 @@ class SimpleGuideScreen extends SimpleScreen {
   Widget get shutter => const SimpleGuideShutter();
 
   @override
-  String caption(BuildContext context, WidgetRef ref) => simpleGuideSummary(ref);
+  String caption(BuildContext context, WidgetRef ref) =>
+      simpleGuideSummary(ref);
 }

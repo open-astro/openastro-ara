@@ -91,7 +91,11 @@ void main() {
     );
 
     test('per-filter focus offsets write through the policy', () {
-      expect(const FilterWheelPolicy(useFilterWheelOffsets: true).toJson()['use_filter_wheel_offsets'], isTrue);
+      expect(
+        const FilterWheelPolicy(useFilterWheelOffsets: true)
+            .toJson()['use_filter_wheel_offsets'],
+        isTrue,
+      );
     });
   });
 

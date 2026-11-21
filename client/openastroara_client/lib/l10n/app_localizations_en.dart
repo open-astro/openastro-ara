@@ -6481,6 +6481,26 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get bestHours => 'Imaging hours';
+
+  @override
+  String get bestHoursAny => 'Any time';
+
+  @override
+  String get bestHoursPick => 'Pick hours';
+
+  @override
+  String bestHoursRange(String from, String to) {
+    return '$from-$to';
+  }
+
+  @override
+  String get bestHoursFromHelp => 'Imaging starts';
+
+  @override
+  String get bestHoursToHelp => 'Imaging ends';
+
+  @override
   String get bestField => 'Field';
 
   @override

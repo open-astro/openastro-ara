@@ -13,8 +13,9 @@ import 'settings/imaging_defaults_state.dart';
 import 'settings/optics_settings_state.dart';
 import 'settings/site_settings_state.dart';
 
-final profileCacheServiceProvider =
-    Provider<ProfileCacheService>((ref) => ProfileCacheService());
+final profileCacheServiceProvider = Provider<ProfileCacheService>(
+  (ref) => ProfileCacheService(),
+);
 
 /// One profile as the offline launch box sees it: the cached identity plus
 /// whether a gear snapshot exists to seed planning with.
@@ -28,11 +29,12 @@ class CachedProfile {
   /// the snapshot predates the stamp) — the offline picker shows this so a
   /// stale ranking looks stale.
   final DateTime? capturedUtc;
-  const CachedProfile(
-      {required this.id,
-      required this.name,
-      required this.hasSections,
-      this.capturedUtc});
+  const CachedProfile({
+    required this.id,
+    required this.name,
+    required this.hasSections,
+    this.capturedUtc,
+  });
 }
 
 @immutable
@@ -61,7 +63,8 @@ final cachedProfilesProvider = FutureProvider<CachedProfileList>((ref) async {
               capturedUtc: sections is Map && sections[p['id']] is Map
                   ? DateTime.tryParse(
                       (sections[p['id']] as Map)['captured_utc']?.toString() ??
-                          '')?.toUtc()
+                          '',
+                    )?.toUtc()
                   : null,
             ),
     ],
@@ -74,7 +77,10 @@ final cachedProfilesProvider = FutureProvider<CachedProfileList>((ref) async {
 /// Sections are stored in wire shape via the [ProfileApi] codecs, so the
 /// offline seed decodes with the exact same logic the live client uses.
 Future<void> captureProfileCache(
-    ProfileCacheService cache, ProfileApi api, ProfileList list) async {
+  ProfileCacheService cache,
+  ProfileApi api,
+  ProfileList list,
+) async {
   try {
     await cache.saveList(list.activeId, [
       for (final p in list.profiles) (id: p.id, name: p.name),
@@ -84,7 +90,16 @@ Future<void> captureProfileCache(
     // The section GETs read the ACTIVE profile — that's the one we snapshot.
     // Parallel (like hydratePlanningSettings): this fires on every list load
     // AND after every mutation, so serializing 6 round-trips adds up.
-    final (optics, imaging, autofocus, site, filters, electronics, horizon, unguided) = await (
+    final (
+      optics,
+      imaging,
+      autofocus,
+      site,
+      filters,
+      electronics,
+      horizon,
+      unguided,
+    ) = await (
       api.getOptics(),
       api.getImagingDefaults(),
       api.getAutofocusSettings(),
@@ -115,7 +130,9 @@ Future<void> captureProfileCache(
         'custom_horizon': ProfileApi.customHorizonToJson(horizon),
     });
   } catch (e) {
-    debugPrint('[profile-cache] capture failed (offline cache stays stale): $e');
+    debugPrint(
+      '[profile-cache] capture failed (offline cache stays stale): $e',
+    );
   }
 }
 
@@ -144,7 +161,9 @@ Future<List<CustomHorizonPoint>?> _tryHorizon(ProfileApi api) async {
 /// (ADR 0015): readable for planning, never saved, and replaced by the rig's
 /// copy once it loads.
 Future<bool> seedPlanningFromCache(
-    ProviderContainer container, String profileId) async {
+  ProviderContainer container,
+  String profileId,
+) async {
   final cache = await container.read(profileCacheServiceProvider).load();
   final sections = cache['sections'];
   final snap = sections is Map ? sections[profileId] : null;

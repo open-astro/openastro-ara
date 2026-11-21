@@ -105,7 +105,8 @@ class GuiderAdvancedField {
   /// rounds decimals; editing must not save the rounded value). Pure.
   static String editText(Object v) {
     if (v is int) return '$v';
-    if (v is double) return v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
+    if (v is double)
+      return v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
     return '$v';
   }
 

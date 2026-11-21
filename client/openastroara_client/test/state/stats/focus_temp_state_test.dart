@@ -59,15 +59,19 @@ class _GatedFocusTempClient implements FocusTempClient {
 const _server = AraServer(hostname: 'h', port: 5555);
 
 FocusTempSeries _series(double? r2) => FocusTempSeries(
-      samples: const [FocusTempPoint(temperatureC: 5.0, focuserPosition: 1000)],
-      correlationR2: r2,
-    );
+  samples: const [FocusTempPoint(temperatureC: 5.0, focuserPosition: 1000)],
+  correlationR2: r2,
+);
 
 ProviderContainer _container(List<AraServer> servers, FocusTempClient api) {
-  final c = ProviderContainer(overrides: [
-    savedServerServiceProvider.overrideWithValue(_FakeSavedServerService(servers)),
-    focusTempApiFactoryProvider.overrideWithValue((_) => api),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      savedServerServiceProvider.overrideWithValue(
+        _FakeSavedServerService(servers),
+      ),
+      focusTempApiFactoryProvider.overrideWithValue((_) => api),
+    ],
+  );
   addTearDown(c.dispose);
   return c;
 }
@@ -107,36 +111,47 @@ void main() {
       final api = _FakeFocusTempClient(_series(null))..throwOnFetch = true;
       final c = _container(const [_server], api);
       await c.read(savedServersProvider.future);
-      await expectLater(c.read(focusTempProvider.future), throwsA(isA<StateError>()));
+      await expectLater(
+        c.read(focusTempProvider.future),
+        throwsA(isA<StateError>()),
+      );
       expect(c.read(focusTempProvider).hasError, isTrue);
     });
 
-    test('a failed refresh keeps the prior scatter and rethrows (no blanking)', () async {
-      final api = _FakeFocusTempClient(_series(0.7));
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(focusTempProvider.future);
+    test(
+      'a failed refresh keeps the prior scatter and rethrows (no blanking)',
+      () async {
+        final api = _FakeFocusTempClient(_series(0.7));
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(focusTempProvider.future);
 
-      api.throwOnFetch = true;
-      await expectLater(
-          c.read(focusTempProvider.notifier).refresh(), throwsA(isA<StateError>()));
-      expect(c.read(focusTempProvider).hasError, isFalse);
-      expect(c.read(focusTempProvider).value!.correlationR2, 0.7);
-    });
+        api.throwOnFetch = true;
+        await expectLater(
+          c.read(focusTempProvider.notifier).refresh(),
+          throwsA(isA<StateError>()),
+        );
+        expect(c.read(focusTempProvider).hasError, isFalse);
+        expect(c.read(focusTempProvider).value!.correlationR2, 0.7);
+      },
+    );
 
-    test('a successful refresh swaps the new scatter in without a loading flash', () async {
-      final api = _FakeFocusTempClient(_series(0.7));
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      await c.read(focusTempProvider.future);
+    test(
+      'a successful refresh swaps the new scatter in without a loading flash',
+      () async {
+        final api = _FakeFocusTempClient(_series(0.7));
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        await c.read(focusTempProvider.future);
 
-      api.value = _series(0.4);
-      final future = c.read(focusTempProvider.notifier).refresh();
-      expect(c.read(focusTempProvider).isLoading, isFalse);
-      expect(c.read(focusTempProvider).value!.correlationR2, 0.7);
-      await future;
-      expect(c.read(focusTempProvider).value!.correlationR2, 0.4);
-    });
+        api.value = _series(0.4);
+        final future = c.read(focusTempProvider.notifier).refresh();
+        expect(c.read(focusTempProvider).isLoading, isFalse);
+        expect(c.read(focusTempProvider).value!.correlationR2, 0.7);
+        await future;
+        expect(c.read(focusTempProvider).value!.correlationR2, 0.4);
+      },
+    );
 
     test('a server switch mid-refresh discards the stale result (generation guard)', () async {
       final api = _GatedFocusTempClient();
@@ -147,7 +162,8 @@ void main() {
       await built;
 
       final notifier = c.read(focusTempProvider.notifier);
-      final refreshing = notifier.refresh(); // captures generation; calls[1] pending
+      final refreshing = notifier
+          .refresh(); // captures generation; calls[1] pending
       notifier.markBuild(); // stand in for a server-switch build() re-run
       api.calls[1].complete(_series(0.1)); // now stale
       await refreshing;
@@ -155,23 +171,26 @@ void main() {
       expect(c.read(focusTempProvider).value!.correlationR2, 0.9);
     });
 
-    test('a refresh that FAILS after a server switch is swallowed, not rethrown', () async {
-      final api = _GatedFocusTempClient();
-      final c = _container(const [_server], api);
-      await c.read(savedServersProvider.future);
-      final built = c.read(focusTempProvider.future);
-      api.calls[0].complete(_series(0.9));
-      await built;
+    test(
+      'a refresh that FAILS after a server switch is swallowed, not rethrown',
+      () async {
+        final api = _GatedFocusTempClient();
+        final c = _container(const [_server], api);
+        await c.read(savedServersProvider.future);
+        final built = c.read(focusTempProvider.future);
+        api.calls[0].complete(_series(0.9));
+        await built;
 
-      final notifier = c.read(focusTempProvider.notifier);
-      final refreshing = notifier.refresh(); // calls[1] pending
-      notifier.markBuild(); // server switch bumps the generation
-      api.calls[1].completeError(StateError('boom')); // stale failure
+        final notifier = c.read(focusTempProvider.notifier);
+        final refreshing = notifier.refresh(); // calls[1] pending
+        notifier.markBuild(); // server switch bumps the generation
+        api.calls[1].completeError(StateError('boom')); // stale failure
 
-      // The generation mismatch means the stale error is discarded, not
-      // rethrown — so the widget can't flash a stale chip over the new data.
-      await expectLater(refreshing, completes);
-      expect(c.read(focusTempProvider).value!.correlationR2, 0.9);
-    });
+        // The generation mismatch means the stale error is discarded, not
+        // rethrown — so the widget can't flash a stale chip over the new data.
+        await expectLater(refreshing, completes);
+        expect(c.read(focusTempProvider).value!.correlationR2, 0.9);
+      },
+    );
   });
 }
