@@ -11818,6 +11818,100 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Server {server} and app {app} differ; update both from the same release.'**
   String versionMismatchWarning(String server, String app);
+
+  /// Settings › Imaging › Polar align (#2081): the way the RA axis turns when a run starts a new start pose (NINA's East direction)
+  ///
+  /// In en, this message translates to:
+  /// **'Turn direction'**
+  String get polarKnobEastDirection;
+
+  /// Polar align turn direction choice (#2081): no setting, the site's hemisphere picks
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic'**
+  String get polarKnobEastDirectionAuto;
+
+  /// Polar align turn direction choice (#2081): the RA reading rises
+  ///
+  /// In en, this message translates to:
+  /// **'East'**
+  String get polarKnobEastDirectionEast;
+
+  /// Polar align turn direction choice (#2081): the RA reading falls
+  ///
+  /// In en, this message translates to:
+  /// **'West'**
+  String get polarKnobEastDirectionWest;
+
+  /// Polar align turn direction (#2081): it picks the way only for a new start pose, later runs turn back toward that start
+  ///
+  /// In en, this message translates to:
+  /// **'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it'**
+  String get polarKnobEastDirectionHint;
+
+  /// Settings › Imaging › Polar align (#2081): the RA motor direction Polar align tested and saved for this mount
+  ///
+  /// In en, this message translates to:
+  /// **'RA motor direction'**
+  String get polarMotorDirection;
+
+  /// Polar align saved RA motor direction (#2081); driver and version are the mount driver's name and version as reported, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'Tested on {driver} {version}: the motor\'s positive speed turns RA {direction}.'**
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  );
+
+  /// Polar align saved RA motor direction (#2081): the connected mount reports another driver name or version than the saved test
+  ///
+  /// In en, this message translates to:
+  /// **'Tested on another driver ({driver} {version}): the next start tests it again with a 0.5° turn.'**
+  String polarMotorDirectionOtherDriver(String driver, String version);
+
+  /// Polar align RA motor direction (#2081): nothing saved, the next motor run tests it first (shown in its confirm step)
+  ///
+  /// In en, this message translates to:
+  /// **'Not tested yet: the next start first turns the mount 0.5° to learn it.'**
+  String get polarMotorDirectionUntested;
+
+  /// Polar align RA motor direction (#2081): an older rig without the motor-direction endpoint
+  ///
+  /// In en, this message translates to:
+  /// **'This rig does not save a motor direction.'**
+  String get polarMotorDirectionUnknown;
+
+  /// Polar align RA motor direction (#2081): the read failed
+  ///
+  /// In en, this message translates to:
+  /// **'Could not read the saved motor direction from the rig.'**
+  String get polarMotorDirectionReadFailed;
+
+  /// Polar align RA motor direction (#2081): button that forgets the saved direction, so the next start tests it with a 0.5° turn
+  ///
+  /// In en, this message translates to:
+  /// **'Test direction again'**
+  String get polarMotorDirectionRetest;
+
+  /// Polar align RA motor direction (#2081): snackbar after Test direction again
+  ///
+  /// In en, this message translates to:
+  /// **'The next start tests the motor direction again.'**
+  String get polarMotorDirectionRetestDone;
+
+  /// Polar align start confirm dialog (#2081): the run's first move, a small RA turn whose reading tells which way the motor runs; deg has one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'First it turns the mount {deg}° to learn the motor direction (not tested yet for this mount and driver).'**
+  String polarConfirmDirectionTest(String deg);
+
+  /// Polar Align card (both modes): the run failed with turn_wrong_way (#2081); 'Test direction again' is polarMotorDirectionRetest
+  ///
+  /// In en, this message translates to:
+  /// **'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.'**
+  String get polarAlignTurnWrongWay;
 }
 
 class _AppLocalizationsDelegate

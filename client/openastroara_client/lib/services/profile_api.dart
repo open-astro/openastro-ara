@@ -1001,6 +1001,8 @@ class ProfileApi {
       stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
       camera: camera as String,
       framesPerPoint: (j['frames_per_point'] as num).toInt(),
+      // #2081 — null (or an older rig without the key) = by hemisphere.
+      eastDirection: j['east_direction'] is bool ? j['east_direction'] as bool : null,
     );
   }
 

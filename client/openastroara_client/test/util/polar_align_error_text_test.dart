@@ -92,4 +92,15 @@ void main() {
     );
     expect(polarAlignErrorText(en, other), 'check focus');
   });
+
+  test('a turn the wrong way reads in both languages and says where to test again (#2081)', () {
+    const live = PolarAlignLive(
+      phase: PolarAlignStates.failed,
+      errorReason: polarAlignTurnWrongWay,
+      errorMessage: 'the daemon sentence',
+    );
+    expect(polarAlignErrorText(en, live), en.polarAlignTurnWrongWay);
+    expect(polarAlignErrorText(en, live), contains('Test direction again'));
+    expect(polarAlignErrorText(pt, live), contains('Testar a direção de novo'));
+  });
 }

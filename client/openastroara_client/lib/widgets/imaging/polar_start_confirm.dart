@@ -16,6 +16,9 @@ import '../adaptive_dialog.dart';
 ///
 /// #2083 — on a rig that takes it, the user can also choose to turn RA by
 /// hand (NINA's manual mode): the start then asks the rig to move nothing.
+///
+/// #2081 — a mount whose RA motor direction is not saved for its driver first
+/// turns 0.5° to learn it: the dialog says so, and the start confirms it.
 Future<void> confirmAndStartPolarAlign(
   BuildContext context,
   PolarAlignClient api, {
@@ -71,6 +74,9 @@ class PolarStartConfirmDialog extends StatelessWidget {
       // #2083 — NINA's guidance on the start field.
       l10n.polarConfirmGuideField,
       l10n.polarConfirmGuideMeridian,
+      // #2081 — the motor-direction test, the run's first move.
+      if (plan.directionTestDeg > 0)
+        l10n.polarConfirmDirectionTest(plan.directionTestDeg.toStringAsFixed(1)),
       l10n.polarConfirmTurns(
         deg(plan.stepDeg),
         direction,

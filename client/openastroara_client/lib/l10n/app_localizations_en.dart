@@ -7110,4 +7110,65 @@ class AppLocalizationsEn extends AppLocalizations {
   String versionMismatchWarning(String server, String app) {
     return 'Server $server and app $app differ; update both from the same release.';
   }
+
+  @override
+  String get polarKnobEastDirection => 'Turn direction';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automatic';
+
+  @override
+  String get polarKnobEastDirectionEast => 'East';
+
+  @override
+  String get polarKnobEastDirectionWest => 'West';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it';
+
+  @override
+  String get polarMotorDirection => 'RA motor direction';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Not tested yet: the next start first turns the mount 0.5° to learn it.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'This rig does not save a motor direction.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Could not read the saved motor direction from the rig.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Test direction again';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'The next start tests the motor direction again.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'First it turns the mount $deg° to learn the motor direction (not tested yet for this mount and driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
 }

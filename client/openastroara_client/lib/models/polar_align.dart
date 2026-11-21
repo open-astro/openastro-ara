@@ -494,6 +494,12 @@ class PolarAlignSettings {
   /// #2082 frames averaged at each of a measurement's three points (1–5).
   final int framesPerPoint;
 
+  /// #2081 the RA turn direction of a run that starts a new sweep origin
+  /// (NINA's EastDirection): true east, false west, null by the site's
+  /// hemisphere (east in the north, west in the south). Later starts of the
+  /// session turn back toward the origin whatever this says.
+  final bool? eastDirection;
+
   const PolarAlignSettings({
     required this.exposureSeconds,
     required this.binning,
@@ -508,6 +514,7 @@ class PolarAlignSettings {
     required this.stopTrackingWhenDone,
     required this.camera,
     required this.framesPerPoint,
+    this.eastDirection,
   });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -524,6 +531,7 @@ class PolarAlignSettings {
         'stop_tracking_when_done': stopTrackingWhenDone,
         'camera': camera,
         'frames_per_point': framesPerPoint,
+        'east_direction': eastDirection,
       };
 
   PolarAlignSettings copyWith({
@@ -557,6 +565,78 @@ class PolarAlignSettings {
         stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
         camera: camera ?? this.camera,
         framesPerPoint: framesPerPoint ?? this.framesPerPoint,
+        eastDirection: eastDirection,
+      );
+
+  /// This copy with [eastDirection] set, null (by hemisphere) included:
+  /// [copyWith] cannot tell null from "unchanged".
+  PolarAlignSettings withEastDirection(bool? value) => PolarAlignSettings(
+        exposureSeconds: exposureSeconds,
+        binning: binning,
+        targetToleranceArcmin: targetToleranceArcmin,
+        seedRotationDeg: seedRotationDeg,
+        loopCadenceMs: loopCadenceMs,
+        settleSeconds: settleSeconds,
+        loopMode: loopMode,
+        checkStepDeg: checkStepDeg,
+        coarseExposureSeconds: coarseExposureSeconds,
+        polarAlignerAuto: polarAlignerAuto,
+        stopTrackingWhenDone: stopTrackingWhenDone,
+        camera: camera,
+        framesPerPoint: framesPerPoint,
+        eastDirection: value,
+      );
+}
+
+/// #2081 — the RA motor direction Polar Align tested and saved for this
+/// profile's mount (`polar_align_motor_direction`): [sign] +1 when a positive
+/// MoveAxis rate raises the mount's RA reading (east, NINA's assumption), −1
+/// when it lowers it; tested on the driver [driverInfo] [driverVersion].
+class PolarAlignMotorDirection {
+  final int sign;
+  final String driverInfo;
+  final String driverVersion;
+  final DateTime? testedUtc;
+
+  const PolarAlignMotorDirection({
+    required this.sign,
+    required this.driverInfo,
+    required this.driverVersion,
+    this.testedUtc,
+  });
+
+  /// Null for anything that is not a saved test (no object, a sign other
+  /// than ±1).
+  static PolarAlignMotorDirection? tryParse(Object? json) {
+    if (json is! Map<String, dynamic>) return null;
+    final sign = (json['sign'] as num?)?.toInt();
+    if (sign != 1 && sign != -1) return null;
+    final tested = json['tested_utc'];
+    return PolarAlignMotorDirection(
+      sign: sign!,
+      driverInfo: json['driver_info'] is String ? json['driver_info'] as String : '',
+      driverVersion: json['driver_version'] is String ? json['driver_version'] as String : '',
+      testedUtc: tested is String ? DateTime.tryParse(tested) : null,
+    );
+  }
+}
+
+/// #2081 — `GET /api/v1/equipment/polaralign/motor-direction`: the saved test
+/// ([saved], null when never tested or forgotten) and whether it stands for
+/// the mount connected now ([matchesConnectedMount], null with none
+/// connected). A start whose mount it does not stand for tests first.
+class PolarAlignMotorDirectionState {
+  final PolarAlignMotorDirection? saved;
+  final bool? matchesConnectedMount;
+
+  const PolarAlignMotorDirectionState({this.saved, this.matchesConnectedMount});
+
+  factory PolarAlignMotorDirectionState.fromJson(Map<String, dynamic> json) =>
+      PolarAlignMotorDirectionState(
+        saved: PolarAlignMotorDirection.tryParse(json['saved']),
+        matchesConnectedMount: json['matches_connected_mount'] is bool
+            ? json['matches_connected_mount'] as bool
+            : null,
       );
 }
 
@@ -583,6 +663,11 @@ abstract final class PolarAlignDirections {
 /// #2083 — [handTurnAvailable]: the rig takes a hand-turn start (an older rig
 /// leaves it out, and would turn the mount with its motor). [handTurn] is the
 /// user's choice in the confirm step, never the rig's ([byHand]).
+///
+/// #2081 — at a new origin [direction] is the profile's East/West setting.
+/// [directionTestDeg] (0.5, or 0) is the turn a motor run makes first to learn
+/// the RA motor's direction, when none is saved for the mount's driver; the
+/// confirm step shows it and the start sends it back.
 class PolarAlignStartPlan {
   /// The stage the start asks for ([PolarAlignStages]; null = the default).
   final String? stage;
@@ -597,6 +682,7 @@ class PolarAlignStartPlan {
   final double sweepLimitDeg;
   final bool handTurnAvailable;
   final bool handTurn;
+  final double directionTestDeg;
 
   /// #2082 the camera the run measures with ([PolarAlignCameras]): the main
   /// camera for Rough first, else the profile's.
@@ -614,6 +700,7 @@ class PolarAlignStartPlan {
     this.camera = PolarAlignCameras.guide,
     this.handTurnAvailable = false,
     this.handTurn = false,
+    this.directionTestDeg = 0.0,
   });
 
   /// This plan, turned by hand: the start asks the rig to move nothing.
@@ -629,6 +716,7 @@ class PolarAlignStartPlan {
         camera: camera,
         handTurnAvailable: handTurnAvailable,
         handTurn: true,
+        directionTestDeg: directionTestDeg,
       );
 
   factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
@@ -647,5 +735,7 @@ class PolarAlignStartPlan {
             ? PolarAlignCameras.main
             : PolarAlignCameras.guide,
         handTurnAvailable: json['hand_turn_available'] == true,
+        directionTestDeg:
+            (json['direction_test_deg'] as num?)?.toDouble() ?? 0.0,
       );
 }
