@@ -167,7 +167,7 @@ class _Mapper {
   }
 
   /// A value copied as found but for its keys (lowerCamelCase, no `$type`,
-  /// `$id`, `$ref` or `Parent`) and its `$values` wrappers.
+  /// `$id` or `$ref`) and its `$values` wrappers.
   Object? value(Object? v) {
     if (v is List) return [for (final e in v) value(e)];
     if (v is! Map) return v;
@@ -178,7 +178,7 @@ class _Mapper {
       if (values is List) return value(values);
       return {
         for (final e in map.entries)
-          if (!(e.key as String).startsWith(r'$') && e.key != 'Parent')
+          if (!(e.key as String).startsWith(r'$'))
             lowerCamel(e.key as String): field(
               lowerCamel(e.key as String),
               e.value,

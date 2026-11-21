@@ -942,6 +942,26 @@ void main() {
       ]);
     });
 
+    test(r'a $ref back into its own value refuses the import', () {
+      expect(
+        () => translateNinaSequence(
+          _ninaRoot(
+            items: [
+              {
+                r'$type': 'NINA.Sequencer.SequenceItem.Telescope.SlewScopeToRaDec, NINA.Sequencer',
+                'Coordinates': {
+                  r'$id': '8',
+                  'RAHours': 1,
+                  'Again': {r'$ref': '8'},
+                },
+              },
+            ],
+          ),
+        ),
+        _refusedWith(_refused),
+      );
+    });
+
     test(r'a $ref that names no $id refuses the import', () {
       expect(
         () => translateNinaSequence(
@@ -978,6 +998,25 @@ void main() {
         ),
         _refusedWith('shared node'),
       );
+    });
+
+    test('a node in a list that does not take its role is a placeholder', () {
+      final t = _import(
+        _ninaRoot(
+          extra: {
+            'Conditions': {
+              r'$values': [
+                {
+                  r'$type': 'NINA.Sequencer.SequenceItem.Imaging.TakeExposure, NINA.Sequencer',
+                },
+              ],
+            },
+          },
+        ),
+      );
+      expect(_ofKind(t, 'capture'), isEmpty);
+      expect(_ofKind(t, 'unknown').single['role'], 'condition');
+      expect(schemaViolations(t.body), isEmpty);
     });
 
     test('a root container nested in the tree is a placeholder', () {
