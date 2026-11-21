@@ -295,13 +295,14 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_Slewing_that_is_always_unreadable_keeps_polling_and_fails_at_the_bound() {
+            // Unpark, not park: an unreadable Slewing leaves the position unverified, which refuses a park (#2085).
             var reads = 0;
             using var mount = new FakeTelescopeDevice {
-                AtParkScript = () => true,
+                AtParkScript = () => false,
                 SlewingScript = () => { Interlocked.Increment(ref reads); throw new InvalidOperationException("no Slewing"); },
             };
             using var svc = await ConnectedAsync(mount, s => s.CommandPolicy = Mounted(maxPolls: 12));
-            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.ParkTelescope(null!, CancellationToken.None));
+            await Assert.ThrowsAsync<SequenceEntityFailedException>(() => svc.UnparkTelescope(null!, CancellationToken.None));
             // The motion flag is required (rule 6): an optional one would have settled after five reads.
             Assert.That(reads, Is.GreaterThanOrEqualTo(12));
             Assert.That(_faults.Faults.Count(f => f.Kind == EquipmentFaultKind.StallTimeout), Is.EqualTo(1));
