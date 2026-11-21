@@ -170,6 +170,59 @@ namespace OpenAstroAra.Test {
             Assert.That(published, Has.Count.EqualTo(2), "each time tracking comes back on above the limit, the user hears why it stopped");
         }
 
+        // The equator site: a mount on its own meridian at Dec 0 points at the zenith (90°), and one hour of hour
+        // angle off it reads 75°, under the 80° limit.
+        private static readonly DateTimeOffset Instant = new(2026, 11, 19, 3, 0, 0, TimeSpan.Zero);
+
+        private MountClearanceWatch EquatorWatch(Mock<IMountClockGate> gate) {
+            profiles.Setup(p => p.GetSiteSettings()).Returns(new SiteSettingsDto("equator", 0, 0, 0, "UTC", false, 0, 4, 2.0, "astronomical"));
+            return new MountClearanceWatch(telescope.Object, profiles.Object, () => sequencer.Object, guider.Object, notifications.Object,
+                mountClock: gate.Object) { UtcNow = () => Instant };
+        }
+
+        private static double RigLstHours => SiteAstrometry.LocalSiderealTimeDeg(Instant, 0) / 15.0;
+
+        private static TelescopeInfo AtRa(double raHours) => new() {
+            Connected = true,
+            TrackingEnabled = true,
+            Coordinates = new Coordinates(Angle.ByHours((raHours % 24 + 24) % 24), Angle.ByDegree(0), Epoch.JNOW),
+        };
+
+        [Test]
+        public async Task With_the_mount_clock_1_h_off_the_rig_clock_the_watch_judges_the_altitude_from_the_mount_s_own_sidereal_time() {
+            // The mount's clock is 1 h slow, so its LST is 1 h behind and the RA it reports on its own meridian is
+            // that LST. It points at the zenith; the rig clock would put it 1 h west, at 75°.
+            var mountLst = RigLstHours - 1.0;
+            info = AtRa(mountLst);
+            var gate = new Mock<IMountClockGate>();
+            gate.Setup(g => g.MountClockMotionRefusal()).Returns("Mount clock not verified: the mount's clock is -1 h 0 min off the synced rig clock");
+            gate.Setup(g => g.MountSiderealTimeHours()).Returns((mountLst % 24 + 24) % 24);
+
+            using var watch = EquatorWatch(gate);
+
+            Assert.That(await watch.TickAsync(), Is.True, "the mount points at the zenith, above the 80° limit");
+
+            telescope.Verify(t => t.SetTrackingEnabled(false), Times.Once);
+            Assert.That(published, Has.Count.EqualTo(1));
+            NeverMoved();
+        }
+
+        [Test]
+        public async Task A_mount_with_an_unverified_clock_and_no_sidereal_time_is_not_judged_from_the_rig_clock() {
+            // By the rig clock this mount is on the meridian at the zenith; with its clock unverified that reading
+            // means nothing, and the mount reports no LST to judge it by.
+            info = AtRa(RigLstHours);
+            var gate = new Mock<IMountClockGate>();
+            gate.Setup(g => g.MountClockMotionRefusal()).Returns("Mount clock not verified: the mount did not report its clock (UTCDate)");
+            gate.Setup(g => g.MountSiderealTimeHours()).Returns((double?)null);
+
+            using var watch = EquatorWatch(gate);
+
+            Assert.That(await watch.TickAsync(), Is.False);
+
+            NothingDone();
+        }
+
         [TestCase(true, false)]
         [TestCase(false, true)]
         public async Task A_slewing_or_parked_mount_is_left_alone(bool slewing, bool parked) {

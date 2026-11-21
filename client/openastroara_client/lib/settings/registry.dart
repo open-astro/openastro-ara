@@ -348,7 +348,7 @@ const List<Setting> settingsRegistry = [
     id: 'safety.policies.clearance_max_altitude_deg',
     tier: SettingTier.advanced,
     label: 'Highest safe altitude (°)',
-    description: 'The clearance limit: the highest altitude this rig may point at. Measure it with the rotator and imaging train you use, at the angle where the camera comes closest to the pier or tripod, and leave a margin.',
+    description: 'The clearance limit: the highest altitude this rig may point at, above 0° and under 90°. Measure it with the rotator and imaging train you use, at the angle where the camera comes closest to the pier or tripod, and leave a margin.',
     keywords: [
       'clearance',
       'limit',
@@ -360,7 +360,9 @@ const List<Setting> settingsRegistry = [
       'degrees',
     ],
     path: ['Settings', 'Unattended running', 'When to stop'],
-    type: SettingType.doubleRange(min: 1, max: 89, step: 0.5),
+    // Above 0 and under 90, as the rig accepts it; the range is the closed
+    // hull (it cannot say "exclusive").
+    type: SettingType.doubleRange(min: 0, max: 90, step: 0.5),
     defaultValue: null,
     profilePath: 'safety.clearance_max_altitude_deg',
     relatedSettings: ['safety.policies.clearance_limit_enabled'],

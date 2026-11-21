@@ -46,8 +46,15 @@ public static partial class ClearanceGuard {
     public static double AltitudeDeg(SiteSettingsDto site, double raHours, double decDeg, DateTimeOffset atUtc) {
         ArgumentNullException.ThrowIfNull(site);
         var lst = SiteAstrometry.LocalSiderealTimeDeg(atUtc, site.LongitudeDeg);
-        var hourAngle = ((lst - raHours * 15.0) % 360.0 + 360.0) % 360.0;
-        return SiteAstrometry.AltitudeFromHourAngleDeg(decDeg, site.LatitudeDeg, hourAngle);
+        return AltitudeAtLstDeg(site.LatitudeDeg, lst / 15.0, raHours, decDeg);
+    }
+
+    /// <summary>The altitude (degrees) of RA <paramref name="raHours"/> / Dec <paramref name="decDeg"/> at local
+    /// sidereal time <paramref name="lstHours"/> from latitude <paramref name="latitudeDeg"/>. With the mount's own
+    /// LST and RA this is where the mount points, whatever its clock says.</summary>
+    public static double AltitudeAtLstDeg(double latitudeDeg, double lstHours, double raHours, double decDeg) {
+        var hourAngle = (((lstHours - raHours) * 15.0) % 360.0 + 360.0) % 360.0;
+        return SiteAstrometry.AltitudeFromHourAngleDeg(decDeg, latitudeDeg, hourAngle);
     }
 
     /// <summary>True when <paramref name="altitudeDeg"/> has reached the limit: at it counts, so the stop comes

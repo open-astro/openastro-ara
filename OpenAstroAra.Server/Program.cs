@@ -1091,7 +1091,9 @@ public partial class Program {
             () => sp.GetService<ISequencerService>(),
             sp.GetService<IGuiderService>(),
             sp.GetService<INotificationService>(),
-            sp.GetService<ILogger<MountClearanceWatch>>()));
+            sp.GetService<ILogger<MountClearanceWatch>>(),
+            // The mount's RA follows its own clock: while that clock is unverified the watch reads the mount's LST.
+            sp.GetService<IMountClockGate>()));
         builder.Services.AddHostedService(sp => sp.GetRequiredService<MountClearanceWatch>());
         // §42.2 row 18 — dew formation advisory: humidity + dew-point gap + the HFR trend → the
         // dew_formation diagnostic (which defers autofocus) and one Warning per episode. Advisory only.

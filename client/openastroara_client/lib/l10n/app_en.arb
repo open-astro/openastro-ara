@@ -199,7 +199,7 @@
   "@deviceClearanceLimit": {"description": "Simple Mode Mount window: the row that shows the profile's clearance limit (#1589)"},
   "deviceClearanceLimitAt": "Stops at {limit}°",
   "@deviceClearanceLimitAt": {
-    "description": "Simple Mode Mount window: the clearance limit is on; limit is whole degrees (#1589)",
+    "description": "Simple Mode Mount window: the clearance limit is on; limit is in degrees, whole or with one decimal rounded down (#1589)",
     "placeholders": {"limit": {"type": "String"}}
   },
   "deviceClearanceLimitHint": "Set in the full app: Settings › Unattended running › When to stop.",

@@ -375,7 +375,7 @@ abstract class AppLocalizations {
   /// **'Clearance limit'**
   String get deviceClearanceLimit;
 
-  /// Simple Mode Mount window: the clearance limit is on; limit is whole degrees (#1589)
+  /// Simple Mode Mount window: the clearance limit is on; limit is in degrees, whole or with one decimal rounded down (#1589)
   ///
   /// In en, this message translates to:
   /// **'Stops at {limit}°'**

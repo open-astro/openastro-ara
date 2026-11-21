@@ -15,6 +15,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Server.Contracts;
 using System;
@@ -35,6 +36,10 @@ namespace OpenAstroAra.Server.Services;
 /// (the write failed) gets the stop again each tick, without a second notification; the episode ends when
 /// tracking reads off or the mount points under the limit, so tracking turned back on above it starts a new
 /// one. A GoTo in flight is left to its own target check; the watch judges where the mount settles.
+/// <para>The mount's RA follows the mount's own clock. While the #2071 mount clock check has not verified that
+/// clock, the rig clock's sidereal time would put the hour angle off by the clock difference (15° an hour), so
+/// the watch reads the mount's own sidereal time instead; a mount that cannot report one is not judged (logged
+/// once) until its clock is verified.</para>
 /// <para>The pause is a plain daemon pause (not "awaiting you"): the §58.12 unattended shutdown, which parks,
 /// does not start from it. The user resumes the run.</para>
 /// </summary>
@@ -45,6 +50,7 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
     private readonly Func<ISequencerService?>? _sequencerResolver;
     private readonly IGuiderService? _guider;
     private readonly INotificationService? _notifications;
+    private readonly IMountClockGate? _mountClock;
     private readonly ILogger<MountClearanceWatch> _logger;
 
     private readonly object _lock = new();
@@ -53,6 +59,9 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
     private int _ticking;
     // True from the stop until tracking reads off or the mount points under the limit.
     private bool _episode;
+    // True while the altitude cannot be judged (the mount's clock is unverified and it reports no sidereal
+    // time), so the log says it once.
+    private bool _unjudged;
 
     /// <summary>Poll cadence. At sidereal rate the altitude moves at most 0.25° a minute, so 5 s overshoots the
     /// limit by about 0.02°. Tests compress it.</summary>
@@ -67,12 +76,14 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
             Func<ISequencerService?>? sequencerResolver = null,
             IGuiderService? guider = null,
             INotificationService? notifications = null,
-            ILogger<MountClearanceWatch>? logger = null) {
+            ILogger<MountClearanceWatch>? logger = null,
+            IMountClockGate? mountClock = null) {
         _telescope = telescope;
         _profiles = profiles;
         _sequencerResolver = sequencerResolver;
         _guider = guider;
         _notifications = notifications;
+        _mountClock = mountClock;
         _logger = logger ?? NullLogger<MountClearanceWatch>.Instance;
     }
 
@@ -105,7 +116,9 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
             if (site is null || !double.IsFinite(site.LatitudeDeg) || !double.IsFinite(site.LongitudeDeg)) {
                 return false;
             }
-            var altitude = ClearanceGuard.AltitudeDeg(site, info.Coordinates.RA, info.Coordinates.Dec, UtcNow());
+            if (await MountAltitudeAsync(site, info.Coordinates).ConfigureAwait(false) is not double altitude) {
+                return false;
+            }
             if (!ClearanceGuard.Reached(altitude, limit)) {
                 _episode = false;
                 return false;
@@ -128,6 +141,27 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
         } finally {
             Interlocked.Exchange(ref _ticking, 0);
         }
+    }
+
+    /// <summary>Where the mount points, in degrees of altitude; null when it cannot be judged. With the mount's
+    /// clock verified (or no clock check wired) the rig clock gives the sidereal time; otherwise the mount's own
+    /// sidereal time does, because the mount's RA follows the mount's clock.</summary>
+    private async Task<double?> MountAltitudeAsync(SiteSettingsDto site, Coordinates position) {
+        var gate = _mountClock;
+        if (gate?.MountClockMotionRefusal() is not string unverified) {
+            _unjudged = false;
+            return ClearanceGuard.AltitudeDeg(site, position.RA, position.Dec, UtcNow());
+        }
+        var mountLst = await Task.Run(gate.MountSiderealTimeHours).ConfigureAwait(false);
+        if (mountLst is not double lst) {
+            if (!_unjudged) {
+                _unjudged = true;
+                LogUnjudged(unverified);
+            }
+            return null;
+        }
+        _unjudged = false;
+        return ClearanceGuard.AltitudeAtLstDeg(site.LatitudeDeg, lst, position.RA, position.Dec);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -231,6 +265,9 @@ public sealed partial class MountClearanceWatch : IHostedService, IDisposable {
 
     [LoggerMessage(EventId = 4258, Level = LogLevel.Warning, Message = "#1589 clearance watch step {Step} failed")]
     private partial void LogStepFailed(string step, Exception exception);
+
+    [LoggerMessage(EventId = 4260, Level = LogLevel.Warning, Message = "#1589 clearance watch cannot judge the mount's altitude: its clock is not verified ({Reason}) and it reports no sidereal time; it is not stopped until its clock is verified")]
+    private partial void LogUnjudged(string reason);
 
     [LoggerMessage(EventId = 4259, Level = LogLevel.Warning, Message = "#1589 clearance watch tick failed; the next tick retries")]
     private partial void LogTickFailed(Exception exception);

@@ -195,6 +195,13 @@ void main() {
     expect(on.puts, isEmpty, reason: 'read-only here');
   });
 
+  testWidgets('a half-degree clearance limit shows its decimal, never the higher whole degree (#1589)', (tester) async {
+    final on = FakeSafetySection(initial: const SafetyPolicies(clearanceLimitEnabled: true, clearanceMaxAltitudeDeg: 79.5));
+    await _pump(tester, _wire(), safety: on);
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const Key('simple-mount-clearance'))).data, 'Stops at 79.5°');
+  });
+
   testWidgets('the meridian flip waits for the profile from the rig: no switch shows, and nothing is sent (ADR 0015)',
       (tester) async {
     final safety = FakeSafetySection(initial: null);
