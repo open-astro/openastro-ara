@@ -15,6 +15,7 @@ import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_calibration.dart'
     show
+        SimpleCalibrationShutterCaption,
         SimpleCalibrationTab,
         SimpleCalibrationTabNotifier,
         simpleCalibrationTabProvider;
@@ -25,6 +26,7 @@ import 'package:openastroara/state/app_shell_state.dart';
 import 'package:openastroara/state/calibration/calibration_state.dart'
     show DarkLibraryStatusNotifier, darkLibraryStatusProvider;
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/guider/guide_step_state.dart';
 import 'package:openastroara/state/guider/guider_calibration_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/server_state.dart'
@@ -35,7 +37,7 @@ import 'package:openastroara/state/simple_calibration_state.dart'
     show simpleLibraryNeedProvider;
 import 'package:openastroara/state/simple_mode_state.dart';
 import 'package:openastroara/state/simple_preflight_state.dart'
-    show simpleShowingProvider;
+    show railFigureProvider, simpleShowingProvider;
 
 // #2038: the right rail keeps one size on every mode. Calibration's shutter
 // adds a caption when it has a job, and the rail (content-sized, centred)
@@ -68,6 +70,26 @@ class _Guider extends GuiderStatusNotifier {
     'state': 'connected',
     'runtime': {'state': 'stopped'},
   });
+}
+
+/// A looping guider with a step on its trace, so the bottom row shows it.
+class _Looping extends GuiderStatusNotifier {
+  @override
+  Future<void> refresh([GuiderClient? client]) async {}
+  @override
+  Future<GuiderStatus?> build() async => GuiderStatus.fromJson({
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {'state': 'looping'},
+  });
+}
+
+class _OneStep extends GuideStepNotifier {
+  @override
+  List<GuideStep> build() => [
+    GuideStep(at: DateTime.utc(2026), raPx: 0.1, decPx: -0.1),
+  ];
 }
 
 class _GuiderCal extends GuiderCalibrationNotifier {
@@ -165,6 +187,19 @@ Rect _rail(WidgetTester tester) => tester.getRect(
       .first,
 );
 
+// How far the tab list scrolls: none while the rail holds every tab.
+double _scroll(WidgetTester tester) => tester
+    .state<ScrollableState>(
+      find
+          .descendant(
+            of: find.byKey(const Key('simple-rail-tabs')),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    )
+    .position
+    .maxScrollExtent;
+
 Future<void> _open(WidgetTester tester, String slug) async {
   final tab = find.byKey(Key('simple-rail-tab-$slug'));
   if (tab.evaluate().isEmpty) {
@@ -201,8 +236,8 @@ final _caption = find.byKey(const Key('simple-calibration-shutter-caption'));
 
 void main() {
   for (final (where, size, text, roomy) in const [
-    // At 720 high the rail is as tall as it can be; at 900 it could grow.
-    ('1280x720 at 1.0x', Size(1280, 720), 1.0, true),
+    // Only 1280x900 is tall enough for the slot (kSimpleRailRoomyHeight).
+    ('1280x720 at 1.0x', Size(1280, 720), 1.0, false),
     ('1280x900 at 1.0x', Size(1280, 900), 1.0, true),
     ('1024x560 at 1.0x', Size(1024, 560), 1.0, false),
     ('1280x720 at 1.5x', Size(1280, 720), 1.5, false),
@@ -226,6 +261,80 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+  }
+
+  // The tabs in the rail's order.
+  for (final slug in const [
+    'preview',
+    'focus',
+    'polar',
+    'guider',
+    'plan',
+    'calibration',
+  ]) {
+    testWidgets('at 1280x720 and 1.0x the tab list does not scroll with '
+        '$slug open (#2038)', (tester) async {
+      await _pump(tester, _ready);
+      await _open(tester, slug);
+      expect(_scroll(tester), 0);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  // From 832 high (kSimpleRailRoomyHeight) the rail at 1.0x holds the slot
+  // with its tabs unscrolled at its fullest: the bottom row showing and Plan
+  // open with its figure. A safe area is not room.
+  for (final (where, size, padding, roomy) in const [
+    ('831 high', Size(1280, 831), FakeViewPadding.zero, false),
+    ('832 high', Size(1280, 832), FakeViewPadding.zero, true),
+    (
+      '875 high with a 44 px safe area',
+      Size(1280, 875),
+      FakeViewPadding(top: 24, bottom: 20),
+      false,
+    ),
+    (
+      '876 high with a 44 px safe area',
+      Size(1280, 876),
+      FakeViewPadding(top: 24, bottom: 20),
+      true,
+    ),
+  ]) {
+    testWidgets('the slot is on every mode only where the rail holds it '
+        'unscrolled at its fullest, $where (#2038)', (tester) async {
+      tester.view.padding = padding;
+      await _pump(tester, [
+        ..._longJob,
+        guiderStatusProvider.overrideWith(_Looping.new),
+        guideStepsProvider.overrideWith(_OneStep.new),
+        railFigureProvider.overrideWithValue('12/40'),
+      ], size: size);
+      expect(find.byKey(const Key('simple-guide-trace')), findsOneWidget);
+      await _open(tester, 'preview');
+      final preview = _rail(tester);
+      await _open(tester, 'plan');
+      expect(find.byKey(const Key('simple-rail-figure')), findsOneWidget);
+      expect(_scroll(tester), 0, reason: 'Plan, its figure and the slot');
+      await _open(tester, 'calibration');
+      expect(
+        find.byType(SimpleCalibrationShutterCaption),
+        roomy ? findsOneWidget : findsNothing,
+      );
+      expect(
+        tester
+            .widget<Tooltip>(
+              find.ancestor(
+                of: find.byKey(const Key('simple-shutter')),
+                matching: find.byType(Tooltip),
+              ),
+            )
+            .message,
+        'Build 30 s · 1 min · 2 min · 5 min + bias',
+      );
+      expect(_scroll(tester), 0);
+      expect(_rail(tester), preview);
+      expect(tester.takeException(), isNull);
+    });
   }
 
   testWidgets('where the caption does not fit it is the shutter tooltip and '
@@ -292,7 +401,7 @@ void main() {
       skip: !hasFonts,
       (tester) async {
         await roboto();
-        await _pump(tester, _ready, text: text);
+        await _pump(tester, _ready, size: const Size(1280, 900), text: text);
         await _open(tester, 'preview');
         final preview = _rail(tester);
         await _open(tester, 'calibration');
@@ -325,10 +434,11 @@ void main() {
       skip: !hasFonts,
       (tester) async {
         await roboto();
-        await _pump(tester, _longJob, text: text);
+        await _pump(tester, _longJob, size: const Size(1280, 900), text: text);
         await _open(tester, 'preview');
         final preview = _rail(tester);
         await _open(tester, 'calibration');
+        expect(find.byType(SimpleCalibrationShutterCaption), findsOneWidget);
         expect(_caption, findsNothing);
         expect(
           tester
