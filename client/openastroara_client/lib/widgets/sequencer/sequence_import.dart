@@ -213,7 +213,8 @@ Future<String?> importSequenceFromJson(
         id = await api.create(
           name,
           translated.body,
-          description: 'Imported from NINA', // l10n-ok: stored data, not shown here
+          description:
+              'Imported from NINA', // l10n-ok: stored data, not shown here
           idempotencyKey: importKey,
         );
       } on DioException catch (e) {
