@@ -4977,15 +4977,7 @@ class _ThisRig extends ConsumerWidget {
         const Divider(key: opticsKey, height: AraSpace.s16),
         // Not loaded reads as 0 (unset); a tap loads the rig's copy first.
         for (final (id, label, digits, value, apply)
-            in <
-              (
-                String,
-                String,
-                int?,
-                double,
-                OpticsSettings Function(OpticsSettings, double),
-              )
-            >[
+            in <(String, String, int?, double, OpticsSettings Function(OpticsSettings, double))>[
               // Aperture on one wheel of millimetres; focal length per digit.
               (
                 'aperture',
