@@ -385,7 +385,7 @@ namespace OpenAstroAra.Server.Services {
             }
             // #2083 — a hand-turn run moves nothing, the Polar Aligner's motors included: the person turns its bolts, as
             // with auto off.
-            var auto = settings.PolarAlignerAuto && !handTurn;
+            var auto = PolarAlignPreflightEvaluator.DrivesAlignerMotors(settings.PolarAlignerAuto, handTurn);
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, userStop);
             try {
                 if (run.Device is null) {

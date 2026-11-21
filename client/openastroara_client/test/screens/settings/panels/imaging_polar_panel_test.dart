@@ -8,6 +8,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_motor_direction_state.dart';
+import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart'
     show SectionNotLoadedException;
@@ -58,10 +59,19 @@ class _DirectionRig implements PolarAlignMotorDirectionClient {
   void close() {}
 }
 
+/// The live Polar Align view, set by the test (no WebSocket).
+class _FakeLive extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() => const PolarAlignLive();
+
+  void set(PolarAlignLive value) => state = value;
+}
+
 Future<FakePolarAlignSection> _pumpWithDirection(
   WidgetTester tester,
   _DirectionRig direction, {
   FakePolarAlignSection? rig,
+  _FakeLive? live,
 }) async {
   // Tall enough that the whole panel is built (the list is lazy).
   tester.view.physicalSize = const Size(1200, 3200);
@@ -74,6 +84,7 @@ Future<FakePolarAlignSection> _pumpWithDirection(
         ...polarAlignSectionOverrides(section),
         activeServerProvider.overrideWithValue(const AraServer(hostname: 'rig', port: 1)),
         polarAlignMotorDirectionApiFactoryProvider.overrideWithValue((_) => direction),
+        if (live != null) polarAlignLiveProvider.overrideWith(() => live),
       ],
       child: MaterialApp(
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -347,6 +358,30 @@ void main() {
       expect(find.text('The next start tests the motor direction again.'), findsOneWidget);
       final retest = tester.widget<ButtonStyleButton>(find.byKey(const Key('polar-motor-direction-retest')));
       expect(retest.onPressed, isNull, reason: 'nothing saved to forget');
+    },
+  );
+
+  testWidgets(
+    'the motor direction reads again when a run ends, so a first run\'s test shows without reopening the panel (#2081)',
+    (tester) async {
+      final direction = _DirectionRig(const PolarAlignMotorDirectionState(matchesConnectedMount: true));
+      final live = _FakeLive();
+      await _pumpWithDirection(tester, direction, live: live);
+      expect(find.text('Not tested yet: the next start first turns the mount 0.5° to learn it.'), findsOneWidget);
+
+      live.set(const PolarAlignLive(phase: PolarAlignStates.adjusting));
+      await tester.pumpAndSettle();
+      // The run's 0.5° test saved a sign on the rig.
+      direction.state = const PolarAlignMotorDirectionState(
+        saved: PolarAlignMotorDirection(sign: 1, driverInfo: 'AlpacaBridge iOptron', driverVersion: '6.0.0'),
+        matchesConnectedMount: true,
+      );
+      live.set(const PolarAlignLive(phase: PolarAlignStates.stopped));
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Tested on AlpacaBridge iOptron 6.0.0: the motor\'s positive speed turns RA east.'),
+        findsOneWidget,
+      );
     },
   );
 

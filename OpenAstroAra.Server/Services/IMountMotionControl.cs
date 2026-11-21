@@ -31,6 +31,15 @@ public interface IMountMotionControl {
     /// it must obey.</summary>
     long AbortEpoch => 0;
 
+    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
+    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
+    /// German equatorial mount, and treats null as one (fail-safe). #2083 — Polar Align refuses an alt-az mount.</summary>
+    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
+
+    /// <summary>#2083 — whether the mount can turn its RA axis by rate (ASCOM <c>CanMoveAxis(Primary)</c>), read once per
+    /// connection; null when not connected, not read yet, or the driver would not answer. Polar Align's motor turn needs it.</summary>
+    bool? CanMovePrimaryAxis => null;
+
     /// <summary>#2089 — counts every mount session the daemon starts or ends: a connect, a disconnect, a fault trip. A
     /// routine that keeps a pose across runs (Polar Align's sweep origin) reads it and forgets the pose once it changes,
     /// and a run that sees it change mid-run ends (#2066 ARA-5): a reconnected mount may have been moved, re-homed or

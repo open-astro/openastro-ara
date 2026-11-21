@@ -12,6 +12,7 @@
 
 #endregion "copyright"
 
+using ASCOM.Common.DeviceInterfaces;
 using NUnit.Framework;
 using OpenAstroAra.Equipment.Equipment.MyTelescope;
 using OpenAstroAra.Server.Contracts;
@@ -25,12 +26,14 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#2068 (ARA-18) — the pre-flight evaluator's table: it never throws, the checks later PRs fill read
-    /// <c>unknown</c>, the mount clock check is #2087's gate, and the clearance is per mount.</summary>
+    /// <summary>#2068 (ARA-18) — the pre-flight evaluator's table: it never throws, the mount clock check is #2087's gate, and the clearance is per mount.</summary>
     [TestFixture]
     public class PolarAlignPreflightEvaluatorTest {
 
         private const string MountId = "a1b2c3d4-mount";
+
+        /// <summary>The placeholder rows #2065 would have filled; #2065 is closed (NINA parity, Joey 2026-11-21).</summary>
+        private static readonly string[] DroppedRows = ["motionsafety", "pier_side", "pose_envelope", "start_cw_angle", "turn_step"];
 
         private static readonly PolarAlignStartPlanDto Plan = new(PolarAlignStages.Fine, PolarAlignDirections.East, 10.0, 2, 20.0);
 
@@ -64,7 +67,9 @@ namespace OpenAstroAra.Test {
                 settings: () => throw boom,
                 clock: () => throw boom,
                 pose: _ => throw boom,
-                plan: _ => Task.FromException<PolarAlignStartPlanDto>(boom)) with { AlignerPresent = () => throw boom };
+                plan: _ => Task.FromException<PolarAlignStartPlanDto>(boom)) with {
+                    AlignerPresent = () => throw boom, AlignmentMode = () => throw boom, CanMovePrimaryAxis = () => throw boom,
+                };
 
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, CancellationToken.None).ConfigureAwait(false);
 
@@ -77,6 +82,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(Check(result, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(Check(result, PolarAlignPreflightChecks.StartPointing).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(Check(result, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(Check(result, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(Check(result, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
                 Assert.That(result.FirstFailure, Is.SameAs(boom), "a start throws the first failed read, as it did before the list");
             });
 
@@ -87,18 +94,12 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task The_checks_later_changes_fill_read_unknown_and_never_refuse() {
+        public async Task The_mount_limits_note_warns_and_never_refuses() {
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
 
-            var later = new[] {
-                PolarAlignPreflightChecks.SiteLongitudeLst, PolarAlignPreflightChecks.MountType, PolarAlignPreflightChecks.CanMoveAxis,
-                PolarAlignPreflightChecks.MotionSafety, PolarAlignPreflightChecks.PierSide, PolarAlignPreflightChecks.PoseEnvelope,
-                PolarAlignPreflightChecks.StartCwAngle, PolarAlignPreflightChecks.TurnStep,
-            };
             Assert.Multiple(() => {
-                foreach (var id in later) {
-                    Assert.That(Check(result, id).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown), id);
-                    Assert.That(Check(result, id).Detail, Does.Contain("#20"), id + " names the issue that fills it");
+                foreach (var dropped in DroppedRows) {
+                    Assert.That(result.Dto.Checks.Select(c => c.Id), Does.Not.Contain(dropped));
                 }
                 Assert.That(Check(result, PolarAlignPreflightChecks.MountLimits).Status, Is.EqualTo(PolarAlignPreflightStatuses.Warn));
                 Assert.That(result.Dto.Ready, Is.True, "unknown and warn checks never refuse");
@@ -107,6 +108,65 @@ namespace OpenAstroAra.Test {
                 Assert.That(result.Dto.Planned.MinAltitudeDeg, Is.Null);
                 Assert.That(result.Dto.Planned.Direction, Is.EqualTo(PolarAlignDirections.East));
                 Assert.That(result.Dto.Planned.MaxSweepDeg, Is.EqualTo(20.0));
+            });
+        }
+
+        [Test]
+        public async Task The_polar_aligner_row_passes_with_its_motors_on_because_its_stop_is_checked() {
+            PolarAlignSettingsDto Motors(bool auto) =>
+                PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(PolarAlignerAuto: auto).Confirmed(MountId));
+
+            var none = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
+            var off = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => Motors(false)) with { AlignerPresent = () => true }, CancellationToken.None).ConfigureAwait(false);
+            var on = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => Motors(true)) with { AlignerPresent = () => true }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(none, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(none, PolarAlignPreflightChecks.Aligner).Detail, Does.Contain("No Polar Aligner"));
+                Assert.That(Check(off, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(off, PolarAlignPreflightChecks.Aligner).Detail, Does.Contain("motors are off"));
+                Assert.That(Check(on, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok),
+                    "#2115 verified the stop and capped the travel: the motors-on row is real");
+                Assert.That(Check(on, PolarAlignPreflightChecks.Aligner).Detail,
+                    Is.EqualTo("The Polar Aligner's Stop is checked and its turns are capped."));
+                Assert.That(on.Dto.Ready, Is.True);
+            });
+        }
+
+        [Test]
+        public async Task A_hand_turn_says_the_polar_aligner_motors_are_off_even_with_auto_on() {
+            var settings = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(PolarAlignerAuto: true).Confirmed(MountId));
+
+            var handTurn = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => settings) with { AlignerPresent = () => true, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Detail,
+                    Is.EqualTo("The Polar Aligner's motors are off: you turn the bolts."),
+                    "a hand-turn run never drives the aligner's motors, so the row must not claim its Stop");
+            });
+        }
+
+        [Test]
+        public async Task No_check_says_a_later_issue_will_fill_it() {
+            var ready = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
+            var aligner = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with {
+                AlignerPresent = () => true, AlignmentMode = () => ASCOM.Common.DeviceInterfaces.AlignmentMode.Polar, CanMovePrimaryAxis = () => true,
+            }, CancellationToken.None).ConfigureAwait(false);
+            var noMount = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(mount: () => new TelescopeInfo { Connected = false }), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                foreach (var check in ready.Dto.Checks.Concat(aligner.Dto.Checks).Concat(noMount.Dto.Checks)) {
+                    Assert.That(check.Detail, Does.Not.Match("#20[0-9][0-9]|lands|comes with|opt-in"), check.Id);
+                }
+                Assert.That(Check(ready, PolarAlignPreflightChecks.MountClockOrSite).Detail,
+                    Is.EqualTo("The mount's clock is set from the synced rig clock and checked."));
+                Assert.That(Check(aligner, PolarAlignPreflightChecks.MountType).Detail, Is.EqualTo("An equatorial (fork or polar) mount."),
+                    "a fork mount is simply allowed");
             });
         }
 
@@ -146,6 +206,80 @@ namespace OpenAstroAra.Test {
                 Assert.That(Check(confirmed, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(confirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(50.0), "this mount's own limit");
                 Assert.That(confirmed.Dto.Ready, Is.True);
+            });
+        }
+
+        private static RefusalCause? CauseOf(PolarAlignPreflightResult r) => (r.FirstFailure as RefusalException)?.Cause;
+
+        // #2083 — Polar Align steers by the hour angle: no usable site longitude, the unset site at 0°, 0°, or no local
+        // sidereal time, and it refuses rather than guess.
+        [Test]
+        public async Task A_site_without_a_longitude_or_sidereal_time_or_at_0_0_refuses() {
+            var store = new InMemoryProfileStore();
+            SiteSettingsDto SiteAt(double lat, double lon) => store.GetSiteSettings() with { LatitudeDeg = lat, LongitudeDeg = lon };
+            TelescopeInfo MountWithLst(double lst) => new() { Connected = true, DeviceId = MountId, Name = "Bench GEM", SiderealTime = lst };
+
+            var noLongitude = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(site: () => SiteAt(52.0, double.NaN)), CancellationToken.None).ConfigureAwait(false);
+            var unsetSite = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(site: () => SiteAt(0.0, 0.0)), CancellationToken.None).ConfigureAwait(false);
+            var noLst = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(mount: () => MountWithLst(double.NaN)), CancellationToken.None).ConfigureAwait(false);
+            var greenwich = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(site: () => SiteAt(51.5, 0.0), mount: () => MountWithLst(3.0)), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                foreach (var (name, r) in new[] { ("no longitude", noLongitude), ("0°, 0°", unsetSite), ("no LST", noLst) }) {
+                    Assert.That(Check(r, PolarAlignPreflightChecks.SiteLongitudeLst).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail), name);
+                    Assert.That(r.Dto.Ready, Is.False, name);
+                }
+                Assert.That(CauseOf(noLongitude), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet));
+                Assert.That(CauseOf(noLst), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet));
+                Assert.That(CauseOf(unsetSite), Is.EqualTo(RefusalCatalog.PolarAlignSiteNotSet), "0°, 0° refuses as an unset site, not a bad latitude");
+                Assert.That(Check(unsetSite, PolarAlignPreflightChecks.SiteLongitudeLst).Detail, Does.Contain("never set"));
+                Assert.That(Check(greenwich, PolarAlignPreflightChecks.SiteLongitudeLst).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok),
+                    "longitude 0° with a real latitude is a real site");
+                Assert.That(greenwich.Dto.Ready, Is.True);
+            });
+        }
+
+        // #2083 — on an alt-az mount MoveAxis(Primary) turns azimuth, not RA.
+        [Test]
+        public async Task An_alt_az_mount_refuses_and_an_equatorial_one_passes() {
+            async Task<PolarAlignPreflightResult> With(AlignmentMode? mode) =>
+                await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { AlignmentMode = () => mode }, CancellationToken.None).ConfigureAwait(false);
+
+            var altAz = await With(AlignmentMode.AltAz).ConfigureAwait(false);
+            var altAzByHand = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs() with { AlignmentMode = () => AlignmentMode.AltAz, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
+            var gem = await With(AlignmentMode.GermanPolar).ConfigureAwait(false);
+            var fork = await With(AlignmentMode.Polar).ConfigureAwait(false);
+            var unknown = await With(null).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(altAz, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(CauseOf(altAz), Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount));
+                Assert.That(CauseOf(altAzByHand), Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount), "turning by hand has no RA axis to turn either");
+                Assert.That(Check(gem, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(fork, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(unknown, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(unknown.Dto.Ready, Is.True, "a mount that does not report its type is not refused");
+            });
+        }
+
+        // #2083 — a mount that cannot turn its RA axis by rate gets no motor start; Turn RA by hand moves nothing.
+        [Test]
+        public async Task A_mount_that_cannot_move_its_RA_axis_refuses_a_motor_start_and_warns_a_hand_turn() {
+            var motor = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => false }, CancellationToken.None).ConfigureAwait(false);
+            var byHand = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs() with { CanMovePrimaryAxis = () => false, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
+            var can = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => true }, CancellationToken.None).ConfigureAwait(false);
+            var unknown = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => null }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(motor, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(CauseOf(motor), Is.EqualTo(RefusalCatalog.PolarAlignCannotMoveAxis));
+                Assert.That(Check(byHand, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Warn));
+                Assert.That(byHand.Dto.Ready, Is.True);
+                Assert.That(Check(can, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(unknown, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
+                Assert.That(unknown.Dto.Ready, Is.True);
             });
         }
     }
