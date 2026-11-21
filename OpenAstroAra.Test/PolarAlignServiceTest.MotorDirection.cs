@@ -203,6 +203,55 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_confirm_that_showed_a_direction_test_no_longer_owed_is_refused_before_anything_moves() {
+            // The confirm step showed the 0.5° test; before Start, a direction was saved for this driver (another session's
+            // run): the start would make no test, which is not what the user confirmed.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var fake = NewFake();
+            var store = TenDegreeStore();
+            using var svc = NewServiceOn(fake, new TrueSkySolver(mount), mount, ws, store, motorDirectionSaved: false);
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg));
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, mount.DriverInfo, mount.DriverVersion, DateTimeOffset.UtcNow));
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine,
+                new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, DirectionTest: true), null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignUnconfirmed));
+            Assert.That(refusal.Message, Does.Contain("makes no direction test"));
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            Assert.That(fake.LeaseCalls, Is.Empty, "refused before the camera is taken");
+        }
+
+        [Test]
+        public async Task A_direction_test_that_would_pass_the_sweep_limit_when_it_moves_fails_before_the_motor_runs() {
+            // The start's plan fits; between the confirmed start and the test move the axis is 31.8° from the origin (a hand on
+            // the mount, tracking through a long wait): the 0.5° test either way would take it past the 30° limit and the 2° a
+            // run may drift. The test move reads where the axis is now and fails before the motor runs.
+            var mount = new FakeStopMount(tracking: false);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var movedAt = -1;
+            mount.OnTrackingOn = () => {
+                mount.MoveByHand(31.8);
+                Volatile.Write(ref movedAt, mount.Count);
+            };
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount.Mock, ws, store: TenDegreeStore(), motorDirectionSaved: false);
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg));
+
+            await svc.StartAsync(PolarAlignStages.Fine,
+                new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, DirectionTest: true), null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("sweep_limit"));
+            Assert.That(Volatile.Read(ref movedAt), Is.GreaterThanOrEqualTo(0), "the axis was moved before the test");
+            AssertNoMotionAfter(mount, Volatile.Read(ref movedAt));
+            Assert.That(mount.RaDeg, Is.EqualTo(31.8).Within(0.01), "the test move never ran");
+        }
+
+        [Test]
         public async Task East_direction_picks_only_a_new_origins_way_and_a_later_start_turns_back_toward_the_origin() {
             var mount = new FakeStopMount(tracking: true);
             var ws = new WsRecorder();
