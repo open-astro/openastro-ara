@@ -3214,6 +3214,18 @@
       }
     }
   },
+  "guiderStateCalibrationDistanceOf": "{moved} of {target} px",
+  "@guiderStateCalibrationDistanceOf": {
+    "description": "Guider state (Simple Mode guider pill, plan pill, guiding strip, run dashboard): how far the star has moved on this calibration leg, of the distance the guider is set to move, in guide-camera pixels; both are numbers",
+    "placeholders": {
+      "moved": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      }
+    }
+  },
   "guideFindStarFailed": "Couldn't find a star: {reason}",
   "@guideFindStarFailed": {
     "description": "Find star failed; reason is a full sentence",

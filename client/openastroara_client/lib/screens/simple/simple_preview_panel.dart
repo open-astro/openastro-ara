@@ -1457,6 +1457,7 @@ class _PillData {
     this.shotProgress,
     this.footProgress,
     this.spoken,
+    this.live = true,
     this.holds = true,
   });
 
@@ -1485,6 +1486,10 @@ class _PillData {
 
   /// What screen readers hear when it changes (label and detail otherwise).
   final String? spoken;
+
+  /// Announced when it changes. A calibration leg is read on focus but not
+  /// announced at each step (#1895).
+  final bool live;
 }
 
 /// One status line of the status card: tapping it opens what it's about.
@@ -1529,7 +1534,7 @@ class _StatusPillState extends State<_StatusPill> {
     final maxWidth = kSimpleMessagesMaxWidth;
     return Semantics(
       container: true,
-      liveRegion: true,
+      liveRegion: d.live,
       label:
           d.spoken ??
           (d.detail == null
@@ -2015,6 +2020,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               (paused && run.state != SequenceRunState.pausedAwaitingUser) ||
               ((flipWait || pausing) && planActive),
           working: planActive && !paused && !flipWait && !pausing,
+          live:
+              !(planCalibrating &&
+                  !pausing &&
+                  guider.calibrationText(l10n) != null),
           // A step that reports none (an exposure) follows the camera's
           // own frame; a paused plan shows no frame (#1755).
           footProgress:
@@ -2359,10 +2368,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.deviceGuider,
           guider!.runtimeSummary(l10n),
           simpleGuiderColour(guider),
+          // The leg is read on focus with its target, not announced at each
+          // step (#1895).
           spoken: l10n.previewStatusSpoken(
             l10n.deviceGuider,
-            guiderRuntimeText(l10n, guider.runtimeState),
+            guider.runtimeSummary(l10n).replaceAll(' · ', ', '),
           ),
+          live:
+              guider.runtimeState != GuiderRuntimeState.calibrating ||
+              guider.calibrationText(l10n) == null,
         ),
     ];
     // A Preflight step with nothing of its own running says it waits for the

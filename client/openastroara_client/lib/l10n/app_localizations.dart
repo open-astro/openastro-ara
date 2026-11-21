@@ -4017,6 +4017,12 @@ abstract class AppLocalizations {
   /// **'{direction} step {step}'**
   String guiderStateCalibrationStep(String direction, String step);
 
+  /// Guider state (Simple Mode guider pill, plan pill, guiding strip, run dashboard): how far the star has moved on this calibration leg, of the distance the guider is set to move, in guide-camera pixels; both are numbers
+  ///
+  /// In en, this message translates to:
+  /// **'{moved} of {target} px'**
+  String guiderStateCalibrationDistanceOf(String moved, String target);
+
   /// Find star failed; reason is a full sentence
   ///
   /// In en, this message translates to:

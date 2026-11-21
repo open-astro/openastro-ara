@@ -122,11 +122,16 @@ class GuidingStrip extends ConsumerWidget {
                   Text('Guiding',
                       style: Theme.of(context).textTheme.titleSmall),
                   const SizedBox(width: 12),
-                  Text(
-                    stateLabel(context.l10n, status),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: _stateColor(status),
-                        ),
+                  // Flexible: the calibration leg ("calibrating · North step 7 ·
+                  // 11.9 of 25 px") is long and gives way before the buttons.
+                  Flexible(
+                    child: Text(
+                      stateLabel(context.l10n, status),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodySmall
+                          ?.copyWith(color: _stateColor(status)),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Text(

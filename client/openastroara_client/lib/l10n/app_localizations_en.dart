@@ -2314,6 +2314,11 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String guiderStateCalibrationDistanceOf(String moved, String target) {
+    return '$moved of $target px';
+  }
+
+  @override
   String guideFindStarFailed(String reason) {
     return 'Couldn\'t find a star: $reason';
   }

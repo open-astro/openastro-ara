@@ -574,6 +574,10 @@ public sealed record GuiderStateDto(
     string? CalibrationDirection = null,
     int? CalibrationStep = null,
     double? CalibrationDistancePx = null,
+    /// <summary>While <c>State</c> is <c>calibrating</c>: the distance in guide-camera pixels the guider is
+    /// configured to move on each leg (its <c>calibration_distance</c>), so a client can show "11.9 of 25 px".
+    /// Null when the guider does not report one or the read failed, and outside calibrating.</summary>
+    double? CalibrationTargetPx = null,
     /// <summary>The guider's profiles (its <c>get_profiles</c>), for the Settings profile picker. Empty until
     /// the guider has listed its profiles; null only while there is no guider at all.</summary>
     System.Collections.Generic.IReadOnlyList<GuiderProfileDto>? Profiles = null,

@@ -660,6 +660,7 @@
   "guiderStateUnknown": "Desconhecido",
   "guiderStateNotConnected": "Não conectado",
   "guiderStateCalibrationStep": "{direction} passo {step}",
+  "guiderStateCalibrationDistanceOf": "{moved} de {target} px",
   "guideFindStarFailed": "Não foi possível encontrar uma estrela: {reason}",
   "errorCouldnt": "Não foi possível {action}",
   "errorActionDefault": "fazer isso",
