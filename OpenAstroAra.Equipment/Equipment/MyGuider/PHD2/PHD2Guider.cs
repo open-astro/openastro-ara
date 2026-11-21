@@ -111,9 +111,24 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             private set {
                 lock (lockobj) {
                     _calibration = value;
+                    if (value is null) {
+                        _calibrationTargetPx = null;
+                    }
                 }
             }
         }
+
+        /// <summary>The distance in guide-camera pixels the guider moves on each leg of this calibration run
+        /// (its <c>calibration_distance</c>); null when unknown and outside a run.</summary>
+        public double? CalibrationTargetPx {
+            get {
+                lock (lockobj) {
+                    return _calibrationTargetPx;
+                }
+            }
+        }
+
+        private double? _calibrationTargetPx;
 
         /// <summary>#1364 — this session's calibration run: every step the guider reported (the plot PHD2
         /// draws), whether it is <c>none</c> | <c>running</c> | <c>complete</c> | <c>failed</c>, and the

@@ -257,6 +257,80 @@ namespace OpenAstroAra.Test {
             Assert.That((runtime.CalibrationDirection, runtime.CalibrationDistancePx), Is.EqualTo(((string?)null, (double?)null)));
         }
 
+        private static JsonObject CalibratingStep(string dir, int step, double dist) => new() {
+            ["Event"] = "Calibrating", ["Timestamp"] = 1.0, ["Host"] = "fake", ["Inst"] = 1,
+            ["Mount"] = "Mount", ["dir"] = dir, ["step"] = step, ["dist"] = dist, ["State"] = dir,
+        };
+
+        [Test]
+        public async Task The_guider_state_carries_the_calibration_target_from_the_guiders_profile_setup() {
+            var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+            await using var _ = fake;
+            using var __ = svc;
+            fake.OnRpc("get_profile_setup", _ => new JsonObject { ["multistar_enabled"] = true, ["calibration_distance"] = 25 });
+            await fake.BroadcastAsync(PhdEvents.StartCalibration()).ConfigureAwait(false);
+            await fake.BroadcastAsync(CalibratingStep("West", 3, 11.94)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationTargetPx == 25)
+                .ConfigureAwait(false), Is.True, "the target reached the guider state during the leg");
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.CalibrationStep, Is.EqualTo(3));
+
+            await fake.BroadcastAsync(CalibratingStep("East", 4, 2.0)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep == 4)
+                .ConfigureAwait(false), Is.True);
+            Assert.That((await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime.CalibrationTargetPx, Is.EqualTo(25), "every leg of the run carries the target");
+            Assert.That(fake.ReceivedMethods.Count(m => m == "get_profile_setup"), Is.EqualTo(1), "read once per run, not per step or poll");
+
+            await fake.BroadcastAsync(PhdEvents.CalibrationComplete()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationTargetPx is null)
+                .ConfigureAwait(false), Is.True, "CalibrationComplete clears the target");
+        }
+
+        [Test]
+        public async Task A_dropped_link_mid_calibration_clears_the_calibration_target() {
+            await using var fake = FakeGuider.Start();
+            fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState("Stopped"));
+            fake.OnRpc("get_pixel_scale", JsonValue.Create(1.5));
+            fake.OnRpc("get_profile_setup", _ => new JsonObject { ["calibration_distance"] = 25 });
+            var profiles = new HeadlessProfileService();
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerHost = "127.0.0.1";
+            profiles.ActiveProfile.GuiderSettings.PHD2ServerPort = fake.Port;
+            using var guider = new PHD2Guider(profiles);
+            using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60))) {
+                Assert.That(await guider.Connect(cts.Token).ConfigureAwait(false), Is.True, "precondition: connected");
+            }
+            await fake.BroadcastAsync(PhdEvents.StartCalibration()).ConfigureAwait(false);
+            await fake.BroadcastAsync(CalibratingStep("East", 3, 4.2)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => guider.CalibrationTargetPx == 25).ConfigureAwait(false), Is.True,
+                "precondition: the target is known");
+
+            fake.DropConnections();
+            Assert.That(await WaitUntilAsync(() => !guider.Connected).ConfigureAwait(false), Is.True, "the drop was seen");
+            Assert.That(guider.CalibrationTargetPx, Is.Null, "the target went with the link");
+        }
+
+        [Test]
+        public async Task A_guider_with_no_calibration_distance_or_a_refused_read_leaves_the_target_null_and_the_leg_shows() {
+            foreach (var refuse in new[] { false, true }) {
+                var (fake, svc) = await ConnectedServiceAsync().ConfigureAwait(false);
+                await using var _ = fake;
+                using var __ = svc;
+                if (refuse) {
+                    fake.OnRpc("get_profile_setup", _ => throw new InvalidOperationException("refused"));
+                } else {
+                    fake.OnRpc("get_profile_setup", _ => new JsonObject { ["multistar_enabled"] = true });
+                }
+                await fake.BroadcastAsync(PhdEvents.StartCalibration()).ConfigureAwait(false);
+                await fake.BroadcastAsync(CalibratingStep("North", 7, 11.94)).ConfigureAwait(false);
+                Assert.That(await WaitUntilAsync(() => svc.GetAsync(CancellationToken.None).Result?.Runtime.CalibrationStep == 7)
+                    .ConfigureAwait(false), Is.True, $"the leg shows (refused: {refuse})");
+                Assert.That(await WaitUntilAsync(() => fake.ReceivedMethods.Contains("get_profile_setup")).ConfigureAwait(false), Is.True,
+                    "the read was attempted");
+                var runtime = (await svc.GetAsync(CancellationToken.None).ConfigureAwait(false))!.Runtime;
+                Assert.That(runtime.CalibrationTargetPx, Is.Null, $"no target (refused: {refuse})");
+                Assert.That(runtime.CalibrationDistancePx, Is.EqualTo(11.9));
+            }
+        }
+
         [Test]
         public async Task A_dropped_link_mid_calibration_clears_the_calibration_leg() {
             // Review of #1365: only calibration events cleared the leg, so a link that dropped mid-
