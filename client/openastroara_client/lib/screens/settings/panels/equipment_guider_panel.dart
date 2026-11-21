@@ -12,6 +12,7 @@ import '../../../state/guider/guider_equipment_state.dart';
 import '../../../state/guider/guider_state.dart';
 import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/optics_settings_state.dart';
 import '../../../state/settings/phd2_settings_state.dart';
 import '../../../util/guide_optics.dart';
@@ -97,8 +98,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
     try {
       // §63.19 — optics first: the OAG-derived guide focal length reads the
       // main optics section, which is hydrated by a different panel.
-      await ref.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+      final opticsLoaded =
+          await ref.read(opticsSettingsProvider.notifier).load(api);
       await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
+      // No optics, no derived focal length: stay not loaded so no save sends 0.
+      final optics = ref.read(opticsSettingsProvider);
+      if (!opticsLoaded || optics.value == null) {
+        throw optics.lastFailure ?? const SectionNotLoadedException(null);
+      }
       _syncDerivedFocalLength();
       _savedJson = _json();
       _hydrated = true;
@@ -133,9 +140,12 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel> {
   /// settings in this client, so the recompute is explicit: on panel load,
   /// on setup-type change, and before every save/apply.
   void _syncDerivedFocalLength() {
-    if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag') return;
-    final optics =
-        ref.read(opticsSettingsProvider).value ?? const OpticsSettings();
+    final optics = ref.read(opticsSettingsProvider).value;
+    // Optics reset (rig changed): keep the stored value, never derive 0.
+    if (ref.read(phd2SettingsProvider).guiderSetupType != 'oag' ||
+        optics == null) {
+      return;
+    }
     _syncingDerived = true;
     try {
       ref
