@@ -989,7 +989,8 @@ public sealed record PolarAlignPreflightCheckDto(string Id, string Status, strin
 /// measurement's two turns (<c>CheckStepDeg</c> a Check's), <c>MaxSweepDeg</c> the most it turns from where it starts,
 /// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and the mount's
 /// counterweight limit (<c>MaxCwAngleDeg</c>, the connected mount's entry or the default). <c>StartCwAngleDeg</c> and
-/// <c>MinAltitudeDeg</c> are null until the counterweight model and the pose envelope land (#2065).</summary>
+/// <c>MinAltitudeDeg</c> are always null: Ara has no counterweight model or pose envelope (NINA parity, Joey
+/// 2026-11-21); they stay so an app that reads them still parses the list.</summary>
 public sealed record PolarAlignPreflightPlannedDto(
     string Stage,
     string? Direction,

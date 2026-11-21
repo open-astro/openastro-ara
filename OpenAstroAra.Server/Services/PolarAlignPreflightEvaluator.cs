@@ -212,7 +212,7 @@ internal static class PolarAlignPreflightEvaluator {
                 if (inputs.ClockRefusal() is { } refusal) {
                     clockRow.Fail(new RefusalException(RefusalCatalog.MountClockNotVerified, refusal), refusal);
                 } else {
-                    clockRow.Ok("The mount's clock is set from the synced rig clock and checked. Its site longitude is compared once #2065 lands.");
+                    clockRow.Ok("The mount's clock is set from the synced rig clock and checked.");
                 }
             } catch (Exception ex) {
                 clockRow.Fail(ex, $"The mount's clock check could not be read: {ex.Message}");

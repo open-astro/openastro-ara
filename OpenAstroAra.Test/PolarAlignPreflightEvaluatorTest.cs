@@ -136,6 +136,26 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task No_check_says_a_later_issue_will_fill_it() {
+            var ready = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
+            var aligner = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with {
+                AlignerPresent = () => true, AlignmentMode = () => ASCOM.Common.DeviceInterfaces.AlignmentMode.Polar, CanMovePrimaryAxis = () => true,
+            }, CancellationToken.None).ConfigureAwait(false);
+            var noMount = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(mount: () => new TelescopeInfo { Connected = false }), CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                foreach (var check in ready.Dto.Checks.Concat(aligner.Dto.Checks).Concat(noMount.Dto.Checks)) {
+                    Assert.That(check.Detail, Does.Not.Match("#20[0-9][0-9]|lands|comes with|opt-in"), check.Id);
+                }
+                Assert.That(Check(ready, PolarAlignPreflightChecks.MountClockOrSite).Detail,
+                    Is.EqualTo("The mount's clock is set from the synced rig clock and checked."));
+                Assert.That(Check(aligner, PolarAlignPreflightChecks.MountType).Detail, Is.EqualTo("An equatorial (fork or polar) mount."),
+                    "a fork mount is simply allowed");
+            });
+        }
+
+        [Test]
         public async Task The_mount_clock_check_is_the_mount_clock_gates_answer() {
             const string closed = "Mount clock not verified: the rig clock has not been synced from the app or a GPS.";
 
