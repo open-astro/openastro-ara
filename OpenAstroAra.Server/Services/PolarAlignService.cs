@@ -370,7 +370,9 @@ namespace OpenAstroAra.Server.Services {
             // From the driver, never the cache: the direction the user confirms and the band every later turn keeps to
             // are both read here. #2066 — a reading that cannot be trusted (none, the placeholder, too old) or one past the
             // pole is refused before anything moves.
-            var (raDeg, decDeg, session, side) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
+            var (raDeg, decDeg, session, side, slewing) = await StartPointingJnowAsync(ct).ConfigureAwait(false);
+            // #2066 (ARA-2) — a mount that slews, or a guider that guides, would move beside Polar Align's turns.
+            ThrowIfBusyAtStart(slewing);
             if (Math.Abs(decDeg) > OnAxisDecDeg) {
                 throw new RefusalException(RefusalCatalog.PolarAlignOnAxis, OnAxisMessage);
             }
@@ -495,6 +497,7 @@ namespace OpenAstroAra.Server.Services {
                     : (abortEpochAtCall, ownAbortsAtCall);
             }
             await _opLock.WaitAsync(ct).ConfigureAwait(false);
+            IDisposable? startHold = null;
             try {
                 lock (_gate) {
                     if (_active) {
@@ -521,12 +524,15 @@ namespace OpenAstroAra.Server.Services {
                 var (priorCts, priorRun) = (_runCts, _runTask);
                 _runCts = null;
                 _runTask = null;
+                RunEnd? priorEnd;
                 lock (_gate) {
+                    priorEnd = _liveRun?.End;
                     _liveRun = null; // that run ended by itself (failed or checked): its exit stopped the mount
                 }
                 if (priorRun is not null) {
                     await AwaitRunUnwindAsync(priorRun).ConfigureAwait(false);
                 }
+                priorEnd?.ReleaseHold(); // #2066 — a run that never unwound gives the mount's motion owner back here
                 priorCts?.Dispose();
                 var guiderClient = _guider.ConnectedLink();
                 var site = MountPreflight();
@@ -535,6 +541,12 @@ namespace OpenAstroAra.Server.Services {
                 // 2026-11-19): refused before anything moves. The Find Home, slew and motor moves are
                 // guarded again in the mount, so a reconnect mid-run cannot home or turn by the model.
                 await ThrowIfPoseUnverifiedAsync(ct).ConfigureAwait(false);
+                // #2066 (ARA-2) — the mount's motion owner for the whole run, the adjust loop included: a GoTo, Center,
+                // Park or Home is refused from here until the run's exit has stopped the mount (Joey, 2026-11-20 on #2048).
+                // Taken before the start reading below: a GoTo the daemon sent before is seen on it (slewing, or where it
+                // ended), and none is sent after it, so the turns and the sweep limit start from the pose read here. Given
+                // back (the catch below) when the start fails before the run takes it over.
+                startHold = AcquireMountForRun();
                 var settings = PolarAlignSettingsClamp.Apply(_profileStore.GetPolarAlignSettings());
                 // #2048 — nothing moves without the user's confirmation of this start and its RA turn direction, read from
                 // the mount now: a direction that changed since the user saw it (the hour angle crossed the meridian)
@@ -587,6 +599,8 @@ namespace OpenAstroAra.Server.Services {
                 int startSeq = 0;
                 var runCts = new CancellationTokenSource();
                 var runEnd = new RunEnd();
+                runEnd.Hold(startHold);
+                startHold = null; // the run's now: its exit (or the end that drains it) gives it back
                 bool endedWhileStarting;
                 lock (_gate) {
                     // Checked with the run's publication in one critical section: an end request either lands first
@@ -637,6 +651,7 @@ namespace OpenAstroAra.Server.Services {
                 }
                 if (endedWhileStarting) {
                     runCts.Dispose();
+                    runEnd.ReleaseHold();
                     await claim.ReleaseAsync().ConfigureAwait(false);
                     LogStartStoppedBeforeRun();
                     throw new InvalidOperationException("polar alignment was stopped while it was starting — the mount was not moved");
@@ -655,6 +670,9 @@ namespace OpenAstroAra.Server.Services {
                 }).ConfigureAwait(false);
                 _runTask = Task.Run(() => RunRoutineAsync(guiderClient, mainCamera, site, settings, stage, camera, band, gen, startSeq, runEnd, runToken), CancellationToken.None);
                 return Accepted("polar-align.start", idempotencyKey);
+            } catch {
+                startHold?.Dispose(); // #2066 — a start that failed before its run took the mount gives it back
+                throw;
             } finally {
                 _opLock.Release();
             }
@@ -816,6 +834,9 @@ namespace OpenAstroAra.Server.Services {
                     FenceStops();
                     LogAbandonedRunFenced();
                 }
+                // #2066 (ARA-2) — the run is over: the mount's motion owner goes back (a run that unwound gave it back in its
+                // exit already; a stuck one gives it back here, after the stop above).
+                end?.ReleaseHold();
                 bool mountNotStopped;
                 bool becameStopped;
                 bool reportNotStopped = false;
@@ -1128,6 +1149,8 @@ namespace OpenAstroAra.Server.Services {
                     await ExitMountOnceAsync(finished: end.Requested == "complete", end.Requested ?? "ended",
                         handedToGuiding: end.Requested == HandedToGuiding).ConfigureAwait(false);
                 }
+                // #2066 (ARA-2) — the exit has stopped the mount (or left it to a takeover): the motion owner goes back.
+                end.ReleaseHold();
                 TryDeleteWorkDir(workDir);
             }
         }

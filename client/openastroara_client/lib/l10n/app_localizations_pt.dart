@@ -6700,7 +6700,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get refusalPolarAlignMovingMount =>
-      'Polar alignment is turning the mount. Stop polar alignment first, or tap Stop Mount.';
+      'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.';
 
   @override
   String polarAlignStoppedFromOutside(String by) {
@@ -6733,6 +6733,10 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get refusalPolarAlignPoseAmbiguous =>
       'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.';
+
+  @override
+  String get refusalPolarAlignMountBusy =>
+      'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.';
 
   @override
   String get actionConfirmFlip => 'confirm the meridian flip';
@@ -13853,7 +13857,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get refusalPolarAlignMovingMount =>
-      'O alinhamento polar está girando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
+      'O alinhamento polar está usando a montagem. Pare o alinhamento polar primeiro, ou toque em Parar montagem.';
 
   @override
   String polarAlignStoppedFromOutside(String by) {
@@ -13886,6 +13890,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get refusalPolarAlignPoseAmbiguous =>
       'A montagem informa uma declinação além do polo, então o lado do pilar não é conhecido. Aponte o tubo de 2 a 5° do polo, com os contrapesos para baixo, pelo controle de mão (ou mande a montagem para a posição inicial), e inicie de novo.';
+
+  @override
+  String get refusalPolarAlignMountBusy =>
+      'A montagem está se movendo ou o guia está guiando. Espere o movimento terminar ou pare a guiagem, e inicie o alinhamento polar de novo.';
 
   @override
   String get actionConfirmFlip => 'confirmar a virada de meridiano';

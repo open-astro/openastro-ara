@@ -52,7 +52,7 @@ public static class PlateSolveEndpoints {
         solve.MapPost("/center", CenterAsync)
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status409Conflict) // #1149 — a centering job for another target is running
+            .ProducesProblem(StatusCodes.Status409Conflict) // #1149 — a centering job for another target is running; #2066 — polar-align-moving-mount while Polar Align runs
             .WithName("CenterOnCoordinates")
             .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
 
@@ -115,7 +115,8 @@ public static class PlateSolveEndpoints {
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
     public static async Task<IResult> CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
             OpenAstroAra.Profile.Interfaces.IProfileService profileService,
-            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null, CancellationToken ct = default) {
+            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null,
+            [Microsoft.AspNetCore.Mvc.FromServices] ITelescopeService? telescope = null, CancellationToken ct = default) {
         // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
         if (request is null
                 || request.RaHours is not (>= 0 and < 24)
@@ -123,6 +124,9 @@ public static class PlateSolveEndpoints {
             return Results.Problem("Centering needs ra_hours in [0, 24) and dec_degrees in [-90, 90].",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: Center's GoTo would run beside its next turn.
+        // Refused before a job is queued (the mediator's GoTo refuses it again, for a center that started first).
+        EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount(null, "centering GoTo", telescope);
         var target = new OpenAstroAra.Astrometry.Coordinates(request.RaHours, request.DecDegrees,
             OpenAstroAra.Astrometry.Epoch.J2000, OpenAstroAra.Astrometry.Coordinates.RAType.Hours);
         // Job total = the profile's solve-attempt budget, read at enqueue time (the autofocus

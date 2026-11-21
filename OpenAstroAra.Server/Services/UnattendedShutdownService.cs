@@ -131,10 +131,12 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             IFlatDeviceService? flatDevice = null,
             INotificationService? notifications = null,
             ILogger<UnattendedShutdownService>? logger = null,
-            TimeProvider? time = null) {
+            TimeProvider? time = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null) {
         _profiles = profiles;
         _sequencerResolver = sequencerResolver;
-        _ladder = new ShutdownLadder(profiles, guider, telescope, camera, filterWheel, focuser, rotator, flatDevice, logger);
+        // #2066 — the ladder ends a running polar alignment before it parks (the mediator refuses a park while it runs).
+        _ladder = new ShutdownLadder(profiles, guider, telescope, camera, filterWheel, focuser, rotator, flatDevice, logger, polarAlignResolver);
         _notifications = notifications;
         _logger = logger ?? NullLogger<UnattendedShutdownService>.Instance;
         _time = time ?? TimeProvider.System;
