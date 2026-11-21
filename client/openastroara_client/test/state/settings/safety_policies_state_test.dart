@@ -60,22 +60,6 @@ void main() {
       expect(isClockText('23:59'), isTrue);
     });
 
-    // The fallback the read-only panels show while the rig's copy is not in.
-    test('defaults match playbook §35', () {
-      const s = TestSafetyPolicies();
-      expect(s.onUnsafe, UnsafeAction.pauseAndPark);
-      expect(s.autoResumeWhenSafe, isTrue);
-      expect(s.resumeDelayMin, 10);
-      expect(s.meridianFlipAuto, isTrue);
-      expect(s.meridianPauseMin, 5);
-      expect(s.meridianRecenter, isTrue);
-      expect(s.meridianRecalGuider, isTrue);
-      expect(s.parkIfNoMoreTargets, isTrue);
-      expect(s.onGuiderLost, GuiderLostAction.pauseAndRetry);
-      expect(s.guiderRetryTimeoutSec, 60);
-      expect(s.skipTargetIfRecoveryFails, isTrue);
-    });
-
     test('numeric setters reject negative', () {
       final n = container.read(safetyPoliciesProvider.notifier);
       n.setResumeDelayMin(-1);

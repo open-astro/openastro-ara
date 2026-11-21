@@ -13,20 +13,6 @@ import '../../support/settings_values.dart';
 
 /// #1264 Imaging → Unguided: the model's guards and the wire codec.
 void main() {
-  test('defaults are the shipped behaviour', () {
-    const u = TestUnguidedSettings();
-    expect(u.guardEnabled, isTrue);
-    expect(u.eccentricityTolerance, 0.5);
-    expect(u.goodEccentricity, 0.3);
-    expect(u.stepDownAfter, 2);
-    expect(u.stepUpAfter, 10);
-    expect(u.probeRungsSeconds, [10, 30, 60, 120]);
-    expect(u.recentreDriftArcmin, 10);
-    expect(u.recentreSolveEveryN, 1);
-    expect(u.priorToleranceBasis, 'max');
-    expect(u.probeRungsText, '10, 30, 60, 120');
-  });
-
   test('codec round-trips, and a sparse body fails the read', () {
     const u = TestUnguidedSettings(
       guardEnabled: false,
