@@ -612,6 +612,60 @@ void main() {
     expect(find.text('Drifting'), findsOneWidget);
   });
 
+  testWidgets('a drifting HFR is read to a screen reader with its amount', (
+    tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+    await _pump(tester, _snap(frames: _drifting));
+    expect(
+      tester.getSemantics(_k('hfr')).label,
+      contains('HFR +18 % since session start'),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets(
+    'a Stars label with no sky or clipped reading does not end in a comma',
+    (tester) async {
+      final semantics = tester.ensureSemantics();
+      await _pump(
+        tester,
+        _snap(
+          frames: [
+            for (var i = 0; i < 3; i++)
+              MonitorFrame(id: 'f$i', hfr: 2.0, stars: 390),
+          ],
+        ),
+      );
+      final label = tester.getSemantics(_k('stars')).label;
+      expect(label, endsWith('Stars 390'));
+      semantics.dispose();
+    },
+  );
+
+  testWidgets(
+    'an enlarged tile keeps a fill that differs from its progress track',
+    (tester) async {
+      await _pump(tester, _snap());
+      await tester.tap(_k('now'));
+      await tester.pump();
+      final fill = tester.widget<Material>(_k('now')).color;
+      final track = tester
+          .widgetList<LinearProgressIndicator>(
+            find.descendant(
+              of: _k('now'),
+              matching: find.byType(LinearProgressIndicator),
+            ),
+          )
+          .map((b) => b.backgroundColor)
+          .whereType<Color>();
+      expect(track, isNotEmpty);
+      for (final c in track) {
+        expect(fill, isNot(c));
+      }
+    },
+  );
+
   testWidgets('no flag before six saved frames', (tester) async {
     await _pump(tester, _snap(frames: _frames([2.0, 2.0, 2.0, 2.6, 2.6])));
     expect(find.textContaining('since session start'), findsNothing);

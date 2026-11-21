@@ -743,7 +743,7 @@ class _Tile extends StatelessWidget {
     final (accent, outline) = switch (status) {
       MonitorStatus.warning => (AraColors.accentWarning, AraColors.accentWarning),
       MonitorStatus.fault => (AraColors.errorText, AraColors.accentError),
-      _ => (AraColors.textSecondary, AraColors.border),
+      _ => (AraColors.textSecondary, ctl.big ? AraColors.textSecondary : AraColors.border),
     };
     final shown = frozen ? context.l10n.monitorLastKnown : word;
     final wordColour = frozen
@@ -773,7 +773,7 @@ class _Tile extends StatelessWidget {
       },
       child: Material(
         key: Key('simple-monitor-$tileKey'),
-        color: ctl.big ? AraColors.bgInput : AraColors.tileFill,
+        color: AraColors.tileFill,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AraRadius.simplePanel),
           side: BorderSide(color: outline, width: outline == AraColors.border ? 1 : 1.5),
@@ -1891,7 +1891,10 @@ class _HfrTile extends StatelessWidget {
       name: l10n.monitorHfr,
       status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
       word: flagged ? l10n.monitorDrifting : null,
-      value: '${l10n.monitorHfr} ${_n(f.last?.hfr, 2)}',
+      value: [
+        '${l10n.monitorHfr} ${_n(f.last?.hfr, 2)}',
+        if (flagged) _flagText(l10n, l10n.monitorHfr, dev!),
+      ].join(', '),
       frozen: s.frozen,
       ctl: ctl,
       children: [
@@ -1957,7 +1960,12 @@ class _StarsTile extends StatelessWidget {
       name: l10n.monitorStarsAndSky,
       status: flagged ? MonitorStatus.warning : MonitorStatus.normal,
       word: flagged ? l10n.monitorDrifting : null,
-      value: '${l10n.monitorStars} ${last?.stars ?? '—'}, $detail',
+      value: [
+        '${l10n.monitorStars} ${last?.stars ?? '—'}',
+        if (detail.isNotEmpty) detail,
+        if (starsDev?.flagged ?? false) _flagText(l10n, l10n.monitorStars, starsDev!),
+        if (bgDev?.flagged ?? false) _flagText(l10n, l10n.monitorSkyBackground, bgDev!),
+      ].join(', '),
       frozen: s.frozen,
       ctl: ctl,
       children: [
