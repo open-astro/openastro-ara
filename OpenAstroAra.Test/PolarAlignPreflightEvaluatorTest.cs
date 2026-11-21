@@ -112,6 +112,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task The_polar_aligner_row_passes_with_its_motors_on_because_its_stop_is_checked() {
+            PolarAlignSettingsDto Motors(bool auto) =>
+                PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(PolarAlignerAuto: auto).Confirmed(MountId));
+
+            var none = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
+            var off = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => Motors(false)) with { AlignerPresent = () => true }, CancellationToken.None).ConfigureAwait(false);
+            var on = await PolarAlignPreflightEvaluator.EvaluateAsync(
+                Inputs(settings: () => Motors(true)) with { AlignerPresent = () => true }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(Check(none, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(none, PolarAlignPreflightChecks.Aligner).Detail, Does.Contain("No Polar Aligner"));
+                Assert.That(Check(off, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(off, PolarAlignPreflightChecks.Aligner).Detail, Does.Contain("motors are off"));
+                Assert.That(Check(on, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok),
+                    "#2115 verified the stop and capped the travel: the motors-on row is real");
+                Assert.That(Check(on, PolarAlignPreflightChecks.Aligner).Detail,
+                    Is.EqualTo("The Polar Aligner's Stop is checked and its turns are capped."));
+                Assert.That(on.Dto.Ready, Is.True);
+            });
+        }
+
+        [Test]
         public async Task The_mount_clock_check_is_the_mount_clock_gates_answer() {
             const string closed = "Mount clock not verified: the rig clock has not been synced from the app or a GPS.";
 

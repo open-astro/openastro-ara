@@ -70,7 +70,8 @@ internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exc
 /// (#2083) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
 /// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), the start pointing (the
 /// confirm step's plan), and (#2083) the mount type (alt-az refused) and CanMoveAxis(Primary) (false refuses a motor
-/// start; a hand-turn start only warns). The Polar Aligner's check is <c>unknown</c> until its verified stop lands (#2069). A last <c>warn</c> asks the user to set the
+/// start; a hand-turn start only warns). The Polar Aligner's check passes: with no aligner or its motors off the user turns the bolts, and with its motors on
+/// its Stop is verified and its turns capped (#2069). A last <c>warn</c> asks the user to set the
 /// mount's own limits.</para>
 /// </summary>
 internal static class PolarAlignPreflightEvaluator {
@@ -283,7 +284,7 @@ internal static class PolarAlignPreflightEvaluator {
             } else if (!settings.PolarAlignerAuto) {
                 alignerRow.Ok("The Polar Aligner's motors are off: you turn the bolts.");
             } else {
-                alignerRow.Unknown("Not checked yet: the Polar Aligner's verified stop and travel limits come with #2069.");
+                alignerRow.Ok("The Polar Aligner's Stop is checked and its turns are capped.");
             }
         } catch (Exception ex) {
             alignerRow.Unknown($"The Polar Aligner could not be read: {ex.Message}");
