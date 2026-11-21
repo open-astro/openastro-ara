@@ -11871,6 +11871,288 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Server {server} and app {app} differ; update both from the same release.'**
   String versionMismatchWarning(String server, String app);
+
+  /// Polar align (#2068): heading of the Start card's list of safety checks the rig makes before a start
+  ///
+  /// In en, this message translates to:
+  /// **'Pre-flight checks'**
+  String get polarPreflightTitle;
+
+  /// Polar align (#2068): the pre-flight list is being read from the rig
+  ///
+  /// In en, this message translates to:
+  /// **'Checking the rig…'**
+  String get polarPreflightChecking;
+
+  /// Polar align (#2068): the pre-flight list could not be read; Start stays on and the rig refuses a start that fails a check
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read the pre-flight checks. The rig still checks them when you start.'**
+  String get polarPreflightReadFailed;
+
+  /// Polar align (#2068): read the pre-flight list again after a failed read
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get polarPreflightRetry;
+
+  /// Polar align (#2068): tooltip of the button that reads the pre-flight list again
+  ///
+  /// In en, this message translates to:
+  /// **'Check again'**
+  String get polarPreflightRefresh;
+
+  /// Polar align (#2068): under the pre-flight list, how many checks passed and how many the rig does not make yet
+  ///
+  /// In en, this message translates to:
+  /// **'{passed} passed · {notYet} not checked yet'**
+  String polarPreflightSummary(int passed, int notYet);
+
+  /// Polar align (#2068): show every pre-flight check, not only the failing and warning ones
+  ///
+  /// In en, this message translates to:
+  /// **'Show all checks'**
+  String get polarPreflightShowAll;
+
+  /// Polar align (#2068): show only the failing and warning pre-flight checks again
+  ///
+  /// In en, this message translates to:
+  /// **'Show fewer'**
+  String get polarPreflightShowFewer;
+
+  /// Polar align (#2068): screen-reader status of a pre-flight check that passed
+  ///
+  /// In en, this message translates to:
+  /// **'passed'**
+  String get polarPreflightStatusOk;
+
+  /// Polar align (#2068): screen-reader status of a pre-flight check that is a reminder and never stops a start
+  ///
+  /// In en, this message translates to:
+  /// **'note'**
+  String get polarPreflightStatusWarn;
+
+  /// Polar align (#2068): screen-reader status of a pre-flight check that fails; Start is off until it passes
+  ///
+  /// In en, this message translates to:
+  /// **'fails, Start is off'**
+  String get polarPreflightStatusFail;
+
+  /// Polar align (#2068): screen-reader status of a pre-flight check the rig does not make yet
+  ///
+  /// In en, this message translates to:
+  /// **'not checked yet'**
+  String get polarPreflightStatusUnknown;
+
+  /// Polar align (#2068): why Simple Mode's Start is off while a pre-flight check fails
+  ///
+  /// In en, this message translates to:
+  /// **'A pre-flight check fails: see the list in Polar align'**
+  String get polarPreflightBlocked;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Mount connected'**
+  String get polarPreflightCheckMountConnected;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Mount not parked'**
+  String get polarPreflightCheckMountParked;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Site latitude'**
+  String get polarPreflightCheckSiteLatitude;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Site longitude and sidereal time'**
+  String get polarPreflightCheckSiteLongitude;
+
+  /// Polar align (#2068): pre-flight check name (the mount's clock set and checked from the rig's synced clock)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount clock'**
+  String get polarPreflightCheckMountClock;
+
+  /// Polar align (#2068): pre-flight check name (no power loss or unconfirmed stop since the mount's position was last trusted)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount position trusted'**
+  String get polarPreflightCheckPoseVerified;
+
+  /// Polar align (#2068): pre-flight check name (the user confirmed this mount's clearance)
+  ///
+  /// In en, this message translates to:
+  /// **'Counterweight and cable clearance'**
+  String get polarPreflightCheckClearance;
+
+  /// Polar align (#2068): pre-flight check name (the start's plan from a fresh reading of the mount)
+  ///
+  /// In en, this message translates to:
+  /// **'Where the scope points'**
+  String get polarPreflightCheckStartPointing;
+
+  /// Polar align (#2068): pre-flight check name (German equatorial, fork or alt-az)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount type'**
+  String get polarPreflightCheckMountType;
+
+  /// Polar align (#2068): pre-flight check name (the mount can turn its RA axis by rate)
+  ///
+  /// In en, this message translates to:
+  /// **'RA motor control'**
+  String get polarPreflightCheckCanMoveAxis;
+
+  /// Polar align (#2068): pre-flight check name (the AlpacaBridge version with its motion-safety marker)
+  ///
+  /// In en, this message translates to:
+  /// **'AlpacaBridge motion safety'**
+  String get polarPreflightCheckMotionSafety;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Pier side'**
+  String get polarPreflightCheckPierSide;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Start near the pole and above the horizon'**
+  String get polarPreflightCheckPoseEnvelope;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Counterweight angle at the start'**
+  String get polarPreflightCheckStartCwAngle;
+
+  /// Polar align (#2068): pre-flight check name
+  ///
+  /// In en, this message translates to:
+  /// **'Turn step within the counterweight limit'**
+  String get polarPreflightCheckTurnStep;
+
+  /// Polar align (#2068): pre-flight check name (the motorised alt/az adjuster)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Aligner'**
+  String get polarPreflightCheckAligner;
+
+  /// Polar align (#2068): pre-flight reminder to set the mount's own slew and altitude limits in its hand controller
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s own limits'**
+  String get polarPreflightCheckMountLimits;
+
+  /// Polar align (#2068): opens the clearance dialog while this mount's clearance is not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm clearance…'**
+  String get polarClearanceButton;
+
+  /// Polar align (#2068): opens the clearance dialog for a mount whose clearance is confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'Change clearance…'**
+  String get polarClearanceChange;
+
+  /// Polar align (#2068): title of the clearance dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Check the mount\'s clearance'**
+  String get polarClearanceTitle;
+
+  /// Polar align (#2068): the clearance dialog's first paragraph: what to check, with the hand controller
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.'**
+  String get polarClearanceExplain;
+
+  /// Polar align (#2068): the clearance dialog's second paragraph
+  ///
+  /// In en, this message translates to:
+  /// **'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.'**
+  String get polarClearanceHow;
+
+  /// Polar align (#2068): the clearance dialog's limit (0° = counterweights down, 90° = horizontal), whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Counterweight limit: {deg}° from counterweight-down'**
+  String polarClearanceLimit(String deg);
+
+  /// Polar align (#2068): the tick the clearance dialog's Confirm needs
+  ///
+  /// In en, this message translates to:
+  /// **'I checked this mount\'s clearance with its hand controller'**
+  String get polarClearanceTick;
+
+  /// Polar align (#2068): the clearance dialog's confirm button
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get polarClearanceConfirm;
+
+  /// Polar align (#2068, Joey 2026-11-21): button in the clearance dialog and in Settings › Imaging › Polar align that withdraws this mount's clearance confirmation, so the motor does not turn it until it is confirmed again
+  ///
+  /// In en, this message translates to:
+  /// **'Take back'**
+  String get polarClearanceTakeBack;
+
+  /// Polar align start confirm dialog (#2068, Joey 2026-11-21): shown while the mount's clearance is not confirmed; 'Move the mount' is polarConfirmGo, 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.'**
+  String get polarConfirmMotorNeedsClearance;
+
+  /// Polar align (#2068): verb phrase completing "Couldn't …" when the clearance could not be saved
+  ///
+  /// In en, this message translates to:
+  /// **'save the mount\'s clearance'**
+  String get polarActionClearance;
+
+  /// Refusal (polar-align-clearance-not-confirmed, #2068): no polar alignment motion until the user confirmed this mount's counterweight and cable clearance; {limit} is the limit in whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to {limit}° from counterweight-down, then tap Confirm clearance in Polar align.'**
+  String refusalPolarAlignClearanceNotConfirmed(String limit);
+
+  /// Settings › Imaging › Polar align (#2068): the connected mount's counterweight limit and clearance confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Counterweight limit and clearance'**
+  String get polarKnobClearance;
+
+  /// Settings › Imaging › Polar align (#2068): the connected mount's limit, its clearance confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}° from counterweight-down, confirmed for this mount'**
+  String polarKnobClearanceConfirmed(String deg);
+
+  /// Settings › Imaging › Polar align (#2068): the connected mount's limit, its clearance not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}° from counterweight-down, not confirmed: Polar align does not move this mount'**
+  String polarKnobClearanceNotConfirmed(String deg);
+
+  /// Settings › Imaging › Polar align (#2068): no mount connected, so no clearance to show
+  ///
+  /// In en, this message translates to:
+  /// **'Connect the mount to see and confirm its clearance'**
+  String get polarKnobClearanceNoMount;
+
+  /// Settings › Imaging › Polar align (#2068): hint under the clearance row
+  ///
+  /// In en, this message translates to:
+  /// **'Kept for each mount. Measure it with the hand controller.'**
+  String get polarKnobClearanceHint;
 }
 
 class _AppLocalizationsDelegate

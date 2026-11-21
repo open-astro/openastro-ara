@@ -23,6 +23,7 @@ using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -953,9 +954,37 @@ public static partial class ProfileEndpoints {
         // stored any value: a stored value outside the range must not make the panel's own edits (the
         // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse
         // — the same table the service applies on every read (PolarAlignSettingsClamp).
+        // #2068 — a confirmed clearance is for the limit the user checked: one out of range is a 400, never raised or
+        // lowered to a limit the user did not confirm. An unconfirmed entry's limit is clamped like the other knobs.
+        if (InvalidConfirmedClearance(body.MountClearance) is { } clearanceProblem) {
+            return Results.Problem(detail: clearanceProblem, statusCode: StatusCodes.Status400BadRequest);
+        }
+        // #2068 — a body without mount_clearance (an app from before the field) keeps the stored entries: saving the
+        // exposure there must not wipe every mount's confirmation. The app sends {} to clear them.
+        if (body.MountClearance is null) {
+            body = body with { MountClearance = store.GetPolarAlignSettings()?.MountClearance };
+        }
         body = PolarAlignSettingsClamp.Apply(body);
         store.PutPolarAlignSettings(body);
         return Results.Ok(body);
+    }
+
+    /// <summary>#2068 — the 400 detail for a confirmed clearance entry whose counterweight limit is outside 10–75°, or
+    /// null when every confirmed entry is in range.</summary>
+    internal static string? InvalidConfirmedClearance(IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
+        if (entries is null) {
+            return null;
+        }
+        foreach (var (key, entry) in entries) {
+            if (entry is { ClearanceConfirmed: true } &&
+                !(double.IsFinite(entry.MaxCwAngleDeg) &&
+                  entry.MaxCwAngleDeg >= PolarAlignSettingsClamp.MinMaxCwAngleDeg &&
+                  entry.MaxCwAngleDeg <= PolarAlignSettingsClamp.MaxMaxCwAngleDeg)) {
+                return string.Create(CultureInfo.InvariantCulture,
+                    $"mount_clearance['{key}'].max_cw_angle_deg must be {PolarAlignSettingsClamp.MinMaxCwAngleDeg:0} to {PolarAlignSettingsClamp.MaxMaxCwAngleDeg:0} when clearance_confirmed is true");
+            }
+        }
+        return null;
     }
 
     /// <summary>§76.2 — write-boundary validation of the guide exposure range. The range feeds BOTH

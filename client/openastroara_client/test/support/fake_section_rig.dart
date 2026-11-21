@@ -356,6 +356,7 @@ const rigDefaults = <String, Map<String, Object?>>{
     'stop_tracking_when_done': true,
     'camera': 'guide',
     'frames_per_point': 3,
+    'mount_clearance': null,
   },
   // The daemon sends null for a profile's unset guider mode and a blank
   // unattended window; the keys are there.

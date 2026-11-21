@@ -11,6 +11,7 @@ import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../util/polar_align_error_text.dart';
+import '../../state/polar_align/polar_align_preflight_state.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../state/profile_management_state.dart';
@@ -19,6 +20,7 @@ import '../../state/settings/polar_align_settings_state.dart';
 import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/imaging/polar_align_readout.dart';
 import '../../widgets/imaging/polar_aligner_block.dart';
+import '../../widgets/imaging/polar_preflight_checklist.dart';
 import '../../widgets/imaging/polar_start_confirm.dart';
 import 'simple_preflight.dart'
     show SimplePreflightStep, simplePreflightProvider, simplePreflightNext;
@@ -62,6 +64,8 @@ class SimplePolarShutter extends ConsumerWidget {
     // Busy while any panel's call runs: a second press would send a start
     // twice. Stop never waits, as it halts a routine that moves the mount.
     final busy = ref.watch(polarAlignActionProvider).busy;
+    // #2068 — a pre-flight check that fails: the rig would refuse the start.
+    final blocked = !active && polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider));
     final notify = userNotifier(context, origin: SimpleStatusOrigin.polar);
     final l10n = context.l10n;
     final action = ref.read(polarAlignActionProvider.notifier);
@@ -80,9 +84,13 @@ class SimplePolarShutter extends ConsumerWidget {
       start: true,
       running: active,
       label: active ? l10n.polarStop : l10n.polarStart,
-      whyOff: api == null ? l10n.shellRigNotConnected : l10n.shellMainCameraBusy,
+      whyOff: api == null
+          ? l10n.shellRigNotConnected
+          : blocked
+          ? l10n.polarPreflightBlocked
+          : l10n.shellMainCameraBusy,
       // It turns the mount: never under the main camera's frame.
-      onPressed: api == null || (!active && (busy || ref.watch(mainCameraBusyProvider)))
+      onPressed: api == null || blocked || (!active && (busy || ref.watch(mainCameraBusyProvider)))
           ? null
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
@@ -489,6 +497,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               // Its own fixed slot between Setup and Error (user, 2026-11-16).
               if (aligner) const PolarAlignerBlock(),
+              // #2068 the checks the rig makes before a start; the shutter is off while one fails.
+              if (!active) const PolarPreflightChecklist(),
             ],
             // Rough stage: which side of the pole, in words.
             if (active && live.stage == PolarAlignStages.coarse)
@@ -652,7 +662,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               OutlinedButton(
                 key: const Key('simple-polar-check-again'),
-                onPressed: busy ? null : _check,
+                // #2068 — off while a check that does not depend on the turn step fails.
+                onPressed: busy || polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider)) ? null : _check,
                 child: Text(l10n.polarCheck),
               ),
             ],
@@ -674,7 +685,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 ),
               OutlinedButton(
                 key: const Key('simple-polar-rough-first'),
-                onPressed: busy ? null : _roughFirst,
+                // #2068 — a start like the shutter's: off while a check fails.
+                onPressed: busy || polarPreflightBlocksStart(ref.watch(polarAlignPreflightProvider)) ? null : _roughFirst,
                 child: Text(l10n.polarRoughFirst),
               ),
             ],
@@ -730,7 +742,11 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                   Expanded(
                     child: OutlinedButton(
                       key: const Key('simple-polar-check'),
-                      onPressed: !busy && inTolerance ? _check : null,
+                      onPressed: !busy &&
+                              inTolerance &&
+                              !polarPreflightBlocksCheck(ref.watch(polarAlignPreflightProvider))
+                          ? _check
+                          : null,
                       child: Text(l10n.polarCheck),
                     ),
                   ),

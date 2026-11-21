@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using System;
+using System.Collections.Generic;
 using OpenAstroAra.Server.Contracts;
 
 namespace OpenAstroAra.Server.Services;
@@ -34,11 +35,18 @@ public static class PolarAlignSettingsClamp {
     public const int MinFramesPerPoint = 1;
     public const int MaxFramesPerPoint = 5;
     public const int DefaultFramesPerPoint = 3;
+    // #2068 (ARA-8) — the counterweight limit: 0° = Home (counterweight down), 90° = horizontal.
+    public const double MinMaxCwAngleDeg = 10.0;
+    public const double MaxMaxCwAngleDeg = 75.0;
+    public const double DefaultMaxCwAngleDeg = 60.0;
+    // A confirmation names the limit it is for; this close is the same limit (a JSON round trip).
+    private const double ConfirmedLimitToleranceDeg = 1e-6;
 
     /// <summary>The same settings with the knobs in range: a non-finite or out-of-range turn is
     /// clamped (a non-finite one takes the default), a rough exposure that is not positive takes
     /// the default — one meaning for "no value", never "use the guide exposure on the main camera" —, the frames
-    /// per point are held to 1–5, and an unknown camera is the guide camera (#2082).</summary>
+    /// per point are held to 1–5, an unknown camera is the guide camera (#2082), and each mount's counterweight limit is
+    /// held to 10–75° (#2068).</summary>
     public static PolarAlignSettingsDto Apply(PolarAlignSettingsDto settings) {
         ArgumentNullException.ThrowIfNull(settings);
         return settings with {
@@ -55,6 +63,37 @@ public static class PolarAlignSettingsClamp {
             // an older or hand-edited profile.json may still hold it).
             FramesPerPoint = Math.Clamp(settings.FramesPerPoint, MinFramesPerPoint, MaxFramesPerPoint),
             Camera = PolarAlignCameras.IsValid(settings.Camera) ? settings.Camera : PolarAlignCameras.Guide,
+            MountClearance = ClampMountClearance(settings.MountClearance),
         };
     }
+
+    /// <summary>#2068 — the per-mount clearance entries: each limit held at 10–75° (a non-finite one takes the default,
+    /// 60°). An entry stays confirmed only while the limit it was confirmed for (<c>ConfirmedMaxCwAngleDeg</c>) is its
+    /// limit: a limit changed without a new confirmation is not confirmed (Joey, 2026-11-21). An entry with an empty
+    /// key, or a null one, is dropped: no mount has that identity. None (null) stays none: no mount has an entry, so
+    /// every mount reads the defaults (60°, not confirmed).</summary>
+    private static Dictionary<string, PolarAlignMountClearanceDto>? ClampMountClearance(
+            IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
+        if (entries is null) {
+            return null;
+        }
+        var clamped = new Dictionary<string, PolarAlignMountClearanceDto>(StringComparer.Ordinal);
+        foreach (var (key, entry) in entries) {
+            if (string.IsNullOrWhiteSpace(key) || entry is null) {
+                continue;
+            }
+            var limit = ClampMaxCwAngleDeg(entry.MaxCwAngleDeg);
+            var confirmed = entry.ClearanceConfirmed && entry.ConfirmedMaxCwAngleDeg is { } at && Math.Abs(at - limit) < ConfirmedLimitToleranceDeg;
+            clamped[key] = entry with {
+                MaxCwAngleDeg = limit,
+                ClearanceConfirmed = confirmed,
+                ConfirmedMaxCwAngleDeg = confirmed ? limit : null,
+            };
+        }
+        return clamped;
+    }
+
+    /// <summary>#2068 — a counterweight limit in range: clamped to 10–75°; a non-finite one is the default, 60°.</summary>
+    public static double ClampMaxCwAngleDeg(double deg) =>
+        double.IsFinite(deg) ? Math.Clamp(deg, MinMaxCwAngleDeg, MaxMaxCwAngleDeg) : DefaultMaxCwAngleDeg;
 }

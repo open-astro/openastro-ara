@@ -29,7 +29,8 @@ enum RefusalCause {
   firstFlipNotCompleted('first-flip-not-completed'),
   mountClockNotVerified('mount-clock-not-verified'),
   polarAlignAlreadyRunning('polar-align-already-running'),
-  polarAlignClutchTurned('polar-align-clutch-turned');
+  polarAlignClutchTurned('polar-align-clutch-turned'),
+  polarAlignClearanceNotConfirmed('polar-align-clearance-not-confirmed');
 
   const RefusalCause(this.token);
 
