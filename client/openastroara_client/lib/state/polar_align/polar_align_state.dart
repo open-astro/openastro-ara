@@ -155,6 +155,7 @@ class PolarAlignLive {
     double? azErrorArcmin,
     double? totalErrorArcmin,
     double? totalSigmaArcmin,
+    bool clearSigma = false,
     String? zone,
     int? consecutiveSolveFailures,
     String? errorReason,
@@ -188,7 +189,7 @@ class PolarAlignLive {
         altErrorArcmin: clearReadout ? null : altErrorArcmin ?? this.altErrorArcmin,
         azErrorArcmin: clearReadout ? null : azErrorArcmin ?? this.azErrorArcmin,
         totalErrorArcmin: clearReadout ? null : totalErrorArcmin ?? this.totalErrorArcmin,
-        totalSigmaArcmin: clearReadout ? null : totalSigmaArcmin ?? this.totalSigmaArcmin,
+        totalSigmaArcmin: clearReadout || clearSigma ? null : totalSigmaArcmin ?? this.totalSigmaArcmin,
         zone: clearReadout ? null : zone ?? this.zone,
         consecutiveSolveFailures:
             consecutiveSolveFailures ?? this.consecutiveSolveFailures,
@@ -288,6 +289,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         totalSigmaArcmin: _num(event.payload, 'total_sigma_arcmin'),
+        // #2072 review — each readout says its σ afresh: one without (an older
+        // daemon) shows none rather than an earlier fit's.
+        clearSigma: _num(event.payload, 'total_sigma_arcmin') == null,
         zone: polarAlignZone(_num(event.payload, 'total_error_arcmin')),
         clearFrameInProgress: true,
       );
@@ -307,6 +311,9 @@ PolarAlignLive? foldPolarAlignEvent(PolarAlignLive current, WsEvent event,
         azErrorArcmin: _num(event.payload, 'azimuth_error_arcmin'),
         totalErrorArcmin: _num(event.payload, 'total_error_arcmin'),
         totalSigmaArcmin: _num(event.payload, 'total_sigma_arcmin'),
+        // #2072 review — each readout says its σ afresh: one without (an older
+        // daemon) shows none rather than an earlier fit's.
+        clearSigma: _num(event.payload, 'total_sigma_arcmin') == null,
         zone: event.payload['zone'] is String ? event.payload['zone'] as String : current.zone,
         consecutiveSolveFailures: 0,
         // Every progress event says the readout's caution afresh (absent = sound).

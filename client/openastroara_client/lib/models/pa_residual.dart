@@ -30,8 +30,9 @@ class PaResidual {
   /// Tonight's last Polar Align result, for comparison.
   final double? alignErrorArcmin;
 
-  /// #2072 that result's own 1σ (`align_sigma_arcmin`); null from an older
-  /// daemon, a stored row, or an alignment measured before it.
+  /// #2072 that result's own 1σ (`align_sigma_arcmin`, kept with a stored
+  /// row too); null from an older daemon, a row stored before it, or an
+  /// alignment measured before it.
   final double? alignSigmaArcmin;
   final DateTime? alignEndedUtc;
   final DateTime? completedUtc;

@@ -130,6 +130,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Optics_with_no_finite_positive_scale_give_no_pixel_scale() {
+            // #2072 review: a focal length of 0 would make the scale infinite; the outcome carries null (unknown) instead.
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(7.5, 200), Is.EqualTo(206.265 * 7.5 / 200).Within(1e-12));
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(7.5, 0), Is.Null);
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(0, 200), Is.Null);
+            Assert.That(PolarAlignFrameSolver.PixelScaleArcsecOrNull(double.NaN, 200), Is.Null);
+        }
+
+        [Test]
         public async Task The_measuring_solve_reports_nothing_when_the_frame_does_not_solve() {
             var (sut, _) = NewSolver();
 

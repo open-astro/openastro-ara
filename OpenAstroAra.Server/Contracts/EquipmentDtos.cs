@@ -765,7 +765,8 @@ public sealed record GuidingAssistantApplyResultDto(IReadOnlyList<string> Applie
 /// wrong); null with no Polar Align result to compare. Hour angle / Dec are the mount's at the end.
 /// <c>AlignSigmaArcmin</c> (#2072) is that Polar Align result's own 1σ; with it, the two disagree when the value is
 /// above the result by more than twice their combined 1σ, √(<c>UncertaintyArcmin</c>² + <c>AlignSigmaArcmin</c>²)
-/// (without it, an older row, the fixed 2′ margin stands in for the result's error). Not stored with the row.
+/// (without it, an older row, the fixed 2′ margin stands in for the result's error). Stored with the row
+/// (<c>pa_residuals.align_sigma_arcmin</c>), so a listed row is judged as the live one was; null on a row stored before it.
 /// </summary>
 public sealed record PaResidualDto(
     Guid Id,

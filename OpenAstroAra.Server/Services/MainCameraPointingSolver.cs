@@ -199,7 +199,6 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
         }
         var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
             _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
-        var scale = 206.265 * pixelSize * Math.Max((short)1, profile.PlateSolveSettings.Binning) / focalLength;
-        return double.IsFinite(scale) && scale > 0 ? scale : null;
+        return PolarAlignFrameSolver.PixelScaleArcsecOrNull(pixelSize * Math.Max((short)1, profile.PlateSolveSettings.Binning), focalLength);
     }
 }

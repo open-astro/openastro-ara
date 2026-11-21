@@ -46,8 +46,13 @@ String polarVerdictFor(double arcmin) {
 
 /// #2072 what a Polar Align rating rates (Joey, 2026-11-21): the total error
 /// plus twice its 1σ, so a noisy "0.2′ ± 1.3′" never reads Excellent. Without a
-/// σ (an older daemon) the error alone. Pure — unit-tested.
-double polarRatedArcmin(double totalArcmin, double? sigmaArcmin) => totalArcmin.abs() + 2 * (sigmaArcmin ?? 0);
+/// σ (an older daemon) the error alone. Both are taken at 0.01′, as the
+/// daemon's `RatedErrorArcmin` takes them, so an unrounded value rates in the
+/// daemon's band. Pure — unit-tested.
+double polarRatedArcmin(double totalArcmin, double? sigmaArcmin) =>
+    _hundredths(totalArcmin.abs()) + 2 * _hundredths(sigmaArcmin ?? 0);
+
+double _hundredths(double arcmin) => (arcmin * 100).round() / 100;
 
 /// #2072 the Check's verdict token: with the result's σ, the bands on the
 /// error plus twice its σ (the daemon's own rule, `RatedErrorArcmin`); without

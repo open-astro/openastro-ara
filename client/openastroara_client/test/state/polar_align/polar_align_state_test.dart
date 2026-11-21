@@ -109,6 +109,21 @@ void main() {
       expect(fromStatus.totalSigmaArcmin, 1.1);
     });
 
+    test('a progress or checked event with no 1σ clears the earlier one, so no stale ± shows (#2072 review)', () {
+      const withSigma = PolarAlignLive(
+          phase: PolarAlignStates.adjusting, stage: 'fine', totalErrorArcmin: 0.2, totalSigmaArcmin: 1.1);
+      final progress = foldPolarAlignEvent(
+        withSigma,
+        _event(PolarAlignWsEvents.progress, {'iteration': 3, 'total_error_arcmin': 0.3}),
+      )!;
+      expect((progress.totalErrorArcmin, progress.totalSigmaArcmin), (0.3, null));
+      final checked = foldPolarAlignEvent(
+        withSigma,
+        _event(PolarAlignWsEvents.checked, {'total_error_arcmin': 0.5, 'verdict': 'excellent'}),
+      )!;
+      expect((checked.totalErrorArcmin, checked.totalSigmaArcmin), (0.5, null));
+    });
+
     test('progress after paused resumes adjusting', () {
       final folded = foldPolarAlignEvent(
         const PolarAlignLive(phase: PolarAlignStates.paused, consecutiveSolveFailures: 5),

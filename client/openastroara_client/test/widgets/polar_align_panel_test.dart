@@ -245,6 +245,14 @@ void main() {
       expect(polarCheckVerdict(older), 'good', reason: "no σ: the daemon's own token");
     });
 
+    test("the rating takes the error and its 1σ at 0.01′, as the daemon's verdict does (#2072 review)", () {
+      // 0.996 + 2 × 0.004 is 1.004 unrounded, but 1.00 + 2 × 0.00 at 0.01′:
+      // the daemon rates 1.00, Excellent, and so does the client.
+      expect(polarRatedArcmin(0.996, 0.004), 1.0);
+      expect(polarVerdictFor(polarRatedArcmin(0.996, 0.004)), 'excellent');
+      expect(polarRatedArcmin(0.2, 1.3), closeTo(2.8, 1e-9));
+    });
+
     test('aligned needs the error plus twice its 1σ inside the tolerance; no σ judges the error alone (#2072)', () {
       expect(polarAligned(0.5, 0.25, 1.0), isTrue, reason: '0.5 + 2 × 0.25 is exactly the tolerance');
       expect(polarAligned(0.5, 0.26, 1.0), isFalse);

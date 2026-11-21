@@ -121,7 +121,14 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         var apparent = result.Coordinates.Transform(Epoch.JNOW);
         // #2072 — the scale the solver was told (guide optics × binning), for the fit's precision floor.
         return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec,
-            PixelScaleArcsec: 206.265 * binnedPixelSizeUm / focalLengthMm);
+            PixelScaleArcsec: PixelScaleArcsecOrNull(binnedPixelSizeUm, focalLengthMm));
+    }
+
+    /// <summary>#2072 — the arcsec per pixel of a frame from its (binned) pixel size and focal length; null when the
+    /// optics give no finite, positive scale (a focal length of 0, say), so no reader sees an infinite or NaN scale.</summary>
+    internal static double? PixelScaleArcsecOrNull(double binnedPixelSizeUm, double focalLengthMm) {
+        var scale = 206.265 * binnedPixelSizeUm / focalLengthMm;
+        return double.IsFinite(scale) && scale > 0 ? scale : null;
     }
 
     public async Task<double?> MeasureFocalLengthAsync(

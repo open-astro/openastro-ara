@@ -312,9 +312,13 @@ public sealed partial class SqliteAraDatabase : IAraDatabase {
                 hour_angle_hours       REAL,
                 dec_deg                REAL,
                 align_error_arcmin     REAL,
-                align_ended_at         TEXT
+                align_ended_at         TEXT,
+                align_sigma_arcmin     REAL
             );
             """, ct);
+        // #2072 review — the compared Polar Align result's 1σ, so a stored row is judged as the live one was; NULL on a row
+        // written before this column.
+        await AddColumnIfMissingAsync(conn, "pa_residuals", "align_sigma_arcmin", "REAL", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_completed_at ON pa_residuals(completed_at);", ct);
         await ExecAsync(conn, "CREATE INDEX IF NOT EXISTS idx_pa_residuals_session_id ON pa_residuals(session_id);", ct);
 

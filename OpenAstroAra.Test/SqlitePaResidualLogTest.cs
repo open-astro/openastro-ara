@@ -63,7 +63,7 @@ namespace OpenAstroAra.Test {
             Id: Guid.NewGuid(), Status: "done", StartedUtc: completed.AddMinutes(-6), CompletedUtc: completed,
             SampleSeconds: 300, TargetSeconds: 300, Frames: 118, DriftArcsecPerMin: -error / PaResidualEstimator.ArcminPerArcsecPerMin,
             PaErrorMinArcmin: error, UncertaintyArcmin: 0.2, Reliable: true, HourAngleHours: -1.25, DecDeg: 44.2,
-            AlignErrorArcmin: 0.68, AlignEndedUtc: completed.AddMinutes(-40), SessionId: session);
+            AlignErrorArcmin: 0.68, AlignEndedUtc: completed.AddMinutes(-40), SessionId: session, AlignSigmaArcmin: 0.31);
 
         [Test]
         public async Task A_logged_residual_reads_back_newest_first_and_by_session() {
@@ -72,7 +72,7 @@ namespace OpenAstroAra.Test {
             var t0 = new DateTimeOffset(2026, 10, 8, 21, 0, 0, TimeSpan.Zero);
             var first = Done(t0, session, error: 0.8);
             var second = Done(t0.AddHours(3), session: null, error: 1.4) with {
-                HourAngleHours = null, DecDeg = null, AlignErrorArcmin = null, AlignEndedUtc = null, Reliable = false,
+                HourAngleHours = null, DecDeg = null, AlignErrorArcmin = null, AlignEndedUtc = null, AlignSigmaArcmin = null, Reliable = false,
             };
             await log.InsertAsync(first, CancellationToken.None);
             await log.InsertAsync(second, CancellationToken.None);
@@ -82,6 +82,7 @@ namespace OpenAstroAra.Test {
             Assert.That(all[0].Id, Is.EqualTo(second.Id), "newest first");
             Assert.That(all[0].Reliable, Is.False);
             Assert.That(all[0].AlignErrorArcmin, Is.Null);
+            Assert.That(all[0].AlignSigmaArcmin, Is.Null);
             Assert.That(all[1], Is.EqualTo(first with { TargetSeconds = first.SampleSeconds }), "every field round-trips");
 
             var bySession = await log.ListAsync(session, limit: 20, CancellationToken.None);
