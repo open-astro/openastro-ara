@@ -16,12 +16,13 @@ import '../../support/polar_preflight.dart';
 /// A rig whose pre-flight list follows the profile's polar-align section.
 class _Rig implements PolarAlignClient {
   final section = FakePolarAlignSection(loaded: true);
+  bool parked = true;
 
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async =>
-      rigPreflightFor(section.initial);
+  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async =>
+      rigPreflightFor(section.initial, handTurn: handTurn, parked: parked);
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
@@ -70,7 +71,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.byKey(const Key('polar-preflight-check-clearance_confirmed')),
+      find.byKey(const Key('polar-preflight-check-mount_parked')),
       findsOneWidget,
       reason: "the failing check is listed in Simple Mode's Polar align panel",
     );
@@ -79,13 +80,7 @@ void main() {
         .onPressed;
     expect(shutter(), isNull, reason: "the rail's shutter is the Start");
 
-    rig.section.initial = rigPolarAlign.withMountClearance(
-      preflightMountKey,
-      const PolarAlignMountClearance(
-        maxCwAngleDeg: 60,
-        clearanceConfirmed: true,
-      ),
-    );
+    rig.parked = false;
     await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
     await tester.pumpAndSettle();
     expect(shutter(), isNotNull);

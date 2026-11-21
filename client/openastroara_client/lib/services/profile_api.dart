@@ -1016,14 +1016,24 @@ class ProfileApi {
     final raw = j['mount_clearance'] as Map<String, dynamic>?;
     return {
       for (final e in (raw ?? const <String, dynamic>{}).entries)
-        e.key: PolarAlignMountClearance(
-          maxCwAngleDeg:
-              ((e.value as Map<String, dynamic>)['max_cw_angle_deg'] as num)
-                  .toDouble(),
-          clearanceConfirmed:
-              (e.value as Map<String, dynamic>)['clearance_confirmed'] as bool,
-        ),
+        e.key: _mountClearanceEntryFromRig(e.value as Map<String, dynamic>),
     };
+  }
+
+  // Every key of an entry must be there; confirmed_max_cw_angle_deg is null
+  // while the mount is not confirmed.
+  static PolarAlignMountClearance _mountClearanceEntryFromRig(
+    Map<String, dynamic> j,
+  ) {
+    if (!j.containsKey('confirmed_max_cw_angle_deg')) {
+      throw const FormatException('missing confirmed_max_cw_angle_deg');
+    }
+    return PolarAlignMountClearance(
+      maxCwAngleDeg: (j['max_cw_angle_deg'] as num).toDouble(),
+      clearanceConfirmed: j['clearance_confirmed'] as bool,
+      confirmedMaxCwAngleDeg: (j['confirmed_max_cw_angle_deg'] as num?)
+          ?.toDouble(),
+    );
   }
 
   /// Every safety key the client has a field for.

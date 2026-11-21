@@ -19,7 +19,6 @@ using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.Test.PolarAlign;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -131,9 +130,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task The_clearance_check_reads_the_connected_mounts_own_entry() {
             var otherMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed("another-mount", maxCwAngleDeg: 45));
-            var thisMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto() with {
-                MountClearance = new Dictionary<string, PolarAlignMountClearanceDto> { [MountId] = new(MaxCwAngleDeg: 90, ClearanceConfirmed: true) },
-            });
+            var thisMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed(MountId, maxCwAngleDeg: 50));
 
             var notConfirmed = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(settings: () => otherMount), CancellationToken.None).ConfigureAwait(false);
             var confirmed = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(settings: () => thisMount), CancellationToken.None).ConfigureAwait(false);
@@ -147,7 +144,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(refusal?.Parameters["max_cw_angle_deg"], Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));
                 Assert.That(notConfirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));
                 Assert.That(Check(confirmed, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
-                Assert.That(confirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.MaxMaxCwAngleDeg), "the limit is held at 75°");
+                Assert.That(confirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(50.0), "this mount's own limit");
                 Assert.That(confirmed.Dto.Ready, Is.True);
             });
         }

@@ -161,9 +161,9 @@ class _PolarPreflightChecklistState
                   }
                 },
                 child: Text(
-                  clearance.fails
-                      ? l10n.polarClearanceButton
-                      : l10n.polarClearanceChange,
+                  clearance.passes
+                      ? l10n.polarClearanceChange
+                      : l10n.polarClearanceButton,
                 ),
               ),
           ],
@@ -258,10 +258,12 @@ String polarPreflightCheckTitle(AppLocalizations l10n, String id) =>
 /// #2068 (ARA-8) the clearance confirmation: the dialog explains the check,
 /// takes the counterweight limit the user measured with the hand controller
 /// (pre-filled with the rig's value for this mount), and on Confirm saves it,
-/// confirmed, as this mount's entry of the polar-align section, then reads the
-/// pre-flight list again. Nothing is saved on Cancel. The section is loaded
-/// from the rig before it is saved (ADR 0015). Returns a failed save's message
-/// in the user's words, null otherwise; the caller shows it.
+/// confirmed for that limit, as this mount's entry of the polar-align section,
+/// then reads the pre-flight list again. Take back (a confirmed mount) saves
+/// it not confirmed (Joey, 2026-11-21). Nothing is saved on Cancel. The
+/// section is loaded from the rig before it is saved (ADR 0015). Returns a
+/// failed save's message in the user's words, null otherwise; the caller
+/// shows it.
 Future<String?> confirmPolarClearance(
   BuildContext context,
   WidgetRef ref,
@@ -269,26 +271,57 @@ Future<String?> confirmPolarClearance(
 ) async {
   final key = preflight.mountKey;
   if (key == null) return null;
-  final l10n = context.l10n;
-  final limit = await showAdaptiveAlert<double>(
+  final confirmed =
+      preflight.check(PolarAlignPreflightChecks.clearanceConfirmed)?.passes ??
+      false;
+  final result = await showAdaptiveAlert<PolarClearanceResult>(
     context: context,
-    builder: (_) =>
-        PolarClearanceDialog(initialDeg: preflight.planned.maxCwAngleDeg),
+    builder: (_) => PolarClearanceDialog(
+      initialDeg: preflight.planned.maxCwAngleDeg,
+      confirmed: confirmed,
+    ),
   );
-  if (limit == null || !context.mounted) return null;
+  if (result == null || !context.mounted) return null;
+  return _savePolarClearance(
+    context,
+    ref,
+    key,
+    result.takeBack
+        ? PolarAlignMountClearance.notConfirmed(preflight.planned.maxCwAngleDeg)
+        : PolarAlignMountClearance.confirmedAt(result.limitDeg),
+  );
+}
+
+/// #2068 Take back: this mount's clearance not confirmed any more, its limit
+/// kept, so the clearance check fails again for a motor start (Joey,
+/// 2026-11-21). Returns a failed save's message, null otherwise.
+Future<String?> takeBackPolarClearance(
+  BuildContext context,
+  WidgetRef ref,
+  PolarAlignPreflight preflight,
+) async {
+  final key = preflight.mountKey;
+  if (key == null) return null;
+  return _savePolarClearance(
+    context,
+    ref,
+    key,
+    PolarAlignMountClearance.notConfirmed(preflight.planned.maxCwAngleDeg),
+  );
+}
+
+Future<String?> _savePolarClearance(
+  BuildContext context,
+  WidgetRef ref,
+  String key,
+  PolarAlignMountClearance entry,
+) async {
+  final l10n = context.l10n;
   String? failure;
   try {
     await ref
         .read(polarAlignSettingsProvider.notifier)
-        .changeAndSave(
-          (s) => s.withMountClearance(
-            key,
-            PolarAlignMountClearance(
-              maxCwAngleDeg: limit,
-              clearanceConfirmed: true,
-            ),
-          ),
-        );
+        .changeAndSave((s) => s.withMountClearance(key, entry));
   } catch (e) {
     failure = e is SectionNotLoadedException || e is SectionConflictException
         ? e.toString()
@@ -329,43 +362,84 @@ class PolarClearanceSettingsRow extends ConsumerWidget {
       children: [
         SettingsRow(
           label: l10n.polarKnobClearance,
-          value: clearance.fails
-              ? l10n.polarKnobClearanceNotConfirmed(deg)
-              : l10n.polarKnobClearanceConfirmed(deg),
+          value: clearance.passes
+              ? l10n.polarKnobClearanceConfirmed(deg)
+              : l10n.polarKnobClearanceNotConfirmed(deg),
           hint: l10n.polarKnobClearanceHint,
           helpKey: 'img.polar.clearance_confirmed',
         ),
-        OutlinedButton(
-          key: const Key('polar-clearance-setting-edit'),
-          onPressed: () async {
-            final failure = await confirmPolarClearance(
-              context,
-              ref,
-              preflight,
-            );
-            if (failure != null) {
-              messenger.showSnackBar(SnackBar(content: Text(failure)));
-            }
-          },
-          child: Text(
-            clearance.fails
-                ? l10n.polarClearanceButton
-                : l10n.polarClearanceChange,
-          ),
+        Wrap(
+          spacing: 8,
+          children: [
+            OutlinedButton(
+              key: const Key('polar-clearance-setting-edit'),
+              onPressed: () async {
+                final failure = await confirmPolarClearance(
+                  context,
+                  ref,
+                  preflight,
+                );
+                if (failure != null) {
+                  messenger.showSnackBar(SnackBar(content: Text(failure)));
+                }
+              },
+              child: Text(
+                clearance.passes
+                    ? l10n.polarClearanceChange
+                    : l10n.polarClearanceButton,
+              ),
+            ),
+            // Joey, 2026-11-21: a confirmation can be taken back.
+            if (clearance.passes)
+              TextButton(
+                key: const Key('polar-clearance-setting-take-back'),
+                onPressed: () async {
+                  final failure = await takeBackPolarClearance(
+                    context,
+                    ref,
+                    preflight,
+                  );
+                  if (failure != null) {
+                    messenger.showSnackBar(SnackBar(content: Text(failure)));
+                  }
+                },
+                child: Text(l10n.polarClearanceTakeBack),
+              ),
+          ],
         ),
       ],
     );
   }
 }
 
+/// What the clearance dialog answers: Confirm with the limit, or Take back.
+class PolarClearanceResult {
+  const PolarClearanceResult.confirm(this.limitDeg) : takeBack = false;
+  const PolarClearanceResult.takeBack() : limitDeg = 0, takeBack = true;
+
+  final double limitDeg;
+  final bool takeBack;
+}
+
 /// The clearance dialog: what to check, the counterweight limit (10–75° from
 /// counterweight-down, in 5° steps), and a tick that the user checked it.
-/// Pops the limit on Confirm (only once ticked), null on Cancel.
+/// The tick starts clear and clears again when the limit moves: a
+/// confirmation is for one limit (Joey, 2026-11-21). Pops
+/// [PolarClearanceResult.confirm] on Confirm (only once ticked),
+/// [PolarClearanceResult.takeBack] on Take back (a [confirmed] mount only),
+/// null on Cancel.
 class PolarClearanceDialog extends StatefulWidget {
-  const PolarClearanceDialog({super.key, required this.initialDeg});
+  const PolarClearanceDialog({
+    super.key,
+    required this.initialDeg,
+    this.confirmed = false,
+  });
 
   /// The rig's limit for this mount (its default for a mount with none).
   final double initialDeg;
+
+  /// The mount's clearance is confirmed now: the dialog offers Take back.
+  final bool confirmed;
 
   @override
   State<PolarClearanceDialog> createState() => _PolarClearanceDialogState();
@@ -410,7 +484,10 @@ class _PolarClearanceDialogState extends State<PolarClearanceDialog> {
             divisions: ((max - min) / 5).round(),
             value: _deg,
             label: '${_deg.toStringAsFixed(0)}°',
-            onChanged: (v) => setState(() => _deg = v),
+            onChanged: (v) => setState(() {
+              if (v != _deg) _checked = false;
+              _deg = v;
+            }),
           ),
           CheckboxListTile.adaptive(
             key: const Key('polar-clearance-checked'),
@@ -429,12 +506,24 @@ class _PolarClearanceDialogState extends State<PolarClearanceDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.polarConfirmCancel),
         ),
+        if (widget.confirmed)
+          adaptiveDialogAction(
+            context,
+            key: const Key('polar-clearance-take-back'),
+            isDestructive: true,
+            onPressed: () => Navigator.of(
+              context,
+            ).pop(const PolarClearanceResult.takeBack()),
+            child: Text(l10n.polarClearanceTakeBack),
+          ),
         adaptiveDialogAction(
           context,
           key: const Key('polar-clearance-confirm'),
           isDefault: true,
           filled: true,
-          onPressed: _checked ? () => Navigator.of(context).pop(_deg) : null,
+          onPressed: _checked
+              ? () => Navigator.of(context).pop(PolarClearanceResult.confirm(_deg))
+              : null,
           child: Text(l10n.polarClearanceConfirm),
         ),
       ],

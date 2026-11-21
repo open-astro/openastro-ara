@@ -366,8 +366,12 @@ namespace OpenAstroAra.Server.Services {
         internal static string CameraFor(string stage, PolarAlignSettingsDto settings) =>
             stage == PolarAlignStages.Coarse ? PolarAlignCameras.Main : settings.Camera;
 
+        /// <summary>The plan of a motor start (<see cref="GetStartPlanAsync(string?, bool, CancellationToken)"/>).</summary>
+        public Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct) =>
+            GetStartPlanAsync(stage, handTurn: false, ct);
+
         /// <inheritdoc />
-        public async Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct) {
+        public async Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, bool handTurn, CancellationToken ct) {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
@@ -379,7 +383,9 @@ namespace OpenAstroAra.Server.Services {
             if (_mountClock is { } clockGate) {
                 await clockGate.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
             }
-            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, ct).ConfigureAwait(false);
+            // #2068 — a hand-turn start's plan is not refused for an unconfirmed clearance (it moves nothing); a motor
+            // start's is (Joey, 2026-11-21).
+            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, handTurn, ct).ConfigureAwait(false);
             ThrowOnFirstFailure(preflight);
             return StartPlanOf(preflight).Plan with { Stage = stage };
         }
@@ -528,7 +534,8 @@ namespace OpenAstroAra.Server.Services {
                 // power loss made the routine slew below the pole, RC51 2026-11-19; the Find Home, slew and motor moves
                 // are guarded again in the mount, so a reconnect mid-run cannot home or turn by the model), the motion
                 // owner (#2066), the mount's clearance (no motion until it is confirmed), and the start pointing.
-                var preflight = await EvaluatePreflightAsync(stage, ct).ConfigureAwait(false);
+                // A hand-turn start (#2083) moves nothing, so an unconfirmed clearance only warns; every motor start refuses.
+                var preflight = await EvaluatePreflightAsync(stage, confirmation?.HandTurn == true, ct).ConfigureAwait(false);
                 ThrowOnFirstFailure(preflight, holdRefusal);
                 var site = _profileStore.GetSiteSettings();
                 var settings = preflight.Settings;
@@ -697,7 +704,8 @@ namespace OpenAstroAra.Server.Services {
         private async Task<(long Epoch, long OwnAborts)?> EndAdjustForCheckAsync(PolarAlignStartConfirmation? confirmation, CancellationToken ct) {
             // #2068 — the check's pre-flight list (#2071's mount clock among it): a refused Check leaves the loop running,
             // the mount untouched.
-            var preflight = await EvaluatePreflightAsync(PolarAlignStages.Check, ct).ConfigureAwait(false);
+            // A hand-turn Check moves nothing: an unconfirmed clearance refuses only the motor Check.
+            var preflight = await EvaluatePreflightAsync(PolarAlignStages.Check, confirmation?.HandTurn == true, ct).ConfigureAwait(false);
             ThrowOnFirstFailure(preflight);
             var (plan, _, _) = StartPlanOf(preflight);
             ThrowIfNotConfirmed(confirmation, plan);

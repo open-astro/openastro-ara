@@ -2483,7 +2483,7 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.max_cw_angle_deg',
     title: 'Counterweight limit',
     body:
-        'How far Polar align may turn the RA axis up from counterweight-down on this mount: 0° is counterweights down (Home), 90° is the counterweight bar horizontal. Measure it with the hand controller: turn RA from counterweight-down until the counterweight, the tube or a cable would touch the pier, the tripod or anything else, and set the limit a little below that. Kept for each mount (by its identity), between 10° and 75°; 60° until you set it. The checks that hold every turn inside it come in a later update; until then the limit is what you confirm.',
+        'How far Polar align may turn the RA axis up from counterweight-down on this mount: 0° is counterweights down (Home), 90° is the counterweight bar horizontal. Measure it with the hand controller: turn RA from counterweight-down until the counterweight, the tube or a cable would touch the pier, the tripod or anything else, and set the limit a little below that. Kept for each mount (by its identity), between 10° and 75°; 60° until you set it. A new limit needs a new clearance confirmation. The checks that hold every turn inside it come in a later update; until then the limit is what you confirm.',
     relatedSettings: ['img.polar.max_cw_angle_deg', 'img.polar.clearance_confirmed'],
     keywords: ['polar', 'alignment', 'counterweight', 'limit', 'clearance', 'pier'],
   ),
@@ -2491,7 +2491,7 @@ const Map<String, Help> helpRegistry = {
     key: 'img.polar.clearance_confirmed',
     title: 'Clearance confirmed',
     body:
-        'Polar align turns the mount with its RA motor, so before the first run on a mount it asks you to check that the counterweight, the tube and the cables clear the pier and the tripod up to the counterweight limit. Do it with the hand controller, with a hand on the mount\'s power switch. Until you confirm it in the clearance dialog (Confirm clearance… on the Polar align card), the pre-flight list fails and Start stays off. The confirmation is kept for each mount: a different mount asks again. A profile you share never carries it.',
+        'Polar align turns the mount with its RA motor, so before the first run on a mount it asks you to check that the counterweight, the tube and the cables clear the pier and the tripod up to the counterweight limit. Do it with the hand controller, with a hand on the mount\'s power switch. Until you confirm it in the clearance dialog (Confirm clearance… on the Polar align card), the motor does not turn the mount: Start opens with Turn RA by hand only, which moves nothing, and the pre-flight list shows the check as a warning. A confirmation is for one limit: change the limit and you tick the box again. Take back (in the dialog, or in Settings › Imaging › Polar align) withdraws it. The confirmation is kept for each mount, in each profile: a different mount asks again. A profile you share never carries it.',
     relatedSettings: ['img.polar.clearance_confirmed', 'img.polar.max_cw_angle_deg'],
     keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'safety'],
   ),

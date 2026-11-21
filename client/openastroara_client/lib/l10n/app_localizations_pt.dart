@@ -7235,6 +7235,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarClearanceConfirm => 'Confirm';
 
   @override
+  String get polarClearanceTakeBack => 'Take back';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.';
+
+  @override
   String get polarActionClearance => 'save the mount\'s clearance';
 
   @override
@@ -14549,6 +14556,13 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarClearanceConfirm => 'Confirmar';
+
+  @override
+  String get polarClearanceTakeBack => 'Retirar';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'A folga desta montagem não está confirmada, então o motor não a gira: Mover a montagem fica desativado. Girar a AR à mão não move nada, então pode começar. Para usar o motor, confirme a folga no cartão de alinhamento polar primeiro.';
 
   @override
   String get polarActionClearance => 'salvar a folga da montagem';

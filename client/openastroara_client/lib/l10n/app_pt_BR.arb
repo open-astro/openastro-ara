@@ -1989,6 +1989,8 @@
   "polarClearanceLimit": "Limite do contrapeso: {deg}° a partir do contrapeso para baixo",
   "polarClearanceTick": "Verifiquei a folga desta montagem com o controle de mão",
   "polarClearanceConfirm": "Confirmar",
+  "polarClearanceTakeBack": "Retirar",
+  "polarConfirmMotorNeedsClearance": "A folga desta montagem não está confirmada, então o motor não a gira: Mover a montagem fica desativado. Girar a AR à mão não move nada, então pode começar. Para usar o motor, confirme a folga no cartão de alinhamento polar primeiro.",
   "polarActionClearance": "salvar a folga da montagem",
   "refusalPolarAlignClearanceNotConfirmed": "Confirme antes a folga desta montagem: verifique com o controle de mão que o contrapeso, o tubo e os cabos não tocam o pilar nem o tripé até {limit}° a partir do contrapeso para baixo, depois toque em Confirmar folga no alinhamento polar.",
   "polarKnobClearance": "Limite do contrapeso e folga",

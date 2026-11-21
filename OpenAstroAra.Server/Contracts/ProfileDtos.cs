@@ -572,10 +572,14 @@ public sealed record PolarAlignSettingsDto(
 /// <summary>#2068 — one mount's entry in <see cref="PolarAlignSettingsDto.MountClearance"/>: how far the RA axis may
 /// turn the counterweight up from counterweight-down (<c>MaxCwAngleDeg</c>, 0 = Home, 90 = horizontal; held at 10–75°,
 /// default 60°), and whether the user checked with the hand controller that the counterweight, the tube and the cables
-/// clear the pier and tripod up to it (<c>ClearanceConfirmed</c>).</summary>
+/// clear the pier and tripod up to it (<c>ClearanceConfirmed</c>). A confirmation is for one limit (Joey, 2026-11-21):
+/// <c>ConfirmedMaxCwAngleDeg</c> is the limit the user confirmed, and an entry is confirmed only while it equals
+/// <c>MaxCwAngleDeg</c> (<see cref="Services.PolarAlignSettingsClamp"/> clears it otherwise, on every read and write), so a
+/// limit changed without a new confirmation in the same request is not confirmed. Null while not confirmed.</summary>
 public sealed record PolarAlignMountClearanceDto(
     double MaxCwAngleDeg = 60.0,
-    bool ClearanceConfirmed = false);
+    bool ClearanceConfirmed = false,
+    double? ConfirmedMaxCwAngleDeg = null);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint

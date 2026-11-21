@@ -570,15 +570,32 @@ class PolarAlignSettings {
 /// RA axis may turn the counterweight up from counterweight-down
 /// ([maxCwAngleDeg]: 0° Home, 90° horizontal; the rig holds it at 10–75°), and
 /// whether the user checked with the hand controller that the counterweight,
-/// tube and cables clear the pier and tripod up to it.
+/// tube and cables clear the pier and tripod up to it. A confirmation is for
+/// one limit ([confirmedMaxCwAngleDeg], null while not confirmed): the rig
+/// keeps the entry confirmed only while it equals [maxCwAngleDeg], so a limit
+/// changed without a new confirmation is not confirmed (Joey, 2026-11-21).
 class PolarAlignMountClearance {
   final double maxCwAngleDeg;
   final bool clearanceConfirmed;
+  final double? confirmedMaxCwAngleDeg;
 
   const PolarAlignMountClearance({
     required this.maxCwAngleDeg,
     required this.clearanceConfirmed,
+    required this.confirmedMaxCwAngleDeg,
   });
+
+  /// The user confirmed the clearance up to [limitDeg].
+  const PolarAlignMountClearance.confirmedAt(double limitDeg)
+    : maxCwAngleDeg = limitDeg,
+      clearanceConfirmed = true,
+      confirmedMaxCwAngleDeg = limitDeg;
+
+  /// Not confirmed (taken back), the limit kept.
+  const PolarAlignMountClearance.notConfirmed(double limitDeg)
+    : maxCwAngleDeg = limitDeg,
+      clearanceConfirmed = false,
+      confirmedMaxCwAngleDeg = null;
 
   /// The limit the rig accepts ([maxCwAngleDeg] is clamped to it).
   static const double minMaxCwAngleDeg = 10;
@@ -587,16 +604,19 @@ class PolarAlignMountClearance {
   Map<String, dynamic> toJson() => <String, dynamic>{
     'max_cw_angle_deg': maxCwAngleDeg,
     'clearance_confirmed': clearanceConfirmed,
+    'confirmed_max_cw_angle_deg': confirmedMaxCwAngleDeg,
   };
 
   @override
   bool operator ==(Object other) =>
       other is PolarAlignMountClearance &&
       other.maxCwAngleDeg == maxCwAngleDeg &&
-      other.clearanceConfirmed == clearanceConfirmed;
+      other.clearanceConfirmed == clearanceConfirmed &&
+      other.confirmedMaxCwAngleDeg == confirmedMaxCwAngleDeg;
 
   @override
-  int get hashCode => Object.hash(maxCwAngleDeg, clearanceConfirmed);
+  int get hashCode =>
+      Object.hash(maxCwAngleDeg, clearanceConfirmed, confirmedMaxCwAngleDeg);
 }
 
 /// #2068 the statuses of a [PolarAlignPreflightCheck].
@@ -638,6 +658,8 @@ class PolarAlignPreflightCheck {
   });
 
   bool get fails => status == PolarAlignPreflightStatuses.fail;
+
+  bool get passes => status == PolarAlignPreflightStatuses.ok;
 
   factory PolarAlignPreflightCheck.fromJson(Map<String, dynamic> json) =>
       PolarAlignPreflightCheck(

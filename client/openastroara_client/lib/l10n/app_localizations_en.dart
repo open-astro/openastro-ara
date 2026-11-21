@@ -7235,6 +7235,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarClearanceConfirm => 'Confirm';
 
   @override
+  String get polarClearanceTakeBack => 'Take back';
+
+  @override
+  String get polarConfirmMotorNeedsClearance =>
+      'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.';
+
+  @override
   String get polarActionClearance => 'save the mount\'s clearance';
 
   @override

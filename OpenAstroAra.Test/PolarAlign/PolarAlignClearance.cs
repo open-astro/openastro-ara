@@ -25,7 +25,7 @@ internal static class PolarAlignClearance {
             string mountKey = PolarAlignPreflightEvaluator.UnidentifiedMountKey, double maxCwAngleDeg = 60.0) =>
         settings with {
             MountClearance = new Dictionary<string, PolarAlignMountClearanceDto> {
-                [mountKey] = new(maxCwAngleDeg, ClearanceConfirmed: true),
+                [mountKey] = new(maxCwAngleDeg, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: maxCwAngleDeg),
             },
         };
 }

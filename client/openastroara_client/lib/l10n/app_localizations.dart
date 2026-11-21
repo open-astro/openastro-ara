@@ -12041,6 +12041,18 @@ abstract class AppLocalizations {
   /// **'Confirm'**
   String get polarClearanceConfirm;
 
+  /// Polar align (#2068, Joey 2026-11-21): button in the clearance dialog and in Settings › Imaging › Polar align that withdraws this mount's clearance confirmation, so the motor does not turn it until it is confirmed again
+  ///
+  /// In en, this message translates to:
+  /// **'Take back'**
+  String get polarClearanceTakeBack;
+
+  /// Polar align start confirm dialog (#2068, Joey 2026-11-21): shown while the mount's clearance is not confirmed; 'Move the mount' is polarConfirmGo, 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.'**
+  String get polarConfirmMotorNeedsClearance;
+
   /// Polar align (#2068): verb phrase completing "Couldn't …" when the clearance could not be saved
   ///
   /// In en, this message translates to:

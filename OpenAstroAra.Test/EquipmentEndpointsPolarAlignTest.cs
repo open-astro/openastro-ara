@@ -173,10 +173,10 @@ namespace OpenAstroAra.Test {
         public async Task The_start_plan_comes_back_200_and_an_unknown_stage_is_400() {
             var plan = new PolarAlignStartPlanDto(PolarAlignStages.Check, PolarAlignDirections.West, 10.0, 2, 20.0);
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.GetStartPlanAsync(PolarAlignStages.Check, It.IsAny<CancellationToken>())).ReturnsAsync(plan);
+            svc.Setup(s => s.GetStartPlanAsync(PolarAlignStages.Check, false, It.IsAny<CancellationToken>())).ReturnsAsync(plan);
 
-            var ok = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, PolarAlignStages.Check, CancellationToken.None);
-            var bad = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, "sideways", CancellationToken.None);
+            var ok = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, PolarAlignStages.Check, handTurn: false, CancellationToken.None);
+            var bad = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, "sideways", handTurn: false, CancellationToken.None);
 
             Assert.That((ok as Ok<PolarAlignStartPlanDto>)?.Value, Is.SameAs(plan));
             Assert.That(ProblemStatusOf(bad), Is.EqualTo(StatusCodes.Status400BadRequest));

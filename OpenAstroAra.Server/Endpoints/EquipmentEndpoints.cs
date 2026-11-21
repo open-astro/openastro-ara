@@ -872,16 +872,18 @@ public static partial class EquipmentEndpoints {
             Results.Ok(await svc.GetStatusAsync(ct)));
         // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
         // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
-        polar.MapGet("/start-plan", async (string? stage, IPolarAlignService svc, CancellationToken ct) =>
-                await PolarAlignStartPlanAsync(svc, stage, ct))
+        // #2068 — hand_turn=true plans a hand-turn start, which an unconfirmed clearance does not refuse.
+        polar.MapGet("/start-plan", async (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignStartPlanAsync(svc, stage, handTurn == true, ct))
             .WithName("GetPolarAlignStartPlan")
             .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
             .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
         // #2068 (ARA-18) — the Start card's pre-flight list: every check a start makes (ok | warn | fail | unknown), in its
         // order, and what the start would do. Always 200 (a failing check is a row, not an error); 400 for an unknown stage.
         // Start and start-plan refuse on the first failing check, with its cause.
-        polar.MapGet("/preflight", (string? stage, IPolarAlignService svc, CancellationToken ct) =>
-                PolarAlignPreflightAsync(svc, stage, ct))
+        // hand_turn=true lists a hand-turn start: its clearance check warns, not fails, while the clearance is not confirmed.
+        polar.MapGet("/preflight", (string? stage, [FromQuery(Name = "hand_turn")] bool? handTurn, IPolarAlignService svc, CancellationToken ct) =>
+                PolarAlignPreflightAsync(svc, stage, handTurn == true, ct))
             .WithName("GetPolarAlignPreflight")
             .WithSummary("Polar Align's pre-flight checks for the next start (ok, warn, fail or unknown each), and what that start would do.")
             .Produces<PolarAlignPreflightDto>().ProducesProblem(StatusCodes.Status400BadRequest);
@@ -1297,24 +1299,24 @@ public static partial class EquipmentEndpoints {
         }
     }
 
-    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
+    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, bool handTurn, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
         try {
-            return Results.Ok(await svc.GetStartPlanAsync(stage, ct));
+            return Results.Ok(await svc.GetStartPlanAsync(stage, handTurn, ct));
         } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 
-    public static async Task<IResult> PolarAlignPreflightAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
+    public static async Task<IResult> PolarAlignPreflightAsync(IPolarAlignService svc, string? stage, bool handTurn, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
-        return Results.Ok(await svc.GetPreflightAsync(stage, ct));
+        return Results.Ok(await svc.GetPreflightAsync(stage, handTurn, ct));
     }
 
     public static async Task<IResult> PolarAlignNextAsync(IPolarAlignService svc, string? idempotencyKey, CancellationToken ct) {

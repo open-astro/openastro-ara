@@ -36,6 +36,8 @@ namespace OpenAstroAra.Server.Services;
 /// <param name="Plan">The confirm step's plan from a fresh reading of the mount (its refusals: on-axis, no fresh
 /// reading, Dec past the pole, the sweep limit).</param>
 /// <param name="AlignerPresent">A Polar Aligner on the rig (#1971); null delegate when this daemon wires none.</param>
+/// <param name="HandTurn">#2068 — the start turns RA by hand (#2083: no motor move), so an unconfirmed clearance is a
+/// <c>warn</c>, not a <c>fail</c> (Joey, 2026-11-21). False for a motor start.</param>
 internal sealed record PolarAlignPreflightInputs(
     string Stage,
     Func<TelescopeInfo?> MountInfo,
@@ -44,7 +46,8 @@ internal sealed record PolarAlignPreflightInputs(
     Func<string?>? ClockRefusal,
     Func<CancellationToken, Task<string?>> PoseUnverifiedReason,
     Func<CancellationToken, Task<PolarAlignStartPlanDto>> Plan,
-    Func<bool>? AlignerPresent);
+    Func<bool>? AlignerPresent,
+    bool HandTurn = false);
 
 /// <summary>The pre-flight list and, for a start, the exception the first failing check refuses with (null when none
 /// fails), with the confirm step's plan when it could be made.</summary>
@@ -58,7 +61,7 @@ internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exc
 /// the read's own exception, as it did before the list existed).
 /// <para>The checks, in the order a start makes them: the mount connected and not parked, the site latitude, then
 /// (#2065) the longitude and LST, #2087's mount clock gate, #2070's position trust, the per-mount clearance (ARA-8: no
-/// motion until it is confirmed), and the start pointing (the confirm step's plan). The checks that #2065 and #2083 add
+/// motor motion until it is confirmed; a hand-turn start, which moves nothing, only warns), and the start pointing (the confirm step's plan). The checks that #2065 and #2083 add
 /// (mount type, CanMoveAxis, the AlpacaBridge <c>motionsafety</c> marker, pier side, the pose envelope, the start
 /// counterweight angle, a reduced turn step) are listed as <c>unknown</c> until they land, and never refuse. The Polar
 /// Aligner's check is <c>unknown</c> until its verified stop lands (#2069). A last <c>warn</c> asks the user to set the
@@ -221,7 +224,8 @@ internal static class PolarAlignPreflightEvaluator {
             }
         }
 
-        // ARA-8: no motion until the user confirmed this mount's clearance.
+        // ARA-8: no motor motion until the user confirmed this mount's clearance. A hand-turn start sends the mount no move
+        // (#2083), so it goes ahead with a warning (Joey, 2026-11-21).
         var clearance = ClearanceFor(settings, mountKey);
         var clearanceRow = rows[PolarAlignPreflightChecks.ClearanceConfirmed];
         if (settingsError is not null) {
@@ -231,6 +235,9 @@ internal static class PolarAlignPreflightEvaluator {
         } else if (clearance.ClearanceConfirmed) {
             clearanceRow.Ok(string.Create(CultureInfo.InvariantCulture,
                 $"You confirmed this mount clears the pier and tripod with the counterweight up to {clearance.MaxCwAngleDeg:0}° from down."));
+        } else if (inputs.HandTurn) {
+            clearanceRow.Warn(string.Create(CultureInfo.InvariantCulture,
+                $"Not confirmed for this mount: Turn RA by hand moves nothing, so it can start. The motor does not turn this mount until you confirm its clearance up to {clearance.MaxCwAngleDeg:0}° from counterweight-down."));
         } else {
             var limit = clearance.MaxCwAngleDeg;
             clearanceRow.Fail(new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,

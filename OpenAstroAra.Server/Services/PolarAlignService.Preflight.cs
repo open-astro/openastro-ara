@@ -30,18 +30,23 @@ namespace OpenAstroAra.Server.Services {
             PolarAlignSettingsDto Settings,
             (PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)? Start);
 
+        /// <summary>The list for a motor start (<see cref="GetPreflightAsync(string?, bool, CancellationToken)"/>).</summary>
+        public Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct) =>
+            GetPreflightAsync(stage, handTurn: false, ct);
+
         /// <inheritdoc />
-        public async Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct) {
+        public async Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, bool handTurn, CancellationToken ct) {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
-            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, ct).ConfigureAwait(false);
+            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, handTurn, ct).ConfigureAwait(false);
             return preflight.Result.Dto;
         }
 
         /// <summary>#2068 (ARA-18) — the pre-flight list for a start at <paramref name="stage"/>
-        /// (<see cref="PolarAlignPreflightEvaluator"/>): the same checks the app's Start card shows. Never throws.</summary>
-        private async Task<StartPreflight> EvaluatePreflightAsync(string stage, CancellationToken ct) {
+        /// (<see cref="PolarAlignPreflightEvaluator"/>): the same checks the app's Start card shows. Never throws.
+        /// <paramref name="handTurn"/>: the start turns RA by hand, so an unconfirmed clearance only warns.</summary>
+        private async Task<StartPreflight> EvaluatePreflightAsync(string stage, bool handTurn, CancellationToken ct) {
             PolarAlignSettingsDto? settings = null;
             (PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)? start = null;
             var inputs = new PolarAlignPreflightInputs(
@@ -56,14 +61,15 @@ namespace OpenAstroAra.Server.Services {
                     start = planned;
                     return planned.Plan;
                 },
-                AlignerPresent: _alignerSource is { } aligners ? () => aligners.Current() is not null : null);
+                AlignerPresent: _alignerSource is { } aligners ? () => aligners.Current() is not null : null,
+                HandTurn: handTurn);
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, ct).ConfigureAwait(false);
             return new StartPreflight(result, settings ?? PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto()), start);
         }
 
         /// <summary>#2068 — a start refuses on the first check that fails, with that check's own cause (the mount not
-        /// connected or parked, no site latitude, #2087's mount clock, #2070's position, the clearance not confirmed, the
-        /// start pointing's refusals). A <c>warn</c> or <c>unknown</c> check never refuses.</summary>
+        /// connected or parked, no site latitude, #2087's mount clock, #2070's position, the clearance not confirmed for a
+        /// motor start, the start pointing's refusals). A <c>warn</c> or <c>unknown</c> check never refuses.</summary>
         private static void ThrowOnFirstFailure(StartPreflight preflight) {
             if (preflight.Result.FirstFailure is { } failure) {
                 ExceptionDispatchInfo.Capture(failure).Throw();

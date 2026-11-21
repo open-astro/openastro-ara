@@ -6,9 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
+import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
+import 'package:openastroara/widgets/imaging/polar_preflight_checklist.dart';
 
 import '../support/polar_align_section.dart';
 import '../support/polar_preflight.dart';
@@ -20,22 +22,42 @@ class _Rig implements PolarAlignClient {
   int preflightReads = 0;
   bool mountConnected = true;
   bool pointingFails = false;
+  bool parked = false;
+  final List<PolarAlignStartPlan> started = [];
+
+  bool get _confirmed => rigPreflightFor(section.initial).ready;
 
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage}) async {
+  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async {
     preflightReads++;
     if (!mountConnected) return _noMount;
     if (pointingFails) return _pointingFails;
-    return rigPreflightFor(section.initial);
+    return rigPreflightFor(section.initial, handTurn: handTurn, parked: parked);
+  }
+
+  // As the rig: a motor start's plan is refused while the clearance is not
+  // confirmed; a hand-turn start's is not (Joey, 2026-11-21).
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async {
+    if (!handTurn && !_confirmed) {
+      throw const Refusal(
+        cause: RefusalCause.polarAlignClearanceNotConfirmed,
+        reason: 'polar-align-clearance-not-confirmed',
+        detail: "Confirm this mount's clearance first",
+        status: 409,
+      );
+    }
+    return PolarAlignStartPlan(
+      stage: stage,
+      direction: PolarAlignDirections.east,
+      handTurnAvailable: true,
+    );
   }
 
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
-      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
-  @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start(PolarAlignStartPlan plan) async {}
+  Future<void> start(PolarAlignStartPlan plan) async => started.add(plan);
   @override
   Future<void> stop() async {}
   @override
@@ -113,8 +135,14 @@ class _Idle extends PolarAlignLiveNotifier {
   PolarAlignLive build() => const PolarAlignLive();
 }
 
-Future<_Rig> _pump(WidgetTester tester) async {
-  final rig = _Rig();
+Future<_Rig> _pump(
+  WidgetTester tester, {
+  bool parked = false,
+  PolarAlignSettings? settings,
+  Widget child = const PolarAlignPanel(),
+}) async {
+  final rig = _Rig()..parked = parked;
+  if (settings != null) rig.section.initial = settings;
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -122,8 +150,8 @@ Future<_Rig> _pump(WidgetTester tester) async {
         polarAlignApiProvider.overrideWithValue(rig),
         polarAlignLiveProvider.overrideWith(_Idle.new),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: SingleChildScrollView(child: PolarAlignPanel())),
+      child: MaterialApp(
+        home: Scaffold(body: SingleChildScrollView(child: child)),
       ),
     ),
   );
@@ -138,10 +166,10 @@ void main() {
   testWidgets('Start is disabled while a pre-flight check fails', (
     tester,
   ) async {
-    final rig = await _pump(tester);
+    final rig = await _pump(tester, parked: true);
 
     expect(
-      find.byKey(const Key('polar-preflight-check-clearance_confirmed')),
+      find.byKey(const Key('polar-preflight-check-mount_parked')),
       findsOneWidget,
       reason: 'the failing check is listed on the Start card',
     );
@@ -152,14 +180,8 @@ void main() {
       reason: 'Check is a start too',
     );
 
-    // The rig's list passes now (the mount's entry confirmed elsewhere): Start is back.
-    rig.section.initial = rigPolarAlign.withMountClearance(
-      preflightMountKey,
-      const PolarAlignMountClearance(
-        maxCwAngleDeg: 60,
-        clearanceConfirmed: true,
-      ),
-    );
+    // The rig's list passes now (the mount unparked elsewhere): Start is back.
+    rig.parked = false;
     await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
     await tester.pumpAndSettle();
     expect(_onPressed(tester, 'polar-align-start'), isNotNull);
@@ -201,10 +223,7 @@ void main() {
       final rig = _Rig()..mountConnected = false;
       rig.section.initial = rigPolarAlign.withMountClearance(
         preflightMountKey,
-        const PolarAlignMountClearance(
-          maxCwAngleDeg: 60,
-          clearanceConfirmed: true,
-        ),
+        const PolarAlignMountClearance.confirmedAt(60),
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -268,11 +287,8 @@ void main() {
       expect(rig.section.puts, hasLength(1));
       expect(
         rig.section.puts.single.mountClearance[preflightMountKey],
-        const PolarAlignMountClearance(
-          maxCwAngleDeg: 60,
-          clearanceConfirmed: true,
-        ),
-        reason: "the mount's own entry, confirmed",
+        const PolarAlignMountClearance.confirmedAt(60),
+        reason: "the mount's own entry, confirmed for its limit",
       );
       expect(
         find.text('Change clearance…'),
@@ -287,4 +303,145 @@ void main() {
       expect(_onPressed(tester, 'polar-align-start'), isNotNull);
     },
   );
+
+  // Joey, 2026-11-21: a Turn RA by hand start moves nothing, so an unconfirmed
+  // clearance only warns for it; the card reads that list and Start stays on.
+  testWidgets(
+    'The list is read for a Turn RA by hand start: an unconfirmed clearance warns and Start stays on',
+    (tester) async {
+      await _pump(tester);
+
+      final row = find.byKey(
+        const Key('polar-preflight-check-clearance_confirmed'),
+      );
+      expect(row, findsOneWidget, reason: 'a warning is always shown');
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byIcon(Icons.warning_amber_outlined),
+        ),
+        findsOneWidget,
+        reason: 'a warn, not a fail',
+      );
+      expect(_onPressed(tester, 'polar-align-start'), isNotNull);
+      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
+      expect(find.text('Confirm clearance…'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'With the clearance unconfirmed, Start offers Turn RA by hand alone and starts a hand-turn run',
+    (tester) async {
+      final rig = await _pump(tester);
+
+      await tester.tap(find.byKey(const Key('polar-align-start')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
+      expect(
+        _onPressed(tester, 'polar-start-confirm-go'),
+        isNull,
+        reason: 'the motor waits for the clearance',
+      );
+      expect(
+        find.textContaining("This mount's clearance is not confirmed"),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(const Key('polar-start-confirm-hand')));
+      await tester.pumpAndSettle();
+
+      expect(rig.started, hasLength(1));
+      expect(rig.started.single.handTurn, isTrue, reason: 'nothing moves');
+    },
+  );
+
+  testWidgets(
+    "Take back in Settings withdraws this mount's clearance confirmation",
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance.confirmedAt(45),
+        ),
+        child: const PolarClearanceSettingsRow(),
+      );
+      expect(
+        find.text('45° from counterweight-down, confirmed for this mount'),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const Key('polar-clearance-setting-take-back')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.single.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance.notConfirmed(45),
+        reason: 'the limit kept, not confirmed',
+      );
+      expect(
+        find.textContaining('45° from counterweight-down, not confirmed'),
+        findsOneWidget,
+        reason: 'the clearance check does not pass any more',
+      );
+      expect(
+        find.byKey(const Key('polar-clearance-setting-take-back')),
+        findsNothing,
+      );
+    },
+  );
+
+  testWidgets('The clearance dialog takes back a confirmed mount', (
+    tester,
+  ) async {
+    final rig = await _pump(
+      tester,
+      settings: rigPolarAlign.withMountClearance(
+        preflightMountKey,
+        const PolarAlignMountClearance.confirmedAt(60),
+      ),
+    );
+
+    await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('polar-clearance-take-back')));
+    await tester.pumpAndSettle();
+
+    expect(
+      rig.section.puts.single.mountClearance[preflightMountKey],
+      const PolarAlignMountClearance.notConfirmed(60),
+    );
+    expect(find.text('Confirm clearance…'), findsOneWidget);
+  });
+
+  testWidgets('Moving the limit in the clearance dialog clears its tick', (
+    tester,
+  ) async {
+    await _pump(tester);
+
+    await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('polar-clearance-checked')));
+    await tester.pumpAndSettle();
+    expect(_onPressed(tester, 'polar-clearance-confirm'), isNotNull);
+
+    await tester.drag(
+      find.byKey(const Key('polar-clearance-limit')),
+      const Offset(-120, 0),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Counterweight limit: 60° from counterweight-down'),
+      findsNothing,
+      reason: 'the limit moved',
+    );
+    expect(
+      _onPressed(tester, 'polar-clearance-confirm'),
+      isNull,
+      reason: 'a confirmation is for one limit: tick again',
+    );
+  });
 }

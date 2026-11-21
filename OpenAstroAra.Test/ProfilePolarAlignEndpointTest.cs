@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_PUT_without_mount_clearance_keeps_every_stored_confirmation() {
             var stored = new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["mount-a"] = new(MaxCwAngleDeg: 45.0, ClearanceConfirmed: true),
+                ["mount-a"] = new(MaxCwAngleDeg: 45.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 45.0),
             };
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(MountClearance: stored));
@@ -185,7 +185,7 @@ namespace OpenAstroAra.Test {
                 new PolarAlignSettingsDto(MountClearance: new Dictionary<string, PolarAlignMountClearanceDto>()), store.Object)
                 as Ok<PolarAlignSettingsDto>)?.Value;
 
-            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(45.0, true)));
+            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(45.0, true, 45.0)));
             Assert.That(kept!.ExposureSeconds, Is.EqualTo(4.0));
             Assert.That(cleared?.MountClearance, Is.Empty, "an empty map clears them");
         }
@@ -206,6 +206,32 @@ namespace OpenAstroAra.Test {
             var clamped = (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: unconfirmed), store.Object)
                 as Ok<PolarAlignSettingsDto>)?.Value;
             Assert.That(clamped?.MountClearance?["m"].MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.ClampMaxCwAngleDeg(limitDeg)));
+        }
+
+        // Joey, 2026-11-21: a confirmation is for one limit. A PUT that changes the limit and carries the old confirmation
+        // along (an app that copied the entry) stores the mount not confirmed; the same PUT confirming the new limit
+        // keeps it confirmed; taking it back (clearance_confirmed false) stores it not confirmed.
+        [Test]
+        public void A_limit_changed_without_a_new_confirmation_is_stored_not_confirmed() {
+            var store = new Mock<IProfileStore>();
+            PolarAlignMountClearanceDto? Put(PolarAlignMountClearanceDto entry) =>
+                (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(
+                    MountClearance: new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = entry }), store.Object)
+                    as Ok<PolarAlignSettingsDto>)?.Value?.MountClearance?["m"];
+
+            var copied = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 45.0));
+            var unnamed = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true));
+            var confirmedAgain = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 30.0));
+            var takenBack = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: false, ConfirmedMaxCwAngleDeg: 30.0));
+
+            Assert.Multiple(() => {
+                Assert.That(copied, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "the old confirmation does not carry to a new limit");
+                Assert.That(unnamed, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "a confirmation names the limit it is for");
+                Assert.That(confirmedAgain, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, true, 30.0)), "the same request confirms the new limit");
+                Assert.That(takenBack, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "taken back");
+            });
+            store.Verify(s => s.PutPolarAlignSettings(It.Is<PolarAlignSettingsDto>(v => v.MountClearance!["m"].ClearanceConfirmed)), Times.Once,
+                "only the request that confirms the new limit stores it confirmed");
         }
 
         [TestCase(0.001, PolarAlignLoopModes.Loop)]

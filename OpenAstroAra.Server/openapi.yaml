@@ -2356,6 +2356,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: hand_turn
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
@@ -2386,6 +2390,10 @@ paths:
           in: query
           schema:
             type: string
+        - name: hand_turn
+          in: query
+          schema:
+            type: boolean
       responses:
         '200':
           description: OK
@@ -14542,6 +14550,13 @@ components:
         clearance_confirmed:
           type: boolean
           default: false
+        confirmed_max_cw_angle_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     PolarAlignPreflightCheckDto:
       required:
         - id

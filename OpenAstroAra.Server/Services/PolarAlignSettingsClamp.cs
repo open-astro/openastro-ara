@@ -39,6 +39,8 @@ public static class PolarAlignSettingsClamp {
     public const double MinMaxCwAngleDeg = 10.0;
     public const double MaxMaxCwAngleDeg = 75.0;
     public const double DefaultMaxCwAngleDeg = 60.0;
+    // A confirmation names the limit it is for; this close is the same limit (a JSON round trip).
+    private const double ConfirmedLimitToleranceDeg = 1e-6;
 
     /// <summary>The same settings with the knobs in range: a non-finite or out-of-range turn is
     /// clamped (a non-finite one takes the default), a rough exposure that is not positive takes
@@ -66,8 +68,10 @@ public static class PolarAlignSettingsClamp {
     }
 
     /// <summary>#2068 — the per-mount clearance entries: each limit held at 10–75° (a non-finite one takes the default,
-    /// 60°). An entry with an empty key, or a null one, is dropped: no mount has that identity. None (null) stays none:
-    /// no mount has an entry, so every mount reads the defaults (60°, not confirmed).</summary>
+    /// 60°). An entry stays confirmed only while the limit it was confirmed for (<c>ConfirmedMaxCwAngleDeg</c>) is its
+    /// limit: a limit changed without a new confirmation is not confirmed (Joey, 2026-11-21). An entry with an empty
+    /// key, or a null one, is dropped: no mount has that identity. None (null) stays none: no mount has an entry, so
+    /// every mount reads the defaults (60°, not confirmed).</summary>
     private static Dictionary<string, PolarAlignMountClearanceDto>? ClampMountClearance(
             IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
         if (entries is null) {
@@ -78,7 +82,13 @@ public static class PolarAlignSettingsClamp {
             if (string.IsNullOrWhiteSpace(key) || entry is null) {
                 continue;
             }
-            clamped[key] = entry with { MaxCwAngleDeg = ClampMaxCwAngleDeg(entry.MaxCwAngleDeg) };
+            var limit = ClampMaxCwAngleDeg(entry.MaxCwAngleDeg);
+            var confirmed = entry.ClearanceConfirmed && entry.ConfirmedMaxCwAngleDeg is { } at && Math.Abs(at - limit) < ConfirmedLimitToleranceDeg;
+            clamped[key] = entry with {
+                MaxCwAngleDeg = limit,
+                ClearanceConfirmed = confirmed,
+                ConfirmedMaxCwAngleDeg = confirmed ? limit : null,
+            };
         }
         return clamped;
     }
