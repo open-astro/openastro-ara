@@ -195,4 +195,33 @@ void main() {
     expect(find.text('A AR vai girar cerca de 10° duas vezes em direção ao leste (20° no total).'), findsOneWidget);
     expect(find.text('Mover a montagem'), findsOneWidget);
   });
+
+  testWidgets('the confirm step shows the motor-direction test first, and the start confirms it (#2081)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.east,
+      stepDeg: 10,
+      directionTestDeg: 0.5,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine);
+
+    expect(
+      find.text('First it turns the mount 0.5° to learn the motor direction (not tested yet for this mount and driver).'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+    await tester.pumpAndSettle();
+    expect(rig.started.single.directionTestDeg, 0.5, reason: 'the start carries the test the user saw');
+  });
+
+  testWidgets('the motor-direction test distance uses the language decimal comma in pt-BR (#2081)', (tester) async {
+    final rig = _Rig(const PolarAlignStartPlan(
+      stage: PolarAlignStages.fine,
+      direction: PolarAlignDirections.east,
+      stepDeg: 10,
+      directionTestDeg: 0.5,
+    ));
+    await _open(tester, rig, stage: PolarAlignStages.fine, locale: const Locale('pt', 'BR'));
+    expect(find.textContaining('Primeiro ela gira a montagem 0,5°'), findsOneWidget);
+  });
 }

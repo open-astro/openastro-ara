@@ -565,7 +565,10 @@ public partial class Program {
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
                 aligner: sp.GetRequiredService<IPolarAlignerSource>(),
-                mountClock: sp.GetRequiredService<IMountClockGate>()));
+                mountClock: sp.GetRequiredService<IMountClockGate>()) {
+                // #2081 — the direction test's sign is saved only to the profile its run was planned under.
+                ActiveProfileId = () => sp.GetService<IProfileRepository>()?.ActiveId,
+            });
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>

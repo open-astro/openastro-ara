@@ -108,6 +108,9 @@ namespace OpenAstroAra.Test {
             /// outside and then a reconnect (a Wi-Fi blip, and the user's Park while nothing turns): that reading is of a new
             /// mount session, and the park owns the mount. Guarded by the lock.</summary>
             public bool ParkAndReconnectBeforeTheNextRestRead { get; set; }
+            /// <summary>#2081 — run once (then cleared), under the lock, when the next tracking-on write arrives: the moment
+            /// between a run's confirmed start and its first move.</summary>
+            public Action? OnTrackingOn { get; set; }
             private bool _motorRan;
 
             public FakeStopMount(bool tracking = true, bool canFindHome = false) {
@@ -137,6 +140,10 @@ namespace OpenAstroAra.Test {
                             throw new InvalidCastException("the driver answered tracking with garbage");
                         }
                         _tracking = on;
+                        if (on && OnTrackingOn is { } hook) {
+                            OnTrackingOn = null;
+                            hook();
+                        }
                         return true;
                     }
                 });

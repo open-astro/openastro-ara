@@ -1597,6 +1597,32 @@ const List<Setting> settingsRegistry = [
     defaultValue: null,
     profilePath: 'polar_align.mount_clearance',
   ),
+  // #2081 the turn direction of a new start pose (NINA's East direction) and
+  // the RA motor direction the 0.5° test saved for this mount.
+  Setting(
+    id: 'img.polar.east_direction',
+    tier: SettingTier.advanced,
+    label: 'Polar align turn direction',
+    description: 'Which way RA turns when Polar align starts from a new pose: east or west, or automatic (east in the north, west in the south, as NINA). Later starts in the same session turn back toward that start, so repeated starts never walk the mount one way. The confirm step shows the way before the mount moves.',
+    keywords: ['polar', 'alignment', 'east', 'west', 'direction', 'turn', 'ra', 'nina', 'meridian'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    // The choices as the panel shows them (as storage.compression and
+    // phd2.guider_setup_type list theirs); the profile value is null (auto),
+    // true (east) or false (west).
+    type: SettingType.enumValue(['auto', 'east', 'west']),
+    defaultValue: null,
+    profilePath: 'polar_align.east_direction',
+  ),
+  Setting(
+    id: 'img.polar.motor_direction',
+    tier: SettingTier.advanced,
+    label: 'RA motor direction',
+    description: 'Which way the mount\'s RA motor really turns for a positive speed, as Polar align tested it with a 0.5° turn and saved for this mount and driver. A new driver or version is tested again. Test direction again makes the next start test it.',
+    keywords: ['polar', 'alignment', 'motor', 'direction', 'sign', 'test', 'reverse', 'driver', 'wrong way'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.complex(),
+    defaultValue: null,
+  ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig
   // without a guider. State lives in `unguidedSettingsProvider` (profile
   // section `unguided`).

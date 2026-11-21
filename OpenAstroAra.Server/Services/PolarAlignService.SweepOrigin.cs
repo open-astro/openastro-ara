@@ -85,12 +85,15 @@ namespace OpenAstroAra.Server.Services {
         private static double SecondsBetween(long from, long to) => (to - from) / (double)Stopwatch.Frequency;
 
         /// <summary>The sweep part of a start's plan from the mount's pose read now: a new origin (the first start since
-        /// the mount connected, or the mount was moved by other means), whose first turn goes away from the meridian as
-        /// before (<see cref="AwayFromMeridianSign"/>); or the offset from the origin, with the turns back toward it.
-        /// Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would take the axis past the limit.
-        /// <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it), and
+        /// the mount connected, or the mount was moved by other means), whose first turn goes the profile's way
+        /// (<paramref name="newOriginSign"/>, <c>polar_align.east_direction</c>, #2081: never the mount's hour angle, which a
+        /// wrong clock or a false zero makes arbitrary); or the offset from the origin, with the turns back toward it, so
+        /// repeated Starts never walk the mount one way. Refuses (<c>polar-align-sweep-limit</c>) a start whose turns would
+        /// take the axis past the limit, the motor-direction test it makes first (<paramref name="testDeg"/>, either way)
+        /// included. <paramref name="epoch"/> is the mount session the pose was read in (#2066: the run keeps it), and
         /// <paramref name="side"/> the pier side that reading reported (never the refresh cache's).</summary>
-        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch, PierSide side) {
+        private SweepPlan PlanSweep(double raDeg, double decDeg, double maxSweepDeg, long epoch, PierSide side,
+                double newOriginSign, double testDeg) {
             var pose = new SweepPose(raDeg, decDeg, Stopwatch.GetTimestamp(), side);
             SweepOrigin? origin;
             SweepPose? lastLeft;
@@ -105,12 +108,13 @@ namespace OpenAstroAra.Server.Services {
                 : null;
             if (why is not null) {
                 LogSweepNewOrigin(raDeg, why);
-                return new SweepPlan(pose, NewOrigin: true, OffsetDeg: 0.0, AwayFromMeridianSign(raDeg), limitDeg, epoch);
+                return new SweepPlan(pose, NewOrigin: true, OffsetDeg: 0.0, newOriginSign >= 0 ? 1.0 : -1.0, limitDeg, epoch);
             }
             var offset = FoldTolerantSignedTurnDeg(MechanicalTurnDeg(origin!.Pose.RaDeg, raDeg, SecondsBetween(origin.Pose.At, pose.At)));
             // Back toward the origin; at the origin (within a turn's overshoot), the way the origin's first run turned.
             var dirSign = Math.Abs(offset) <= BandToleranceDeg ? origin.AwaySign : -Math.Sign(offset);
-            var farDeg = Math.Max(Math.Abs(offset), Math.Abs(offset + (dirSign * maxSweepDeg)));
+            // #2081 — the direction test turns testDeg first, toward the turns or (an inverted driver) away from them.
+            var farDeg = Math.Max(Math.Abs(offset), Math.Abs(offset + (dirSign * maxSweepDeg))) + testDeg;
             LogSweepFromOrigin(offset, dirSign > 0 ? PolarAlignDirections.East : PolarAlignDirections.West, farDeg, limitDeg);
             if (farDeg > limitDeg) {
                 throw new RefusalException(RefusalCatalog.PolarAlignSweepLimit,

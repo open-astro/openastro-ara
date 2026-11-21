@@ -145,6 +145,9 @@ class PolarAlignApi implements PolarAlignClient {
           'new_origin': plan.newOrigin,
           // #2083 — only when the user chose it: the rig then moves nothing.
           if (plan.handTurn) 'hand_turn': true,
+          // #2081 — the user saw the 0.5° motor-direction test (a motor run).
+          if (!plan.handTurn && plan.directionTestDeg > 0)
+            'direction_test': true,
         },
         options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );
@@ -272,6 +275,54 @@ class PolarAlignerApi implements PolarAlignerClient {
 
   @override
   Future<void> resumeInRoutine() => _dio.post<void>('/api/v1/equipment/polaralign/correction/resume');
+
+  @override
+  void close() => _dio.close(force: true);
+}
+
+/// #2081 the RA motor direction Polar Align saved for this profile's mount
+/// (`/api/v1/equipment/polaralign/motor-direction`) and "Test direction
+/// again", which forgets it so the next start tests it with a 0.5° turn.
+abstract interface class PolarAlignMotorDirectionClient {
+  /// Null on a 404: a rig that predates the saved direction.
+  Future<PolarAlignMotorDirectionState?> get();
+  Future<void> retest();
+  void close();
+}
+
+class PolarAlignMotorDirectionApi implements PolarAlignMotorDirectionClient {
+  final Dio _dio;
+
+  PolarAlignMotorDirectionApi(AraServer server, {Dio? dio})
+    : _dio =
+          dio ??
+          Dio(
+            BaseOptions(
+              baseUrl: server.baseUrl,
+              connectTimeout: const Duration(seconds: 3),
+              receiveTimeout: const Duration(seconds: 5),
+            ),
+          );
+
+  @override
+  Future<PolarAlignMotorDirectionState?> get() async {
+    try {
+      final res = await _dio.get<dynamic>(
+        '/api/v1/equipment/polaralign/motor-direction',
+      );
+      final data = res.data;
+      return data is Map<String, dynamic>
+          ? PolarAlignMotorDirectionState.fromJson(data)
+          : null;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> retest() =>
+      _dio.post<void>('/api/v1/equipment/polaralign/motor-direction/retest');
 
   @override
   void close() => _dio.close(force: true);

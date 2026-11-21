@@ -170,17 +170,20 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false)).State, Is.EqualTo("idle"));
         }
 
-        // LST 20 h: RA 0 is 60° east of the meridian (turn east, RA up); RA 270° is 30° west of it (turn west, RA down).
-        [TestCase(0.0, PolarAlignDirections.East, 30.0, 60.0)]
-        [TestCase(270.0, PolarAlignDirections.West, 240.0, 210.0)]
+        // #2081 — the profile's east_direction picks the way (null: east in the north), never the hour angle: RA 0 (60° east
+        // of the meridian at LST 20 h) turns east, RA up; RA 270° (30° west of it) turns west, RA down, when set to west.
+        [TestCase(0.0, null, PolarAlignDirections.East, 30.0, 60.0)]
+        [TestCase(270.0, false, PolarAlignDirections.West, 240.0, 210.0)]
         public async Task A_confirmed_start_runs_from_the_current_pose_and_turns_the_confirmed_way(
-                double startRaDeg, string direction, double firstTurnRaDeg, double secondTurnRaDeg) {
+                double startRaDeg, bool? eastDirection, string direction, double firstTurnRaDeg, double secondTurnRaDeg) {
             var stops = new ConcurrentQueue<Coordinates>();
             var mount = NewMount();
             var position = new Coordinates(startRaDeg, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees);
             mount.Setup(m => m.GetCurrentPosition()).Returns(() => position);
             SimulateMotors(mount, () => position, c => position = c, stopped: stops.Enqueue);
-            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount);
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { EastDirection = eastDirection });
+            using var svc = NewService(NewFake(), new HintFollowingSolver(), mount, store: store);
 
             var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
             Assert.That(plan.Direction, Is.EqualTo(direction));

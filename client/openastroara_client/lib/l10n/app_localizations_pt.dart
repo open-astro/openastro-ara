@@ -7336,6 +7336,67 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarKnobClearanceHint =>
       'Kept for each mount. Measure it with the hand controller.';
+
+  @override
+  String get polarKnobEastDirection => 'Turn direction';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automatic';
+
+  @override
+  String get polarKnobEastDirectionEast => 'East';
+
+  @override
+  String get polarKnobEastDirectionWest => 'West';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automatic is east in the north and west in the south. A new start turns this way; later starts turn back toward it';
+
+  @override
+  String get polarMotorDirection => 'RA motor direction';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Not tested yet: the next start first turns the mount 0.5° to learn it.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'This rig does not save a motor direction.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Could not read the saved motor direction from the rig.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Test direction again';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'The next start tests the motor direction again.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'First it turns the mount $deg° to learn the motor direction (not tested yet for this mount and driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14725,4 +14786,65 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarKnobClearanceHint =>
       'Guardado para cada montagem. Meça com o controle de mão.';
+
+  @override
+  String get polarKnobEastDirection => 'Direção do giro';
+
+  @override
+  String get polarKnobEastDirectionAuto => 'Automática';
+
+  @override
+  String get polarKnobEastDirectionEast => 'Leste';
+
+  @override
+  String get polarKnobEastDirectionWest => 'Oeste';
+
+  @override
+  String get polarKnobEastDirectionHint =>
+      'Automática é leste no norte e oeste no sul. Um novo início gira para este lado; os seguintes voltam em direção a ele';
+
+  @override
+  String get polarMotorDirection => 'Direção do motor de AR';
+
+  @override
+  String polarMotorDirectionSaved(
+    String driver,
+    String version,
+    String direction,
+  ) {
+    return 'Testada em $driver $version: a velocidade positiva do motor gira a AR para $direction.';
+  }
+
+  @override
+  String polarMotorDirectionOtherDriver(String driver, String version) {
+    return 'Testada em outro driver ($driver $version): o próximo início testa de novo com um giro de 0,5°.';
+  }
+
+  @override
+  String get polarMotorDirectionUntested =>
+      'Ainda não testada: o próximo início primeiro gira a montagem 0,5° para descobri-la.';
+
+  @override
+  String get polarMotorDirectionUnknown =>
+      'Este setup não salva uma direção do motor.';
+
+  @override
+  String get polarMotorDirectionReadFailed =>
+      'Não foi possível ler do setup a direção do motor salva.';
+
+  @override
+  String get polarMotorDirectionRetest => 'Testar a direção de novo';
+
+  @override
+  String get polarMotorDirectionRetestDone =>
+      'O próximo início testa a direção do motor de novo.';
+
+  @override
+  String polarConfirmDirectionTest(String deg) {
+    return 'Primeiro ela gira a montagem $deg° para descobrir a direção do motor (ainda não testada para esta montagem e driver).';
+  }
+
+  @override
+  String get polarAlignTurnWrongWay =>
+      'A montagem girou para o lado contrário da direção do motor salva, então o alinhamento polar a parou e nunca a girou de volta. Verifique a montagem, toque em Testar a direção de novo em Configurações › Imagem › Alinhamento polar e comece de novo.';
 }

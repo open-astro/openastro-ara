@@ -416,9 +416,21 @@ internal static class ProfileSections {
         st => st.GetPolarAlignSettings(),
         (st, v) => st.PutPolarAlignSettings(v!),
         new(),
-        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "PolarAlignerAuto", "StopTrackingWhenDone", "Camera", "FramesPerPoint"],
+        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "PolarAlignerAuto", "StopTrackingWhenDone", "Camera", "FramesPerPoint", "EastDirection"],
         stripped: ["MountClearance"],
         strip: v => v with { MountClearance = null });
+
+    /// <summary>Null until a Polar Align run tests the RA motor direction (#2081). Measured on the donor's mount and driver.</summary>
+    public static readonly ProfileSection<PolarAlignMotorDirectionDto> PolarAlignMotorDirection = new(
+        "PolarAlignMotorDirection",
+        s => s.PolarAlignMotorDirection,
+        (s, v) => s with { PolarAlignMotorDirection = v },
+        st => st.GetPolarAlignMotorDirection(),
+        (st, v) => st.PutPolarAlignMotorDirection(v),
+        null,
+        kept: [],
+        stripped: ["Sign", "DriverInfo", "DriverVersion", "TestedUtc"],
+        strip: _ => null);
 
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>
     public static readonly ProfileSection<UnguidedSettingsDto> Unguided = new(
@@ -576,6 +588,7 @@ internal static class ProfileSections {
         CoolingFan,
         FilterFocusOffsets,
         Dome,
+        PolarAlignMotorDirection,
     ];
 
     /// <summary>
