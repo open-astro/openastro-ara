@@ -34,8 +34,10 @@ class SimpleModePrefsService {
   Future<bool> load() async {
     try {
       final f = await _file();
-      if (!await f.exists()) return false;
-      final decoded = jsonDecode(await f.readAsString());
+      // Sync reads: a reopened Queue screen shows the saved view within a
+      // turn or two of the event loop; async file IO lands later.
+      if (!f.existsSync()) return false;
+      final decoded = jsonDecode(f.readAsStringSync());
       if (decoded is! Map) return false;
       return decoded['enabled'] is bool ? decoded['enabled'] as bool : false;
     } catch (_) {

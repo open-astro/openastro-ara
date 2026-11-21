@@ -61,6 +61,9 @@ abstract class SimpleScreen {
   /// for the last frame (or the sky, when there is none).
   Widget? frame(WidgetRef ref) => null;
 
+  /// A note over the foot of [frame]; null for none. It takes no taps.
+  Widget? frameCaption(WidgetRef ref) => null;
+
   /// Called once this Screen stops showing.
   void onLeave(BuildContext context, WidgetRef ref) {}
 

@@ -1,0 +1,239 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../l10n/l10n.dart';
+import '../../services/session_live_stack_api.dart';
+import '../../state/simple_live_stack_state.dart';
+import '../../state/simple_messages_state.dart';
+import '../../theme/ara_colors.dart';
+import '../../theme/ara_metrics.dart';
+import '../../util/friendly_error.dart';
+import 'simple_shell.dart';
+
+/// "Live Stack · 3 lights", then "· 2 left out" for the lights the stack could
+/// not add (not registered, or the stacker was busy).
+String simpleLiveStackReadout(AppLocalizations l10n, SessionLiveStackStatus s) {
+  final text = l10n.simpleLiveStackLights(s.lightsStacked);
+  final out = s.lightsUnregistered + s.lightsSkippedBusy;
+  return out == 0 ? text : '$text · ${l10n.simpleLiveStackLeftOut(out)}';
+}
+
+/// The `unsupported` tokens the user can act on, and their words.
+final _reasons = <String, String Function(AppLocalizations)>{
+  'not_colour': (l10n) => l10n.simpleLiveStackNotColour,
+  'too_large': (l10n) => l10n.simpleLiveStackTooLarge,
+};
+
+/// Why the stack cannot run with this camera, for the two reasons the user can
+/// act on (`not_colour`, `too_large`); null for any other token.
+String? simpleLiveStackReason(AppLocalizations l10n, String? token) =>
+    _reasons[token]?.call(l10n);
+
+/// Whether the row shows: once the daemon says the stack can run, or says why
+/// it cannot in words the user can act on. The run panel adds the row only
+/// then, so a hidden row leaves no gap between its neighbours.
+bool simpleLiveStackRowShown(SimpleLiveStack s) =>
+    s.supported || _reasons.containsKey(s.status?.unsupported);
+
+/// A failed start, stop or reset shows as one error pill (DESIGN.md
+/// "Errors": a Queue failure after a rig round-trip).
+Future<void> _sayIfFailed(
+  BuildContext context,
+  Future<Object?> call,
+  String title,
+) async {
+  final l10n = context.l10n;
+  // Read before the await: this row may be gone when it returns.
+  final container = ProviderScope.containerOf(context, listen: false);
+  final e = await call;
+  if (e == null) return;
+  container
+      .read(simpleMessagesProvider.notifier)
+      .show(
+        SimpleMessageKind.error,
+        title,
+        detail: failureReason(l10n, e),
+        origin: SimpleStatusOrigin.plan,
+      );
+}
+
+/// The Live Stack row in the run panel: On / Off, Reset, and (while on)
+/// the choice between the stack and the last light. Hidden until the daemon
+/// says the stack can run, or says why it cannot (`not_colour`, `too_large`).
+class SimpleLiveStackRow extends ConsumerWidget {
+  const SimpleLiveStackRow({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    final s = ref.watch(simpleLiveStackProvider);
+    if (!simpleLiveStackRowShown(s)) return const SizedBox.shrink();
+    final status = s.status!;
+    final reason = simpleLiveStackReason(l10n, status.unsupported);
+    final stack = ref.read(simpleLiveStackProvider.notifier);
+    final dim = kSimpleText.copyWith(color: AraColors.textSecondary);
+    final outcome = s.supported
+        ? simpleLiveStackReason(l10n, status.lastOutcome)
+        : null;
+    // The Simple Mode choice: selection-tint and link-text words when chosen
+    // (DESIGN.md "Panels"), not Material chips, the brightest fill at night.
+    Widget option(String id, String label, SimpleLiveStackView v) {
+      final selected = s.view == v;
+      return Expanded(
+        child: Semantics(
+          button: true,
+          selected: selected,
+          child: Material(
+            color: selected ? AraColors.selectionTint : AraColors.tileFill,
+            borderRadius: BorderRadius.circular(AraRadius.container),
+            child: InkWell(
+              key: Key('simple-live-stack-view-$id'),
+              borderRadius: BorderRadius.circular(AraRadius.container),
+              onTap: () => stack.setView(v),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 48),
+                child: Center(
+                  child: Text(
+                    label,
+                    textAlign: TextAlign.center,
+                    style: selected
+                        ? kSimpleText.copyWith(color: AraColors.linkText)
+                        : kSimpleText,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final title = Text(l10n.simpleLiveStackTitle, style: kSimpleText);
+    // On / Off as named segments, never a bare toggle, over the image
+    // (DESIGN.md "Switches and Segmented Controls").
+    final onOff = SimpleSegments<bool>(
+      key: const Key('simple-live-stack-switch'),
+      keyPrefix: 'simple-live-stack',
+      expand: simpleStackText(context),
+      group: l10n.simpleLiveStackTitle,
+      options: [(true, l10n.deviceOn, 'on'), (false, l10n.deviceOff, 'off')],
+      selected: s.on,
+      onPick: (on) => _sayIfFailed(
+        context,
+        stack.setOn(on),
+        on ? l10n.simpleLiveStackCouldntStart : l10n.simpleLiveStackCouldntStop,
+      ),
+    );
+    // 8 px between neighbouring targets (DESIGN.md), so a gloved tap meant
+    // for one never lands on Off or Reset, which both empty the stack.
+    return Column(
+      key: const Key('simple-live-stack-row'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      spacing: AraSpace.s8,
+      children: [
+        if (!s.supported)
+          title
+        // Large text: the segments go under the title, sharing its width.
+        else if (simpleStackText(context))
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            spacing: AraSpace.s4,
+            children: [title, onOff],
+          )
+        else
+          Row(
+            spacing: AraSpace.s8,
+            children: [
+              Expanded(child: title),
+              onOff,
+            ],
+          ),
+        if (!s.supported)
+          Text(
+            reason!,
+            key: const Key('simple-live-stack-unavailable'),
+            style: dim,
+          ),
+        if (outcome != null)
+          Text(
+            outcome,
+            key: const Key('simple-live-stack-outcome'),
+            style: dim,
+          ),
+        if (s.supported) ...[
+          if (s.on)
+            Row(
+              key: const Key('simple-live-stack-view'),
+              spacing: AraSpace.s8,
+              children: [
+                option(
+                  'stack',
+                  l10n.simpleLiveStackViewStack,
+                  SimpleLiveStackView.stack,
+                ),
+                option(
+                  'last',
+                  l10n.simpleLiveStackViewLastLight,
+                  SimpleLiveStackView.lastLight,
+                ),
+              ],
+            ),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              key: const Key('simple-live-stack-reset'),
+              onPressed: s.on
+                  ? () => _sayIfFailed(
+                      context,
+                      stack.reset(),
+                      l10n.simpleLiveStackCouldntReset,
+                    )
+                  : null,
+              child: Text(l10n.simpleLiveStackReset),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The count and target over the stacked picture, at the foot of the frame.
+/// Empty until a light is stacked.
+class SimpleLiveStackReadout extends ConsumerWidget {
+  const SimpleLiveStackReadout({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final s = ref.watch(simpleLiveStackProvider);
+    final status = s.status;
+    if (!s.on || status == null || status.lightsStacked == 0) {
+      return const SizedBox.shrink();
+    }
+    final target = status.targetName;
+    final text = [
+      simpleLiveStackReadout(context.l10n, status),
+      if (target != null && target.isNotEmpty) target,
+    ].join(' · ');
+    return Semantics(
+      key: const Key('simple-live-stack-readout'),
+      container: true,
+      label: text,
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: AraColors.overlayScrim,
+            borderRadius: BorderRadius.circular(AraRadius.container),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AraSpace.s12,
+              vertical: AraSpace.s8,
+            ),
+            child: Text(text, style: kSimpleText),
+          ),
+        ),
+      ),
+    );
+  }
+}

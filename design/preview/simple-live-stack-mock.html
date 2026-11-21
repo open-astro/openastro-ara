@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Simple Mode: Live Stack</title>
+<style>
+  /* DESIGN.md tokens (lib/theme/ara_colors.dart), as design/preview/simple-tonights-best-mock.html. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --scrim: rgba(26,26,26,.9); --border: #404040; --text: #E0E0E0; --text2: #A0A0A0;
+    --sel: #1976D2; --tint: rgba(25,118,210,.25); --tile: rgba(56,56,56,.55); --link: #64B5F6; --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.45 var(--sys); }
+  .page { max-width: 1000px; margin: 0 auto; padding: 28px 16px 72px; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; }
+  h2 { font-size: 14px; font-weight: 600; margin: 0 0 8px; color: var(--text2); }
+  p.note { color: var(--text2); margin: 0; max-width: 84ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+  .panel { width: 280px; padding: 16px; background: var(--scrim); border-radius: 10px; box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; gap: 8px; }
+  .line { display: flex; align-items: center; justify-content: space-between; min-height: 44px; }
+  .dim { color: var(--text2); }
+  /* On / Off as Simple Mode segments on a tile (SimpleSegments): the chosen one in the selection blue, white words. */
+  .seg { display: inline-flex; background: var(--tile); border-radius: 8px; }
+  .seg span { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; border-radius: 8px; color: var(--text2); }
+  .seg span.on { background: var(--sel); color: #fff; }
+  /* The view choice: the chosen option on the selection tint with link-text words, the other on the tile fill. */
+  .chips { display: flex; gap: 8px; }
+  .chip { flex: 1; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; background: var(--tile); }
+  .chip.on { background: var(--tint); color: var(--link); }
+  .link { color: var(--link); min-height: 44px; display: flex; align-items: center; }
+  .link.off { color: var(--text2); opacity: .6; }
+  .frame { position: relative; width: 480px; height: 300px; border-radius: 10px; overflow: hidden; background: radial-gradient(circle at 40% 45%, #6c6c8c 0, #20203a 50%, #0a0a14 90%); }
+  .readout { position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); padding: 8px 12px; background: var(--scrim); border-radius: 10px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Live Stack in the Queue panel</h1>
+  <p class="note">The row sits in the run panel under the progress and above the queue list; before Start it keeps the same slot. The readout sits at the foot of the stacked picture. Not shown at all for a camera the daemon calls no_camera or not_available.</p>
+  <div class="row">
+    <div>
+      <h2>Off (a colour camera)</h2>
+      <div class="panel">
+        <div class="line"><span>Live Stack</span><span class="seg"><span>On</span><span class="on">Off</span></span></div>
+        <div class="link off">Reset</div>
+      </div>
+    </div>
+    <div>
+      <h2>On</h2>
+      <div class="panel">
+        <div class="line"><span>Live Stack</span><span class="seg"><span class="on">On</span><span>Off</span></span></div>
+        <div class="chips"><span class="chip on">Live Stack</span><span class="chip">Last light</span></div>
+        <div class="link">Reset</div>
+      </div>
+    </div>
+    <div>
+      <h2>Unavailable (mono camera)</h2>
+      <div class="panel">
+        <div class="line"><span>Live Stack</span></div>
+        <div class="dim">Needs a colour camera</div>
+      </div>
+    </div>
+  </div>
+  <div>
+    <h2>Readout over the stacked picture</h2>
+    <div class="frame"><div class="readout">Live Stack · 12 lights · 2 left out · M31</div></div>
+  </div>
+</div>
+</body>
+</html>

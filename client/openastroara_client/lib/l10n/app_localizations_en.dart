@@ -7021,6 +7021,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get clockWrongStartAnyway => 'Start anyway';
 
   @override
+  String get simpleLiveStackTitle => 'Live Stack';
+
+  @override
+  String get simpleLiveStackReset => 'Reset';
+
+  @override
+  String get simpleLiveStackViewStack => 'Live Stack';
+
+  @override
+  String get simpleLiveStackViewLastLight => 'Last light';
+
+  @override
+  String simpleLiveStackLights(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count lights',
+      one: '1 light',
+    );
+    return 'Live Stack · $_temp0';
+  }
+
+  @override
+  String simpleLiveStackLeftOut(int count) {
+    return '$count left out';
+  }
+
+  @override
+  String get simpleLiveStackNotColour => 'Needs a color camera';
+
+  @override
+  String get simpleLiveStackTooLarge => 'Frame too large to stack';
+
+  @override
+  String get simpleLiveStackCouldntStart => 'Couldn\'t start Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntStop => 'Couldn\'t stop Live Stack';
+
+  @override
+  String get simpleLiveStackCouldntReset => 'Couldn\'t reset Live Stack';
+
+  @override
   String get limitsTitle => 'Limits';
 
   @override

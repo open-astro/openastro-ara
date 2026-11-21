@@ -8918,6 +8918,60 @@
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
   },
+  "simpleLiveStackTitle": "Live Stack",
+  "@simpleLiveStackTitle": {
+    "description": "Run panel: the row whose On / Off stacks the session's lights into one growing picture"
+  },
+  "simpleLiveStackReset": "Reset",
+  "@simpleLiveStackReset": {
+    "description": "Run panel, Live Stack: empties the stack; the next light starts it again"
+  },
+  "simpleLiveStackViewStack": "Live Stack",
+  "@simpleLiveStackViewStack": {
+    "description": "Run panel, Live Stack: show the stacked picture on the screen"
+  },
+  "simpleLiveStackViewLastLight": "Last light",
+  "@simpleLiveStackViewLastLight": {
+    "description": "Run panel, Live Stack: show the last single light on the screen"
+  },
+  "simpleLiveStackLights": "Live Stack · {count, plural, =1{1 light} other{{count} lights}}",
+  "@simpleLiveStackLights": {
+    "description": "Readout on the stacked picture: how many lights are stacked",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "simpleLiveStackLeftOut": "{count} left out",
+  "@simpleLiveStackLeftOut": {
+    "description": "Readout, appended after a ' · ': lights the stack could not add (not aligned, or the stacker was busy)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "simpleLiveStackNotColour": "Needs a color camera",
+  "@simpleLiveStackNotColour": {
+    "description": "Run panel, Live Stack row: why it is unavailable with a mono camera, or with a binned one"
+  },
+  "simpleLiveStackTooLarge": "Frame too large to stack",
+  "@simpleLiveStackTooLarge": {
+    "description": "Run panel, Live Stack row: why it is unavailable when the sensor frame is above the stack's size limit"
+  },
+  "simpleLiveStackCouldntStart": "Couldn't start Live Stack",
+  "@simpleLiveStackCouldntStart": {
+    "description": "Error pill title when the rig refuses or fails to turn Live Stack on"
+  },
+  "simpleLiveStackCouldntStop": "Couldn't stop Live Stack",
+  "@simpleLiveStackCouldntStop": {
+    "description": "Error pill title when the rig refuses or fails to turn Live Stack off"
+  },
+  "simpleLiveStackCouldntReset": "Couldn't reset Live Stack",
+  "@simpleLiveStackCouldntReset": {
+    "description": "Error pill title when the rig refuses or fails to empty the Live Stack"
+  },
   "limitsTitle": "Limits",
   "@limitsTitle": {
     "description": "Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch"

@@ -1184,6 +1184,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
     _lastShown = shown;
     final screenFrame = SimpleScreen.of(shown).frame(ref);
+    final frameCaption = SimpleScreen.of(shown).frameCaption(ref);
     // On the guide camera only its own frames count: the main camera's last
     // one would read as the guide camera's.
     final guidePreview = simpleShowsGuidePreview(ref);
@@ -1570,9 +1571,24 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       ),
                                     ),
                                   ),
-                                  if (!showSky)
-                                    screenFrame ?? const FrameViewer()
-                                  else if (!skyShown) ...[
+                                  if (!showSky) ...[
+                                    screenFrame ?? const FrameViewer(),
+                                    // A caption over the frame (the Live
+                                    // Stack readout), only with a screen frame.
+                                    if (screenFrame != null &&
+                                        frameCaption != null)
+                                      Align(
+                                        alignment: Alignment.bottomCenter,
+                                        child: Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: kSimpleInset,
+                                          ),
+                                          child: IgnorePointer(
+                                            child: frameCaption,
+                                          ),
+                                        ),
+                                      ),
+                                  ] else if (!skyShown) ...[
                                     const SimpleWallpaper(
                                       key: Key('simple-wallpaper'),
                                     ),
