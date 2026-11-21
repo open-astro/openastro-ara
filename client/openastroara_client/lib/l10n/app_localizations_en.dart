@@ -7296,6 +7296,18 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
+
+  @override
   String get polarKnobClearance => 'Counterweight limit and clearance';
 
   @override

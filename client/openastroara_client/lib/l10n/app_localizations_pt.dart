@@ -7296,6 +7296,18 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get refusalPolarAlignSiteNotSet =>
+      'Polar align needs your site: set its latitude and longitude in the site settings (not 0° and 0°), so it knows the sidereal time.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'Polar align needs an equatorial mount. This mount says it is alt-az, so turning it would turn azimuth, not RA.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
+
+  @override
   String get polarKnobClearance => 'Counterweight limit and clearance';
 
   @override
@@ -14663,6 +14675,18 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String refusalPolarAlignClearanceNotConfirmed(String limit) {
     return 'Confirme antes a folga desta montagem: verifique com o controle de mão que o contrapeso, o tubo e os cabos não tocam o pilar nem o tripé até $limit° a partir do contrapeso para baixo, depois toque em Confirmar folga no alinhamento polar.';
   }
+
+  @override
+  String get refusalPolarAlignSiteNotSet =>
+      'O alinhamento polar precisa do seu local: defina a latitude e a longitude nas configurações do local (não 0° e 0°), para saber o tempo sideral.';
+
+  @override
+  String get refusalPolarAlignAltAzMount =>
+      'O alinhamento polar precisa de uma montagem equatorial. Esta montagem diz que é altazimutal, então girá-la giraria o azimute, não a AR.';
+
+  @override
+  String get refusalPolarAlignCannotMoveAxis =>
+      'Esta montagem não consegue girar o eixo de AR por velocidade do motor, então o alinhamento polar não consegue girá-la. Use Girar a AR à mão.';
 
   @override
   String get polarKnobClearance => 'Limite do contrapeso e folga';

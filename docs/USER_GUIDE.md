@@ -218,7 +218,10 @@ framing/focus loop when you need to point or focus by eye.
   its Dec axis, as NINA's three-point alignment. A parked mount is refused ("Mount is parked — unpark
   it and point near the pole first"); Polar Align never unparks it. A tube within 3° of the pole is
   refused too ("point it 2–5° from the pole"): the camera would look along the RA axis, and Polar
-  Align no longer tilts it off with the Dec motor. Before anything moves, a confirm step shows which
+  Align no longer tilts it off with the Dec motor. Polar Align also refuses, like NINA, a site with
+  no longitude or one still at latitude 0° and longitude 0° (set your site first: it steers by the
+  sidereal time), an alt-az mount (turning it would turn azimuth, not RA), and, for a motor start, a
+  mount that cannot turn its RA axis by motor speed (use **Turn RA by hand**). Before anything moves, a confirm step shows which
   way RA will turn (east or west: on the first start away from the meridian, later back toward Polar
   Align's start) and how far (about 10° twice); the mount moves only when you tap **Move the mount**.
   Keep a hand on the mount's power switch.
