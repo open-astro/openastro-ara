@@ -148,6 +148,7 @@ internal static partial class PolarAlignerVerifiedStop {
     internal static readonly TimeSpan DefaultWindow = TimeSpan.FromSeconds(3);
     internal static readonly TimeSpan DefaultPoll = TimeSpan.FromMilliseconds(250);
     internal const int Sends = 3;
+    private static readonly TimeSpan MinCallTime = TimeSpan.FromMilliseconds(1);
 
     private const string NoAnswerInWindow = "the Polar Aligner did not answer within the stop's window";
     /// <summary>The outcome's <c>Error</c> when the last thing the stop heard was a delivered Stop and a moving read.</summary>
@@ -166,6 +167,10 @@ internal static partial class PolarAlignerVerifiedStop {
         var abandoned = 0;
         string? error = null;
         void Abandon() => abandoned++;
+        // The window is over once a call used up what was left of it (it was abandoned), or under a millisecond is left.
+        // A wait's timer counts whole milliseconds and may end a hair before the window by the stopwatch; a pass started
+        // in that hair would start a device call with no time to answer, a thread and an abandoned call more.
+        bool Over() => abandoned > 0 || window - clock.Elapsed < MinCallTime;
         PolarAlignerStopOutcome Done(bool confirmed) {
             if (abandoned > 0 && logger is not null) {
                 LogCallsAbandoned(logger, abandoned, window.TotalSeconds, StillRunning);
@@ -174,7 +179,7 @@ internal static partial class PolarAlignerVerifiedStop {
         }
         while (true) {
             // The first Stop always goes out; a resend only inside the window.
-            if (sends == 0 || (sends < Sends && clock.Elapsed >= resendEvery * sends && clock.Elapsed < window)) {
+            if (sends == 0 || (sends < Sends && clock.Elapsed >= resendEvery * sends && !Over())) {
                 sends++;
                 try {
                     await WithinAsync(() => { device.Stop(); return true; }, window - clock.Elapsed, Abandon).ConfigureAwait(false);
@@ -192,7 +197,7 @@ internal static partial class PolarAlignerVerifiedStop {
                     error = ex.Message; // not the device's own refusal: no answer
                 }
             }
-            if (clock.Elapsed >= window) {
+            if (Over()) {
                 return Done(false);
             }
             try {
@@ -210,10 +215,10 @@ internal static partial class PolarAlignerVerifiedStop {
             } catch (Exception ex) {
                 error = ex.Message;
             }
-            var left = window - clock.Elapsed;
-            if (left <= TimeSpan.Zero) {
+            if (Over()) {
                 return Done(false);
             }
+            var left = window - clock.Elapsed;
             await Task.Delay(poll < left ? poll : left).ConfigureAwait(false);
         }
     }

@@ -94,6 +94,8 @@ namespace OpenAstroAra.Server.Services {
         internal TimeSpan PausedRetryDelay { get; set; } = TimeSpan.FromSeconds(5);
         internal TimeSpan CaptureCompleteTimeout { get; set; } = TimeSpan.FromSeconds(31);
         internal TimeSpan RunUnwindGrace { get; set; } = TimeSpan.FromSeconds(15);
+        /// <summary>The clock <see cref="RunUnwindGrace"/> runs on: a test ends the grace when its scenario is in place.</summary>
+        internal TimeProvider RunUnwindClock { get; set; } = TimeProvider.System;
         internal TimeSpan CaptureRequestPoll { get; set; } = TimeSpan.FromMilliseconds(200);
         internal TimeSpan TrackingConfirmTimeout { get; set; } = TimeSpan.FromSeconds(10);
         internal TimeSpan TrackingConfirmPoll { get; set; } = TimeSpan.FromMilliseconds(250);
@@ -1675,7 +1677,7 @@ namespace OpenAstroAra.Server.Services {
             Justification = "Stop must always complete; the run task's own boundary already logged any failure.")]
         private async Task<bool> AwaitRunUnwindAsync(Task run) {
             try {
-                await run.WaitAsync(RunUnwindGrace).ConfigureAwait(false);
+                await run.WaitAsync(RunUnwindGrace, RunUnwindClock).ConfigureAwait(false);
             } catch (TimeoutException) {
                 LogRunUnwindTimedOut();
                 return false;

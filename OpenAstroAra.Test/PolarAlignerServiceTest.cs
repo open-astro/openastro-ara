@@ -402,21 +402,27 @@ namespace OpenAstroAra.Test {
         public async Task A_verified_stop_that_leaves_a_device_call_running_logs_a_warning_with_the_count() {
             // #2069 — a call still waiting at the window's end keeps its own thread until it returns (a dead link: the HTTP
             // timeout). Each one the stop abandons is counted and logged, so a dead link holding threads shows in the log.
+            // The Status read is held by the test (not timed): it is under way when the window ends and answers only once the
+            // stop has returned. The window is long enough for the Stop send to answer on a loaded runner, so the read is the
+            // one call left running.
+            var readEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             var actions = Healthy();
             actions.Replies["PolarAlign:Status"] = () => {
-                release.Task.Wait(TimeSpan.FromSeconds(10));
+                readEntered.TrySetResult();
+                release.Task.Wait(TimeSpan.FromSeconds(30));
                 return StillStatus;
             };
             _switches.Connected.Add(new("sw", "Base", actions));
             var logger = new RecordingLogger();
             var service = new PolarAlignerService(_switches, _mount, logger: logger) {
-                StopWindow = TimeSpan.FromMilliseconds(150), StopPoll = TimeSpan.FromMilliseconds(5),
+                StopWindow = TimeSpan.FromSeconds(1.5), StopPoll = TimeSpan.FromMilliseconds(5),
             };
 
             try {
                 await Assert.ThatAsync(() => service.StopAsync(null, CancellationToken.None),
                     Throws.InvalidOperationException.With.Message.StartsWith("stop_not_confirmed"));
+                Assert.That(readEntered.Task.IsCompleted, Is.True, "the Stop answered and the Status read was under way at the window's end");
                 Assert.That(PolarAlignerVerifiedStop.StillRunning, Is.GreaterThanOrEqualTo(1), "the Status read still holds its thread");
             } finally {
                 release.TrySetResult();
@@ -426,7 +432,8 @@ namespace OpenAstroAra.Test {
             Assert.That(warnings, Has.Count.EqualTo(1));
             Assert.Multiple(() => {
                 Assert.That(warnings[0].Level, Is.EqualTo(Microsoft.Extensions.Logging.LogLevel.Warning));
-                Assert.That(warnings[0].Text, Does.Contain("1 device call(s) still waiting"));
+                Assert.That(warnings[0].Text, Does.Contain("1 device call(s) still waiting"), "the held read, and no call started after it");
+                Assert.That(StopCalls(actions), Is.EqualTo(1), "no Stop resent once the read used up the window");
             });
         }
 
