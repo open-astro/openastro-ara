@@ -517,10 +517,7 @@ Future<void> saveWizardProfile(ProfileApi api, ProfileDraft d) async {
     if (errors.every((e) => e is DioException && e.response == null)) {
       throw ProfileSaveTransportFailure(errors.length);
     }
-    throw Exception(
-      'Failed to save ${errors.length} profile section(s): '
-      '${errors.map((e) => e.toString()).join('; ')}',
-    );
+    throw ProfileSaveFailure(errors);
   }
 }
 
@@ -546,6 +543,16 @@ class ProfileSaveTransportFailure implements Exception {
   @override
   String toString() =>
       'The rig stopped answering while saving $sections profile section(s).';
+}
+
+/// Some profile sections did not apply; [errors] holds each one's failure.
+class ProfileSaveFailure implements Exception {
+  final List<Object> errors;
+  const ProfileSaveFailure(this.errors);
+  @override
+  String toString() =>
+      'Failed to save ${errors.length} profile section(s): '
+      '${errors.map((e) => e.toString()).join('; ')}';
 }
 
 /// Runs a section save and captures its error (null = success) so a concurrent

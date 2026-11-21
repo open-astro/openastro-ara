@@ -28,6 +28,7 @@ class _FakeProfileApi extends ProfileApi {
   bool failSite = false; // in transit: no response at all
   bool rejectSite = false; // the daemon answers 422
   bool busy = false; // a run is active: create answers 409
+  bool siteSavedMeanwhile = false; // another write lands between GET and PUT
   int n = 0;
 
   @override
@@ -84,6 +85,10 @@ class _FakeProfileApi extends ProfileApi {
           statusCode: 422,
         ),
       );
+    }
+    if (siteSavedMeanwhile) {
+      siteSavedMeanwhile = false;
+      rig.savedElsewhere('site');
     }
     return super.putSiteSection(v, ifMatch: ifMatch);
   }
@@ -302,6 +307,59 @@ void main() {
       reason: 'no re-select of the rejected profile',
     );
     expect(api.activeId, 'real');
+  });
+
+  test('a replayed draft on a rig that sends no version stays pending and '
+      'lands once the rig sends one', () async {
+    await pend('Old rig');
+    final api = _FakeProfileApi();
+    api.rig.sendsTags = false;
+
+    final first = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(first, (0, 1, 0, 0), reason: 'kept, not rejected');
+    expect(api.rig.puts, isEmpty, reason: 'no untagged write');
+    final left = (await store.loadAll()).single;
+    expect(left.name, 'Old rig', reason: 'the wizard input survives');
+    expect(left.draft.savedProfileId, 'profile-1');
+
+    api.rig.sendsTags = true;
+    final second = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(second, (1, 0, 0, 0));
+    expect(api.created, ['Old rig'], reason: 'no second create');
+    expect(await store.loadAll(), isEmpty);
+  });
+
+  test('a replayed draft whose section was saved meanwhile (412) stays '
+      'pending and lands on the next connect', () async {
+    await pend('Raced');
+    final api = _FakeProfileApi()..siteSavedMeanwhile = true;
+
+    final first = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(first, (0, 1, 0, 0), reason: 'kept, not rejected');
+    expect((await store.loadAll()).single.name, 'Raced');
+
+    final second = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+    expect(second, (1, 0, 0, 0));
+    expect(api.created, ['Raced'], reason: 'no second create');
+    expect(await store.loadAll(), isEmpty);
   });
 
   test('#1327: a draft that half-landed on this rig is pinned here, so another rig holds it', () async {
