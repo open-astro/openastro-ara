@@ -22,7 +22,7 @@ Shaped 2026-11-01 (`/impeccable shape simple-mode`). Paperclip: ALP-4810. Render
   - **top-left:** one status card: the status lines first (what the rig is doing, one per source), then the message pills (results, errors, questions) behind hairlines, as wide as its widest line up to 420 px; see `simple-mode-pills.md`;
   - **right rail, 72 px wide and only as tall as its controls:** the mode name (tap for the five modes as a grid), the shutter, the settings chip (the current mode's options under the settings icon: "5 s · 100" in Preview, "Auto" or "Manual" in Focus) and, on a desktop or iPad, Stop as its last row (#1911);
   - **Emergency Stop:** on a desktop or iPad, the rail's last row, an octagon and STOP with a 2 s hold; a phone keeps the compact 60 px STOP on its own at the bottom right; a 2 s hold on any shutter is Emergency Stop too (#1911);
-  - **left rail:** Sky Map, Library, Stats, Sky Album and, from 900 pt wide, Monitor; Info, an On / Off row in Preview's and Focus's panels, shows the last frame's facts as fact tiles in the bottom-left corner;
+  - **left rail:** Sky Map, Library, Stats, Sky Album and Monitor (at every window width); Info, an On / Off row in Preview's and Focus's panels, shows the last frame's facts as fact tiles in the bottom-left corner;
   - **bottom row, 56 px tall, 16 px from the left edge and from the right edge (from Stop on a phone held sideways):** the guiding graph and the histogram, each once it has data; a lone one fills the row, both split it equally with guiding on the left;
   - **popovers** (the mode grid, settings, a mode's panel) open left of the right rail and never move it.
 - **Fixed slots:** nothing shifts when state changes; a panel with no data is not drawn.
