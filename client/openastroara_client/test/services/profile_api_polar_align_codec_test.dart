@@ -11,7 +11,10 @@ void main() {
     final west = await api.getPolarAlignSection();
     expect(west.value.eastDirection, isFalse);
 
-    await api.putPolarAlignSection(west.value.withEastDirection(null));
+    await api.putPolarAlignSection(
+      west.value.withEastDirection(null),
+      ifMatch: west.etag,
+    );
     final sent = rig.puts.single.body! as Map;
     expect(sent.containsKey('east_direction'), isTrue);
     expect(sent['east_direction'], isNull);
