@@ -87,6 +87,9 @@ class _Rig implements HttpClientAdapter {
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
         if (site) 'etag': ['"site-v$siteVersion"'],
+        // Any other section: a hash of the stored copy, as the daemon's tag.
+        if (!site && options.path.startsWith('/api/v1/profile/'))
+          'etag': ['"${jsonEncode(body).hashCode}"'],
       },
     );
   }
@@ -195,7 +198,10 @@ void main() {
       await settleLoaded(c, siteSettingsProvider);
       rig.siteName = 'Set on the other device';
       await expectLater(
-        c.read(profileApiProvider)!.putSiteSettings(const SiteSettings()),
+        c.read(profileApiProvider)!.putSiteSection(
+          const SiteSettings(),
+          ifMatch: '"site-v1"',
+        ),
         throwsA(isA<DioException>()),
       );
 
@@ -213,8 +219,14 @@ void main() {
         ..refuseWrites = 1;
       final c = _container(rig);
       final api = c.read(profileApiProvider)!;
-      final refused = api.putSiteSettings(const SiteSettings());
-      final saved = api.putSiteSettings(const SiteSettings(siteName: 'Saved'));
+      final refused = api.putSiteSection(
+        const SiteSettings(),
+        ifMatch: '"site-v1"',
+      );
+      final saved = api.putSiteSection(
+        const SiteSettings(siteName: 'Saved'),
+        ifMatch: '"site-v1"',
+      );
       await _sent(rig, 2);
       rig.holdWrites!.complete();
       await expectLater(refused, throwsA(isA<DioException>()));

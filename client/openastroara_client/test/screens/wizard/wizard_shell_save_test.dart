@@ -1,4 +1,5 @@
 import '../../support/storage_fixture.dart';
+import '../../support/wizard_sections.dart';
 
 import 'dart:async';
 
@@ -19,15 +20,6 @@ import 'package:openastroara/state/wizard_state.dart';
 
 import '../../helpers/fake_data_manager_client.dart';
 
-import 'package:openastroara/state/settings/autofocus_settings_state.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
-import 'package:openastroara/state/settings/filter_set_state.dart';
-import 'package:openastroara/state/settings/imaging_defaults_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/phd2_settings_state.dart';
-import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
-import 'package:openastroara/state/settings/safety_policies_state.dart';
-import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 import '../../support/site_section.dart';
 
@@ -35,7 +27,7 @@ import '../../support/site_section.dart';
 /// blocking spinner is observable) and which records how many times the profile
 /// was created — the regression hooks for the navigator/spinner + double-tap
 /// guard the bot flagged on PR #486.
-class _FakeProfileApi extends FakeStorageApi {
+class _FakeProfileApi extends FakeStorageApi with WizardSectionsInMemory {
   int createCalls = 0;
   final Completer<void> _gate = Completer<void>();
   void releaseCreate() => _gate.complete();
@@ -53,56 +45,6 @@ class _FakeProfileApi extends FakeStorageApi {
     listCalls++;
     return const ProfileList(activeId: null, profiles: []);
   }
-
-  @override
-  Future<SiteSettings> getSiteSettings() async => const SiteSettings();
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings v) async => v;
-  @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
-  @override
-  Future<OpticsSettings> putOptics(OpticsSettings v) async => v;
-  @override
-  Future<ImagingDefaults> getImagingDefaults() async => const ImagingDefaults();
-  @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) async => v;
-  @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
-  @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async => v;
-  @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const PlateSolveSettings();
-  @override
-  Future<PlateSolveSettings> putPlateSolveSettings(
-    PlateSolveSettings v,
-  ) async => v;
-  @override
-  Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings();
-  @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
-      v;
-  @override
-  Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics();
-  @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
-      v;
-  @override
-  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
-  @override
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
-  @override
-  Future<StorageSettings> getStorageSettings() async => kTestStorage;
-  // The wizard writes Storage with no tag; the rig takes it and its tag moves.
-  @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async =>
-      (await putStorageSection(v)).value;
-  @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
-  @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
 
 /// The wizard's reset builds the filter wheel labels, which watch the wheel's
@@ -205,7 +147,11 @@ void main() {
     await tester.pumpAndSettle();
     expect(container.read(storageSettingsProvider).value, isNull);
     await storage.save(api);
-    expect(api.ifMatches, [null, '"v2"'], reason: 'the wizard wrote untagged');
+    expect(
+      api.ifMatches,
+      ['"v1"', '"v2"'],
+      reason: 'the wizard wrote with the tag it loaded; the Save sends the new one',
+    );
   });
 
   testWidgets(

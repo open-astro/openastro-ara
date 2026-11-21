@@ -10,10 +10,10 @@ typedef LandedPut = ({String section, Object? body, String? ifMatch});
 
 /// A rig at the HTTP level for any profile section (ADR 0015): it serves each
 /// section under `/api/v1/profile/<section>` with an `ETag`, refuses a PUT
-/// whose `If-Match` names another copy with a 412 (nothing written), and still
-/// takes a PUT with no `If-Match`, as the daemon does until a version is
-/// required. [puts] holds only the writes that landed, so a test can check the
-/// rig's side whatever shape the client's section notifiers take.
+/// with no or an empty `If-Match` with a 428 and one whose `If-Match` names
+/// another copy with a 412 (nothing written either way), as the daemon does.
+/// [puts] holds only the writes that landed, so a test can check the rig's
+/// side whatever shape the client's section notifiers take.
 class FakeSectionRig implements HttpClientAdapter {
   FakeSectionRig(Map<String, Object?> sections) : _sections = {...sections};
 
@@ -27,6 +27,13 @@ class FakeSectionRig implements HttpClientAdapter {
 
   /// Each entry fails one PUT to its section with a 500 (nothing written).
   final List<String> failPut = [];
+
+  /// Each entry answers one PUT to its section with a 428, as if it carried
+  /// no `If-Match` (nothing written).
+  final List<String> requireVersion = [];
+
+  /// False: a rig from before section versions, which answers no `ETag`.
+  bool sendsTags = true;
 
   /// Section -> a key its PUT reply leaves out (the write still lands).
   final Map<String, String> dropFromReply = {};
@@ -102,7 +109,12 @@ class FakeSectionRig implements HttpClientAdapter {
         final ifMatch = options.headers['if-match'] as String?;
         ifMatches.add(ifMatch);
         if (failPut.remove(section)) return _json({'title': 'rig error'}, 500);
-        if (ifMatch != null && ifMatch != '*' && ifMatch != etagOf(section)) {
+        if (ifMatch == null ||
+            ifMatch.trim().isEmpty ||
+            requireVersion.remove(section)) {
+          return _json({'title': 'Precondition Required'}, 428);
+        }
+        if (ifMatch != '*' && ifMatch != etagOf(section)) {
           return _json({'title': 'Precondition Failed'}, 412);
         }
         puts.add((section: section, body: options.data, ifMatch: ifMatch));
@@ -118,13 +130,13 @@ class FakeSectionRig implements HttpClientAdapter {
     }
   }
 
-  static ResponseBody _json(Object? body, int status, {String? etag}) =>
+  ResponseBody _json(Object? body, int status, {String? etag}) =>
       ResponseBody.fromString(
         jsonEncode(body),
         status,
         headers: {
           Headers.contentTypeHeader: [Headers.jsonContentType],
-          if (etag != null) 'etag': [etag],
+          if (etag != null && sendsTags) 'etag': [etag],
         },
       );
 }
@@ -360,6 +372,20 @@ const rigDefaults = <String, Map<String, Object?>>{
     'recentre_solve_every_n': 1,
     'prior_tolerance_basis': 'max',
   },
+};
+
+/// A whole storage section as the rig serves it, for a test that writes it
+/// (the wizard): every key is there, so the strict read succeeds.
+const rigStorage = <String, Object?>{
+  'save_directory': '/media/openastroara',
+  'file_format': 'fits',
+  'compression': 'zstd',
+  'filename_template':
+      r'$$TARGETNAME$$\\$$DATEMINUS12$$\\$$IMAGETYPE$$\\$$DATETIME$$_$$FILTER$$_$$EXPOSURETIME$$s',
+  'min_free_disk_warn_gb': 10,
+  'min_free_disk_critical_gb': 2,
+  'backup_retention_count': 20,
+  'fault_log_retention_days': 90,
 };
 
 /// Wait (real time, at most 2 s) until [done]: the notifiers load on their

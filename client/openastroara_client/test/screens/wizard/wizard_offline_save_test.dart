@@ -56,25 +56,37 @@ class _UnreachableAfterCreate extends ProfileApi {
     message: 'Connection reset',
   );
   @override
-  Future<SiteSettings> getSiteSettings() async => _gone();
-  @override
   Future<OpticsSettings> getOptics() async => _gone();
   @override
-  Future<ImagingDefaults> getImagingDefaults() async => _gone();
+  Future<({SiteSettings value, String? etag})> getSiteSection() async =>
+      _gone();
   @override
-  Future<Phd2Settings> getPhd2Settings() async => _gone();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      _gone();
   @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async => _gone();
+  Future<({ImagingDefaults value, String? etag})>
+  getImagingDefaultsSection() async => _gone();
   @override
-  Future<AutofocusSettings> getAutofocusSettings() async => _gone();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      _gone();
   @override
-  Future<CameraElectronics> getCameraElectronics() async => _gone();
+  Future<({PlateSolveSettings value, String? etag})>
+  getPlateSolveSection() async => _gone();
   @override
-  Future<FilterSetSettings> getFilterSet() async => _gone();
+  Future<({AutofocusSettings value, String? etag})>
+  getAutofocusSection() async => _gone();
   @override
-  Future<StorageSettings> getStorageSettings() async => _gone();
+  Future<({CameraElectronics value, String? etag})>
+  getCameraElectronicsSection() async => _gone();
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => _gone();
+  Future<({FilterSetSettings value, String? etag})>
+  getFilterSetSection() async => _gone();
+  @override
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      _gone();
+  @override
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      _gone();
 }
 
 /// The very first request (createProfile) dies in transit: no profile exists yet.

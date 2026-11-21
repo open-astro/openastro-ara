@@ -67,14 +67,34 @@ class _MemoryTargets extends CustomTargetsService {
   }
 }
 
-/// A daemon profile section: GET answers the list, PUT stores and echoes it
-/// (canonicalised like the daemon: newest first), or fails when [down].
+/// A daemon profile section: GET answers the list with an `ETag`, PUT stores
+/// and echoes it (canonicalised like the daemon: newest first), or fails when
+/// [down]. As the daemon does (ADR 0015), a PUT with no `If-Match` is a 428
+/// and one naming an older copy a 412, with nothing stored.
 class _ProfileAdapter implements HttpClientAdapter {
-  _ProfileAdapter(this.stored, {this.down = false, this.missing = false});
-  List<CustomTarget> stored;
+  _ProfileAdapter(this._stored, {this.down = false, this.missing = false});
+  List<CustomTarget> _stored;
+  int _version = 1;
   bool down;
   bool missing;
   int puts = 0;
+
+  /// Every `If-Match` a PUT sent (null when none), landed or refused.
+  final ifMatches = <String?>[];
+
+  /// Called as each PUT arrives, before its tag is checked: another device
+  /// saving the list in between.
+  void Function()? beforePut;
+
+  List<CustomTarget> get stored => _stored;
+
+  /// Another device saved the list: the copy and its tag move.
+  set stored(List<CustomTarget> list) {
+    _stored = list;
+    _version++;
+  }
+
+  String get etag => '"targets-v$_version"';
 
   @override
   void close({bool force = false}) {}
@@ -89,6 +109,11 @@ class _ProfileAdapter implements HttpClientAdapter {
       return ResponseBody.fromString('', 404);
     }
     if (options.method == 'PUT') {
+      beforePut?.call();
+      final ifMatch = options.headers['if-match'] as String?;
+      ifMatches.add(ifMatch);
+      if (ifMatch == null) return ResponseBody.fromString('{}', 428);
+      if (ifMatch != etag) return ResponseBody.fromString('{}', 412);
       puts++;
       final body = options.data as Map<String, dynamic>;
       stored = [for (final e in body['targets'] as List) ?CustomTarget.fromWire(e)]
@@ -97,7 +122,10 @@ class _ProfileAdapter implements HttpClientAdapter {
     return ResponseBody.fromString(
       jsonEncode({'targets': [for (final t in stored) t.toWire()]}),
       200,
-      headers: {Headers.contentTypeHeader: [Headers.jsonContentType]},
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+        'etag': [etag],
+      },
     );
   }
 }
@@ -204,6 +232,30 @@ void main() {
     await c.read(customTargetsProvider.notifier).remember(_t('New here', 6));
     expect(adapter.stored.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
     expect(c.read(customTargetsProvider).value!.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
+  });
+
+  test('a push sends the tag of its read; a list saved elsewhere meanwhile is read and merged once more', () async {
+    final mirror = _MemoryTargets(seed: {_scopeA: [_t('Mine', 1)]}, base: {_scopeA: {'mine'}});
+    final adapter = _ProfileAdapter([_t('Mine', 1)]);
+    final c = _container(mirror, adapter);
+    addTearDown(c.dispose);
+    await c.read(customTargetsProvider.future);
+    // Another device saves between this push's read and its write: once.
+    var saves = 0;
+    adapter.beforePut = () {
+      if (saves++ == 0) adapter.stored = [_t('Theirs', 5), ...adapter.stored];
+    };
+    await c.read(customTargetsProvider.notifier).remember(_t('New here', 6));
+    expect(adapter.ifMatches, ['"targets-v1"', '"targets-v2"'],
+        reason: 'the read\'s tag, refused as stale, then the fresh read\'s');
+    expect(adapter.stored.map((t) => t.name), ['New here', 'Theirs', 'Mine']);
+
+    // Refused again after the second read: kept here, not written over.
+    adapter.beforePut = () => adapter.stored = [_t('Again', 7), ...adapter.stored];
+    await c.read(customTargetsProvider.notifier).remember(_t('Later', 8));
+    expect(adapter.ifMatches, hasLength(4), reason: 'one more read and merge, then it gives up');
+    expect(adapter.stored.map((t) => t.name), isNot(contains('Later')));
+    expect(mirror.items(_scopeA).map((t) => t.name), contains('Later'), reason: 'the mirror holds it for the next sync');
   });
 
   test('a target re-added here after another client forgot it survives the push', () async {

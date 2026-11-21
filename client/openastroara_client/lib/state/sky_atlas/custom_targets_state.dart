@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -57,7 +58,7 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
   Future<List<CustomTarget>> _sync(
       ProfileApi api, CustomTargetsService svc, String scope) async {
     final local = await svc.loadScope(scope);
-    List<CustomTarget> remote;
+    ({List<CustomTarget> value, String? etag}) remote;
     try {
       remote = await api.getSavedTargets();
     } catch (e) {
@@ -65,16 +66,38 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
       return local.targets;
     }
     final merged = threeWayMergeSavedTargets(
-        remote: remote, mirror: local.targets, base: local.base);
-    if (sameSavedTargets(merged, remote)) {
-      return svc.commitSync(scope, remote);
+        remote: remote.value, mirror: local.targets, base: local.base);
+    if (sameSavedTargets(merged, remote.value)) {
+      return svc.commitSync(scope, remote.value);
     }
     try {
-      final echoed = await api.putSavedTargets(merged.where(isAcceptableSavedTarget).toList());
-      return await svc.commitSync(scope, echoed);
+      return await _putMerged(api, svc, scope, remote);
     } catch (e) {
       debugPrint('[custom-targets] profile push failed, kept locally: $e');
       return svc.replaceAll(merged, scope: scope);
+    }
+  }
+
+  /// ADR 0015 — PUT the three-way merge of [read] and the mirror with
+  /// [read]'s tag. A 412 (another device saved the list since the read) reads
+  /// once more and merges once more; a second refusal throws, and the caller
+  /// keeps the list locally for the next build to sync.
+  Future<List<CustomTarget>> _putMerged(ProfileApi api, CustomTargetsService svc,
+      String scope, ({List<CustomTarget> value, String? etag}) read) async {
+    var remote = read;
+    for (var attempt = 0;; attempt++) {
+      final local = await svc.loadScope(scope);
+      final merged = threeWayMergeSavedTargets(
+          remote: remote.value, mirror: local.targets, base: local.base);
+      try {
+        final echoed = await api.putSavedTargets(
+            merged.where(isAcceptableSavedTarget).toList(),
+            ifMatch: remote.etag);
+        return await svc.commitSync(scope, echoed.value);
+      } on DioException catch (e) {
+        if (attempt > 0 || e.response?.statusCode != 412) rethrow;
+        remote = await api.getSavedTargets();
+      }
     }
   }
 
@@ -102,13 +125,9 @@ class CustomTargetsNotifier extends AsyncNotifier<List<CustomTarget>> {
     final task = _pushes.then((_) async {
       try {
         final svc = ref.read(customTargetsServiceProvider);
-        final local = await svc.loadScope(scope);
         final remote = await api.getSavedTargets();
-        final merged = threeWayMergeSavedTargets(
-            remote: remote, mirror: local.targets, base: local.base);
-        final echoed = await api.putSavedTargets(merged.where(isAcceptableSavedTarget).toList());
         if (!ref.mounted) return;
-        final committed = await svc.commitSync(scope, echoed);
+        final committed = await _putMerged(api, svc, scope, remote);
         if (ref.mounted) state = AsyncData(committed);
       } catch (e) {
         // Offline or an older daemon: the mirror holds it; the next build syncs.

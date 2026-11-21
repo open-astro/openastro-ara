@@ -27,19 +27,26 @@ class _Fake implements GuiderAdvancedClient {
   @override
   Future<({GuiderAdvancedSettings value, String? etag})> getProfile() async {
     if (failProfileRead) throw Exception('profile read timed out');
-    return (value: profile, etag: '"v$version"');
+    return (value: profile, etag: tagless ? null : '"v$version"');
   }
+
+  /// The read answers no tag, so Apply sends none.
+  bool tagless = false;
 
   @override
   Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
     GuiderAdvancedSettings s, {
     String? ifMatch,
   }) async {
-    if (ifMatch != null && ifMatch != '"v$version"') {
+    // As the daemon does (ADR 0015): no tag is a 428, another copy's a 412.
+    if (ifMatch == null || ifMatch != '"v$version"') {
       final req = RequestOptions(path: '/api/v1/profile/guider-advanced');
       throw DioException(
         requestOptions: req,
-        response: Response<void>(requestOptions: req, statusCode: 412),
+        response: Response<void>(
+          requestOptions: req,
+          statusCode: ifMatch == null ? 428 : 412,
+        ),
       );
     }
     ifMatches.add(ifMatch);
@@ -79,8 +86,9 @@ Future<_Fake> _pump(
   WidgetTester t, {
   GuiderAdvancedSettings profile = GuiderAdvancedSettings.empty,
   GuiderAdvancedView? guider,
+  bool tagless = false,
 }) async {
-  final fake = _Fake(profile, guider ?? _guider());
+  final fake = _Fake(profile, guider ?? _guider())..tagless = tagless;
   t.view.physicalSize = const Size(900, 2400);
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.resetPhysicalSize);
@@ -239,6 +247,16 @@ void main() {
     await t.tap(find.widgetWithText(FilledButton, 'Apply'));
     await t.pumpAndSettle();
     expect(fake.ifMatches, ['"v2"']);
+  });
+
+  testWidgets('Guider advanced: Apply refused for want of a version (428) '
+      'says to reload and offers Reload', (t) async {
+    final fake = await _pump(t, tagless: true);
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.putBody, isNull);
+    expect(find.textContaining('Reload these settings from the rig'), findsWidgets);
+    expect(find.text('Reload'), findsWidgets);
   });
 
   test('Guider advanced: the multi-star chip writes over the copy it '

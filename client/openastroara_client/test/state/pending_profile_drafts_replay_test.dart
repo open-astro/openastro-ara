@@ -1,5 +1,3 @@
-import '../support/storage_fixture.dart';
-
 import 'dart:io';
 
 import 'package:dio/dio.dart';
@@ -11,20 +9,21 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/pending_profile_draft_service.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/pending_profile_drafts_state.dart';
-import 'package:openastroara/state/settings/autofocus_settings_state.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
-import 'package:openastroara/state/settings/filter_set_state.dart';
-import 'package:openastroara/state/settings/imaging_defaults_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/phd2_settings_state.dart';
-import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
-import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
-import 'package:openastroara/state/settings/storage_settings_state.dart';
+
+import '../support/fake_section_rig.dart';
 
 /// A ProfileApi double for the replay: records creates, can fail one section.
+/// The sections themselves reach [rig], which refuses a PUT without the
+/// loaded tag (428) as the daemon does.
 class _FakeProfileApi extends ProfileApi {
-  _FakeProfileApi() : super(const AraServer(hostname: 'test', port: 1));
+  _FakeProfileApi() : this._(FakeSectionRig({...rigDefaults, 'storage': rigStorage}));
+  _FakeProfileApi._(this.rig)
+    : super(
+        const AraServer(hostname: 'test', port: 1),
+        dio: Dio(BaseOptions(baseUrl: 'http://test:1'))..httpClientAdapter = rig,
+      );
+  final FakeSectionRig rig;
   final created = <String>[];
   bool failSite = false; // in transit: no response at all
   bool rejectSite = false; // the daemon answers 422
@@ -66,9 +65,10 @@ class _FakeProfileApi extends ProfileApi {
   }
 
   @override
-  Future<SiteSettings> getSiteSettings() async => const SiteSettings();
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings v) async {
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) async {
     if (failSite) {
       throw DioException(
         requestOptions: RequestOptions(path: '/api/v1/profile/site'),
@@ -85,52 +85,8 @@ class _FakeProfileApi extends ProfileApi {
         ),
       );
     }
-    return v;
+    return super.putSiteSection(v, ifMatch: ifMatch);
   }
-
-  @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
-  @override
-  Future<OpticsSettings> putOptics(OpticsSettings v) async => v;
-  @override
-  Future<ImagingDefaults> getImagingDefaults() async => const ImagingDefaults();
-  @override
-  Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) async => v;
-  @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
-  @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async => v;
-  @override
-  Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const PlateSolveSettings();
-  @override
-  Future<PlateSolveSettings> putPlateSolveSettings(
-    PlateSolveSettings v,
-  ) async => v;
-  @override
-  Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings();
-  @override
-  Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
-      v;
-  @override
-  Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics();
-  @override
-  Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
-      v;
-  @override
-  Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings();
-  @override
-  Future<FilterSetSettings> putFilterSet(FilterSetSettings v) async => v;
-  @override
-  Future<StorageSettings> getStorageSettings() async => kTestStorage;
-  @override
-  Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
-  @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
-  @override
-  Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
 
 void main() {
@@ -175,6 +131,24 @@ void main() {
       expect(await store.loadAll(), isEmpty);
     },
   );
+
+  test('a replayed draft sends every section the tag of the copy it loaded', () async {
+    await pend('Dark site rig');
+    final api = _FakeProfileApi();
+
+    final (applied, _, _, _) = await replayPendingProfileDrafts(
+      store,
+      api,
+      serverKey: 'rig-a:5555',
+    );
+
+    expect(applied, 1);
+    expect(api.rig.puts, hasLength(10), reason: 'every section the wizard writes');
+    expect(api.rig.ifMatches, isNot(contains(null)));
+    for (final p in api.rig.puts) {
+      expect(p.ifMatch, '"${p.section}-v1"', reason: p.section);
+    }
+  });
 
   test('#1137: a draft whose sections failed IN TRANSIT stays pending with its created profile id', () async {
     await pend('Flaky');

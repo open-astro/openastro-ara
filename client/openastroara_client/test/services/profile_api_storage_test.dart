@@ -62,7 +62,7 @@ ProfileApi _api(_RecordingAdapter adapter) {
 void main() {
   group('storage settings JSON (#1145 fault_log_retention_days)', () {
     test(
-      'getStorageSettings reads the wire key with a non-default value',
+      'getStorageSection reads the wire key with a non-default value',
       () async {
         final a = _RecordingAdapter(
           body: {
@@ -76,7 +76,7 @@ void main() {
             'fault_log_retention_days': 365,
           },
         );
-        final s = await _api(a).getStorageSettings();
+        final s = (await _api(a).getStorageSection()).value;
         expect(a.method, 'GET');
         expect(a.path, '/api/v1/profile/storage');
         expect(s.faultLogRetentionDays, 365);
@@ -88,16 +88,19 @@ void main() {
       () async {
         final a = _RecordingAdapter(body: {'save_directory': '/media/x'});
         await expectLater(
-          _api(a).getStorageSettings(),
+          _api(a).getStorageSection(),
           throwsA(isA<TypeError>()),
         );
       },
     );
 
-    test('putStorageSettings writes the wire key and reads it back', () async {
+    test('putStorageSection writes the wire key and reads it back', () async {
       final sent = kTestStorage.copyWith(faultLogRetentionDays: 0);
       final a = _RecordingAdapter(body: _full({'fault_log_retention_days': 0}));
-      final echoed = await _api(a).putStorageSettings(sent);
+      final echoed = (await _api(a).putStorageSection(
+        sent,
+        ifMatch: '"t"',
+      )).value;
       expect(a.method, 'PUT');
       expect(a.path, '/api/v1/profile/storage');
       expect((a.requestData as Map)['fault_log_retention_days'], 0);
@@ -116,7 +119,7 @@ void main() {
           'compression': compression ?? 'zstd',
         }),
       ),
-    ).getStorageSettings();
+    ).getStorageSection().then((r) => r.value);
 
     test('current tokens parse', () async {
       final s = await read('xisf', 'off');
@@ -167,7 +170,10 @@ void main() {
               'compression': compression.wire,
             }),
           );
-          final echoed = await _api(a).putStorageSettings(sent);
+          final echoed = (await _api(a).putStorageSection(
+            sent,
+            ifMatch: '"t"',
+          )).value;
           final body = a.requestData as Map;
           expect(body['file_format'], anyOf('fits', 'xisf'));
           expect(body['compression'], anyOf('off', 'zstd'));
