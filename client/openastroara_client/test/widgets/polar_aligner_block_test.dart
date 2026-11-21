@@ -229,7 +229,8 @@ void main() {
             correction: PolarAlignerRun(state: 'converged', moves: 4)));
     expect(
         find.text('The motors stopped inside your 2′ tolerance, but the error is not inside it with twice its '
-            'uncertainty (± 0.4′), so Done waits. More moves cannot help: run Check to measure afresh.'),
+            'uncertainty (± 0.4′), so Done waits. More moves cannot help: larger turns shrink it most (20° in place '
+            'of 10° cuts it about four times), so run Check with a larger Check step.'),
         findsOneWidget);
   });
 

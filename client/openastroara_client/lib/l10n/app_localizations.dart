@@ -10242,13 +10242,13 @@ abstract class AppLocalizations {
   /// Polar align (#2072): why Done is not available while the error is inside the tolerance but the error plus twice its 1σ is not
   ///
   /// In en, this message translates to:
-  /// **'Done waits: the error is inside your {tolerance}′ tolerance, but not with twice its uncertainty (± {sigma}). Take more frames per point, or check focus and seeing.'**
+  /// **'Done waits: the error is inside your {tolerance}′ tolerance, but not with twice its uncertainty (± {sigma}). Larger turns shrink it most: 20° in place of 10° cuts it about four times (Polar align turn and Check step in Settings). More frames per point help a little.'**
   String polarDoneHeldBySigma(String tolerance, String sigma);
 
   /// Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it
   ///
   /// In en, this message translates to:
-  /// **'The motors stopped inside your {tolerance}′ tolerance, but the error is not inside it with twice its uncertainty (± {sigma}), so Done waits. More moves cannot help: run Check to measure afresh.'**
+  /// **'The motors stopped inside your {tolerance}′ tolerance, but the error is not inside it with twice its uncertainty (± {sigma}), so Done waits. More moves cannot help: larger turns shrink it most (20° in place of 10° cuts it about four times), so run Check with a larger Check step.'**
   String polarAlignerConvergedHeld(String tolerance, String sigma);
 
   /// Guiding residual tooltip (#2072): the residual is above Polar Align's figure by more than their combined 1σ; both figures with their uncertainty, both causes and how to tell them apart

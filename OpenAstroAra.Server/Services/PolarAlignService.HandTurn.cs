@@ -293,7 +293,7 @@ namespace OpenAstroAra.Server.Services {
                             // polar_align.frames_per_point frames averaged (retaken once when scattered, else flagged
                             // noisy), its frame ids going on from the wait's.
                             var (mean, meanAt) = await SolveSeedFrameAsync(capture, frameId, (s.RaDegJnow, s.DecDegJnow), settings, gen, ct,
-                                attemptsBefore: frame).ConfigureAwait(false);
+                                attemptsBefore: frame, tracking: tracking).ConfigureAwait(false);
                             LogSeedSolve(frameId, mean.RaDegJnow, mean.DecDegJnow);
                             return new HandPoint(mean, meanAt, ReadingAt(now.Reading, at, meanAt, tracking));
                         }

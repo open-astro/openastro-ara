@@ -6093,12 +6093,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String polarDoneHeldBySigma(String tolerance, String sigma) {
-    return 'Done waits: the error is inside your $tolerance′ tolerance, but not with twice its uncertainty (± $sigma). Take more frames per point, or check focus and seeing.';
+    return 'Done waits: the error is inside your $tolerance′ tolerance, but not with twice its uncertainty (± $sigma). Larger turns shrink it most: 20° in place of 10° cuts it about four times (Polar align turn and Check step in Settings). More frames per point help a little.';
   }
 
   @override
   String polarAlignerConvergedHeld(String tolerance, String sigma) {
-    return 'The motors stopped inside your $tolerance′ tolerance, but the error is not inside it with twice its uncertainty (± $sigma), so Done waits. More moves cannot help: run Check to measure afresh.';
+    return 'The motors stopped inside your $tolerance′ tolerance, but the error is not inside it with twice its uncertainty (± $sigma), so Done waits. More moves cannot help: larger turns shrink it most (20° in place of 10° cuts it about four times), so run Check with a larger Check step.';
   }
 
   @override
@@ -13264,12 +13264,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String polarDoneHeldBySigma(String tolerance, String sigma) {
-    return 'Concluir espera: o erro está dentro da sua tolerância de $tolerance′, mas não com o dobro da sua incerteza (± $sigma). Use mais quadros por ponto, ou verifique o foco e o seeing.';
+    return 'Concluir espera: o erro está dentro da sua tolerância de $tolerance′, mas não com o dobro da sua incerteza (± $sigma). Giros maiores a reduzem mais: 20° no lugar de 10° a corta cerca de quatro vezes (giro e passo do Verificar nas configurações do alinhamento polar). Mais quadros por ponto ajudam um pouco.';
   }
 
   @override
   String polarAlignerConvergedHeld(String tolerance, String sigma) {
-    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas o erro não fica dentro dela com o dobro da sua incerteza (± $sigma), então Concluir espera. Mais movimentos não ajudam: rode o Verificar para medir de novo.';
+    return 'Os motores pararam dentro da sua tolerância de $tolerance′, mas o erro não fica dentro dela com o dobro da sua incerteza (± $sigma), então Concluir espera. Mais movimentos não ajudam: giros maiores a reduzem mais (20° no lugar de 10° a corta cerca de quatro vezes), então rode o Verificar com um passo maior.';
   }
 
   @override

@@ -300,11 +300,15 @@ framing/focus loop when you need to point or focus by eye.
 - **How sure the readout is (#2072).** The total error shows with its uncertainty, for example
   **0.2′ ± 1.1′** (one sigma), in the full UI and Simple Mode. The uncertainty comes from how much
   each point's frames scattered; a point of one frame counts a 1″ floor, because one frame has no
-  scatter to measure. With 10° turns, each arcsecond of solve noise is about 1.3′ of axis error.
+  scatter to measure, and a point of several frames is never counted surer than that floor shared
+  among them (1″ ÷ √3 for three). With 10° turns, each arcsecond of solve noise is about 1.3′ of
+  axis error, so at the defaults (1′ tolerance, 10° turns, three frames) the floor alone keeps Done
+  waiting.
   **Done** waits until the error plus twice its uncertainty is inside your tolerance, so a noisy
   measurement cannot claim a small error; until then the screen says why. **Check** stays available:
-  it measures afresh. To shrink the uncertainty, take more frames per point, or check focus and
-  seeing. The uncertainty covers only what the frames of each point show: a mount that shifts
+  it measures afresh, with its own step. Larger turns shrink the uncertainty most: 20° in place of
+  10° (**Polar align turn** and **Check step** in Settings → Imaging → Polar align) cuts it about
+  four times; more frames per point help a little. The uncertainty covers only what the frames of each point show: a mount that shifts
   between points (flexure, a slipping clutch) is not in it. With a Polar Aligner, the motors stop
   once the error is inside the tolerance (more moves cannot shrink the uncertainty) and the line
   says when Done still waits.
@@ -333,7 +337,7 @@ framing/focus loop when you need to point or focus by eye.
   **Verify**, or start again with the scope nearer the pole.
   When Polar Align carries its uncertainty, the two numbers are said to disagree only when the
   guiding figure is above Polar Align's by more than twice their combined uncertainty, and the
-  tooltip shows both with it (for example *0.2′ ± 1.1′ vs at least 16′ ± 1.2′*).
+  tooltip shows both with it (for example *12″ ± 66″ vs at least 17′ ± 70″*).
 - **Stop Mount and Emergency Stop end Polar Align.** Any stop Polar Align did not send itself ends
   the run at once, even between two turns while it solves a frame or while you turn the knobs:
   **Stop Mount**, **Emergency Stop**, the meridian-flip watchdog, a **Park** or a **Home**, the

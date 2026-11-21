@@ -600,7 +600,8 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
-                              formatArcmin(total),
+                              // #2072 the verdict's total with its 1σ: "+0.5′ ± 0.6′".
+                              polarErrorWithSigmaText(context.l10n, formatArcmin(total), r?.totalSigmaArcmin ?? live.totalSigmaArcmin),
                               key: const Key('polar-align-check-total'),
                               style: TextStyle(
                                 fontSize: _short ? _heroFontShort : _heroFont,

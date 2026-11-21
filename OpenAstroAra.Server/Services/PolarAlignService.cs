@@ -243,10 +243,11 @@ namespace OpenAstroAra.Server.Services {
                     MeasurementNoisy: _measurementNoisy,
                     HandTurn: _handTurn,
                     HandTurnWait: _handTurnWait,
-                    // #2072 — the readout's 1σ, beside each error.
-                    CurrentSigmaArcmin: total is null ? null : _fitSigma?.TotalSigmaArcmin,
-                    AzimuthSigmaArcmin: total is null ? null : _fitSigma?.AzSigmaArcmin,
-                    AltitudeSigmaArcmin: total is null ? null : _fitSigma?.AltSigmaArcmin));
+                    // #2072 — the readout's 1σ, beside each error, at the 0.01′ polar_align.progress gives it (the Done
+                    // gate, AlignedWithinTolerance, judges it at that precision).
+                    CurrentSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.TotalSigmaArcmin),
+                    AzimuthSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.AzSigmaArcmin),
+                    AltitudeSigmaArcmin: total is null ? null : RoundedSigma(_fitSigma?.AltSigmaArcmin)));
             }
         }
 
@@ -1340,17 +1341,18 @@ namespace OpenAstroAra.Server.Services {
         /// the last one's time by the Earth's turn since it was taken).</returns>
         /// <param name="attemptsBefore">Frames already taken under <paramref name="frameId"/> (a hand turn's wait): the
         /// point's frame ids go on from them.</param>
+        /// <param name="tracking">Whether the mount tracks meanwhile (<see cref="SolvePointSetAsync"/>).</param>
         private async Task<(PolarAlignSolveOutcome Point, DateTimeOffset At)> SolveSeedFrameAsync(
                 LiveCapture capture, string frameId,
                 (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings, int gen, CancellationToken ct,
-                int attemptsBefore = 0) {
+                int attemptsBefore = 0, bool tracking = true) {
             var frames = FramesPerPoint(settings);
-            var set = (await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore, gen, ct).ConfigureAwait(false))!;
+            var set = (await SolvePointSetAsync(capture, frameId, hint, settings, frames, attemptsBefore, gen, ct, tracking: tracking).ConfigureAwait(false))!;
             LogPointScatter(frameId, set.Solved, set.Failed, set.Point.RaDegJnow, set.Point.DecDegJnow, set.ScatterArcsec);
             if (set.ScatterArcsec > MaxPointScatterArcsec) {
                 LogPointRetake(frameId, set.ScatterArcsec, MaxPointScatterArcsec);
                 var retake = await SolvePointSetAsync(capture, frameId, (set.Point.RaDegJnow, set.Point.DecDegJnow), settings, frames,
-                    attemptsBefore: set.Attempts, gen, ct, retake: true).ConfigureAwait(false);
+                    attemptsBefore: set.Attempts, gen, ct, retake: true, tracking: tracking).ConfigureAwait(false);
                 if (retake is null) {
                     // The retake did not solve (a cloud): the first set still stands for the point, flagged noisy.
                     LogPointRetakeUnsolved(frameId, set.ScatterArcsec);
@@ -1376,9 +1378,11 @@ namespace OpenAstroAra.Server.Services {
 
         /// <param name="attemptsBefore">The frames this point took already (a retake): frame ids stay unique.</param>
         /// <param name="retake">A retake: a set with no solve returns null (the first set stands) and keeps no frame.</param>
+        /// <param name="tracking">Whether the mount tracks while the set is taken (a motor run's always does; a hand-turn
+        /// run's may not): off, the solves are moved to the set's mean time by the Earth's turn before they are averaged.</param>
         private async Task<PointSet?> SolvePointSetAsync(
                 LiveCapture capture, string frameId, (double RaDeg, double DecDeg)? hint, PolarAlignSettingsDto settings,
-                int frames, int attemptsBefore, int gen, CancellationToken ct, bool retake = false) {
+                int frames, int attemptsBefore, int gen, CancellationToken ct, bool retake = false, bool tracking = true) {
             var anyFrameReachedSolver = false;
             string? keptFrame = null;
             var solves = new List<(PolarAlignSolveOutcome S, DateTimeOffset At)>(frames);
@@ -1416,12 +1420,9 @@ namespace OpenAstroAra.Server.Services {
                 }
             }
             if (solves.Count > 0) {
-                var (ra, dec, scatter) = PolarAlignGeometry.MeanDirection(solves.ConvertAll(p => (p.S.RaDegJnow, p.S.DecDegJnow)));
-                var first = solves[0].At;
-                var meanAt = first + TimeSpan.FromTicks((long)solves.Average(p => (p.At - first).Ticks));
-                // #2072 — the point carries its mean's 1σ from the scatter, for the fit's uncertainty.
-                var sigma = PolarAlignGeometry.MeanStandardErrorArcsec(scatter, solves.Count);
-                return new PointSet(new PolarAlignSolveOutcome(true, ra, dec, sigma), meanAt, solves.Count, failed, scatter, attempt);
+                // #2072 — the mean carries its 1σ from the scatter, for the fit's uncertainty.
+                var (point, meanAt, scatter) = AveragePointSolves(solves, tracking);
+                return new PointSet(point, meanAt, solves.Count, failed, scatter, attempt);
             }
             if (retake) {
                 return null;

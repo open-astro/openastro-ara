@@ -567,6 +567,21 @@ void main() {
       expect(api.calls, contains('start:fine'));
     });
 
+    testWidgets("the check verdict shows its total with the verdict's own 1σ (#2072)", (tester) async {
+      final api = _FakePolarAlignClient();
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.checked, stage: PolarAlignStages.check, checkSolvesDone: 3,
+        altErrorArcmin: 0.3, azErrorArcmin: 0.4, totalErrorArcmin: 0.5, totalSigmaArcmin: 1.0, zone: 'green',
+        checkResult: PolarAlignCheckResult(
+          altErrorArcmin: 0.3, azErrorArcmin: 0.4, totalErrorArcmin: 0.5,
+          coneHalfAngleDeg: 5.0, turnMismatchDeg: 0.02, verdict: 'excellent', totalSigmaArcmin: 0.6,
+        ),
+      )));
+      await _expand(tester);
+      final total = tester.widget<Text>(find.byKey(const Key('polar-align-check-total')));
+      expect(total.data, '+0.5′ ± 0.6′', reason: "the verdict's σ, as Simple Mode shows it");
+    });
+
     testWidgets('idle shows Start, and posts start only once the confirm step says so (#2048)', (tester) async {
       final api = _FakePolarAlignClient();
       await tester.pumpWidget(_harness(api, const PolarAlignLive()));

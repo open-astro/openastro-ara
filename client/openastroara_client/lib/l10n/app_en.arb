@@ -7862,7 +7862,7 @@
       "sigma": {"type": "String"}
     }
   },
-  "polarDoneHeldBySigma": "Done waits: the error is inside your {tolerance}′ tolerance, but not with twice its uncertainty (± {sigma}). Take more frames per point, or check focus and seeing.",
+  "polarDoneHeldBySigma": "Done waits: the error is inside your {tolerance}′ tolerance, but not with twice its uncertainty (± {sigma}). Larger turns shrink it most: 20° in place of 10° cuts it about four times (Polar align turn and Check step in Settings). More frames per point help a little.",
   "@polarDoneHeldBySigma": {
     "description": "Polar align (#2072): why Done is not available while the error is inside the tolerance but the error plus twice its 1σ is not",
     "placeholders": {
@@ -7870,7 +7870,7 @@
       "sigma": {"type": "String"}
     }
   },
-  "polarAlignerConvergedHeld": "The motors stopped inside your {tolerance}′ tolerance, but the error is not inside it with twice its uncertainty (± {sigma}), so Done waits. More moves cannot help: run Check to measure afresh.",
+  "polarAlignerConvergedHeld": "The motors stopped inside your {tolerance}′ tolerance, but the error is not inside it with twice its uncertainty (± {sigma}), so Done waits. More moves cannot help: larger turns shrink it most (20° in place of 10° cuts it about four times), so run Check with a larger Check step.",
   "@polarAlignerConvergedHeld": {
     "description": "Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it",
     "placeholders": {

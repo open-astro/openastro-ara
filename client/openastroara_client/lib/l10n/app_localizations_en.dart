@@ -6093,12 +6093,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String polarDoneHeldBySigma(String tolerance, String sigma) {
-    return 'Done waits: the error is inside your $tolerance′ tolerance, but not with twice its uncertainty (± $sigma). Take more frames per point, or check focus and seeing.';
+    return 'Done waits: the error is inside your $tolerance′ tolerance, but not with twice its uncertainty (± $sigma). Larger turns shrink it most: 20° in place of 10° cuts it about four times (Polar align turn and Check step in Settings). More frames per point help a little.';
   }
 
   @override
   String polarAlignerConvergedHeld(String tolerance, String sigma) {
-    return 'The motors stopped inside your $tolerance′ tolerance, but the error is not inside it with twice its uncertainty (± $sigma), so Done waits. More moves cannot help: run Check to measure afresh.';
+    return 'The motors stopped inside your $tolerance′ tolerance, but the error is not inside it with twice its uncertainty (± $sigma), so Done waits. More moves cannot help: larger turns shrink it most (20° in place of 10° cuts it about four times), so run Check with a larger Check step.';
   }
 
   @override
