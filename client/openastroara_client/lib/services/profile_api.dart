@@ -983,6 +983,10 @@ class ProfileApi {
         mode != PolarAlignLoopModes.single) {
       throw FormatException('unknown loop_mode', mode);
     }
+    final camera = j['camera'];
+    if (camera != PolarAlignCameras.guide && camera != PolarAlignCameras.main) {
+      throw FormatException('unknown camera', camera);
+    }
     return PolarAlignSettings(
       exposureSeconds: (j['exposure_seconds'] as num).toDouble(),
       binning: (j['binning'] as num).toInt(),
@@ -995,6 +999,8 @@ class ProfileApi {
       coarseExposureSeconds: (j['coarse_exposure_seconds'] as num).toDouble(),
       polarAlignerAuto: j['polar_aligner_auto'] as bool,
       stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
+      camera: camera as String,
+      framesPerPoint: (j['frames_per_point'] as num).toInt(),
     );
   }
 

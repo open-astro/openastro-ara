@@ -160,6 +160,53 @@ Offset bullseyeDotFraction(double? azErrArcmin, double? altErrArcmin, double ran
       : (westIsLeft ? Icons.arrow_forward : Icons.arrow_back, l.polarHintMoveEast);
 }
 
+/// #2083 the azimuth error as NINA's three-point polar alignment shows it.
+/// Ara's azimuth readout is a true arc on the sky: the angle the axis must
+/// move about the vertical, times cos(altitude of the pole). NINA shows the
+/// angle itself, so its figure is Ara's divided by cos(|latitude|): about 1.5×
+/// at latitude 48°. Null without a readout or a site latitude. Pure —
+/// unit-tested.
+double? ninaAzimuthArcmin(double? azArcmin, double? latitudeDeg) {
+  if (azArcmin == null || latitudeDeg == null || latitudeDeg.abs() >= 89.0) return null;
+  return azArcmin / math.cos(latitudeDeg.abs() * math.pi / 180.0);
+}
+
+/// #2083 NINA's warnings on the error a stage starts from: over 2° the
+/// correction is less reliable ([large]), over 10° something else is wrong —
+/// the site, the start field, or a mount that did not turn only in RA
+/// ([huge]).
+enum PolarInitialErrorWarning { none, large, huge }
+
+/// The warning for a stage that started at [initialArcmin]. Pure —
+/// unit-tested.
+PolarInitialErrorWarning polarInitialErrorWarning(double? initialArcmin) {
+  if (initialArcmin == null || initialArcmin <= 120.0) return PolarInitialErrorWarning.none;
+  return initialArcmin > 600.0 ? PolarInitialErrorWarning.huge : PolarInitialErrorWarning.large;
+}
+
+/// The warning's sentence in the user's language, or null for none.
+String? polarInitialErrorText(AppLocalizations l10n, double? initialArcmin) =>
+    switch (polarInitialErrorWarning(initialArcmin)) {
+      PolarInitialErrorWarning.large => l10n.polarInitialErrorLarge,
+      PolarInitialErrorWarning.huge => l10n.polarInitialErrorHuge,
+      PolarInitialErrorWarning.none => null,
+    };
+
+/// #2083 what a hand-turn run asks of the user right now, in the user's
+/// language: the turn and its direction, then how far the mount's reading says
+/// the axis has turned (or that it went the other way); the ask alone with the
+/// clutch open (no angle then). Null when it waits for no turn. Pure —
+/// unit-tested.
+String? polarHandTurnText(AppLocalizations l10n, PolarAlignHandTurn? wait) {
+  if (wait == null || !wait.waiting) return null;
+  final direction = wait.direction == PolarAlignDirections.west ? l10n.polarDirectionWest : l10n.polarDirectionEast;
+  final ask = l10n.polarHandTurnAsk(wait.targetDeg.toStringAsFixed(0), direction);
+  final turned = wait.turnedDeg;
+  if (turned == null) return ask;
+  if (turned < -1.0) return '$ask ${l10n.polarHandTurnWrongWay(direction)}';
+  return '$ask ${l10n.polarHandTurnTurned(turned.toStringAsFixed(1))}';
+}
+
 /// Format a signed arcminute value like `+14.2′` / `−23.4′`.
 String formatArcmin(double? v) {
   if (v == null) return '—';

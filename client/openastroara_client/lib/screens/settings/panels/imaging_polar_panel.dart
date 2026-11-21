@@ -132,6 +132,41 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
           helpKey: 'img.polar.coarse_exposure_seconds',
           range: polarCoarseExposureRange,
         ),
+        // #2082 the measurement's camera; Rough first is always the main one.
+        SettingsDropdownRow<String>(
+          key: const Key('polar-knob-camera'),
+          label: l10n.polarKnobCamera,
+          helpKey: 'img.polar.camera',
+          value: s.camera,
+          items: {
+            PolarAlignCameras.guide: l10n.polarKnobCameraGuide,
+            PolarAlignCameras.main: l10n.polarKnobCameraMain,
+          },
+          onChanged: (v) {
+            final now = ref.read(polarAlignSettingsProvider).value ?? s;
+            if (v != null && v != now.camera) save((x) => x.copyWith(camera: v));
+          },
+        ),
+        // #2082 frames averaged at each point: a whole number, 1 to 5.
+        EditableNumberRow(
+          key: const Key('polar-knob-frames-per-point'),
+          label: l10n.polarKnobFramesPerPoint,
+          helpKey: 'img.polar.frames_per_point',
+          hint: l10n.polarKnobFramesPerPointHint,
+          currentValue: '${s.framesPerPoint}',
+          getCanonical: () =>
+              '${(ref.read(polarAlignSettingsProvider).value ?? s).framesPerPoint}',
+          parse: (text) {
+            final v = int.tryParse(text.trim());
+            final now = ref.read(polarAlignSettingsProvider).value ?? s;
+            if (v != null &&
+                v >= polarFramesPerPointRange.min &&
+                v <= polarFramesPerPointRange.max &&
+                v != now.framesPerPoint) {
+              save((x) => x.copyWith(framesPerPoint: v));
+            }
+          },
+        ),
       ],
     );
   }

@@ -142,6 +142,20 @@ namespace OpenAstroAra.Test {
             Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
         }
 
+        // #2083 — the user chose to turn RA by hand in the confirm step: the body's hand_turn reaches the service with it.
+        [TestCase(true)]
+        [TestCase(false)]
+        public async Task A_start_body_carries_the_hand_turn_choice_the_user_confirmed(bool handTurn) {
+            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null);
+            var svc = new Mock<IPolarAlignService>();
+            svc.Setup(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation("east", true, handTurn), null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
+
+            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object,
+                new PolarAlignStartRequestDto(PolarAlignStages.Fine, true, "east", true, HandTurn: handTurn), null, CancellationToken.None);
+
+            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
+        }
+
         // ADR 0022 — the parked and unconfirmed refusals leave the endpoint for the one Refusal handler, which answers with
         // their reason; the endpoint's own 409 catch would drop it.
         [Test]

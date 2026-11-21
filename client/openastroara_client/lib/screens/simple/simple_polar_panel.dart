@@ -208,6 +208,17 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     );
   }
 
+  /// #2082 — Rough first: the main camera's measurement, a confirmed Start
+  /// through the rig's sweep plan, offered after the guide camera could not
+  /// solve the pole field (Joey, 2026-11-20).
+  Future<void> _roughFirst() {
+    final l10n = context.l10n;
+    return _run(
+      l10n.polarActionStart,
+      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.coarse),
+    );
+  }
+
   /// Finish the routine. In Preflight, Done moves on (the routine is complete:
   /// nothing to stop).
   Future<void> _done(bool inSimplePreflight) async {
@@ -299,7 +310,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(axis, style: AraText.caption, maxLines: 1),
+                // One line, scaled down when the convention (#2083) makes it long.
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(axis, key: Key('simple-polar-turn-$id-axis'), style: AraText.caption, maxLines: 1),
+                ),
                 Text(
                   value == null
                       ? hint.$2
@@ -344,7 +360,8 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
       ),
       turn(
         'az',
-        l10n.polarAzimuth,
+        // #2083 the azimuth's convention: a true arc, not NINA's angle.
+        '${l10n.polarAzimuth} · ${l10n.polarAzimuthArc}',
         live.azErrorArcmin,
         polarAzHint(l10n, live.azErrorArcmin, southern: southern),
       ),
@@ -461,6 +478,18 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
+            // #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
+            if (active &&
+                live.handTurn &&
+                (live.phase == PolarAlignStates.seeding || live.phase == PolarAlignStates.checking))
+              Text(
+                polarHandTurnText(l10n, live.handTurnWait) ?? l10n.polarHandTurnRunNote,
+                key: const Key('simple-polar-hand-turn'),
+                style: kSimpleText.copyWith(
+                  color: live.handTurnWait == null ? null : AraColors.accentBusy,
+                ),
+                maxLines: 4,
+              ),
             // #2072 the camera sits where the readout reads the altitude bolt poorly.
             if (active &&
                 !verifying &&
@@ -468,6 +497,16 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
               Text(
                 l10n.polarReadoutCautionAltitudeWeak,
                 key: const Key('simple-polar-readout-caution'),
+                style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                maxLines: 4,
+              ),
+            // #2082 a point's frames stayed scattered after their retake: the
+            // readout, or the check's verdict, rests on noisy solves.
+            if ((active && !verifying && live.measurementNoisy) ||
+                (live.phase == PolarAlignStates.checked && live.checkResult?.noisy == true))
+              Text(
+                l10n.polarNoisyMeasurement,
+                key: const Key('simple-polar-noisy'),
                 style: kSimpleText.copyWith(color: AraColors.accentBusy),
                 maxLines: 4,
               ),
@@ -512,6 +551,13 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                     ),
                 ],
               ),
+              if (polarInitialErrorText(l10n, live.initialErrorArcmin) case final warning?)
+                Text(
+                  warning,
+                  key: const Key('simple-polar-initial-error'),
+                  style: kSimpleText.copyWith(color: AraColors.accentBusy),
+                  maxLines: 4,
+                ),
             ],
             // The full panel's nudge, cut to two lines for the 248 px panel.
             if (active && _bolt.nudge != null)
@@ -579,6 +625,28 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 key: const Key('simple-polar-check-again'),
                 onPressed: busy ? null : _check,
                 child: Text(l10n.polarCheck),
+              ),
+            ],
+            // #2082 — after the guide camera could not solve the pole field:
+            // the main camera's measurement, which says how far it turns. Not
+            // after a run on the main camera, which just failed.
+            if (!active &&
+                live.phase == PolarAlignStates.failed &&
+                live.errorReason == 'seed_solve_failed' &&
+                !live.usesMainCamera) ...[
+              if (settings != null)
+                Text(
+                  l10n.polarRoughFirstCaption(
+                    settings.seedRotationDeg.toStringAsFixed(0),
+                  ),
+                  key: const Key('simple-polar-rough-caption'),
+                  style: AraText.caption,
+                  maxLines: 3,
+                ),
+              OutlinedButton(
+                key: const Key('simple-polar-rough-first'),
+                onPressed: busy ? null : _roughFirst,
+                child: Text(l10n.polarRoughFirst),
               ),
             ],
             if (checkCaption != null &&
@@ -650,12 +718,13 @@ class SimplePolarFrame extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // The rough stage's frames are the main camera's: the guider has no picture.
-    final coarse = ref.watch(
-      polarAlignLiveProvider.select((l) => l.stage == PolarAlignStages.coarse),
+    // The main camera's frames (the rough stage, or the profile's camera,
+    // #2082): the guider has no picture.
+    final mainCamera = ref.watch(
+      polarAlignLiveProvider.select((l) => l.usesMainCamera),
     );
     final frame = ref.watch(polarAlignFrameProvider);
-    final jpeg = coarse ? null : frame;
+    final jpeg = mainCamera ? null : frame;
     return ColoredBox(
       color: AraColors.imageBackdrop,
       child: jpeg == null

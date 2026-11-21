@@ -969,7 +969,8 @@ public partial class Program {
                 sp.GetService<IRotatorService>(),
                 sp.GetService<IFlatDeviceService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<ILogger<UnattendedShutdownService>>()));
+                sp.GetService<ILogger<UnattendedShutdownService>>(),
+                polarAlignResolver: () => sp.GetService<IPolarAlignService>()));
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
 
@@ -984,7 +985,9 @@ public partial class Program {
             sp.GetService<IFocuserService>(),
             sp.GetService<IRotatorService>(),
             sp.GetService<IFlatDeviceService>(),
-            sp.GetService<ILogger<ShutdownLadder>>()));
+            sp.GetService<ILogger<ShutdownLadder>>(),
+            // #2066 — resolved lazily (Polar Align is built after the ladder): ended before the Find Home and park.
+            () => sp.GetService<IPolarAlignService>()));
         builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
         builder.Services.AddSingleton(sp => new EndNightService(
             sp.GetRequiredService<ShutdownLadder>(),

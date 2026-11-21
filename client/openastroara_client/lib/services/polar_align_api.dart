@@ -101,6 +101,8 @@ class PolarAlignApi implements PolarAlignClient {
           'confirmed': true,
           'direction': plan.direction,
           'new_origin': plan.newOrigin,
+          // #2083 — only when the user chose it: the rig then moves nothing.
+          if (plan.handTurn) 'hand_turn': true,
         },
         options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );

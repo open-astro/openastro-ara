@@ -222,6 +222,33 @@ framing/focus loop when you need to point or focus by eye.
   way RA will turn (east or west: on the first start away from the meridian, later back toward Polar
   Align's start) and how far (about 10° twice); the mount moves only when you tap **Move the mount**.
   Keep a hand on the mount's power switch.
+- **Where to point for Polar Align** (NINA's advice, also on the confirm step). Pick a field fairly
+  high toward the pole for your hemisphere, at least about 15° above the horizon when you can, and a
+  start whose turns do not cross the meridian, so the tube cannot swing into the pier. Keep a hand on
+  the mount's power switch the first time you run this on a mount.
+- **Turning RA by hand.** The confirm step also offers **Turn RA by hand**, like NINA's manual mode:
+  you turn RA yourself (the hand pad, or the clutch open) and Ara moves nothing. No motor move, no
+  GoTo, no Find Home, no Polar Aligner motor (you turn its bolts), and tracking is never switched on
+  while it measures. It is still switched off for the knob loop, which needs the camera still; at the
+  end it is off, or given back as it was if *Stop tracking when polar align ends* is off, like any
+  run. The card asks for each turn ("Turn RA by hand about 10° toward the east, then let go") and
+  takes the next frame once the mount is still; then the readout works as usual. With the hand pad it
+  shows how far the mount says you have turned. With the clutch open it shows no number: the mount
+  does not see the turn, and the frames alone cannot measure it while the mount is off the pole, so
+  it waits until the view has moved far enough and has stayed still for a few frames (at least 5 s
+  after it asked). A turn far past the two asked for ends the run. After
+  a turn with the clutch open the mount no longer knows where it points: **Move the mount** is
+  refused until you sync it (Center does) or reconnect it once it is homed; **Turn RA by hand** still
+  works. Each Start is one measurement, its two turns the way the confirm step
+  says. A **Check** can be turned by hand the same way: pick **Turn RA by hand** on its confirm step.
+  A tube within 3° of the pole is refused, as for the motor. The mount still has to be connected. An
+  older rig does not offer it.
+- **The azimuth number is a true arc.** Ara shows the azimuth error as an arc on the sky (cos alt
+  applied, "true arc" next to the number). NINA shows the angle itself, which is larger by about
+  1/cos(latitude) (1.5× at 48°); the Full UI shows NINA's figure beside Ara's so the two compare.
+  A measurement that starts more than 2° from the pole warns that the correction is less reliable (get
+  closer, then run again); over 10°, check the site location, the start field, and that the mount
+  turned only in RA.
 - **Polar Align moves only from a fresh reading of the mount.** Every turn starts and stops on where
   the mount says it points right now, never on the app's last known position. When the mount gives
   no fresh reading (no answer, a blank 0, 0 position, or one more than 2 s old), Polar Align refuses
@@ -254,8 +281,22 @@ framing/focus loop when you need to point or focus by eye.
   the 30° Polar Align keeps RA within, so repeated Checks are refused once RA is too far from where
   Polar Align started. **Rough first (main camera)**: offered when the guide camera could not solve
   the pole field; the same measurement on the main camera, whose frames take a few seconds each, and
-  the card says how far from the pole you are and on which side, for the big moves. Within a few
-  arcminutes, stop and start again: the guide camera refines it.
+  the card says how far from the pole you are and on which side, for the big moves. Like Check, it
+  says how far it turns ("Rough first turns the mount 2 × 10°") and goes through the confirm step.
+  Within a few arcminutes, stop and start again: the guide camera refines it.
+- **Polar Align's camera and frames per point.** Settings › Imaging › Polar align › *Camera* picks
+  the camera for every measurement, its live readout and Check: the guide camera (the default) or
+  the main camera, with its own plate solver at the rough step exposure. Use the main camera when the
+  guide camera cannot solve the pole field; Start refuses while it is not connected, and the confirm
+  step says the run uses it. *Frames per point* (1 to 5, 3 by default) is how many frames each of the
+  three points takes with the mount still; they are averaged, so one bad solve does not move the
+  axis, and their scatter is in the log. A point whose solves scatter more than 3″ is taken again
+  once; if it is still scattered, or a cloud hides the retake, the run goes on but says the
+  measurement is noisy, under the readout or under the Check. Check focus and seeing, or take more
+  frames per point. The mount tracks while the frames are taken: with many long frames per point,
+  a run can end before a turn that would take the mount past its sweep limit. Slew back near the
+  pole and start again, or take fewer or shorter frames. When you turn RA by hand, the frames of
+  each point are taken once your turn is in and the mount is still.
 - **Polar Align's Stop stops the mount.** Stop, Done, a failure and the end of a Check all stop the
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
@@ -285,10 +326,20 @@ framing/focus loop when you need to point or focus by eye.
   direction pad, or the safety or equipment-fault reaction when it could not park the mount. The card
   says what stopped it, in the app's language, and no further turn starts. Emergency Stop latches before any of its other
   steps, so Polar Align cannot start a turn or switch tracking on while the rest of the stop runs.
-  While Polar Align turns the mount, a GoTo, a direction-pad move, Home and Park are refused
-  ("Polar alignment is turning the mount"): stop Polar Align first, or tap Stop Mount. When the sky
-  turns unsafe, or a device fault ends in a park, the park stops Polar Align and the Polar Aligner
-  first. A Home you tap just before Stop Mount or Emergency Stop does not start after the stop.
+  From Start until it ends (its solves and the live adjust loop too), Polar Align holds the mount: a
+  GoTo, a sync, Center, Home and Park are refused ("Polar alignment is using the mount"), and so are a
+  sequence's GoTo, Park, Find Home and meridian flip; a direction-pad move is refused while it turns
+  the mount. Stop Polar Align first, tap **Done**, or tap Stop Mount. Emergency Stop, Stop Mount, a pad
+  release and Tracking off always get through. When the sky turns unsafe, a device fault ends in a
+  park, or End Night (or the unattended shutdown) homes and parks the mount, it stops Polar Align and
+  the Polar Aligner first. A Home you tap just before Stop Mount or Emergency Stop does not start
+  after the stop.
+- **Polar Align turns only a still mount.** It refuses to start while the mount is slewing (or does
+  not say whether it is), or while the guider is guiding or calibrating ("the mount is moving or the
+  guider is guiding"): let the slew finish or stop guiding, then start again. Before each turn it
+  reads the mount twice, a second apart: if the mount slews or moved in between (the hand controller,
+  another program), or the guider started guiding, the run ends before the motor starts and the card
+  says why.
 - **Starting guiding ends Polar Align.** Polar Align holds the guide camera while it runs. If guiding
   is started while it is still open (a run's Start Guiding after the Polar Align step was left
   without **Done**, a re-guide after a meridian flip, or Guide pressed by hand in the guider panel), Ara stops the

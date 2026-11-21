@@ -539,6 +539,19 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
         }
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: a sequencer, Center or flip GoTo, a Park Scope or
+        // Find Home instruction, an end-of-sequence park or a failed flip's safe rest would run beside its next turn
+        // (Joey, 2026-11-20 on #2048). Refused before the try (never an op fault), and it throws, so a blind
+        // SlewScopeToRaDec shows it. A refused park leaves tracking as it is (the run tracks). Checked and counted with
+        // the owner in one step, right before the send: a routine that took the mount while this GoTo read the pose or
+        // the coordinate system still refuses it, and none can take it while the move goes out. The shutdown ladder's
+        // Find Home and park end Polar Align through its takeover first; the safety and fault parks do not come here.
+        using var dispatch = op switch {
+            "telescope.slew" => BeginMotionDispatchOrThrow(op, "GoTo"),
+            "telescope.park" => BeginMotionDispatchOrThrow(op, "park"),
+            "telescope.findhome" => BeginMotionDispatchOrThrow(op, "Find Home"),
+            _ => null,
+        };
         // #2066 — a raced REST GoTo's second abort must not stop this move: noted here, it counts from its send (SendMotion,
         // which first waits for a second abort already on its way) and is settled when its call returns or throws.
         long? motion = op is "telescope.slew" or "telescope.park" or "telescope.findhome" ? NoteMotionDispatched(abortEpoch: null) : null;
@@ -887,6 +900,14 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogSlewTargetRefused("telescope.sync", refusal);
             return false;
         }
+        // #2066 (ARA-2) — while Polar Align holds the mount, a sync (Center's, after its solve) would shift the RA reading
+        // its turn steers by and reverse the motor: a clean "not synced", and Center falls back to its offset. Counted with
+        // the owner in one step until the sync returns, so Polar Align cannot take the mount while it goes out.
+        using var dispatch = TryBeginMotionDispatch(out var owner);
+        if (dispatch is null) {
+            LogMountOpRejectedOwned("telescope.sync", owner!);
+            return false;
+        }
         NotePoseCommand(); // #2070 — the sync moves the reported position; it is no power blip
         try {
             var opTask = Task.Run(() => {
@@ -897,6 +918,7 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 }
                 TryEnableTracking(client); // some mounts require tracking engaged to accept a sync
                 client.SyncToCoordinates(syncRa, syncDec);
+                Interlocked.Increment(ref _syncEpoch); // #2083
                 RefreshCacheOnce(); // reflect the recalibrated pointing into the §32.4 cache
                 return true;
             }, CancellationToken.None);
@@ -932,6 +954,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
         if (client is null) {
             return false;
         }
+        // #2066 (ARA-2) — before the pier-side write, which starts the flip slew on some mounts: while Polar Align holds
+        // the mount the flip is refused here, not at its GoTo after the write (which checks again before it is sent).
+        ThrowIfMotionOwned("telescope.flip", "meridian flip");
         // #2075 — refuse an out-of-range flip target BEFORE the pier-side write: some mounts start
         // moving on that write, and the goto's own guard runs only after it.
         if (SlewTargetRefusal(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip") is string refusal) {

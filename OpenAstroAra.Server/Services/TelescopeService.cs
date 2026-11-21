@@ -386,7 +386,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(EventId = 6369, Level = LogLevel.Warning, Message = "telescope.{Op}: could not stop guiding first; moving anyway")]
     private partial void LogGuidingStopBeforeMoveFailed(Exception exception, string op);
 
-    public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    // The safety and fault parks: never yield to the motion owner (they end Polar Align through its takeover first).
+    public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        ParkAsync(request, idempotencyKey, yieldToOwner: false, ct);
+
+    // #2066 (ARA-2) — the user's park (POST /park): counted in the motion dispatch, as a REST GoTo is.
+    public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        ParkAsync(request, idempotencyKey, yieldToOwner: true, ct);
+
+    private Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, bool yieldToOwner, CancellationToken ct) {
         // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
         // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
         // unused by the park itself — the param is kept only for the interface contract.
@@ -397,10 +405,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // #2073 — read before the pose check and the guider stop, as the GoTo does: a Stop Mount or emergency
         // stop that lands after this request must win over its tracking enable and park. #2066 — a move from here on.
         var (motion, abortEpoch) = NoteMotionRequested();
-        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, ct);
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, yieldToOwner, ct);
     }
 
-    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, bool yieldToOwner, CancellationToken ct) {
         try {
             // #2070 — a park drives to a position the mount's model computes: refused while that model is
             // not trusted, before the leases end or the guider stops. The safety and fault parks fall back to
@@ -410,28 +420,41 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             NoteMotionFailed(motion, client);
             throw;
         }
-        // #2066 — a park ends any routine that drives the motors (Polar Align): it counts as a stop, so the routine starts
-        // no further move and fails at its next check. A Stop Mount that landed since the request still wins (below).
-        abortEpoch = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.Park, motion);
-        Lease.CancelAll();
-        await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
-        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
-        NoteMountCommand(w => w.NoteParkCommanded());
-        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
-            // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
-            // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
-            // issue the park. The park itself stops tracking once the mount reaches the park position.
-            // #2073 — a stop that landed after this park was accepted wins: the park is dropped rather
-            // than turning tracking back on and moving the mount after the stop.
-            SettleOnThrow(motion, c, () => {
-                if (!TryEnableTrackingUnlessAborted(c, abortEpoch)) {
-                    NoteMotionFailed(motion, c);
-                    LogParkDroppedAfterAbort(StoppedSinceWords(abortEpoch)); // #2107 — named: a second park in flight too
-                    return;
-                }
-                SendMotion(motion, c, c.Park);
-            });
-        }), CancellationToken.None);
+        // #2066 (ARA-2) — the user's park: the owner was checked when it was accepted, and Polar Align may have taken the
+        // mount during the checks. Checked again and counted in one step with the owner, before the park ends anything:
+        // refused once Polar Align has it, and Polar Align cannot take it while the park is on its way (to its send).
+        var dispatch = yieldToOwner ? BeginRestMotionDispatchOrRefuse("telescope.park", "park", motion, client) : null;
+        try {
+            // #2066 — a park ends any routine that drives the motors (Polar Align): it counts as a stop, so the routine starts
+            // no further move and fails at its next check. A Stop Mount that landed since the request still wins (below).
+            abortEpoch = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.Park, motion);
+            Lease.CancelAll();
+            await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
+            lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
+            NoteMountCommand(w => w.NoteParkCommanded());
+            _ = Task.Run(() => {
+                using var sending = dispatch;
+                RunControlInBackground("telescope.park", client, c => {
+                    // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
+                    // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
+                    // issue the park. The park itself stops tracking once the mount reaches the park position.
+                    // #2073 — a stop that landed after this park was accepted wins: the park is dropped rather
+                    // than turning tracking back on and moving the mount after the stop.
+                    SettleOnThrow(motion, c, () => {
+                        if (!TryEnableTrackingUnlessAborted(c, abortEpoch)) {
+                            NoteMotionFailed(motion, c);
+                            LogParkDroppedAfterAbort(StoppedSinceWords(abortEpoch)); // #2107 — named: a second park in flight too
+                            return;
+                        }
+                        SendMotion(motion, c, c.Park);
+                    });
+                });
+            }, CancellationToken.None);
+        } catch {
+            dispatch?.Dispose();
+            NoteMotionFailed(motion, client);
+            throw;
+        }
         return Accepted("telescope.park", idempotencyKey);
     }
 
@@ -448,6 +471,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, ct);
     }
 
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
     private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
         try {
             // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
@@ -457,32 +482,44 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             NoteMotionFailed(motion, client);
             throw;
         }
-        // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
-        // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
-        var fence = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.FindHome, motion);
-        Lease.CancelAll();
-        await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
-        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
-        // FindHome blocks until the mount reaches its home switch; run it off the request
-        // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
-        // AtHome when it settles. The panel gates this on CanFindHome.
-        // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
-        // workaround executes fine from a stationary state — verified on-device, the mount moves
-        // to home with tracking off — so homing doesn't need the motors pre-engaged.
-        // Park semantics for the watch (matching the mediator's RunMountOpAsync): homing ends
-        // idle-not-parked with tracking off, so a motion note would leave the old expectation
-        // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
-        NoteMountCommand(w => w.NoteParkCommanded());
-        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => {
-            // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the watchdog)
-            // wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount after the stop.
-            if (AbortedSince(fence)) {
-                NoteMotionFailed(motion, c);
-                LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
-                return;
-            }
-            SendMotion(motion, c, c.FindHome);
-        }), CancellationToken.None);
+        // #2066 (ARA-2) — the user's Find Home (nothing else calls this) is counted in the dispatch as the user's park is.
+        var dispatch = BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client);
+        try {
+            // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
+            // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
+            var fence = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.FindHome, motion);
+            Lease.CancelAll();
+            await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
+            lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
+            // FindHome blocks until the mount reaches its home switch; run it off the request
+            // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
+            // AtHome when it settles. The panel gates this on CanFindHome.
+            // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
+            // workaround executes fine from a stationary state — verified on-device, the mount moves
+            // to home with tracking off — so homing doesn't need the motors pre-engaged.
+            // Park semantics for the watch (matching the mediator's RunMountOpAsync): homing ends
+            // idle-not-parked with tracking off, so a motion note would leave the old expectation
+            // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
+            NoteMountCommand(w => w.NoteParkCommanded());
+            _ = Task.Run(() => {
+                using var sending = dispatch;
+                RunControlInBackground("telescope.findhome", client, c => {
+                    // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the
+                    // watchdog) wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount
+                    // after the stop.
+                    if (AbortedSince(fence)) {
+                        NoteMotionFailed(motion, c);
+                        LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
+                        return;
+                    }
+                    SendMotion(motion, c, c.FindHome);
+                });
+            }, CancellationToken.None);
+        } catch {
+            dispatch.Dispose();
+            NoteMotionFailed(motion, client);
+            throw;
+        }
         return Accepted("telescope.findhome", idempotencyKey);
     }
 
@@ -782,6 +819,11 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private long _sessionEpoch;
 
     public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
+
+    // #2083 — bumped by each sync the driver accepted (the mediator's, the REST slew's sync).
+    private long _syncEpoch;
+
+    public long SyncEpoch => Interlocked.Read(ref _syncEpoch);
 
     public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
         MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
@@ -1127,9 +1169,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
     private async Task SlewInBackgroundAsync(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch, long? motion, Task reAbort) {
         try {
+            // #2066 (ARA-2) — the owner was checked when the GoTo or sync was accepted; Polar Align may have taken the
+            // mount since (a GoTo waits up to 3 s for the guider to stop). Checked again and counted in one step with the
+            // owner, so Polar Align cannot take the mount while this goes out, and it is dropped once Polar Align has it.
+            using var dispatch = TryBeginMotionDispatch(out var owner);
+            if (dispatch is null) {
+                if (motion is long owned) {
+                    NoteMotionFailed(owned, client); // #2066 — dropped: it moved nothing, so a kept-back second abort may go out
+                }
+                LogSlewDroppedOwned(sync ? "sync" : "slew", raHours, decDeg, owner!);
+                ClearPendingSlewTarget();
+                return;
+            }
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
+                Interlocked.Increment(ref _syncEpoch);
             } else {
                 // #2073 — a Stop Mount or emergency stop (AbortSlew, then Tracking off) that landed after
                 // this goto was accepted wins: the goto is dropped rather than turning tracking back on

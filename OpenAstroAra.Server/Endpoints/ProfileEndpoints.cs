@@ -931,6 +931,12 @@ public static partial class ProfileEndpoints {
             return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        // #2082 — a camera the routine cannot pick: refused like an unknown loop mode (a typo must not become the guide
+        // camera silently). An absent key is the guide camera (the record's default).
+        if (!PolarAlignCameras.IsValid(body.Camera)) {
+            return Results.Problem(detail: "camera must be \"guide\" or \"main\"",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
         // The turn and rough-exposure knobs have no control in the app yet (#1736), and an older build
         // stored any value: a stored value outside the range must not make the panel's own edits (the
         // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse

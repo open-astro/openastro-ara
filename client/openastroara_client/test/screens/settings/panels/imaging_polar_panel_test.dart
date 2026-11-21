@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
 import 'package:openastroara/state/settings/loaded_section.dart'
     show SectionNotLoadedException;
@@ -46,7 +47,7 @@ void main() {
     (tester) async {
       final api = await _pump(tester);
       final fields = find.byType(TextField);
-      expect(fields, findsNWidgets(4));
+      expect(fields, findsNWidgets(5), reason: 'and frames per point (#2082)');
       // Row order: tolerance, turn, verify step, rough exposure.
       final entered = ['2', '25', '20', '7.5'];
       for (var i = 0; i < 4; i++) {
@@ -75,7 +76,35 @@ void main() {
       rig.initial = rigPolarAlign;
       await tester.tap(find.byKey(const Key('section-retry')));
       await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNWidgets(4));
+      expect(find.byType(TextField), findsNWidgets(5));
+    },
+  );
+
+  testWidgets(
+    'the camera saves main, and frames per point saves a whole number from 1 to 5 (#2082)',
+    (tester) async {
+      final rig = await _pump(tester);
+      await tester.tap(find.byKey(const Key('polar-knob-camera')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Main camera').last);
+      await tester.pumpAndSettle();
+      expect(rig.puts.single.camera, PolarAlignCameras.main);
+
+      final frames = find.descendant(
+        of: find.byKey(const Key('polar-knob-frames-per-point')),
+        matching: find.byType(TextField),
+      );
+      for (final refused in ['6', '0', '2.5']) {
+        await tester.enterText(frames, refused);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+      }
+      expect(rig.puts, hasLength(1), reason: 'out of range or not whole: nothing sent');
+      await tester.enterText(frames, '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect((rig.puts.last.framesPerPoint, rig.puts.last.camera), (5, PolarAlignCameras.main),
+          reason: 'saved over the rig copy the camera change left');
     },
   );
 
@@ -109,6 +138,8 @@ void main() {
         'Check step',
         'Rough step exposure',
         'Stop tracking when polar align ends',
+        'Frames per point',
+        'Guide camera',
       ]) {
         expect(find.textContaining(english), findsNothing, reason: english);
       }

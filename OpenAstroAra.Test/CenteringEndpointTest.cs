@@ -134,6 +134,21 @@ namespace OpenAstroAra.Test {
             }
         }
 
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: Center's GoTo would run beside its next turn.
+        // Refused before a job is queued, with the cause the telescope endpoints answer.
+        [Test]
+        public async Task Center_is_refused_while_Polar_Align_holds_the_mount() {
+            var jobs = new Mock<IBatchJobService>(MockBehavior.Strict); // any Enqueue = test failure
+            var telescope = new Mock<ITelescopeService>();
+            telescope.Setup(t => t.MotionOwner).Returns(MotionOwners.PolarAlign);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => PlateSolveEndpoints.CenterAsync(new CenterRequestDto(5.5, 20.0),
+                Mock.Of<ICenteringService>(), jobs.Object, Profile(attempts: 1).Object, telescope: telescope.Object));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMovingMount));
+            Assert.That(refusal.Message, Does.Contain("centering GoTo"));
+        }
+
         [Test]
         public async Task A_nonsense_attempt_budget_still_yields_a_sane_one_step_job() {
             var jobs = new InMemoryBatchJobService(null);

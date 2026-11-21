@@ -122,12 +122,16 @@ const _adjusting = PolarAlignLive(
 );
 
 Future<_Api?> _pump(WidgetTester tester, PolarAlignLive live,
-    {bool server = true, String loopMode = PolarAlignLoopModes.loop, double? tolerance, Widget child = const SimplePolarPanel()}) async {
+    {bool server = true,
+    String loopMode = PolarAlignLoopModes.loop,
+    double? tolerance,
+    PolarAlignSettings rig = rigPolarAlign,
+    Widget child = const SimplePolarPanel()}) async {
   final api = server
       ? (_Api()
         ..settings = tolerance == null
-            ? rigPolarAlign.copyWith(loopMode: loopMode)
-            : rigPolarAlign.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
+            ? rig.copyWith(loopMode: loopMode)
+            : rig.copyWith(loopMode: loopMode, targetToleranceArcmin: tolerance))
       : null;
   await tester.pumpWidget(ProviderScope(
     overrides: [
@@ -690,6 +694,60 @@ void main() {
       expect(api.stages, [PolarAlignStages.check]);
     },
   );
+
+  testWidgets('after the guide camera could not solve, Rough first says how far it turns and starts a confirmed rough run (#2082)',
+      (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    // A seed turn unlike the check step (10°): the caption is the rig's seed turn, not the check's.
+    final api = await _pump(
+        tester,
+        const PolarAlignLive(
+            phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'seed_solve_failed',
+            errorMessage: 'the seed-a seed frame failed to solve'),
+        rig: rigPolarAlign.copyWith(seedRotationDeg: 15));
+    expect(find.text('Rough first turns the mount 2 × 15° and measures with the main camera.'), findsOneWidget);
+    await tester.tap(find.byKey(const Key('simple-polar-rough-first')));
+    await tester.pumpAndSettle();
+    expect(api!.stages, isEmpty, reason: 'nothing moves before the confirm step');
+    await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+    await tester.pumpAndSettle();
+    expect(api.stages, [PolarAlignStages.coarse]);
+  });
+
+  testWidgets('a main-camera run that could not solve offers no Rough first (#2082)', (tester) async {
+    await _pump(tester, const PolarAlignLive(
+        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
+        errorReason: 'seed_solve_failed'));
+    expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
+  });
+
+  testWidgets('another failure offers no Rough first (#2082)', (tester) async {
+    await _pump(tester, const PolarAlignLive(
+        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, errorReason: 'slew_failed'));
+    expect(find.byKey(const Key('simple-polar-rough-first')), findsNothing);
+  });
+
+  testWidgets('a noisy measurement says so while adjusting and beside the verdict (#2082)', (tester) async {
+    tester.view.physicalSize = const Size(1024, 768);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await _pump(tester, _adjusting);
+    expect(find.byKey(const Key('simple-polar-noisy')), findsNothing);
+    final live = ProviderScope.containerOf(tester.element(find.byType(SimplePolarPanel)))
+        .read(polarAlignLiveProvider.notifier) as _Live;
+    live.frame(_adjusting.copyWith(measurementNoisy: true));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-noisy')), findsOneWidget);
+    live.frame(const PolarAlignLive(
+      phase: PolarAlignStates.checked, stage: PolarAlignStages.check, totalErrorArcmin: 0.36,
+      checkResult: PolarAlignCheckResult(
+          altErrorArcmin: 0.3, azErrorArcmin: 0.2, totalErrorArcmin: 0.36, verdict: 'excellent', noisy: true),
+    ));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('simple-polar-noisy')), findsOneWidget);
+  });
 
   testWidgets("Check again names only the rig's own step: no caption until the profile loads (ADR 0015)",
       (tester) async {

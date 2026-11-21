@@ -554,5 +554,23 @@ namespace OpenAstroAra.Test {
             // Signed: past ψ = ±90° the altitude knob moves the camera the other way (#1983 keeps that sign).
             Assert.That(PolarAlignGeometry.ReadoutCosPsi(seedAzDeg, latitudeDeg), Is.EqualTo(expected).Within(0.001));
         }
+
+        // ── #2082: a point's frames averaged as unit vectors ─────────────────────────────────
+
+        [Test]
+        public void MeanDirection_averages_as_unit_vectors_across_RA_zero_and_gives_the_rms_scatter() {
+            // Three solves of one field at Dec 0 straddling RA 0: 2″ either side and one on it. An average in RA would
+            // put the mean near RA 120°; as unit vectors it is RA 0. Scatter: √((2² + 2² + 0²) / 3) = 1.633″.
+            var twoArcsecDeg = 2.0 / 3600.0;
+            var (ra, dec, rms) = PolarAlignGeometry.MeanDirection(new[] {
+                (360.0 - twoArcsecDeg, 0.0), (twoArcsecDeg, 0.0), (0.0, 0.0),
+            });
+
+            Assert.That(Math.Min(ra, 360.0 - ra), Is.LessThan(1e-9), "RA 0, not the mean of 359.999° and 0.001°");
+            Assert.That(dec, Is.EqualTo(0.0).Within(1e-12));
+            Assert.That(rms, Is.EqualTo(Math.Sqrt(8.0 / 3.0)).Within(1e-6));
+            Assert.That(PolarAlignGeometry.MeanDirection(new[] { (12.5, 85.0) }), Is.EqualTo((12.5, 85.0, 0.0)), "one solve is itself");
+            Assert.Throws<ArgumentException>(() => PolarAlignGeometry.MeanDirection(Array.Empty<(double, double)>()));
+        }
     }
 }

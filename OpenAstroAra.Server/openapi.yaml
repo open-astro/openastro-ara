@@ -14593,6 +14593,16 @@ components:
         stop_tracking_when_done:
           type: boolean
           default: true
+        camera:
+          type: string
+          default: guide
+        frames_per_point:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 3
     PolarAlignStartPlanDto:
       required:
         - stage
@@ -14643,6 +14653,12 @@ components:
             - string
           format: double
           default: 30
+        camera:
+          type: string
+          default: guide
+        hand_turn_available:
+          type: boolean
+          default: true
     PolarAlignStartRequestDto:
       type: object
       properties:
@@ -14658,6 +14674,9 @@ components:
             - 'null'
             - string
         new_origin:
+          type: boolean
+          default: false
+        hand_turn:
           type: boolean
           default: false
     PreflightChecklistDto:
@@ -15186,8 +15205,11 @@ components:
         - polar-align-on-axis
         - polar-align-pointing-unknown
         - polar-align-pose-ambiguous
+        - polar-align-mount-busy
         - first-flip-not-completed
         - mount-clock-not-verified
+        - polar-align-already-running
+        - polar-align-clutch-turned
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:

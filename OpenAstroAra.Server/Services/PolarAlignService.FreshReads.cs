@@ -79,13 +79,14 @@ namespace OpenAstroAra.Server.Services {
                 return FreshPointing.Ambiguous(reading.DecDegrees);
             }
             var jnow = new Coordinates(Angle.ByHours(reading.RaHours), Angle.ByDegree(reading.DecDegrees), reading.Frame).Transform(Epoch.JNOW);
-            return FreshPointing.Read(jnow.RADegrees, jnow.Dec, reading.SessionEpoch, reading.SideOfPier);
+            return FreshPointing.Read(jnow.RADegrees, jnow.Dec, reading.SessionEpoch, reading.SideOfPier, reading.Slewing);
         }
 
         /// <summary>A start's reading (its plan and the confirm step): refused with <c>polar-align-pointing-unknown</c> or
         /// <c>polar-align-pose-ambiguous</c> before the camera is taken or anything moves. Its pier side is the reading's,
-        /// never the refresh cache's (#2066): the sweep plan compares it with where Polar Align left the mount.</summary>
-        private async Task<(double RaDeg, double DecDeg, long SessionEpoch, PierSide Side)> StartPointingJnowAsync(CancellationToken ct) {
+        /// never the refresh cache's (#2066): the sweep plan compares it with where Polar Align left the mount. Its Slewing
+        /// (null when that read failed) is the start's mount-busy check (<see cref="ThrowIfBusyAtStart"/>).</summary>
+        private async Task<(double RaDeg, double DecDeg, long SessionEpoch, PierSide Side, bool? Slewing)> StartPointingJnowAsync(CancellationToken ct) {
             var p = await ReadFreshPointingAsync(runSession: null, ct).ConfigureAwait(false);
             if (p.DecPastPoleDeg is double dec) {
                 LogPoseAmbiguous(dec);
@@ -95,7 +96,7 @@ namespace OpenAstroAra.Server.Services {
                 LogPointingUnknown(why);
                 throw new RefusalException(RefusalCatalog.PolarAlignPointingUnknown, PointingUnknownMessage(why));
             }
-            return (p.RaDeg, p.DecDeg, p.SessionEpoch, p.Side);
+            return (p.RaDeg, p.DecDeg, p.SessionEpoch, p.Side, p.Slewing);
         }
 
         /// <summary>A run's reading: one it cannot trust fails the run (<see cref="PointingUnknown"/>,
@@ -109,6 +110,13 @@ namespace OpenAstroAra.Server.Services {
         /// <summary><see cref="RunPointingJnowAsync"/> with the reading's pier side (<c>pierUnknown</c> for a position-only
         /// read).</summary>
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> RunPoseJnowAsync(int gen, CancellationToken ct, bool positionOnly = false) {
+            var p = await RunReadingAsync(gen, positionOnly, ct).ConfigureAwait(false);
+            return (p.RaDeg, p.DecDeg, p.Side);
+        }
+
+        /// <summary>A run's checked reading, its Slewing included (null for a position-only read, or a failed Slewing
+        /// read): one it cannot trust fails the run as <see cref="RunPointingJnowAsync"/> says.</summary>
+        private async Task<FreshPointing> RunReadingAsync(int gen, bool positionOnly, CancellationToken ct) {
             var p = await ReadFreshPointingAsync(RunSessionEpoch(gen), ct, positionOnly).ConfigureAwait(false);
             if (p.Why is not null || p.DecPastPoleDeg is not null) {
                 ThrowIfAbortedFromOutside(gen); // a park or Emergency Stop meanwhile owns the mount: its failure wins
@@ -121,7 +129,7 @@ namespace OpenAstroAra.Server.Services {
                 LogPointingUnknown(why);
                 throw new RoutineFailedException(PointingUnknown, PointingUnknownMessage(why));
             }
-            return (p.RaDeg, p.DecDeg, p.Side);
+            return p;
         }
 
         /// <summary>A best-effort reading for the exit's bookkeeping (where Polar Align left the mount): null when it cannot
@@ -170,10 +178,10 @@ namespace OpenAstroAra.Server.Services {
         internal static string PoseAmbiguousMessage(double decDeg) => string.Create(CultureInfo.InvariantCulture,
             $"The mount reports Dec {decDeg:F1}°, past the pole, so its pier side is not known and Polar Align moves nothing — point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again");
 
-        /// <summary>A checked reading: the pointing (JNOW), session and pier side, or <see cref="Why"/> it cannot be trusted,
-        /// or the Dec past the pole it reported.</summary>
-        private readonly record struct FreshPointing(double RaDeg, double DecDeg, long SessionEpoch, PierSide Side, string? Why, double? DecPastPoleDeg) {
-            public static FreshPointing Read(double raDeg, double decDeg, long session, PierSide side) => new(raDeg, decDeg, session, side, null, null);
+        /// <summary>A checked reading: the pointing (JNOW), session, pier side and Slewing (null when not read or the read
+        /// failed), or <see cref="Why"/> it cannot be trusted, or the Dec past the pole it reported.</summary>
+        private readonly record struct FreshPointing(double RaDeg, double DecDeg, long SessionEpoch, PierSide Side, string? Why, double? DecPastPoleDeg, bool? Slewing = null) {
+            public static FreshPointing Read(double raDeg, double decDeg, long session, PierSide side, bool? slewing) => new(raDeg, decDeg, session, side, null, null, slewing);
             public static FreshPointing Unknown(string why) => new(0, 0, 0, PierSide.pierUnknown, why, null);
             public static FreshPointing Ambiguous(double decDeg) => new(0, 0, 0, PierSide.pierUnknown, null, decDeg);
         }

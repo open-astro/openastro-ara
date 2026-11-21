@@ -336,12 +336,13 @@ namespace OpenAstroAra.Server.Services {
         private async Task CorrectAsync(int gen, double altErr, double azErr, PolarAlignSettingsDto settings, CancellationToken ct) {
             AlignerRun? run;
             CancellationToken userStop;
-            bool stopped, stopOwed;
+            bool stopped, stopOwed, handTurn;
             lock (_gate) {
                 run = _generation == gen ? _alignerRun : null;
                 if (run is null) {
                     return;
                 }
+                handTurn = _handTurn;
                 if (run.RearmRequested) {
                     run.RearmRequested = false;
                     run.Rearm();
@@ -382,6 +383,9 @@ namespace OpenAstroAra.Server.Services {
             if (stopped || run.Undrivable) {
                 return;
             }
+            // #2083 — a hand-turn run moves nothing, the Polar Aligner's motors included: the person turns its bolts, as
+            // with auto off.
+            var auto = settings.PolarAlignerAuto && !handTurn;
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, userStop);
             try {
                 if (run.Device is null) {
@@ -400,13 +404,13 @@ namespace OpenAstroAra.Server.Services {
                         return;
                     }
                 }
-                if (!settings.PolarAlignerAuto) {
+                if (!auto) {
                     await SetAlignerAsync(gen, new PolarAlignCorrectionDto(PolarAlignCorrectionStates.Manual)).ConfigureAwait(false);
                     ResetAlignerBaseline();
                     return;
                 }
                 await CorrectOnceAsync(gen, run, altErr, azErr, settings, linked.Token).ConfigureAwait(false);
-            } catch (PolarAlignerException) when (!settings.PolarAlignerAuto) {
+            } catch (PolarAlignerException) when (!auto) {
                 // By hand: a device that does not answer is not a stop. It is read again at the next measurement.
             } catch (OperationCanceledException) when (!ct.IsCancellationRequested) {
                 // The person's Stop: the command already set the state; the device gets its Stop here too,

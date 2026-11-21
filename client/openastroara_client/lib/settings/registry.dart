@@ -1488,7 +1488,7 @@ const List<Setting> settingsRegistry = [
     id: 'img.polar.coarse_exposure_seconds',
     tier: SettingTier.advanced,
     label: 'Rough step exposure (s)',
-    description: 'The main camera\'s exposure in the rough step. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
+    description: 'The main camera\'s exposure in the rough step, and in every measurement when Polar align\'s camera is the main camera. The pole field is sparse, so it is longer than a guide frame; a slow camera wants more.',
     keywords: [
       'polar',
       'alignment',
@@ -1501,6 +1501,28 @@ const List<Setting> settingsRegistry = [
     type: SettingType.doubleRange(min: 0.1, max: 60, step: 0.5),
     defaultValue: null,
     profilePath: 'polar_align.coarse_exposure_seconds',
+  ),
+  Setting(
+    id: 'img.polar.camera',
+    tier: SettingTier.advanced,
+    label: 'Polar align camera',
+    description: 'The camera that measures the RA axis, runs the live readout and takes the Check: the guide camera (the default), or the main camera with its own plate solver at the rough step exposure. Rough first always uses the main camera.',
+    keywords: ['polar', 'alignment', 'camera', 'guide camera', 'main camera', 'solver'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.enumValue(['guide', 'main']),
+    defaultValue: null,
+    profilePath: 'polar_align.camera',
+  ),
+  Setting(
+    id: 'img.polar.frames_per_point',
+    tier: SettingTier.advanced,
+    label: 'Frames per point',
+    description: 'How many frames Polar align takes at each of the three points of a measurement, with the mount still, and averages. A point whose solves scatter more than 3″ is retaken once; if it is still scattered, the result is marked noisy. 1 to 5, 3 by default.',
+    keywords: ['polar', 'alignment', 'frames', 'average', 'scatter', 'noisy', 'solves'],
+    path: ['Settings', 'Imaging', 'Polar align'],
+    type: SettingType.intRange(min: 1, max: 5),
+    defaultValue: null,
+    profilePath: 'polar_align.frames_per_point',
   ),
   // #1264 Imaging → Unguided — the probe / guard / re-centre knobs on a rig
   // without a guider. State lives in `unguidedSettingsProvider` (profile

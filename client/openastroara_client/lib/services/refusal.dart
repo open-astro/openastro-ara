@@ -25,8 +25,11 @@ enum RefusalCause {
   polarAlignOnAxis('polar-align-on-axis'),
   polarAlignPointingUnknown('polar-align-pointing-unknown'),
   polarAlignPoseAmbiguous('polar-align-pose-ambiguous'),
+  polarAlignMountBusy('polar-align-mount-busy'),
   firstFlipNotCompleted('first-flip-not-completed'),
-  mountClockNotVerified('mount-clock-not-verified');
+  mountClockNotVerified('mount-clock-not-verified'),
+  polarAlignAlreadyRunning('polar-align-already-running'),
+  polarAlignClutchTurned('polar-align-clutch-turned');
 
   const RefusalCause(this.token);
 

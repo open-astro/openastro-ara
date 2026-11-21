@@ -203,6 +203,43 @@ public static class PolarAlignGeometry {
         return Math.Acos(Math.Clamp(Dot(a, b), -1.0, 1.0)) * 180.0 / Math.PI;
     }
 
+    /// <summary>#2082 — the mean of several solves of one field as unit vectors (so RA 359.99° and 0.01° average to 0°,
+    /// and a field near the pole averages as the sky does, not in RA), and their rms scatter about that mean in
+    /// arcseconds: √(mean of each solve's angle to the mean²). One solve: itself, scatter 0.</summary>
+    /// <exception cref="ArgumentException">No solves, a non-finite one, or solves that cancel (no mean direction).</exception>
+    public static (double RaDeg, double DecDeg, double RmsArcsec) MeanDirection(
+            System.Collections.Generic.IReadOnlyList<(double RaDeg, double DecDeg)> solves) {
+        ArgumentNullException.ThrowIfNull(solves);
+        if (solves.Count == 0) {
+            throw new ArgumentException("at least one solve is needed", nameof(solves));
+        }
+        if (solves.Count == 1) {
+            // Itself, exactly: no round trip through a unit vector.
+            RequireFinite(solves[0].RaDeg, nameof(solves));
+            RequireFinite(solves[0].DecDeg, nameof(solves));
+            return (solves[0].RaDeg, solves[0].DecDeg, 0.0);
+        }
+        var sum = (X: 0.0, Y: 0.0, Z: 0.0);
+        foreach (var (ra, dec) in solves) {
+            RequireFinite(ra, nameof(solves));
+            RequireFinite(dec, nameof(solves));
+            sum = Add(sum, UnitVector(ra, dec));
+        }
+        if (Norm(sum) < 1e-12) {
+            throw new ArgumentException("the solves cancel out: they have no mean direction", nameof(solves));
+        }
+        var mean = Normalize(sum);
+        var squares = 0.0;
+        foreach (var (ra, dec) in solves) {
+            // atan2(|a×b|, a·b): exact for the sub-arcsecond angles a still mount gives, where acos of a dot near 1 is not.
+            var v = UnitVector(ra, dec);
+            var arcsec = Math.Atan2(Norm(Cross(v, mean)), Dot(v, mean)) * 180.0 / Math.PI * 3600.0;
+            squares += arcsec * arcsec;
+        }
+        var (meanRa, meanDec) = RaDec(mean);
+        return (meanRa, meanDec, Math.Sqrt(squares / solves.Count));
+    }
+
     /// <summary>
     /// The signed angle (degrees, −180..180) the pointing turned about <paramref name="axisRaDeg"/>/<paramref name="axisDecDeg"/>
     /// from (<paramref name="ra1Deg"/>, <paramref name="dec1Deg"/>) to (<paramref name="ra2Deg"/>, <paramref name="dec2Deg"/>),

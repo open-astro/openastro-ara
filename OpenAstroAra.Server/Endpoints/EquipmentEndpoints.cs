@@ -58,10 +58,9 @@ public static partial class EquipmentEndpoints {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
         ArgumentNullException.ThrowIfNull(request);
-        // #2066 — a sync moves nothing and stays allowed; force does not bypass it.
-        if (request.Sync != true) {
-            ThrowIfPolarAlignMovesTheMount(polarAlign, "slew");
-        }
+        // #2066 — force does not bypass it. A sync is refused too: it moves no motor, but it shifts the RA reading Polar
+        // Align steers its turns by (a jump of 0.5° reverses the motor) and measures its sweep from.
+        ThrowIfPolarAlignMovesTheMount(polarAlign, request.Sync == true ? "sync" : "slew", telescope);
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
         }
@@ -85,29 +84,35 @@ public static partial class EquipmentEndpoints {
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
     }
 
-    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a pad move, Home or Park while Polar Align
-    /// turns the mount, or its stop is not confirmed yet: two commands would drive the motors at once. Stop Polar Align (or
-    /// Stop Mount, which ends it) first. A pad stop (rate 0) and Stop Mount are never refused.</summary>
-    internal static void ThrowIfPolarAlignMovesTheMount(IPolarAlignService? polarAlign, string what) {
+    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a sync, a pad move, Home or Park while Polar Align
+    /// turns the mount, or its stop is not confirmed yet: two commands would drive the motors at once. With
+    /// <paramref name="mount"/> (a GoTo, a sync, Center, Home or Park; not a pad move) it is refused for Polar Align's whole run
+    /// too, the adjust loop included, while it holds the mount's motion owner (#2066 ARA-2, Joey 2026-11-20 on #2048).
+    /// Stop Polar Align (or Stop Mount, which ends it) first. A pad stop (rate 0) and Stop Mount are never refused.</summary>
+    internal static void ThrowIfPolarAlignMovesTheMount(IPolarAlignService? polarAlign, string what, IMountMotionControl? mount = null) {
         if (polarAlign is { IsMovingMount: true }) {
             throw new RefusalException(RefusalCatalog.PolarAlignMovingMount,
                 $"Polar alignment is turning the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it).");
         }
+        if (mount?.MotionOwner is { } owner) {
+            throw TelescopeService.MotionOwnedRefusal(owner, what);
+        }
     }
 
     /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
-    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    /// runs (#2066), else the 202 the telescope service answers. The service checks the owner again when the park's checks end
+    /// (<see cref="ITelescopeService.ParkUnlessMotionOwnedAsync"/>). The safety and fault parks call its ParkAsync, not this.</summary>
     internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
-        ThrowIfPolarAlignMovesTheMount(polarAlign, "park");
-        return Results.Accepted(value: await telescope.ParkAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "park", telescope);
+        return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
     }
 
     /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
-    /// turns the mount (#2066), else the 202 the telescope service answers.</summary>
+    /// runs (#2066), else the 202 the telescope service answers.</summary>
     internal static async Task<IResult> TelescopeFindHomeAsync(string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(telescope);
-        ThrowIfPolarAlignMovesTheMount(polarAlign, "home");
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "home", telescope);
         return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
     }
 
@@ -409,7 +414,7 @@ public static partial class EquipmentEndpoints {
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
-        // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align turns the mount.
+        // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align runs (it holds the mount).
         telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
             TelescopeParkAsync(request, key, svc, polarAlign, ct))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
@@ -1268,7 +1273,7 @@ public static partial class EquipmentEndpoints {
     /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
     /// service refuses a start without one).</summary>
     internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
-        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin) : null;
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn) : null;
 
     public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
         ArgumentNullException.ThrowIfNull(svc);

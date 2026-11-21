@@ -13,6 +13,9 @@ import '../adaptive_dialog.dart';
 /// from the mount ([PolarAlignClient.startPlan]) and refuses a start that does
 /// not carry it back ([PolarAlignClient.start]). Nothing starts when the user
 /// cancels. A parked mount is refused by the rig before the dialog opens.
+///
+/// #2083 — on a rig that takes it, the user can also choose to turn RA by
+/// hand (NINA's manual mode): the start then asks the rig to move nothing.
 Future<void> confirmAndStartPolarAlign(
   BuildContext context,
   PolarAlignClient api, {
@@ -20,17 +23,28 @@ Future<void> confirmAndStartPolarAlign(
 }) async {
   final plan = await api.startPlan(stage: stage);
   if (!context.mounted) return;
-  final confirmed = await showAdaptiveAlert<bool>(
+  final choice = await showAdaptiveAlert<PolarStartChoice>(
     context: context,
     builder: (_) => PolarStartConfirmDialog(plan: plan),
   );
-  if (confirmed != true) return;
-  await api.start(plan);
+  switch (choice) {
+    case PolarStartChoice.motor:
+      await api.start(plan);
+    case PolarStartChoice.hand:
+      await api.start(plan.byHand());
+    case null:
+      return;
+  }
 }
 
-/// The confirm step's dialog: where to point the mount, the RA turns and
-/// their direction, the most the run turns, and the hand on the power switch.
-/// Pops true for "Move the mount", false for Cancel.
+/// The confirm step's answer: the mount's motor turns RA, or the user does.
+enum PolarStartChoice { motor, hand }
+
+/// The confirm step's dialog: where to point the mount (with NINA's guidance,
+/// #2083), the RA turns and their direction, the most the run turns, and the
+/// hand on the power switch. Pops [PolarStartChoice.motor] for "Move the
+/// mount", [PolarStartChoice.hand] for "Turn RA by hand" (shown only when the
+/// rig takes it), null for Cancel.
 class PolarStartConfirmDialog extends StatelessWidget {
   const PolarStartConfirmDialog({super.key, required this.plan});
 
@@ -54,11 +68,16 @@ class PolarStartConfirmDialog extends StatelessWidget {
             (plan.originOffsetDeg > 0);
     final lines = [
       l10n.polarConfirmPoint,
+      // #2083 — NINA's guidance on the start field.
+      l10n.polarConfirmGuideField,
+      l10n.polarConfirmGuideMeridian,
       l10n.polarConfirmTurns(
         deg(plan.stepDeg),
         direction,
         deg(plan.stepDeg * plan.turns),
       ),
+      // #2082 Rough first, or the profile's camera set to main.
+      if (plan.camera == PolarAlignCameras.main) l10n.polarConfirmMainCamera,
       // #2089 — where this run stands against the session's first start.
       if (plan.newOrigin)
         l10n.polarConfirmNewOrigin(deg(plan.sweepLimitDeg))
@@ -68,8 +87,11 @@ class PolarStartConfirmDialog extends StatelessWidget {
           offsetDirection,
         ),
       l10n.polarConfirmPower,
+      if (plan.handTurnAvailable) l10n.polarConfirmHandTurnHint,
     ];
     return adaptiveAlertDialog(
+      // The guidance lines (#2083) make it tall: scroll on a short screen.
+      scrollable: true,
       icon: const Icon(Icons.warning_amber_rounded),
       title: Text(l10n.polarConfirmTitle),
       content: Column(
@@ -88,15 +110,22 @@ class PolarStartConfirmDialog extends StatelessWidget {
         adaptiveDialogAction(
           context,
           key: const Key('polar-start-confirm-cancel'),
-          onPressed: () => Navigator.of(context).pop(false),
+          onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.polarConfirmCancel),
         ),
+        if (plan.handTurnAvailable)
+          adaptiveDialogAction(
+            context,
+            key: const Key('polar-start-confirm-hand'),
+            onPressed: () => Navigator.of(context).pop(PolarStartChoice.hand),
+            child: Text(l10n.polarConfirmHandTurn),
+          ),
         adaptiveDialogAction(
           context,
           key: const Key('polar-start-confirm-go'),
           isDefault: true,
           filled: true,
-          onPressed: () => Navigator.of(context).pop(true),
+          onPressed: () => Navigator.of(context).pop(PolarStartChoice.motor),
           child: Text(l10n.polarConfirmGo),
         ),
       ],

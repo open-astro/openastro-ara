@@ -524,9 +524,11 @@ public sealed record Phd2SettingsDto(
 /// <see cref="OpenAstroAra.Server.Services.PolarAlignBinning"/>), 1–4 = the user's override.
 /// <c>TargetToleranceArcmin</c> gates the client's [Done] button (the server reports errors
 /// regardless); <c>SeedRotationDeg</c> is each of the 3-point seed's two RA turns; <c>CheckStepDeg</c> each
-/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure of the
-/// coarse stage;
+/// of the check stage's two turns; <c>CoarseExposureSeconds</c> the main-camera exposure (the rough step, and every
+/// measurement with <c>Camera</c> = <c>main</c>);
 /// <c>StopTrackingWhenDone</c> whether every end of a run turns tracking off (#2048);
+/// <c>Camera</c> the camera of the measurement and its live loop (<see cref="PolarAlignCameras"/>, #2082);
+/// <c>FramesPerPoint</c> the frames averaged at each of the measurement's three points (1–5, #2082);
 /// <c>LoopCadenceMs</c> is the live loop's target period (capture+solve time is inside it).
 /// <c>LoopMode</c> is <c>"loop"</c> (re-shoot continuously) or <c>"single"</c> (the adjust phase
 /// waits for <c>POST /equipment/polaralign/capture</c> before each frame). The live loop re-reads
@@ -555,7 +557,13 @@ public sealed record PolarAlignSettingsDto(
     // #2048: NINA's StopTrackingWhenDone, on by default like NINA's ("to not run into pier collisions").
     // On: every end of a run turns tracking off. Off: a run that finishes (Done, or the check's verdict)
     // gives back the tracking it found; a Stop or a failure still leaves tracking off.
-    bool StopTrackingWhenDone = true);
+    bool StopTrackingWhenDone = true,
+    // #2082: the camera of the measurement and its live loop (PolarAlignCameras): the guide camera (the default), or the
+    // main camera with its own solver at CoarseExposureSeconds. A check measures on it too; "Rough first" is always the main.
+    string Camera = PolarAlignCameras.Guide,
+    // #2082: frames per point of a measurement, the mount still, averaged as unit vectors (their rms scatter is logged).
+    // A point scattered over 3″ is retaken once; still over, the result is flagged noisy. Clamped to 1–5.
+    int FramesPerPoint = 3);
 
 /// <summary>
 /// #1364 — the guider's settings beyond Tune Guiding (profile section <c>guider_advanced</c>, endpoint
@@ -636,6 +644,15 @@ public static class UnguidedPriorToleranceBases {
     public const string Pixel = "pixel";
     public const string Seeing = "seeing";
     public static bool IsValid(string? v) => v is Max or Pixel or Seeing;
+}
+
+/// <summary>#2082 — the camera a polar-align measurement uses (<see cref="PolarAlignSettingsDto.Camera"/>).</summary>
+public static class PolarAlignCameras {
+    /// <summary>The guide camera, through the guider's single-frame capture and the guide optics (the default).</summary>
+    public const string Guide = "guide";
+    /// <summary>The main camera with its own solver and optics, at <see cref="PolarAlignSettingsDto.CoarseExposureSeconds"/>.</summary>
+    public const string Main = "main";
+    public static bool IsValid(string? camera) => camera is Guide or Main;
 }
 
 /// <summary>§45 live-adjust capture modes (<see cref="PolarAlignSettingsDto.LoopMode"/>).</summary>

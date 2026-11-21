@@ -20,9 +20,9 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #2066 (ARA-5) — the narrow seam a routine that drives the mount's motors itself (Polar Align) moves it through: the
 /// stop count it obeys, the mount session it started in, the tagged abort, the leased motor move, the pose-trust check and
-/// a fresh, timestamped reading. <see cref="ITelescopeService"/> extends it, so the daemon's telescope service is the one
-/// implementation; a routine takes the seam and never casts its mount to the service. The single motion owner
-/// (<c>AcquireMotion</c>, #2048 ARA-2) joins it with the <c>mount_busy</c> change.
+/// a fresh, timestamped reading, and the single motion owner (<see cref="AcquireMotion"/>, #2048 ARA-2).
+/// <see cref="ITelescopeService"/> extends it, so the daemon's telescope service is the one implementation; a routine takes
+/// the seam and never casts its mount to the service.
 /// </summary>
 public interface IMountMotionControl {
 
@@ -36,6 +36,10 @@ public interface IMountMotionControl {
     /// and a run that sees it change mid-run ends (#2066 ARA-5): a reconnected mount may have been moved, re-homed or
     /// swapped meanwhile.</summary>
     long SessionEpoch => 0;
+
+    /// <summary>#2083 — counts the syncs the mount accepted (a plate solve's, Center's): a routine that stopped trusting the
+    /// mount's reading (Polar Align after a clutch turn) trusts it again once this changes.</summary>
+    long SyncEpoch => 0;
 
     /// <summary>#2066 — what raised the first count after <paramref name="abortEpoch"/> other than
     /// <paramref name="except"/>: <c>user_request</c> (Stop Mount), <c>emergency_stop</c>, <c>watchdog</c>, <c>park</c>,
@@ -70,6 +74,38 @@ public interface IMountMotionControl {
     /// For a routine that polls its own motor move several times a second: two driver round trips more per poll would
     /// stretch the poll, and the stop on the reading would land further past its target.</summary>
     Task<MountReading?> ReadPositionNowAsync(CancellationToken ct) => ReadNowAsync(ct);
+
+    /// <summary>#2066 (ARA-2) — the routine that holds the mount's single motion owner (<see cref="MotionOwners"/>), or
+    /// null. While one holds it, a GoTo (the REST one, Center, the sequencer's and every other mediator GoTo), a sync, a
+    /// Park and a Home (REST or mediator) are refused. A stop never is: Emergency Stop, Stop Mount, AbortSlew, a pad stop
+    /// (MoveAxis rate 0) and tracking off always reach the mount; the safety, fault and shutdown parks end the routine
+    /// through its takeover first.</summary>
+    string? MotionOwner => null;
+
+    /// <summary>#2066 (ARA-2) — take the motion owner for <paramref name="owner"/> (a <see cref="MotionOwners"/> name)
+    /// until the returned hold is disposed. A new hold of the same owner replaces its old one (a new run of the routine),
+    /// and disposing the old one then gives nothing back. Throws <see cref="InvalidOperationException"/> while another
+    /// owner holds it.</summary>
+    IDisposable AcquireMotion(string owner) => MotionHold.None;
+}
+
+/// <summary>#2066 (ARA-2) — the names a routine takes the motion owner (<see cref="IMountMotionControl.AcquireMotion"/>)
+/// with.</summary>
+public static class MotionOwners {
+
+    /// <summary>The Polar Align routine: it holds the owner for its whole run, the adjust loop included, and gives it back
+    /// once its exit has stopped the mount. The same token as its own stop's reason (<see cref="MountStopReasons.PolarAlign"/>).</summary>
+    public const string PolarAlign = MountStopReasons.PolarAlign;
+}
+
+/// <summary>A hold of the motion owner that gives nothing back: a mount that keeps no owner.</summary>
+internal sealed class MotionHold : IDisposable {
+
+    public static readonly MotionHold None = new();
+
+    public void Dispose() {
+        // Nothing to give back.
+    }
 }
 
 /// <summary>One fresh reading of the mount (#2066 ARA-5): RA (hours) and Dec (degrees) as the driver reports them in its

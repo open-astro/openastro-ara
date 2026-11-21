@@ -376,6 +376,71 @@ void main() {
       expect(api.calls, ['start:coarse']);
     });
 
+    testWidgets('Rough first says how far it turns the mount before it moves (#2082)', (tester) async {
+      final api = _FakePolarAlignClient()..settings = rigPolarAlign.copyWith(seedRotationDeg: 15);
+      await tester.pumpWidget(_harness(api, const PolarAlignLive(
+        phase: PolarAlignStates.failed, errorReason: 'seed_solve_failed', errorMessage: 'the seed-a seed frame failed to solve',
+      )));
+      await _expand(tester);
+      expect(find.text('Rough first turns the mount 2 × 15° and measures with the main camera.'), findsOneWidget);
+    });
+
+    testWidgets('a noisy measurement says so under the live readout and under the check (#2082)', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      const live = PolarAlignLive(
+        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine,
+        azErrorArcmin: 2.0, altErrorArcmin: -1.0, totalErrorArcmin: 2.24,
+      );
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), live));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-noisy')), findsNothing, reason: 'a steady measurement');
+
+      final notifier = ProviderScope.containerOf(tester.element(find.byType(PolarAlignPanel)))
+          .read(polarAlignLiveProvider.notifier) as _StubLiveNotifier;
+      notifier.set(live.copyWith(measurementNoisy: true));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-noisy')), findsOneWidget);
+      expect(find.text(_en.polarNoisyMeasurement), findsOneWidget);
+
+      notifier.set(const PolarAlignLive(
+        phase: PolarAlignStates.checked, stage: PolarAlignStages.check,
+        totalErrorArcmin: 0.8, altErrorArcmin: 0.5, azErrorArcmin: 0.6,
+        checkResult: PolarAlignCheckResult(
+            altErrorArcmin: 0.5, azErrorArcmin: 0.6, totalErrorArcmin: 0.8, verdict: 'excellent', noisy: true),
+      ));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-align-check-noisy')), findsOneWidget);
+    });
+
+    testWidgets('a run on the main camera shows its solves without a guide-camera picture (#2082)', (tester) async {
+      tester.view.physicalSize = const Size(1400, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final api = _FakePolarAlignClient()..frame = Uint8List.fromList([1, 2, 3]);
+      await tester.pumpWidget(_harness(api, PolarAlignLive(
+        phase: PolarAlignStates.adjusting, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
+        azErrorArcmin: 2.0, altErrorArcmin: -1.0, totalErrorArcmin: 2.24,
+        lastFrame: PolarAlignFrameInfo.fromJson({'frame_id': 'live-1', 'solved': true, 'exposure_seconds': 3.0}),
+      )));
+      await tester.pumpAndSettle();
+      expect(find.text('Main camera'.toUpperCase()), findsOneWidget);
+      expect(find.text('Main-camera solves (no preview)'), findsOneWidget);
+      expect(api.calls, isNot(contains('frame')), reason: 'the guider has no picture of this run');
+    });
+
+    testWidgets('idle after a main-camera run could not solve offers no Rough first (#2082)', (tester) async {
+      // Rough first is the fallback for a guide camera that could not solve: the main camera just failed.
+      await tester.pumpWidget(_harness(_FakePolarAlignClient(), const PolarAlignLive(
+        phase: PolarAlignStates.failed, stage: PolarAlignStages.fine, camera: PolarAlignCameras.main,
+        errorReason: 'seed_solve_failed', errorMessage: 'the seed-a seed frame failed to solve',
+      )));
+      await _expand(tester);
+      expect(find.byKey(const Key('polar-align-error-banner')), findsOneWidget);
+      expect(find.byKey(const Key('polar-align-start-rough')), findsNothing);
+    });
+
     testWidgets('idle after another failure offers no Rough first (#2082)', (tester) async {
       await tester.pumpWidget(_harness(_FakePolarAlignClient(), const PolarAlignLive(
         phase: PolarAlignStates.failed, errorReason: 'slew_failed', errorMessage: 'the mount refused to turn',

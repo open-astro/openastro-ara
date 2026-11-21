@@ -99,6 +99,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         private string? _limitReason;
         private int _abortCount;
         private string? _motionOwner;
+        private object? _motionClaim;
         private bool _inhibited;
         private int _cachedReadsWhileMoving;
         private int _sentinelReads;
@@ -552,6 +553,23 @@ namespace OpenAstroAra.Test.PolarAlign {
 
         public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
 
+        /// <summary>The syncs the mount accepted (#2083): a test bumps it to play a plate-solve sync (Sync itself is forbidden here).</summary>
+        public long SyncEpoch { get; set; }
+
+        /// <summary>A plate-solve sync as TelescopeService takes one (#2066, #2083): not sent while a routine holds the
+        /// mount's motion owner (false); else the mount accepts it and <see cref="SyncEpoch"/> moves (true).</summary>
+        public bool SyncAsTheDaemonDoes() {
+            lock (_lock) {
+                if (_motionOwner is not null) {
+                    CommandLocked("sync refused: " + _motionOwner + " holds the mount", isMotion: false);
+                    return false;
+                }
+                SyncEpoch++;
+                CommandLocked("sync", isMotion: false);
+                return true;
+            }
+        }
+
         public ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
 
         public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
@@ -635,7 +653,12 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
+        /// <summary>#2066 (ARA-2) — runs at the start of every <see cref="ReadNowAsync"/>, before the mount is read: something
+        /// that happens between two of the routine's full readings (the mount moved by other means).</summary>
+        public Action? OnFullRead { get; set; }
+
         public async Task<MountReading?> ReadNowAsync(CancellationToken ct) {
+            OnFullRead?.Invoke();
             await SlowReadAsync("now").ConfigureAwait(false);
             TakeFreshReadTime();
             lock (_lock) {
@@ -748,20 +771,25 @@ namespace OpenAstroAra.Test.PolarAlign {
                 if (_inhibited) {
                     throw new InvalidOperationException("the motion latch is set (Emergency Stop): no new motion");
                 }
-                if (_motionOwner is not null) {
+                // As TelescopeService: another owner refuses; the same owner's new hold replaces its old one.
+                if (_motionOwner is not null && _motionOwner != owner) {
                     throw new InvalidOperationException($"{_motionOwner} is moving the mount");
                 }
                 _motionOwner = owner;
                 CommandLocked("acquire motion " + owner, isMotion: false);
-                return new MotionClaim(this, owner);
+                var claim = new MotionClaim(this);
+                _motionClaim = claim;
+                return claim;
             }
         }
 
-        private sealed class MotionClaim(FakeGemMount mount, string owner) : IDisposable {
+        private sealed class MotionClaim(FakeGemMount mount) : IDisposable {
             public void Dispose() {
                 lock (mount._lock) {
-                    if (mount._motionOwner == owner) {
+                    if (ReferenceEquals(mount._motionClaim, this)) {
+                        mount._motionClaim = null;
                         mount._motionOwner = null;
+                        mount.CommandLocked("release motion", isMotion: false);
                     }
                 }
             }
@@ -839,19 +867,46 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>The mediator's fire-and-forget abort (tagged <c>watchdog</c> on the daemon).</summary>
         public void StopSlew() => Abort("watchdog");
 
+        /// <summary>The mediator's GoTo (the sequencer's, Center's). As TelescopeService (#2066 ARA-2): refused, with
+        /// nothing sent, while a routine holds the motion owner.</summary>
         public async Task<bool> SlewToCoordinatesAsync(Coordinates coords, CancellationToken token) {
             ArgumentNullException.ThrowIfNull(coords);
             var jnow = coords.Epoch == Epoch.JNOW ? coords : coords.Transform(Epoch.JNOW);
             int? entry;
             lock (_lock) {
+                if (_motionOwner is { } owner) {
+                    CommandLocked("goto refused: " + owner + " holds the mount", isMotion: false);
+                    throw new SequenceEntityFailedException(TelescopeService.MotionOwnedMessage(owner, "GoTo"));
+                }
                 entry = BeginGoToLocked(MotionKind.GoTo, (jnow.RADegrees, jnow.Dec), fixedTrueTarget: null);
             }
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
         }
 
+        /// <summary>A GoTo by other means (the hand controller, another program on the driver): the daemon's motion owner
+        /// does not see it. Starts it (JNOW RA and Dec, degrees) and returns at once; false when the mount refused it.</summary>
+        public bool GoToByOtherMeans(double raDeg, double decDeg) {
+            lock (_lock) {
+                return BeginGoToLocked(MotionKind.GoTo, (raDeg, decDeg), fixedTrueTarget: null) is int e && !_motions[e].Refused;
+            }
+        }
+
+        /// <summary>#2066 (ARA-2) — opt-in: the mediator's <see cref="FindHome"/> and <see cref="ParkTelescope"/> refuse, as
+        /// TelescopeService's do, while a routine holds the motion owner (the shutdown ladder's). Off by default: other tests
+        /// call <see cref="ParkTelescope"/> as the safety park, which goes through the service's ParkAsync and is never refused.</summary>
+        public bool MediatorRefusesHomeAndParkWhileOwned { get; set; }
+
+        private void ThrowIfMediatorMoveOwnedLocked(string what) {
+            if (MediatorRefusesHomeAndParkWhileOwned && _motionOwner is { } owner) {
+                CommandLocked(what + " refused: " + owner + " holds the mount", isMotion: false);
+                throw new SequenceEntityFailedException(TelescopeService.MotionOwnedMessage(owner, what));
+            }
+        }
+
         public async Task<bool> FindHome(IProgress<ApplicationStatus> progress, CancellationToken token) {
             int? entry;
             lock (_lock) {
+                ThrowIfMediatorMoveOwnedLocked("Find Home");
                 entry = CanFindHome ? BeginGoToLocked(MotionKind.FindHome, target: null, fixedTrueTarget: GemGeometry.Home(South)) : null;
             }
             return entry is int e && await WaitForMotionAsync(e, token).ConfigureAwait(false);
@@ -860,6 +915,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public async Task<bool> ParkTelescope(IProgress<ApplicationStatus> progress, CancellationToken token) {
             int? entry;
             lock (_lock) {
+                ThrowIfMediatorMoveOwnedLocked("park");
                 IntegrateLocked();
                 var park = ParkPose ?? GemGeometry.Home(South);
                 entry = BeginGoToLocked(MotionKind.Park, target: null, fixedTrueTarget: TrueFromBelieved(park));
@@ -1000,6 +1056,7 @@ namespace OpenAstroAra.Test.PolarAlign {
         public Task<bool> ForgetAsync(CancellationToken ct) => throw Unmodelled(nameof(ForgetAsync));
         public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(SlewAsync));
         public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(ParkAsync));
+        public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(ParkUnlessMotionOwnedAsync));
         public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(UnparkAsync));
         public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) => throw Unmodelled(nameof(FindHomeAsync));
         public Task SetTrackingAsync(bool enabled, CancellationToken ct) => throw Unmodelled(nameof(SetTrackingAsync));

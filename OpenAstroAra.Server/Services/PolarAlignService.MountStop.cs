@@ -341,6 +341,15 @@ namespace OpenAstroAra.Server.Services {
 
             public void MarkReported() => Volatile.Write(ref _reported, 1);
 
+            private IDisposable? _hold;
+
+            /// <summary>#2066 (ARA-2) — the run's hold of the mount's motion owner, taken before it launched.</summary>
+            public void Hold(IDisposable hold) => Volatile.Write(ref _hold, hold);
+
+            /// <summary>Give the run's motion owner back, once: when its exit has stopped the mount, when an end gives up
+            /// waiting for a stuck run, or when the next Start drains it.</summary>
+            public void ReleaseHold() => Interlocked.Exchange(ref _hold, null)?.Dispose();
+
             /// <summary>#2066 — the stop fence when the run was launched (set before the run is published): once the fence
             /// moves, no stop of this run goes out (<see cref="StopsFenced"/>).</summary>
             public long Fence { get; set; }

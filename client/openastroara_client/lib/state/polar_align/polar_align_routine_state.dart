@@ -24,6 +24,9 @@ const polarSeedRotationRange = (min: 5.0, max: 30.0);
 const polarCheckStepRange = (min: 5.0, max: 30.0);
 const polarCoarseExposureRange = (min: 0.1, max: 60.0);
 
+/// #2082 frames averaged at each point: whole numbers only.
+const polarFramesPerPointRange = (min: 1, max: 5);
+
 /// A knob's value as its field shows it.
 String polarKnobText(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
@@ -31,8 +34,9 @@ String polarKnobText(double v) =>
 /// The routine camera's latest frame, fetched after each finished frame; null
 /// until there is one. A failed fetch keeps the previous picture. Fetches are
 /// coalesced: a frame that finishes while one is in flight is fetched once
-/// after it, or Single would keep showing the older image. Not in the rough
-/// stage: its frames are the main camera's, and the guider has none to show.
+/// after it, or Single would keep showing the older image. Not while the run
+/// shoots the main camera (the rough stage, or `polar_align.camera` = main,
+/// #2082): the guider has none of its frames to show.
 class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
   bool _loading = false;
   bool _reload = false;
@@ -40,7 +44,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
   @override
   Uint8List? build() {
     ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (next.stage != PolarAlignStages.coarse &&
+      if (!next.usesMainCamera &&
           next.lastFrame != null &&
           !identical(prev?.lastFrame, next.lastFrame)) {
         unawaited(load());
@@ -48,7 +52,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
     });
     // A frame already finished before anything watched: fetch it too.
     final live = ref.read(polarAlignLiveProvider);
-    if (live.lastFrame != null && live.stage != PolarAlignStages.coarse) {
+    if (live.lastFrame != null && !live.usesMainCamera) {
       Future.microtask(load);
     }
     return null;
@@ -61,6 +65,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
     if (status != null &&
         status.isActive &&
         status.stage != PolarAlignStages.coarse &&
+        status.camera != PolarAlignCameras.main &&
         ref.mounted) {
       await load();
     }
