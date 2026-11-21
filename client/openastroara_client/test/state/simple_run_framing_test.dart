@@ -333,8 +333,8 @@ void main() {
       _expectFramed(_goTo(body(), 'M31'));
     });
 
-    test('an edit refused for a section not loaded leaves the Target\'s '
-        'block on the rig', () async {
+    test('an edit refused for a section not loaded leaves its Target block '
+        'on the rig', () async {
       pick(_m31);
       frame(_m31Framed);
       await run().create();
