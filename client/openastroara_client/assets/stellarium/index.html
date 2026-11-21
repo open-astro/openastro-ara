@@ -37,9 +37,11 @@
   /* ?bare=1 (Simple Mode): sky only, the app's own panels float over it. The
      one exception is the framing box's own controls (#f-bare, #frame). */
   .bare .ui:not(#frame):not(#f-bare) { display: none !important; }
-  .bare #frame { left: auto; right: 14px; top: 64px; }
+  /* Clear of Simple Mode's own chrome: the device strip (16 + 56 px from the top)
+     and the right rail (16 + 72 px from the right), each plus a 16 px gap. */
+  .bare #frame { left: auto; right: 104px; top: 136px; }
   .bare #frame .full-only { display: none; }
-  #f-bare { display: none; left: auto; right: 14px; top: 14px; padding: 8px 14px; background: var(--mat);
+  #f-bare { display: none; left: auto; right: 104px; top: 88px; padding: 8px 14px; background: var(--mat);
     backdrop-filter: var(--blur); -webkit-backdrop-filter: var(--blur); border: 0.5px solid var(--hair);
     border-radius: 10px; box-shadow: var(--shadow); }
   #f-bare.on { color: var(--accent); }
@@ -147,6 +149,11 @@
     background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
   #frame #f-rotcam:hover { background: rgba(255,255,255,0.14); }
   #frame #f-rotcam:disabled { opacity: .4; cursor: default; }
+  #frame #f-snap { display: none; width: 100%; margin-top: 8px; font-size: 12.5px; font-weight: 600; padding: 8px 0;
+    border-radius: 10px; background: rgba(255,255,255,0.08); color: var(--txt); border: 1px solid rgba(255,255,255,0.14); }
+  .bare #frame #f-snap { display: block; }
+  #frame #f-snap:hover { background: rgba(255,255,255,0.14); }
+  #frame #f-snap:disabled { opacity: .4; cursor: default; }
   /* A short view (a laptop window): tighter rows and a smaller dial so the
      card fits without scrolling. */
   @media (max-height: 560px) {
@@ -261,6 +268,7 @@
     <div id="f-dial" class="dial" title="Drag to rotate"><div class="dial-hand"></div></div>
     <button id="f-rot+" title="+1°">+</button>
   </div>
+  <button id="f-snap" title="Turn the box to the catalogue position angle of this object">Snap to catalogue angle</button>
   <div class="frow full-only"><span class="k">Columns</span>
     <div class="stp"><button id="f-col-">−</button><span class="val" id="f-col">1</span><button id="f-col+">+</button></div>
   </div>
@@ -540,7 +548,7 @@ function renderInfo(sel) {
     var icrf = stel.c2s(radec);
     selRaJ2000Hours = stel.anp(icrf[0]) * 12 / Math.PI;
     selDecJ2000Deg = stel.anpm(icrf[1]) * 180 / Math.PI;
-    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target');
+    setFrameTarget(stel.anp(icrf[0]) / D2R, stel.anpm(icrf[1]) / D2R, names.length ? names[0] : 'Target', catalogueAngle(sel));
     var jnow = stel.c2s(stel.convertFrame(stel.core.observer, 'ICRF', 'JNOW', radec));
     var ra = stel.anp(jnow[0]), dec = stel.anpm(jnow[1]);
     selRaHours = ra * 12 / Math.PI;
@@ -1278,6 +1286,7 @@ function wireCatalogs() {
 var frameOn = false;
 var frameRotDeg = 0, frameCols = 1, frameRows = 1, frameOverlap = 10;
 var frameRaDeg = null, frameDecDeg = null, frameTargetName = '';
+var frameCatPaDeg = null;   // catalogue position angle of the Target, deg east of north, or null
 var optics = null;          // { ok, fovWDeg, fovHDeg } from the profile, or null
 var _frameGeo = null;       // the engine GeoJSON object holding the box/mosaic
 var _frameLayer = null;     // a layer to parent it — a bare geojson under core won't render
@@ -1330,14 +1339,35 @@ function loadOptics() {
 // before — "Moon" at NGC 7000's coordinates, night of 2026-10-02.
 // Simple Mode (CHART): a new target name sets Framing Off and the angle to 0°,
 // the same name keeps both (#1899 decision B).
-function setFrameTarget(raDeg, decDeg, name) {
+function setFrameTarget(raDeg, decDeg, name, catPaDeg) {
   var next = name || '';
+  frameCatPaDeg = catPaDeg == null ? null : catPaDeg;
   if (CHART && next !== frameTargetName) {
     frameRotDeg = 0;
     if (frameOn) toggleFrame(false);
   }
   frameRaDeg = raDeg; frameDecDeg = decDeg; frameTargetName = next;
   if (frameOn) updateFrame(); else if (CHART) renderFramePanel();
+}
+
+// The catalogue position angle of a selected object (degrees east of north,
+// 0 to 359), or null when the survey data carries none (stars, planets).
+function catalogueAngle(sel) {
+  try {
+    var a = sel.jsonData.model_data.angle;
+    if (typeof a !== 'number' || !isFinite(a)) return null;
+    return ((Math.round(a) % 360) + 360) % 360;
+  } catch (e) { return null; }
+}
+
+function snapEnabled() {
+  return !!frameOn && frameCatPaDeg != null && frameRotDeg !== frameCatPaDeg;
+}
+
+function snapToCatalogueAngle() {
+  if (frameCatPaDeg == null) return;
+  frameRotDeg = frameCatPaDeg;
+  updateFrame();
 }
 
 // The view's centre in J2000 RA/Dec — lets the frame follow the view so you can
@@ -1583,6 +1613,9 @@ function renderFramePanel() {
     msg.classList.remove('warn');
   }
   document.getElementById('f-add').textContent = CHART ? 'Add to queue' : API ? 'Create Run' : 'Create Run (draft)';
+  var snapBtn = document.getElementById('f-snap');
+  snapBtn.textContent = 'Snap to catalogue angle' + (frameCatPaDeg == null ? '' : ' (' + frameCatPaDeg + '°)');
+  snapBtn.disabled = !snapEnabled();
   var bareBtn = document.getElementById('f-bare');
   bareBtn.style.display = CHART && frameRaDeg != null ? 'block' : 'none';
   bareBtn.classList.toggle('on', frameOn);
@@ -1699,6 +1732,7 @@ function wireFrame() {
   holdRepeat('f-ov+', function () { frameOverlap = Math.min(50, frameOverlap + 1); updateFrame(); });
   document.getElementById('f-add').onclick = addFrameToSequence;
   document.getElementById('f-rotcam').onclick = openRotateCamera;
+  document.getElementById('f-snap').onclick = snapToCatalogueAngle;
   // Pick up optics edited in Options → Imaging → Optics without reopening Frame.
   setInterval(function () { if (frameOn) loadOptics(); }, 3000);
 }
