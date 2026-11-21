@@ -369,6 +369,72 @@ namespace OpenAstroAra.Test {
             Assert.That(mount.AtRest, Is.True);
         }
 
+        // ── the axis's place before each turn ────────────────────────────────────────────────
+
+        /// <summary>Answers at the hint (like <see cref="HintFollowingSolver"/>) and runs <see cref="OnFrame"/> on each frame
+        /// it solves, by id (e.g. <c>seed-b-1</c>).</summary>
+        private sealed class FrameHookSolver : IPolarAlignFrameSolver {
+            public Action<string>? OnFrame { get; set; }
+            public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
+                OnFrame?.Invoke(System.IO.Path.GetFileNameWithoutExtension(fitsPath));
+                return Task.FromResult(hintRa is double ra ? new PolarAlignSolveOutcome(true, ra, 85.0) : SolveA);
+            }
+        }
+
+        [Test]
+        public async Task A_turn_that_would_take_the_axis_past_the_sweep_limit_after_its_frames_fails_before_the_motor_runs() {
+            // #2082 review — five frames per point at long exposures keep the mount tracking at each point for many minutes,
+            // and tracking turns the RA axis on: the start's plan (0 → 20° east here) cannot see that. The second turn reads
+            // where the axis is now: 25° from the origin (the frames' time, stood in for by the reading), and its 10° would
+            // take it to 35°, past the 30° limit and the 2° a run may drift. It fails before the motor runs.
+            var mount = new FakeStopMount(tracking: true);
+            var ws = new WsRecorder();
+            mount.EventCount = () => ws.Events.Count;
+            var movedAt = -1;
+            var solver = new FrameHookSolver {
+                OnFrame = frame => {
+                    if (frame == "seed-b-1") {
+                        mount.MoveByHand(25.0);
+                        Volatile.Write(ref movedAt, mount.Count);
+                    }
+                },
+            };
+            using var svc = NewService(NewFake(), solver, mount.Mock, ws, store: TenDegreeStore());
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(plan.Direction, Is.EqualTo(PolarAlignDirections.East));
+
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            var error = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignError).ConfigureAwait(false);
+
+            Assert.That(error.GetProperty("reason").GetString(), Is.EqualTo("sweep_limit"));
+            Assert.That(error.GetProperty("message").GetString(), Does.Contain("25°").And.Contain("slew it back near the pole"));
+            Assert.That(Volatile.Read(ref movedAt), Is.GreaterThanOrEqualTo(0));
+            AssertNoMotionAfter(mount, Volatile.Read(ref movedAt));
+            Assert.That(mount.RaDeg, Is.EqualTo(25.0).Within(0.01), "the second turn never ran");
+        }
+
+        [Test]
+        public async Task A_turn_that_ends_within_the_drift_allowance_past_the_limit_runs_as_planned() {
+            // The other side of the guard: the axis at 21° before the second turn ends it at 31°, past the 30° limit but
+            // within the 2° a run may drift (a turn's overshoot, tracking between the turns). That is not a failure.
+            var mount = new FakeStopMount(tracking: true);
+            var solver = new FrameHookSolver {
+                OnFrame = frame => {
+                    if (frame == "seed-b-1") {
+                        mount.MoveByHand(21.0);
+                    }
+                },
+            };
+            using var svc = NewService(NewFake(), solver, mount.Mock, store: TenDegreeStore());
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("adjusting"));
+        }
+
         // ── tracking is not a move by other means ────────────────────────────────────────────
 
         // from RA, to RA, seconds between → how far the mount moved beyond what tracking (on or off) explains.
