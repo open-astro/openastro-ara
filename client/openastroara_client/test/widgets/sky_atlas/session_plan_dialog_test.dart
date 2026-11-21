@@ -10,6 +10,7 @@ import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
+import 'package:openastroara/state/sky_atlas/session_plan_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -17,6 +18,8 @@ import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 import 'package:openastroara/widgets/sky_atlas/target_preview.dart';
+import '../../support/settings_values.dart';
+import '../../support/imaging_sections.dart';
 
 class _FixedStats extends StatsTargetsNotifier {
   _FixedStats(this._v);
@@ -96,6 +99,27 @@ void main() {
     await tester.tap(find.text('Plan it'));
     await tester.pumpAndSettle();
     expect(find.text('Skull Nebula (NGC 246)'), findsOneWidget);
+  });
+
+  testWidgets('guider and autofocus settings not loaded: the plan charges no '
+      'dither or refocus time and says so', (tester) async {
+    final c = ProviderContainer(overrides: [
+      targetPreviewProvider.overrideWith((ref, key) async => null),
+      tonightSkyAtProvider.overrideWith(
+          (ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
+    ]);
+    addTearDown(c.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: c,
+      child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
+    ));
+    await tester.tap(find.text('Plan it'));
+    await tester.pumpAndSettle();
+    final o = c.read(sessionPlanProvider).overheads;
+    expect(o.ditherEnabled, isFalse, reason: 'never an assumed cadence');
+    expect(o.autofocusEveryHours, 0);
+    expect(find.textContaining('Guider settings not loaded'), findsOneWidget);
+    expect(find.textContaining('Autofocus settings not loaded'), findsOneWidget);
   });
 
   testWidgets('Plan it ranks at the window midpoint and shows a plan card',
@@ -290,6 +314,8 @@ void main() {
             .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
         sequenceApiProvider.overrideWith((ref) => null),
         draftSequenceServiceProvider.overrideWithValue(drafts),
+        // The offline draft is built from the profile's copy (ADR 0015).
+        ...imagingSectionsFromRig(),
       ],
       child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
     ));
@@ -339,7 +365,7 @@ class _HangingDraftService extends DraftSequenceService {
 class _FixedOptics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() => const LoadedSection(
-    value: OpticsSettings(
+    value: TestOpticsSettings(
       focalLengthMm: 250,
       reducerFactor: 1,
       sensorWidthPx: 6248,

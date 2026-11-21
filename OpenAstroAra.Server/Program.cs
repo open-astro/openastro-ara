@@ -441,7 +441,8 @@ public partial class Program {
         builder.Services.AddSingleton<PolarAlignerService>(sp => new PolarAlignerService(
             sp.GetRequiredService<SwitchService>(), sp.GetRequiredService<TelescopeService>(),
             // Resolved at the call, not here: the routine itself is built from this service.
-            () => sp.GetRequiredService<IPolarAlignService>() as IPolarAlignerDriver));
+            () => sp.GetRequiredService<IPolarAlignService>() as IPolarAlignerDriver,
+            sp.GetRequiredService<ILogger<PolarAlignerService>>()));
         builder.Services.AddSingleton<IPolarAlignerService>(sp => sp.GetRequiredService<PolarAlignerService>());
         builder.Services.AddSingleton<IPolarAlignerSource>(sp => sp.GetRequiredService<PolarAlignerService>());
         // §14e — second real device service: live weather sensors over REST (read-only, §32.4

@@ -7,6 +7,7 @@ import 'package:openastroara/models/sequence/nina_dom.dart' show childrenOf;
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/unguided_settings_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
 import 'package:openastroara/state/sky_atlas/plan_framing_state.dart';
 import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
@@ -329,6 +330,23 @@ void main() {
         ]),
         isTrue,
       );
+      _expectFramed(_goTo(body(), 'M31'));
+    });
+
+    test('an edit refused for a section not loaded leaves its Target block '
+        'on the rig', () async {
+      pick(_m31);
+      frame(_m31Framed);
+      await run().create();
+      c.read(unguidedSettingsProvider.notifier).reset();
+      expect(
+        await run().edit(0, const [
+          FilterPlanStep(filterName: '', exposureSeconds: 60, frameCount: 10),
+        ]),
+        isFalse,
+      );
+      expect(indexOfTargetBlock(body(), 'M31'), isNonNegative,
+          reason: 'nothing was removed from the rig');
       _expectFramed(_goTo(body(), 'M31'));
     });
 

@@ -22,6 +22,7 @@ import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import '../../support/settings_values.dart';
 
 /// In-memory ProfileApi double — overrides only the methods saveWizardProfile
 /// calls. The inherited Dio is never used (all calls are overridden), so the
@@ -71,17 +72,17 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('cooling-fan', v, ifMatch);
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() =>
-      _get(const SiteSettings());
+      _get(const TestSiteSettings());
   @override
   Future<({SiteSettings value, String? etag})> putSiteSection(
     SiteSettings v, {
     String? ifMatch,
   }) => _put('site', v, ifMatch);
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
-      _get(const OpticsSettings());
+      _get(const TestOpticsSettings());
   @override
   Future<({OpticsSettings value, String? etag})> putOpticsSection(
     OpticsSettings v, {
@@ -89,7 +90,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('optics', v, ifMatch);
   @override
   Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
-      _get(const ImagingDefaults());
+      _get(const TestImagingDefaults());
   @override
   Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
     ImagingDefaults v, {
@@ -97,7 +98,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('imaging', v, ifMatch);
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
-      _get(const Phd2Settings());
+      _get(const TestPhd2Settings());
   @override
   Future<({Phd2Settings value, String? etag})> putPhd2Section(
     Phd2Settings v, {
@@ -105,7 +106,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('phd2', v, ifMatch);
   @override
   Future<({PlateSolveSettings value, String? etag})> getPlateSolveSection() =>
-      _get(const PlateSolveSettings());
+      _get(const TestPlateSolveSettings());
   @override
   Future<({PlateSolveSettings value, String? etag})> putPlateSolveSection(
     PlateSolveSettings v, {
@@ -113,7 +114,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('platesolve', v, ifMatch);
   @override
   Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
-      _get(const AutofocusSettings());
+      _get(const TestAutofocusSettings());
   @override
   Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
     AutofocusSettings v, {
@@ -121,7 +122,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('autofocus', v, ifMatch);
   @override
   Future<({CameraElectronics value, String? etag})>
-  getCameraElectronicsSection() => _get(const CameraElectronics());
+  getCameraElectronicsSection() => _get(const TestCameraElectronics());
   @override
   Future<({CameraElectronics value, String? etag})> putCameraElectronicsSection(
     CameraElectronics v, {
@@ -145,7 +146,7 @@ class _FakeProfileApi extends ProfileApi {
   }) => _put('storage', v, ifMatch);
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
-      _get(const SafetyPolicies());
+      _get(const TestSafetyPolicies());
   @override
   Future<({SafetyPolicies value, String? etag})> putSafetySection(
     SafetyPolicies v, {

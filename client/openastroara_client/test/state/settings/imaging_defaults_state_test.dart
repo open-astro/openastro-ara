@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/section_load.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('ImagingDefaultsNotifier', () {
@@ -91,7 +92,7 @@ void main() {
     });
 
     test('copyWith preserves unchanged fields', () {
-      const d = ImagingDefaults(defaultGain: 200, defaultBin: 2);
+      const d = TestImagingDefaults(defaultGain: 200, defaultBin: 2);
       final updated = d.copyWith(defaultGain: 300);
       expect(updated.defaultGain, 300);
       expect(updated.defaultBin, 2);

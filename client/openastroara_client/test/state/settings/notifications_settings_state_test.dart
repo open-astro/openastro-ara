@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../../support/section_load.dart';
 
 import 'package:openastroara/state/settings/notifications_settings_state.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('NotificationsSettingsNotifier', () {
@@ -77,7 +78,7 @@ void main() {
       expect(s.pushoverUserKey, 'user-key-1');
       expect(s.telegramChatId, '12345');
 
-      const a = NotificationsSettings(pushoverUserKey: 'uk', telegramChatId: 'ch');
+      const a = TestNotificationsSettings(pushoverUserKey: 'uk', telegramChatId: 'ch');
       final b = a.copyWith(inAppBanner: false);
       expect(b.pushoverUserKey, 'uk',
           reason: 'copyWith must carry the new fields like their token siblings');
@@ -104,7 +105,7 @@ void main() {
     });
 
     test('copyWith preserves untouched fields', () {
-      const a = NotificationsSettings(
+      const a = TestNotificationsSettings(
         inAppBanner: false,
         osDesktop: true,
         pushoverToken: 'k',

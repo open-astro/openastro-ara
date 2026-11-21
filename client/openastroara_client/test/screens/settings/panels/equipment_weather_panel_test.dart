@@ -11,6 +11,13 @@ import 'package:openastroara/services/equipment_device_api.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
+import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/widgets/settings/section_load_state.dart';
+
+import '../../../support/fake_section_rig.dart';
+import '../../../support/safety_section.dart';
+import '../../../support/settings_values.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -72,7 +79,7 @@ Future<void> _wideSurface(WidgetTester tester) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
 }
 
-Future<_FakeWeatherApi> _pump(WidgetTester tester, WeatherStatus? status) async {
+Future<_FakeWeatherApi> _pump(WidgetTester tester, WeatherStatus? status, {FakeSafetySection? safety}) async {
   await _wideSurface(tester);
   final api = _FakeWeatherApi(status);
   await tester.pumpWidget(ProviderScope(
@@ -81,6 +88,11 @@ Future<_FakeWeatherApi> _pump(WidgetTester tester, WeatherStatus? status) async 
       savedServerServiceProvider.overrideWithValue(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)])),
       weatherApiFactoryProvider.overrideWithValue((_) => api),
+      if (safety != null) ...[
+        // The rig's safety policies, loaded as in the app (ADR 0015).
+        profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+        safetyPoliciesProvider.overrideWith(() => safety),
+      ],
     ],
     child: const MaterialApp(home: Scaffold(body: EquipmentWeatherPanel())),
   ));
@@ -133,5 +145,21 @@ void main() {
     await tester.tap(find.byIcon(Icons.link_off));
     await tester.pumpAndSettle();
     expect(api.calls, contains('disconnect'));
+  });
+
+  testWidgets('the weather thresholds wait for the safety policies from the rig: Not loaded with Retry, and Retry loads them (ADR 0015)',
+      (tester) async {
+    final safety = FakeSafetySection(initial: null); // the rig does not answer the read
+    await _pump(tester, null, safety: safety);
+    final notLoaded = find.byType(SectionNotLoadedRows);
+    expect(find.descendant(of: notLoaded, matching: find.textContaining('Not loaded')), findsOneWidget);
+    expect(find.text('Wind speed max (km/h)'), findsNothing, reason: 'no default shows');
+    safety.initial = const TestSafetyPolicies(maxWindKmh: 42);
+    await tester.tap(find.descendant(of: notLoaded, matching: find.byKey(const Key('section-retry'))));
+    await tester.pumpAndSettle();
+    expect(notLoaded, findsNothing);
+    expect(find.text('Wind speed max (km/h)'), findsOneWidget, reason: 'Retry loads it');
+    expect(find.text('42'), findsOneWidget, reason: "the rig's value");
+    expect(safety.puts, isEmpty, reason: 'read only');
   });
 }

@@ -14,6 +14,7 @@ import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 import 'package:openastroara/widgets/guider/guider_setup_wizard.dart'
     show alpacaDeviceNamesApiProvider;
+import '../../support/settings_values.dart';
 
 /// §76 S3 — records the pixel-size lookup and answers with a scripted value.
 class _FakeGuiderEquipment implements GuiderEquipmentClient {
@@ -58,9 +59,9 @@ class _BaseProfileApi extends ProfileApi {
   final String camera;
   @override
   Future<Phd2Settings> getPhd2Settings() async =>
-      Phd2Settings(guiderCamera: camera);
+      TestPhd2Settings(guiderCamera: camera);
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
 }
 
 class _NoAlpacaNames extends AlpacaDeviceNamesClient {

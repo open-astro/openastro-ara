@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/bundled_catalogs.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
+import '../support/settings_values.dart';
 
 /// #1141 — the ±12 h / 288-sample window scan against the REAL bundled
 /// catalogs (all eight packages, ~16k rows), timed. The ranking runs in an
@@ -21,7 +21,7 @@ void main() {
   List<PlanningDso> load(String file) =>
       parseOpenNgcCsv(File('assets/catalogs/$file').readAsStringSync());
 
-  const site = SiteSettings(
+  const site = TestSiteSettings(
     siteName: 'profile',
     latitudeDeg: 34.0,
     longitudeDeg: -84.0,
@@ -30,7 +30,7 @@ void main() {
     twilightDefinition: TwilightDefinition.astronomical,
     softWarningAltitudeDeg: 30,
   );
-  const optics = OpticsSettings(
+  const optics = TestOpticsSettings(
     focalLengthMm: 250,
     reducerFactor: 1.0,
     sensorWidthPx: 6248,

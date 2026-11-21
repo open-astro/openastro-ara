@@ -13,6 +13,7 @@ import '../../../util/tonight_sky_local.dart'
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Weather (ObservingConditions) panel. Shows the connected device's live
@@ -24,9 +25,8 @@ class EquipmentWeatherPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(weatherProvider);
-    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
-    final policies =
-        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
+    // Read only: the rig's copy once it loads (ADR 0015); not loaded until.
+    final policies = ref.watch(safetyPoliciesProvider).value;
     final notifier = ref.read(weatherProvider.notifier);
 
     return ListView(
@@ -47,33 +47,37 @@ class EquipmentWeatherPanel extends ConsumerWidget {
         ),
         AutoConnectRow(EquipmentDeviceType.weather),
         const SettingsSectionHeader('Thresholds'),
-        // Live values from the §35 safety policies — the ONE place they are
-        // configured. Shown read-only here so this panel can never disagree
-        // with what actually parks the rig.
-        SettingsRow(
-          label: 'Weather triggers safety',
-          helpKey: 'eq.weather.triggers_safety',
-          value: policies.weatherTriggersEnabled ? 'On' : 'Off',
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
-        SettingsRow(
-          label: 'Wind speed max (km/h)',
-          helpKey: 'eq.weather.wind_max',
-          value: policies.maxWindKmh.toString(),
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
-        SettingsRow(
-          label: 'Humidity max (%)',
-          helpKey: 'eq.weather.humidity_max',
-          value: policies.maxHumidityPct.toString(),
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
-        SettingsRow(
-          label: 'Dew-point margin (°C)',
-          helpKey: 'eq.weather.dewpoint_margin',
-          value: policies.minDewDeltaC.toString(),
-          hint: 'Edit in Settings → Safety → Policies',
-        ),
+        if (policies == null)
+          SectionNotLoadedRows(safetyPoliciesProvider)
+        else ...[
+          // Live values from the §35 safety policies — the ONE place they are
+          // configured. Shown read-only here so this panel can never disagree
+          // with what actually parks the rig.
+          SettingsRow(
+            label: 'Weather triggers safety',
+            helpKey: 'eq.weather.triggers_safety',
+            value: policies.weatherTriggersEnabled ? 'On' : 'Off',
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+          SettingsRow(
+            label: 'Wind speed max (km/h)',
+            helpKey: 'eq.weather.wind_max',
+            value: policies.maxWindKmh.toString(),
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+          SettingsRow(
+            label: 'Humidity max (%)',
+            helpKey: 'eq.weather.humidity_max',
+            value: policies.maxHumidityPct.toString(),
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+          SettingsRow(
+            label: 'Dew-point margin (°C)',
+            helpKey: 'eq.weather.dewpoint_margin',
+            value: policies.minDewDeltaC.toString(),
+            hint: 'Edit in Settings → Safety → Policies',
+          ),
+        ],
       ],
     );
   }
@@ -136,11 +140,11 @@ class _WeatherBody extends ConsumerWidget {
     // Computed, not station sensors: the sun/moon geometry belongs with the
     // sky conditions the observer plans around, so it rides in the same list.
     final nowUtc = DateTime.now().toUtc();
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
-    // Same unset-site guard as tonight_sky_state._rankAt: the (0,0) default
-    // would confidently report Null Island altitudes — skip the rows instead.
-    final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;
-    if (siteSet) {
+    final site = ref.watch(siteSettingsProvider).value;
+    // Same guard as tonight_sky_state._rankAt: a site not loaded, or the
+    // unset (0,0), would confidently report Null Island altitudes — skip the
+    // rows instead.
+    if (site != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
       final alt = sunMoonAltitudeDeg(
         nowUtc,
         site.latitudeDeg,

@@ -240,6 +240,84 @@ public static class PolarAlignGeometry {
         return (meanRa, meanDec, Math.Sqrt(squares / solves.Count));
     }
 
+    /// <summary>#2072 — the 1σ of a point's mean position, per axis on the sky (arcseconds), from
+    /// <see cref="MeanDirection"/>'s rms scatter of <paramref name="solves"/> solves. The rms is the 2-D angle about the
+    /// mean, divided by n. For noise of σ per axis the sum of those squares averages 2(n−1)σ² (two axes, one mean
+    /// fitted), so σ² = n·rms² / (2(n−1)), and the mean of n solves has σ/√n = rms / √(2(n−1)). Null for one solve:
+    /// one frame has no scatter to measure.</summary>
+    public static double? MeanStandardErrorArcsec(double rmsArcsec, int solves) {
+        RequireFinite(rmsArcsec, nameof(rmsArcsec));
+        if (solves < 2) {
+            return null;
+        }
+        return rmsArcsec / Math.Sqrt(2.0 * (solves - 1));
+    }
+
+    /// <summary>
+    /// #2072 — the 1σ of <see cref="AxisError"/>'s two numbers for the axis <see cref="FitAxisThreePoint"/> fits through
+    /// three points, each with its own 1σ per axis on the sky (<c>SigmaArcsec</c>, arcseconds). The total's 1σ is the
+    /// rms length of the error vector, √(σ_alt² + σ_az²): it does not depend on which way the error points, so it
+    /// holds near a zero error too, where the total's own spread is not Gaussian.
+    /// <para><b>Method: linear propagation through the fit.</b> The Jacobian of (alt, az) against each point's east and
+    /// north offset is taken by central differences of 1″ through the real fit and <see cref="AxisError"/>. The fit is
+    /// smooth, and arcsecond offsets are tiny beside the points' 5°–30° spacing, so the linear answer matches a Monte
+    /// Carlo to far better than the readout's 0.1′. It is deterministic (no seed, the same σ on every run) and costs
+    /// 12 fits, where a Monte Carlo needs thousands and adds its own sampling noise. The points' errors are taken as
+    /// independent, and the same in both axes.</para>
+    /// <para>With 10° turns about 1″ of noise per point gives about 1.3′ in one direction (the one along the middle
+    /// point) and 0.25′ in the other.</para>
+    /// </summary>
+    /// <exception cref="ArgumentOutOfRangeException">A negative or non-finite σ, or the fit's own refusals.</exception>
+    public static (double AltSigmaArcmin, double AzSigmaArcmin, double TotalSigmaArcmin) AxisErrorSigma(
+            (double RaDeg, double DecDeg, double SigmaArcsec) p1, (double RaDeg, double DecDeg, double SigmaArcsec) p2,
+            (double RaDeg, double DecDeg, double SigmaArcsec) p3, bool northernHemisphere,
+            double latitudeDeg, double longitudeDeg, DateTimeOffset atUtc) {
+        var points = new[] { p1, p2, p3 };
+        foreach (var p in points) {
+            if (!(double.IsFinite(p.SigmaArcsec) && p.SigmaArcsec >= 0)) {
+                throw new ArgumentOutOfRangeException(nameof(p1), "each point's sigma must be finite and not negative");
+            }
+        }
+        const double StepArcsec = 1.0;
+        (double Alt, double Az) ErrorWith(int moved, double eastArcsec, double northArcsec) {
+            var q = new (double RaDeg, double DecDeg)[3];
+            for (var i = 0; i < 3; i++) {
+                q[i] = i == moved ? Offset(points[i].RaDeg, points[i].DecDeg, eastArcsec, northArcsec) : (points[i].RaDeg, points[i].DecDeg);
+            }
+            var axis = FitAxisThreePoint(q[0].RaDeg, q[0].DecDeg, q[1].RaDeg, q[1].DecDeg, q[2].RaDeg, q[2].DecDeg, northernHemisphere);
+            var (alt, az) = AxisError(axis.RaDeg, axis.DecDeg, latitudeDeg, longitudeDeg, atUtc);
+            return (alt, az);
+        }
+        var altVariance = 0.0;
+        var azVariance = 0.0;
+        for (var i = 0; i < 3; i++) {
+            var sigma = points[i].SigmaArcsec;
+            if (sigma == 0) {
+                continue;
+            }
+            foreach (var (east, north) in new[] { (1.0, 0.0), (0.0, 1.0) }) {
+                var plus = ErrorWith(i, east * StepArcsec, north * StepArcsec);
+                var minus = ErrorWith(i, -east * StepArcsec, -north * StepArcsec);
+                // arcmin of error per arcsec of offset, times the point's σ in arcsec.
+                var dAlt = (plus.Alt - minus.Alt) / (2 * StepArcsec) * sigma;
+                var dAz = (plus.Az - minus.Az) / (2 * StepArcsec) * sigma;
+                altVariance += dAlt * dAlt;
+                azVariance += dAz * dAz;
+            }
+        }
+        return (Math.Sqrt(altVariance), Math.Sqrt(azVariance), Math.Sqrt(altVariance + azVariance));
+    }
+
+    // The pointing moved by the given arcseconds on the sky: east (RA increasing) and north (Dec increasing).
+    private static (double RaDeg, double DecDeg) Offset(double raDeg, double decDeg, double eastArcsec, double northArcsec) {
+        var p = UnitVector(raDeg, decDeg);
+        var ra = Deg2Rad(raDeg);
+        var east = (X: -Math.Sin(ra), Y: Math.Cos(ra), Z: 0.0);
+        var north = Cross(p, east);
+        var toRad = Math.PI / (180.0 * 3600.0);
+        return RaDec(Normalize(Add(p, Add(Scale(east, eastArcsec * toRad), Scale(north, northArcsec * toRad)))));
+    }
+
     /// <summary>
     /// The signed angle (degrees, −180..180) the pointing turned about <paramref name="axisRaDeg"/>/<paramref name="axisDecDeg"/>
     /// from (<paramref name="ra1Deg"/>, <paramref name="dec1Deg"/>) to (<paramref name="ra2Deg"/>, <paramref name="dec2Deg"/>),

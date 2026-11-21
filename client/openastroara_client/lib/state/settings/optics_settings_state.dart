@@ -37,14 +37,16 @@ class OpticsSettings {
   // §29.2 — goes in every frame's TELESCOP header. Empty = header omitted.
   final String telescopeName;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const OpticsSettings({
-    this.focalLengthMm = 0,
-    this.reducerFactor = 1.0,
-    this.sensorWidthPx = 0,
-    this.sensorHeightPx = 0,
-    this.pixelSizeUm = 0,
-    this.apertureMm = 0,
-    this.telescopeName = '',
+    required this.focalLengthMm,
+    required this.reducerFactor,
+    required this.sensorWidthPx,
+    required this.sensorHeightPx,
+    required this.pixelSizeUm,
+    required this.apertureMm,
+    required this.telescopeName,
   });
 
   /// True once every input the FOV box needs is a usable positive value. The

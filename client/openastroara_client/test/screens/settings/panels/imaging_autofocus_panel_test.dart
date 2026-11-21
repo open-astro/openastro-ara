@@ -16,6 +16,7 @@ import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/fake_section_rig.dart';
 import '../../../support/imaging_sections.dart';
+import '../../../support/settings_values.dart';
 
 /// The profile's autofocus section the last pump loaded (no HTTP).
 late FakeAutofocusSection _af;
@@ -49,7 +50,7 @@ Future<void> _pump(
         profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
         autofocusSettingsProvider.overrideWith(
           () => _af = FakeAutofocusSection(
-            initial: loaded ? const AutofocusSettings() : null,
+            initial: loaded ? const TestAutofocusSettings() : null,
           ),
         ),
         autofocusApiProvider.overrideWithValue(api),

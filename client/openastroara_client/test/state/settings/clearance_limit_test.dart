@@ -5,6 +5,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/section_load.dart';
+import '../../support/settings_values.dart';
 
 /// #1589 — the clearance limit rides the rig's safety section: read as the rig
 /// has it, saved whole with If-Match, and never made up by the client.
@@ -85,7 +86,7 @@ void main() {
 
   test('the clearance limit keys are modeled, not passed through', () {
     final json = ProfileApi.safetyPoliciesToJson(
-      const SafetyPolicies(clearanceLimitEnabled: true),
+      const TestSafetyPolicies(clearanceLimitEnabled: true),
     );
     expect(json['clearance_limit_enabled'], isTrue);
     expect(json.containsKey('clearance_max_altitude_deg'), isTrue);

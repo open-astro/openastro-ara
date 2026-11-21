@@ -188,6 +188,18 @@ public sealed class MainCameraPointingSolver : IPolarAlignMainCameraSolver {
             return new PolarAlignSolveOutcome(false, 0, 0);
         }
         var apparent = result.Coordinates.Transform(Epoch.JNOW);
-        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result));
+        return new PolarAlignSolveOutcome(true, apparent.RADegrees, apparent.Dec, PolarAlignSolveOutcome.PositionAngleOf(result),
+            PixelScaleArcsec: SolvePixelScaleArcsec());
+    }
+
+    /// <summary>#2072 — the arcsec per pixel of the frame the capture solves: the main optics and the plate-solve
+    /// binning it was told (<see cref="CaptureAndSolveRawAsync"/>); null with no profile or unset optics.</summary>
+    private double? SolvePixelScaleArcsec() {
+        if (_profileService.ActiveProfile is not { } profile) {
+            return null;
+        }
+        var (focalLength, pixelSize) = PlateSolveService.ResolveSolveGeometry(
+            _profileStore?.GetOpticsSettings(), profile.TelescopeSettings.FocalLength, profile.CameraSettings.PixelSize);
+        return PolarAlignFrameSolver.PixelScaleArcsecOrNull(pixelSize * Math.Max((short)1, profile.PlateSolveSettings.Binning), focalLength);
     }
 }

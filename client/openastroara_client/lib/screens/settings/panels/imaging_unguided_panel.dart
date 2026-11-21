@@ -256,10 +256,9 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
         // say so only while it is actually missing.
         if (basisGapFor(
               u.priorToleranceBasis,
-              optics:
-                  ref.watch(opticsSettingsProvider).value ??
-                  const OpticsSettings(),
-              seeingArcsec: (ref.watch(siteSettingsProvider).value ?? const SiteSettings()).typicalSeeingArcsec,
+              optics: ref.watch(opticsSettingsProvider).value,
+              seeingArcsec:
+                  ref.watch(siteSettingsProvider).value?.typicalSeeingArcsec,
             )
             case final gap?)
           Padding(
@@ -309,14 +308,15 @@ class _ImagingUnguidedPanelState extends ConsumerState<ImagingUnguidedPanel>
 
 /// #1264 — what a single-figure prior tolerance basis still lacks, or null
 /// when the figure is there (or the basis needs none). Pure — unit-tested.
-String? basisGapFor(String basis, {required OpticsSettings optics, required double seeingArcsec}) {
+// A section not loaded (null) holds no figure either (ADR 0015).
+String? basisGapFor(String basis, {required OpticsSettings? optics, required double? seeingArcsec}) {
   switch (basis) {
     case 'pixel':
-      return optics.focalLengthMm > 0 && optics.pixelSizeUm > 0
+      return optics != null && optics.focalLengthMm > 0 && optics.pixelSizeUm > 0
           ? null
           : 'Needs the optics (focal length and pixel size) set; without them the spec sheet gives no prior.';
     case 'seeing':
-      return seeingArcsec > 0
+      return seeingArcsec != null && seeingArcsec > 0
           ? null
           : 'Needs the site\'s typical seeing set; without it the spec sheet gives no prior.';
     default:

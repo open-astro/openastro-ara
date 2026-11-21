@@ -572,5 +572,76 @@ namespace OpenAstroAra.Test {
             Assert.That(PolarAlignGeometry.MeanDirection(new[] { (12.5, 85.0) }), Is.EqualTo((12.5, 85.0, 0.0)), "one solve is itself");
             Assert.Throws<ArgumentException>(() => PolarAlignGeometry.MeanDirection(Array.Empty<(double, double)>()));
         }
+
+        // ── #2072: each fit's uncertainty ────────────────────────────────────────────────────
+
+        [Test]
+        public void MeanStandardErrorArcsec_is_the_rms_over_root_two_n_minus_one_and_none_for_one_solve() {
+            // 2″, −2″, 0″: rms 1.633″ about the mean, per-axis σ² = n·rms²/(2(n−1)) = 2″², the mean's σ = √(2/3) = 0.816″.
+            Assert.That(PolarAlignGeometry.MeanStandardErrorArcsec(Math.Sqrt(8.0 / 3.0), 3), Is.EqualTo(Math.Sqrt(2.0 / 3.0)).Within(1e-12));
+            Assert.That(PolarAlignGeometry.MeanStandardErrorArcsec(1.0, 5), Is.EqualTo(1.0 / Math.Sqrt(8.0)).Within(1e-12));
+            Assert.That(PolarAlignGeometry.MeanStandardErrorArcsec(0.0, 1), Is.Null, "one solve has no scatter to measure");
+        }
+
+        [Test]
+        public void AxisErrorSigma_matches_a_seeded_Monte_Carlo_of_the_three_point_fit() {
+            // A known axis half a degree off the pole; three pointings 10° apart about it at Dec ≈ 80° (NINA's TPPA),
+            // each with its own 1σ per axis. The linear propagation must match the spread of the real fit under that
+            // noise (a fixed seed: the same draw every run).
+            var axis = Unit(30.0, 89.5);
+            var start = Unit(0.0, 80.0);
+            var sigmas = new[] { 0.5, 1.0, 2.0 };
+            var points = Enumerable.Range(0, 3).Select(i => RaDec(Rotate(start, axis, 10.0 * i))).ToArray();
+            const double lat = 48.0, lon = 11.0;
+            var at = new DateTimeOffset(2026, 11, 19, 5, 53, 48, TimeSpan.Zero);
+            (double Alt, double Az) ErrorOf((double RaDeg, double DecDeg)[] p) {
+                var fit = PolarAlignGeometry.FitAxisThreePoint(p[0].RaDeg, p[0].DecDeg, p[1].RaDeg, p[1].DecDeg, p[2].RaDeg, p[2].DecDeg, true);
+                return PolarAlignGeometry.AxisError(fit.RaDeg, fit.DecDeg, lat, lon, at);
+            }
+            var truth = ErrorOf(points);
+            // Box-Muller over a tiny LCG (System.Random trips CA5394): the same noise on every run.
+            var state = 2072u;
+            double Next() {
+                state = (state * 1664525u) + 1013904223u;
+                return (state >> 8) / (double)(1 << 24);
+            }
+            double Gauss() => Math.Sqrt(-2.0 * Math.Log(1.0 - Next())) * Math.Cos(2.0 * Math.PI * Next());
+            const int Trials = 4000;
+            double altSquares = 0, azSquares = 0;
+            for (var t = 0; t < Trials; t++) {
+                var noisy = new (double RaDeg, double DecDeg)[3];
+                for (var i = 0; i < 3; i++) {
+                    // East and north offsets on the sky, built here independently of the code under test.
+                    var p = Unit(points[i].RaDeg, points[i].DecDeg);
+                    var ra = points[i].RaDeg * Math.PI / 180.0;
+                    var east = (X: -Math.Sin(ra), Y: Math.Cos(ra), Z: 0.0);
+                    var north = (X: -p.Z * Math.Cos(ra), Y: -p.Z * Math.Sin(ra), Z: Math.Sqrt(p.X * p.X + p.Y * p.Y));
+                    var (de, dn) = (Gauss() * sigmas[i] / 206264.806, Gauss() * sigmas[i] / 206264.806);
+                    var v = (X: p.X + de * east.X + dn * north.X, Y: p.Y + de * east.Y + dn * north.Y, Z: p.Z + de * east.Z + dn * north.Z);
+                    var n = Math.Sqrt(v.X * v.X + v.Y * v.Y + v.Z * v.Z);
+                    noisy[i] = RaDec((v.X / n, v.Y / n, v.Z / n));
+                }
+                var e = ErrorOf(noisy);
+                altSquares += (e.Alt - truth.Alt) * (e.Alt - truth.Alt);
+                azSquares += (e.Az - truth.Az) * (e.Az - truth.Az);
+            }
+            var (mcAlt, mcAz) = (Math.Sqrt(altSquares / Trials), Math.Sqrt(azSquares / Trials));
+
+            var sigma = PolarAlignGeometry.AxisErrorSigma(
+                (points[0].RaDeg, points[0].DecDeg, sigmas[0]), (points[1].RaDeg, points[1].DecDeg, sigmas[1]),
+                (points[2].RaDeg, points[2].DecDeg, sigmas[2]), true, lat, lon, at);
+
+            Assert.That(sigma.AltSigmaArcmin, Is.EqualTo(mcAlt).Within(6).Percent);
+            Assert.That(sigma.AzSigmaArcmin, Is.EqualTo(mcAz).Within(6).Percent);
+            Assert.That(sigma.TotalSigmaArcmin, Is.EqualTo(Math.Sqrt(mcAlt * mcAlt + mcAz * mcAz)).Within(6).Percent);
+            // The size #2072 quotes: about 1.3′ of axis error per 1″ of solve noise at 10° steps.
+            var perArcsec = PolarAlignGeometry.AxisErrorSigma(
+                (points[0].RaDeg, points[0].DecDeg, 1.0), (points[1].RaDeg, points[1].DecDeg, 1.0),
+                (points[2].RaDeg, points[2].DecDeg, 1.0), true, lat, lon, at);
+            Assert.That(perArcsec.TotalSigmaArcmin, Is.InRange(1.1, 1.6));
+            Assert.That(PolarAlignGeometry.AxisErrorSigma(
+                (points[0].RaDeg, points[0].DecDeg, 0.0), (points[1].RaDeg, points[1].DecDeg, 0.0),
+                (points[2].RaDeg, points[2].DecDeg, 0.0), true, lat, lon, at).TotalSigmaArcmin, Is.Zero, "exact solves: no uncertainty");
+        }
     }
 }

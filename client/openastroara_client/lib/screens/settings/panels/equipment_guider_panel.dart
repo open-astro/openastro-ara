@@ -24,6 +24,7 @@ import '../../../widgets/profile/profile_import_flow.dart'
     show friendlyDaemonError;
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
+import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../widgets/adaptive_controls.dart';
@@ -480,9 +481,14 @@ class _EquipmentGuiderPanelState extends ConsumerState<EquipmentGuiderPanel>
         if (phd2.guiderSetupType == 'oag')
           Builder(
             builder: (context) {
-              final optics =
-                  ref.watch(opticsSettingsProvider).value ??
-                  const OpticsSettings();
+              final optics = ref.watch(opticsSettingsProvider).value;
+              // Optics not loaded: say so, never derive from defaults.
+              if (optics == null) {
+                return SectionNotLoadedRows(
+                  opticsSettingsProvider,
+                  padding: EdgeInsets.zero,
+                );
+              }
               final derived = derivedOagGuideFocalLength(
                 optics.focalLengthMm,
                 optics.reducerFactor,

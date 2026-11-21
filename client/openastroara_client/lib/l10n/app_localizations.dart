@@ -10251,6 +10251,35 @@ abstract class AppLocalizations {
   /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
   String get polarNoisyMeasurement;
 
+  /// Polar align readout (#2072): an error with its 1σ uncertainty, e.g. '+0.2′ ± 1.1′'
+  ///
+  /// In en, this message translates to:
+  /// **'{value} ± {sigma}'**
+  String polarErrorWithSigma(String value, String sigma);
+
+  /// Polar align (#2072): the error is inside the tolerance but the error plus twice its 1σ is not, so the alignment is not confirmed (Done stays available)
+  ///
+  /// In en, this message translates to:
+  /// **'Inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).'**
+  String polarUnconfirmedBySigma(String tolerance, String sigma);
+
+  /// Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it, so the alignment is not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'The motors stopped inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.'**
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma);
+
+  /// Guiding residual tooltip (#2072): the residual is above Polar Align's figure by more than their combined 1σ; both figures with their uncertainty, both causes and how to tell them apart
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align and guiding disagree ({align} ± {alignSigma} vs at least {guiding} ± {guidingSigma}), by more than their combined uncertainty. Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.'**
+  String paResidualDetailDisagreeSigma(
+    String align,
+    String alignSigma,
+    String guiding,
+    String guidingSigma,
+  );
+
   /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
   ///
   /// In en, this message translates to:
@@ -10500,13 +10529,13 @@ abstract class AppLocalizations {
   /// Polar Aligner stop cause wrong_direction
   ///
   /// In en, this message translates to:
-  /// **'The test move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'**
+  /// **'A move on {axis} went the wrong way, so Ara stopped the motors. The Polar Aligner may be set up reversed on that axis.'**
   String polarAlignerStopWrongDirection(String axis);
 
   /// Polar Aligner stop cause wrong_scale
   ///
   /// In en, this message translates to:
-  /// **'The test move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.'**
+  /// **'A move on {axis} didn\'t go the distance asked, so Ara stopped the motors. Check the Polar Aligner\'s step setting.'**
   String polarAlignerStopWrongScale(String axis);
 
   /// Polar Aligner stop cause device_fault, with the device's own text
@@ -10562,6 +10591,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'You stopped the motors.'**
   String get polarAlignerStopByUser;
+
+  /// Polar Aligner stop cause stop_not_confirmed (#2069): the device did not report both axes still after three Stops in 3 s
+  ///
+  /// In en, this message translates to:
+  /// **'Ara sent Stop, but the Polar Aligner didn\'t confirm its motors stopped. Cut its power if it still moves. Ara sends Stop again at each measurement.'**
+  String get polarAlignerStopNotConfirmed;
+
+  /// Polar Aligner stop cause stop_confirmed (#2069): a Stop owed from before the run was confirmed at a later measurement; the run waits for the person's Resume
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner has now confirmed its motors stopped. Ara won\'t move them again until you Resume.'**
+  String get polarAlignerStopConfirmed;
+
+  /// Polar Aligner stop cause travel_limit (#2069): the next move would take an axis past the run's travel cap
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner has moved as far as one run allows, so Ara stopped the motors. Check the alignment by hand.'**
+  String get polarAlignerStopTravelLimit;
+
+  /// Polar Aligner stop cause move_limit (#2069): a run sends 40 moves at most
+  ///
+  /// In en, this message translates to:
+  /// **'The Polar Aligner made 40 moves without reaching your tolerance, so Ara stopped the motors.'**
+  String get polarAlignerStopMoveLimit;
 
   /// Polar Aligner stop with a cause this app does not know
   ///

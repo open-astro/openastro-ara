@@ -20,10 +20,11 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/guider/guider_setup_wizard.dart';
+import '../../support/settings_values.dart';
 
 const _server = AraServer(hostname: 'h', port: 5555);
 
-const _daemonSettings = Phd2Settings(
+const _daemonSettings = TestPhd2Settings(
   host: 'rc91.lan',
   port: 4400,
   guiderCamera: 'Old Camera',
@@ -51,7 +52,7 @@ class _FakeProfileApi extends ProfileApi {
   Phd2Settings stored = _daemonSettings;
   // Unconfigured first-run shape: no camera/mount ever selected.
   void makeUnconfigured() =>
-      stored = const Phd2Settings(host: 'rc91.lan', port: 4400);
+      stored = const TestPhd2Settings(host: 'rc91.lan', port: 4400);
   Phd2Settings? lastPut;
   String? lastIfMatch;
   /// The rig's tag for its copy; [savedElsewhere] moves it on.
@@ -439,7 +440,7 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     final h = await _pump(tester,
-        stored: const Phd2Settings(
+        stored: const TestPhd2Settings(
           host: 'rc91.lan',
           port: 4400,
           guiderCamera: 'Old Camera',
@@ -470,7 +471,7 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     final h = await _pump(tester,
-        stored: const Phd2Settings(
+        stored: const TestPhd2Settings(
           host: 'rc91.lan',
           port: 4400,
           guiderCamera: 'Old Camera',

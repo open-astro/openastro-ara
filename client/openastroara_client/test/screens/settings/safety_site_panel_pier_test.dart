@@ -16,6 +16,7 @@ import 'package:openastroara/widgets/help_icon.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/site_section.dart';
+import '../../support/settings_values.dart';
 
 class _NoServers implements SavedServerService {
   @override
@@ -35,7 +36,7 @@ class _File extends SimpleModePrefsService {
 
 /// The rig's site (ADR 0015: served with its tag, no HTTP).
 FakeSiteSection _rig({bool pier = false}) => FakeSiteSection(
-  initial: SiteSettings(
+  initial: TestSiteSettings(
     latitudeDeg: -33.856784,
     longitudeDeg: 151.215297,
     permanentPier: pier,

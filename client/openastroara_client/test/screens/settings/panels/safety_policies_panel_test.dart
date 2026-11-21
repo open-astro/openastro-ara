@@ -10,6 +10,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 import '../../../support/fake_section_rig.dart';
 import '../../../support/safety_section.dart';
+import '../../../support/settings_values.dart';
 
 // ADR 0015: Unattended running and Calibration edit the rig's copy of the
 // safety section.
@@ -25,7 +26,7 @@ void main() {
     addTearDown(tester.view.reset);
     final section = FakeSafetySection(
       initial: loaded
-          ? const SafetyPolicies(meridianPauseMin: 12, flatFramesPerFilter: 40)
+          ? const TestSafetyPolicies(meridianPauseMin: 12, flatFramesPerFilter: 40)
           : null,
     );
     await tester.pumpWidget(

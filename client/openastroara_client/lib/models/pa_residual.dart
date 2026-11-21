@@ -4,6 +4,8 @@
 /// /equipment/guider`, `GET /equipment/guider/pa-residuals`).
 library;
 
+import 'dart:math' as math;
+
 enum PaResidualStatus { measuring, done, unavailable }
 
 class PaResidual {
@@ -27,6 +29,11 @@ class PaResidual {
 
   /// Tonight's last Polar Align result, for comparison.
   final double? alignErrorArcmin;
+
+  /// #2072 that result's own 1σ (`align_sigma_arcmin`, kept with a stored
+  /// row too); null from an older daemon, a row stored before it, or an
+  /// alignment measured before it.
+  final double? alignSigmaArcmin;
   final DateTime? alignEndedUtc;
   final DateTime? completedUtc;
 
@@ -51,6 +58,7 @@ class PaResidual {
     this.hourAngleHours,
     this.decDeg,
     this.alignErrorArcmin,
+    this.alignSigmaArcmin,
     this.alignEndedUtc,
     this.completedUtc,
     this.reason,
@@ -60,18 +68,21 @@ class PaResidual {
   /// #1731 / #2072 — the lower bound sits past the total error Polar Align
   /// measured: the two numbers disagree. The daemon's `above_align` decides;
   /// without it (an older daemon, a stored row) the same rule is applied here:
-  /// the value less 2σ more than [alignDisagreementMarginArcmin] above Align.
+  /// with Align's own 1σ, the value more than twice their combined 1σ above
+  /// Align; without it, the value less 2σ more than
+  /// [alignDisagreementMarginArcmin] above Align.
   bool get aboveAlign {
     final flag = aboveAlignFlag;
     if (flag != null) return flag;
     final value = paErrorMinArcmin,
         sigma = uncertaintyArcmin,
-        align = alignErrorArcmin;
-    return !reliable &&
-        value != null &&
-        sigma != null &&
-        align != null &&
-        value - 2 * sigma > align + alignDisagreementMarginArcmin;
+        align = alignErrorArcmin,
+        alignSigma = alignSigmaArcmin;
+    if (value == null || sigma == null || align == null) return false;
+    if (alignSigma != null) {
+      return value - align > 2 * math.sqrt(sigma * sigma + alignSigma * alignSigma);
+    }
+    return !reliable && value - 2 * sigma > align + alignDisagreementMarginArcmin;
   }
 
   /// The daemon's margin for Polar Align's own error
@@ -106,6 +117,7 @@ class PaResidual {
       hourAngleHours: _d(json['hour_angle_hours']),
       decDeg: _d(json['dec_deg']),
       alignErrorArcmin: _d(json['align_error_arcmin']),
+      alignSigmaArcmin: _d(json['align_sigma_arcmin']),
       alignEndedUtc: _t(json['align_ended_utc']),
       completedUtc: _t(json['completed_utc']),
       reason: json['reason'] is String ? json['reason'] as String : null,
@@ -130,6 +142,7 @@ class PaResidual {
       other.paErrorMinArcmin == paErrorMinArcmin &&
       other.uncertaintyArcmin == uncertaintyArcmin &&
       other.alignErrorArcmin == alignErrorArcmin &&
+      other.alignSigmaArcmin == alignSigmaArcmin &&
       other.reason == reason &&
       other.aboveAlignFlag == aboveAlignFlag;
 
@@ -142,6 +155,7 @@ class PaResidual {
     paErrorMinArcmin,
     uncertaintyArcmin,
     alignErrorArcmin,
+    alignSigmaArcmin,
     reason,
     aboveAlignFlag,
   );

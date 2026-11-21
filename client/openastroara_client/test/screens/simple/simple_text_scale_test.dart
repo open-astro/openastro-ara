@@ -55,13 +55,15 @@ import 'package:openastroara/state/ws/ws_providers.dart' show serverLinkUpProvid
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 
+import '../../support/imaging_sections.dart';
 import '../../support/site_section.dart';
+import '../../support/settings_values.dart';
 
 /// The profile's optics, in from the rig from the start (no load, no network).
 class _RigOptics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() =>
-      const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+      const LoadedSection(value: TestOpticsSettings(), source: SectionSource.rig, etag: '"v1"');
 }
 
 class _MemPrefs extends SimpleModePrefsService {
@@ -216,6 +218,8 @@ void main() {
           opticsSettingsProvider.overrideWith(_RigOptics.new),
           // The profile's site, in from the rig from the start (ADR 0015).
           siteFromRig(),
+          // The imaging defaults too: Plan's rows take their sub from them.
+          imagingDefaultsFromRig(),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),

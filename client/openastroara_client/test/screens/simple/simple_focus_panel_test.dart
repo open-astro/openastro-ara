@@ -40,6 +40,7 @@ import 'package:openastroara/widgets/focus/v_curve_chart.dart';
 import '../../support/fake_section_rig.dart';
 import '../../support/imaging_sections.dart';
 import '../../support/phd2_section.dart';
+import '../../support/settings_values.dart';
 
 FocuserStatus _focuser({int? position = 1000, bool absolute = true, int max = 1100, String runtime = 'idle'}) =>
     FocuserStatus(
@@ -143,7 +144,7 @@ Future<(_Focuser, _Live)> _pump(WidgetTester tester,
     bool afLoaded = true}) async {
   final f = _Focuser(focuser);
   final l = _Live(AutofocusLive(run: run, frame: frame));
-  final af = _af = FakeAutofocusSection(initial: afLoaded ? const AutofocusSettings() : null);
+  final af = _af = FakeAutofocusSection(initial: afLoaded ? const TestAutofocusSettings() : null);
   _c = ProviderContainer(overrides: [
     profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
     autofocusSettingsProvider.overrideWith(() => af),
@@ -572,7 +573,7 @@ void main() {
 
     testWidgets('after a failed load a pick loads once more, then saves (ADR 0015)', (tester) async {
       await _pump(tester, focuser: _focuser(), afLoaded: false);
-      _af.initial = const AutofocusSettings();
+      _af.initial = const TestAutofocusSettings();
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
       await tester.pump();
       expect(_af.puts.map((v) => v.exposureSeconds), [10]);
@@ -585,7 +586,7 @@ void main() {
       ]);
       _af
         ..refuse = staleSave()
-        ..initial = const AutofocusSettings().copyWith(exposureSeconds: 15);
+        ..initial = const TestAutofocusSettings().copyWith(exposureSeconds: 15);
       await tester.tap(find.byKey(const Key('simple-focus-af-exposure-10')));
       await tester.pump();
       expect(_af.puts, isEmpty);

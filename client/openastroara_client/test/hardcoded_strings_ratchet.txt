@@ -122,7 +122,7 @@ lib/widgets/sequencer/sequence_load_dialog.dart 19
 lib/widgets/sequencer/sequence_new_dialog.dart 9
 lib/widgets/sequencer/sequencer_palette.dart 1
 lib/widgets/sequencer/sequencer_toolbar.dart 55
-lib/widgets/sequencer/target_plan_dialog.dart 14
+lib/widgets/sequencer/target_plan_dialog.dart 13
 lib/widgets/session_ended_summary_listener.dart 5
 lib/widgets/settings/auto_connect_row.dart 1
 lib/widgets/settings/section_panel.dart 1

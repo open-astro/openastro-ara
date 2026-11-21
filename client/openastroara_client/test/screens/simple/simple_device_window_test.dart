@@ -15,6 +15,7 @@ import 'package:openastroara/state/simple_messages_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _FixedFan extends CoolingFanNotifier {
@@ -73,7 +74,7 @@ Future<(ProviderContainer, _Camera)> _pump(
   await tester.pump();
   final camera = _Camera(wire);
   final defaults = _defaults = FakeImagingDefaultsSection(
-    initial: defaultsLoad ? const ImagingDefaults() : null,
+    initial: defaultsLoad ? const TestImagingDefaults() : null,
   );
   final c = ProviderContainer(
     overrides: [
@@ -203,7 +204,7 @@ void main() {
 
   testWidgets('a target set on the offline cache copy is refused: nothing saved and the cooler stays (ADR 0015)', (tester) async {
     final (c, camera) = await _pump(tester, _wire(), defaultsLoad: false);
-    c.read(imagingDefaultsProvider.notifier).seed(const ImagingDefaults());
+    c.read(imagingDefaultsProvider.notifier).seed(const TestImagingDefaults());
     await tester.pump();
     tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
     await tester.pump();
@@ -229,7 +230,7 @@ void main() {
     final (c, camera) = await _pump(tester, _wire());
     _defaults
       ..refuse = staleSave()
-      ..initial = const ImagingDefaults(coolerTargetC: -5);
+      ..initial = const TestImagingDefaults(coolerTargetC: -5);
     tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
     await tester.pump();
     expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -5, reason: 'the copy another device saved');

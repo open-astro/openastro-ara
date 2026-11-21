@@ -318,20 +318,11 @@ class ProfileApi {
     ],
   };
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static List<CustomHorizonPoint> customHorizonFromJson(
     Map<String, dynamic> json,
-  ) {
-    final raw = json['points'];
-    if (raw is! List) return const [];
-    return [
-      for (final e in raw)
-        if (e is Map)
-          CustomHorizonPoint(
-            azimuthDeg: (e['azimuth_deg'] as num?)?.toDouble() ?? 0,
-            altitudeDeg: (e['altitude_deg'] as num?)?.toDouble() ?? 0,
-          ),
-    ];
-  }
+  ) => _customHorizonFromRig(json);
 
   /// GET the active profile's planning filter set (NEXTGEN §1/§4).
   Future<FilterSetSettings> getFilterSet() async {
@@ -638,7 +629,7 @@ class ProfileApi {
   // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
   // rule 3): as with storage, a missing or mistyped key fails the load or the
   // Save, and so does an unknown engine, so no default is written back. The
-  // lenient readers stay for the offline cache and the untagged reads.
+  // offline cache and the untagged reads go through these readers too.
   static CameraElectronics _cameraElectronicsFromRig(Map<String, dynamic> j) =>
       CameraElectronics(
         sensorName: j['sensor_name'] as String,
@@ -682,7 +673,7 @@ class ProfileApi {
 
   // Strict like the readers above: an unknown filter kind, a missing name or a
   // wheel with no slot list fails the load instead of reading as `l`, '' or the
-  // reference wheel (the lenient filterSetFromJson stays for the offline cache).
+  // reference wheel. The offline cache reads through it too (filterSetFromJson).
   static FilterSetSettings _filterSetFromRig(Map<String, dynamic> j) =>
       FilterSetSettings(
         filters: [
@@ -734,7 +725,8 @@ class ProfileApi {
 
   // Strict like the readers above: an unknown frame type, autofocus method or
   // telescope type fails the load instead of reading as light, the V-curve or
-  // `other` (the lenient readers stay for the offline cache and the wizard).
+  // `other`. The offline cache and the wizard read through it too
+  // (imagingDefaultsFromJson).
   static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
       ImagingDefaults(
         defaultExposure: Duration(
@@ -874,7 +866,7 @@ class ProfileApi {
       ),
       guiderRetryTimeoutSec: (j['guider_retry_timeout_sec'] as num).toInt(),
       skipTargetIfRecoveryFails: j['skip_target_if_recovery_fails'] as bool,
-      // The lenient reader takes any case here; so does this one.
+      // Matched case-insensitively.
       onDiskSpaceCritical: DiskSpaceCriticalAction.values.firstWhere(
         (a) => a.name == (j['on_disk_space_critical'] as String).toLowerCase(),
         orElse: () => throw FormatException(
@@ -961,15 +953,60 @@ class ProfileApi {
   }
 
   /// Every safety key the client has a field for.
-  static final Set<String> _safetyModeledKeys = safetyPoliciesToJson(
-    const SafetyPolicies(),
-  ).keys.toSet();
+  /// (The keys [safetyPoliciesToJson] writes besides [SafetyPolicies.unmodeled];
+  /// a test checks the two agree.)
+  @visibleForTesting
+  static const Set<String> safetyModeledKeys = {
+    'on_unsafe',
+    'auto_resume_when_safe',
+    'resume_delay_min',
+    'meridian_flip_auto',
+    'meridian_pause_min',
+    'meridian_recenter',
+    'meridian_recal_guider',
+    'meridian_refocus',
+    'meridian_refocus_temp_threshold_c',
+    'meridian_guider_recal',
+    'unattended_window_start',
+    'unattended_window_end',
+    'on_altitude_limit',
+    'park_if_no_more_targets',
+    'on_guider_lost',
+    'guider_retry_timeout_sec',
+    'skip_target_if_recovery_fails',
+    'on_disk_space_critical',
+    'flip_safety_enabled',
+    'expected_flip_slew_seconds',
+    'first_flip_confirmed',
+    'first_flip_completed_utc',
+    'first_flip_pier_side_changed',
+    'unattended_escalation',
+    'unattended_shutdown_enabled',
+    'unattended_shutdown_wait_minutes',
+    'calibration_capture_default',
+    'weather_triggers_enabled',
+    'max_wind_kmh',
+    'max_humidity_pct',
+    'min_dew_delta_c',
+    'flat_target_adu',
+    'flat_target_percent',
+    'flat_target_adu_tolerance_pct',
+    'flat_frames_per_filter',
+    'post_flat_park_mount',
+    'sky_flat_target_adu',
+    'sky_flat_frames_per_filter',
+    'sky_flat_target_azimuth',
+    'sky_flat_target_altitude',
+    'sky_flat_stop_at_max_adu',
+    'sky_flat_stop_at_min_adu',
+    'sky_flat_sun_altitude',
+  };
 
   /// The keys of a safety reply the client has no field for, as served, so a
   /// Save sends them back unchanged (SafetyPolicies.unmodeled).
   static Map<String, Object?> _safetyUnmodeled(Map<String, dynamic> j) => {
     for (final e in j.entries)
-      if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
+      if (!safetyModeledKeys.contains(e.key)) e.key: e.value,
   };
 
   /// GET the active profile's site-settings section.
@@ -979,40 +1016,19 @@ class ProfileApi {
   }
 
   /// GET the active profile's unguided-imaging settings (#1264). A daemon
-  /// predating the section (404) answers the defaults.
+  /// predating the section (404) fails like any other read: the client has no
+  /// default for it (ADR 0015 rule 3).
   Future<UnguidedSettings> getUnguidedSettings() async {
-    try {
-      final res = await _dio.get<Map<String, dynamic>>(
-        '/api/v1/profile/unguided',
-      );
-      return unguidedSettingsFromJson(res.data ?? const {});
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) return const UnguidedSettings();
-      rethrow;
-    }
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/profile/unguided',
+    );
+    return unguidedSettingsFromJson(res.data ?? const {});
   }
 
-  static UnguidedSettings unguidedSettingsFromJson(Map<String, dynamic> j) {
-    final rungs = (j['probe_rungs_seconds'] as List<dynamic>?)
-        ?.whereType<num>()
-        .map((n) => n.toDouble())
-        .toList();
-    return UnguidedSettings(
-      guardEnabled: (j['guard_enabled'] as bool?) ?? true,
-      eccentricityTolerance:
-          (j['eccentricity_tolerance'] as num?)?.toDouble() ?? 0.5,
-      goodEccentricity: (j['good_eccentricity'] as num?)?.toDouble() ?? 0.3,
-      stepDownAfter: (j['step_down_after'] as num?)?.toInt() ?? 2,
-      stepUpAfter: (j['step_up_after'] as num?)?.toInt() ?? 10,
-      probeRungsSeconds: rungs == null || rungs.isEmpty
-          ? UnguidedSettings.defaultProbeRungsSeconds
-          : rungs,
-      recentreDriftArcmin:
-          (j['recentre_drift_arcmin'] as num?)?.toDouble() ?? 10,
-      recentreSolveEveryN: (j['recentre_solve_every_n'] as num?)?.toInt() ?? 1,
-      priorToleranceBasis: (j['prior_tolerance_basis'] as String?) ?? 'max',
-    );
-  }
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
+  static UnguidedSettings unguidedSettingsFromJson(Map<String, dynamic> j) =>
+      _unguidedSettingsFromRig(j);
 
   static Map<String, dynamic> unguidedSettingsToJson(UnguidedSettings v) => {
     'guard_enabled': v.guardEnabled,
@@ -1052,20 +1068,10 @@ class ProfileApi {
   // The server's `ConfigureHttpJsonOptions` uses snake_case, so the wire
   // shape is `exposure_seconds` etc. (not `defaultExposure`).
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static ImagingDefaults imagingDefaultsFromJson(Map<String, dynamic> j) =>
-      ImagingDefaults(
-        defaultExposure: Duration(
-          seconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5,
-        ),
-        defaultGain: (j['gain'] as num?)?.toInt() ?? 100,
-        defaultOffset: (j['offset'] as num?)?.toInt() ?? 50,
-        defaultBin: (j['bin'] as num?)?.toInt() ?? 1,
-        defaultFrameKind: _frameKindFromString(j['frame_kind'] as String?),
-        coolerTargetC: (j['cooler_target_c'] as num?)?.toDouble() ?? -10.0,
-        coolerRampRatePerMin:
-            (j['cooler_ramp_c_per_min'] as num?)?.toDouble() ?? 1.0,
-        warmupAtSessionEnd: (j['warmup_at_session_end'] as bool?) ?? false,
-      );
+      _imagingDefaultsFromRig(j);
 
   static Map<String, dynamic> imagingDefaultsToJson(ImagingDefaults v) => {
     'exposure_seconds': v.defaultExposure.inSeconds,
@@ -1078,39 +1084,12 @@ class ProfileApi {
     'warmup_at_session_end': v.warmupAtSessionEnd,
   };
 
-  static FrameKind _frameKindFromString(String? s) {
-    switch (s) {
-      case 'dark':
-        return FrameKind.dark;
-      case 'bias':
-        return FrameKind.bias;
-      case 'flat':
-        return FrameKind.flat;
-      case 'light':
-      default:
-        return FrameKind.light;
-    }
-  }
-
   // ── Storage settings JSON mapping ──────────────────────────────────────
 
-  static OpticsSettings opticsFromJson(Map<String, dynamic> j) {
-    // The daemon defaults reducer_factor to 1.0, back-fills it on upgrade, and PUT
-    // rejects ≤ 0 (#467), so the wire value is always positive in practice. Coalesce
-    // a missing OR non-positive value (e.g. a hand-edited profile.json) to 1.0 = "no
-    // reducer" — a 0 would otherwise multiply the focal length to 0 and silently mark
-    // an otherwise-complete rig unconfigured (no FOV box).
-    final reducer = (j['reducer_factor'] as num?)?.toDouble();
-    return OpticsSettings(
-      focalLengthMm: (j['focal_length_mm'] as num?)?.toDouble() ?? 0,
-      reducerFactor: (reducer != null && reducer > 0) ? reducer : 1.0,
-      sensorWidthPx: (j['sensor_width_px'] as num?)?.toInt() ?? 0,
-      sensorHeightPx: (j['sensor_height_px'] as num?)?.toInt() ?? 0,
-      pixelSizeUm: (j['pixel_size_um'] as num?)?.toDouble() ?? 0,
-      apertureMm: (j['aperture_mm'] as num?)?.toDouble() ?? 0,
-      telescopeName: (j['telescope_name'] as String?) ?? '',
-    );
-  }
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
+  static OpticsSettings opticsFromJson(Map<String, dynamic> j) =>
+      _opticsFromRig(j);
 
   static Map<String, dynamic> opticsToJson(OpticsSettings v) => {
     'focal_length_mm': v.focalLengthMm,
@@ -1124,17 +1103,10 @@ class ProfileApi {
 
   // ── Camera electronics + filter set JSON mapping (NEXTGEN §4) ──────────
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static CameraElectronics cameraElectronicsFromJson(Map<String, dynamic> j) =>
-      CameraElectronics(
-        sensorName: (j['sensor_name'] as String?) ?? '',
-        readNoiseE: (j['read_noise_e'] as num?)?.toDouble() ?? 0,
-        fullWellE: (j['full_well_e'] as num?)?.toDouble() ?? 0,
-        electronsPerAdu: (j['electrons_per_adu'] as num?)?.toDouble() ?? 0,
-        gain: (j['gain'] as num?)?.toInt() ?? -1,
-        quantumEfficiencyPeak:
-            (j['quantum_efficiency_peak'] as num?)?.toDouble() ?? 0,
-        autoCaptured: (j['auto_captured'] as bool?) ?? false,
-      );
+      _cameraElectronicsFromRig(j);
 
   static Map<String, dynamic> cameraElectronicsToJson(CameraElectronics v) => {
     'sensor_name': v.sensorName,
@@ -1146,20 +1118,10 @@ class ProfileApi {
     'auto_captured': v.autoCaptured,
   };
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static FilterSetSettings filterSetFromJson(Map<String, dynamic> j) =>
-      FilterSetSettings(
-        filters: ((j['filters'] as List?) ?? const [])
-            .whereType<Map<String, dynamic>>()
-            .map(
-              (f) => PlanningFilter(
-                name: (f['name'] as String?) ?? '',
-                kind: FilterKind.fromWire(f['kind'] as String?),
-                bandwidthNm: (f['bandwidth_nm'] as num?)?.toDouble() ?? 0,
-              ),
-            )
-            .where((f) => f.name.isNotEmpty)
-            .toList(),
-      );
+      _filterSetFromRig(j);
 
   static Map<String, dynamic> filterSetToJson(FilterSetSettings v) => {
     'filters': [
@@ -1263,53 +1225,10 @@ class ProfileApi {
 
   // ── OpenAstro Guider settings JSON mapping ─────────────────────────────────────────
 
-  static Phd2Settings _phd2SettingsFromJson(
-    Map<String, dynamic> j,
-  ) => Phd2Settings(
-    host: (j['host'] as String?) ?? 'localhost',
-    port: (j['port'] as num?)?.toInt() ?? 4400,
-    phd2Profile: (j['phd2_profile'] as String?) ?? 'Default',
-    ditherEnabled: (j['dither_enabled'] as bool?) ?? true,
-    ditherEveryNFrames: (j['dither_every_n_frames'] as num?)?.toInt() ?? 1,
-    ditherPixels: (j['dither_pixels'] as num?)?.toDouble() ?? 5.0,
-    settlePixels: (j['settle_pixels'] as num?)?.toDouble() ?? 1.5,
-    settleTimeSec: (j['settle_time_sec'] as num?)?.toInt() ?? 10,
-    settleTimeoutSec: (j['settle_timeout_sec'] as num?)?.toInt() ?? 60,
-    forceCalibrationEachSession:
-        (j['force_calibration_each_session'] as bool?) ?? false,
-    // §63.19 guide setup type — unknown tokens coerce to 'guide_scope'.
-    guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
-      (j['guider_setup_type'] as String?) ?? 'guide_scope',
-    ),
-    // §63.5 guider-engine config (defaults match the server's optional-field defaults).
-    guideFocalLength: (j['guide_focal_length'] as num?)?.toInt() ?? 0,
-    guidePixelSize: (j['guide_pixel_size'] as num?)?.toDouble() ?? 0,
-    raAggressiveness: (j['ra_aggressiveness'] as num?)?.toDouble() ?? 0.7,
-    decAggressiveness: (j['dec_aggressiveness'] as num?)?.toDouble() ?? 0.7,
-    minimumMove: (j['minimum_move'] as num?)?.toDouble() ?? 0.15,
-    // #1156 — a daemon profile from before the split has no Dec value: Dec follows RA.
-    decMinimumMove:
-        (j['dec_minimum_move'] as num?)?.toDouble() ??
-        (j['minimum_move'] as num?)?.toDouble() ??
-        0.15,
-    decGuideMode: (j['dec_guide_mode'] as String?) ?? 'auto',
-    // §63.17 guider equipment selection ("" / 0 = unset).
-    guiderCamera: (j['guider_camera'] as String?) ?? '',
-    guiderCameraId: (j['guider_camera_id'] as String?) ?? '',
-    guiderCameraAlpacaUniqueId:
-        (j['guider_camera_alpaca_unique_id'] as String?) ?? '',
-    guiderMount: (j['guider_mount'] as String?) ?? '',
-    guiderAuxMount: (j['guider_aux_mount'] as String?) ?? '',
-    guiderRotator: (j['guider_rotator'] as String?) ?? '',
-    guiderAlpacaHost: (j['guider_alpaca_host'] as String?) ?? '',
-    guiderAlpacaPort: (j['guider_alpaca_port'] as num?)?.toInt() ?? 0,
-    // §76.2 guide exposure range (defaults match the server's optional fields).
-    guideExposureMinMs: (j['guide_exposure_min_ms'] as num?)?.toInt() ?? 1000,
-    guideExposureMaxMs: (j['guide_exposure_max_ms'] as num?)?.toInt() ?? 6000,
-    guideExposureMs: (j['guide_exposure_ms'] as num?)?.toInt() ?? 0,
-    guideCameraGain: (j['guide_camera_gain'] as num?)?.toInt() ?? 50,
-    guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
-  );
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
+  static Phd2Settings _phd2SettingsFromJson(Map<String, dynamic> j) =>
+      _phd2FromRig(j);
 
   // Strict like the readers above: a missing key fails the load instead of
   // reading as the client's own default (localhost, dither every frame, no
@@ -1396,17 +1315,14 @@ class ProfileApi {
 
   // ── Diagnostics mode JSON mapping ──────────────────────────────────────
 
-  static DiagnosticsMode _diagnosticsModeFromString(String? s) {
-    switch (s) {
-      case 'pause_on_critical':
-        return DiagnosticsMode.pauseOnCritical;
-      case 'abort_on_critical':
-        return DiagnosticsMode.abortOnCritical;
-      case 'notify_only':
-      default:
-        return DiagnosticsMode.notifyOnly;
-    }
-  }
+  // ADR 0015 rule 3: a missing or unknown mode fails the read instead of
+  // reading as notify-only.
+  static DiagnosticsMode _diagnosticsModeFromString(String? s) => switch (s) {
+    'notify_only' => DiagnosticsMode.notifyOnly,
+    'pause_on_critical' => DiagnosticsMode.pauseOnCritical,
+    'abort_on_critical' => DiagnosticsMode.abortOnCritical,
+    _ => throw FormatException('unknown diagnostics mode', s),
+  };
 
   static String _diagnosticsModeToString(DiagnosticsMode m) {
     switch (m) {
@@ -1421,24 +1337,11 @@ class ProfileApi {
 
   // ── Plate-solve settings JSON mapping ──────────────────────────────────
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static PlateSolveSettings _plateSolveSettingsFromJson(
     Map<String, dynamic> j,
-  ) => PlateSolveSettings(
-    engine: _plateSolveEngineFromString(j['engine'] as String?),
-    pathOrEndpoint:
-        (j['path_or_endpoint'] as String?) ?? '/opt/openastroara/astap_cli',
-    indexDownloadPath:
-        (j['index_download_path'] as String?) ?? '/var/lib/astap',
-    searchRadiusDeg: (j['search_radius_deg'] as num?)?.toDouble() ?? 30,
-    downsampleFactor: (j['downsample_factor'] as num?)?.toInt() ?? 0,
-    timeoutSeconds: (j['timeout_seconds'] as num?)?.toInt() ?? 60,
-    useBlindFallback: (j['use_blind_fallback'] as bool?) ?? true,
-    centerAfterSlew: (j['center_after_slew'] as bool?) ?? true,
-    syncToCoordinates: (j['sync_to_coordinates'] as bool?) ?? true,
-    maxIterations: (j['max_iterations'] as num?)?.toInt() ?? 5,
-    convergenceToleranceArcsec:
-        (j['convergence_tolerance_arcsec'] as num?)?.toDouble() ?? 60.0,
-  );
+  ) => _plateSolveSettingsFromRig(j);
 
   static Map<String, dynamic> _plateSolveSettingsToJson(PlateSolveSettings v) =>
       {
@@ -1455,18 +1358,6 @@ class ProfileApi {
         'convergence_tolerance_arcsec': v.convergenceToleranceArcsec,
       };
 
-  static PlateSolveEngine _plateSolveEngineFromString(String? s) {
-    switch (s) {
-      case 'astrometry_net':
-        return PlateSolveEngine.astrometryNet;
-      case 'platesolve2':
-        return PlateSolveEngine.platesolve2;
-      case 'astap':
-      default:
-        return PlateSolveEngine.astap;
-    }
-  }
-
   static String _plateSolveEngineToString(PlateSolveEngine e) {
     switch (e) {
       case PlateSolveEngine.astap:
@@ -1480,29 +1371,10 @@ class ProfileApi {
 
   // ── Autofocus settings JSON mapping ────────────────────────────────────
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static AutofocusSettings autofocusSettingsFromJson(Map<String, dynamic> j) =>
-      AutofocusSettings(
-        method: _autofocusMethodFromString(j['method'] as String?),
-        steps: (j['steps'] as num?)?.toInt() ?? 7,
-        stepSize: (j['step_size'] as num?)?.toInt() ?? 50,
-        stepSizeAuto: (j['step_size_auto'] as bool?) ?? true,
-        exposureSeconds: (j['exposure_seconds'] as num?)?.toInt() ?? 5,
-        binning: (j['binning'] as num?)?.toInt() ?? 1,
-        afFilter: (j['af_filter'] as String?) ?? 'L',
-        runAfterFilterChange: (j['run_after_filter_change'] as bool?) ?? true,
-        triggerTempDeltaC:
-            (j['trigger_temp_delta_c'] as num?)?.toDouble() ?? 2.0,
-        triggerHfrDriftPct:
-            (j['trigger_hfr_drift_pct'] as num?)?.toDouble() ?? 15.0,
-        everyNHours: (j['every_n_hours'] as num?)?.toInt() ?? 2,
-        abortSequenceOnAfFailure:
-            (j['abort_sequence_on_af_failure'] as bool?) ?? true,
-        restorePositionOnFailure:
-            (j['restore_position_on_failure'] as bool?) ?? true,
-        telescopeType: telescopeTypeFromWire(j['telescope_type'] as String?),
-        backlashInSteps: (j['backlash_in_steps'] as num?)?.toInt() ?? 0,
-        backlashOutSteps: (j['backlash_out_steps'] as num?)?.toInt() ?? 0,
-      );
+      _autofocusSettingsFromRig(j);
 
   static Map<String, dynamic> autofocusSettingsToJson(AutofocusSettings v) => {
     'method': _autofocusMethodToString(v.method),
@@ -1523,18 +1395,6 @@ class ProfileApi {
     'backlash_out_steps': v.backlashOutSteps,
   };
 
-  static AutofocusMethod _autofocusMethodFromString(String? s) {
-    switch (s) {
-      case 'brightest_star_hfr':
-        return AutofocusMethod.brightestStarHfr;
-      case 'fwhm':
-        return AutofocusMethod.fwhm;
-      case 'hfr_v_curve':
-      default:
-        return AutofocusMethod.hfrVCurve;
-    }
-  }
-
   static String _autofocusMethodToString(AutofocusMethod m) {
     switch (m) {
       case AutofocusMethod.hfrVCurve:
@@ -1549,91 +1409,11 @@ class ProfileApi {
   // ── Safety policies JSON mapping ───────────────────────────────────────
 
   /// The safety-policies wire mapping, exposed for the round-trip test (#1138).
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   @visibleForTesting
-  static SafetyPolicies safetyPoliciesFromJson(
-    Map<String, dynamic> j,
-  ) => SafetyPolicies(
-    onUnsafe: _unsafeActionFromString(j['on_unsafe'] as String?),
-    autoResumeWhenSafe: (j['auto_resume_when_safe'] as bool?) ?? true,
-    resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
-    meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
-    meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
-    meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
-    meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
-    meridianRefocus: _meridianRefocusFromString(
-      j['meridian_refocus'] as String?,
-    ),
-    meridianRefocusTempThresholdC:
-        (j['meridian_refocus_temp_threshold_c'] as num?)?.toDouble() ?? 2.0,
-    // A daemon/profile from before the mode carries null: left null here too, so a save
-    // does not invent a mode (the daemon keeps its legacy behaviour until the user picks one).
-    meridianGuiderRecal: j['meridian_guider_recal'] is String
-        ? _guiderRecalFromString(j['meridian_guider_recal'] as String)
-        : null,
-    unattendedWindowStart: (j['unattended_window_start'] as String?) ?? '',
-    unattendedWindowEnd: (j['unattended_window_end'] as String?) ?? '',
-    onAltitudeLimit: _altitudeLimitActionFromString(
-      j['on_altitude_limit'] as String?,
-    ),
-    parkIfNoMoreTargets: (j['park_if_no_more_targets'] as bool?) ?? true,
-    onGuiderLost: _guiderLostActionFromString(j['on_guider_lost'] as String?),
-    guiderRetryTimeoutSec:
-        (j['guider_retry_timeout_sec'] as num?)?.toInt() ?? 60,
-    skipTargetIfRecoveryFails:
-        (j['skip_target_if_recovery_fails'] as bool?) ?? true,
-    onDiskSpaceCritical: switch ((j['on_disk_space_critical'] as String?)
-        ?.toLowerCase()) {
-      'abort' => DiskSpaceCriticalAction.abort,
-      'pause' => DiskSpaceCriticalAction.pause,
-      _ => DiskSpaceCriticalAction.warn,
-    },
-    flipSafetyEnabled: (j['flip_safety_enabled'] as bool?) ?? true,
-    expectedFlipSlewSeconds:
-        (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
-    firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
-    firstFlipCompletedUtc: j['first_flip_completed_utc'] is String
-        ? DateTime.tryParse(j['first_flip_completed_utc'] as String)?.toUtc()
-        : null,
-    firstFlipPierSideChanged:
-        (j['first_flip_pier_side_changed'] as bool?) ?? false,
-    // #1589 — only a daemon from before the clearance limit leaves these out,
-    // and it has no limit: read as off. The section's own reader is strict.
-    clearanceLimitEnabled: (j['clearance_limit_enabled'] as bool?) ?? false,
-    clearanceMaxAltitudeDeg:
-        (j['clearance_max_altitude_deg'] as num?)?.toDouble() ?? 80.0,
-    unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
-    unattendedShutdownEnabled:
-        (j['unattended_shutdown_enabled'] as bool?) ?? true,
-    unattendedShutdownWaitMinutes:
-        (j['unattended_shutdown_wait_minutes'] as num?)?.toInt() ?? 30,
-    calibrationCaptureDefault: _calibrationCaptureDefaultFromString(
-      j['calibration_capture_default'] as String?,
-    ),
-    weatherTriggersEnabled: (j['weather_triggers_enabled'] as bool?) ?? false,
-    maxWindKmh: (j['max_wind_kmh'] as num?)?.toInt() ?? 36,
-    maxHumidityPct: (j['max_humidity_pct'] as num?)?.toInt() ?? 85,
-    minDewDeltaC: (j['min_dew_delta_c'] as num?)?.toDouble() ?? 2.0,
-    flatTargetAdu: (j['flat_target_adu'] as num?)?.toInt() ?? 30000,
-    flatTargetPercent: (j['flat_target_percent'] as num?)?.toDouble() ?? 50,
-    flatTargetAduTolerancePct:
-        (j['flat_target_adu_tolerance_pct'] as num?)?.toDouble() ?? 5.0,
-    flatFramesPerFilter: (j['flat_frames_per_filter'] as num?)?.toInt() ?? 30,
-    postFlatParkMount: (j['post_flat_park_mount'] as bool?) ?? false,
-    skyFlatTargetAdu: (j['sky_flat_target_adu'] as num?)?.toInt() ?? 25000,
-    skyFlatFramesPerFilter:
-        (j['sky_flat_frames_per_filter'] as num?)?.toInt() ?? 20,
-    skyFlatTargetAzimuth:
-        (j['sky_flat_target_azimuth'] as num?)?.toDouble() ?? 90.0,
-    skyFlatTargetAltitude:
-        (j['sky_flat_target_altitude'] as num?)?.toDouble() ?? 75.0,
-    skyFlatStopAtMaxAdu:
-        (j['sky_flat_stop_at_max_adu'] as num?)?.toDouble() ?? 50000.0,
-    skyFlatStopAtMinAdu:
-        (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
-    skyFlatSunAltitude:
-        (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
-    unmodeled: _safetyUnmodeled(j),
-  );
+  static SafetyPolicies safetyPoliciesFromJson(Map<String, dynamic> j) =>
+      _safetyFromRig(j);
 
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
     ...v.unmodeled,
@@ -1695,22 +1475,6 @@ class ProfileApi {
     'sky_flat_sun_altitude': v.skyFlatSunAltitude,
   };
 
-  static CalibrationCaptureDefault _calibrationCaptureDefaultFromString(
-    String? s,
-  ) {
-    switch (s) {
-      case 'panel_at_end':
-        return CalibrationCaptureDefault.panelAtEnd;
-      case 'sky_at_twilight':
-        return CalibrationCaptureDefault.skyAtTwilight;
-      case 'never':
-        return CalibrationCaptureDefault.never;
-      case 'ask':
-      default:
-        return CalibrationCaptureDefault.ask;
-    }
-  }
-
   static String _calibrationCaptureDefaultToString(
     CalibrationCaptureDefault v,
   ) {
@@ -1726,55 +1490,17 @@ class ProfileApi {
     }
   }
 
-  static MeridianRefocusMode _meridianRefocusFromString(String? s) {
-    switch (s) {
-      case 'always':
-        return MeridianRefocusMode.always;
-      case 'never':
-        return MeridianRefocusMode.never;
-      case 'if_temp_drifted':
-      default:
-        return MeridianRefocusMode.ifTempDrifted;
-    }
-  }
-
   static String _meridianRefocusToString(MeridianRefocusMode m) => switch (m) {
     MeridianRefocusMode.always => 'always',
     MeridianRefocusMode.never => 'never',
     MeridianRefocusMode.ifTempDrifted => 'if_temp_drifted',
   };
 
-  static GuiderRecalMode _guiderRecalFromString(String? s) {
-    switch (s) {
-      case 'full':
-        return GuiderRecalMode.full;
-      case 'skip':
-        return GuiderRecalMode.skip;
-      case 'auto_restore':
-      default:
-        return GuiderRecalMode.autoRestore;
-    }
-  }
-
   static String _guiderRecalToString(GuiderRecalMode m) => switch (m) {
     GuiderRecalMode.full => 'full',
     GuiderRecalMode.skip => 'skip',
     GuiderRecalMode.autoRestore => 'auto_restore',
   };
-
-  static UnsafeAction _unsafeActionFromString(String? s) {
-    switch (s) {
-      case 'park_only':
-        return UnsafeAction.parkOnly;
-      case 'abort_and_park':
-        return UnsafeAction.abortAndPark;
-      case 'ignore':
-        return UnsafeAction.ignore;
-      case 'pause_and_park':
-      default:
-        return UnsafeAction.pauseAndPark;
-    }
-  }
 
   static String _unsafeActionToString(UnsafeAction a) {
     switch (a) {
@@ -1789,18 +1515,6 @@ class ProfileApi {
     }
   }
 
-  static AltitudeLimitAction _altitudeLimitActionFromString(String? s) {
-    switch (s) {
-      case 'pause_sequence':
-        return AltitudeLimitAction.pauseSequence;
-      case 'abort_sequence':
-        return AltitudeLimitAction.abortSequence;
-      case 'skip_target':
-      default:
-        return AltitudeLimitAction.skipTarget;
-    }
-  }
-
   static String _altitudeLimitActionToString(AltitudeLimitAction a) {
     switch (a) {
       case AltitudeLimitAction.skipTarget:
@@ -1809,18 +1523,6 @@ class ProfileApi {
         return 'pause_sequence';
       case AltitudeLimitAction.abortSequence:
         return 'abort_sequence';
-    }
-  }
-
-  static GuiderLostAction _guiderLostActionFromString(String? s) {
-    switch (s) {
-      case 'skip_target':
-        return GuiderLostAction.skipTarget;
-      case 'abort_sequence':
-        return GuiderLostAction.abortSequence;
-      case 'pause_and_retry':
-      default:
-        return GuiderLostAction.pauseAndRetry;
     }
   }
 
@@ -1837,16 +1539,18 @@ class ProfileApi {
 
   // ── Filenames settings JSON mapping ────────────────────────────────────
 
+  // ADR 0015 rule 3: a missing key or an unknown separator fails the read
+  // instead of reading as the client's own default.
   static FilenamesSettings _filenamesSettingsFromJson(Map<String, dynamic> j) =>
       FilenamesSettings(
         dateSeparator: _dateSeparatorFromString(j['date_separator'] as String?),
-        compressDarksAndBias: (j['compress_darks_and_bias'] as bool?) ?? true,
-        headerIdentity: (j['header_identity'] as bool?) ?? true,
-        headerSite: (j['header_site'] as bool?) ?? true,
-        headerOptics: (j['header_optics'] as bool?) ?? true,
-        headerTemperature: (j['header_temperature'] as bool?) ?? true,
-        headerWeather: (j['header_weather'] as bool?) ?? true,
-        headerEphemeris: (j['header_ephemeris'] as bool?) ?? true,
+        compressDarksAndBias: j['compress_darks_and_bias'] as bool,
+        headerIdentity: j['header_identity'] as bool,
+        headerSite: j['header_site'] as bool,
+        headerOptics: j['header_optics'] as bool,
+        headerTemperature: j['header_temperature'] as bool,
+        headerWeather: j['header_weather'] as bool,
+        headerEphemeris: j['header_ephemeris'] as bool,
       );
 
   static Map<String, dynamic> _filenamesSettingsToJson(FilenamesSettings v) => {
@@ -1860,17 +1564,12 @@ class ProfileApi {
     'header_ephemeris': v.headerEphemeris,
   };
 
-  static DateSeparator _dateSeparatorFromString(String? s) {
-    switch (s) {
-      case 'underscore':
-        return DateSeparator.underscore;
-      case 'dash':
-        return DateSeparator.dash;
-      case 'forward_slash':
-      default:
-        return DateSeparator.forwardSlash;
-    }
-  }
+  static DateSeparator _dateSeparatorFromString(String? s) => switch (s) {
+    'forward_slash' => DateSeparator.forwardSlash,
+    'underscore' => DateSeparator.underscore,
+    'dash' => DateSeparator.dash,
+    _ => throw FormatException('unknown date_separator', s),
+  };
 
   static String _dateSeparatorToString(DateSeparator d) {
     switch (d) {
@@ -1885,30 +1584,10 @@ class ProfileApi {
 
   // ── Site settings JSON mapping ─────────────────────────────────────────
 
+  // The one reader of the section (ADR 0015 rule 3): a missing key fails the
+  // read, so no client default stands in for it.
   static SiteSettings siteSettingsFromJson(Map<String, dynamic> j) =>
-      SiteSettings(
-        siteName: (j['site_name'] as String?) ?? 'Backyard',
-        latitudeDeg: (j['latitude_deg'] as num?)?.toDouble() ?? 0,
-        longitudeDeg: (j['longitude_deg'] as num?)?.toDouble() ?? 0,
-        elevationM: (j['elevation_m'] as num?)?.roundToDouble() ?? 0,
-        timeZone: (j['time_zone'] as String?) ?? 'UTC',
-        useCustomHorizon: (j['use_custom_horizon'] as bool?) ?? false,
-        defaultHorizonAltitudeDeg:
-            (j['default_horizon_altitude_deg'] as num?)?.toDouble() ?? 20,
-        bortleClass: (j['bortle_class'] as num?)?.toInt() ?? 6,
-        sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num?)?.toDouble() ?? 0,
-        typicalSeeingArcsec:
-            (j['typical_seeing_arcsec'] as num?)?.toDouble() ?? 2.5,
-        twilightDefinition: _twilightFromString(
-          j['twilight_definition'] as String?,
-        ),
-        maxSequenceRuntimeMin:
-            (j['max_sequence_runtime_min'] as num?)?.toInt() ?? 0,
-        softWarningAltitudeDeg:
-            (j['soft_warning_altitude_deg'] as num?)?.toDouble() ?? 30,
-        observerName: (j['observer_name'] as String?) ?? '',
-        permanentPier: (j['permanent_pier'] as bool?) ?? false,
-      );
+      _siteFromRig(j);
 
   static Map<String, dynamic> siteSettingsToJson(SiteSettings v) => {
     'site_name': v.siteName,
@@ -1928,37 +1607,27 @@ class ProfileApi {
     'permanent_pier': v.permanentPier,
   };
 
-  static TwilightDefinition _twilightFromString(String? s) {
-    switch (s) {
-      case 'civil':
-        return TwilightDefinition.civil;
-      case 'nautical':
-        return TwilightDefinition.nautical;
-      case 'astronomical':
-      default:
-        return TwilightDefinition.astronomical;
-    }
-  }
-
   // ── Notifications settings JSON mapping ────────────────────────────────
 
+  // ADR 0015 rule 3: a missing key fails the read instead of reading as the
+  // client's own default.
   static NotificationsSettings _notificationsSettingsFromJson(
     Map<String, dynamic> j,
   ) => NotificationsSettings(
-    inAppBanner: (j['in_app_banner'] as bool?) ?? true,
-    osDesktop: (j['os_desktop'] as bool?) ?? true,
-    soundAlert: (j['sound_alert'] as bool?) ?? true,
-    pushoverToken: (j['pushover_token'] as String?) ?? '',
-    telegramBotToken: (j['telegram_bot_token'] as String?) ?? '',
-    pushoverUserKey: (j['pushover_user_key'] as String?) ?? '',
-    telegramChatId: (j['telegram_chat_id'] as String?) ?? '',
-    onSequenceComplete: (j['on_sequence_complete'] as bool?) ?? true,
-    onSequencePaused: (j['on_sequence_paused'] as bool?) ?? true,
-    onCriticalDiagnostic: (j['on_critical_diagnostic'] as bool?) ?? true,
-    onSafetyEvent: (j['on_safety_event'] as bool?) ?? true,
-    onAutofocusFailed: (j['on_autofocus_failed'] as bool?) ?? true,
-    onPlateSolveFailed: (j['on_plate_solve_failed'] as bool?) ?? true,
-    onDiskSpaceLow: (j['on_disk_space_low'] as bool?) ?? true,
+    inAppBanner: j['in_app_banner'] as bool,
+    osDesktop: j['os_desktop'] as bool,
+    soundAlert: j['sound_alert'] as bool,
+    pushoverToken: j['pushover_token'] as String,
+    telegramBotToken: j['telegram_bot_token'] as String,
+    pushoverUserKey: j['pushover_user_key'] as String,
+    telegramChatId: j['telegram_chat_id'] as String,
+    onSequenceComplete: j['on_sequence_complete'] as bool,
+    onSequencePaused: j['on_sequence_paused'] as bool,
+    onCriticalDiagnostic: j['on_critical_diagnostic'] as bool,
+    onSafetyEvent: j['on_safety_event'] as bool,
+    onAutofocusFailed: j['on_autofocus_failed'] as bool,
+    onPlateSolveFailed: j['on_plate_solve_failed'] as bool,
+    onDiskSpaceLow: j['on_disk_space_low'] as bool,
   );
 
   static Map<String, dynamic> _notificationsSettingsToJson(
