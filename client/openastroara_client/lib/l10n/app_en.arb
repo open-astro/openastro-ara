@@ -5659,10 +5659,6 @@
       }
     }
   },
-  "monitorLastFrame": "Last frame",
-  "@monitorLastFrame": {
-    "description": "Monitor tile: the last saved frame's quality"
-  },
   "monitorHfr": "HFR",
   "@monitorHfr": {
     "description": "Monitor Last frame reading"
@@ -5697,9 +5693,30 @@
       }
     }
   },
+  "monitorOpenWindow": "Open {window}",
+  "@monitorOpenWindow": {
+    "description": "Monitor tile, screen reader action (the long press): opens the window the tile belongs to",
+    "placeholders": {
+      "window": {
+        "type": "String"
+      }
+    }
+  },
+  "monitorEnlarge": "Enlarge",
+  "@monitorEnlarge": {
+    "description": "Monitor tile, screen reader action (the tap): fills the grid with the tile"
+  },
+  "monitorShrink": "Shrink",
+  "@monitorShrink": {
+    "description": "Monitor tile, screen reader action (the tap on the enlarged tile): back to the grid"
+  },
+  "monitorEnlarged": "enlarged",
+  "@monitorEnlarged": {
+    "description": "Monitor tile, screen reader state: the tile fills the grid"
+  },
   "monitorStartedAt": "session start {value}",
   "@monitorStartedAt": {
-    "description": "Monitor Last frame tile: the HFR the session started at",
+    "description": "Monitor graph tile: the reading the session started at",
     "placeholders": {
       "value": {
         "type": "String"
@@ -5720,7 +5737,7 @@
   },
   "monitorDrifting": "Drifting",
   "@monitorDrifting": {
-    "description": "Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start"
+    "description": "Monitor graph tile status word: a reading moved 15 % or more the wrong way since session start"
   },
   "monitorConditions": "Conditions",
   "@monitorConditions": {
@@ -5753,6 +5770,10 @@
         "type": "String"
       }
     }
+  },
+  "monitorStarsAndSky": "Stars · sky background",
+  "@monitorStarsAndSky": {
+    "description": "Monitor tile: stars and sky background per saved frame"
   },
   "monitorSkyOwnScale": "Sky (own scale)",
   "@monitorSkyOwnScale": {

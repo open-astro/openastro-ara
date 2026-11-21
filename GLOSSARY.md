@@ -113,8 +113,15 @@ One of Simple Mode's five views (Preview, Focus, Polar align, Guide, Queue). Pre
 _Avoid_: mode, panel, page
 
 **Monitor**:
-Simple Mode's full-screen, read-only view of the Session, opened from the left rail or the phone deck's Monitor word. Not a Screen.
+Simple Mode's full-screen, read-only view of the Session, opened from the left rail's Monitor item at any window width, or from the phone deck's Monitor word. Not a Screen.
 _Avoid_: Cockpit, Night Watch, Dashboard
+
+**Conditions tile**:
+Monitor's tile for the night's conditions: the weather station's readings and a "Camera and focuser" group (sensor temperature with its target, cooler power, focuser temperature, the change since the last autofocus). Each group exists only when its gear is in the profile.
+_Avoid_: Weather tile
+
+**Enlarged tile**:
+A Monitor tile a tap has widened over the whole grid, clear of Emergency Stop; a second tap shrinks it, a long press opens the window that owns it. Widget state of Monitor, not kept when it closes.
 
 **Tonight's Best**:
 Simple Mode's page of the Targets ranked for the rest of tonight, with sort, filters and Image this, opened from the left rail's Best item, the phone deck's Best word or See all on Plan's Tonight's Best row. A page pushed over the shell like Monitor, not a Screen.

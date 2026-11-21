@@ -4469,9 +4469,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get monitorLastFrame => 'Last frame';
-
-  @override
   String get monitorHfr => 'HFR';
 
   @override
@@ -4492,6 +4489,20 @@ class AppLocalizationsEn extends AppLocalizations {
   String monitorSaved(int n) {
     return '$n saved';
   }
+
+  @override
+  String monitorOpenWindow(String window) {
+    return 'Open $window';
+  }
+
+  @override
+  String get monitorEnlarge => 'Enlarge';
+
+  @override
+  String get monitorShrink => 'Shrink';
+
+  @override
+  String get monitorEnlarged => 'enlarged';
 
   @override
   String monitorStartedAt(String value) {
@@ -4525,6 +4536,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String monitorImagingSpan(String start, String end) {
     return 'Imaging $start to $end';
   }
+
+  @override
+  String get monitorStarsAndSky => 'Stars · sky background';
 
   @override
   String get monitorSkyOwnScale => 'Sky (own scale)';

@@ -757,7 +757,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : label;
   }
 
-  /// Monitor (#1724): a tile tap closes it and opens what owns that thing.
+  /// Monitor (#1724): a tile's long press closes it and opens what owns that
+  /// thing. A tile tap only enlarges the tile (#2014).
   void _openMonitor() => unawaited(
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -777,6 +778,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 _openDevice('eq.weather');
               case MonitorDestination.camera:
                 _openDevice('eq.camera');
+              case MonitorDestination.focuser:
+                _openDevice('eq.focuser');
               case MonitorDestination.sky:
                 setState(() => _sky = true);
               case MonitorDestination.frameInfo:
@@ -1728,12 +1731,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                       onSky: () => setState(() => _sky = !_sky),
                                       onAlbum: _openAlbum,
                                       onBest: _openBest,
-                                      // The grid needs the room.
-                                      onMonitor:
-                                          MediaQuery.sizeOf(context).width >=
-                                              kMonitorMinWidth
-                                          ? _openMonitor
-                                          : null,
+                                      onMonitor: _openMonitor,
                                     ),
                                   ),
                                 ),
@@ -2763,18 +2761,18 @@ class _LeftRail extends StatelessWidget {
     required this.onSky,
     required this.onAlbum,
     required this.onBest,
-    this.onMonitor,
+    required this.onMonitor,
   });
 
   final bool sky;
   final VoidCallback? onSky;
   final VoidCallback onAlbum;
 
-  /// Tonight's Best: offered at every width (Monitor needs 900 pt).
+  /// Tonight's Best: offered at every width (so is Monitor).
   final VoidCallback onBest;
 
-  /// Null: the window is too narrow for Monitor, so it isn't offered.
-  final VoidCallback? onMonitor;
+  /// Monitor is offered at every width (#2014).
+  final VoidCallback onMonitor;
 
   @override
   Widget build(BuildContext context) => SimplePanel(
@@ -2820,13 +2818,12 @@ class _LeftRail extends StatelessWidget {
           label: context.l10n.shellAlbum,
           onTap: onAlbum,
         ),
-        if (onMonitor != null)
-          _RailButton(
-            key: const Key('simple-monitor-open'),
-            icon: Icons.monitor_heart_outlined,
-            label: context.l10n.monitorTitle,
-            onTap: onMonitor,
-          ),
+        _RailButton(
+          key: const Key('simple-monitor-open'),
+          icon: Icons.monitor_heart_outlined,
+          label: context.l10n.monitorTitle,
+          onTap: onMonitor,
+        ),
         _RailButton(
           key: const Key('simple-best-open'),
           icon: Icons.star_outline,
