@@ -24,8 +24,17 @@ class _KeepAwake extends KeepAwake {
 class _Fixed extends MonitorState {
   _Fixed(this.snap);
   final MonitorSnapshot snap;
+
+  /// The notifier of the latest pump, for a test that changes the snapshot.
+  static _Fixed? latest;
+
   @override
-  MonitorSnapshot build() => snap;
+  MonitorSnapshot build() {
+    latest = this;
+    return snap;
+  }
+
+  void show(MonitorSnapshot next) => state = next;
 }
 
 final _asOf = DateTime(2026, 11, 15, 0, 23);
@@ -512,17 +521,61 @@ void main() {
     expect(wide, isNull);
   });
 
-  testWidgets('an enlarged tile whose gear leaves the profile is shrunk', (
+  testWidgets(
+    'an enlarged tile whose gear leaves the profile is shrunk, and stays shrunk when the gear returns',
+    (tester) async {
+      await _pump(tester, _snap());
+      await tester.tap(_k('guider'));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
+      _Fixed.latest!.show(_snap(guider: false));
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
+      expect(_k('hfr'), findsOneWidget);
+      _Fixed.latest!.show(_snap());
+      await tester.pump();
+      expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
+      expect(_k('guider'), findsOneWidget);
+    },
+  );
+
+  testWidgets('a Conditions label wraps at 2x text and is never cut (#2014)', (
     tester,
   ) async {
-    await _pump(tester, _snap());
-    await tester.tap(_k('guider'));
-    await tester.pump();
-    expect(find.byKey(const Key('simple-monitor-enlarged')), findsOneWidget);
-    await tester.pumpWidget(const SizedBox());
-    await _pump(tester, _snap(guider: false));
-    expect(find.byKey(const Key('simple-monitor-enlarged')), findsNothing);
-    expect(_k('hfr'), findsOneWidget);
+    tester.platformDispatcher.textScaleFactorTestValue = 2;
+    addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+    await _pump(
+      tester,
+      _snap(
+        conditions: const MonitorConditions(
+          weather: MonitorWeather(
+            status: MonitorStatus.normal,
+            cells: [
+              (cell: MonitorWeatherCell.dewMargin, value: 6.8, overLimit: null),
+              (
+                cell: MonitorWeatherCell.skyQuality,
+                value: 21.3,
+                overLimit: null,
+              ),
+            ],
+          ),
+          rig: MonitorRigTemps(sensorC: -10.2, coolerPowerPct: 38),
+        ),
+      ),
+    );
+    for (final label in ['Above dew point', 'Sky quality', 'Cooler power']) {
+      final text = find.descendant(
+        of: _k('conditions'),
+        matching: find.text(label),
+      );
+      expect(text, findsOneWidget, reason: label);
+      expect(
+        tester.renderObject<RenderParagraph>(text).didExceedMaxLines,
+        isFalse,
+        reason: '$label is cut',
+      );
+      expect(tester.renderObject<RenderParagraph>(text).maxLines, isNull);
+    }
   });
 
   testWidgets(
@@ -716,7 +769,6 @@ void main() {
       handle.dispose();
     },
   );
-
 
   testWidgets('Conditions holds the weather and a Camera and focuser group', (
     tester,
