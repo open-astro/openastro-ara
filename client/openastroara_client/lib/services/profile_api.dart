@@ -1409,6 +1409,11 @@ class ProfileApi {
     resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
     meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
     meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
+    minutesAfterMeridian: (j['minutes_after_meridian'] as num?)?.toInt() ?? 5,
+    maxMinutesAfterMeridian:
+        (j['max_minutes_after_meridian'] as num?)?.toInt() ?? 10,
+    stopBeforeMeridianMin:
+        (j['stop_before_meridian_min'] as num?)?.toInt() ?? 0,
     meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
     meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
     meridianRefocus: _meridianRefocusFromString(
@@ -1482,6 +1487,11 @@ class ProfileApi {
     'resume_delay_min': v.resumeDelayMin,
     'meridian_flip_auto': v.meridianFlipAuto,
     'meridian_pause_min': v.meridianPauseMin,
+    'minutes_after_meridian': v.minutesAfterMeridian,
+    'max_minutes_after_meridian': v.maxMinutesAfterMeridian,
+    // 0 is the client's Off; the wire's is null.
+    'stop_before_meridian_min':
+        v.stopBeforeMeridianMin > 0 ? v.stopBeforeMeridianMin : null,
     'meridian_recenter': v.meridianRecenter,
     'meridian_recal_guider': v.meridianRecalGuider,
     'meridian_refocus': _meridianRefocusToString(v.meridianRefocus),

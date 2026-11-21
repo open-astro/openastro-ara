@@ -62,9 +62,12 @@ public interface IGuiderProcessSupervisor {
 }
 
 /// <summary>
-/// <c>systemctl</c>-backed <see cref="IGuiderProcessSupervisor"/>. Linux/Pi only in effect — on a
-/// host without <c>systemctl</c> (dev/CI) every call degrades to a safe no-op
-/// (<see cref="GuiderProcessStatus.Unknown"/> / swallowed restart).
+/// <c>systemctl</c>-backed <see cref="IGuiderProcessSupervisor"/>, meant for the rig. Where
+/// <c>systemctl</c> is missing (macOS dev) every call is a no-op (<see cref="GuiderProcessStatus.Unknown"/>
+/// / swallowed start). Where it exists but the unit does not (a Linux dev box or CI runner) the calls
+/// really run: is-active reads <c>inactive</c>, and start/restart reach polkit. Every call passes
+/// <see cref="Systemctl.NoAskPassword"/>, so such a host refuses the start instead of popping a
+/// password dialog; test hosts replace this class with a fake (<c>TestHostSeams</c>).
 /// </summary>
 public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSupervisor {
 
@@ -75,9 +78,20 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
     internal const string Unit = "openastro-guider";
 
     private readonly ILogger<SystemctlGuiderProcessSupervisor> _logger;
+    // The process seams: launch `systemctl <args>` without waiting, and run `systemctl <args>` for its
+    // stdout (null when no process started). Tests record the argv here instead of reaching systemd.
+    private readonly Action<string[]> _launch;
+    private readonly Func<string[], CancellationToken, Task<string?>> _readStdout;
 
-    public SystemctlGuiderProcessSupervisor(ILogger<SystemctlGuiderProcessSupervisor> logger) {
+    public SystemctlGuiderProcessSupervisor(ILogger<SystemctlGuiderProcessSupervisor> logger)
+        : this(logger, LaunchSystemctl, ReadSystemctlStdoutAsync) {
+    }
+
+    internal SystemctlGuiderProcessSupervisor(ILogger<SystemctlGuiderProcessSupervisor> logger,
+            Action<string[]> launch, Func<string[], CancellationToken, Task<string?>> readStdout) {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _launch = launch ?? throw new ArgumentNullException(nameof(launch));
+        _readStdout = readStdout ?? throw new ArgumentNullException(nameof(readStdout));
     }
 
     public async Task<GuiderProcessStatus> QueryStatusAsync(CancellationToken ct) {
@@ -102,16 +116,13 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
     public void RequestStart() => RequestVerb("start");
 
     private void RequestVerb(string verb) {
-        // Bare `systemctl <verb> <unit>`, fire-and-forget. systemctl asks systemd over D-Bus, and
-        // polkit authorises the openastroara user for start/restart of exactly this unit via the
-        // rule ARA's .deb ships (packaging/debian/usr/share/polkit-1/rules.d/50-openastroara-guider.rules).
+        // `systemctl --no-ask-password <verb> <unit>`, fire-and-forget. systemctl asks systemd over
+        // D-Bus, and polkit authorises the openastroara user for start/restart of exactly this unit via
+        // the rule ARA's .deb ships (packaging/debian/usr/share/polkit-1/rules.d/50-openastroara-guider.rules).
         // NOT sudo: the unit runs with NoNewPrivileges=true, which makes every setuid binary fail
         // ("no new privileges flag is set") — verified on a Pi. D-Bus authorisation is unaffected.
         try {
-            using var _ = Process.Start(new ProcessStartInfo("systemctl", $"{verb} {Unit}") {
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            });
+            _launch([Systemctl.NoAskPassword, verb, Unit]);
             LogVerbRequested(verb);
         } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException
                                          or PlatformNotSupportedException or IOException) {
@@ -122,28 +133,44 @@ public sealed partial class SystemctlGuiderProcessSupervisor : IGuiderProcessSup
 
     private async Task<string?> RunIsActiveAsync(CancellationToken ct) {
         try {
-            var psi = new ProcessStartInfo("systemctl", $"is-active {Unit}") {
-                RedirectStandardOutput = true,
-                // Deliberately NOT redirecting stderr: we never read it, and a redirected-but-unread
-                // stderr pipe would deadlock WaitForExit if systemctl writes enough to it (e.g. a
-                // "Failed to connect to bus" error). Errors surface via the exception filter / a
-                // non-"active" stdout instead; stderr just inherits the daemon's.
-                UseShellExecute = false,
-                CreateNoWindow = true,
-            };
-            using var process = Process.Start(psi);
-            if (process is null) {
-                return null;
-            }
-            // Read stdout to completion before waiting so a full pipe can't deadlock the exit.
-            var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
-            await process.WaitForExitAsync(ct).ConfigureAwait(false);
-            return stdout;
+            return await _readStdout([Systemctl.NoAskPassword, "is-active", Unit], ct).ConfigureAwait(false);
         } catch (Exception ex) when (ex is Win32Exception or InvalidOperationException
                                          or PlatformNotSupportedException or IOException) {
             LogSystemctlUnavailable(ex);
             return null;
         }
+    }
+
+    private static ProcessStartInfo SystemctlStartInfo(string[] args) {
+        var psi = new ProcessStartInfo("systemctl") {
+            UseShellExecute = false,
+            CreateNoWindow = true,
+        };
+        foreach (var arg in args) {
+            psi.ArgumentList.Add(arg);
+        }
+        return psi;
+    }
+
+    private static void LaunchSystemctl(string[] args) {
+        using var _ = Process.Start(SystemctlStartInfo(args));
+    }
+
+    private static async Task<string?> ReadSystemctlStdoutAsync(string[] args, CancellationToken ct) {
+        var psi = SystemctlStartInfo(args);
+        psi.RedirectStandardOutput = true;
+        // Deliberately NOT redirecting stderr: we never read it, and a redirected-but-unread
+        // stderr pipe would deadlock WaitForExit if systemctl writes enough to it (e.g. a
+        // "Failed to connect to bus" error). Errors surface via the caller's exception filter / a
+        // non-"active" stdout instead; stderr just inherits the daemon's.
+        using var process = Process.Start(psi);
+        if (process is null) {
+            return null;
+        }
+        // Read stdout to completion before waiting so a full pipe can't deadlock the exit.
+        var stdout = await process.StandardOutput.ReadToEndAsync(ct).ConfigureAwait(false);
+        await process.WaitForExitAsync(ct).ConfigureAwait(false);
+        return stdout;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Requested systemctl {Verb} of the guider unit")]

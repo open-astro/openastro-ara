@@ -166,7 +166,11 @@ public sealed record CameraStateDto(
     // #1185 (§25.5.5) — the cooler's hot side (ASCOM HeatSinkTemperature); null when the driver
     // does not report it. A heat sink that climbs while CCD temperature holds is a fan or airflow
     // problem the cooler-power figure alone does not show.
-    double? HeatSinkTemperatureC = null);
+    double? HeatSinkTemperatureC = null,
+    // #2076 — true while a cooler Ara switched on does not respond: CoolerOn has read back off
+    // for a minute, or on at 0 % power with the sensor well above its set-point and not moving
+    // (a camera with no 12 V). Cleared when the cooler responds, is switched off, or on reconnect.
+    bool CoolerNotResponding = false);
 
 // §64 Live View: a server-driven short-exposure loop that renders the latest
 // frame to JPEG (no FITS write, not cataloged) for framing/focus. Start/stop +
@@ -296,7 +300,19 @@ public sealed record TelescopeStateDto(
     double? TargetDeclinationDegrees = null,
     // #1649 — the mount's drive rate ("Sidereal" | "Lunar" | "Solar" | "King", ASCOM DriveRate
     // names as in SupportedSiderealRates); null when the mount can't report it.
-    string? TrackingRate = null);
+    string? TrackingRate = null,
+    // #2070 — the mount's reported position is not trusted (it reported Home right after it
+    // connected, or its position jumped with nothing commanded): GoTo, Park, Home and polar
+    // alignment are refused until the user confirms Home. The reason is one of
+    // at_home_on_connect | pose_jump_on_reconnect | at_home_without_command | pose_jump_in_session.
+    bool PositionUnverified = false,
+    string? PositionUnverifiedReason = null);
+
+/// <summary>#2070 — one mount whose position is unverified, as the daemon keeps it across restarts.</summary>
+public sealed record MountPoseEntry(string DeviceId, string Reason);
+
+/// <summary>#2070 — on-disk shape of the unverified-mount file (<c>mount-pose.json</c>).</summary>
+public sealed record MountPoseFile(IReadOnlyList<MountPoseEntry> Unverified);
 
 /// <param name="Force">A slew while a sequence run is in progress stops guiding and pauses the run,
 /// so it is refused (409) unless the caller says it knows: the client asks, then repeats with
@@ -897,7 +913,7 @@ public sealed record GuiderAlpacaDiscoveryDto(IReadOnlyList<string> Servers);
 // ─── Polar Alignment (§10.6 row 12) ───────────────────────────────────────────
 
 /// <summary>The routine's stages (<see cref="PolarAlignStateDto.Stage"/>): <c>coarse</c> — the mount goes
-/// Home, then the two-point seed + live adjust loop on the main camera (slower frames, for the big moves);
+/// Home, then the three-point seed (two RA-motor turns, three solves) + live adjust loop on the main camera (slower frames, for the big moves);
 /// <c>fine</c> — the same seed + live adjust loop on the guide camera; <c>check</c> — back Home, three
 /// guide-camera solves with two RA turns, an exact three-point axis fit, no adjusting.</summary>
 public static class PolarAlignStages {
@@ -931,7 +947,7 @@ public sealed record PolarAlignCheckResultDto(
 
 public sealed record PolarAlignStateDto(
     // §45 engine states: homing (Find Home running, or — WaitingForHome — waiting for the user to
-    // put the mount at Home and tap Continue), seeding (2-point axis measurement incl. the RA slew),
+    // put the mount at Home and tap Continue), seeding (3-point axis measurement: the Dec-motor tilt and two RA-motor turns),
     // adjusting (live loop, error fields populated — every stage reaches it through seeding), paused
     // (5 consecutive failed solves — still retrying), checking (the three check solves), checked
     // (terminal: CheckResult populated), failed (fatal routine error; see the polar_align.error WS event).

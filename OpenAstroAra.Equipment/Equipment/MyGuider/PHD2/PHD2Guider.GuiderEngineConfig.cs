@@ -39,19 +39,44 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// <c>EnsurePHD2EquipmentConnected</c> reconnects it. Every message is best-effort: a rejected RPC
         /// (e.g. an algo-param name a given PHD2 build doesn't expose) is logged and skipped so the push can
         /// never block — or fail — the connect itself.
+        /// <para>#2074 — the guider's state is read first, and selections or setup that already match are
+        /// left out (<see cref="PlanEngineConfigPush"/>). Each of <c>set_alpaca_server</c>,
+        /// <c>set_selected_camera</c>, <c>set_selected_mount</c> and <c>set_selected_rotator</c> rebuilds the
+        /// guider's device object even for the choice it already holds (guider event_server.cpp
+        /// <c>apply_selection_to_control</c> → <c>GearDialog::OnChoiceScope</c> / <c>OnChoiceCamera</c>), and
+        /// the new mount object has no calibration. <c>set_profile_setup</c> alone rebuilds nothing. Returns
+        /// the plan that was sent; the caller restores the calibration after its reconnect when
+        /// <see cref="GuiderEnginePushPlan.RestoreCalibrationAfterReconnect"/> is set. Call it after
+        /// <c>EnsureAraGuiderProfileAsync</c>: a profile switch changes what the guider holds.</para>
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
             Justification = "Best-effort §63.5 push boundary: each setter RPC may throw (socket drop, a PHD2 build that doesn't expose a param) — it's logged and skipped so a config push can never fail or block the guider connect itself.")]
-        private async Task PushGuiderEngineConfigAsync(CancellationToken ct) {
+        private async Task<GuiderEnginePushPlan> PushGuiderEngineConfigAsync(CancellationToken ct) {
             var guider = profileService.ActiveProfile.GuiderSettings;
             // Never empty: the Dec mode rides every push (#1448), so the summary line always reports the run.
-            var messages = BuildGuiderEngineConfigMessages(guider, AdvancedSettingsQuietly());
+            var built = BuildGuiderEngineConfigMessages(guider, AdvancedSettingsQuietly());
+
+            // #2074 — ask the guider what it holds only when something in the push would need the equipment
+            // off; a push of runtime-safe messages alone never opens the window anyway.
+            GuiderEquipmentState? state = null;
+            if (built.Any(RequiresDisconnectedEquipment)) {
+                try {
+                    state = await ReadGuiderEquipmentStateAsync(ct);
+                } catch (OperationCanceledException) {
+                    throw;
+                } catch (Exception ex) {
+                    // No state means every comparison reads "changed": the full push goes out, as before.
+                    Logger.Warning($"PHD2 §63.5 push - reading the guider's equipment state failed, sending every setting: {ex.Message}");
+                }
+            }
+            var plan = PlanEngineConfigPush(built, state);
+            var messages = plan.Messages;
 
             // Only set_profile_setup and the §63.17 selection setters need the equipment off, so only pay the
             // disconnect → reconnect cost when one is actually being sent — otherwise the algo-param /
             // dec-mode pushes apply at runtime and we leave an already-connected (possibly calibrated)
             // session alone.
-            var disconnectedForSetup = messages.Any(RequiresDisconnectedEquipment);
+            var disconnectedForSetup = plan.OpensDisconnectWindow;
             if (disconnectedForSetup) {
                 // Best-effort like the sends: a socket drop here must not propagate into Connect's catch
                 // (user-visible error + aborted connect). Log + proceed — set_profile_setup will then just fail
@@ -65,8 +90,16 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 }
             }
 
-            var setup = disconnectedForSetup ? " (equipment disconnected for set_profile_setup)" : string.Empty;
+            var setup = (disconnectedForSetup, plan.SelectionsSkipped, plan.SetupSkipped) switch {
+                (true, true, _) => " (equipment disconnected for set_profile_setup; selections unchanged)",
+                (true, false, _) => " (equipment disconnected for set_profile_setup)",
+                (false, true, true) => " (equipment left connected: selections and setup unchanged)",
+                (false, true, false) => " (equipment left connected: selections unchanged)",
+                (false, false, true) => " (equipment left connected: setup unchanged)",
+                _ => string.Empty,
+            };
             await SendEngineConfigMessagesAsync(messages, setup, ct);
+            return plan;
         }
 
         /// <summary>What the latest push did not land (#1748): a skipped setting, a value left out, or a refused
@@ -439,7 +472,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
 
         /// <summary>§63.17 — the daemon blocks these RPCs while equipment is connected (doc/jsonrpc_api.md),
         /// so their presence in a push forces the disconnect → reconnect window. Single source of truth for
-        /// the push's disconnect decision; unit-tested so a new selection setter can't silently skip it.</summary>
+        /// the push's disconnect decision; unit-tested so a new selection setter can't silently skip it.
+        /// #2074: the Alpaca server and the camera, mount and rotator setters also rebuild the guider's device
+        /// object, even for the same choice, and that drops the calibration; so the push leaves them out when
+        /// the guider already holds them. <c>set_profile_setup</c> rebuilds nothing, and
+        /// <c>set_selected_camera_id</c> neither rebuilds nor (on this guider) needs the equipment off: it
+        /// rides the selection group so the camera and its id always go together.</summary>
         public static bool RequiresDisconnectedEquipment(Phd2Method message) => message
             is Phd2SetProfileSetup
             or Phd2SetAlpacaServer
@@ -478,7 +516,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         /// pushes automatically; this serves POST /guider/profile/push so a settings edit takes effect without
         /// a full reconnect). Runs the same best-effort push — including its disconnect window when a
         /// selection/setup message is queued — then re-ensures the daemon's equipment is connected. Returns
-        /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload.
+        /// the RPC method names attempted, for the <c>guider.profile_pushed</c> event's fields-changed payload:
+        /// a selection or setup message the guider already held is not sent, so it is not listed (#2074).
         /// Requires a connected guider (throws <see cref="InvalidOperationException"/>).
         /// </summary>
         [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -491,9 +530,8 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // to be sitting on (a web-UI switch or a fresh daemon selects some other profile, and a push
             // there silently configures the wrong rig).
             await SelectActiveAraProfileTwinAsync(ct);
-            var pushed = BuildGuiderEngineConfigMessages(profileService.ActiveProfile.GuiderSettings, AdvancedSettingsQuietly())
-                .Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
-            await PushGuiderEngineConfigAsync(ct);
+            var plan = await PushGuiderEngineConfigAsync(ct);
+            var pushed = plan.Messages.Select(m => m.Method).Append(CameraGainSetter).Distinct().ToList();
             // The push only reconnects equipment when it opened the disconnect window; make the post-push
             // state deterministic for the caller either way. A reconnect failure here is a real, actionable
             // fault — the realistic case being a just-pushed selection the daemon can't connect (wrong
@@ -515,6 +553,9 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                 throw new GuiderRpcException("set_connected", -1,
                     "profile pushed, but the daemon could not reconnect its equipment — check that the "
                     + "selected camera/mount/rotator are reachable (get_connected/set_connected failed).");
+            }
+            if (plan.RestoreCalibrationAfterReconnect) {
+                await RestoreCalibrationAfterPushAsync(ct);
             }
             await PushCameraGainAsync(ct);
             return pushed;

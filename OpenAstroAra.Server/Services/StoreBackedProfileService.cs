@@ -254,6 +254,10 @@ internal static class ProfileStoreMapper {
     internal static void ApplyMeridian(SafetyPoliciesDto policies, IProfile profile) {
         var meridian = profile.MeridianFlipSettings;
         meridian.PauseTimeBeforeMeridian = policies.MeridianPauseMin;
+        // #2044 — the window after the meridian. The max first: NINA's setters pull the other value along, so a new
+        // max under the old minutes-after would otherwise clip it.
+        meridian.MaxMinutesAfterMeridian = Math.Max(0, policies.MaxMinutesAfterMeridian);
+        meridian.MinutesAfterMeridian = Math.Clamp(policies.MinutesAfterMeridian, 0, meridian.MaxMinutesAfterMeridian);
         meridian.Recenter = policies.MeridianRecenter;
         // #1138 — the NINA-side flag mirrors the store's meridian_refocus policy for any legacy reader;
         // the executor itself decides from the store (always / if_temp_drifted / never).

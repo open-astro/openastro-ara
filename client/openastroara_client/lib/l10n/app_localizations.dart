@@ -4815,6 +4815,24 @@ abstract class AppLocalizations {
   /// **'Guide camera pixel size'**
   String get shellGuidePixelSize;
 
+  /// Settings › Rig: the main camera's sensor size in pixels, read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera sensor'**
+  String get shellMainSensor;
+
+  /// Settings › Rig: the main camera's pixel size (µm), read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera pixel size'**
+  String get shellMainPixelSize;
+
+  /// Settings › Rig: the hint under the main camera sensor row; the rig reads it from the camera
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in when the main camera connects'**
+  String get shellFromMainCamera;
+
   /// Simple search: other words that find the guide scope rows (not shown)
   ///
   /// In en, this message translates to:
@@ -6693,6 +6711,12 @@ abstract class AppLocalizations {
   /// **'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.'**
   String get simpleGuiderCalibrationFailed;
 
+  /// Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler not responding: is the camera\'s 12 V connected?'**
+  String get simpleCoolerNotResponding;
+
   /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
   ///
   /// In en, this message translates to:
@@ -7377,12 +7401,6 @@ abstract class AppLocalizations {
   /// **'Up next'**
   String get monitorUpNext;
 
-  /// Monitor Now tile with no plan: tonight's best Targets
-  ///
-  /// In en, this message translates to:
-  /// **'Tonight\'s best'**
-  String get monitorTonightsBest;
-
   /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
@@ -7400,12 +7418,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'then'**
   String get monitorThen;
-
-  /// Monitor Tonight's best row: the Target's altitude now
-  ///
-  /// In en, this message translates to:
-  /// **'{alt}° up'**
-  String monitorAltitudeUp(String alt);
 
   /// Monitor tile: the Target
   ///
@@ -7509,7 +7521,7 @@ abstract class AppLocalizations {
   /// **'Since {time} · {duration}'**
   String monitorSince(String time, String duration);
 
-  /// Monitor Weather tile status word
+  /// Monitor Conditions tile status word
   ///
   /// In en, this message translates to:
   /// **'Past limit'**
@@ -7605,11 +7617,11 @@ abstract class AppLocalizations {
   /// **'Clipped stars'**
   String get monitorClippedStars;
 
-  /// Monitor Last frame: the last autofocus and the temperature change since
+  /// Monitor Conditions: label under the focuser's signed temperature change since the last autofocus, which ran at the given clock time
   ///
   /// In en, this message translates to:
-  /// **'Autofocus {time} · {delta} since then'**
-  String monitorAutofocusSince(String time, String delta);
+  /// **'Autofocus {time}'**
+  String monitorAutofocusAt(String time);
 
   /// Monitor Now tile: frames saved so far
   ///
@@ -7634,6 +7646,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drifting'**
   String get monitorDrifting;
+
+  /// Monitor tile: weather with the camera and focuser temperatures
+  ///
+  /// In en, this message translates to:
+  /// **'Conditions'**
+  String get monitorConditions;
+
+  /// Monitor Conditions tile: section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Camera and focuser'**
+  String get monitorCameraAndFocuser;
+
+  /// Monitor Conditions tile: the camera sensor's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get monitorSensor;
+
+  /// Monitor Conditions tile: the cooler's power
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler power'**
+  String get monitorCoolerPower;
+
+  /// Monitor Conditions tile: the focuser's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser'**
+  String get monitorFocuserTemp;
 
   /// Monitor altitude graph key: the plan's imaging span
   ///
@@ -8979,7 +9021,7 @@ abstract class AppLocalizations {
   /// **'The sensor or the focal length is not set.'**
   String get rigSetupOpticsMissing;
 
-  /// Rig setup: button that opens the optics panel
+  /// Rig setup: button that opens Simple Mode's Settings › Rig at the telescope rows
   ///
   /// In en, this message translates to:
   /// **'Set up optics'**
@@ -10254,13 +10296,13 @@ abstract class AppLocalizations {
   /// Settings → Imaging → Polar align: RA turn field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Turn (°, 5 to 120)'**
+  /// **'Turn (°, 5 to 30)'**
   String get polarKnobTurn;
 
   /// Settings → Imaging → Polar align: Verify step field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Verify step (°, 5 to 60)'**
+  /// **'Verify step (°, 5 to 30)'**
   String get polarKnobVerifyStep;
 
   /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
@@ -10296,13 +10338,13 @@ abstract class AppLocalizations {
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Kept between 5° and 120°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobTurnHint;
 
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Kept between 5° and 60°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobVerifyStepHint;
 
   /// The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line
@@ -10646,6 +10688,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
+
+  /// Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop tracking when polar align ends'**
+  String get polarKnobStopTracking;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is on
+  ///
+  /// In en, this message translates to:
+  /// **'Every end of a run turns tracking off'**
+  String get polarKnobStopTrackingOn;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is off
+  ///
+  /// In en, this message translates to:
+  /// **'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'**
+  String get polarKnobStopTrackingOff;
 
   /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
   ///
@@ -11073,11 +11133,75 @@ abstract class AppLocalizations {
   /// **'That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.'**
   String refusalBelowHorizonLimit(String altitude, String limit);
 
+  /// Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.'**
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  );
+
   /// Refusal (end-night-in-progress): End Night was started while it is already running
   ///
   /// In en, this message translates to:
   /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
   String get refusalEndNightInProgress;
+
+  /// Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionUnverified;
+
+  /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
+  String get refusalMountPositionNotReadYet;
+
+  /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount position unverified'**
+  String get mountPositionUnverifiedTitle;
+
+  /// Mount window: what the unverified-position warning means and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionUnverifiedBody;
+
+  /// Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)
+  ///
+  /// In en, this message translates to:
+  /// **'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.'**
+  String get mountPositionUnverifiedRunZeroSearch;
+
+  /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again
+  ///
+  /// In en, this message translates to:
+  /// **'The mount IS at Home'**
+  String get mountConfirmAtHome;
+
+  /// Mount window: the question asked before confirming Home
+  ///
+  /// In en, this message translates to:
+  /// **'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.'**
+  String get mountConfirmAtHomeQuestion;
+
+  /// Mount window: the confirm button of the Home question
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, it is at Home'**
+  String get mountConfirmAtHomeYes;
+
+  /// Mount window: notice when the rig refused the Home confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t confirm Home'**
+  String get mountCouldntConfirmHome;
 
   /// Add your devices: heading above the detected devices
   ///
@@ -11252,6 +11376,240 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Start anyway'**
   String get clockWrongStartAnyway;
+
+  /// Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch
+  ///
+  /// In en, this message translates to:
+  /// **'Limits'**
+  String get limitsTitle;
+
+  /// Simple Mode Mount window, Limits: the row for the lowest altitude Ara points at (the profile's flat horizon)
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude'**
+  String get limitsLowestAltitude;
+
+  /// Screen-reader label of the + button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise lowest altitude'**
+  String get limitsLowestRaise;
+
+  /// Screen-reader label of the - button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower lowest altitude'**
+  String get limitsLowestLower;
+
+  /// Simple Mode Mount window, Limits: an altitude in whole degrees, like '20°'
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}°'**
+  String limitsDegrees(int deg);
+
+  /// Simple Mode Mount window, Limits: the read-only Lowest altitude when the profile uses a measured (custom) horizon
+  ///
+  /// In en, this message translates to:
+  /// **'Your measured horizon'**
+  String get limitsMeasuredHorizon;
+
+  /// Caption under 'Your measured horizon': where the measured horizon is edited
+  ///
+  /// In en, this message translates to:
+  /// **'Change it in Advanced Mode › Settings › Site.'**
+  String get limitsMeasuredHorizonCaption;
+
+  /// Simple Mode Mount window, Limits (flip Auto): the row for when the flip runs, before or after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'At the meridian'**
+  String get limitsAtMeridian;
+
+  /// Screen-reader label of the + button of the At the meridian stepper (moves the flip later)
+  ///
+  /// In en, this message translates to:
+  /// **'Later at the meridian'**
+  String get limitsAtMeridianLater;
+
+  /// Screen-reader label of the - button of the At the meridian stepper (moves the flip earlier)
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier at the meridian'**
+  String get limitsAtMeridianEarlier;
+
+  /// At the meridian value: stop tracking n minutes before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min before'**
+  String limitsMinBefore(int n);
+
+  /// At the meridian value: flip as the target crosses the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'On it'**
+  String get limitsOnMeridian;
+
+  /// At the meridian value: keep tracking n minutes after the meridian, then flip
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min after'**
+  String limitsMinAfter(int n);
+
+  /// Caption under At the meridian when it is before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.'**
+  String limitsCaptionBefore(int n);
+
+  /// Caption under At the meridian when it is on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips as soon as the target crosses the meridian.'**
+  String get limitsCaptionOn;
+
+  /// Caption under At the meridian when it is after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Keeps tracking {n} min past the meridian, then flips.'**
+  String limitsCaptionAfter(int n);
+
+  /// Simple Mode Mount window, Limits (flip Off): minutes before the meridian at which Ara stops tracking and pauses the plan
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian'**
+  String get limitsStopBefore;
+
+  /// Screen-reader label of the + button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise stop before meridian'**
+  String get limitsStopBeforeRaise;
+
+  /// Screen-reader label of the - button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower stop before meridian'**
+  String get limitsStopBeforeLower;
+
+  /// Stop before meridian value: a number of minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min'**
+  String limitsMinutes(int n);
+
+  /// Caption under Stop before meridian when it is set
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking and pauses the plan {n} min before the meridian.'**
+  String limitsStopCaption(int n);
+
+  /// Caption under Stop before meridian when it is Off
+  ///
+  /// In en, this message translates to:
+  /// **'The mount tracks through the meridian. Only its own firmware limit stops it.'**
+  String get limitsStopCaptionOff;
+
+  /// Pill after the Lowest altitude was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude {deg}°'**
+  String limitsPillLowest(int deg);
+
+  /// Pill after At the meridian was saved as before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, flips after it'**
+  String limitsPillBefore(int n);
+
+  /// Pill after At the meridian was saved as on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips at the meridian'**
+  String get limitsPillOn;
+
+  /// Pill after At the meridian was saved as after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips {n} min after the meridian'**
+  String limitsPillAfter(int n);
+
+  /// Pill after Stop before meridian was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian {n} min'**
+  String limitsPillStop(int n);
+
+  /// Pill after Stop before meridian was turned off
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian off'**
+  String get limitsPillStopOff;
+
+  /// Error pill when a Limits row could not be saved; the old value is back
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the limit'**
+  String get limitsCouldntSave;
+
+  /// Screen-reader label of the Limits sky arc
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed sky from {deg}° to the zenith'**
+  String limitsArcLabel(int deg);
+
+  /// Sky arc label: the band under the lowest altitude
+  ///
+  /// In en, this message translates to:
+  /// **'too low'**
+  String get limitsArcTooLow;
+
+  /// Sky arc label: the band where the mount may point
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get limitsArcOk;
+
+  /// Sky arc label: the horizon line
+  ///
+  /// In en, this message translates to:
+  /// **'horizon'**
+  String get limitsArcHorizon;
+
+  /// Error pill: the rig stopped tracking n minutes before the meridian (meridian flip off, Stop before meridian set)
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking stopped {n} min before the meridian.'**
+  String limitStoppedMeridian(int n);
+
+  /// Error pill: the rig asked the mount to stop tracking before the meridian and the mount did not
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t stop tracking {n} min before the meridian. Stop it by hand.'**
+  String limitNotStoppedMeridian(int n);
+
+  /// Added to the meridian stop pill when the plan was paused
+  ///
+  /// In en, this message translates to:
+  /// **'Plan paused.'**
+  String get limitPlanPaused;
+
+  /// Ends the meridian stop pill: Ara never slews or parks for a limit
+  ///
+  /// In en, this message translates to:
+  /// **'Ara didn\'t move the mount.'**
+  String get limitDidntMove;
+
+  /// Simple Mode search: the Limits group of the Mount window
+  ///
+  /// In en, this message translates to:
+  /// **'Mount limits'**
+  String get searchSettingMountLimits;
+
+  /// Simple Mode search keywords for Mount limits, space-separated
+  ///
+  /// In en, this message translates to:
+  /// **'limit horizon altitude lowest meridian stop flip'**
+  String get searchWordsMountLimits;
 }
 
 class _AppLocalizationsDelegate

@@ -64,6 +64,7 @@ import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
+import '../../models/camera_status.dart' show CameraStatus;
 import '../../models/equipment_device_status.dart';
 import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
 import '../../state/equipment/camera_state.dart';
@@ -77,7 +78,6 @@ import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/mount_state.dart';
-import '../../models/mount_status.dart' show MountCapabilities;
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
@@ -325,6 +325,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  int? _coolerPill;
+
+  /// #2076 — one warning each time a cooler the daemon switched on stops
+  /// responding (no 12 V); it goes when the cooler responds or the camera
+  /// drops.
+  void _syncCoolerPill(CameraStatus? next) {
+    final on = next != null &&
+        next.connectionState == EquipmentConnectionState.connected &&
+        next.coolerNotResponding;
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    // A pill closed with × stays closed for this episode.
+    if (on && _coolerPill == null) {
+      final l10n = context.l10n;
+      _coolerPill = messages.show(
+        SimpleMessageKind.warning,
+        l10n.simpleCoolerNotResponding,
+        origin: SimpleStatusOrigin.camera,
+        actions: [
+          SimpleMessageAction(
+            l10n.shellSectionCamera,
+            () => _openFromPill(SimpleStatusOrigin.camera),
+          ),
+        ],
+      );
+    } else if (!on && _coolerPill != null) {
+      messages.dismiss(_coolerPill!);
+      _coolerPill = null;
+    }
+  }
+
   int? _calibrationPill;
 
   /// #1716 — one warning each time the Guider falls back to its earlier
@@ -389,15 +419,32 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listenManual(coolingFanAskDueProvider, (_, due) {
       if (due) unawaited(_askCoolingFan());
     }, fireImmediately: true);
-    ref.listenManual(mountProvider, (previous, next) {
-      final caps = next.value?.capabilities;
-      final was = previous?.value?.capabilities;
-      if (caps != null &&
-          (was == null || previous?.value?.deviceId != next.value?.deviceId)) {
-        _opticsFromMount(caps);
-      }
-    }, fireImmediately: true);
+    // #2041 — the rig fills empty optics from the mount (#1994) and the
+    // sensor from the main camera when one connects: read them again then.
+    // Never written from here: a save sent from a read that had not landed
+    // put the rig's sensor back to 0.
+    // A reconnect of the same device reads again because the rig reports no
+    // capabilities while it is disconnected: never cache them here.
+    void readOpticsOnConnect((Object?, String?)? was, (Object?, String?)? now) {
+      if (now?.$1 == null || (was?.$1 != null && was?.$2 == now?.$2)) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) return;
+      // A load only (record 0021 rule 7); a failure stays in the section.
+      unawaited(ref.read(opticsSettingsProvider.notifier).load(api));
+    }
+    ref.listenManual(mountProvider.select((m) => (m.value?.capabilities, m.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
+    ref.listenManual(cameraStatusProvider.select((c) => (c.value?.capabilities, c.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
     _watchDeviceFailures();
+    // #2044 — kept alive with the shell: a meridian stop shows its pill on any screen.
+    ref.listenManual(simpleMountLimitProvider, (_, _) {});
+    // #2076 — a frame late, as a pill changes a provider.
+    ref.listenManual(cameraStatusProvider, (_, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncCoolerPill(next.value);
+      });
+    }, fireImmediately: true);
     // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
     // person; a frame late, as a pill changes a provider.
     void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -524,18 +571,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     watch('safety', safetyMonitorProvider, (l) => l.shellSafetyMonitor);
   }
 
-  /// The rig fills the telescope's empty fields from the mount when it connects
-  /// (#1846); reading them again lets the screens show them. Never a save from
-  /// here: no widget saves a profile section in reaction to rig state (record
-  /// 0021 rule 7), and overlapping loads at connect once wrote zeros over the
-  /// sensor fields (#2041).
-  Future<void> _opticsFromMount(MountCapabilities caps) async {
-    if (caps.apertureMm == null && caps.focalLengthMm == null) return;
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    await ref.read(opticsSettingsProvider.notifier).load(api);
-  }
-
   late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
   late SimpleMessagesNotifier _messages;
 
@@ -556,6 +591,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
+    final coolerPill = _coolerPill;
     final devicePills = [..._devicePills.values];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       devicePills.forEach(_messages.dismiss);
@@ -563,6 +599,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
+      if (coolerPill != null) _messages.dismiss(coolerPill);
     });
     _focus.dispose();
     _rigBarConnect.dispose();
@@ -734,6 +771,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 _openFromPill(SimpleStatusOrigin.safetyMonitor);
               case MonitorDestination.weather:
                 _openDevice('eq.weather');
+              case MonitorDestination.camera:
+                _openDevice('eq.camera');
               case MonitorDestination.sky:
                 setState(() => _sky = true);
               case MonitorDestination.frameInfo:
@@ -873,6 +912,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     } else {
       _openMenu();
     }
+  }
+
+  /// #2041 — Settings › Rig scrolled to the telescope rows, a frame late so
+  /// the page is up.
+  void _showRigOptics() {
+    _showRigPage();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ThisRig._reveal(_ThisRig.opticsKey, 0),
+    );
   }
 
   /// A search hit, opened where it lives in Simple Mode.
@@ -1739,6 +1787,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: SimpleRigSetupHost(
                                   autoOpened: _rigSetupOpened,
                                   onOpenRig: _showRigPage,
+                                  onOpenOptics: _showRigOptics,
                                   onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
                                 ),
                               ),
@@ -4634,6 +4683,49 @@ Widget _gearRow({
   );
 }
 
+/// A Settings › Rig value the rig finds out itself: its button, never
+/// enabled, read as text, in the same tile as the wheels above it.
+class _RigReadOnlyRow extends StatelessWidget {
+  const _RigReadOnlyRow({required this.id, required this.label, required this.value, this.hint});
+
+  final String id;
+  final String label;
+  final String value;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: kSimpleText),
+              if (hint case final hint?) Text(hint, style: AraText.caption),
+            ],
+          ),
+        ),
+        Semantics(
+          excludeSemantics: true,
+          label: value,
+          child: TextButton(
+            key: Key('simple-rig-$id'),
+            style: TextButton.styleFrom(
+              backgroundColor: AraColors.tileFill,
+              disabledBackgroundColor: AraColors.tileFill,
+              minimumSize: const Size(kSimpleRigControlWidth, 44),
+            ),
+            onPressed: null,
+            child: Text(value, style: kSimpleText),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Settings › Rig: what belongs to no device. The rig's figures, the rig
 /// and profile with the way to change them, the one setting Ara can't find out
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
@@ -4653,6 +4745,18 @@ class _ThisRig extends ConsumerWidget {
   /// One Rig page is up at a time, so a global key by name is safe.
   static const _siteKey = GlobalObjectKey('simple-rig-site');
   static const _guideKey = GlobalObjectKey('simple-rig-guide-scope');
+  static const opticsKey = GlobalObjectKey('simple-rig-optics');
+
+  /// A pixel size, or Not set.
+  static String _micrometres(AppLocalizations l10n, double um) =>
+      um > 0 ? '${um.toStringAsFixed(2)} µm' : l10n.shellNotSet;
+
+  /// A sensor size in pixels, or null while the rig has none (or the optics
+  /// are not loaded).
+  static String? _sensor(OpticsSettings? o) =>
+      o != null && o.sensorWidthPx > 0 && o.sensorHeightPx > 0
+      ? '${o.sensorWidthPx} × ${o.sensorHeightPx} px'
+      : null;
 
   /// Scrolls the Rig page so [key]'s block shows: [alignment] 0 puts it at
   /// the top, 1 at the bottom.
@@ -4838,7 +4942,7 @@ class _ThisRig extends ConsumerWidget {
               case RigSetupGap.guideScope:
                 _reveal(_guideKey, 0);
               case RigSetupGap.mainOptics:
-                openSettingsPanel(ref, 'img.optics');
+                _reveal(opticsKey, 0);
               case RigSetupGap.guiderCalibration:
                 onOpenGuider?.call();
             }
@@ -4870,7 +4974,7 @@ class _ThisRig extends ConsumerWidget {
           ),
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
-        const Divider(height: AraSpace.s16),
+        const Divider(key: opticsKey, height: AraSpace.s16),
         // Not loaded reads as 0 (unset); a tap loads the rig's copy first.
         for (final (id, label, digits, value, apply)
             in <
@@ -4912,6 +5016,22 @@ class _ThisRig extends ConsumerWidget {
               title: l10n.shellCouldntSave,
             ),
           ),
+        // #2041 — read only: the rig takes the sensor from the main camera
+        // when it connects.
+        _RigReadOnlyRow(
+          id: 'sensor',
+          label: l10n.shellMainSensor,
+          // The hint only while the sensor is still to come.
+          hint: _sensor(ref.watch(opticsSettingsProvider).value) == null
+              ? l10n.shellFromMainCamera
+              : null,
+          value: _sensor(ref.watch(opticsSettingsProvider).value) ?? l10n.shellNotSet,
+        ),
+        _RigReadOnlyRow(
+          id: 'pixel',
+          label: l10n.shellMainPixelSize,
+          value: _micrometres(l10n, ref.watch(opticsSettingsProvider).value?.pixelSizeUm ?? 0),
+        ),
         // The guide scope: read from the guider when the profile left it
         // unset, kept in the profile (polar alignment solves with it).
         _GuideOpticsReader(
@@ -4940,41 +5060,11 @@ class _ThisRig extends ConsumerWidget {
             ),
           ),
         ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
-              ),
-              // Read only (it comes from the guider), in the same tile as
-              // the value above it: its button, never enabled, read as text.
-              Builder(
-                builder: (context) {
-                  final pixel = switch (ref
-                      .watch(phd2SettingsProvider)
-                      .guidePixelSize) {
-                    final p when p > 0 => '${p.toStringAsFixed(2)} µm',
-                    _ => l10n.shellNotSet,
-                  };
-                  return Semantics(
-                    excludeSemantics: true,
-                    label: pixel,
-                    child: TextButton(
-                      key: const Key('simple-rig-guidepixel'),
-                      style: TextButton.styleFrom(
-                        backgroundColor: AraColors.tileFill,
-                        disabledBackgroundColor: AraColors.tileFill,
-                        minimumSize: const Size(kSimpleRigControlWidth, 44),
-                      ),
-                      onPressed: null,
-                      child: Text(pixel, style: kSimpleText),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+        // Read only: it comes from the guider.
+        _RigReadOnlyRow(
+          id: 'guidepixel',
+          label: l10n.shellGuidePixelSize,
+          value: _micrometres(l10n, ref.watch(phd2SettingsProvider).guidePixelSize),
         ),
         for (final (id, label, value, set)
             in <(String, String, double, void Function(double))>[

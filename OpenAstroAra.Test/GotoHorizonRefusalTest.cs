@@ -57,6 +57,10 @@ namespace OpenAstroAra.Test {
         private static Task<Microsoft.AspNetCore.Http.IResult> Slew(SlewRequestDto request, Mock<ITelescopeService> t, Mock<ISequencerService> s, IProfileStore? profiles) =>
             EquipmentEndpoints.SlewAsync(request, null, t.Object, s.Object, profiles, CancellationToken.None);
 
+        /// <summary>An RA on the meridian now (longitude 0): a target the #2073 counterweight check never
+        /// refuses, so an accepted case does not depend on the time of day.</summary>
+        private static double RaOnTheMeridian() => SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, 0) / 15.0 % 24.0;
+
         private static void NothingDispatched(Mock<ITelescopeService> telescope) =>
             telescope.Verify(t => t.SlewAsync(It.IsAny<SlewRequestDto>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never, "a refused GoTo never reaches the mount");
 
@@ -69,7 +73,9 @@ namespace OpenAstroAra.Test {
                 Assert.That(refusal.Cause.Status, Is.EqualTo(409));
                 Assert.That((double)refusal.Parameters["altitude_deg"]!, Is.EqualTo(14).Within(0.3));
                 Assert.That(refusal.Parameters["limit_deg"], Is.EqualTo(20.0));
-                Assert.That(refusal.Message, Does.Contain("14").And.Contain("20"), "the detail names the altitude and the limit");
+                // The site is 0.1° off the pole, so the altitude drifts 13.9–14.1° over the day: name the computed one.
+                var altitude = ((double)refusal.Parameters["altitude_deg"]!).ToString("F1", System.Globalization.CultureInfo.InvariantCulture);
+                Assert.That(refusal.Message, Does.Contain(altitude).And.Contain("20"), "the detail names the altitude and the limit");
             });
             NothingDispatched(telescope);
         }
@@ -77,7 +83,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_slew_to_a_target_above_the_floor_is_accepted() {
             var (telescope, sequencer) = Rig();
-            var accepted = await Slew(new SlewRequestDto(5.5, 40), telescope, sequencer, Site(floorDeg: 20).Object);
+            var accepted = await Slew(new SlewRequestDto(RaOnTheMeridian(), 40), telescope, sequencer, Site(floorDeg: 20).Object);
             Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
         }
 
@@ -95,7 +101,7 @@ namespace OpenAstroAra.Test {
         public async Task A_target_above_the_custom_skyline_is_accepted() {
             var skyline = new[] { new CustomHorizonPointDto(0, 30), new CustomHorizonPointDto(120, 30), new CustomHorizonPointDto(240, 30) };
             var (telescope, sequencer) = Rig();
-            var accepted = await Slew(new SlewRequestDto(5.5, 35), telescope, sequencer, Site(-20, custom: true, skyline).Object);
+            var accepted = await Slew(new SlewRequestDto(RaOnTheMeridian(), 35), telescope, sequencer, Site(-20, custom: true, skyline).Object);
             Assert.That(accepted, Is.InstanceOf<Accepted<OperationAcceptedDto>>());
         }
 

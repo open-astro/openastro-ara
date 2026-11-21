@@ -3872,6 +3872,18 @@
   "@shellGuidePixelSize": {
     "description": "Settings › Rig: the guide camera's pixel size (µm), read from AlpacaBridge through the guider"
   },
+  "shellMainSensor": "Main camera sensor",
+  "@shellMainSensor": {
+    "description": "Settings › Rig: the main camera's sensor size in pixels, read only (#2041)"
+  },
+  "shellMainPixelSize": "Main camera pixel size",
+  "@shellMainPixelSize": {
+    "description": "Settings › Rig: the main camera's pixel size (µm), read only (#2041)"
+  },
+  "shellFromMainCamera": "Filled in when the main camera connects",
+  "@shellFromMainCamera": {
+    "description": "Settings › Rig: the hint under the main camera sensor row; the rig reads it from the camera"
+  },
   "searchWordsGuideScope": "guide scope guider camera pixel focal polar",
   "@searchWordsGuideScope": {
     "description": "Simple search: other words that find the guide scope rows (not shown)"
@@ -5105,6 +5117,10 @@
   "@simpleGuiderCalibrationFailed": {
     "description": "Simple Mode warning pill while the daemon's guider.calibration.failed diagnostic is open"
   },
+  "simpleCoolerNotResponding": "Cooler not responding: is the camera's 12 V connected?",
+  "@simpleCoolerNotResponding": {
+    "description": "Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)"
+  },
   "simpleDewWarning": "Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.",
   "@simpleDewWarning": {
     "description": "Simple Mode warning pill while the daemon's dew_formation diagnostic is open"
@@ -5474,10 +5490,6 @@
   "@monitorUpNext": {
     "description": "Monitor Now tile: the upcoming steps"
   },
-  "monitorTonightsBest": "Tonight's best",
-  "@monitorTonightsBest": {
-    "description": "Monitor Now tile with no plan: tonight's best Targets"
-  },
   "monitorUpFrame": "Frame {frame}",
   "@monitorUpFrame": {
     "description": "Monitor Up next row: the next frame (the filter follows when the camera has one)",
@@ -5494,15 +5506,6 @@
   "monitorThen": "then",
   "@monitorThen": {
     "description": "Monitor Up next row whose time isn't known"
-  },
-  "monitorAltitudeUp": "{alt}° up",
-  "@monitorAltitudeUp": {
-    "description": "Monitor Tonight's best row: the Target's altitude now",
-    "placeholders": {
-      "alt": {
-        "type": "String"
-      }
-    }
   },
   "monitorTarget": "Target",
   "@monitorTarget": {
@@ -5607,7 +5610,7 @@
   },
   "monitorPastLimit": "Past limit",
   "@monitorPastLimit": {
-    "description": "Monitor Weather tile status word"
+    "description": "Monitor Conditions tile status word"
   },
   "monitorCloud": "Cloud",
   "@monitorCloud": {
@@ -5684,14 +5687,11 @@
   "@monitorClippedStars": {
     "description": "Monitor Last frame reading: the share of clipped stars"
   },
-  "monitorAutofocusSince": "Autofocus {time} · {delta} since then",
-  "@monitorAutofocusSince": {
-    "description": "Monitor Last frame: the last autofocus and the temperature change since",
+  "monitorAutofocusAt": "Autofocus {time}",
+  "@monitorAutofocusAt": {
+    "description": "Monitor Conditions: label under the focuser's signed temperature change since the last autofocus, which ran at the given clock time",
     "placeholders": {
       "time": {
-        "type": "String"
-      },
-      "delta": {
         "type": "String"
       }
     }
@@ -5729,6 +5729,26 @@
   "monitorDrifting": "Drifting",
   "@monitorDrifting": {
     "description": "Monitor Last frame tile status word: a reading moved 15 % or more the wrong way since session start"
+  },
+  "monitorConditions": "Conditions",
+  "@monitorConditions": {
+    "description": "Monitor tile: weather with the camera and focuser temperatures"
+  },
+  "monitorCameraAndFocuser": "Camera and focuser",
+  "@monitorCameraAndFocuser": {
+    "description": "Monitor Conditions tile: section heading"
+  },
+  "monitorSensor": "Sensor",
+  "@monitorSensor": {
+    "description": "Monitor Conditions tile: the camera sensor's temperature"
+  },
+  "monitorCoolerPower": "Cooler power",
+  "@monitorCoolerPower": {
+    "description": "Monitor Conditions tile: the cooler's power"
+  },
+  "monitorFocuserTemp": "Focuser",
+  "@monitorFocuserTemp": {
+    "description": "Monitor Conditions tile: the focuser's temperature"
   },
   "monitorImagingSpan": "Imaging {start} to {end}",
   "@monitorImagingSpan": {
@@ -6825,7 +6845,7 @@
   },
   "rigSetupOpticsAction": "Set up optics",
   "@rigSetupOpticsAction": {
-    "description": "Rig setup: button that opens the optics panel"
+    "description": "Rig setup: button that opens Simple Mode's Settings › Rig at the telescope rows"
   },
   "rigSetupGuideScope": "Guide scope",
   "@rigSetupGuideScope": {
@@ -7872,11 +7892,11 @@
   "@polarKnobTolerance": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: tolerance field label with its accepted range"
   },
-  "polarKnobTurn": "Turn (°, 5 to 120)",
+  "polarKnobTurn": "Turn (°, 5 to 30)",
   "@polarKnobTurn": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: RA turn field label with its accepted range"
   },
-  "polarKnobVerifyStep": "Verify step (°, 5 to 60)",
+  "polarKnobVerifyStep": "Verify step (°, 5 to 30)",
   "@polarKnobVerifyStep": {
     "description": "Settings \u2192 Imaging \u2192 Polar align: Verify step field label with its accepted range"
   },
@@ -7900,11 +7920,11 @@
   "@polarKnobUseHomeOff": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobTurnHint": "Kept between 5° and 120°",
+  "polarKnobTurnHint": "Kept between 5° and 30°",
   "@polarKnobTurnHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
-  "polarKnobVerifyStepHint": "Kept between 5° and 60°",
+  "polarKnobVerifyStepHint": "Kept between 5° and 30°",
   "@polarKnobVerifyStepHint": {
     "description": "Imaging > Polar align settings panel hint"
   },
@@ -8213,6 +8233,18 @@
   "polarKnobAlignerAutoOff": "Off: Polar align shows the turns and you make them",
   "@polarKnobAlignerAutoOff": {
     "description": "Imaging > Polar align settings panel hint"
+  },
+  "polarKnobStopTracking": "Stop tracking when polar align ends",
+  "@polarKnobStopTracking": {
+    "description": "Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)"
+  },
+  "polarKnobStopTrackingOn": "Every end of a run turns tracking off",
+  "@polarKnobStopTrackingOn": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is on"
+  },
+  "polarKnobStopTrackingOff": "Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off",
+  "@polarKnobStopTrackingOff": {
+    "description": "Imaging > Polar align settings panel hint while stop_tracking_when_done is off"
   },
   "polarAdvancedTitle": "Advanced",
   "@polarAdvancedTitle": {
@@ -8549,8 +8581,31 @@
     "description": "Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal",
     "placeholders": {"altitude": {"type": "String"}, "limit": {"type": "String"}}
   },
+  "refusalCounterweightLimit": "That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.",
+  "@refusalCounterweightLimit": {
+    "description": "Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees",
+    "placeholders": {"hourAngle": {"type": "String"}, "angle": {"type": "String"}, "limit": {"type": "String"}}
+  },
   "refusalEndNightInProgress": "End Night is already running. Wait for it to finish, or cancel it, before starting it again.",
   "@refusalEndNightInProgress": {"description": "Refusal (end-night-in-progress): End Night was started while it is already running"},
+  "refusalMountPositionUnverified": "The mount's position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount's zero search from its hand controller or app, or confirm it is physically at Home.",
+  "@refusalMountPositionUnverified": {"description": "Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss"},
+  "refusalMountPositionNotReadYet": "The mount's position has not been read since it connected. Try again in a few seconds.",
+  "@refusalMountPositionNotReadYet": {"description": "Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read"},
+  "mountPositionUnverifiedTitle": "Mount position unverified",
+  "@mountPositionUnverifiedTitle": {"description": "Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)"},
+  "mountPositionUnverifiedBody": "The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.",
+  "@mountPositionUnverifiedBody": {"description": "Mount window: what the unverified-position warning means and what still works"},
+  "mountPositionUnverifiedRunZeroSearch": "Run the mount's zero search from its hand controller or app. When it reports Home, confirm it here.",
+  "@mountPositionUnverifiedRunZeroSearch": {"description": "Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)"},
+  "mountConfirmAtHome": "The mount IS at Home",
+  "@mountConfirmAtHome": {"description": "Mount window: button that confirms the mount is physically at Home, so its position is trusted again"},
+  "mountConfirmAtHomeQuestion": "Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.",
+  "@mountConfirmAtHomeQuestion": {"description": "Mount window: the question asked before confirming Home"},
+  "mountConfirmAtHomeYes": "Yes, it is at Home",
+  "@mountConfirmAtHomeYes": {"description": "Mount window: the confirm button of the Home question"},
+  "mountCouldntConfirmHome": "Couldn't confirm Home",
+  "@mountCouldntConfirmHome": {"description": "Mount window: notice when the rig refused the Home confirmation"},
   "bridgeSetupFoundTitle": "Found on this rig",
   "@bridgeSetupFoundTitle": {
     "description": "Add your devices: heading above the detected devices"
@@ -8673,5 +8728,175 @@
   "clockWrongStartAnyway": "Start anyway",
   "@clockWrongStartAnyway": {
     "description": "Button: start the run although the rig's clock is wrong"
+  },
+  "limitsTitle": "Limits",
+  "@limitsTitle": {
+    "description": "Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch"
+  },
+  "limitsLowestAltitude": "Lowest altitude",
+  "@limitsLowestAltitude": {
+    "description": "Simple Mode Mount window, Limits: the row for the lowest altitude Ara points at (the profile's flat horizon)"
+  },
+  "limitsLowestRaise": "Raise lowest altitude",
+  "@limitsLowestRaise": {
+    "description": "Screen-reader label of the + button of the Lowest altitude stepper"
+  },
+  "limitsLowestLower": "Lower lowest altitude",
+  "@limitsLowestLower": {
+    "description": "Screen-reader label of the - button of the Lowest altitude stepper"
+  },
+  "limitsDegrees": "{deg}°",
+  "@limitsDegrees": {
+    "description": "Simple Mode Mount window, Limits: an altitude in whole degrees, like '20°'",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsMeasuredHorizon": "Your measured horizon",
+  "@limitsMeasuredHorizon": {
+    "description": "Simple Mode Mount window, Limits: the read-only Lowest altitude when the profile uses a measured (custom) horizon"
+  },
+  "limitsMeasuredHorizonCaption": "Change it in Advanced Mode › Settings › Site.",
+  "@limitsMeasuredHorizonCaption": {
+    "description": "Caption under 'Your measured horizon': where the measured horizon is edited"
+  },
+  "limitsAtMeridian": "At the meridian",
+  "@limitsAtMeridian": {
+    "description": "Simple Mode Mount window, Limits (flip Auto): the row for when the flip runs, before or after the meridian"
+  },
+  "limitsAtMeridianLater": "Later at the meridian",
+  "@limitsAtMeridianLater": {
+    "description": "Screen-reader label of the + button of the At the meridian stepper (moves the flip later)"
+  },
+  "limitsAtMeridianEarlier": "Earlier at the meridian",
+  "@limitsAtMeridianEarlier": {
+    "description": "Screen-reader label of the - button of the At the meridian stepper (moves the flip earlier)"
+  },
+  "limitsMinBefore": "{n} min before",
+  "@limitsMinBefore": {
+    "description": "At the meridian value: stop tracking n minutes before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsOnMeridian": "On it",
+  "@limitsOnMeridian": {
+    "description": "At the meridian value: flip as the target crosses the meridian"
+  },
+  "limitsMinAfter": "{n} min after",
+  "@limitsMinAfter": {
+    "description": "At the meridian value: keep tracking n minutes after the meridian, then flip",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsCaptionBefore": "Stops tracking {n} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.",
+  "@limitsCaptionBefore": {
+    "description": "Caption under At the meridian when it is before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsCaptionOn": "Flips as soon as the target crosses the meridian.",
+  "@limitsCaptionOn": {
+    "description": "Caption under At the meridian when it is on the meridian"
+  },
+  "limitsCaptionAfter": "Keeps tracking {n} min past the meridian, then flips.",
+  "@limitsCaptionAfter": {
+    "description": "Caption under At the meridian when it is after the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopBefore": "Stop before meridian",
+  "@limitsStopBefore": {
+    "description": "Simple Mode Mount window, Limits (flip Off): minutes before the meridian at which Ara stops tracking and pauses the plan"
+  },
+  "limitsStopBeforeRaise": "Raise stop before meridian",
+  "@limitsStopBeforeRaise": {
+    "description": "Screen-reader label of the + button of the Stop before meridian stepper"
+  },
+  "limitsStopBeforeLower": "Lower stop before meridian",
+  "@limitsStopBeforeLower": {
+    "description": "Screen-reader label of the - button of the Stop before meridian stepper"
+  },
+  "limitsMinutes": "{n} min",
+  "@limitsMinutes": {
+    "description": "Stop before meridian value: a number of minutes",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopCaption": "Stops tracking and pauses the plan {n} min before the meridian.",
+  "@limitsStopCaption": {
+    "description": "Caption under Stop before meridian when it is set",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsStopCaptionOff": "The mount tracks through the meridian. Only its own firmware limit stops it.",
+  "@limitsStopCaptionOff": {
+    "description": "Caption under Stop before meridian when it is Off"
+  },
+  "limitsPillLowest": "Lowest altitude {deg}°",
+  "@limitsPillLowest": {
+    "description": "Pill after the Lowest altitude was saved",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsPillBefore": "Stops tracking {n} min before the meridian, flips after it",
+  "@limitsPillBefore": {
+    "description": "Pill after At the meridian was saved as before the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillOn": "Flips at the meridian",
+  "@limitsPillOn": {
+    "description": "Pill after At the meridian was saved as on the meridian"
+  },
+  "limitsPillAfter": "Flips {n} min after the meridian",
+  "@limitsPillAfter": {
+    "description": "Pill after At the meridian was saved as after the meridian",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillStop": "Stop before meridian {n} min",
+  "@limitsPillStop": {
+    "description": "Pill after Stop before meridian was saved",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitsPillStopOff": "Stop before meridian off",
+  "@limitsPillStopOff": {
+    "description": "Pill after Stop before meridian was turned off"
+  },
+  "limitsCouldntSave": "Couldn't save the limit",
+  "@limitsCouldntSave": {
+    "description": "Error pill when a Limits row could not be saved; the old value is back"
+  },
+  "limitsArcLabel": "Allowed sky from {deg}° to the zenith",
+  "@limitsArcLabel": {
+    "description": "Screen-reader label of the Limits sky arc",
+    "placeholders": {"deg": {"type": "int"}}
+  },
+  "limitsArcTooLow": "too low",
+  "@limitsArcTooLow": {
+    "description": "Sky arc label: the band under the lowest altitude"
+  },
+  "limitsArcOk": "OK",
+  "@limitsArcOk": {
+    "description": "Sky arc label: the band where the mount may point"
+  },
+  "limitsArcHorizon": "horizon",
+  "@limitsArcHorizon": {
+    "description": "Sky arc label: the horizon line"
+  },
+  "limitStoppedMeridian": "Tracking stopped {n} min before the meridian.",
+  "@limitStoppedMeridian": {
+    "description": "Error pill: the rig stopped tracking n minutes before the meridian (meridian flip off, Stop before meridian set)",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitNotStoppedMeridian": "The mount didn't stop tracking {n} min before the meridian. Stop it by hand.",
+  "@limitNotStoppedMeridian": {
+    "description": "Error pill: the rig asked the mount to stop tracking before the meridian and the mount did not",
+    "placeholders": {"n": {"type": "int"}}
+  },
+  "limitPlanPaused": "Plan paused.",
+  "@limitPlanPaused": {
+    "description": "Added to the meridian stop pill when the plan was paused"
+  },
+  "limitDidntMove": "Ara didn't move the mount.",
+  "@limitDidntMove": {
+    "description": "Ends the meridian stop pill: Ara never slews or parks for a limit"
+  },
+  "searchSettingMountLimits": "Mount limits",
+  "@searchSettingMountLimits": {
+    "description": "Simple Mode search: the Limits group of the Mount window"
+  },
+  "searchWordsMountLimits": "limit horizon altitude lowest meridian stop flip",
+  "@searchWordsMountLimits": {
+    "description": "Simple Mode search keywords for Mount limits, space-separated"
   }
 }

@@ -2792,6 +2792,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get shellGuidePixelSize => 'Guide camera pixel size';
 
   @override
+  String get shellMainSensor => 'Main camera sensor';
+
+  @override
+  String get shellMainPixelSize => 'Main camera pixel size';
+
+  @override
+  String get shellFromMainCamera => 'Filled in when the main camera connects';
+
+  @override
   String get searchWordsGuideScope =>
       'guide scope guider camera pixel focal polar';
 
@@ -3963,6 +3972,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.';
 
   @override
+  String get simpleCoolerNotResponding =>
+      'Cooler not responding: is the camera\'s 12 V connected?';
+
+  @override
   String get simpleDewWarning =>
       'Dew may be forming: stars are swelling at high humidity. Wipe the optics or turn on the dew heaters. Scheduled autofocus waits until it clears.';
 
@@ -4353,9 +4366,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorUpNext => 'Up next';
 
   @override
-  String get monitorTonightsBest => 'Tonight\'s best';
-
-  @override
   String monitorUpFrame(int frame) {
     return 'Frame $frame';
   }
@@ -4365,11 +4375,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorThen => 'then';
-
-  @override
-  String monitorAltitudeUp(String alt) {
-    return '$alt° up';
-  }
 
   @override
   String get monitorTarget => 'Target';
@@ -4490,8 +4495,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get monitorClippedStars => 'Clipped stars';
 
   @override
-  String monitorAutofocusSince(String time, String delta) {
-    return 'Autofocus $time · $delta since then';
+  String monitorAutofocusAt(String time) {
+    return 'Autofocus $time';
   }
 
   @override
@@ -4511,6 +4516,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get monitorDrifting => 'Drifting';
+
+  @override
+  String get monitorConditions => 'Conditions';
+
+  @override
+  String get monitorCameraAndFocuser => 'Camera and focuser';
+
+  @override
+  String get monitorSensor => 'Sensor';
+
+  @override
+  String get monitorCoolerPower => 'Cooler power';
+
+  @override
+  String get monitorFocuserTemp => 'Focuser';
 
   @override
   String monitorImagingSpan(String start, String end) {
@@ -6096,10 +6116,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarKnobTolerance => 'Tolerance (arcmin, 0.1 to 10)';
 
   @override
-  String get polarKnobTurn => 'Turn (°, 5 to 120)';
+  String get polarKnobTurn => 'Turn (°, 5 to 30)';
 
   @override
-  String get polarKnobVerifyStep => 'Verify step (°, 5 to 60)';
+  String get polarKnobVerifyStep => 'Verify step (°, 5 to 30)';
 
   @override
   String get polarKnobRoughExposure => 'Rough step exposure (s, 0.1 to 60)';
@@ -6119,10 +6139,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Off: where the mount points now counts as Home';
 
   @override
-  String get polarKnobTurnHint => 'Kept between 5° and 120°';
+  String get polarKnobTurnHint => 'Kept between 5° and 30°';
 
   @override
-  String get polarKnobVerifyStepHint => 'Kept between 5° and 60°';
+  String get polarKnobVerifyStepHint => 'Kept between 5° and 30°';
 
   @override
   String get polarAligner => 'Polar Aligner';
@@ -6340,6 +6360,16 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get polarKnobAlignerAutoOff =>
       'Off: Polar align shows the turns and you make them';
+
+  @override
+  String get polarKnobStopTracking => 'Stop tracking when polar align ends';
+
+  @override
+  String get polarKnobStopTrackingOn => 'Every end of a run turns tracking off';
+
+  @override
+  String get polarKnobStopTrackingOff =>
+      'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off';
 
   @override
   String get polarAdvancedTitle => 'Advanced';
@@ -6603,8 +6633,49 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  ) {
+    return 'That target is below the pole, at hour angle $hourAngle h: the counterweight would swing $angle° up from hanging straight down, past the $limit° limit. Pick another target, or wait until this one is higher.';
+  }
+
+  @override
   String get refusalEndNightInProgress =>
       'End Night is already running. Wait for it to finish, or cancel it, before starting it again.';
+
+  @override
+  String get refusalMountPositionUnverified =>
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.';
+
+  @override
+  String get refusalMountPositionNotReadYet =>
+      'The mount\'s position has not been read since it connected. Try again in a few seconds.';
+
+  @override
+  String get mountPositionUnverifiedTitle => 'Mount position unverified';
+
+  @override
+  String get mountPositionUnverifiedBody =>
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.';
+
+  @override
+  String get mountPositionUnverifiedRunZeroSearch =>
+      'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountConfirmAtHome => 'The mount IS at Home';
+
+  @override
+  String get mountConfirmAtHomeQuestion =>
+      'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.';
+
+  @override
+  String get mountConfirmAtHomeYes => 'Yes, it is at Home';
+
+  @override
+  String get mountCouldntConfirmHome => 'Couldn\'t confirm Home';
 
   @override
   String get bridgeSetupFoundTitle => 'Found on this rig';
@@ -6704,4 +6775,153 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clockWrongStartAnyway => 'Start anyway';
+
+  @override
+  String get limitsTitle => 'Limits';
+
+  @override
+  String get limitsLowestAltitude => 'Lowest altitude';
+
+  @override
+  String get limitsLowestRaise => 'Raise lowest altitude';
+
+  @override
+  String get limitsLowestLower => 'Lower lowest altitude';
+
+  @override
+  String limitsDegrees(int deg) {
+    return '$deg°';
+  }
+
+  @override
+  String get limitsMeasuredHorizon => 'Your measured horizon';
+
+  @override
+  String get limitsMeasuredHorizonCaption =>
+      'Change it in Advanced Mode › Settings › Site.';
+
+  @override
+  String get limitsAtMeridian => 'At the meridian';
+
+  @override
+  String get limitsAtMeridianLater => 'Later at the meridian';
+
+  @override
+  String get limitsAtMeridianEarlier => 'Earlier at the meridian';
+
+  @override
+  String limitsMinBefore(int n) {
+    return '$n min before';
+  }
+
+  @override
+  String get limitsOnMeridian => 'On it';
+
+  @override
+  String limitsMinAfter(int n) {
+    return '$n min after';
+  }
+
+  @override
+  String limitsCaptionBefore(int n) {
+    return 'Stops tracking $n min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.';
+  }
+
+  @override
+  String get limitsCaptionOn =>
+      'Flips as soon as the target crosses the meridian.';
+
+  @override
+  String limitsCaptionAfter(int n) {
+    return 'Keeps tracking $n min past the meridian, then flips.';
+  }
+
+  @override
+  String get limitsStopBefore => 'Stop before meridian';
+
+  @override
+  String get limitsStopBeforeRaise => 'Raise stop before meridian';
+
+  @override
+  String get limitsStopBeforeLower => 'Lower stop before meridian';
+
+  @override
+  String limitsMinutes(int n) {
+    return '$n min';
+  }
+
+  @override
+  String limitsStopCaption(int n) {
+    return 'Stops tracking and pauses the plan $n min before the meridian.';
+  }
+
+  @override
+  String get limitsStopCaptionOff =>
+      'The mount tracks through the meridian. Only its own firmware limit stops it.';
+
+  @override
+  String limitsPillLowest(int deg) {
+    return 'Lowest altitude $deg°';
+  }
+
+  @override
+  String limitsPillBefore(int n) {
+    return 'Stops tracking $n min before the meridian, flips after it';
+  }
+
+  @override
+  String get limitsPillOn => 'Flips at the meridian';
+
+  @override
+  String limitsPillAfter(int n) {
+    return 'Flips $n min after the meridian';
+  }
+
+  @override
+  String limitsPillStop(int n) {
+    return 'Stop before meridian $n min';
+  }
+
+  @override
+  String get limitsPillStopOff => 'Stop before meridian off';
+
+  @override
+  String get limitsCouldntSave => 'Couldn\'t save the limit';
+
+  @override
+  String limitsArcLabel(int deg) {
+    return 'Allowed sky from $deg° to the zenith';
+  }
+
+  @override
+  String get limitsArcTooLow => 'too low';
+
+  @override
+  String get limitsArcOk => 'OK';
+
+  @override
+  String get limitsArcHorizon => 'horizon';
+
+  @override
+  String limitStoppedMeridian(int n) {
+    return 'Tracking stopped $n min before the meridian.';
+  }
+
+  @override
+  String limitNotStoppedMeridian(int n) {
+    return 'The mount didn\'t stop tracking $n min before the meridian. Stop it by hand.';
+  }
+
+  @override
+  String get limitPlanPaused => 'Plan paused.';
+
+  @override
+  String get limitDidntMove => 'Ara didn\'t move the mount.';
+
+  @override
+  String get searchSettingMountLimits => 'Mount limits';
+
+  @override
+  String get searchWordsMountLimits =>
+      'limit horizon altitude lowest meridian stop flip';
 }

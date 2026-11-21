@@ -71,6 +71,7 @@ import '../../widgets/status_indicator.dart' show StatusBlink, StatusDot;
 import 'simple_preview_panel.dart' show SimpleStopSquare, kSimpleText;
 import 'simple_shell.dart' show SimpleSegment, SimpleSegments, simpleRailScale;
 import 'simple_mount_controls.dart';
+import 'simple_mount_limits.dart';
 import 'simple_save_section.dart';
 import '../../util/tracking_rate_words.dart';
 import '../../util/friendly_error.dart';
@@ -208,6 +209,16 @@ class _SimpleCameraWindowState extends ConsumerState<SimpleCameraWindow> {
             ),
           ),
         );
+        // #2076 — switched on, but the camera does not run it (no 12 V).
+        if (s.coolerNotResponding) {
+          children.add(
+            Text(
+              context.l10n.simpleCoolerNotResponding,
+              key: const Key('simple-camera-cooler-not-responding'),
+              style: AraText.caption.copyWith(color: AraColors.accentWarning),
+            ),
+          );
+        }
         // The target only while the cooler is on (On cools to the profile's).
         if (caps.canSetTemperature && s.coolerOn) {
           const lo = SimpleCameraWindow.targetMin,
@@ -502,27 +513,34 @@ List<Widget> _versions(BuildContext context, DeviceDriver? d) {
 /// under each other line up as one column.
 const double kSimpleWindowControlWidth = 216;
 
-/// − value +, for a device window's numbers (refocus, dither).
+/// − value +, for a device window's numbers (refocus, dither). A null
+/// [onLess] or [onMore] disables that button (the value is at its end);
+/// [lessLabel] and [moreLabel] replace what a screen reader hears for them
+/// ("Raise lowest altitude", #2044).
 Widget simpleWindowStepper({
   required String id,
   required String text,
   // What it changes: read with Less and More on the buttons.
   String? name,
-  required VoidCallback onLess,
-  required VoidCallback onMore,
+  required VoidCallback? onLess,
+  required VoidCallback? onMore,
+  String? lessLabel,
+  String? moreLabel,
 }) {
   Widget button(
     String dir,
     IconData icon,
     String Function(AppLocalizations) label,
-    VoidCallback onTap,
+    String? spoken,
+    VoidCallback? onTap,
   ) => Builder(
     builder: (context) => IconButton(
       key: Key('$id-$dir'),
       onPressed: onTap,
       icon: Icon(
         icon,
-        semanticLabel: name == null ? label(context.l10n) : '$name, ${label(context.l10n)}',
+        semanticLabel: spoken ??
+            (name == null ? label(context.l10n) : '$name, ${label(context.l10n)}'),
       ),
     ),
   );
@@ -534,15 +552,20 @@ Widget simpleWindowStepper({
     child: Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        button('down', Icons.remove, (l) => l.deviceLess, onLess),
+        button('down', Icons.remove, (l) => l.deviceLess, lessLabel, onLess),
         // Gives way in a narrow window, keeping the buttons whole.
         Flexible(
           child: SizedBox(
             width: kSimpleWindowControlWidth - 96, // less the two 48 pt buttons
-            child: Text(text, textAlign: TextAlign.center, style: kSimpleText),
+            child: Text(
+              text,
+              key: Key('$id-value'),
+              textAlign: TextAlign.center,
+              style: kSimpleText,
+            ),
           ),
         ),
-        button('up', Icons.add, (l) => l.deviceMore, onMore),
+        button('up', Icons.add, (l) => l.deviceMore, moreLabel, onMore),
       ],
     ),
   );
@@ -1008,6 +1031,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
   /// Parked (false: Home) tapped while a plan runs: the window asks first.
   bool? _asking;
 
+  /// "The mount IS at Home" tapped: the window asks first (#2070).
+  bool _confirmingHome = false;
+
   /// Read up front: dispose clears the Check answer, and ref is gone by then.
   late final SimplePointingNotifier _pointing;
 
@@ -1043,6 +1069,7 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
     } else {
       final caps = m.capabilities;
       final notifier = ref.read(mountProvider.notifier);
+      if (m.positionUnverified) _addPositionUnverified(context, children, m);
       // A park is done once the mount says so; until then it reads Parking….
       final parking = ref.watch(simpleMountMotionProvider);
       final moving = parking != null || m.runtimeState == 'unparking';
@@ -1115,8 +1142,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
       final position = m.parked ? 'parked' : 'unparked';
       children.add(
         simpleWindowRow(
-          // Home is the pad's centre now; the row still says where it is.
-          m.atHome && canHome && !homing
+          // Home is the pad's centre now; the row still says where it is. An
+          // unverified Home is no Home (#2070).
+          m.atHome && canHome && !homing && !m.positionUnverified
               ? '${context.l10n.deviceMountPosition} · ${context.l10n.deviceAtHome}'
               : context.l10n.deviceMountPosition,
           id: 'Position',
@@ -1153,7 +1181,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                         (
                           'parked',
                           context.l10n.deviceParked,
-                          caps?.canPark ?? false,
+                          // #2070 — a park from an unverified position is refused.
+                          (caps?.canPark ?? false) && !m.positionUnverified,
                           () => planRunning
                               ? setState(() => _asking = true)
                               : _park(context, true),
@@ -1212,6 +1241,9 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
         ),
       );
       _addPadAndPointing(context, children, m, planRunning: planRunning);
+      // #2044 — what the mount must not do, across the full width under the
+      // rows and the pad, so the pad and Check stay at the top of the window.
+      children.add(const SimpleMountLimits());
     }
     if (widget.inSettings) {
       children.addAll(
@@ -1266,7 +1298,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                 ref.watch(simpleMountHomeProvider) ||
                 (m.isBusy && !ref.watch(simplePadMovingProvider)),
             canHome: caps?.canFindHome ?? false,
-            onHome: m.parked || m.isBusy
+            // #2070 — Home by the mount's model is refused while unverified.
+            onHome: m.parked || m.isBusy || m.positionUnverified
                 ? null
                 : () => planRunning
                       ? setState(() => _asking = false)
@@ -1357,6 +1390,61 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
         error: true,
       );
     }
+  }
+
+  /// #2070 — the rig does not trust the mount's position (a power loss leaves a
+  /// mount without absolute encoders reporting Home wherever it points): say
+  /// so, and offer the Home confirmation once the mount reports Home (after its
+  /// own zero search, or when it really is there).
+  void _addPositionUnverified(
+    BuildContext context,
+    List<Widget> children,
+    MountStatus m,
+  ) {
+    final l10n = context.l10n;
+    children.add(
+      Column(
+        key: const Key('simple-mount-position-unverified'),
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        spacing: AraSpace.s4,
+        children: [
+          Text(
+            l10n.mountPositionUnverifiedTitle,
+            style: kSimpleText.copyWith(color: AraColors.errorText),
+          ),
+          Text(l10n.mountPositionUnverifiedBody, style: kSimpleCaption),
+          if (!m.atHome)
+            Text(
+              l10n.mountPositionUnverifiedRunZeroSearch,
+              key: const Key('simple-mount-run-zero-search'),
+              style: kSimpleCaption,
+            )
+          else if (_confirmingHome)
+            simpleWindowConfirm(
+              question: l10n.mountConfirmAtHomeQuestion,
+              confirm: l10n.mountConfirmAtHomeYes,
+              onCancel: () => setState(() => _confirmingHome = false),
+              onConfirm: () {
+                setState(() => _confirmingHome = false);
+                _run(
+                  context,
+                  ref.read(mountProvider.notifier).confirmHome,
+                  failure: l10n.mountCouldntConfirmHome,
+                );
+              },
+            )
+          else
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: TextButton(
+                key: const Key('simple-mount-confirm-home'),
+                onPressed: () => setState(() => _confirmingHome = true),
+                child: Text(l10n.mountConfirmAtHome),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   /// False when the mount refused (a pill says why: [failure], or that it

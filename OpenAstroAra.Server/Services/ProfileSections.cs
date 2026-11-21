@@ -186,7 +186,7 @@ internal static class ProfileSections {
             MeridianRecalGuider: true, OnAltitudeLimit: "skip_target",
             ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
             GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true),
-        kept: ["OnUnsafe", "AutoResumeWhenSafe", "ResumeDelayMin", "MeridianFlipAuto", "MeridianPauseMin", "MeridianRecenter", "MeridianRecalGuider", "OnAltitudeLimit", "ParkIfNoMoreTargets", "OnGuiderLost", "GuiderRetryTimeoutSec", "SkipTargetIfRecoveryFails", "OnDiskSpaceCritical", "CalibrationCaptureDefault", "FlipSafetyEnabled", "ExpectedFlipSlewSeconds", "UnattendedEscalation", "UnattendedShutdownEnabled", "UnattendedShutdownWaitMinutes", "WeatherTriggersEnabled", "MaxWindKmh", "MaxHumidityPct", "MinDewDeltaC", "FlatTargetAdu", "FlatTargetAduTolerancePct", "FlatFramesPerFilter", "PostFlatParkMount", "SkyFlatTargetAdu", "SkyFlatFramesPerFilter", "SkyFlatTargetAzimuth", "SkyFlatTargetAltitude", "SkyFlatStopAtMaxAdu", "SkyFlatStopAtMinAdu", "SkyFlatSunAltitude", "HotReconnectEnabled", "OnCameraLost", "OnMountLost", "OnTrackingLost", "SwitchValueTolerancePct", "MeridianRefocus", "MeridianRefocusTempThresholdC", "MeridianGuiderRecal", "UnattendedWindowStart", "UnattendedWindowEnd", "FlatTargetPercent"],
+        kept: ["OnUnsafe", "AutoResumeWhenSafe", "ResumeDelayMin", "MeridianFlipAuto", "MeridianPauseMin", "MeridianRecenter", "MeridianRecalGuider", "OnAltitudeLimit", "ParkIfNoMoreTargets", "OnGuiderLost", "GuiderRetryTimeoutSec", "SkipTargetIfRecoveryFails", "OnDiskSpaceCritical", "CalibrationCaptureDefault", "FlipSafetyEnabled", "ExpectedFlipSlewSeconds", "UnattendedEscalation", "UnattendedShutdownEnabled", "UnattendedShutdownWaitMinutes", "WeatherTriggersEnabled", "MaxWindKmh", "MaxHumidityPct", "MinDewDeltaC", "FlatTargetAdu", "FlatTargetAduTolerancePct", "FlatFramesPerFilter", "PostFlatParkMount", "SkyFlatTargetAdu", "SkyFlatFramesPerFilter", "SkyFlatTargetAzimuth", "SkyFlatTargetAltitude", "SkyFlatStopAtMaxAdu", "SkyFlatStopAtMinAdu", "SkyFlatSunAltitude", "HotReconnectEnabled", "OnCameraLost", "OnMountLost", "OnTrackingLost", "SwitchValueTolerancePct", "MeridianRefocus", "MeridianRefocusTempThresholdC", "MeridianGuiderRecal", "UnattendedWindowStart", "UnattendedWindowEnd", "FlatTargetPercent", "MinutesAfterMeridian", "MaxMinutesAfterMeridian", "StopBeforeMeridianMin"],
         stripped: ["FirstFlipConfirmed"],
         strip: v => v with { FirstFlipConfirmed = false });
 
@@ -407,7 +407,7 @@ internal static class ProfileSections {
         st => st.GetPolarAlignSettings(),
         (st, v) => st.PutPolarAlignSettings(v!),
         new(),
-        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "UseHome", "PolarAlignerAuto"],
+        kept: ["ExposureSeconds", "Binning", "TargetToleranceArcmin", "SeedRotationDeg", "LoopCadenceMs", "SettleSeconds", "LoopMode", "CheckStepDeg", "CoarseExposureSeconds", "UseHome", "PolarAlignerAuto", "StopTrackingWhenDone"],
         stripped: []);
 
     /// <summary>Guard thresholds and probe ladder: tuning judgement.</summary>

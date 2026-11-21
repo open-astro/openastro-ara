@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../l10n/l10n.dart';
 import '../../state/rig_setup_state.dart';
 import '../../state/saved_server_state.dart';
-import '../../state/settings/settings_nav.dart';
 import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -26,6 +25,7 @@ class SimpleRigSetupHost extends ConsumerStatefulWidget {
     super.key,
     required this.autoOpened,
     required this.onOpenRig,
+    required this.onOpenOptics,
     required this.onOpenGuider,
   });
 
@@ -36,6 +36,10 @@ class SimpleRigSetupHost extends ConsumerStatefulWidget {
   /// Simple Mode's Settings at the Rig page: where the site and the guide
   /// scope live. The sheet stays up under it, so its ticks follow the edits.
   final VoidCallback onOpenRig;
+
+  /// The same page at the telescope rows (#2041): Simple Mode never sends
+  /// the person to the full UI.
+  final VoidCallback onOpenOptics;
 
   /// Closes the sheet and shows Guider mode, where the calibration is made.
   final VoidCallback onOpenGuider;
@@ -105,7 +109,7 @@ class _SimpleRigSetupHostState extends ConsumerState<SimpleRigSetupHost> {
           action: item.action,
           onTap: switch (item.gap) {
             RigSetupGap.site || RigSetupGap.guideScope => widget.onOpenRig,
-            RigSetupGap.mainOptics => () => openSettingsPanel(ref, 'img.optics'),
+            RigSetupGap.mainOptics => widget.onOpenOptics,
             RigSetupGap.guiderCalibration => () {
               ref.read(rigSetupSheetProvider.notifier).set(false);
               widget.onOpenGuider();

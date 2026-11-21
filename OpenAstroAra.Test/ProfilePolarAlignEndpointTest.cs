@@ -89,11 +89,11 @@ namespace OpenAstroAra.Test {
 
         // §45.12 — the turn and rough-exposure knobs have no control in the app yet (#1736), so an
         // out-of-range or non-finite value is clamped, never a 400 that would fail the panel's own edits.
-        [TestCase(200.0, 90.0, 0.0, 120.0, 60.0, 3.0)]
+        [TestCase(200.0, 90.0, 0.0, 30.0, 30.0, 3.0)]
         [TestCase(1.0, 1.0, -2.0, 5.0, 5.0, 3.0)]
-        [TestCase(double.NaN, double.NaN, double.NaN, 60.0, 30.0, 3.0)]
-        [TestCase(double.PositiveInfinity, double.NegativeInfinity, 600.0, 60.0, 30.0, 60.0)]
-        [TestCase(45.0, 20.0, 2.5, 45.0, 20.0, 2.5)]
+        [TestCase(double.NaN, double.NaN, double.NaN, 10.0, 10.0, 3.0)]
+        [TestCase(double.PositiveInfinity, double.NegativeInfinity, 600.0, 10.0, 10.0, 60.0)]
+        [TestCase(25.0, 20.0, 2.5, 25.0, 20.0, 2.5)]
         public void Turn_and_rough_exposure_knobs_are_clamped_on_PUT_and_the_clamped_values_are_stored(
                 double seedRotationDeg, double checkStepDeg, double coarseExposureSeconds,
                 double expectedSeed, double expectedCheck, double expectedExposure) {

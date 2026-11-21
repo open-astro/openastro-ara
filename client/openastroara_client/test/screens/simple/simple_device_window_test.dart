@@ -153,6 +153,17 @@ void main() {
     },
   );
 
+  testWidgets('a cooler that does not respond says to check the 12 V under the Cooler row (#2076)', (tester) async {
+    final caption = find.byKey(const Key('simple-camera-cooler-not-responding'));
+    await _pump(tester, _wire());
+    expect(caption, findsNothing);
+    final wire = _wire(on: false);
+    (wire['runtime'] as Map<String, dynamic>)['cooler_not_responding'] = true;
+    await _pump(tester, wire);
+    expect(caption, findsOneWidget);
+    expect(find.text("Cooler not responding: is the camera's 12 V connected?"), findsOneWidget);
+  });
+
   testWidgets('Off turns the cooler off; On cools to the target', (
     tester,
   ) async {
