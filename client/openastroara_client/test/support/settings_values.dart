@@ -210,6 +210,8 @@ class TestSafetyPolicies extends SafetyPolicies {
     super.expectedFlipSlewSeconds = 90,
     super.firstFlipConfirmed = false,
     super.firstFlipPierSideChanged = false,
+    super.clearanceLimitEnabled = false,
+    super.clearanceMaxAltitudeDeg = 80.0,
     super.unattendedEscalation = true,
     super.unattendedShutdownEnabled = true,
     super.unattendedShutdownWaitMinutes = 30,

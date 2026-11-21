@@ -295,6 +295,24 @@ namespace OpenAstroAra.Test {
             Assert.That(await Tag("site"), Is.EqualTo(etag));
         }
 
+        [TestCase(90.0)]
+        [TestCase(0.0)]
+        public async Task A_safety_PUT_with_a_clearance_limit_out_of_range_answers_400_and_writes_nothing(double limit) {
+            // #1589 — the route itself refuses the limit, on or off, before the store sees the record.
+            var etag = await Tag("safety");
+            var safety = _store.GetSafetyPolicies();
+            _ws.Clear();
+            using var request = new HttpRequestMessage(HttpMethod.Put, new Uri("/api/v1/profile/safety", UriKind.Relative)) {
+                Content = JsonContent(safety with { ClearanceMaxAltitudeDeg = limit, ResumeDelayMin = safety.ResumeDelayMin + 1 }),
+            };
+            request.Headers.TryAddWithoutValidation("If-Match", etag);
+            using var put = await _http.SendAsync(request);
+            Assert.That(put.StatusCode, Is.EqualTo(HttpStatusCode.BadRequest));
+            Assert.That(put.Content.Headers.ContentType?.MediaType, Is.EqualTo("application/problem+json"));
+            Assert.That(_store.GetSafetyPolicies(), Is.EqualTo(safety), "nothing is written");
+            Assert.That(Seen(), Is.Empty, "a refused write publishes no profile.updated");
+        }
+
         [Test]
         public async Task An_optics_route_write_that_clears_the_flip_confirmation_also_publishes_safety() {
             // The store clears first_flip_confirmed on a real optics change: the safety tag moves too.

@@ -1262,6 +1262,60 @@ namespace OpenAstroAra.Test {
 
         /// <summary>A healthy tracking mount whose pier side flips east→west when MeridianFlip is
         /// called — so safety tests that should PASS the pier-side gate do.</summary>
+        // ─── #1589 — the clearance limit ───
+
+        /// <summary>A target at the zenith at <see cref="FlipInstant"/> from the lat 40 N, lon 0 test site.</summary>
+        private static Coordinates ZenithTarget() =>
+            new(Angle.ByDegree(SiteAstrometry.LocalSiderealTimeDeg(FlipInstant, 0)), Angle.ByDegree(40), Epoch.J2000);
+
+        [Test]
+        public async Task With_the_clearance_limit_on_a_flip_to_a_target_above_it_is_refused_before_anything_moves() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety() with { ClearanceLimitEnabled = true, ClearanceMaxAltitudeDeg = 80 });
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            sut.UtcNow = () => FlipInstant;
+            var progress = new RecordingProgress();
+
+            var ok = await sut.MeridianFlip(ZenithTarget(), TimeSpan.Zero, progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.SetTrackingEnabled(It.IsAny<bool>()), Times.Never, "the pre-flip state is untouched");
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+            guider.Verify(g => g.StopGuiding(It.IsAny<CancellationToken>()), Times.Never);
+            var refused = progress.Reports.Single(r => r.Status.StartsWith("Flip refused:", StringComparison.Ordinal));
+            Assert.That(refused.Status, Does.Contain("80° clearance limit"));
+            Assert.That(published.Single().Severity, Is.EqualTo(NotificationSeverity.Critical));
+        }
+
+        [Test]
+        public async Task The_clearance_limit_refuses_the_flip_even_with_flip_safety_off() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety(enabled: false) with { ClearanceLimitEnabled = true, ClearanceMaxAltitudeDeg = 80 });
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            sut.UtcNow = () => FlipInstant;
+
+            var ok = await sut.MeridianFlip(ZenithTarget(), TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.False);
+            telescope.Verify(t => t.MeridianFlip(It.IsAny<Coordinates>(), It.IsAny<CancellationToken>()), Times.Never);
+        }
+
+        [Test]
+        public async Task With_the_clearance_limit_off_a_flip_near_the_zenith_runs_as_before() {
+            SetupProfile(recenter: false);
+            SetupSafety(Safety());
+            SetupHealthyTrackingMount();
+            var sut = CreateSafetySUT();
+            sut.UtcNow = () => FlipInstant;
+
+            var ok = await sut.MeridianFlip(ZenithTarget(), TimeSpan.Zero, Progress, CancellationToken.None);
+
+            Assert.That(ok, Is.True);
+            Assert.That(callLog, Has.Member("Flip"));
+        }
+
         private void SetupHealthyTrackingMount() {
             var side = PierSide.pierEast;
             telescope.Setup(t => t.GetInfo()).Returns(() => new TelescopeInfo {

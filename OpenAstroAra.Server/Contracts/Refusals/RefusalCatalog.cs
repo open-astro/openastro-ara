@@ -102,6 +102,10 @@ public static class RefusalCatalog {
     // app. max_cw_angle_deg is the limit the confirmation is for.
     public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "max_cw_angle_deg");
 
+    // #1589 — a GoTo to a target at or above the profile's clearance limit (clearance_limit_enabled on): the camera
+    // or rotator could reach the pier or tripod there.
+    public static readonly RefusalCause AboveClearanceLimit = new("above-clearance-limit", 409, "The target is above the clearance limit", "altitude_deg", "limit_deg");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
@@ -109,5 +113,6 @@ public static class RefusalCatalog {
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
         PolarAlignClearanceNotConfirmed,
+        AboveClearanceLimit,
     ];
 }

@@ -1258,6 +1258,26 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             ),
           ),
         );
+        // #1589 — the rig's clearance limit, read-only here: it is measured
+        // per rig and set in the full app.
+        children.add(
+          simpleWindowRow(
+            context.l10n.deviceClearanceLimit,
+            id: 'Clearance limit',
+            Tooltip(
+              message: context.l10n.deviceClearanceLimitHint,
+              child: Text(
+                p.clearanceLimitEnabled
+                    ? context.l10n.deviceClearanceLimitAt(
+                        _clearanceDegText(p.clearanceMaxAltitudeDeg),
+                      )
+                    : context.l10n.deviceOff,
+                key: const Key('simple-mount-clearance'),
+                style: kSimpleText,
+              ),
+            ),
+          ),
+        );
       } else {
         children.add(
           SectionNotLoaded(
@@ -1570,6 +1590,16 @@ class _SimpleGainSliderState extends ConsumerState<SimpleGainSlider> {
       ],
     );
   }
+}
+
+/// "80" or "79.5": the clearance limit as the rig stops at it (#1589). Whole
+/// degrees only when the value is whole, and one decimal rounded down
+/// otherwise, so the readout never shows a limit higher than the real stop.
+String _clearanceDegText(double v) {
+  final tenths = (v * 10 + 1e-9).floorToDouble() / 10;
+  return tenths == tenths.roundToDouble()
+      ? tenths.toStringAsFixed(0)
+      : tenths.toStringAsFixed(1);
 }
 
 /// "12 000": a focuser position, grouped in thousands.

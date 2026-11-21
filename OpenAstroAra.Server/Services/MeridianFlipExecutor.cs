@@ -186,7 +186,10 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
         string? failReason = null;
         try {
             safety = profileStore?.GetSafetyPolicies();
-            if (safety is { FlipSafetyEnabled: true }) {
+            // #1589 — the clearance limit gates the flip whether or not the §58.9 layers are on: it is the
+            // user's statement of where the camera reaches the mount, not an unattended-only extra.
+            failReason = ClearanceFlightCheck(targetCoordinates, timeToFlip, safety);
+            if (failReason is null && safety is { FlipSafetyEnabled: true }) {
                 failReason = await PreFlipFlightCheck(targetCoordinates, timeToFlip, settings, safety, token);
             }
         } catch (OperationCanceledException) {
@@ -663,6 +666,23 @@ public sealed class MeridianFlipExecutor : IMeridianFlipExecutor {
 
         Logger.Info($"Meridian Flip - Pre-flip flight check passed (predicted target altitude {predictedAlt:0.#}°).");
         return null;
+    }
+
+    /// <summary>#1589 — the clearance gate: with the profile's clearance limit on, the flip does not start when
+    /// the target will be at or above the limit at the flip (predicted at now + <paramref name="timeToFlip"/>,
+    /// as the horizon gate is). Returns null when the limit is off or the target stays under it. Nothing is
+    /// touched before it, so the mount keeps its pre-flip state; <see cref="MountClearanceWatch"/> stops the
+    /// tracking if the mount reaches the limit.</summary>
+    private string? ClearanceFlightCheck(Coordinates target, TimeSpan timeToFlip, SafetyPoliciesDto? safety) {
+        if (ClearanceGuard.LimitDeg(safety) is not double limit || profileStore is null) {
+            return null;
+        }
+        var site = profileStore.GetSiteSettings();
+        var predictedAlt = PredictedTargetAltitudeDeg(target, site.LatitudeDeg, site.LongitudeDeg, UtcNow() + timeToFlip);
+        if (!ClearanceGuard.Reached(predictedAlt, limit)) {
+            return null;
+        }
+        return $"the target will be at {predictedAlt:0.#}° at the flip, at or above the {limit:0.#}° clearance limit, where the camera can reach the mount.";
     }
 
     /// <summary>Connected-or-reconnect gate for one required device: already connected → ok;

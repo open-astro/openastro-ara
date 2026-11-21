@@ -24,6 +24,8 @@ Refusal _known(RefusalCause cause) => Refusal(
       ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
       : cause == RefusalCause.belowHorizonLimit
       ? const {'altitude_deg': 14.2, 'limit_deg': 20}
+      : cause == RefusalCause.aboveClearanceLimit
+      ? const {'altitude_deg': 84.6, 'limit_deg': 80}
       : cause == RefusalCause.counterweightLimit
       ? const {
           'hour_angle_hours': -11.13,
@@ -90,6 +92,14 @@ void main() {
       final words = failureReason(l, _known(RefusalCause.belowHorizonLimit));
       expect(words, contains('14'));
       expect(words, contains('20'));
+    }
+  });
+
+  test('the clearance sentence names the altitude and the limit, in both languages (#1589)', () {
+    for (final l in [_en, _pt]) {
+      final words = failureReason(l, _known(RefusalCause.aboveClearanceLimit));
+      expect(words, contains('84.6'));
+      expect(words, contains('80.0'));
     }
   });
 
