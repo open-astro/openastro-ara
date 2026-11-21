@@ -6087,6 +6087,31 @@ class AppLocalizationsEn extends AppLocalizations {
       'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.';
 
   @override
+  String polarErrorWithSigma(String value, String sigma) {
+    return '$value ± $sigma';
+  }
+
+  @override
+  String polarUnconfirmedBySigma(String tolerance, String sigma) {
+    return 'Inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).';
+  }
+
+  @override
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma) {
+    return 'The motors stopped inside your $tolerance′ tolerance, but at ± $sigma this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.';
+  }
+
+  @override
+  String paResidualDetailDisagreeSigma(
+    String align,
+    String alignSigma,
+    String guiding,
+    String guidingSigma,
+  ) {
+    return 'Polar Align and guiding disagree ($align ± $alignSigma vs at least $guiding ± $guidingSigma), by more than their combined uncertainty. Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about $align again points at backlash, much more points at the mount or the alignment.';
+  }
+
+  @override
   String get polarKnobCamera => 'Camera';
 
   @override

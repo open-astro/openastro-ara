@@ -10233,6 +10233,35 @@ abstract class AppLocalizations {
   /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
   String get polarNoisyMeasurement;
 
+  /// Polar align readout (#2072): an error with its 1σ uncertainty, e.g. '+0.2′ ± 1.1′'
+  ///
+  /// In en, this message translates to:
+  /// **'{value} ± {sigma}'**
+  String polarErrorWithSigma(String value, String sigma);
+
+  /// Polar align (#2072): the error is inside the tolerance but the error plus twice its 1σ is not, so the alignment is not confirmed (Done stays available)
+  ///
+  /// In en, this message translates to:
+  /// **'Inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can\'t confirm the alignment. Larger turns help most: 20° in place of 10° cuts the uncertainty about four times (Polar align turn and Check step in Settings).'**
+  String polarUnconfirmedBySigma(String tolerance, String sigma);
+
+  /// Polar Aligner block (#2072): the motors converged inside the tolerance, but the error plus twice its 1σ is outside it, so the alignment is not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'The motors stopped inside your {tolerance}′ tolerance, but at ± {sigma} this measurement can\'t confirm the alignment. More moves cannot help; larger turns do (20° in place of 10° cuts the uncertainty about four times), so run Check with a larger Check step.'**
+  String polarAlignerConvergedUnconfirmed(String tolerance, String sigma);
+
+  /// Guiding residual tooltip (#2072): the residual is above Polar Align's figure by more than their combined 1σ; both figures with their uncertainty, both causes and how to tell them apart
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align and guiding disagree ({align} ± {alignSigma} vs at least {guiding} ± {guidingSigma}), by more than their combined uncertainty. Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.'**
+  String paResidualDetailDisagreeSigma(
+    String align,
+    String alignSigma,
+    String guiding,
+    String guidingSigma,
+  );
+
   /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
   ///
   /// In en, this message translates to:

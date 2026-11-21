@@ -195,6 +195,62 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignChecked), CounterweightLimitDeg);
         }
 
+        /// <summary>The true-sky solve with tracking off on the wall clock the routine stamps its frames by: each answer
+        /// comes <see cref="Delay"/> after the frame was asked for, and the field has run on in RA with the Earth's turn
+        /// since the solver was made. Each answer adds the Dec offset next in +2″, −2″, 0″, so any three solves in a row
+        /// scatter by exactly 1.633″ rms of their own.</summary>
+        private sealed class DriftingSkySolver(FakeGemMount mount, TimeSpan delay) : IPolarAlignFrameSolver {
+            private static readonly double[] DecOffsetArcsec = { 2.0, -2.0, 0.0 };
+            private readonly DateTimeOffset _t0 = DateTimeOffset.UtcNow;
+            private int _solves;
+            public TimeSpan Delay { get; } = delay;
+            public async Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
+                await Task.Delay(Delay, ct).ConfigureAwait(false);
+                var offset = DecOffsetArcsec[(Interlocked.Increment(ref _solves) - 1) % 3] / 3600.0;
+                var (ra, dec) = mount.TrueSky;
+                var drift = (DateTimeOffset.UtcNow - _t0).TotalSeconds * SiderealRate;
+                return new PolarAlignSolveOutcome(true, ra + drift, dec + offset);
+            }
+        }
+
+        [Test]
+        public async Task A_hand_turn_check_with_tracking_off_gives_each_point_its_frames_own_scatter_not_the_Earths_turn() {
+            // #2072 review: tracking off (as the fine stage's live loop leaves it), three frames per point. The field runs
+            // on with the Earth's turn between frames (7.5″/s at Dec 60°, so a few arcseconds a set, as 5 s frames at
+            // Dec 85° drift); every point, the first as well as the two after the turns, is averaged at its frames' mean
+            // time, so its scatter is the frames' own 1.633″ and its σ 1.633″ / 2 = 0.82″ per axis.
+            var mount = FakeGemMount.CounterweightDownAt(-4.0, 60.0, lstHours: 20.0, tracking: false, clock: new ManualMountClock());
+            mount.FreshReadTakes = FreshRead;
+            var ws = new WsRecorder();
+            var logger = new CapturingLogger();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { FramesPerPoint = 3 });
+            mount.EventCount = () => ws.Events.Count;
+            using var svc = NewServiceOn(NewFake(), new DriftingSkySolver(mount, TimeSpan.FromMilliseconds(150)), mount, ws, store, logger: logger);
+
+            await StartByHandAsync(svc, PolarAlignStages.Check).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"),
+                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
+            var points = logger.Entries.Where(e => e.EventId == 4574).Select(e => e.Message).ToArray();
+            Assert.That(points.Select(m => m.Split(':')[0]), Is.EqualTo(CheckPointLogs), "each point averaged once, none retaken");
+            foreach (var point in points) {
+                var scatter = double.Parse(point[(point.LastIndexOf("rms scatter ", StringComparison.Ordinal) + 12)..].TrimEnd('″'),
+                    System.Globalization.CultureInfo.InvariantCulture);
+                Assert.That(scatter, Is.EqualTo(Math.Sqrt(8.0 / 3.0)).Within(0.1), "the frames' own scatter, not the drift: " + point);
+            }
+            var check = logger.Entries.Single(e => e.EventId == 4539).Message;
+            Assert.That(System.Text.RegularExpressions.Regex.Count(check, @"Dec [-\d.]+° ±0\.82″(?! \(floor\))"), Is.EqualTo(3),
+                "each point's σ is its frames' scatter over 2: " + check);
+            Assert.That(status.MeasurementNoisy, Is.Not.True);
+            Assert.That(mount.Motions, Is.Empty, mount.Describe());
+        }
+
+        private static readonly string[] CheckPointLogs = { "§45 polar-align check-1", "§45 polar-align check-2", "§45 polar-align check-3" };
+
         private static readonly bool[] OneHandStart = { true };
 
         [Test]

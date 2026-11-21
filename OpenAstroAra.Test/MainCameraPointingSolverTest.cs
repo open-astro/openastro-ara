@@ -148,5 +148,30 @@ namespace OpenAstroAra.Test {
             var expectedHint = new Coordinates(45.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees).Transform(Epoch.J2000);
             Assert.That(param.Coordinates!.Dec, Is.EqualTo(expectedHint.Dec).Within(1e-6), "the caller's hint, not the mount's reading");
         }
+
+        [Test]
+        public async Task A_solved_frame_carries_the_main_cameras_pixel_scale_at_the_solve_binning() {
+            // #2072: the fit's precision floor scales with it. 800 mm, 3.8 µm, 2×2: 206.265 × 7.6 / 800 = 1.96″/px.
+            var settings = new Mock<IPlateSolveSettings>();
+            settings.SetupGet(s => s.Binning).Returns((short)2);
+            settings.SetupGet(s => s.SolveTimeoutSeconds).Returns(30);
+            var profileService = ProfileWithOptics(800, 3.8);
+            profileService.SetupGet(p => p.ActiveProfile.PlateSolveSettings).Returns(settings.Object);
+            var captureSolver = new Mock<ICaptureSolver>();
+            captureSolver.Setup(s => s.Solve(It.IsAny<CaptureSequence>(), It.IsAny<CaptureSolverParameter>(),
+                    It.IsAny<IProgress<PlateSolveProgress>>(), It.IsAny<IProgress<ApplicationStatus>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new PlateSolveResult { Success = true, Coordinates = new Coordinates(45.0, 85.0, Epoch.JNOW, Coordinates.RAType.Degrees) });
+            var factory = new Mock<IPlateSolverFactory>();
+            factory.Setup(f => f.GetPlateSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetBlindSolver(It.IsAny<IPlateSolveSettings>())).Returns(Mock.Of<IPlateSolver>());
+            factory.Setup(f => f.GetCaptureSolver(It.IsAny<IPlateSolver>(), It.IsAny<IPlateSolver>(), It.IsAny<IImagingMediator>(), It.IsAny<IFilterWheelMediator>()))
+                .Returns(captureSolver.Object);
+            var solver = Solver(profileService, Camera(EquipmentConnectionState.Connected, free: true).Object, factory.Object);
+
+            var outcome = await solver.CaptureAndSolveAsync(3.0, (45.0, 85.0), blindFailover: false, CancellationToken.None);
+
+            Assert.That(outcome.Success, Is.True);
+            Assert.That(outcome.PixelScaleArcsec, Is.EqualTo(206.265 * 3.8 * 2 / 800).Within(1e-9));
+        }
     }
 }

@@ -14228,6 +14228,13 @@ components:
           type:
             - 'null'
             - boolean
+        align_sigma_arcmin:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - 'null'
+            - number
+            - string
+          format: double
     ParkRequestDto:
       type: object
       properties:

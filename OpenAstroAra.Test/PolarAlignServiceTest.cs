@@ -2711,7 +2711,9 @@ namespace OpenAstroAra.Test {
             // The axis IS the pole: the only error is the ~1′ refraction term (the apparent pole sits above it).
             Assert.That(status.CheckResult!.TotalErrorArcmin, Is.EqualTo(0.98).Within(0.1));
             Assert.That(status.CheckResult.AltitudeErrorArcmin, Is.LessThan(0));
-            Assert.That(status.CheckResult.Verdict, Is.EqualTo("excellent"));
+            // #2072: the band rates the error plus twice its 1σ; one frame per point (1″ floor) at 10° gives about 1.3′,
+            // so 0.98′ ± 1.3′ is "good", not "excellent".
+            Assert.That(status.CheckResult.Verdict, Is.EqualTo("good"));
             Assert.That(status.CheckResult.ConeHalfAngleDeg, Is.EqualTo(5.0).Within(1e-6));
             Assert.That(status.CheckResult.TurnMismatchDeg, Is.EqualTo(0.0).Within(1e-6));
             Assert.That(status.LastResult, Is.Not.Null, "#1565: a finished check is the last result");
@@ -2725,7 +2727,7 @@ namespace OpenAstroAra.Test {
             Assert.That(Math.Abs(((targets[1].RADegrees - targets[0].RADegrees + 540) % 360) - 180), Is.EqualTo(10.0).Within(1e-6));
             // The row, the event and the lease.
             var checkedEvent = await WaitForEventAsync(ws, WsEventCatalog.PolarAlignChecked).ConfigureAwait(false);
-            Assert.That(checkedEvent.GetProperty("verdict").GetString(), Is.EqualTo("excellent"));
+            Assert.That(checkedEvent.GetProperty("verdict").GetString(), Is.EqualTo("good"));
             Assert.That(log.Rows.Single().Outcome, Is.EqualTo("checked"));
             Assert.That(log.Rows.Single().FinalErrorArcmin, Is.EqualTo(status.CheckResult.TotalErrorArcmin).Within(1e-6));
             Assert.That(PaCalls(fake), Is.EqualTo(AcquireThenRelease), "the check releases the lease itself");
