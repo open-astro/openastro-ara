@@ -1921,3 +1921,17 @@ The push applies the same limits to values already saved: a bad value is left ou
 **Spec ref:** `Contracts/ProfileDtos.cs`, `Services/StoreBackedProfileService.cs` (`ApplyMeridian`), `Services/MeridianStopWatch.cs`, `Contracts/WsEvents/TelescopePayloads.cs`. Tests `MeridianStopWatchTest`, `StoreBackedProfileServiceMeridianTest`; client `state/settings/safety_policies_state.dart`, `screens/simple/simple_mount_limits.dart`.
 
 **Related:** #2044, #1589, ADR 0014
+
+---
+
+## 2026-11-21 — #1895 `GuiderStateDto.calibration_target_px`: how far each calibration leg has to go
+
+**Endpoint(s) or area:** `GET /api/v1/equipment/guider` (`runtime`): `GuiderStateDto` gains the optional `calibration_target_px` (number, nullable, default null). No WebSocket event changes.
+
+**Decision:** while `state` is `calibrating`, the distance in guide-camera pixels the guider is configured to move on each leg, so a client reads "11.9 of 25 px". Null outside `calibrating`, when the guider reports no `calibration_distance`, or when the read fails. The daemon reads it once per calibration run (at `StartCalibration`, or at the first step when it connected mid-run) through the guider's `get_profile_setup`, best-effort and silent (no inbox error), keeps it with the leg fields and clears it where they are cleared (`CalibrationComplete`, `CalibrationFailed`, loop or guiding stopped, a dropped link). The state read stays an in-memory snapshot. Every leg of a run carries the same target; nothing identifies a backlash-clearing leg. Ara sets no calibration distance. An older client ignores the field; a newer client against an older daemon reads null and shows today's "11.9 px".
+
+**Reasoning:** #1875 asked for "West step 3 · 11.9 of 25 px"; #1884 shipped the moved distance without the target because the daemon did not send it. The guider's JSON-RPC document lists `calibration_distance` among the `get_profile_setup` result fields.
+
+**Spec ref:** `Contracts/EquipmentDtos.cs` (`GuiderStateDto`), `Services/GuiderService.cs` (`GetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.cs` (`ReadCalibrationTargetAsync`), `Equipment/MyGuider/PHD2/PHD2Guider.LiveView.cs` (`ReadProfileSetupAsync`). Tests `GuiderFakeIntegrationTest`; client `models/guider_status_test`. `openapi.yaml` does not list `GuiderStateDto`, so it does not change.
+
+**Related:** #1895, #1875, #1884, ADR 0009 (rule 1), 0014, 0020

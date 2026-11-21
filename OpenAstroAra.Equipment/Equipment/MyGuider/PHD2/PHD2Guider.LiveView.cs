@@ -96,13 +96,18 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             // TolerateJumps only; the flag lives in get_profile_setup (multistar_enabled), which the
             // guider answers whether or not its equipment is connected. Without this the dialog's
             // Multi-star / Single star chip never showed (2026-10-18).
+            var token = (await ReadProfileSetupAsync().ConfigureAwait(false))?["multistar_enabled"];
+            return token?.Type == JTokenType.Boolean ? token.Value<bool>() : null;
+        }
+
+        /// <summary>The guider's <c>get_profile_setup</c> result object; null when the guider refuses or
+        /// answers anything but an object (it answers whether or not its equipment is connected).</summary>
+        private async Task<JObject?> ReadProfileSetupAsync() {
             var setup = await SendMessage<GenericPhdMethodResponse>(new Phd2NamedGetter("get_profile_setup", new Dictionary<string, object>()), LiveRpcTimeoutMs, notifyOnError: false).ConfigureAwait(false);
             if (setup.error != null || setup.result is null) {
                 return null;
             }
-            // The result is an object on every guider that has the method; anything else is not an answer.
-            var token = (JToken.FromObject(setup.result) as JObject)?["multistar_enabled"];
-            return token?.Type == JTokenType.Boolean ? token.Value<bool>() : null;
+            return JToken.FromObject(setup.result) as JObject;
         }
 
         /// <summary>Lock on the star nearest (<paramref name="x"/>, <paramref name="y"/>) frame pixels —
