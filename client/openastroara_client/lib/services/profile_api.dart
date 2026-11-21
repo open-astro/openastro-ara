@@ -629,7 +629,7 @@ class ProfileApi {
   // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
   // rule 3): as with storage, a missing or mistyped key fails the load or the
   // Save, and so does an unknown engine, so no default is written back. The
-  // lenient readers stay for the offline cache and the untagged reads.
+  // offline cache and the untagged reads go through these readers too.
   static CameraElectronics _cameraElectronicsFromRig(Map<String, dynamic> j) =>
       CameraElectronics(
         sensorName: j['sensor_name'] as String,
@@ -866,7 +866,7 @@ class ProfileApi {
       ),
       guiderRetryTimeoutSec: (j['guider_retry_timeout_sec'] as num).toInt(),
       skipTargetIfRecoveryFails: j['skip_target_if_recovery_fails'] as bool,
-      // The lenient reader takes any case here; so does this one.
+      // Matched case-insensitively.
       onDiskSpaceCritical: DiskSpaceCriticalAction.values.firstWhere(
         (a) => a.name == (j['on_disk_space_critical'] as String).toLowerCase(),
         orElse: () => throw FormatException(
