@@ -8,6 +8,7 @@ import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/refusal.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
+import 'package:openastroara/state/polar_align/polar_align_preflight_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
 import 'package:openastroara/widgets/imaging/polar_preflight_checklist.dart';
@@ -134,6 +135,20 @@ class _Idle extends PolarAlignLiveNotifier {
   @override
   PolarAlignLive build() => const PolarAlignLive();
 }
+
+/// The routine's phase, set by the test (a run starting, turning, adjusting).
+class _Live extends PolarAlignLiveNotifier {
+  @override
+  PolarAlignLive build() => const PolarAlignLive();
+  void enter(String phase) => state = state.copyWith(phase: phase);
+}
+
+MountStatus _connectedMount({required bool slewing}) => MountStatus.fromJson({
+  'device_id': preflightMountKey,
+  'name': 'Mount',
+  'state': 'connected',
+  'runtime': {'state': slewing ? 'slewing' : 'idle'},
+});
 
 Future<_Rig> _pump(
   WidgetTester tester, {
@@ -442,6 +457,49 @@ void main() {
       _onPressed(tester, 'polar-clearance-confirm'),
       isNull,
       reason: 'a confirmation is for one limit: tick again',
+    );
+  });
+
+  test('The list is not read again while a run moves the mount', () async {
+    final rig = _Rig();
+    final mount = _Mount(_connectedMount(slewing: false));
+    final container = ProviderContainer(
+      overrides: [
+        ...polarAlignSectionOverrides(rig.section),
+        polarAlignApiProvider.overrideWithValue(rig),
+        polarAlignLiveProvider.overrideWith(_Live.new),
+        mountProvider.overrideWith(() => mount),
+      ],
+    );
+    addTearDown(container.dispose);
+    final sub = container.listen(polarAlignPreflightProvider, (_, _) {});
+    addTearDown(sub.close);
+    await container.read(polarAlignPreflightProvider.future);
+    await pumpEventQueue();
+    final live = container.read(polarAlignLiveProvider.notifier) as _Live;
+
+    live.enter(PolarAlignStates.seeding);
+    await pumpEventQueue();
+    final readsAtStart = rig.preflightReads;
+    // The seed's turns: the mount's state flips with each one.
+    for (var i = 0; i < 3; i++) {
+      mount.set(_connectedMount(slewing: true));
+      await pumpEventQueue();
+      mount.set(_connectedMount(slewing: false));
+      await pumpEventQueue();
+    }
+    expect(
+      rig.preflightReads,
+      readsAtStart,
+      reason: 'no rig read while the run turns the mount',
+    );
+
+    live.enter(PolarAlignStates.adjusting);
+    await pumpEventQueue();
+    expect(
+      rig.preflightReads,
+      readsAtStart + 1,
+      reason: 'read once the turns are over, for the adjust screen\'s Check',
     );
   });
 }

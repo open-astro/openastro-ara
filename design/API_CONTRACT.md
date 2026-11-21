@@ -2111,7 +2111,7 @@ The push applies the same limits to values already saved: a bad value is left ou
 
 ---
 
-## 2026-11-20 — Polar Align pre-flight list: `GET /polaralign/preflight`, per-mount clearance, `polar-align-clearance-not-confirmed` (#2068, ADR 0022)
+## 2026-11-21 — Polar Align pre-flight list: `GET /polaralign/preflight`, per-mount clearance, `polar-align-clearance-not-confirmed` (#2068, ADR 0022)
 
 **Endpoint(s) or area:** new `GET /api/v1/equipment/polaralign/preflight?stage=` → `PolarAlignPreflightDto { ready, checks: [{ id, status: ok|warn|fail|unknown, detail }], planned: { stage, direction?, turn_step_deg, check_step_deg, turns, max_sweep_deg, new_origin?, origin_offset_deg?, sweep_limit_deg?, max_cw_angle_deg, start_cw_angle_deg?, min_altitude_deg? }, mount_key? }` (always 200; 400 for an unknown stage). The polar-align profile section (`GET/PUT /api/v1/profile/polar-align`) gains `mount_clearance` (null or a map from the mount's key to `{ max_cw_angle_deg, clearance_confirmed, confirmed_max_cw_angle_deg }`, the last null while not confirmed). `GET /polaralign/preflight` and `GET /polaralign/start-plan` take `hand_turn` (query, boolean, default false): the list and the plan of a Turn RA by hand start. New Refusal cause `polar-align-clearance-not-confirmed` (409, parameter `max_cw_angle_deg`) at `POST /polaralign/start` and `GET /polaralign/start-plan`. `GET /polaralign/start-plan` now also refuses with `mount-clock-not-verified`, as Start does, after waiting (up to about 10 s) for a mount clock push in flight, as Start waits. A `PUT /profile/polar-align` without `mount_clearance` (or with null) keeps the stored entries; `{}` clears them. A confirmed entry whose `max_cw_angle_deg` is outside 10–75 is a 400; an unconfirmed one is clamped.
 

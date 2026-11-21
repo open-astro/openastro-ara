@@ -35,6 +35,11 @@ namespace OpenAstroAra.Server.Services {
             GetPreflightAsync(stage, handTurn: false, ct);
 
         /// <inheritdoc />
+        /// <remarks>Takes no <c>_opLock</c>, like <see cref="GetStartPlanAsync(string?, bool, CancellationToken)"/>: a list
+        /// read during a Start or a Stop must not wait behind it (the Start card would hang through a 15 s unwind). That
+        /// holds only while <see cref="EvaluatePreflightAsync"/> reads and never writes: the mount, the profile, the mount
+        /// clock gate and the session's sweep origin (under <c>_gate</c>). A check that writes the mount or the routine's
+        /// state belongs in the Start under the lock, not in the list.</remarks>
         public async Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, bool handTurn, CancellationToken ct) {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");

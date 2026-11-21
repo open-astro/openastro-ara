@@ -16,6 +16,7 @@ using Moq;
 using NUnit.Framework;
 using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Contracts.Refusals;
+using OpenAstroAra.Server.Contracts.WsEvents;
 using OpenAstroAra.Server.Services;
 using OpenAstroAra.Test.PolarAlign;
 using System.Linq;
@@ -108,6 +109,115 @@ namespace OpenAstroAra.Test {
 
             Assert.That(status.HandTurn, Is.True, "the hand-turn run started");
             Assert.That(mount.Motions, Is.Empty, "and Ara moved nothing. " + mount.Describe());
+        }
+
+        // ── the adjust screen's Check (EndAdjustForCheckAsync) ───────────────────────────────
+
+        /// <summary>A refused Check leaves the adjust loop as it was: still adjusting, still holding the mount, no stop
+        /// sent and no turn made since <paramref name="eventsBefore"/> / <paramref name="turnsBefore"/>.</summary>
+        private static async Task AssertLoopRunsOnAsync(PolarAlignService svc, FakeGemMount mount, WsRecorder ws, int eventsBefore, int turnsBefore) {
+            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
+            Assert.Multiple(() => {
+                Assert.That(status.State, Is.EqualTo("adjusting"), "the loop runs on");
+                Assert.That(mount.MotionOwner, Is.EqualTo(MotionOwners.PolarAlign), "the loop still holds the mount");
+                Assert.That(ws.Events.Skip(eventsBefore).Select(e => e.Type),
+                    Has.None.EqualTo(WsEventCatalog.PolarAlignStopped).And.None.EqualTo(WsEventCatalog.PolarAlignStarted), "the loop was not ended");
+                Assert.That(RaTurns(mount), Has.Length.EqualTo(turnsBefore), "nothing turned. " + mount.Describe());
+            });
+        }
+
+        [Test]
+        public async Task An_adjust_screen_motor_Check_without_the_clearance_is_refused_and_the_loop_runs_on() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            using var svc = NewGemService(mount, ws, store);
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            var check = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            // The user takes the confirmation back (Settings › Take back) while the loop runs, then taps Check.
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
+            var (eventsBefore, turnsBefore) = (ws.Events.Count, RaTurns(mount).Length);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Check,
+                new PolarAlignStartConfirmation(check.Direction, check.NewOrigin), null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed), "a motor Check is refused");
+            await AssertLoopRunsOnAsync(svc, mount, ws, eventsBefore, turnsBefore).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+            mount.AssertEndedStopped(tracking: false);
+        }
+
+        [Test]
+        public async Task An_adjust_screen_Check_with_the_position_unverified_is_refused_before_the_loop_ends() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            using var svc = NewGemService(mount, ws);
+            await FineRunToAdjustingAsync(svc).ConfigureAwait(false);
+            var check = await svc.GetStartPlanAsync(PolarAlignStages.Check, CancellationToken.None).ConfigureAwait(false);
+            // The mount's position stops being trusted while the loop runs (a reconnect that read a false zero).
+            mount.PositionUnverifiedReason = MountPoseTrust.NotReadYet;
+            var (eventsBefore, turnsBefore) = (ws.Events.Count, RaTurns(mount).Length);
+
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Check,
+                new PolarAlignStartConfirmation(check.Direction, check.NewOrigin), null, CancellationToken.None));
+
+            Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
+            await AssertLoopRunsOnAsync(svc, mount, ws, eventsBefore, turnsBefore).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+        }
+
+        [Test]
+        public async Task An_adjust_screen_hand_turn_Check_without_the_clearance_goes_ahead() {
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            using var svc = NewGemService(mount, ws, store);
+            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
+            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
+            var checkFrom = ws.Events.Count;
+
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, handTurn: true, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartAsync(PolarAlignStages.Check, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, HandTurn: true), null,
+                CancellationToken.None).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, from: checkFrom).ConfigureAwait(false);
+            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, from: checkFrom).ConfigureAwait(false);
+            var status = await PollStateAsync(svc, checkFrom, "checked", "failed").ConfigureAwait(false);
+
+            Assert.That(status.State, Is.EqualTo("checked"),
+                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
+            Assert.That(status.HandTurn, Is.True, "the hand-turn check ran");
+            Assert.That(mount.Motions, Is.Empty, "and Ara moved nothing. " + mount.Describe());
+        }
+
+        // ── the motion owner's rank in the list ──────────────────────────────────────────────
+
+        [Test]
+        public async Task Another_motion_owner_refuses_a_motor_start_after_the_position_check_and_before_the_clearance() {
+            // DESIGN.md / API_CONTRACT: polar-align-mount-busy ranks after the checks up to pose_verified and before
+            // clearance_confirmed.
+            var mount = PolledGemAt(-4.0);
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
+            using var svc = NewGemService(mount, ws, store);
+            // The motor plan is refused on the clearance; the hand-turn plan gives the direction to confirm.
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, handTurn: true, CancellationToken.None).ConfigureAwait(false);
+            using var sequencer = mount.AcquireMotion("sequencer");
+            Task Start() => svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None);
+
+            var busy = await Assert.ThrowsAsync<RefusalException>(Start);
+            mount.PositionUnverifiedReason = MountPoseTrust.NotReadYet;
+            var pose = await Assert.ThrowsAsync<RefusalException>(Start);
+
+            Assert.Multiple(() => {
+                Assert.That(busy!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMountBusy), "the owner ranks before the clearance");
+                Assert.That(pose!.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified), "the position ranks before the owner");
+                Assert.That(mount.MotionOwner, Is.EqualTo("sequencer"), "the other owner keeps the mount");
+                Assert.That(mount.Motions, Is.Empty, "nothing moved. " + mount.Describe());
+            });
         }
     }
 }

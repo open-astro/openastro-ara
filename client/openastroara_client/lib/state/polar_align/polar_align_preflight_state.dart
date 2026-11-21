@@ -14,7 +14,8 @@ import 'polar_align_state.dart';
 /// changes: the routine's phase (a run started, ended or failed), the mount
 /// (connected, parked, its position trusted, a slew ending, another mount),
 /// the polar-align section (a clearance saved here or on another device, a
-/// profile switch) and the site. A failing mount-clock check is read again a
+/// profile switch) and the site; not while a run moves the mount (its phase
+/// change after the turns reads it). A failing mount-clock check is read again a
 /// few seconds later ([clockRetryDelay]): the rig's clock push after a
 /// connect clears it with no event the app sees. Null with no rig, or from a
 /// rig that predates the list (the card then shows none, and the rig's own
@@ -35,6 +36,13 @@ class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
 
   static const _clockCheck = 'mount_clock_or_site';
 
+  /// The routine's phases in which it may move the mount.
+  static const _movingPhases = {
+    PolarAlignStates.homing,
+    PolarAlignStates.seeding,
+    PolarAlignStates.checking,
+  };
+
   // The read that may set the state: an older reply never overwrites a newer
   // one.
   int _seq = 0;
@@ -46,8 +54,14 @@ class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
     final api = ref.watch(polarAlignApiProvider);
     ref.onDispose(() => _clockRetry?.cancel());
     if (api == null) return null;
+    // While a run moves the mount (Home, the seed's turns, a Check's turns) the
+    // mount's state flips with every turn, and each read makes the rig read
+    // the mount afresh; the list is read again when the phase moves on (into
+    // the adjust loop, or the run's end).
+    bool runMovesMount() =>
+        _movingPhases.contains(ref.read(polarAlignLiveProvider).phase);
     void changed(Object? prev, Object? next) {
-      if (prev != next) unawaited(refresh());
+      if (prev != next && !runMovesMount()) unawaited(refresh());
     }
 
     ref.listen<Object?>(polarAlignLiveProvider.select((l) => l.phase), changed);
