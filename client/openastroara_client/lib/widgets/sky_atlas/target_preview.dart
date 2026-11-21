@@ -6,6 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../services/target_preview_service.dart';
 import '../../services/tonight_sky_api.dart';
+import '../../state/album/album_art.dart';
+import '../../state/sky_atlas/dso_catalog_state.dart';
+import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/target_preview_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/mosaic_geometry.dart';
@@ -216,6 +219,55 @@ class TargetPreview extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The DSS2 cutout of a sky pick, from the same cache and source as
+/// [TargetPreview] (nothing is forked): the bytes once cached or fetched, null
+/// while loading, offline or on any failure, so the caller keeps its
+/// placeholder. Waits for the Album manifest and catalog, so a target that has
+/// Art never fetches a survey in the meantime. The field is the default for an
+/// object of unknown size.
+Uint8List? surveyPicture(WidgetRef ref, PlanetariumSelection sel) {
+  if (ref.watch(albumManifestProvider).isLoading ||
+      ref.watch(bundledCatalogProvider).isLoading) {
+    return null;
+  }
+  return ref
+      .watch(targetPreviewProvider((
+        id: 'pick-${sel.name}',
+        raDeg: sel.raJ2000Hours * 15,
+        decDeg: sel.decJ2000Deg,
+        fieldDeg: TargetPreviewService.fieldDegFor(null, null),
+      )))
+      .value;
+}
+
+/// A small square survey picture for a card whose target has no Album Art.
+/// Decorative: the name beside it says it all; the tooltip carries the
+/// survey credit.
+class SurveyThumb extends StatelessWidget {
+  const SurveyThumb({super.key, required this.bytes, required this.size});
+
+  final Uint8List bytes;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: 'DSS2 colour survey (CDS hips2fits)',
+        child: ExcludeSemantics(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(6),
+            child: Image.memory(
+              bytes,
+              width: size,
+              height: size,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => SizedBox(width: size, height: size),
+            ),
+          ),
+        ),
+      );
 }
 
 class _NoPreview extends StatelessWidget {
