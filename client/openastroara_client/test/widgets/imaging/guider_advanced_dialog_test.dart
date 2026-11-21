@@ -5,6 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/guider_advanced_settings.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/guider_advanced_api.dart';
+import 'package:openastroara/services/profile_api.dart'
+    show SectionVersionMissingException;
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
@@ -30,22 +32,30 @@ class _Fake implements GuiderAdvancedClient {
     return (value: profile, etag: tagless ? null : '"v$version"');
   }
 
-  /// The read answers no tag, so Apply sends none.
+  /// The read answers no tag (a rig from before section versions).
   bool tagless = false;
+
+  /// The rig answers the PUT 428, as it does one with no `If-Match`.
+  bool demandVersion = false;
 
   @override
   Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
     GuiderAdvancedSettings s, {
     String? ifMatch,
   }) async {
-    // As the daemon does (ADR 0015): no tag is a 428, another copy's a 412.
-    if (ifMatch == null || ifMatch != '"v$version"') {
+    // As GuiderAdvancedApi does: no loaded tag, nothing is sent.
+    if (ifMatch == null || ifMatch.isEmpty) {
+      throw const SectionVersionMissingException('guider-advanced');
+    }
+    // As the daemon does (ADR 0015): a refused version is a 428, another
+    // copy's tag a 412.
+    if (demandVersion || ifMatch != '"v$version"') {
       final req = RequestOptions(path: '/api/v1/profile/guider-advanced');
       throw DioException(
         requestOptions: req,
         response: Response<void>(
           requestOptions: req,
-          statusCode: ifMatch == null ? 428 : 412,
+          statusCode: demandVersion ? 428 : 412,
         ),
       );
     }
@@ -87,8 +97,11 @@ Future<_Fake> _pump(
   GuiderAdvancedSettings profile = GuiderAdvancedSettings.empty,
   GuiderAdvancedView? guider,
   bool tagless = false,
+  bool demandVersion = false,
 }) async {
-  final fake = _Fake(profile, guider ?? _guider())..tagless = tagless;
+  final fake = _Fake(profile, guider ?? _guider())
+    ..tagless = tagless
+    ..demandVersion = demandVersion;
   t.view.physicalSize = const Size(900, 2400);
   t.view.devicePixelRatio = 1;
   addTearDown(t.view.resetPhysicalSize);
@@ -251,12 +264,22 @@ void main() {
 
   testWidgets('Guider advanced: Apply refused for want of a version (428) '
       'says to reload and offers Reload', (t) async {
-    final fake = await _pump(t, tagless: true);
+    final fake = await _pump(t, demandVersion: true);
     await t.tap(find.widgetWithText(FilledButton, 'Apply'));
     await t.pumpAndSettle();
     expect(fake.putBody, isNull);
     expect(find.textContaining('Reload these settings from the rig'), findsWidgets);
     expect(find.text('Reload'), findsWidgets);
+  });
+
+  testWidgets('Guider advanced: a rig that sends no version gets no PUT: '
+      'Apply says to update the rig', (t) async {
+    final fake = await _pump(t, tagless: true);
+    await t.tap(find.widgetWithText(FilledButton, 'Apply'));
+    await t.pumpAndSettle();
+    expect(fake.putBody, isNull);
+    expect(fake.pushes, 0);
+    expect(find.textContaining('Update the rig to save them'), findsWidgets);
   });
 
   test('Guider advanced: the multi-star chip writes over the copy it '
