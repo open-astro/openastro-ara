@@ -117,7 +117,6 @@ lib/widgets/sequencer/sequence_delete.dart 24
 lib/widgets/sequencer/sequence_editor_tree.dart 4
 lib/widgets/sequencer/sequence_export.dart 3
 lib/widgets/sequencer/sequence_field_editor.dart 14
-lib/widgets/sequencer/sequence_import.dart 9
 lib/widgets/sequencer/sequence_load_dialog.dart 19
 lib/widgets/sequencer/sequence_new_dialog.dart 9
 lib/widgets/sequencer/sequencer_palette.dart 1

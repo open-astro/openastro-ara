@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
@@ -229,6 +230,8 @@ void main() {
       UncontrolledProviderScope(
         container: container,
         child: MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Consumer(
               builder: (context, ref, _) {
@@ -238,6 +241,7 @@ void main() {
                       context,
                       ref,
                       name: 'M42',
+                      fileName: 'M42.json',
                       ninaJson: ninaJson,
                     );
                     returnedId = id;
@@ -344,7 +348,7 @@ void main() {
 
     final from = (client.lastBody!['metadata'] as Map)['importedFrom'] as Map;
     expect(from['format'], 'nina');
-    expect(from['fileName'], isA<String>());
+    expect(from['fileName'], 'M42.json');
     final stamp = DateTime.parse(from['importedUtc'] as String);
     expect(stamp.isUtc, isTrue);
     expect(
@@ -522,6 +526,16 @@ void main() {
     },
   );
 
+  test('a file that is not JSON gets the one refusal sentence', () {
+    expect(
+      ninaFileErrorMessage(
+        lookupAppLocalizations(const Locale('en')),
+        NinaFileError.notJson,
+      ),
+      'This file is not a NINA sequence.',
+    );
+  });
+
   group('readNinaSequenceFile', () {
     late Directory tmp;
     setUp(
@@ -536,6 +550,7 @@ void main() {
       expect(r.ok, isTrue);
       expect(r.nina, const {'Name': 'M42'});
       expect(r.name, 'M42 Wide'); // basename minus .json
+      expect(r.fileName, 'M42 Wide.json'); // the spec's `fileName`
     });
 
     test('a non-object JSON body → notJson', () async {
