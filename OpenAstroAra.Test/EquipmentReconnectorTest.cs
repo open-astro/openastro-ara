@@ -401,17 +401,33 @@ namespace OpenAstroAra.Test {
             Assert.That(r.IsDisconnectedByUser(EquipmentRole.SafetyMonitor), Is.True);
         }
 
-        [Test]
-        public async Task Port_maps_a_role_to_the_device_type_its_service_answers_to() {
-            // Mount is the Telescope; the Flat Panel is the CoverCalibrator group; Weather is ObservingConditions.
-            var foc = new Mock<IFlatDeviceService>();
-            foc.Setup(s => s.GetAsync(It.IsAny<CancellationToken>())).ReturnsAsync((FlatDeviceDto?)null);
-            var r = Build(new FakeStore(), (typeof(IFlatDeviceService), foc.Object));
+        // Remembers a device of `type` and mocks the one service that type answers to; the role's connect must
+        // dial that service. The service never reports a state, so the settle runs out: only the dial is asserted.
+        private static async Task AssertRoleDialsItsService<T>(EquipmentRole role, DeviceType type,
+                System.Linq.Expressions.Expression<Func<T, Task<OperationAcceptedDto>>> connect) where T : class {
+            var svc = new Mock<T>();
+            svc.Setup(connect).ReturnsAsync(Accepted());
+            var r = Build(new FakeStore(Device(type, "dev")), (typeof(T), svc.Object));
+            r.SettleTimeout = TimeSpan.FromMilliseconds(200);
 
-            var ex = await Assert.CatchAsync<EquipmentRefusedException>(() => r.ConnectAsync(EquipmentRole.FlatPanel, CancellationToken.None));
+            await Assert.CatchAsync<SequenceEntityFailedException>(() => r.ConnectAsync(role, CancellationToken.None));
 
-            Assert.That(ex!.Cause, Is.EqualTo(EquipmentRefusalCause.NotKnown));
-            Assert.That(ex.Message, Does.StartWith("No Flat Panel is remembered"));
+            svc.Verify(connect, Times.Once);
         }
+
+        [Test]
+        public Task Port_maps_the_Mount_role_to_the_telescope_service() =>
+            AssertRoleDialsItsService<ITelescopeService>(EquipmentRole.Mount, DeviceType.Telescope,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
+
+        [Test]
+        public Task Port_maps_the_FlatPanel_role_to_the_flat_device_service() =>
+            AssertRoleDialsItsService<IFlatDeviceService>(EquipmentRole.FlatPanel, DeviceType.CoverCalibrator,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
+
+        [Test]
+        public Task Port_maps_the_Weather_role_to_the_observing_conditions_service() =>
+            AssertRoleDialsItsService<IObservingConditionsService>(EquipmentRole.Weather, DeviceType.ObservingConditions,
+                s => s.ConnectAsync(It.IsAny<ConnectRequestDto>(), null, It.IsAny<CancellationToken>()));
     }
 }
