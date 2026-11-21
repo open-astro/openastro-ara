@@ -253,9 +253,13 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // With a draft already open the target is APPENDED to it (below), the same
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
-    // No daemon to ask what the rig has — settings are the best we know.
+    // The offline cache's copy (ADR 0015): a section it lacks stops the
+    // create before the plan chooser, as connected, never a client default.
+    final (defaults, af) = _loadedRunSettings(container);
+    // No daemon to ask what the rig has — settings are the best we know (the
+    // cache holds no guider settings: no guider then).
     final rig = rigCapabilitiesFromSettings(
-      container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
+      container.read(phd2SettingsProvider).value,
     )
         .copyWith(pauseForFilterSwap: pauseForFilterSwap);
     final choice = filterPlan != null
@@ -270,13 +274,6 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       rig: rig,
     );
     if (choice == null) return ImagingRunResult.userCancelled;
-    // Not loaded (no rig to load from): the classes' values, as with the
-    // unguided options below. A run reads them; nothing saves them.
-    final defaults =
-        container.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
-    final af =
-        container.read(autofocusSettingsProvider).value ??
-        const AutofocusSettings();
     final exposureSeconds = exposureOverride ??
         defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
     final frameCount = frameCountOverride ??
@@ -399,17 +396,10 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // the notifiers already hold.
   await hydratePlanningSettings(container);
   // Connected: a run goes to the rig, so it is built from the profile's own
-  // copy (the rig's, or its offline cache), never from the classes' values.
-  // Either one not loaded: the create stops before the plan chooser, with
-  // nothing sent (ADR 0015).
-  final loadedDefaults = container.read(imagingDefaultsProvider);
-  final loadedAf = container.read(autofocusSettingsProvider);
-  final defaults = loadedDefaults.value;
-  final af = loadedAf.value;
-  if (defaults == null) {
-    throw SectionNotLoadedException(loadedDefaults.lastFailure);
-  }
-  if (af == null) throw SectionNotLoadedException(loadedAf.lastFailure);
+  // copy (the rig's, or its offline cache), never from client defaults. One
+  // not loaded: the create stops before the plan chooser, with nothing sent
+  // (ADR 0015).
+  final (defaults, af) = _loadedRunSettings(container);
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
   final rig = (await readRigCapabilities(container))
@@ -662,11 +652,11 @@ Future<TargetPlanChoice?> _choosePlan(
 /// The dither cadence for the run's imaging loops: the OpenAstro Guider settings' every-N
 /// frames when the user chose to guide and dithering is on; null = no dither
 /// trigger (also whenever guiding was declined — dithering without a guider
-/// nudges nothing).
+/// nudges nothing). Guiding with the guider settings not loaded throws
+/// [SectionNotLoadedException]: the cadence is never a client default.
 int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
   if (!choice.guide) return null;
-  final phd2 =
-      container.read(phd2SettingsProvider).value ?? const Phd2Settings();
+  final phd2 = _loaded(container.read(phd2SettingsProvider));
   return phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : null;
 }
 
@@ -892,11 +882,25 @@ Future<void> _registerMosaicProject(
   }
 }
 
-/// #1264 — the Imaging → Unguided knobs as the run builder takes them.
+/// The sections every run is built from, or [SectionNotLoadedException]
+/// when one holds no copy (the rig's or the offline cache's): a run never
+/// takes a client default (ADR 0015 rule 3).
+(ImagingDefaults, AutofocusSettings) _loadedRunSettings(
+  ProviderContainer container,
+) {
+  final defaults = _loaded(container.read(imagingDefaultsProvider));
+  final af = _loaded(container.read(autofocusSettingsProvider));
+  _loaded(container.read(unguidedSettingsProvider));
+  return (defaults, af);
+}
+
+T _loaded<T>(LoadedSection<T> section) =>
+    section.value ?? (throw SectionNotLoadedException(section.lastFailure));
+
+/// #1264 — the Imaging → Unguided knobs as the run builder takes them;
+/// [SectionNotLoadedException] when the section holds no copy.
 UnguidedOptions unguidedOptionsOf(ProviderContainer container) {
-  final u =
-      container.read(unguidedSettingsProvider).value ??
-      const UnguidedSettings();
+  final u = _loaded(container.read(unguidedSettingsProvider));
   return UnguidedOptions(
     guardEnabled: u.guardEnabled,
     eccentricityTolerance: u.eccentricityTolerance,

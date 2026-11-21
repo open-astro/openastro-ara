@@ -2839,12 +2839,18 @@ class _SimpleGuideGainSliderState extends ConsumerState<SimpleGuideGainSlider> {
 
   @override
   Widget build(BuildContext context) {
-    // Not in from the rig yet: the class value shows; a change is refused.
+    // Not in from the rig yet: no value and no slider (ADR 0015: never a
+    // client default); the section loads itself.
     final gain =
         _drag ??
-        (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
-            .guideCameraGain
-            .toDouble();
+        ref.watch(phd2SettingsProvider).value?.guideCameraGain.toDouble();
+    if (gain == null) {
+      return simpleWindowRow(
+        context.l10n.deviceGain,
+        id: 'Gain',
+        Text('—', style: kSimpleText),
+      );
+    }
     // Merged: Slider's own node carries the value as its label, so a plain
     // Semantics parent would leave VoiceOver's adjustable node unnamed.
     final slider = MergeSemantics(
@@ -4574,10 +4580,10 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
 
   Widget _tiles(BuildContext context, WeatherStatus s) {
     final l10n = context.l10n;
-    // Not in from the rig: the defaults, which mark nothing.
-    final p = ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
+    // Not in from the rig: no limits, which mark nothing.
+    final p = ref.watch(safetyPoliciesProvider).value;
     // Marked only when these limits act (the daemon's same checks, §35.1).
-    final mark = p.weatherTriggersEnabled;
+    final mark = p != null && p.weatherTriggersEnabled;
     final t = s.temperatureC, dew = s.dewPointC, hum = s.humidityPct;
     final speed = s.windSpeedMs, gust = s.windGustMs;
     final tiles = <_WeatherTile>[
@@ -4675,7 +4681,7 @@ class _SimpleWeatherWindowState extends ConsumerState<SimpleWeatherWindow> {
           ],
           // A gust past the limit marks the tile and its gust, not the lower
           // sustained speed the number shows.
-          past: over(shown) || gustOver
+          past: mark && (over(shown) || gustOver)
               ? l10n.deviceLimit('${p.maxWindKmh} km/h')
               : null,
           numberPast: over(shown),

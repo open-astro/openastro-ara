@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../support/fake_section_rig.dart';
 import '../support/section_load.dart';
+import '../support/settings_values.dart';
 
 /// The rig this device talks to, null until it connects.
 class _Api extends Notifier<ProfileApi?> {
@@ -36,7 +37,7 @@ class _FakeApi extends ProfileApi {
   _FakeApi() : super(const AraServer(hostname: 'test', port: 1));
 
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings(
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings(
       focalLengthMm: 382,
       reducerFactor: 1.0,
       sensorWidthPx: 6248,
@@ -46,19 +47,19 @@ class _FakeApi extends ProfileApi {
 
   @override
   Future<ImagingDefaults> getImagingDefaults() async =>
-      const ImagingDefaults(defaultGain: 101);
+      const TestImagingDefaults(defaultGain: 101);
 
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings(steps: 9);
+      const TestAutofocusSettings(steps: 9);
 
   @override
   Future<UnguidedSettings> getUnguidedSettings() async =>
-      const UnguidedSettings(stepDownAfter: 3);
+      const TestUnguidedSettings(stepDownAfter: 3);
 
   @override
   Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(siteName: 'South GA', bortleClass: 4);
+      const TestSiteSettings(siteName: 'South GA', bortleClass: 4);
 
   @override
   Future<FilterSetSettings> getFilterSet() async => const FilterSetSettings(
@@ -68,7 +69,7 @@ class _FakeApi extends ProfileApi {
 
   @override
   Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics(
+      const TestCameraElectronics(
           sensorName: 'IMX571',
           readNoiseE: 1.5,
           fullWellE: 51000,
@@ -148,7 +149,7 @@ void main() {
 
   test('a snapshot without camera electronics leaves the section not loaded, never defaults', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final c = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -160,7 +161,7 @@ void main() {
 
   test('#1264: a snapshot without an unguided section leaves a staged knob alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final container = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -174,7 +175,7 @@ void main() {
 
   test('#1137: a snapshot without a horizon leaves the notifier alone', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
-    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const OpticsSettings())});
+    await cache.saveSections('p1', {'optics': ProfileApi.opticsToJson(const TestOpticsSettings())});
     final container = ProviderContainer(overrides: [
       profileCacheServiceProvider.overrideWithValue(cache),
     ]);
@@ -220,7 +221,7 @@ void main() {
     () async {
       await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
       await cache.saveSections('p1', {
-        'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+        'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
       });
       final c = ProviderContainer(
         overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -289,7 +290,7 @@ void main() {
       'loaded (ADR 0015)', () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -348,7 +349,7 @@ void main() {
       () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'site': ProfileApi.siteSettingsToJson(const SiteSettings()),
+      'site': ProfileApi.siteSettingsToJson(const TestSiteSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],
@@ -382,7 +383,7 @@ void main() {
       () async {
     await cache.saveList('p1', [(id: 'p1', name: 'RedCat 91')]);
     await cache.saveSections('p1', {
-      'optics': ProfileApi.opticsToJson(const OpticsSettings()),
+      'optics': ProfileApi.opticsToJson(const TestOpticsSettings()),
     });
     final c = ProviderContainer(
       overrides: [profileCacheServiceProvider.overrideWithValue(cache)],

@@ -15,6 +15,7 @@ import 'package:openastroara/state/profile_management_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/safety_section.dart';
+import '../../support/settings_values.dart';
 
 /// A mount that records what it was asked to do.
 class _Mount extends MountNotifier {
@@ -168,7 +169,7 @@ void main() {
   });
 
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {
-    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianPauseMin: 12));
+    final safety = FakeSafetySection(initial: const TestSafetyPolicies(meridianPauseMin: 12));
     final (c, mount) = await _pump(tester, _wire(), safety: safety);
     expect(find.text('Mount · EQM-35 Pro'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
@@ -190,7 +191,7 @@ void main() {
     await tester.pump();
     expect(find.byKey(const Key('simple-mount-flip-off')), findsNothing, reason: 'no default shows');
     expect(find.byKey(const Key('section-retry')), findsOneWidget);
-    safety.initial = const SafetyPolicies(meridianFlipAuto: true);
+    safety.initial = const TestSafetyPolicies(meridianFlipAuto: true);
     await tester.tap(find.byKey(const Key('section-retry')));
     await tester.pump();
     await tester.pump();
@@ -200,7 +201,7 @@ void main() {
 
   testWidgets("a meridian flip change the rig refuses says why and shows the rig's setting again (ADR 0015)",
       (tester) async {
-    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianFlipAuto: true))
+    final safety = FakeSafetySection(initial: const TestSafetyPolicies(meridianFlipAuto: true))
       ..refuse = StateError('rig error');
     final (c, _) = await _pump(tester, _wire(), safety: safety);
     await tester.pump();

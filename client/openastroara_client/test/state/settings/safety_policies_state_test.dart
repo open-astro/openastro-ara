@@ -4,6 +4,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/section_load.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('SafetyPoliciesNotifier', () {
@@ -61,7 +62,7 @@ void main() {
 
     // The fallback the read-only panels show while the rig's copy is not in.
     test('defaults match playbook §35', () {
-      const s = SafetyPolicies();
+      const s = TestSafetyPolicies();
       expect(s.onUnsafe, UnsafeAction.pauseAndPark);
       expect(s.autoResumeWhenSafe, isTrue);
       expect(s.resumeDelayMin, 10);
@@ -166,7 +167,7 @@ void main() {
       // through ProfileApi.rearmFirstFlip (the daemon's dedicated endpoint)
       // and the general safety PUT is ignored server-side for this field, so
       // a stale panel Save can neither clear nor set a confirmation.
-      const confirmed = SafetyPolicies(firstFlipConfirmed: true);
+      const confirmed = TestSafetyPolicies(firstFlipConfirmed: true);
       expect(confirmed.firstFlipConfirmed, isTrue);
       expect(confirmed.copyWith(firstFlipConfirmed: false).firstFlipConfirmed,
           isFalse);
@@ -176,7 +177,7 @@ void main() {
       // The re-arm patch shape: only the flag moves; staged panel edits on the
       // other fields survive (rearmFirstFlip patches via copyWith rather than
       // replacing state with the daemon's persisted echo).
-      const staged = SafetyPolicies(resumeDelayMin: 42, firstFlipConfirmed: true);
+      const staged = TestSafetyPolicies(resumeDelayMin: 42, firstFlipConfirmed: true);
       final patched = staged.copyWith(firstFlipConfirmed: false);
       expect(patched.firstFlipConfirmed, isFalse);
       expect(patched.resumeDelayMin, 42,

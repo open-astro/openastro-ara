@@ -11,6 +11,7 @@ import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/widgets/settings/editable_field.dart';
 
 import '../../../support/storage_fixture.dart';
+import '../../../support/settings_values.dart';
 
 /// The rig behind File naming: Storage as [FakeStorageApi] serves it, and the
 /// other three sections the panel reads, whose filenames or site GET can be
@@ -23,7 +24,7 @@ class _FakeRig extends FakeStorageApi {
   Future<({FilenamesSettings value, String? etag})>
   getFilenamesSection() async {
     if (failFilenames != null) throw failFilenames!;
-    return (value: const FilenamesSettings(), etag: '"f1"');
+    return (value: const TestFilenamesSettings(), etag: '"f1"');
   }
 
   @override
@@ -38,7 +39,7 @@ class _FakeRig extends FakeStorageApi {
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() async {
     if (failSite != null) throw failSite!;
-    return (value: const SiteSettings(latitudeDeg: 51.477833), etag: '"s1"');
+    return (value: const TestSiteSettings(latitudeDeg: 51.477833), etag: '"s1"');
   }
 
   @override
@@ -55,7 +56,7 @@ class _FakeRig extends FakeStorageApi {
 
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: const OpticsSettings(focalLengthMm: 382), etag: '"o1"');
+      (value: const TestOpticsSettings(focalLengthMm: 382), etag: '"o1"');
 
   @override
   Future<({OpticsSettings value, String? etag})> putOpticsSection(

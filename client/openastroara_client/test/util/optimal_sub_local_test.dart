@@ -1,12 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/camera_electronics_state.dart';
 import 'package:openastroara/state/settings/filter_set_state.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
-import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/optimal_sub_local.dart';
+import '../support/settings_values.dart';
 
 void main() {
-  const optics = OpticsSettings(
+  const optics = TestOpticsSettings(
     focalLengthMm: 447,
     reducerFactor: 1.0,
     sensorWidthPx: 6248,
@@ -14,13 +12,13 @@ void main() {
     pixelSizeUm: 3.76,
     apertureMm: 91,
   );
-  const electronics = CameraElectronics(
+  const electronics = TestCameraElectronics(
     readNoiseE: 1.5,
     fullWellE: 50000,
     electronsPerAdu: 0.8,
     quantumEfficiencyPeak: 0.8,
   );
-  const site = SiteSettings(bortleClass: 6);
+  const site = TestSiteSettings(bortleClass: 6);
   const filters = FilterSetSettings(
     filters: [
       PlanningFilter(name: 'L', kind: FilterKind.l),

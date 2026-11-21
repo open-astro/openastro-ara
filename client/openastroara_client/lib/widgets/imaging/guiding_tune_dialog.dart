@@ -13,6 +13,7 @@ import '../../state/settings/phd2_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../profile/profile_import_flow.dart' show friendlyDaemonError;
 import '../settings/editable_field.dart';
+import '../settings/section_load_state.dart';
 import 'guider_advanced_dialog.dart';
 import '../adaptive_controls.dart';
 
@@ -188,8 +189,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
         ref.watch(guiderStatusProvider).asData?.value?.isConnected ?? false;
     // Fall back to the provider's values for display while the draft is
     // unseeded (pre-hydrate); edits are only possible once the draft exists.
-    final Phd2Settings phd2 =
-        _draft ?? ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
+    // Neither: the section is not loaded, and the controls say so (ADR 0015).
+    final phd2 = _draft ?? ref.watch(phd2SettingsProvider).value;
 
     return Dialog(
       backgroundColor: AraColors.bgPanel,
@@ -239,6 +240,13 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                 ),
               // Controls stay visible when disconnected (values are still the
               // saved profile) but inert, matching the settings panel's gating.
+              if (phd2 == null)
+                SectionNotLoaded(
+                  section: ref.watch(phd2SettingsProvider),
+                  padding: EdgeInsets.zero,
+                  onRetry: _hydrate,
+                )
+              else
               IgnorePointer(
                 ignoring: !connected,
                 child: Opacity(
@@ -261,7 +269,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       EditableNumberRow(
                         label: 'RA minimum move (px)',
                         currentValue: phd2.minimumMove.toString(),
-                        getCanonical: () => _current.minimumMove.toString(),
+                        getCanonical: () => (_current ?? phd2).minimumMove.toString(),
                         parse: (s) {
                           // Mirror setMinimumMove's bound (>= 0): an invalid
                           // entry never enters the draft, so the canonical
@@ -276,7 +284,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       EditableNumberRow(
                         label: 'Dec minimum move (px)',
                         currentValue: phd2.decMinimumMove.toString(),
-                        getCanonical: () => _current.decMinimumMove.toString(),
+                        getCanonical: () => (_current ?? phd2).decMinimumMove.toString(),
                         parse: (s) {
                           final v = double.tryParse(s);
                           if (v != null && v >= 0) {
@@ -329,7 +337,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       EditableNumberRow(
                         label: 'Guide camera gain (%)',
                         currentValue: phd2.guideCameraGain.toString(),
-                        getCanonical: () => _current.guideCameraGain.toString(),
+                        getCanonical: () => (_current ?? phd2).guideCameraGain.toString(),
                         parse: (s) {
                           final v = int.tryParse(s);
                           if (v != null && v >= 0 && v <= 100) {
@@ -353,7 +361,7 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                       EditableNumberRow(
                         label: 'Dither pixels',
                         currentValue: phd2.ditherPixels.toString(),
-                        getCanonical: () => _current.ditherPixels.toString(),
+                        getCanonical: () => (_current ?? phd2).ditherPixels.toString(),
                         parse: (s) {
                           // Mirror setDitherPixels's bound (>= 0) — see above.
                           final v = double.tryParse(s);
@@ -366,7 +374,8 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
                   ),
                 ),
               ),
-              if (_hydrateError != null)
+              // Not loaded: the failure shows in the not-loaded state above.
+              if (_hydrateError != null && phd2 != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
@@ -427,9 +436,10 @@ class _GuidingTuneDialogState extends ConsumerState<GuidingTuneDialog> {
     );
   }
 
-  /// The values the controls show: the draft once seeded, else the provider.
-  Phd2Settings get _current =>
-      _draft ?? ref.read(phd2SettingsProvider).value ?? const Phd2Settings();
+  /// The values the controls show: the draft once seeded, else the provider;
+  /// null while neither holds a copy.
+  Phd2Settings? get _current =>
+      _draft ?? ref.read(phd2SettingsProvider).value;
 
   /// Apply an edit to the local draft (no-op until the hydrate seeds it).
   void _edit(Phd2Settings Function(Phd2Settings) change) {

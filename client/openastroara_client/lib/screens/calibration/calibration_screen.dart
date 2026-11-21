@@ -340,11 +340,12 @@ class MatchingFlatsDialog extends ConsumerStatefulWidget {
 }
 
 class _MatchingFlatsDialogState extends ConsumerState<MatchingFlatsDialog> {
+  // The profile's frames per filter; empty while the policies are not
+  // loaded (ADR 0015: no client default), for the person to fill in.
   late final _frames = TextEditingController(
     text:
-        (ref.read(safetyPoliciesProvider).value ?? const SafetyPolicies())
-            .flatFramesPerFilter
-            .toString(),
+        ref.read(safetyPoliciesProvider).value?.flatFramesPerFilter.toString() ??
+        '',
   );
   final _coolTo = TextEditingController();
   bool _busy = false;

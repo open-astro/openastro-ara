@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+import 'settings_values.dart';
 
 /// The profile's site for a widget test, with no HTTP (a Dio request leaves a
 /// timer pending in a test that only pumps). The section loads itself as in
@@ -9,7 +10,7 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 /// rig that does not answer. Every save that reached "the rig" is in [puts];
 /// [refuse] fails each save instead (nothing written).
 class FakeSiteSection extends SiteSettingsNotifier {
-  FakeSiteSection({this.initial = const SiteSettings()});
+  FakeSiteSection({this.initial = const TestSiteSettings()});
 
   SiteSettings? initial;
   final List<SiteSettings> puts = [];
@@ -34,7 +35,7 @@ class FakeSiteSection extends SiteSettingsNotifier {
 
 /// The site as the rig's copy from the start (no load, no HTTP), for a test
 /// that reads or edits it with no rig to load it from.
-Override siteFromRig([SiteSettings site = const SiteSettings()]) =>
+Override siteFromRig([SiteSettings site = const TestSiteSettings()]) =>
     siteSettingsProvider.overrideWith(() => _RigSite(site));
 
 class _RigSite extends SiteSettingsNotifier {

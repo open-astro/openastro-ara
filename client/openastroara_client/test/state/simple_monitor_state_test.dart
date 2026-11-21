@@ -36,6 +36,7 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
 import 'package:openastroara/state/stats/guiding_rms_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/imaging/histogram_strip.dart';
+import '../support/settings_values.dart';
 
 // The Monitor state module (#1724): rig, run and frame set through fakes, and
 // the snapshot read as the screen would.
@@ -127,7 +128,7 @@ class _Clock extends MonitorClock {
 class _Policies extends SafetyPoliciesNotifier {
   @override
   LoadedSection<SafetyPolicies> build() => const LoadedSection(
-    value: SafetyPolicies(weatherTriggersEnabled: true),
+    value: TestSafetyPolicies(weatherTriggersEnabled: true),
     source: SectionSource.rig,
   );
 }

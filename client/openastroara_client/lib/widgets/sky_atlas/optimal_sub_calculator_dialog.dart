@@ -17,12 +17,14 @@ import '../settings/settings_row.dart';
 /// #1140 / NEXTGEN §5 — the standalone Optimal Sub calculator, seeded from the
 /// profile (optics, camera electronics, site sky, the first filter's passband,
 /// the noise-tolerance knob and the fitted sky-model k for that filter's kind).
+///
+/// A section not loaded seeds its inputs unset, never a client default (ADR
+/// 0015): the train at 0 and no sky (each then named in "Needs …"), the
+/// sensor as the Tier-0 figures an unset one takes.
 Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
-  final optics =
-      ref.read(opticsSettingsProvider).value ?? const OpticsSettings();
-  final cam =
-      ref.read(cameraElectronicsProvider).value ?? const CameraElectronics();
-  final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
+  final optics = ref.read(opticsSettingsProvider).value;
+  final cam = ref.read(cameraElectronicsProvider).value;
+  final site = ref.read(siteSettingsProvider).value;
   final filters = ref.read(filterSetProvider).value?.filters ?? const [];
   final k =
       ref.read(skyModelCalibrationProvider).asData?.value?.appliedK ??
@@ -32,20 +34,31 @@ Future<void> showOptimalSubCalculator(BuildContext context, WidgetRef ref) {
       ? filters.first.bandwidthNm
       : kind.defaultBandwidthNm;
   final seed = CalculatorInputs(
-    readNoiseE: cam.readNoiseE > 0 ? cam.readNoiseE : defaultReadNoiseE,
-    fullWellE: cam.fullWellE > 0 ? cam.fullWellE : defaultFullWellE,
-    electronsPerAdu: cam.electronsPerAdu > 0 ? cam.electronsPerAdu : 0,
-    pixelSizeUm: optics.pixelSizeUm,
-    apertureMm: optics.apertureMm,
-    focalLengthMm: optics.focalLengthMm,
-    reducerFactor: optics.reducerFactor > 0 ? optics.reducerFactor : 1.0,
-    quantumEfficiency: cam.quantumEfficiencyPeak > 0
+    readNoiseE: cam != null && cam.readNoiseE > 0
+        ? cam.readNoiseE
+        : defaultReadNoiseE,
+    fullWellE: cam != null && cam.fullWellE > 0
+        ? cam.fullWellE
+        : defaultFullWellE,
+    electronsPerAdu: cam != null && cam.electronsPerAdu > 0
+        ? cam.electronsPerAdu
+        : 0,
+    pixelSizeUm: optics?.pixelSizeUm ?? 0,
+    apertureMm: optics?.apertureMm ?? 0,
+    focalLengthMm: optics?.focalLengthMm ?? 0,
+    reducerFactor: optics != null && optics.reducerFactor > 0
+        ? optics.reducerFactor
+        : 1.0,
+    quantumEfficiency: cam != null && cam.quantumEfficiencyPeak > 0
         ? cam.quantumEfficiencyPeak
         : defaultQuantumEfficiency,
-    skyMagPerArcsec2: effectiveSkyMag(
-      bortleClass: site.bortleClass,
-      sqmMagPerArcsec2: site.sqmMagPerArcsec2,
-    ),
+    // No site: no sky (0 is out of range, so the calculator asks for one).
+    skyMagPerArcsec2: site == null
+        ? 0
+        : effectiveSkyMag(
+            bortleClass: site.bortleClass,
+            sqmMagPerArcsec2: site.sqmMagPerArcsec2,
+          ),
     filterBandwidthNm: bandwidth,
     noiseTolerancePct: ref.read(planningPrefsProvider).noiseTolerancePct,
     skyCalibrationK: k[kind.wire] ?? 1.0,

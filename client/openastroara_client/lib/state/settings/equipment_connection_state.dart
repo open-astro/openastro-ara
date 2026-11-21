@@ -29,27 +29,11 @@ enum EquipmentDeviceType {
 }
 
 class EquipmentConnectionSettings {
-  // Single map keyed by device type. EVERY type defaults to auto-connect on:
-  // boot-time auto-connect only attempts devices the user actually connected
-  // before (the daemon's remembered store), so an all-on default is safe for
-  // unconfigured types and a working rig comes back by itself after a reboot.
+  // Single map keyed by device type, as the rig holds it (ADR 0015: no client
+  // default; the daemon's normalizer fills every type).
   final Map<EquipmentDeviceType, bool> autoConnectOnBoot;
 
-  const EquipmentConnectionSettings({
-    this.autoConnectOnBoot = const {
-      EquipmentDeviceType.camera: true,
-      EquipmentDeviceType.mount: true,
-      EquipmentDeviceType.focuser: true,
-      EquipmentDeviceType.filterWheel: true,
-      EquipmentDeviceType.rotator: true,
-      EquipmentDeviceType.guider: true,
-      EquipmentDeviceType.flatPanel: true,
-      EquipmentDeviceType.dome: true,
-      EquipmentDeviceType.weather: true,
-      EquipmentDeviceType.safetyMonitor: true,
-      EquipmentDeviceType.switchDevice: true,
-    },
-  });
+  const EquipmentConnectionSettings({required this.autoConnectOnBoot});
 
   bool autoConnect(EquipmentDeviceType t) => autoConnectOnBoot[t] ?? true;
 

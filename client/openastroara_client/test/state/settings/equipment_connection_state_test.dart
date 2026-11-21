@@ -7,6 +7,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import '../../support/fake_section_rig.dart';
 
 import 'package:openastroara/state/settings/equipment_connection_state.dart';
+import '../../support/settings_values.dart';
 
 void main() {
   group('EquipmentConnectionNotifier', () {
@@ -93,7 +94,7 @@ void main() {
       // Sanity check the map fallback (the defaults cover all 10, so this
       // really verifies the `?? true` guard in case the map is ever
       // partially populated) — unmapped types follow the all-on default.
-      const s = EquipmentConnectionSettings(
+      const s = TestEquipmentConnectionSettings(
         autoConnectOnBoot: {EquipmentDeviceType.camera: false},
       );
       expect(s.autoConnect(EquipmentDeviceType.camera), isFalse);

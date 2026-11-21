@@ -14,6 +14,7 @@ import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
+import '../../support/settings_values.dart';
 
 class _Monitor extends SafetyMonitorNotifier {
   _Monitor(this.json);
@@ -75,7 +76,7 @@ Future<void> _pump(
   Map<String, dynamic> wire, {
   bool inSettings = false,
   DeviceDriver? driver,
-  SafetyPolicies? policies = const SafetyPolicies(),
+  SafetyPolicies? policies = const TestSafetyPolicies(),
   Locale? locale,
   Map<String, dynamic>? weather,
 }) async {
@@ -143,7 +144,7 @@ void main() {
       await _pump(
         tester,
         _wire(safe: false, changed: _changed),
-        policies: const SafetyPolicies(resumeDelayMin: 15),
+        policies: const TestSafetyPolicies(resumeDelayMin: 15),
       );
       expect(find.text('Unsafe'), findsOneWidget);
       expect(_colour(tester, 'Unsafe'), AraColors.accentWarning);
@@ -182,7 +183,7 @@ void main() {
         await _pump(
           tester,
           _wire(safe: false),
-          policies: SafetyPolicies(onUnsafe: action),
+          policies: TestSafetyPolicies(onUnsafe: action),
         );
         expect(find.text(text), findsOneWidget, reason: '$action');
         expect(find.textContaining('Resumes'), findsNothing, reason: '$action');
@@ -196,7 +197,7 @@ void main() {
       await _pump(
         tester,
         _wire(safe: false),
-        policies: const SafetyPolicies(weatherTriggersEnabled: true),
+        policies: const TestSafetyPolicies(weatherTriggersEnabled: true),
         weather: _windy(),
       );
       expect(
@@ -206,7 +207,7 @@ void main() {
       await _pump(
         tester,
         _wire(safe: false),
-        policies: const SafetyPolicies(weatherTriggersEnabled: false),
+        policies: const TestSafetyPolicies(weatherTriggersEnabled: false),
         weather: _windy(),
       );
       expect(
@@ -223,7 +224,7 @@ void main() {
       await _pump(
         tester,
         _wire(),
-        policies: const SafetyPolicies(weatherTriggersEnabled: true),
+        policies: const TestSafetyPolicies(weatherTriggersEnabled: true),
         weather: _windy(),
       );
       // The card says what the rig is, not just the monitor (#1690 audit).
@@ -245,7 +246,7 @@ void main() {
     await _pump(
       tester,
       _wire(safe: false),
-      policies: const SafetyPolicies(weatherTriggersEnabled: true),
+      policies: const TestSafetyPolicies(weatherTriggersEnabled: true),
       weather: {
         ..._windy(windMs: 1),
         'humidity_pct': 90.0,
@@ -264,7 +265,7 @@ void main() {
     await _pump(
       tester,
       _wire(),
-      policies: const SafetyPolicies(weatherTriggersEnabled: true),
+      policies: const TestSafetyPolicies(weatherTriggersEnabled: true),
       weather: _windy(windMs: 1),
     );
     expect(find.text('Why'), findsNothing);
@@ -278,7 +279,7 @@ void main() {
       await _pump(
         tester,
         _wire(safe: false, changed: _changed),
-        policies: const SafetyPolicies(autoResumeWhenSafe: false),
+        policies: const TestSafetyPolicies(autoResumeWhenSafe: false),
       );
       expect(find.text('Stays paused until you resume'), findsOneWidget);
     });

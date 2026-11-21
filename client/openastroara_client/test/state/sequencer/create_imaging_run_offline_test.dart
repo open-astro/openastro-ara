@@ -14,6 +14,7 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// In-memory draft store — widget tests can't await real file IO.
 /// Captures the key a degraded create stamps into the draft.
@@ -65,7 +66,7 @@ class _ThrowingClient implements SequenceClient {
 class _GuiderPhd2 extends Phd2SettingsNotifier {
   @override
   LoadedSection<Phd2Settings> build() => LoadedSection(
-      value: const Phd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
+      value: const TestPhd2Settings(guiderCamera: 'Alpaca Camera [rc91.lan:6800/1]'),
       source: SectionSource.rig);
 }
 

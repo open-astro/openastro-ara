@@ -20,6 +20,7 @@ import 'package:openastroara/state/sky_atlas/tonights_best_list_state.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/theme/ara_metrics.dart';
+import '../../support/settings_values.dart';
 
 final _now = DateTime.utc(2026, 11, 17, 22);
 
@@ -58,8 +59,8 @@ class _Site extends SiteSettingsNotifier {
   @override
   LoadedSection<SiteSettings> build() =>
       LoadedSection(value: set
-      ? const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297)
-      : const SiteSettings(), source: SectionSource.rig);
+      ? const TestSiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297)
+      : const TestSiteSettings(), source: SectionSource.rig);
 }
 
 class _Stats extends StatsTargetsNotifier {

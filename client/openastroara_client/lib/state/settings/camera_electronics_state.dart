@@ -37,14 +37,16 @@ class CameraElectronics {
   /// True when the ASCOM-sourced fields came from a connected camera.
   final bool autoCaptured;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const CameraElectronics({
-    this.sensorName = '',
-    this.readNoiseE = 0,
-    this.fullWellE = 0,
-    this.electronsPerAdu = 0,
-    this.gain = -1,
-    this.quantumEfficiencyPeak = 0,
-    this.autoCaptured = false,
+    required this.sensorName,
+    required this.readNoiseE,
+    required this.fullWellE,
+    required this.electronsPerAdu,
+    required this.gain,
+    required this.quantumEfficiencyPeak,
+    required this.autoCaptured,
   });
 
   CameraElectronics copyWith({

@@ -18,6 +18,7 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/slew_rates.dart';
+import '../../../support/settings_values.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -42,7 +43,7 @@ class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi() : super(const AraServer(hostname: 'h', port: 5555));
   @override
   Future<({SiteSettings value, String? etag})> getSiteSection() async => (
-    value: const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
+    value: const TestSiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
     etag: '"v1"',
   );
 }
@@ -222,7 +223,7 @@ void main() {
     await _pump(
       tester,
       _status(),
-      site: const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
+      site: const TestSiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
     );
     expect(find.text('Latitude'), findsOneWidget);
     expect(find.text('12.60° N'), findsOneWidget);

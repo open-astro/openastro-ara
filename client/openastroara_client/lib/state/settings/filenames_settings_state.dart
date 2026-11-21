@@ -33,15 +33,17 @@ class FilenamesSettings {
   final bool headerWeather;
   final bool headerEphemeris;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const FilenamesSettings({
-    this.dateSeparator = DateSeparator.forwardSlash,
-    this.compressDarksAndBias = true,
-    this.headerIdentity = true,
-    this.headerSite = true,
-    this.headerOptics = true,
-    this.headerTemperature = true,
-    this.headerWeather = true,
-    this.headerEphemeris = true,
+    required this.dateSeparator,
+    required this.compressDarksAndBias,
+    required this.headerIdentity,
+    required this.headerSite,
+    required this.headerOptics,
+    required this.headerTemperature,
+    required this.headerWeather,
+    required this.headerEphemeris,
   });
 
   FilenamesSettings copyWith({

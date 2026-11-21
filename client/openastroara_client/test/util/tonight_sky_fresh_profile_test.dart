@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/tonight_sky_local.dart';
+import '../support/settings_values.dart';
 
 /// Tonight's Sky on a *fresh* profile: a site has been entered but nothing
 /// else — default optics, no filter set, no catalog downloaded yet (the
@@ -17,25 +17,25 @@ import 'package:openastroara/util/tonight_sky_local.dart';
 /// tonight_sky_state.dart is the only per-platform difference.
 void main() {
   const sites = <String, SiteSettings>{
-    'Los Angeles (mid-north)': SiteSettings(
+    'Los Angeles (mid-north)': TestSiteSettings(
       siteName: 'LA',
       latitudeDeg: 34.05,
       longitudeDeg: -118.25,
       timeZone: 'America/Los_Angeles',
     ),
-    'Tromsø (arctic, no astro dark in summer)': SiteSettings(
+    'Tromsø (arctic, no astro dark in summer)': TestSiteSettings(
       siteName: 'Tromsø',
       latitudeDeg: 69.65,
       longitudeDeg: 18.96,
       timeZone: 'Europe/Oslo',
     ),
-    'Quito (equator)': SiteSettings(
+    'Quito (equator)': TestSiteSettings(
       siteName: 'Quito',
       latitudeDeg: -0.18,
       longitudeDeg: -78.47,
       timeZone: 'America/Guayaquil',
     ),
-    'Hobart (deep south)': SiteSettings(
+    'Hobart (deep south)': TestSiteSettings(
       siteName: 'Hobart',
       latitudeDeg: -42.88,
       longitudeDeg: 147.33,
@@ -57,7 +57,7 @@ void main() {
       for (final at in moments) {
         final list = computeTonightSkyLocal(
           site: entry.value,
-          optics: const OpticsSettings(),
+          optics: const TestOpticsSettings(),
           atUtc: at,
           limit: 30,
         );
@@ -78,8 +78,8 @@ void main() {
     // that calling the ranking directly with the sentinel does not throw, so a
     // stale cache can never crash the panel; it says nothing about the result.
     final list = computeTonightSkyLocal(
-      site: const SiteSettings(),
-      optics: const OpticsSettings(),
+      site: const TestSiteSettings(),
+      optics: const TestOpticsSettings(),
       atUtc: DateTime.utc(2026, 9, 24, 20),
     );
     expect(list, isA<List<Object?>>());

@@ -17,6 +17,7 @@ import '../../state/simple_messages_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
+import '../../widgets/settings/section_load_state.dart';
 import '../../widgets/status_indicator.dart'
     show StatusBlink, StatusDot;
 import '../../util/friendly_error.dart';
@@ -182,12 +183,17 @@ class SimpleGuidePanel extends ConsumerWidget {
     final guiding = g?.isCorrecting ?? false;
     final calibrating = connected && g.runtimeState == GuiderRuntimeState.calibrating;
     final pending = ref.watch(simpleGuiderPendingProvider);
-    // Not in from the rig yet: the class values show. A change loads the
-    // rig's copy first and steps from it, never from the shown value, or is
-    // refused when that load fails too.
-    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
+    // Not in from the rig yet: no value shows (ADR 0015: "—", and the
+    // sliders say not loaded). A change loads the rig's copy first and steps
+    // from it, never from the shown value, or is refused when that load fails
+    // too.
+    final phd2 = ref.watch(phd2SettingsProvider).value;
     final tab = ref.watch(simpleGuiderTabProvider);
-    final every = phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : 0;
+    final every = phd2 == null
+        ? null
+        : phd2.ditherEnabled
+        ? math.max(1, phd2.ditherEveryNFrames)
+        : 0;
     final total = guiding ? g!.rmsTotalArcsec : null;
     final ra = guiding ? g!.rmsRaArcsec : null;
     final dec = guiding ? g!.rmsDecArcsec : null;
@@ -281,20 +287,25 @@ class SimpleGuidePanel extends ConsumerWidget {
             ),
             const SimpleGuideGainSlider(oneLine: true),
             Text(l10n.guideAggressiveness, style: AraText.caption),
-            _SimpleAggressiveness(
-              id: 'ra',
-              axis: l10n.guideAxisRa,
-              label: l10n.guideRaAggressiveness,
-              value: phd2.raAggressiveness,
-              set: (p, v) => p.copyWith(raAggressiveness: v.clamp(0.0, 1.0)),
-            ),
-            _SimpleAggressiveness(
-              id: 'dec',
-              axis: l10n.guideAxisDec,
-              label: l10n.guideDecAggressiveness,
-              value: phd2.decAggressiveness,
-              set: (p, v) => p.copyWith(decAggressiveness: v.clamp(0.0, 1.0)),
-            ),
+            // A slider needs a value: none until the rig's copy is in.
+            if (phd2 == null)
+              SectionNotLoadedRows(phd2SettingsProvider, padding: EdgeInsets.zero)
+            else ...[
+              _SimpleAggressiveness(
+                id: 'ra',
+                axis: l10n.guideAxisRa,
+                label: l10n.guideRaAggressiveness,
+                value: phd2.raAggressiveness,
+                set: (p, v) => p.copyWith(raAggressiveness: v.clamp(0.0, 1.0)),
+              ),
+              _SimpleAggressiveness(
+                id: 'dec',
+                axis: l10n.guideAxisDec,
+                label: l10n.guideDecAggressiveness,
+                value: phd2.decAggressiveness,
+                set: (p, v) => p.copyWith(decAggressiveness: v.clamp(0.0, 1.0)),
+              ),
+            ],
             // Four named choices: one row of segments, no list to open.
             Text(l10n.guideDecMode, style: AraText.caption),
             SimpleSegments<String>(
@@ -302,7 +313,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               keyPrefix: 'simple-guide-dec-mode',
               group: l10n.guideDecMode,
               shrinkToFit: true,
-              selected: phd2.decGuideMode,
+              selected: phd2?.decGuideMode,
               options: [
                 for (final m in const ['auto', 'north', 'south', 'off'])
                   (m, _decModeName(l10n, m) ?? l10n.guideDecAuto, m),
@@ -320,6 +331,7 @@ class SimpleGuidePanel extends ConsumerWidget {
               simpleWindowStepper(
                 id: 'simple-guider-dither',
                 text: switch (every) {
+                  null => '—',
                   0 => l10n.deviceOff,
                   _ => l10n.deviceDitherEveryFrames(every),
                 },
@@ -447,8 +459,10 @@ class _SimpleGuiderTuning extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
-    final px = phd2.ditherPixels;
+    // Not in from the rig yet: "—" for each value (ADR 0015); a step loads
+    // the rig's copy first and steps from it.
+    final phd2 = ref.watch(phd2SettingsProvider).value;
+    final px = phd2?.ditherPixels;
     // Label beside a narrower stepper: this tab has six of them to fit on an iPad.
     // Read whole, because "For" or "RA" means nothing without its group.
     Widget row(String label, Widget stepper, {required String id, String? group}) => Semantics(
@@ -479,7 +493,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           simpleWindowStepper(
             name: '${l10n.guideMinimumMoveName}, $axis',
             id: 'simple-guider-min-move-$id',
-            text: '${v(phd2).toStringAsFixed(2)} px',
+            text: phd2 == null ? '—' : '${v(phd2).toStringAsFixed(2)} px',
             onLess: () => live((p) => v(p) > 0 ? set(p, math.max(0, _stepped(v(p), -0.05))) : p),
             onMore: () => live((p) => set(p, _stepped(v(p), 0.05))),
           ),
@@ -492,14 +506,16 @@ class _SimpleGuiderTuning extends ConsumerWidget {
         Text(l10n.guideMinimumMove, style: AraText.caption),
         minMove(l10n.guideAxisRa, 'RA minimum move', 'ra', (p) => p.minimumMove, (p, v) => p.copyWith(minimumMove: v)),
         minMove(l10n.guideAxisDec, 'Dec minimum move', 'dec', (p) => p.decMinimumMove, (p, v) => p.copyWith(decMinimumMove: v)),
-        if (phd2.ditherEnabled)
+        if (phd2 == null || phd2.ditherEnabled)
           row(
             l10n.deviceDitherBy,
             id: 'Dither by',
             simpleWindowStepper(
               id: 'simple-guider-dither-px',
               name: l10n.deviceDitherBy,
-              text: '${px == px.roundToDouble() ? px.round() : px} px',
+              text: px == null
+                  ? '—'
+                  : '${px == px.roundToDouble() ? px.round() : px} px',
               onLess: () => save((p) => p.ditherPixels > 1 ? p.copyWith(ditherPixels: p.ditherPixels - 1) : p),
               onMore: () => save((p) => p.ditherPixels < 30 ? p.copyWith(ditherPixels: p.ditherPixels + 1) : p),
             ),
@@ -512,7 +528,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           simpleWindowStepper(
             id: 'simple-guider-settle-px',
             name: '${l10n.guideSettle}, ${l10n.guideSettleWithin}',
-            text: '${phd2.settlePixels.toStringAsFixed(1)} px',
+            text: phd2 == null ? '—' : '${phd2.settlePixels.toStringAsFixed(1)} px',
             onLess: () => save((p) =>
                 p.settlePixels > 0.1 ? p.copyWith(settlePixels: _stepped(p.settlePixels, -0.1)) : p),
             onMore: () => save((p) => p.copyWith(settlePixels: _stepped(p.settlePixels, 0.1))),
@@ -525,7 +541,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           simpleWindowStepper(
             id: 'simple-guider-settle-time',
             name: '${l10n.guideSettle}, ${l10n.guideSettleFor}',
-            text: '${phd2.settleTimeSec} s',
+            text: phd2 == null ? '—' : '${phd2.settleTimeSec} s',
             onLess: () => save((p) => p.settleTimeSec > 1 ? p.copyWith(settleTimeSec: p.settleTimeSec - 1) : p),
             onMore: () => save((p) => p.copyWith(settleTimeSec: p.settleTimeSec + 1)),
           ),
@@ -537,7 +553,7 @@ class _SimpleGuiderTuning extends ConsumerWidget {
           simpleWindowStepper(
             id: 'simple-guider-settle-timeout',
             name: '${l10n.guideSettle}, ${l10n.guideSettleGiveUp}',
-            text: '${phd2.settleTimeoutSec} s',
+            text: phd2 == null ? '—' : '${phd2.settleTimeoutSec} s',
             onLess: () => save((p) =>
                 p.settleTimeoutSec > 5 ? p.copyWith(settleTimeoutSec: p.settleTimeoutSec - 5) : p),
             onMore: () => save((p) => p.copyWith(settleTimeoutSec: p.settleTimeoutSec + 5)),
@@ -1056,8 +1072,12 @@ class _SimpleAggressivenessState extends ConsumerState<_SimpleAggressiveness> {
 
 /// "2 s", or "The guider's own" while none is set: the guider's exposure as
 /// Simple Mode writes it.
-String simpleGuiderExposureText(AppLocalizations l10n, int ms) =>
-    ms <= 0 ? l10n.guideExposureOwn : formatExposure(Duration(milliseconds: ms));
+/// "—" while the guider settings are not loaded (null).
+String simpleGuiderExposureText(AppLocalizations l10n, int? ms) => ms == null
+    ? '—'
+    : ms <= 0
+    ? l10n.guideExposureOwn
+    : formatExposure(Duration(milliseconds: ms));
 
 /// The guider's exposure, set live: what its loop and its guiding run at.
 /// Shared by Guide and Preview › Guide, whose shutter loops the guider
@@ -1068,11 +1088,12 @@ class SimpleGuiderExposureTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = context.l10n;
-    return SimplePresetTile<int>(
+    // Null ("—") while the guider settings are not loaded.
+    return SimplePresetTile<int?>(
       key: const Key('simple-guide-exposure'),
       label: l10n.previewExposure,
       value: ref.watch(
-        phd2SettingsProvider.select((p) => (p.value ?? const Phd2Settings()).guideExposureMs),
+        phd2SettingsProvider.select((p) => p.value?.guideExposureMs),
       ),
       options: [
         for (final ms in guideExposureChoicesMs)

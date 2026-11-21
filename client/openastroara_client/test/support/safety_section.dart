@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'settings_values.dart';
 
 /// The profile's safety policies for a widget test, with no HTTP (a Dio
 /// request leaves a timer pending in a test that only pumps). The section
@@ -9,7 +10,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 /// copy, or null for a rig that does not answer. Every save that reached "the
 /// rig" is in [puts]; [refuse] fails each save instead (nothing written).
 class FakeSafetySection extends SafetyPoliciesNotifier {
-  FakeSafetySection({this.initial = const SafetyPolicies()});
+  FakeSafetySection({this.initial = const TestSafetyPolicies()});
 
   SafetyPolicies? initial;
   final List<SafetyPolicies> puts = [];
@@ -34,7 +35,7 @@ class FakeSafetySection extends SafetyPoliciesNotifier {
 
 /// The policies as the rig's copy from the start (no load, no HTTP), for a
 /// test that reads or edits them with no rig to load them from.
-Override safetyFromRig([SafetyPolicies policies = const SafetyPolicies()]) =>
+Override safetyFromRig([SafetyPolicies policies = const TestSafetyPolicies()]) =>
     safetyPoliciesProvider.overrideWith(() => _RigSafety(policies));
 
 class _RigSafety extends SafetyPoliciesNotifier {

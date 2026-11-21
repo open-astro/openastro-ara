@@ -61,23 +61,25 @@ class AutofocusSettings {
   final int backlashInSteps;
   final int backlashOutSteps;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const AutofocusSettings({
-    this.method = AutofocusMethod.hfrVCurve,
-    this.steps = 7,
-    this.stepSize = 50,
-    this.stepSizeAuto = true,
-    this.exposureSeconds = 5,
-    this.binning = 1,
-    this.afFilter = 'L',
-    this.runAfterFilterChange = true,
-    this.triggerTempDeltaC = 2.0,
-    this.triggerHfrDriftPct = 15,
-    this.everyNHours = 2,
-    this.abortSequenceOnAfFailure = true,
-    this.restorePositionOnFailure = true,
-    this.telescopeType = TelescopeType.other,
-    this.backlashInSteps = 0,
-    this.backlashOutSteps = 0,
+    required this.method,
+    required this.steps,
+    required this.stepSize,
+    required this.stepSizeAuto,
+    required this.exposureSeconds,
+    required this.binning,
+    required this.afFilter,
+    required this.runAfterFilterChange,
+    required this.triggerTempDeltaC,
+    required this.triggerHfrDriftPct,
+    required this.everyNHours,
+    required this.abortSequenceOnAfFailure,
+    required this.restorePositionOnFailure,
+    required this.telescopeType,
+    required this.backlashInSteps,
+    required this.backlashOutSteps,
   });
 
   AutofocusSettings copyWith({

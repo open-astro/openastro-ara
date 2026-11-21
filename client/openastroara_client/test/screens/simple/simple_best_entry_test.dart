@@ -21,6 +21,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
+import '../../support/settings_values.dart';
 
 class _Prefs extends SimpleModePrefsService {
   @override
@@ -47,7 +48,7 @@ class _Stats extends StatsTargetsNotifier {
 class _Site extends SiteSettingsNotifier {
   @override
   LoadedSection<SiteSettings> build() =>
-      LoadedSection(value: const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297), source: SectionSource.rig);
+      LoadedSection(value: const TestSiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297), source: SectionSource.rig);
 }
 
 const _m42 = TonightSkyObject(

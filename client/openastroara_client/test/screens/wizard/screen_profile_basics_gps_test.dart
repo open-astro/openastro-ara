@@ -11,6 +11,8 @@ import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
 import 'package:openastroara/util/gps_site_fill.dart';
 
+import '../../support/site_section.dart';
+
 /// getState() returns a configurable §31.3 state — the wizard's "Fill from
 /// GPS" reads the server's last fix (the USB dongle plugged into the SERVER
 /// machine; no mount involvement).
@@ -33,7 +35,11 @@ void main() {
     void Function(ProviderContainer)? setup,
   }) async {
     final container = ProviderContainer(
-      overrides: [timeSyncApiProvider.overrideWithValue(api)],
+      overrides: [
+        timeSyncApiProvider.overrideWithValue(api),
+        // The saved site as the rig's copy (ADR 0015): the sky starts there.
+        siteFromRig(),
+      ],
     );
     addTearDown(container.dispose);
     setup?.call(container);

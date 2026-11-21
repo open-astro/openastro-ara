@@ -5,7 +5,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/profile_api.dart';
-import 'package:openastroara/state/settings/phd2_settings_state.dart';
+import '../support/fake_section_rig.dart';
+import '../support/settings_values.dart';
 
 class _StubAdapter implements HttpClientAdapter {
   _StubAdapter(this.jsonBody);
@@ -27,7 +28,8 @@ void main() {
   // ways; a misspelled key would store "" on the daemon and silently skip
   // the pin check.
   test('guider_camera_alpaca_unique_id is parsed from GET and sent on PUT', () async {
-    final adapter = _StubAdapter(const {
+    final adapter = _StubAdapter({
+      ...rigDefaults['phd2']!,
       'host': 'rc91.lan',
       'port': 4400,
       'phd2_profile': 'main',
@@ -39,28 +41,26 @@ void main() {
     final got = await api.getPhd2Settings();
     expect(got.guiderCameraAlpacaUniqueId, 'ZWO_0');
 
-    await api.putPhd2Settings(const Phd2Settings(
+    await api.putPhd2Settings(const TestPhd2Settings(
         guiderCamera: 'Alpaca Camera [127.0.0.1:6800/1]',
         guiderCameraAlpacaUniqueId: 'ZWO_SN_abc'));
     final sent = adapter.lastBody as Map<String, dynamic>;
     expect(sent['guider_camera_alpaca_unique_id'], 'ZWO_SN_abc');
   });
 
-  test('an older daemon without the key reads as unset', () async {
-    final api = ProfileApi(const AraServer(hostname: 'x', port: 80),
-        dio: Dio()..httpClientAdapter = _StubAdapter(const {'host': 'h', 'port': 4400}));
-    expect((await api.getPhd2Settings()).guiderCameraAlpacaUniqueId, '');
-  });
-
   test('phd2_profile_id: a picked guider profile round-trips, Automatic (0) goes out as null', () async {
-    final adapter = _StubAdapter(const {'host': 'h', 'port': 4400, 'phd2_profile_id': 3});
+    final adapter = _StubAdapter({
+      ...rigDefaults['phd2']!,
+      'host': 'h',
+      'phd2_profile_id': 3,
+    });
     final api = ProfileApi(const AraServer(hostname: 'x', port: 80),
         dio: Dio()..httpClientAdapter = adapter);
     expect((await api.getPhd2Settings()).guiderProfileId, 3);
 
-    await api.putPhd2Settings(const Phd2Settings(guiderProfileId: 5));
+    await api.putPhd2Settings(const TestPhd2Settings(guiderProfileId: 5));
     expect((adapter.lastBody as Map<String, dynamic>)['phd2_profile_id'], 5);
-    await api.putPhd2Settings(const Phd2Settings());
+    await api.putPhd2Settings(const TestPhd2Settings());
     expect((adapter.lastBody as Map<String, dynamic>)['phd2_profile_id'], isNull,
         reason: 'Automatic = the guider profile named after the Ara profile');
   });

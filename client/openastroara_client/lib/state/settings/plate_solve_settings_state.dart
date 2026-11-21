@@ -23,18 +23,20 @@ class PlateSolveSettings {
   final int maxIterations;
   final double convergenceToleranceArcsec;
 
+  // No defaults: the daemon's normalizer is the one owner (ADR 0012, ADR
+  // 0015 rule 3), so a value is the rig's copy or the offline cache's.
   const PlateSolveSettings({
-    this.engine = PlateSolveEngine.astap,
-    this.pathOrEndpoint = '/opt/openastroara/astap_cli',
-    this.indexDownloadPath = '/var/lib/astap',
-    this.searchRadiusDeg = 30,
-    this.downsampleFactor = 0,
-    this.timeoutSeconds = 60,
-    this.useBlindFallback = true,
-    this.centerAfterSlew = true,
-    this.syncToCoordinates = true,
-    this.maxIterations = 5,
-    this.convergenceToleranceArcsec = 60,
+    required this.engine,
+    required this.pathOrEndpoint,
+    required this.indexDownloadPath,
+    required this.searchRadiusDeg,
+    required this.downsampleFactor,
+    required this.timeoutSeconds,
+    required this.useBlindFallback,
+    required this.centerAfterSlew,
+    required this.syncToCoordinates,
+    required this.maxIterations,
+    required this.convergenceToleranceArcsec,
   });
 
   PlateSolveSettings copyWith({

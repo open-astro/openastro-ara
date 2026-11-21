@@ -194,9 +194,10 @@ class _PreviewShot extends Notifier<PreviewShot> {
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
     // The guider's own exposure: the one Preview › Guide's loop runs at.
-    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
-    final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
-    return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
+    // Not loaded: "—" for each (ADR 0015).
+    final phd2 = ref.watch(phd2SettingsProvider).value;
+    final exposure = simpleGuiderExposureText(context.l10n, phd2?.guideExposureMs);
+    return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2?.guideCameraGain ?? '—'}';
   }
   final p = ref.watch(exposureControllerProvider);
   return '${formatExposure(p.exposure)} · ${p.gain}';
@@ -384,14 +385,10 @@ class _GuideInfoTiles extends ConsumerWidget {
     // A focus loop found running reports its own exposure; otherwise the
     // frames are the guider's loop, at the guider's exposure.
     final guiderMs = ref.watch(
-      phd2SettingsProvider.select(
-        (p) => (p.value ?? const Phd2Settings()).guideExposureMs,
-      ),
+      phd2SettingsProvider.select((p) => p.value?.guideExposureMs),
     );
     final gain = ref.watch(
-      phd2SettingsProvider.select(
-        (p) => (p.value ?? const Phd2Settings()).guideCameraGain,
-      ),
+      phd2SettingsProvider.select((p) => p.value?.guideCameraGain),
     );
     return SimpleFactTiles(
       facts: [
@@ -405,7 +402,7 @@ class _GuideInfoTiles extends ConsumerWidget {
                 )
               : simpleGuiderExposureText(l10n, guiderMs),
         ),
-        (l10n.deviceGain, '$gain %'),
+        (l10n.deviceGain, gain == null ? '—' : '$gain %'),
       ],
     );
   }

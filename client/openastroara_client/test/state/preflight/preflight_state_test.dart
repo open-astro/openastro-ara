@@ -14,6 +14,7 @@ import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/setup/setup_readiness.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
+import '../../support/settings_values.dart';
 
 class _List extends SequenceListNotifier {
   _List(this.items);
@@ -54,7 +55,7 @@ class _Api extends PreflightApi {
   void close() {}
 }
 
-const belen = SiteSettings(
+const belen = TestSiteSettings(
   siteName: 'Belen',
   latitudeDeg: 34.66,
   longitudeDeg: -106.78,
@@ -194,7 +195,7 @@ void main() {
           (await make(
             runs: running,
             now: midnight,
-            site: const SiteSettings(),
+            site: const TestSiteSettings(),
           ).read(preflightPromptProvider.future)).shouldPrompt,
           isFalse,
           reason: 'a (0, 0) site is never dark',

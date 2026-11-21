@@ -17,6 +17,7 @@ import 'package:openastroara/widgets/time_sync_on_connect.dart';
 
 import '../support/fake_section_rig.dart';
 import '../support/site_section.dart';
+import '../support/settings_values.dart';
 
 class _Rig implements TimeSyncClient {
   _Rig({required this.synced});
@@ -138,7 +139,7 @@ void main() {
     tester,
   ) async {
     final section = FakeSiteSection(
-      initial: const SiteSettings(siteName: 'Dark site', bortleClass: 2),
+      initial: const TestSiteSettings(siteName: 'Dark site', bortleClass: 2),
     );
     final (c, link, rig) = await pump(tester, site: section);
     await connect(tester, link);
@@ -169,7 +170,7 @@ void main() {
       final (c, link, _) = await pump(tester, site: section);
       c
           .read(siteSettingsProvider.notifier)
-          .seed(const SiteSettings(siteName: 'Cached', latitudeDeg: 10));
+          .seed(const TestSiteSettings(siteName: 'Cached', latitudeDeg: 10));
       await connect(tester, link);
       c.read(simpleMessagesProvider).single.actions.last.onPressed();
       await tester.pump(const Duration(seconds: 4));

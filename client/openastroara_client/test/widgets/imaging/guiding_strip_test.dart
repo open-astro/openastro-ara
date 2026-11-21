@@ -34,6 +34,7 @@ import 'package:openastroara/widgets/imaging/guider_advanced_dialog.dart';
 import 'package:openastroara/widgets/imaging/guiding_strip.dart';
 import 'package:openastroara/widgets/imaging/guiding_tune_dialog.dart';
 import 'package:openastroara/l10n/l10n.dart';
+import '../../support/settings_values.dart';
 
 /// Records the painter's rectangles; every other canvas call is a no-op.
 class _RectCanvas implements Canvas {
@@ -108,7 +109,7 @@ class _FakeProfileApi extends ProfileApi {
   void savedElsewhere() => version++;
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async => (
-    value: await (_load != null ? _load() : Future.value(const Phd2Settings())),
+    value: await (_load != null ? _load() : Future.value(const TestPhd2Settings())),
     etag: '"v$version"',
   );
   /// Every PUT body, in order — Apply's persisted object is asserted on it.
@@ -719,7 +720,7 @@ void main() {
           connectionState: GuiderConnectionState.connected,
           runtimeState: GuiderRuntimeState.guiding,
         ),
-        profileApi: _FakeProfileApi(() async => const Phd2Settings(
+        profileApi: _FakeProfileApi(() async => const TestPhd2Settings(
             guideExposureMinMs: 1000, guideExposureMaxMs: 6000)));
     await tester.tap(find.byTooltip('Tune guiding…'));
     await tester.pumpAndSettle();
@@ -765,7 +766,7 @@ void main() {
     expect(applyButton(tester).onPressed, isNull,
         reason: 'hydrate has not resolved yet');
 
-    gate.complete(const Phd2Settings(host: 'daemon.local'));
+    gate.complete(const TestPhd2Settings(host: 'daemon.local'));
     await tester.pump();
     expect(applyButton(tester).onPressed, isNotNull);
     expect(container.read(phd2SettingsProvider).value?.host, 'daemon.local',
@@ -957,7 +958,7 @@ void main() {
   testWidgets('Tune Guiding: Apply sends the tuning over the rig\'s copy with '
       'its tag, never an edit staged elsewhere (ADR 0015)', (tester) async {
     final profileApi = _FakeProfileApi(
-      () async => const Phd2Settings(host: 'rig.lan', guiderCamera: 'ZWO'),
+      () async => const TestPhd2Settings(host: 'rig.lan', guiderCamera: 'ZWO'),
     );
     final container = await _pump(tester,
         status: const GuiderStatus(

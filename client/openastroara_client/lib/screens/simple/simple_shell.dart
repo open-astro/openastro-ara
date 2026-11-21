@@ -5017,22 +5017,27 @@ class _ThisRig extends ConsumerWidget {
         // The guide scope: the rig fills it from the guider when the
         // profile left it unset (its profile.updated reloads it here), kept
         // in the profile (polar alignment solves with it).
+        // Null until the profile's copy is in (ADR 0015): the row says so.
         KeyedSubtree(
           key: _guideKey,
-          child: _RigWheelRow.millimetres(
-            l10n,
-            id: 'guidefocal',
-            label: l10n.shellGuideFocalLength,
-            digits: 4,
-            value: (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
-                .guideFocalLength
-                .toDouble(),
-            onSet: (v) => _saveGuider(
-              context,
-              ref,
-              (c) => c.copyWith(guideFocalLength: math.max(0, v.round())),
+          child: switch (ref.watch(phd2SettingsProvider).value) {
+            null => SectionNotLoadedRows(
+              phd2SettingsProvider,
+              padding: EdgeInsets.zero,
             ),
-          ),
+            final phd2 => _RigWheelRow.millimetres(
+              l10n,
+              id: 'guidefocal',
+              label: l10n.shellGuideFocalLength,
+              digits: 4,
+              value: phd2.guideFocalLength.toDouble(),
+              onSet: (v) => _saveGuider(
+                context,
+                ref,
+                (c) => c.copyWith(guideFocalLength: math.max(0, v.round())),
+              ),
+            ),
+          },
         ),
         ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 44),
@@ -5045,11 +5050,11 @@ class _ThisRig extends ConsumerWidget {
               // the value above it: its button, never enabled, read as text.
               Builder(
                 builder: (context) {
-                  final pixel = switch ((ref
-                              .watch(phd2SettingsProvider)
-                              .value ??
-                          const Phd2Settings())
-                      .guidePixelSize) {
+                  final pixel = switch (ref
+                      .watch(phd2SettingsProvider)
+                      .value
+                      ?.guidePixelSize) {
+                    null => '—',
                     final p when p > 0 => '${p.toStringAsFixed(2)} µm',
                     _ => l10n.shellNotSet,
                   };

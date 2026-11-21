@@ -59,6 +59,31 @@ class SectionNotLoaded extends ConsumerWidget {
   }
 }
 
+/// ADR 0015 — a read-only view of a section another panel edits, while the
+/// section holds no copy: [SectionNotLoaded] in place of the rows, with a
+/// Retry that loads it again. Never shows defaults.
+class SectionNotLoadedRows extends ConsumerWidget {
+  const SectionNotLoadedRows(
+    this.provider, {
+    super.key,
+    this.padding = const EdgeInsets.symmetric(vertical: 8),
+  });
+
+  final NotifierProvider<SectionNotifier<Object?>, LoadedSection<Object?>>
+  provider;
+  final EdgeInsetsGeometry padding;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) => SectionNotLoaded(
+    section: ref.watch(provider),
+    padding: padding,
+    onRetry: () {
+      final api = ref.read(profileApiProvider);
+      if (api != null) ref.read(provider.notifier).load(api);
+    },
+  );
+}
+
 /// ADR 0015 — the rig refused a save because another device saved a newer copy.
 /// The person's edits stay on screen; Reload replaces them with the rig's copy.
 class SectionConflictBanner extends StatelessWidget {

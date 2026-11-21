@@ -35,6 +35,7 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/integration_budget.dart';
 import 'package:openastroara/util/optimal_sub.dart';
 import '../../support/imaging_sections.dart';
+import '../../support/settings_values.dart';
 
 /// Records create()/updateSequence() calls; the append path additionally reads
 /// [runState] (null = no active run) and [detail] (the open sequence's body).
@@ -1071,11 +1072,11 @@ void _budgetTests() {
     addTearDown(tester.view.reset);
     final container = ProviderContainer(overrides: [
       tonightSkyProvider.overrideWith((ref) async => [_m31]),
-      opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+      opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
           focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
       // Read noise / full well UNSET: the Tier-0 defaults must seed the rows.
-      cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
-      siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 4, sqmMagPerArcsec2: 21.3))),
+      cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const TestCameraElectronics(electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
+      siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(bortleClass: 4, sqmMagPerArcsec2: 21.3))),
       filterSetProvider.overrideWith(() => _SeededFilters(const FilterSetSettings(filters: [
         PlanningFilter(name: 'Ha 3nm', kind: FilterKind.ha, bandwidthNm: 3),
         PlanningFilter(name: 'L', kind: FilterKind.l),

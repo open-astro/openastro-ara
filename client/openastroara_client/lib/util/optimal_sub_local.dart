@@ -40,10 +40,14 @@ class LocalOptimalSubSuccess extends LocalOptimalSubOutcome {
 
 const double _maxReducerFactor = 10.0; // TonightSkyOverrides.MaxReducerFactor
 
+/// A section not loaded (null) reads as unset, never as a client default
+/// (ADR 0015): [electronics] as the unset sensor (the Tier-0 figures, tagged
+/// assumed), [optics] as the incomplete train; with no [site] there is no sky
+/// to plan against, so no figure.
 LocalOptimalSubOutcome resolveOptimalSubLocal({
-  required OpticsSettings optics,
-  required CameraElectronics electronics,
-  required SiteSettings site,
+  required OpticsSettings? optics,
+  required CameraElectronics? electronics,
+  required SiteSettings? site,
   required FilterSetSettings filterSet,
   String? filterName,
   double? raDeg,
@@ -54,6 +58,11 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   // (`SkyModelCalibration.appliedK`); the matched filter's kind picks the k.
   Map<String, double> skyCalibrationK = const {},
 }) {
+  if (site == null) {
+    return const LocalOptimalSubUnavailable(
+        'The site is not loaded from your rig — connect to the rig, or plan '
+        'from a cached profile.');
+  }
   final assumed = <String>[];
 
   // ── Filter passband: named profile filter → broadband default ────────────
@@ -81,22 +90,22 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
 
   // ── Electronics: profile (0/-1 = unset) → Tier-0 default, tagged ─────────
   double readNoise;
-  if (electronics.readNoiseE > 0) {
+  if (electronics != null && electronics.readNoiseE > 0) {
     readNoise = electronics.readNoiseE;
   } else {
     readNoise = defaultReadNoiseE;
     assumed.add('read_noise_e');
   }
   double fullWell;
-  if (electronics.fullWellE > 0) {
+  if (electronics != null && electronics.fullWellE > 0) {
     fullWell = electronics.fullWellE;
   } else {
     fullWell = defaultFullWellE;
     assumed.add('full_well_e');
   }
-  final ePerAdu = math.max(0.0, electronics.electronsPerAdu);
+  final ePerAdu = math.max(0.0, electronics?.electronsPerAdu ?? 0);
   double qe;
-  if (electronics.quantumEfficiencyPeak > 0) {
+  if (electronics != null && electronics.quantumEfficiencyPeak > 0) {
     qe = electronics.quantumEfficiencyPeak;
   } else {
     qe = defaultQuantumEfficiency;
@@ -104,7 +113,8 @@ LocalOptimalSubOutcome resolveOptimalSubLocal({
   }
 
   // ── Imaging-train geometry: NO honest default ─────────────────────────────
-  if (!(optics.apertureMm.isFinite &&
+  if (optics == null ||
+      !(optics.apertureMm.isFinite &&
       optics.apertureMm > 0 &&
       optics.focalLengthMm.isFinite &&
       optics.focalLengthMm > 0 &&

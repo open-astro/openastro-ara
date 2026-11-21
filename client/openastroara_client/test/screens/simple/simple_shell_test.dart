@@ -165,7 +165,10 @@ import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planni
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 
 import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
+import '../../support/phd2_section.dart';
 import '../../support/polar_align_section.dart';
+import '../../support/settings_values.dart';
 
 /// The session's rigs, without storage.
 class _SavedRigs extends SavedServersNotifier {
@@ -243,7 +246,8 @@ final _en = lookupAppLocalizations(const Locale('en'));
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
     ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true, bool rigOptics = true,
-    SiteSettings? rigSite = const SiteSettings(), Object? siteRefuse, FakePolarAlignSection? polar, bool rigPolar = true}) async {
+    SiteSettings? rigSite = const TestSiteSettings(), Object? siteRefuse, FakePolarAlignSection? polar, bool rigPolar = true,
+    bool rigImaging = true, bool rigPhd2 = false}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -265,6 +269,10 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     if (rigSite != null) siteSettingsProvider.overrideWith(() => _RigSite(rigSite, refuse: siteRefuse)),
     // The profile's polar-align section as the rig's copy (ADR 0015), with no HTTP.
     if (rigPolar) polarAlignSettingsProvider.overrideWith(() => polar ?? FakePolarAlignSection(loaded: true)),
+    // The imaging defaults as the rig's copy (ADR 0015): Plan's rows take their sub from them.
+    if (rigImaging) imagingDefaultsFromRig(),
+    // The guider settings as the rig's copy, for a test with no rig to load them from.
+    if (rigPhd2) phd2FromRig(),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -480,7 +488,7 @@ class _FlakyPoliciesApi extends ProfileApi {
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
     if (++calls == 1) throw StateError('unreachable');
-    return (value: const SafetyPolicies(weatherTriggersEnabled: true), etag: '"v1"');
+    return (value: const TestSafetyPolicies(weatherTriggersEnabled: true), etag: '"v1"');
   }
 }
 
@@ -488,7 +496,7 @@ class _FlakyPoliciesApi extends ProfileApi {
 class _EditedPolicies extends SafetyPoliciesNotifier {
   @override
   LoadedSection<SafetyPolicies> build() => const LoadedSection(
-    value: SafetyPolicies(weatherTriggersEnabled: true, meridianPauseMin: 12),
+    value: TestSafetyPolicies(weatherTriggersEnabled: true, meridianPauseMin: 12),
     source: SectionSource.rig,
     etag: '"v1"',
   );
@@ -501,7 +509,7 @@ class _CountingPoliciesApi extends ProfileApi {
   @override
   Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
     calls++;
-    return (value: const SafetyPolicies(), etag: '"v2"');
+    return (value: const TestSafetyPolicies(), etag: '"v2"');
   }
 }
 
@@ -803,7 +811,7 @@ class _GuiderConnecting extends _GuiderCalls {
 /// The rig's guider section, tagged (ADR 0015): [fill] is the rig filling the
 /// guide optics from the guider once it connects, which moves the tag on.
 class _GuideOpticsApi extends ProfileApi {
-  _GuideOpticsApi([this.phd2 = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  _GuideOpticsApi([this.phd2 = const TestPhd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
   Phd2Settings phd2;
   int version = 1;
   int reads = 0;
@@ -828,7 +836,7 @@ class _GuideOpticsApi extends ProfileApi {
   }
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: const OpticsSettings(), etag: '"v1"');
+      (value: const TestOpticsSettings(), etag: '"v1"');
 }
 
 /// A rig that holds the permanent pier on and refuses to change it.
@@ -844,13 +852,13 @@ class _PierRefusedApi extends ProfileApi {
       throw StateError('unreachable');
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
-      (value: const Phd2Settings(), etag: '"v1"');
+      (value: const TestPhd2Settings(), etag: '"v1"');
 }
 
 /// The rig's guider section as a tagged store: reads return it, a save with
 /// the tag it holds replaces it, one with an older tag is refused (412).
 class _Phd2StoreApi extends ProfileApi {
-  _Phd2StoreApi([this.stored = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  _Phd2StoreApi([this.stored = const TestPhd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
   Phd2Settings stored;
   int version = 1;
   final saved = <Phd2Settings>[];
@@ -879,7 +887,7 @@ class _Phd2StoreApi extends ProfileApi {
   }
   @override
   Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
-      (value: const OpticsSettings(), etag: '"v1"');
+      (value: const TestOpticsSettings(), etag: '"v1"');
 }
 
 /// The rig's answer once the guider is disconnected: no guider (404).
@@ -981,7 +989,7 @@ class _ParkingMount extends MountNotifier {
 class _RigOptics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() =>
-      const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+      const LoadedSection(value: TestOpticsSettings(), source: SectionSource.rig, etag: '"v1"');
 }
 
 /// The rig's site: loaded from the start, every save that reached it in
@@ -1041,7 +1049,7 @@ class _OpticsApi extends ProfileApi {
   // The guider settings load themselves when Rig opens; no network here.
   @override
   Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
-      (value: const Phd2Settings(), etag: '"v1"');
+      (value: const TestPhd2Settings(), etag: '"v1"');
   /// The optics read fails, as against a rig that does not answer.
   bool fail = false;
   @override
@@ -3576,7 +3584,7 @@ void main() {
 
   testWidgets('Rig sets the telescope with digit wheels and the site with this device\'s location, adjust wheels and '
       'an elevation stepper, saved to the profile; no text fields', (tester) async {
-    final optics = _OpticsApi(const OpticsSettings(apertureMm: 80, focalLengthMm: 480));
+    final optics = _OpticsApi(const TestOpticsSettings(apertureMm: 80, focalLengthMm: 480));
     final c = await _pump(tester, const Size(1024, 768), rigOptics: false,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       profileApiProvider.overrideWithValue(optics),
@@ -3661,7 +3669,7 @@ void main() {
       timeSyncApiProvider.overrideWithValue(clock),
       clientGpsPrefsServiceProvider.overrideWithValue(_GpsPrefs()),
       // A rig to save the site to (the site itself is the rig's copy, no HTTP).
-      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      profileApiProvider.overrideWithValue(_OpticsApi(const TestOpticsSettings())),
     ]);
     c.read(siteSettingsProvider.notifier).setTimeZone('Europe/London');
     await _openSection(tester, 'Rig');
@@ -3959,7 +3967,7 @@ void main() {
     await _pump(tester, const Size(1024, 768), rigOptics: false,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       // The optics load themselves from the rig (ADR 0015).
-      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings(apertureMm: 80))),
+      profileApiProvider.overrideWithValue(_OpticsApi(const TestOpticsSettings(apertureMm: 80))),
       planningSettingsBootstrapProvider.overrideWith((ref) async {
         loaded++;
         await Future<void>.value(); // like the real fetch: no writes during the provider's build
@@ -3992,7 +4000,7 @@ void main() {
 
   testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
       (tester) async {
-    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
+    final api = _OpticsApi(const TestOpticsSettings(focalLengthMm: 600));
     final c = await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
@@ -4006,7 +4014,7 @@ void main() {
 
   testWidgets('the telescope rows wait for the profile from the rig: no wheel, and nothing is sent (ADR 0015)',
       (tester) async {
-    final optics = _OpticsApi(const OpticsSettings(apertureMm: 80))..fail = true;
+    final optics = _OpticsApi(const TestOpticsSettings(apertureMm: 80))..fail = true;
     await _pump(tester, const Size(1024, 768), rigOptics: false,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       profileApiProvider.overrideWithValue(optics),
@@ -4027,13 +4035,13 @@ void main() {
 
   testWidgets('a telescope wheel on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
       (tester) async {
-    final optics = _OpticsApi(const OpticsSettings())..fail = true;
+    final optics = _OpticsApi(const TestOpticsSettings())..fail = true;
     final c = await _pump(tester, const Size(1024, 768), rigOptics: false,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       profileApiProvider.overrideWithValue(optics),
     ]);
     await tester.pump();
-    c.read(opticsSettingsProvider.notifier).seed(const OpticsSettings(apertureMm: 80));
+    c.read(opticsSettingsProvider.notifier).seed(const TestOpticsSettings(apertureMm: 80));
     await tester.pump();
     await _openSection(tester, 'Rig');
     await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
@@ -4050,10 +4058,10 @@ void main() {
 
   testWidgets('the site rows wait for the profile from the rig: no wheel, and nothing is sent (ADR 0015)',
       (tester) async {
-    final site = _SiteSection(const SiteSettings(latitudeDeg: -37.2037));
+    final site = _SiteSection(const TestSiteSettings(latitudeDeg: -37.2037));
     await _pump(tester, const Size(1024, 768), rigSite: null,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
-      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      profileApiProvider.overrideWithValue(_OpticsApi(const TestOpticsSettings())),
       siteSettingsProvider.overrideWith(() => site),
     ]);
     await tester.pump();
@@ -4072,14 +4080,14 @@ void main() {
 
   testWidgets('a site change on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
       (tester) async {
-    final site = _SiteSection(const SiteSettings());
+    final site = _SiteSection(const TestSiteSettings());
     final c = await _pump(tester, const Size(1024, 768), rigSite: null,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
-      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      profileApiProvider.overrideWithValue(_OpticsApi(const TestOpticsSettings())),
       siteSettingsProvider.overrideWith(() => site),
     ]);
     await tester.pump();
-    c.read(siteSettingsProvider.notifier).seed(const SiteSettings(elevationM: 71));
+    c.read(siteSettingsProvider.notifier).seed(const TestSiteSettings(elevationM: 71));
     await tester.pump();
     await _openSection(tester, 'Rig');
     final up = find.byKey(const Key('simple-rig-elevation-up'));
@@ -4094,7 +4102,7 @@ void main() {
   });
 
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
-    final api = _OpticsApi(const OpticsSettings());
+    final api = _OpticsApi(const TestOpticsSettings());
     await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({})),
@@ -4403,7 +4411,7 @@ void main() {
           activeId: 'p1',
           profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')],
         ),
-        rigSite: const SiteSettings(permanentPier: true),
+        rigSite: const TestSiteSettings(permanentPier: true),
         siteRefuse: StateError('The rig refused the change.'),
         gear: [profileApiProvider.overrideWithValue(_PierRefusedApi())],
       );
@@ -4442,7 +4450,7 @@ void main() {
   });
 
   testWidgets("Rig names the main scope's optics and shows the guide scope's, kept in the profile", (tester) async {
-    final api = _Phd2StoreApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
+    final api = _Phd2StoreApi(const TestPhd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
     final c = await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderGone.new),
@@ -4492,7 +4500,7 @@ void main() {
   testWidgets("Rig reads the guide optics from the rig when it opens, the guider already connected", (tester) async {
     // On the iPad (2026-11-03): the rig held 128 mm / 3.75 µm but Rig showed Not set — nothing read the
     // profile's guider section unless the guider connected while Rig was open.
-    final api = _GuideOpticsApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
+    final api = _GuideOpticsApi(const TestPhd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
     await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderUp.new),
@@ -4508,7 +4516,7 @@ void main() {
   testWidgets("every Rig adjustment is one width: the wheels, the elevation stepper and the read-only tile",
       (tester) async {
     // User, 2026-11-04: the elevation stepper was wider than the rows above it.
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), rigPhd2: true);
     await _openSection(tester, 'Rig');
     final elevation = find.byKey(const Key('simple-rig-elevation'));
     await tester.ensureVisible(elevation);
@@ -4525,7 +4533,7 @@ void main() {
   });
 
   testWidgets("Rig's two guide rows show Not set in the same tile, the same size and edge", (tester) async {
-    await _pump(tester, const Size(1024, 768));
+    await _pump(tester, const Size(1024, 768), rigPhd2: true);
     await _openSection(tester, 'Rig');
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidepixel')));
     await tester.pumpAndSettle();
@@ -4609,7 +4617,7 @@ void main() {
     await _openSection(tester, 'Rig');
     await tester.pump();
     expect(find.text('Not set'), findsWidgets, reason: 'precondition: Rig read the section unset');
-    api.daemonWrote(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)); // the rig's fill, unheard
+    api.daemonWrote(const TestPhd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)); // the rig's fill, unheard
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
@@ -4634,7 +4642,7 @@ void main() {
 
   testWidgets("a Rig edit with no rig link says it wasn't saved instead of nothing", (tester) async {
     // Review: _save returned silently when there was no ProfileApi, and the value reverted at the next read.
-    final c = await _pump(tester, const Size(1024, 768), feature: true);
+    final c = await _pump(tester, const Size(1024, 768), feature: true, rigPhd2: true);
     expect(c.read(profileApiProvider), isNull, reason: 'precondition: no rig');
     await _openSection(tester, 'Rig');
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
@@ -7269,7 +7277,7 @@ void main() {
     await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
       weatherProvider.overrideWith(() => _Windy()),
-      profileApiProvider.overrideWithValue(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true))),
+      profileApiProvider.overrideWithValue(_PoliciesApi(const TestSafetyPolicies(weatherTriggersEnabled: true))),
     ]);
     await tester.pump();
     await tester.pump();
@@ -7286,7 +7294,7 @@ void main() {
       weatherProvider.overrideWith(() => _Windy()),
       profileApiProvider.overrideWithValue(_PoliciesApi(null)),
     ]);
-    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
+    c.read(safetyPoliciesProvider.notifier).seed(const TestSafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
@@ -7323,7 +7331,7 @@ void main() {
     await tester.pump();
     expect(api.calls, greaterThan(0));
     // Anything that rebuilds the pill retries after the failed first load.
-    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
+    c.read(safetyPoliciesProvider.notifier).seed(const TestSafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -7336,7 +7344,7 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
       safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
       weatherProvider.overrideWith(() => _Windy()),
-      _rigProvider.overrideWith(() => _Rig(_PoliciesApi(const SafetyPolicies(weatherTriggersEnabled: true)))),
+      _rigProvider.overrideWith(() => _Rig(_PoliciesApi(const TestSafetyPolicies(weatherTriggersEnabled: true)))),
       profileApiProvider.overrideWith((ref) => ref.watch(_rigProvider)),
     ]);
     await tester.pump();
@@ -8205,7 +8213,7 @@ void main() {
   testWidgets('a Rig wheel turns with the arrow keys and sets the value', (tester) async {
     final c = await _pump(tester, const Size(1024, 768), gear: [
       // A rig to save the site to (the site itself is the rig's copy, no HTTP).
-      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      profileApiProvider.overrideWithValue(_OpticsApi(const TestOpticsSettings())),
     ]);
     await _openSection(tester, 'Rig');
     final before = c.read(siteSettingsProvider).value!.latitudeDeg;
@@ -8292,6 +8300,7 @@ void main() {
         tester,
         screen,
         server: rig,
+        rigPhd2: true,
         gear: [
           _factsHolder.overrideWith(() => _FactsHolder(facts)),
           rigSetupFactsProvider.overrideWith((ref) => ref.watch(_factsHolder)),

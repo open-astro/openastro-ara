@@ -11,6 +11,7 @@ import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/widgets/sequencer/target_plan_dialog.dart';
+import '../../support/settings_values.dart';
 
 class _SeededOptics extends OpticsSettingsNotifier {
   _SeededOptics(this._v);
@@ -198,11 +199,11 @@ void main() {
       // under the saturation ceiling, so pick the sky (Bortle) where the Hα floor
       // itself sets the step — then halving the measured sky rate must move it.
       List<Object> rig(int bortle) => <Object>[
-        opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+        opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
             focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics(
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const TestCameraElectronics(
             readNoiseE: 0.7, fullWellE: 50000, electronsPerAdu: 0.8, quantumEfficiencyPeak: 0.8))),
-        siteSettingsProvider.overrideWith(() => _SeededSite(SiteSettings(bortleClass: bortle))),
+        siteSettingsProvider.overrideWith(() => _SeededSite(TestSiteSettings(bortleClass: bortle))),
       ];
       Future<Map<String, double>> exposures(int bortle, SkyModelCalibration? record) async {
         final choice = await open(tester, filters: shoSet, overrides: [
@@ -236,9 +237,9 @@ void main() {
     testWidgets('camera electronics not loaded: the plan reads unset electronics, never a saved value', (tester) async {
       Future<Map<String, double>> exposures(List<Object> electronics) async {
         final choice = await open(tester, filters: shoSet, overrides: [
-          opticsSettingsProvider.overrideWith(() => _SeededOptics(const OpticsSettings(
+          opticsSettingsProvider.overrideWith(() => _SeededOptics(const TestOpticsSettings(
               focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91))),
-          siteSettingsProvider.overrideWith(() => _SeededSite(const SiteSettings(bortleClass: 5))),
+          siteSettingsProvider.overrideWith(() => _SeededSite(const TestSiteSettings(bortleClass: 5))),
           ...electronics,
         ], interact: (t) async {
           await t.tap(find.text('Narrowband · SHO'));
@@ -250,7 +251,7 @@ void main() {
       }
       final notLoaded = await exposures(const []);
       final unset = await exposures([
-        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const CameraElectronics())),
+        cameraElectronicsProvider.overrideWith(() => _SeededElectronics(const TestCameraElectronics())),
       ]);
       expect(notLoaded, unset);
     });

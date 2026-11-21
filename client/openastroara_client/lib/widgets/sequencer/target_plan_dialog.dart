@@ -125,10 +125,9 @@ double suggestedSubSeconds(
   Map<String, double> skyCalibrationK = const {},
 }) {
   final outcome = resolveOptimalSubLocal(
-    optics: ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
-    electronics:
-        ref.read(cameraElectronicsProvider).value ?? const CameraElectronics(),
-    site: ref.read(siteSettingsProvider).value ?? const SiteSettings(),
+    optics: ref.read(opticsSettingsProvider).value,
+    electronics: ref.read(cameraElectronicsProvider).value,
+    site: ref.read(siteSettingsProvider).value,
     filterSet: ref.read(filterSetProvider).value ?? const FilterSetSettings(),
     filterName: filterName,
     raDeg: raDeg,
@@ -219,10 +218,13 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
   }
 
   List<FilterPlanStep> _steps(List<PlanningFilter> picked) {
-    final defaults =
-        ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
-    final defaultExposure = defaults.defaultExposure.inMilliseconds /
-        Duration.millisecondsPerSecond;
+    // The create refuses before this chooser while the defaults are not
+    // loaded (create_imaging_run); 0 = no default sub (ADR 0015).
+    final defaults = ref.read(imagingDefaultsProvider).value;
+    final defaultExposure = defaults == null
+        ? 0.0
+        : defaults.defaultExposure.inMilliseconds /
+            Duration.millisecondsPerSecond;
     return [
       for (final f in picked)
         () {
@@ -304,6 +306,14 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
     return options;
   }
 
+  /// The dither cadence the run takes; none while the guider settings are
+  /// not loaded (ADR 0015: never a client default).
+  String get _ditherNote =>
+      switch (ref.read(phd2SettingsProvider).value?.ditherEveryNFrames) {
+        null => '',
+        final n => ', dithers every $n frame(s)',
+      };
+
   @override
   Widget build(BuildContext context) {
     return adaptiveAlertDialog(
@@ -359,9 +369,7 @@ class _TargetPlanDialogState extends ConsumerState<_TargetPlanDialog> {
                         color: AraColors.textPrimary, fontSize: 13)),
                 subtitle: Text(
                   _guide
-                      ? 'Starts guiding after autofocus, dithers every '
-                          '${(ref.read(phd2SettingsProvider).value ?? const Phd2Settings()).ditherEveryNFrames} '
-                          'frame(s).'
+                      ? 'Starts guiding after autofocus$_ditherNote.'
                       : 'No guiding steps in the run.',
                   style: const TextStyle(
                       color: AraColors.textSecondary, fontSize: 11.5),

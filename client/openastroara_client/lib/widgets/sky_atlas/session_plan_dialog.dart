@@ -109,14 +109,17 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // Charge the night's REAL overheads from the user's own settings, so the
     // sub counts describe a session with dithering, guiding settles, plate
     // solving and autofocus in it — not an idealized shutter-open number.
-    final phd2 = ref.read(phd2SettingsProvider).value ?? const Phd2Settings();
-    final af =
-        ref.read(autofocusSettingsProvider).value ?? const AutofocusSettings();
+    // A section not loaded charges the planner's own figures, never the
+    // client's old section defaults (ADR 0015).
+    final phd2 = ref.read(phd2SettingsProvider).value;
+    final af = ref.read(autofocusSettingsProvider).value;
+    const planner = SessionOverheads();
     final overheads = SessionOverheads(
-      ditherEnabled: phd2.ditherEnabled,
-      ditherEveryNFrames: phd2.ditherEveryNFrames,
-      ditherSettleSec: phd2.settleTimeSec.toDouble(),
-      autofocusEveryHours: af.everyNHours.toDouble(),
+      ditherEnabled: phd2?.ditherEnabled ?? planner.ditherEnabled,
+      ditherEveryNFrames: phd2?.ditherEveryNFrames ?? planner.ditherEveryNFrames,
+      ditherSettleSec: phd2?.settleTimeSec.toDouble() ?? planner.ditherSettleSec,
+      autofocusEveryHours:
+          af?.everyNHours.toDouble() ?? planner.autofocusEveryHours,
     );
     // §Integration Budget P5 — what the library already holds, so the plan
     // favours finishing a tier tonight over re-shooting a done one. Awaited
@@ -191,9 +194,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     // A mosaic becomes one target block per panel, on the same grid the
     // preview drew (mosaic_geometry ports the overlay's math). Each panel
     // gets its share of the slot so the run finishes inside it.
-    final fov = opticsFovArcmin(
-      ref.read(opticsSettingsProvider).value ?? const OpticsSettings(),
-    );
+    final fov = opticsFovArcmin(ref.read(opticsSettingsProvider).value);
     final aim = t.aim;
     final panels = t.mosaic.isMosaic && fov != null
         ? mosaicPanelCentres(
@@ -286,9 +287,7 @@ class _SessionPlanDialogState extends ConsumerState<SessionPlanDialog> {
     final theme = Theme.of(context);
     final s = ref.watch(sessionPlanProvider);
     final plan = s.plan;
-    final frameFov = opticsFovArcmin(
-      ref.watch(opticsSettingsProvider).value ?? const OpticsSettings(),
-    );
+    final frameFov = opticsFovArcmin(ref.watch(opticsSettingsProvider).value);
 
     return AlertDialog(
       backgroundColor: AraColors.bgPanel,

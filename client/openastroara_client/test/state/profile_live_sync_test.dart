@@ -19,6 +19,7 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 
 import '../support/fake_section_rig.dart';
 import '../support/section_load.dart';
+import '../support/settings_values.dart';
 
 /// The rig's profile endpoints, as far as this test needs: the site section
 /// (whatever name it currently holds), the profile list, and any other
@@ -195,7 +196,7 @@ void main() {
       await settleLoaded(c, siteSettingsProvider);
       rig.siteName = 'Set on the other device';
       await expectLater(
-        c.read(profileApiProvider)!.putSiteSettings(const SiteSettings()),
+        c.read(profileApiProvider)!.putSiteSettings(const TestSiteSettings()),
         throwsA(isA<DioException>()),
       );
 
@@ -213,8 +214,8 @@ void main() {
         ..refuseWrites = 1;
       final c = _container(rig);
       final api = c.read(profileApiProvider)!;
-      final refused = api.putSiteSettings(const SiteSettings());
-      final saved = api.putSiteSettings(const SiteSettings(siteName: 'Saved'));
+      final refused = api.putSiteSettings(const TestSiteSettings());
+      final saved = api.putSiteSettings(const TestSiteSettings(siteName: 'Saved'));
       await _sent(rig, 2);
       rig.holdWrites!.complete();
       await expectLater(refused, throwsA(isA<DioException>()));

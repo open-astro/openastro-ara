@@ -9,6 +9,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/safety_section.dart';
+import '../../support/settings_values.dart';
 
 /// #1589 — a meridian flip is confirmed by the user, after a flip completed.
 /// The daemon owns the confirmation and the completed-flip record; the client
@@ -92,26 +93,17 @@ void main() {
     expect(s.firstFlipPierSideChanged, isFalse);
   });
 
-  test('first_flip_completed_utc parses tolerantly', () {
+  test('first_flip_completed_utc parses; null is no flip on record', () {
     final read = ProfileApi.safetyPoliciesFromJson({
+      ...rigDefaults['safety']!,
       'first_flip_completed_utc': '2026-11-20T03:00:00+00:00',
       'first_flip_pier_side_changed': true,
     });
     expect(read.firstFlipCompletedUtc, _completed);
     expect(read.firstFlipPierSideChanged, isTrue);
-    expect(
-      ProfileApi.safetyPoliciesFromJson({'first_flip_completed_utc': 'garbage'})
-          .firstFlipCompletedUtc,
-      isNull,
-    );
-    expect(
-      ProfileApi.safetyPoliciesFromJson({'first_flip_completed_utc': 42})
-          .firstFlipCompletedUtc,
-      isNull,
-    );
-    final old = ProfileApi.safetyPoliciesFromJson(const {});
-    expect(old.firstFlipCompletedUtc, isNull, reason: 'an older daemon has no record');
-    expect(old.firstFlipPierSideChanged, isFalse);
+    final none = ProfileApi.safetyPoliciesFromJson({...rigDefaults['safety']!});
+    expect(none.firstFlipCompletedUtc, isNull, reason: 'no flip on record');
+    expect(none.firstFlipPierSideChanged, isFalse);
   });
 
   Future<void> pumpPanel(WidgetTester tester, SafetyPolicies seed) async {
@@ -142,39 +134,39 @@ void main() {
 
   testWidgets('Re-arm can drop a completed flip that is not confirmed yet',
       (tester) async {
-    await pumpPanel(tester, const SafetyPolicies());
+    await pumpPanel(tester, const TestSafetyPolicies());
     expect(rearmEnabled(tester), isFalse, reason: 'nothing to re-arm');
 
-    await pumpPanel(tester, SafetyPolicies(firstFlipCompletedUtc: _completed));
+    await pumpPanel(tester, TestSafetyPolicies(firstFlipCompletedUtc: _completed));
     expect(rearmEnabled(tester), isTrue,
         reason: 'a flip recorded before a rig change must not stay confirmable');
 
     await pumpPanel(
       tester,
-      SafetyPolicies(firstFlipConfirmed: true, firstFlipCompletedUtc: _completed),
+      TestSafetyPolicies(firstFlipConfirmed: true, firstFlipCompletedUtc: _completed),
     );
     expect(rearmEnabled(tester), isTrue);
   });
 
   testWidgets('Confirm is enabled only after a completed flip', (tester) async {
-    await pumpPanel(tester, const SafetyPolicies());
+    await pumpPanel(tester, const TestSafetyPolicies());
     expect(confirmEnabled(tester), isFalse, reason: 'no completed flip yet');
     expect(find.textContaining('every flip alerts and waits 60 s'), findsOneWidget);
 
     await pumpPanel(
       tester,
-      SafetyPolicies(firstFlipCompletedUtc: _completed, firstFlipPierSideChanged: true),
+      TestSafetyPolicies(firstFlipCompletedUtc: _completed, firstFlipPierSideChanged: true),
     );
     expect(confirmEnabled(tester), isTrue);
     expect(find.textContaining('pier side changed'), findsOneWidget);
 
-    await pumpPanel(tester, SafetyPolicies(firstFlipCompletedUtc: _completed));
+    await pumpPanel(tester, TestSafetyPolicies(firstFlipCompletedUtc: _completed));
     expect(confirmEnabled(tester), isTrue);
     expect(find.textContaining('check by eye'), findsOneWidget);
 
     await pumpPanel(
       tester,
-      SafetyPolicies(firstFlipConfirmed: true, firstFlipCompletedUtc: _completed),
+      TestSafetyPolicies(firstFlipConfirmed: true, firstFlipCompletedUtc: _completed),
     );
     expect(confirmEnabled(tester), isFalse, reason: 'already confirmed');
   });

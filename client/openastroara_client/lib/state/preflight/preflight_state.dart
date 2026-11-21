@@ -117,7 +117,8 @@ class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
       ...await ref.read(preflightPrefsProvider).loadAcknowledgedNights(),
     };
     ref.watch(skyClockProvider);
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    // Not loaded: never dark (isDarkNow), so no bedtime prompt (ADR 0015).
+    final site = ref.watch(siteSettingsProvider).value;
     // Await the list (not its AsyncValue): the first build must not answer
     // "nothing running" while the list is still loading.
     List<SequenceListItem>? runs;

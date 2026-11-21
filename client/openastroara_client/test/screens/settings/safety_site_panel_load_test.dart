@@ -13,6 +13,7 @@ import 'package:openastroara/state/time_sync_state.dart';
 
 import '../../support/fake_section_rig.dart';
 import '../../support/site_section.dart';
+import '../../support/settings_values.dart';
 
 // ADR 0015: the Location & sky panel edits the rig's copy of the site section.
 
@@ -33,7 +34,7 @@ void main() {
     addTearDown(tester.view.reset);
     final section = FakeSiteSection(
       initial: loaded
-          ? const SiteSettings(
+          ? const TestSiteSettings(
               siteName: 'Sydney',
               latitudeDeg: -33.856784,
               longitudeDeg: 151.215297,

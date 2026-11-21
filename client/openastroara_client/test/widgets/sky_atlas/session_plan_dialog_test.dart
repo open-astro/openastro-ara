@@ -17,6 +17,8 @@ import 'package:openastroara/models/stats/stats_target.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 import 'package:openastroara/widgets/sky_atlas/target_preview.dart';
+import '../../support/settings_values.dart';
+import '../../support/imaging_sections.dart';
 
 class _FixedStats extends StatsTargetsNotifier {
   _FixedStats(this._v);
@@ -290,6 +292,8 @@ void main() {
             .overrideWith((ref, at) async => [_allNight('X', 'Test Nebula', 80)]),
         sequenceApiProvider.overrideWith((ref) => null),
         draftSequenceServiceProvider.overrideWithValue(drafts),
+        // The offline draft is built from the profile's copy (ADR 0015).
+        ...imagingSectionsFromRig(),
       ],
       child: const MaterialApp(home: Scaffold(body: SessionPlanDialog())),
     ));
@@ -339,7 +343,7 @@ class _HangingDraftService extends DraftSequenceService {
 class _FixedOptics extends OpticsSettingsNotifier {
   @override
   LoadedSection<OpticsSettings> build() => const LoadedSection(
-    value: OpticsSettings(
+    value: TestOpticsSettings(
       focalLengthMm: 250,
       reducerFactor: 1,
       sensorWidthPx: 6248,

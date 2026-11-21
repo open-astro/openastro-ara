@@ -16,14 +16,15 @@ import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart'
     show planningSettingsBootstrapProvider;
 import 'package:openastroara/state/ws/ws_providers.dart';
+import '../support/settings_values.dart';
 
 const _gap = RigSetupGap.site;
 
-const _setUpSite = SiteSettings(
+const _setUpSite = TestSiteSettings(
   latitudeDeg: -33.856784,
   longitudeDeg: 151.215297,
 );
-const _setUpOptics = OpticsSettings(
+const _setUpOptics = TestOpticsSettings(
   focalLengthMm: 800,
   sensorWidthPx: 6248,
   sensorHeightPx: 4176,
@@ -36,7 +37,7 @@ class _Profile extends ProfileApi {
   _Profile({
     this.site = _setUpSite,
     this.optics = _setUpOptics,
-    this.phd2 = const Phd2Settings(guideFocalLength: 240, guidePixelSize: 3.75),
+    this.phd2 = const TestPhd2Settings(guideFocalLength: 240, guidePixelSize: 3.75),
   }) : super(const AraServer(hostname: '192.0.2.10', port: 5555));
   SiteSettings? site;
   final OpticsSettings? optics;
@@ -274,8 +275,8 @@ void main() {
       'a link that is down leaves the facts untrusted and lists nothing',
       () async {
         final notSetUp = _Profile(
-          site: const SiteSettings(),
-          optics: const OpticsSettings(),
+          site: const TestSiteSettings(),
+          optics: const TestOpticsSettings(),
         );
         final c = await _trust(notSetUp, linkUp: false);
         expect(c.read(rigSetupFactsProvider), isNull);
@@ -315,7 +316,7 @@ void main() {
         // read is a 404, but the profile names the guide camera.
         final c = await _trust(
           _Profile(
-            phd2: const Phd2Settings(
+            phd2: const TestPhd2Settings(
               guiderCamera: 'Alpaca Camera [192.0.2.10:11111/1]',
             ),
           ),

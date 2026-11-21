@@ -76,18 +76,16 @@ Future<RigCapabilities> readRigCapabilities(ProviderContainer container) async {
     filterWheel: await wheel,
     rotator: await rotator,
     flatPanel: await flatPanel,
-    guider: guiderConfigured(
-      guider,
-      container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
-    ),
+    guider: guiderConfigured(guider, container.read(phd2SettingsProvider).value),
   );
 }
 
 /// The rig as far as settings alone can tell — the offline planning path
 /// (no daemon to ask). A guider counts when the profile names its camera;
 /// focuser and filter wheel are assumed (the historical shape) and the
-/// rotator is not. Pure — unit-tested.
-RigCapabilities rigCapabilitiesFromSettings(Phd2Settings phd2) =>
+/// rotator is not. Guider settings not loaded name no guide camera. Pure —
+/// unit-tested.
+RigCapabilities rigCapabilitiesFromSettings(Phd2Settings? phd2) =>
     RigCapabilities(
       focuser: true,
       filterWheel: true,
@@ -98,10 +96,11 @@ RigCapabilities rigCapabilitiesFromSettings(Phd2Settings phd2) =>
 
 /// A guider is part of the rig when the daemon reports one (whatever its link
 /// state right now — a dropped link is still a guider) or the profile names
-/// the guide camera (§63.17); the guider's "None" camera choice names none.
-/// Pure — unit-tested.
-bool guiderConfigured(GuiderStatus? status, Phd2Settings phd2) =>
+/// the guide camera (§63.17); the guider's "None" camera choice names none,
+/// and so do guider settings not loaded (null). Pure — unit-tested.
+bool guiderConfigured(GuiderStatus? status, Phd2Settings? phd2) =>
     status != null ||
-    (phd2.guiderCamera.trim().isNotEmpty &&
-        phd2.guiderCamera.trim().toLowerCase() != 'none') ||
-    phd2.guiderCameraId.trim().isNotEmpty;
+    (phd2 != null &&
+        ((phd2.guiderCamera.trim().isNotEmpty &&
+                phd2.guiderCamera.trim().toLowerCase() != 'none') ||
+            phd2.guiderCameraId.trim().isNotEmpty));

@@ -660,7 +660,8 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final storage = ref.watch(storageSpaceProvider).value;
     final coolerOff = ref.watch(monitorCoolerOffProvider);
     final trends = ref.watch(monitorTrendsProvider);
-    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
+    // Null until the rig's copy (or the offline cache's) is in: no dark, no curve.
+    final site = ref.watch(siteSettingsProvider).value;
     final guidingRms = ref.watch(guidingRmsProvider).value;
     ref.watch(skyClockProvider);
 
@@ -869,13 +870,13 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     MonitorTarget? targetTile;
     if (target != null) {
       // The curve changes only with the Target or the night.
-      final curveKey = (target.raDeg, target.decDeg, site.latitudeDeg, site.longitudeDeg, darkStart, darkEnd);
+      final curveKey = (target.raDeg, target.decDeg, site?.latitudeDeg, site?.longitudeDeg, darkStart, darkEnd);
       if (curveKey != _curveKey) {
         _curveKey = curveKey;
         final points = <double>[];
         double? top;
         DateTime? at;
-        if (darkStart != null && darkEnd != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
+        if (site != null && darkStart != null && darkEnd != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0)) {
           const n = 48;
           final span = darkEnd.difference(darkStart);
           for (var i = 0; i <= n; i++) {
@@ -1107,9 +1108,11 @@ int _currentStep(SimpleTarget t, List<int> done) {
 
 /// Tonight's dark at [site] (local): from the sun going below its twilight
 /// line to it coming back. While it is dark, the dark in progress. Nulls with
-/// no site set, or when it doesn't get dark within a day.
-(DateTime?, DateTime?) monitorDarkSpan(SiteSettings site, DateTime nowUtc) {
-  if (site.latitudeDeg == 0 && site.longitudeDeg == 0) return (null, null);
+/// no site set or loaded, or when it doesn't get dark within a day.
+(DateTime?, DateTime?) monitorDarkSpan(SiteSettings? site, DateTime nowUtc) {
+  if (site == null || (site.latitudeDeg == 0 && site.longitudeDeg == 0)) {
+    return (null, null);
+  }
   final line = twilightSunAltitudeDeg(site.twilightDefinition);
   bool dark(DateTime t) => sunMoonAltitudeDeg(t, site.latitudeDeg, site.longitudeDeg).sunAltDeg < line;
   final now = DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day, nowUtc.hour, nowUtc.minute);

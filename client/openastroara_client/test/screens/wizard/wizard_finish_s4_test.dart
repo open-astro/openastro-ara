@@ -29,6 +29,7 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
 import 'package:openastroara/state/wizard_state.dart';
+import '../../support/settings_values.dart';
 
 /// Instant in-memory ProfileApi double (no gate — the finish flow is what's
 /// under test, not the spinner).
@@ -40,19 +41,19 @@ class _FastProfileApi extends ProfileApi {
   Future<ProfileMeta> createProfile(String name) async =>
       ProfileMeta(id: 'profile-1', name: name);
   @override
-  Future<SiteSettings> getSiteSettings() async => const SiteSettings();
+  Future<SiteSettings> getSiteSettings() async => const TestSiteSettings();
   @override
   Future<SiteSettings> putSiteSettings(SiteSettings v) async => v;
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<OpticsSettings> getOptics() async => const TestOpticsSettings();
   @override
   Future<OpticsSettings> putOptics(OpticsSettings v) async => v;
   @override
-  Future<ImagingDefaults> getImagingDefaults() async => const ImagingDefaults();
+  Future<ImagingDefaults> getImagingDefaults() async => const TestImagingDefaults();
   @override
   Future<ImagingDefaults> putImagingDefaults(ImagingDefaults v) async => v;
   @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<Phd2Settings> getPhd2Settings() async => const TestPhd2Settings();
   @override
   Future<Phd2Settings> putPhd2Settings(Phd2Settings v) async {
     lastPhd2Put = v;
@@ -61,20 +62,20 @@ class _FastProfileApi extends ProfileApi {
 
   @override
   Future<PlateSolveSettings> getPlateSolveSettings() async =>
-      const PlateSolveSettings();
+      const TestPlateSolveSettings();
   @override
   Future<PlateSolveSettings> putPlateSolveSettings(
     PlateSolveSettings v,
   ) async => v;
   @override
   Future<AutofocusSettings> getAutofocusSettings() async =>
-      const AutofocusSettings();
+      const TestAutofocusSettings();
   @override
   Future<AutofocusSettings> putAutofocusSettings(AutofocusSettings v) async =>
       v;
   @override
   Future<CameraElectronics> getCameraElectronics() async =>
-      const CameraElectronics();
+      const TestCameraElectronics();
   @override
   Future<CameraElectronics> putCameraElectronics(CameraElectronics v) async =>
       v;
@@ -87,7 +88,7 @@ class _FastProfileApi extends ProfileApi {
   @override
   Future<StorageSettings> putStorageSettings(StorageSettings v) async => v;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => const SafetyPolicies();
+  Future<SafetyPolicies> getSafetyPolicies() async => const TestSafetyPolicies();
   @override
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies v) async => v;
 }
