@@ -52,7 +52,7 @@ namespace OpenAstroAra.Server;
 public partial class Program {
 
     public static void Main(string[] args) {
-        var app = BuildApp(args);
+        var app = BuildApp(args, overrideServices: null);
         // Main returns void, so Environment.ExitCode (75 after a restart request) is the process exit status.
         try {
             app.Run();
@@ -73,6 +73,14 @@ public partial class Program {
         return mount;
     }
 
+    // #2071 — a trusted time sync sets the connected mount's clock too, not only the Pi's.
+    private static TelescopeService FollowClock(IServiceProvider sp, TelescopeService mount) {
+        if (sp.GetService<ITimeSyncService>() is { } timeSync) {
+            mount.FollowTimeSync(timeSync);
+        }
+        return mount;
+    }
+
     /// <summary>
     /// Everything <see cref="Main"/> does before <c>app.Run()</c>: the §8.1 service graph, the
     /// middleware and endpoint maps, the startup reconciliation and the boot probes. Split out
@@ -81,8 +89,13 @@ public partial class Program {
     /// reverted to the headless stub because nothing ever built this graph outside <c>Main</c>.
     /// Kestrel binds only in <c>Run</c>, so building is side-effect-free on the network; the profile
     /// directory (<c>OPENASTROARA_PROFILE_DIR</c>) is created and the catalog opened, as at boot.
+    /// <paramref name="overrideServices"/> runs on the finished service collection just before
+    /// <c>Build()</c>: a test host swaps the host-side seams there (the guider's <c>systemctl</c>
+    /// supervisor, the poweroff starter) so a test run never asks systemd or polkit for anything.
+    /// <c>Main</c> passes null. The parameter is required, not optional, so a new test host cannot
+    /// call <c>BuildApp</c> without deciding (<c>TestHostSeams.Replace</c>) and silently get the real seams.
     /// </summary>
-    internal static WebApplication BuildApp(string[] args) {
+    internal static WebApplication BuildApp(string[] args, Action<IServiceCollection>? overrideServices) {
         var builder = WebApplication.CreateSlimBuilder(new WebApplicationOptions {
             Args = args,
             // The OpenAPI generator tags untagged routes (/healthz, /server/info) with the
@@ -354,7 +367,7 @@ public partial class Program {
         // park/unpark, set-tracking, abort-slew. One singleton backs BOTH the REST ITelescopeService
         // and the Sequencer's ITelescopeMediator (§8.1), so the telescope instructions drive the live
         // device (mediator wiring is below; this replaces the HeadlessTelescopeMediator stub).
-        builder.Services.AddSingleton<TelescopeService>(sp => FollowSite(sp, new TelescopeService(
+        builder.Services.AddSingleton<TelescopeService>(sp => FollowClock(sp, FollowSite(sp, new TelescopeService(
             sp.GetService<ILogger<TelescopeService>>(),
             sp.GetService<EquipmentEventPublisher>(),
             sp.GetService<IEquipmentFaultSink>(),
@@ -364,8 +377,13 @@ public partial class Program {
             // resolved lazily (and the factory lambda bypasses constructor activation: every optional
             // parameter is passed by hand, #711).
             () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
-            sp.GetService<IProfileStore>())));
+            sp.GetService<IProfileStore>(),
+            // #2070 — registered below, once profileDir is known.
+            sp.GetService<IMountPoseStore>(),
+            // #2071 — the mount's clock is set from, and checked against, the synced rig clock.
+            () => sp.GetService<ITimeSyncService>()))));
         builder.Services.AddSingleton<ITelescopeService>(sp => sp.GetRequiredService<TelescopeService>());
+        builder.Services.AddSingleton<IMountClockGate>(sp => sp.GetRequiredService<TelescopeService>());
         builder.Services.AddSingleton<IMountSpecSheetSource>(sp => sp.GetRequiredService<TelescopeService>());
         // §14e — fourth real device service: live focuser (position/temp) + Move. One singleton
         // backs BOTH the REST IFocuserService and the Sequencer's IFocuserMediator (§8.1), so the
@@ -516,7 +534,7 @@ public partial class Program {
         });
         builder.Services.AddSingleton<IGuiderService>(sp => sp.GetRequiredService<GuiderService>());
         // §45 — the polar-align engine: the guider supplies capture + the PA-session lease, the frame
-        // solver runs ASTAP with the guide optics, the telescope mediator drives the seed RA slew +
+        // solver runs ASTAP with the guide optics, the telescope service drives the seed's motor moves +
         // tracking hand-back, and the profile store supplies the site for the pole-error geometry.
         builder.Services.AddSingleton<IPolarAlignFrameSolver>(sp =>
             new PolarAlignFrameSolver(
@@ -536,12 +554,14 @@ public partial class Program {
                 sp.GetRequiredService<ILogger<PolarAlignService>>(),
                 sp.GetRequiredService<IPolarAlignFrameSolver>(),
                 sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+                sp.GetRequiredService<ITelescopeService>(), // #2066 — the IMountMotionControl seam: the same TelescopeService
                 sp.GetRequiredService<IProfileStore>(),
                 sp.GetService<IWsBroadcaster>(),
                 sp.GetRequiredService<IPolarAlignmentLog>(),
                 sp.GetRequiredService<IPolarAlignFrameFetcher>(),
                 mainCamera: sp.GetRequiredService<IPolarAlignMainCameraSolver>(),
-                aligner: sp.GetRequiredService<IPolarAlignerSource>()));
+                aligner: sp.GetRequiredService<IPolarAlignerSource>(),
+                mountClock: sp.GetRequiredService<IMountClockGate>()));
         // Setup → Smart Focus: the guide-camera focus loop (frames through the guider, measured here).
         builder.Services.AddSingleton<IGuideFrameDecoder, CfitsioGuideFrameDecoder>();
         builder.Services.AddSingleton<IGuideFocusService>(sp =>
@@ -654,6 +674,9 @@ public partial class Program {
 
         builder.Services.AddSingleton<IProfileStore>(sp =>
             new FileProfileStore(profileDir, sp.GetService<ILogger<FileProfileStore>>()));
+        // #2070 — the mounts whose position is unverified (a false zero after a power loss) stay so across a restart.
+        builder.Services.AddSingleton<IMountPoseStore>(sp =>
+            new FileMountPoseStore(profileDir, sp.GetService<ILogger<FileMountPoseStore>>()));
         // §63.4 — guider-twin deletes waiting for a connected, idle guider (survive a daemon restart).
         builder.Services.AddSingleton<IGuiderTwinDeleteStore>(sp =>
             new FileGuiderTwinDeleteStore(profileDir, sp.GetService<ILogger<FileGuiderTwinDeleteStore>>()));
@@ -729,7 +752,9 @@ public partial class Program {
             new TimeSyncService(
                 sp.GetRequiredService<ILogger<TimeSyncService>>(),
                 clockSetter: null,
-                profiles: sp.GetService<IProfileStore>()));
+                profiles: sp.GetService<IProfileStore>(),
+                // #2071 — a kernel the NTP daemon keeps synchronised is a trusted time source too.
+                kernelClock: new LinuxKernelClockSyncProbe()));
         builder.Services.AddSingleton<ITimeSyncService>(sp => sp.GetRequiredService<TimeSyncService>());
         // §37.4/§29 — the save-directory picker's server-side directory walk.
         builder.Services.AddSingleton<IStorageBrowseService, StorageBrowseService>();
@@ -943,9 +968,34 @@ public partial class Program {
                 sp.GetService<IRotatorService>(),
                 sp.GetService<IFlatDeviceService>(),
                 sp.GetService<INotificationService>(),
-                sp.GetService<ILogger<UnattendedShutdownService>>()));
+                sp.GetService<ILogger<UnattendedShutdownService>>(),
+                polarAlignResolver: () => sp.GetService<IPolarAlignService>()));
         // Hosted so a daemon shutdown cancels a pending countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<UnattendedShutdownService>());
+
+        // #1901 — End Night: the shared shutdown ladder, the root-owned poweroff helper (ADR 0017: the daemon only
+        // asks systemd to start the unit) and the action itself.
+        builder.Services.AddSingleton(sp => new ShutdownLadder(
+            sp.GetService<IProfileStore>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IGuiderMediator>(),
+            sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            sp.GetService<ICameraService>(),
+            sp.GetService<IFilterWheelService>(),
+            sp.GetService<IFocuserService>(),
+            sp.GetService<IRotatorService>(),
+            sp.GetService<IFlatDeviceService>(),
+            sp.GetService<ILogger<ShutdownLadder>>(),
+            // #2066 — resolved lazily (Polar Align is built after the ladder): ended before the Find Home and park.
+            () => sp.GetService<IPolarAlignService>()));
+        builder.Services.AddSingleton<IHostPoweroffStarter>(_ => new SystemctlHostPoweroffStarter(ServerUpdateService.RunAsync));
+        builder.Services.AddSingleton(sp => new EndNightService(
+            sp.GetRequiredService<ShutdownLadder>(),
+            sp.GetRequiredService<IHostPoweroffStarter>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<INotificationService>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetService<UnattendedShutdownService>(),
+            sp.GetService<ILogger<EndNightService>>()));
 
         // #1140 P2 — the sky-model calibration fit reads the catalog's frame rows and writes the profile.
         builder.Services.AddSingleton(sp => new SkyModelCalibrationService(
@@ -1026,7 +1076,10 @@ public partial class Program {
                 () => sp.GetService<ICenteringService>(),
                 sp.GetService<TargetRecenter>(),
                 // #1689 — an unsafe reaction turns dome following off (Func<>: registered later in this file).
-                () => sp.GetService<DomeFollower>()));
+                () => sp.GetService<DomeFollower>(),
+                // #2066 — the park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the poll timer starts with the daemon and a shutdown cancels a
         // pending auto-resume countdown.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<SafetyReactionService>());
@@ -1057,7 +1110,10 @@ public partial class Program {
                 // §42.5 — the reaction outcome lands on the fault-log row.
                 sp.GetService<IFaultLogService>(),
                 // §42.2 — the guider learns which runs a guider episode paused (resolved lazily).
-                () => sp.GetService<GuiderService>()));
+                () => sp.GetService<GuiderService>(),
+                // #2066 — the give-up park stops a running polar alignment and the Polar Aligner first.
+                () => sp.GetService<IPolarAlignService>(),
+                sp.GetService<IPolarAlignerService>()));
         // Hosted so the hub subscription is armed with the daemon and a shutdown cancels
         // any in-flight reconnect ladder.
         builder.Services.AddHostedService(sp => sp.GetRequiredService<FaultReactionService>());
@@ -1087,6 +1143,14 @@ public partial class Program {
         // §29 — background disk-space monitor: warns (diagnostic + OnDiskSpaceLow notification) when the image
         // save volume runs low so an unattended session doesn't silently die on a full disk. Warn-only.
         builder.Services.AddHostedService<DiskSpaceMonitor>();
+        // #2044 — flip off + "Stop before meridian": stops tracking and pauses runs that many minutes before the
+        // meridian; never slews or parks. Same sequencer-resolver pattern as the reaction engines.
+        builder.Services.AddHostedService(sp => new MeridianStopWatch(
+            sp.GetRequiredService<IProfileStore>(),
+            sp.GetRequiredService<OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator>(),
+            () => sp.GetService<ISequencerService>(),
+            sp.GetService<IWsBroadcaster>(),
+            sp.GetRequiredService<ILogger<MeridianStopWatch>>()));
         // §42.5 — fault-log retention sweep (#1145): drops fault rows older than storage.fault_log_retention_days
         // two minutes after start, then once a day. 0 keeps everything.
         builder.Services.AddHostedService<FaultLogRetentionService>();
@@ -1296,6 +1360,8 @@ public partial class Program {
         builder.Services.AddSingleton<FilterOffsetCalibrationService>();
         builder.Services.AddSingleton<SequenceBodyDeserializer>();
 
+        overrideServices?.Invoke(builder.Services);
+
         var app = builder.Build();
 
         // #1174 — the ported device layers' Notifier toasts land in the §46 inbox from here on.
@@ -1366,6 +1432,7 @@ public partial class Program {
         app.MapDiagnosticsEndpoints();
         app.MapFaultsEndpoints(); // §42.5 — persisted fault history
         app.MapPreflightEndpoints(); // §58.14 — pre-sleep checklist
+        app.MapEndNightEndpoints(); // #1901 — End Night
         app.MapPlanningEndpoints(); // #1140 P2 — sky-model calibration store
 
         // Phase 9 endpoint groups (501 stubs except /api/v1/ws/catalog which is
@@ -1383,6 +1450,9 @@ public partial class Program {
         // (in-memory store); other sections follow as 12h.6b-N adds DTOs +
         // section-specific endpoint pairs on top of the same IProfileStore.
         app.MapProfileEndpoints();
+        // #1807 — a section the daemon writes itself (time sync, plate solve, a connect-time fill, the flip
+        // executor, the guider, ...) publishes profile.updated too, so a client reloads it before its next Save.
+        app.PublishDaemonProfileWrites();
 
         // §37/§30 multi-profile management — CRUD over the known-profiles set.
         app.MapProfilesEndpoints();

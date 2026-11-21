@@ -11,10 +11,11 @@ import '../../../state/focus/autofocus_step_size_state.dart';
 import '../../../state/settings/advanced_settings_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/settings_nav.dart';
+import '../../../state/simple_mode_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -28,8 +29,6 @@ class EquipmentFocuserPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(focuserProvider);
     final notifier = ref.read(focuserProvider.notifier);
 
@@ -49,12 +48,7 @@ class EquipmentFocuserPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FocuserBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.focuser),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.focuser, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.focuser),
         const SettingsSectionHeader('Autofocus'),
         // §59 — trigger one V-curve sweep with the profile's autofocus settings.
         // Runs as a daemon background job; the row polls it to a terminal state.
@@ -66,7 +60,9 @@ class EquipmentFocuserPanel extends ConsumerWidget {
         // #1544: the step size the next sweep would use, read beside the
         // focuser it belongs to; it is edited, with its other inputs, in the
         // Autofocus panel only.
-        if (ref.watch(advancedSettingsProvider).value ?? true)
+        // #2036: Advanced Mode has no toggle and always shows it.
+        if (!ref.watch(simpleModeActiveProvider) ||
+            (ref.watch(advancedSettingsProvider).value ?? true))
           if (ref.watch(autofocusStepSizeProvider).value case final derived?)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),

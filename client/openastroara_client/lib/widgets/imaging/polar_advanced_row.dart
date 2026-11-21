@@ -5,15 +5,17 @@ import '../../l10n/l10n.dart';
 import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../state/profile_management_state.dart';
 import '../../state/settings/loaded_section.dart';
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
 import '../help_icon.dart';
 import '../settings/section_load_state.dart';
 
-/// #1736 The Start card's collapsed Advanced row: the routine's four knobs
-/// (`use_home`, `check_step_deg`, `coarse_exposure_seconds`,
-/// `seed_rotation_deg`), edited through the same module as the Settings panel
+/// #1736 The Start card's collapsed Advanced row: the routine's three knobs
+/// (`check_step_deg`, `coarse_exposure_seconds`, `seed_rotation_deg`; #2048
+/// retired `use_home`: the routine never sends the mount Home), edited through the same module as the Settings panel
 /// ([polarAlignSettingsProvider], ADR 0013 rule 3): nothing shows or saves
 /// until the rig's copy is loaded, each edit saves at once, a failed save puts
 /// the field back, and a value outside the range is refused in the field.
@@ -28,9 +30,16 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
   bool _open = false;
   String? _saveError;
 
-  void _retry() => ref.invalidate(polarAlignSettingsProvider);
+  void _retry() {
+    final api = ref.read(profileApiProvider);
+    if (api != null) ref.read(polarAlignSettingsProvider.notifier).load(api);
+  }
 
-  Future<void> _save(PolarAlignSettings next) async {
+  /// [change] on the rig's copy as it is when the edit lands (ADR 0015); a
+  /// 412 reloads the rig's copy (this row has no Reload of its own).
+  Future<void> _save(
+    PolarAlignSettings Function(PolarAlignSettings) change,
+  ) async {
     final l10n = context.l10n;
     setState(() => _saveError = null);
     // Through the routine's action module (ADR 0013 rule 3): busy while the
@@ -39,12 +48,17 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
     await ref
         .read(polarAlignActionProvider.notifier)
         .run(
-          (_) => ref.read(polarAlignSettingsProvider.notifier).save(next),
+          (_) => ref
+              .read(polarAlignSettingsProvider.notifier)
+              .changeAndSave(change),
           describe: (e) {
             if (mounted) {
               setState(
                 () => _saveError = l10n.polarAdvancedSaveFailed(
-                  friendlyError(l10n, e, action: l10n.polarActionSave),
+                  e is SectionNotLoadedException ||
+                          e is SectionConflictException
+                      ? e.toString()
+                      : friendlyError(l10n, e, action: l10n.polarActionSave),
                 ),
               );
             }
@@ -111,10 +125,7 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
           ),
           if (_open)
             if (!loaded)
-              SectionNotLoaded(
-                section: LoadedSection(lastFailure: settings.error),
-                onRetry: _retry,
-              )
+              SectionNotLoaded(section: settings, onRetry: _retry)
             else
               _knobs(l10n, s),
         ],
@@ -124,7 +135,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
 
   Widget _knobs(AppLocalizations l10n, PolarAlignSettings s) {
     final fields = [
-      _homeField(l10n, s),
       _numberField(
         const Key('polar-advanced-seed'),
         l10n.polarKnobTurn,
@@ -200,34 +210,6 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
     ],
   );
 
-  Widget _homeField(AppLocalizations l10n, PolarAlignSettings s) => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _label(l10n.polarKnobUseHome, 'img.polar.use_home'),
-      Row(
-        children: [
-          Semantics(
-            label: l10n.polarKnobUseHome,
-            child: Switch(
-              key: const Key('polar-advanced-use-home'),
-              value: s.useHome,
-              onChanged: (v) => _save(s.copyWith(useHome: v)),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              s.useHome ? l10n.polarKnobUseHomeOn : l10n.polarKnobUseHomeOff,
-              style: const TextStyle(
-                fontSize: 12,
-                color: AraColors.textSecondary,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ],
-  );
-
   Widget _numberField(
     Key key,
     String label,
@@ -258,7 +240,7 @@ class _PolarAdvancedRowState extends ConsumerState<PolarAdvancedRow> {
               );
             }
             final now = ref.read(polarAlignSettingsProvider).value ?? current;
-            if (v != read(now)) _save(apply(now, v));
+            if (v != read(now)) _save((x) => apply(x, v));
             return null;
           },
         ),

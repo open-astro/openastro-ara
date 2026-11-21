@@ -14,6 +14,7 @@
     { "name": "TelescopeSlewStarted", "type": "telescope.slew_started" },
     { "name": "TelescopeSlewComplete", "type": "telescope.slew_complete" },
     { "name": "TelescopeSlewAborted", "type": "telescope.slew_aborted" },
+    { "name": "TelescopeLimitReached", "type": "telescope.limit_reached", "payload": [ { "field": "limit", "type": "string", "nullable": false }, { "field": "minutes", "type": "integer", "nullable": false }, { "field": "tracking_stopped", "type": "boolean", "nullable": false }, { "field": "runs_paused", "type": "integer", "nullable": false }, { "field": "detail", "type": "string", "nullable": false } ] },
     { "name": "GuiderStep", "type": "guider.step" },
     { "name": "GuiderEvent", "type": "guider.event" },
     { "name": "GuiderPaResidual", "type": "guider.pa_residual" },
@@ -29,9 +30,9 @@
     { "name": "PolarAlignPaused", "type": "polar_align.paused" },
     { "name": "PolarAlignError", "type": "polar_align.error" },
     { "name": "PolarAlignStage", "type": "polar_align.stage" },
-    { "name": "PolarAlignNeedsHome", "type": "polar_align.needs_home" },
     { "name": "PolarAlignChecked", "type": "polar_align.checked" },
     { "name": "PolarAlignCorrection", "type": "polar_align.correction" },
+    { "name": "PolarAlignHandTurn", "type": "polar_align.hand_turn" },
     { "name": "AutofocusCollimationVerdict", "type": "autofocus.collimation_verdict" },
     { "name": "AutofocusStarted", "type": "autofocus.started" },
     { "name": "AutofocusShotComplete", "type": "autofocus.shot_complete" },
@@ -93,6 +94,7 @@
     { "name": "SafetyUnsafe", "type": "safety.unsafe" },
     { "name": "SafetySafe", "type": "safety.safe" },
     { "name": "SafetyActionTaken", "type": "safety.action_taken" },
-    { "name": "SafetyEmergencyStop", "type": "safety.emergency_stop" }
+    { "name": "SafetyEmergencyStop", "type": "safety.emergency_stop" },
+    { "name": "EndNightProgress", "type": "end_night.progress", "payload": [ { "field": "run_id", "type": "string", "nullable": false }, { "field": "state", "type": "string", "nullable": false }, { "field": "step", "type": "string", "nullable": true }, { "field": "step_state", "type": "string", "nullable": true }, { "field": "detail", "type": "string", "nullable": true }, { "field": "cancellable", "type": "boolean", "nullable": false } ] }
   ]
 }

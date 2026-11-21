@@ -205,7 +205,7 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
 
         // --no-block: the oneshot restarts THIS process part-way through, so a blocking start
         // would never return. The result file is what reports the outcome (GetStatusAsync).
-        var (exitCode, output) = await run("systemctl", ["start", "--no-block", $"openastroara-update@{id}.service"], ct)
+        var (exitCode, output) = await run("systemctl", [Systemctl.NoAskPassword, "start", "--no-block", $"openastroara-update@{id}.service"], ct)
             .ConfigureAwait(false);
         if (exitCode != 0) {
             TryDelete(requestPath);
@@ -360,7 +360,7 @@ public sealed partial class ServerUpdateService : IServerUpdateService, IDisposa
 
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Probing dpkg/systemctl is best-effort: a missing binary must become a typed refusal, never crash the request.")]
-    private static async Task<(int ExitCode, string Output)> RunAsync(string file, string[] args, CancellationToken ct) {
+    internal static async Task<(int ExitCode, string Output)> RunAsync(string file, string[] args, CancellationToken ct) {
         try {
             var info = new ProcessStartInfo(file) {
                 UseShellExecute = false,

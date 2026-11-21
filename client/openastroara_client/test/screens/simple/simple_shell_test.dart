@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show ImageFilter;
 
+import 'package:dio/dio.dart' show DioException, RequestOptions, Response;
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:openastroara/models/discovered_device.dart';
@@ -18,7 +20,9 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/screens/simple/simple_rig_storage.dart';
+import 'package:openastroara/app_version.dart' show appVersionProvider;
 import 'package:openastroara/screens/album/sky_album_screen.dart';
 import 'package:openastroara/screens/stats/stats_dashboard_screen.dart';
 import 'package:openastroara/state/album/album_art.dart';
@@ -59,6 +63,7 @@ import 'package:openastroara/models/bahtinov_focus.dart';
 import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/models/filter_offset_calibration.dart';
 import 'package:openastroara/state/focus/filter_offset_calibration_state.dart';
+import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/guiding_assistant.dart';
@@ -83,10 +88,10 @@ import 'package:openastroara/services/storage_devices_api.dart';
 import 'package:openastroara/state/stats/server_internal_state_state.dart';
 import 'package:openastroara/screens/app_shell.dart';
 import 'package:openastroara/models/polar_align.dart';
-import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/screens/simple/simple_focus_panel.dart';
 import 'package:openastroara/screens/simple/simple_guide_panel.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
@@ -162,6 +167,9 @@ import 'package:openastroara/widgets/night_hotkey.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart' show planningSettingsBootstrapProvider;
 import 'package:openastroara/widgets/support/bug_report_card.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/polar_align_section.dart';
 
 /// The session's rigs, without storage.
 class _SavedRigs extends SavedServersNotifier {
@@ -243,9 +251,12 @@ class _SkyReady extends PlanetariumReadyNotifier {
 /// button and the grid, as on a phone held sideways (#1911).
 const _gridWindow = Size(1024, 590);
 
+final _en = lookupAppLocalizations(const Locale('en'));
+
 Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     {List<GuideStep> steps = const [], AraServer? server, FrameHistogram? histogram,
-    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true}) async {
+    ServerInternalState? internal, StorageSpace? storage, ProfileList? profiles, SimpleRun? plan, SequenceRunStateInfo? runState, bool queueing = false, bool manualAlarm = false, bool feature = false, bool pier = false, bool linkUp = false, List<Override> gear = const [], DaemonVersions? versions, List<String>? starDatabases, Locale? locale, SimpleModePrefsService? modePrefs, TargetPlatform platform = TargetPlatform.linux, bool skyReady = true, bool rigOptics = true,
+    SiteSettings? rigSite = const SiteSettings(), Object? siteRefuse, FakePolarAlignSection? polar, bool rigPolar = true}) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
@@ -261,6 +272,12 @@ Future<ProviderContainer> _pump(WidgetTester tester, Size size,
     // The Rig setup reads the profile once the link is up: no network either. The #1562
     // group sets the facts itself; rig_setup_state_test covers the reads.
     rigSetupHydratedProvider.overrideWith((ref) async => false),
+    // The profile's optics as the rig's copy (ADR 0015): Rig shows its telescope rows.
+    if (rigOptics) opticsSettingsProvider.overrideWith(_RigOptics.new),
+    // The profile's site as the rig's copy (ADR 0015), saved with no HTTP.
+    if (rigSite != null) siteSettingsProvider.overrideWith(() => _RigSite(rigSite, refuse: siteRefuse)),
+    // The profile's polar-align section as the rig's copy (ADR 0015), with no HTTP.
+    if (rigPolar) polarAlignSettingsProvider.overrideWith(() => polar ?? FakePolarAlignSection(loaded: true)),
     ...gear,
     if (versions != null) daemonVersionsProvider.overrideWith((ref) async => versions),
     if (starDatabases != null)
@@ -338,6 +355,15 @@ class _Camera extends CameraStatusNotifier with _Calls<CameraStatus> {
   void report(String runtime, {double? pct}) => state = AsyncData(CameraStatus.fromJson({
         ..._wire('ASI2600MM', state0),
         'runtime': {'state': runtime, 'exposure_progress_pct': ?pct},
+      }));
+}
+
+/// #2076 — a camera whose cooler the daemon switched on but which has no 12 V.
+class _UnpoweredCooler extends _Camera {
+  _UnpoweredCooler() : super(EquipmentConnectionState.connected);
+  void notResponding(bool value) => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('Uranus-C Pro', state0),
+        'runtime': {'state': 'idle', 'cooler_on': false, 'cooler_not_responding': value},
       }));
 }
 
@@ -456,7 +482,8 @@ class _PoliciesApi extends ProfileApi {
   _PoliciesApi(this.policies) : super(const AraServer(hostname: 'test', port: 1));
   final SafetyPolicies? policies;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => policies ?? (throw StateError('unreachable'));
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
+      (value: policies ?? (throw StateError('unreachable')), etag: '"v1"');
 }
 
 /// Fails its first safety-policies read, then answers with the weather on.
@@ -464,9 +491,30 @@ class _FlakyPoliciesApi extends ProfileApi {
   _FlakyPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
   int calls = 0;
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async {
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
     if (++calls == 1) throw StateError('unreachable');
-    return const SafetyPolicies(weatherTriggersEnabled: true);
+    return (value: const SafetyPolicies(weatherTriggersEnabled: true), etag: '"v1"');
+  }
+}
+
+/// The rig's copy, already in with an unsaved edit (Unattended running).
+class _EditedPolicies extends SafetyPoliciesNotifier {
+  @override
+  LoadedSection<SafetyPolicies> build() => const LoadedSection(
+    value: SafetyPolicies(weatherTriggersEnabled: true, meridianPauseMin: 12),
+    source: SectionSource.rig,
+    etag: '"v1"',
+  );
+}
+
+/// Counts its safety-policies reads; answers the class values.
+class _CountingPoliciesApi extends ProfileApi {
+  _CountingPoliciesApi() : super(const AraServer(hostname: 'test', port: 1));
+  int calls = 0;
+  @override
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async {
+    calls++;
+    return (value: const SafetyPolicies(), etag: '"v2"');
   }
 }
 
@@ -690,23 +738,16 @@ class _PolarAlignerDown extends _PolarAligner {
   Future<PolarAligner?> get() async => throw StateError('The rig did not answer.');
 }
 
-/// The profile's polar-align section: [puts] records each save.
+/// The polar-align routine on a rig: none runs. (Its profile section is
+/// [FakePolarAlignSection], ADR 0015.)
 class _PolarProfile implements PolarAlignClient {
-  PolarAlignSettings settings = const PolarAlignSettings(exposureSeconds: 4, polarAlignerAuto: true);
-  final puts = <Map<String, dynamic>>[];
   @override
-  Future<PolarAlignSettings> getSettings() async => settings;
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    puts.add(next.toJson());
-    return settings = next;
-  }
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async {}
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -727,15 +768,27 @@ class _PolarRun extends PolarAlignLiveNotifier {
 
 /// A connected guider in [runtime], with a calibration leg and an RMS; [at] moves it on.
 class _GuiderAt extends GuiderStatusNotifier {
-  _GuiderAt(this.runtime);
+  _GuiderAt(this.runtime, {this.target = 25});
   final String runtime;
-  static GuiderStatus _wire(String r) => GuiderStatus.fromJson({
-        'device_id': 'g', 'name': 'PHD2', 'state': 'connected',
-        'runtime': {'state': r, 'calibration_direction': 'West', 'calibration_step': 3, 'rms_total_arcsec': 0.62},
-      });
+
+  /// The guider's calibration distance in pixels; null is a guider that reports none (#1895).
+  final num? target;
+  static GuiderStatus _wire(String r, num? target) => GuiderStatus.fromJson({
+    'device_id': 'g',
+    'name': 'PHD2',
+    'state': 'connected',
+    'runtime': {
+      'state': r,
+      'calibration_direction': 'West',
+      'calibration_step': 3,
+      'calibration_distance_px': 11.94,
+      'calibration_target_px': target,
+      'rms_total_arcsec': 0.62,
+    },
+  });
   @override
-  Future<GuiderStatus?> build() async => _wire(runtime);
-  void at(String r) => state = AsyncData(_wire(r));
+  Future<GuiderStatus?> build() async => _wire(runtime, target);
+  void at(String r) => state = AsyncData(_wire(r, target));
 
   /// What the rig answers on the next read.
   late String rig = runtime;
@@ -743,7 +796,7 @@ class _GuiderAt extends GuiderStatusNotifier {
   @override
   Future<void> refresh([GuiderClient? client]) async {
     refreshes++;
-    state = AsyncData(_wire(rig));
+    state = AsyncData(_wire(rig, target));
   }
 }
 
@@ -771,30 +824,36 @@ class _GuiderConnecting extends _GuiderCalls {
       GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connecting'});
 }
 
-/// A guider mid-connect that [up] brings to connected.
-class _GuiderComingUp extends _GuiderConnecting {
-  void up() => state = AsyncData(GuiderStatus.fromJson(const {'device_id': 'g', 'name': 'PHD2', 'state': 'connected'}));
-}
 
-/// The rig's guide optics: unset for the first [unsetReads] reads, then filled (the rig fills them a
-/// few round trips after the guider connects).
+/// The rig's guider section, tagged (ADR 0015): [fill] is the rig filling the
+/// guide optics from the guider once it connects, which moves the tag on.
 class _GuideOpticsApi extends ProfileApi {
-  _GuideOpticsApi(this.unsetReads) : super(const AraServer(hostname: 'test', port: 1));
-  int unsetReads;
+  _GuideOpticsApi([this.phd2 = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  Phd2Settings phd2;
+  int version = 1;
   int reads = 0;
+  void fill() {
+    phd2 = phd2.copyWith(guideFocalLength: 128, guidePixelSize: 3.75);
+    version++;
+  }
   // The Storage block loads its section when Rig opens; no network here.
   @override
   Future<({StorageSettings value, String? etag})> getStorageSection() async =>
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
+  // Live sync refreshes the offline cache after a reload; no network here.
   @override
-  Future<Phd2Settings> getPhd2Settings() async => ++reads > unsetReads
-      ? const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)
-      : const Phd2Settings();
+  Future<ProfileList> listProfiles() async => throw StateError('unreachable');
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async {
+    reads++;
+    return (value: phd2, etag: '"v$version"');
+  }
+  @override
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: '"v1"');
 }
 
 /// A rig that holds the permanent pier on and refuses to change it.
@@ -806,32 +865,46 @@ class _PierRefusedApi extends ProfileApi {
       throw StateError('unreachable');
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async =>
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async =>
       throw StateError('unreachable');
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(permanentPier: true);
-  @override
-  Future<SiteSettings> putSiteSettings(SiteSettings value) async =>
-      throw StateError('The rig refused the change.');
-  @override
-  Future<Phd2Settings> getPhd2Settings() async => const Phd2Settings();
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const Phd2Settings(), etag: '"v1"');
 }
 
-/// The rig's guider section as a store: reads return it, saves replace it.
+/// The rig's guider section as a tagged store: reads return it, a save with
+/// the tag it holds replaces it, one with an older tag is refused (412).
 class _Phd2StoreApi extends ProfileApi {
-  _Phd2StoreApi() : super(const AraServer(hostname: 'test', port: 1));
-  Phd2Settings stored = const Phd2Settings();
+  _Phd2StoreApi([this.stored = const Phd2Settings()]) : super(const AraServer(hostname: 'test', port: 1));
+  Phd2Settings stored;
+  int version = 1;
   final saved = <Phd2Settings>[];
+  /// The rig wrote its copy itself (a fill from the guider): the tag moves on.
+  void daemonWrote(Phd2Settings s) {
+    stored = s;
+    version++;
+  }
+  // The Storage block and the status pill load their sections; no network here.
   @override
-  Future<Phd2Settings> getPhd2Settings() async => stored;
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      throw StateError('unreachable');
   @override
-  Future<Phd2Settings> putPhd2Settings(Phd2Settings s) async {
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
+  @override
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async => (value: stored, etag: '"v$version"');
+  @override
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(Phd2Settings s, {String? ifMatch}) async {
+    if (ifMatch != null && ifMatch != '"v$version"') {
+      final req = RequestOptions(path: '/api/v1/profile/phd2');
+      throw DioException(requestOptions: req, response: Response<void>(requestOptions: req, statusCode: 412));
+    }
     saved.add(s);
-    return stored = s;
+    version++;
+    return (value: stored = s, etag: '"v$version"');
   }
   @override
-  Future<OpticsSettings> getOptics() async => const OpticsSettings();
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      (value: const OpticsSettings(), etag: '"v1"');
 }
 
 /// The rig's answer once the guider is disconnected: no guider (404).
@@ -929,6 +1002,48 @@ class _ParkingMount extends MountNotifier {
   Future<bool> park() async => true;
 }
 
+/// The profile's optics, in from the rig from the start (no load, no network).
+class _RigOptics extends OpticsSettingsNotifier {
+  @override
+  LoadedSection<OpticsSettings> build() =>
+      const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+}
+
+/// The rig's site: loaded from the start, every save that reached it in
+/// [puts]; [refuse] fails each save instead (nothing written).
+class _RigSite extends SiteSettingsNotifier {
+  _RigSite(this.site, {this.refuse});
+  SiteSettings site;
+  final Object? refuse;
+  final puts = <SiteSettings>[];
+  @override
+  LoadedSection<SiteSettings> build() => LoadedSection(value: site, source: SectionSource.rig, etag: '"v1"');
+  @override
+  Future<Tagged<SiteSettings>> fetch(ProfileApi api) async => (value: site, etag: '"v${puts.length + 1}"');
+  @override
+  Future<Tagged<SiteSettings>> send(ProfileApi api, SiteSettings value, String? etag) async {
+    if (refuse case final e?) throw e;
+    puts.add(value);
+    return (value: site = value, etag: '"v${puts.length + 1}"');
+  }
+}
+
+/// A rig whose site read fails ([fail]) or answers [site] (ADR 0015).
+class _SiteSection extends SiteSettingsNotifier {
+  _SiteSection(this.site);
+  SiteSettings site;
+  bool fail = true;
+  final puts = <SiteSettings>[];
+  @override
+  Future<Tagged<SiteSettings>> fetch(ProfileApi api) async =>
+      fail ? throw StateError('rig unreachable') : (value: site, etag: '"v1"');
+  @override
+  Future<Tagged<SiteSettings>> send(ProfileApi api, SiteSettings value, String? etag) async {
+    puts.add(value);
+    return (value: site = value, etag: '"v${puts.length + 1}"');
+  }
+}
+
 class _OpticsMount extends MountNotifier {
   _OpticsMount(this.caps);
   final Map<String, dynamic> caps;
@@ -938,18 +1053,62 @@ class _OpticsMount extends MountNotifier {
 }
 
 class _OpticsApi extends ProfileApi {
-  _OpticsApi(this.optics) : super(const AraServer(hostname: 'test', port: 1));
-  OpticsSettings optics;
+  _OpticsApi(this._optics) : super(const AraServer(hostname: 'test', port: 1));
+  OpticsSettings _optics;
+  int _version = 1;
+  OpticsSettings get optics => _optics;
+  /// A new copy on the rig: its tag moves, as the daemon's content hash does.
+  set optics(OpticsSettings v) {
+    _optics = v;
+    _version++;
+  }
+
+  String get _etag => '"v$_version"';
   final puts = <OpticsSettings>[];
   // The status pill loads the safety policies; no network here.
   @override
-  Future<SafetyPolicies> getSafetyPolicies() async => throw StateError('unreachable');
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() async => throw StateError('unreachable');
+  // The Storage block loads its section when Rig opens; no network here.
   @override
-  Future<OpticsSettings> getOptics() async => optics;
+  Future<({StorageSettings value, String? etag})> getStorageSection() async =>
+      throw StateError('unreachable');
+  // The guider settings load themselves when Rig opens; no network here.
   @override
-  Future<OpticsSettings> putOptics(OpticsSettings value) async {
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async =>
+      (value: const Phd2Settings(), etag: '"v1"');
+  /// The optics read fails, as against a rig that does not answer.
+  bool fail = false;
+  @override
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async =>
+      fail ? throw StateError('rig unreachable') : (value: optics, etag: _etag);
+  @override
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(OpticsSettings value, {String? ifMatch}) async {
     puts.add(value);
-    return optics = value;
+    optics = value;
+    return (value: value, etag: _etag);
+  }
+}
+
+/// #2041 — a main camera that connects when the test says, with its sensor.
+class _SensorCamera extends CameraStatusNotifier {
+  @override
+  Future<CameraStatus?> build() async =>
+      CameraStatus.fromJson(_wire('ASI2600MM', EquipmentConnectionState.disconnected));
+  void plugIn() => state = AsyncData(CameraStatus.fromJson({
+        ..._wire('ASI2600MM', EquipmentConnectionState.connected),
+        'capabilities': {'sensor_width': 6248, 'sensor_height': 4176, 'pixel_size_um': 3.76},
+      }));
+}
+
+/// #2041 — each optics read waits until the test answers it, so reads overlap.
+class _GatedOpticsApi extends _OpticsApi {
+  _GatedOpticsApi(super.optics);
+  final reads = <Completer<OpticsSettings>>[];
+  @override
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() async {
+    final read = Completer<OpticsSettings>();
+    reads.add(read);
+    return (value: await read.future, etag: _etag);
   }
 }
 
@@ -1710,10 +1869,9 @@ void main() {
   testWidgets('the P.A. chip stacks exposure over Loop/Single under the icon, never cut', (tester) async {
     tester.platformDispatcher.textScaleFactorTestValue = 0.5;
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
-    final container = await _pump(tester, const Size(1024, 768));
-    await container.read(polarAlignSettingsProvider.future);
-    await container.read(polarAlignSettingsProvider.notifier)
-        .save(const PolarAlignSettings(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single));
+    await _pump(tester, const Size(1024, 768),
+        polar: FakePolarAlignSection(
+            initial: rigPolarAlign.copyWith(exposureSeconds: 45, loopMode: PolarAlignLoopModes.single), loaded: true));
     await openMode(tester, 'polarAlign');
     final chip = find.byKey(const Key('simple-settings'));
     expect(find.descendant(of: chip, matching: find.byIcon(Icons.tune)), findsOneWidget);
@@ -2212,8 +2370,7 @@ void main() {
     final wheel = tester.widget<ListWheelScrollView>(find.byType(ListWheelScrollView));
     final tile = tester.widget<SimplePresetTile<Duration>>(find.byKey(const Key('simple-exposure')));
     wheel.onSelectedItemChanged!(tile.options.indexOf(const Duration(seconds: 10)));
-    await tester.ensureVisible(find.text('Done'));
-    await tester.tap(find.text('Done'));
+    await tester.tap(find.descendant(of: find.byKey(const Key('simple-exposure')), matching: find.byType(InkWell)));
     await tester.pumpAndSettle();
     expect(container.read(exposureControllerProvider).exposure, const Duration(seconds: 10));
     tester.widget<Slider>(find.byKey(const Key('simple-gain'))).onChangeEnd!(200);
@@ -2643,43 +2800,141 @@ void main() {
     expect(pill(), contains('Run autofocus'), reason: 'the Plan pill returns');
   });
 
-  testWidgets("a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
-      (tester) async {
-    await _pump(tester, const Size(1024, 768),
-        plan: const SimpleRun(sequenceId: 'seq-1', started: true, targets: [
-          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
-        ]),
+  testWidgets(
+    "a plan's Start guiding names the calibration leg on one pill (rig 2026-11-13, #1875 slice 3)",
+    (tester) async {
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        plan: const SimpleRun(
+          sequenceId: 'seq-1',
+          started: true,
+          targets: [
+            SimpleTarget(
+              name: 'M31',
+              steps: [
+                FilterPlanStep(
+                  filterName: 'L',
+                  exposureSeconds: 120,
+                  frameCount: 30,
+                ),
+              ],
+            ),
+          ],
+        ),
         runState: const SequenceRunStateInfo(
-            sequenceId: 'seq-1', state: SequenceRunState.running,
-            currentInstructionDescription: 'Start guiding · Guider - Calibrating'),
-        gear: [guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating'))]);
-    await tester.pump();
-    final pills = find.byKey(const Key('simple-status-pill'));
-    final text = tester
-        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
-        .map((t) => t.text.toPlainText())
-        .join('|');
-    expect(text, contains('Start guiding · Guider calibrating · West step 3'));
-    expect(pills, findsOneWidget, reason: 'the Plan pill says it; no second Guider pill');
-  });
+          sequenceId: 'seq-1',
+          state: SequenceRunState.running,
+          currentInstructionDescription: 'Start guiding · Guider - Calibrating',
+        ),
+        gear: [
+          guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating')),
+        ],
+      );
+      await tester.pump();
+      final pills = find.byKey(const Key('simple-status-pill'));
+      final text = tester
+          .widgetList<RichText>(
+            find.descendant(of: pills, matching: find.byType(RichText)),
+          )
+          .map((t) => t.text.toPlainText())
+          .join('|');
+      expect(
+        text,
+        contains(
+          'Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px',
+        ),
+      );
+      expect(
+        pills,
+        findsOneWidget,
+        reason: 'the Plan pill says it; no second Guider pill',
+      );
+      // Story 8 (#1895): the plan pill's focus reads the leg with its target; the live region does not announce each step.
+      expect(
+        tester.getSemantics(pills.first),
+        matchesSemantics(
+          label: 'Plan, Start guiding · Guider calibrating · West step 3 · 11.9 of 25 px',
+          isButton: true,
+          hasTapAction: true,
+        ),
+        reason: 'the full text is read on focus; each step is not announced',
+      );
+    },
+  );
+
+  testWidgets(
+    'the calibration pill says how far the leg has to go, and keeps today\'s text with no target (#1895)',
+    (tester) async {
+      String pill() => tester
+          .widgetList<RichText>(
+            find.descendant(
+              of: find.byType(SimpleStatusPill),
+              matching: find.byType(RichText),
+            ),
+          )
+          .map((t) => t.text.toPlainText())
+          .join(' ');
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [
+          guiderStatusProvider.overrideWith(() => _GuiderAt('calibrating')),
+        ],
+      );
+      await tester.pump();
+      expect(pill(), contains('Calibrating · West step 3 · 11.9 of 25 px'));
+      await tester.pumpWidget(const SizedBox());
+
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [
+          guiderStatusProvider.overrideWith(
+            () => _GuiderAt('calibrating', target: null),
+          ),
+        ],
+      );
+      await tester.pump();
+      expect(pill(), contains('Calibrating · West step 3 · 11.9 px'));
+      expect(pill(), isNot(contains(' of ')));
+    },
+  );
 
   testWidgets('the Guiding Assistant has its own pill with time left on its bar; the Done pill fades after 10 s '
       '(#1875 slice 3)', (tester) async {
     final guider = _GuiderAt('assistant');
     final ga = _AssistantRunning();
-    await _pump(tester, const Size(1024, 768),
-        gear: [guiderStatusProvider.overrideWith(() => guider), guidingAssistantProvider.overrideWith(() => ga)]);
+    await _pump(
+      tester,
+      const Size(1024, 768),
+      gear: [
+        guiderStatusProvider.overrideWith(() => guider),
+        guidingAssistantProvider.overrideWith(() => ga),
+      ],
+    );
     await tester.pump();
     await tester.pump();
     final pills = find.byKey(const Key('simple-status-pill'));
     String text() => tester
-        .widgetList<RichText>(find.descendant(of: pills, matching: find.byType(RichText)))
+        .widgetList<RichText>(
+          find.descendant(of: pills, matching: find.byType(RichText)),
+        )
         .map((t) => t.text.toPlainText())
         .join('|');
     expect(text(), contains('Guiding Assistant'));
     expect(text(), contains('01:30 left'));
-    expect(text(), isNot(contains('Guider')), reason: 'not the generic Guider pill');
-    final bar = tester.widget<LinearProgressIndicator>(find.descendant(of: pills, matching: find.byType(LinearProgressIndicator)));
+    expect(
+      text(),
+      isNot(contains('Guider')),
+      reason: 'not the generic Guider pill',
+    );
+    final bar = tester.widget<LinearProgressIndicator>(
+      find.descendant(
+        of: pills,
+        matching: find.byType(LinearProgressIndicator),
+      ),
+    );
     expect(bar.value, closeTo(0.25, 0.01));
     guider
       ..rig = 'stopped'
@@ -2688,10 +2943,18 @@ void main() {
     await tester.pump();
     expect(text(), contains('Done. 1 suggestion to apply.'));
     await tester.pump(const Duration(seconds: 5));
-    expect(text(), contains('Done. 1 suggestion to apply.'), reason: 'still there at 5 s');
+    expect(
+      text(),
+      contains('Done. 1 suggestion to apply.'),
+      reason: 'still there at 5 s',
+    );
     await tester.pump(const Duration(seconds: 6));
     await _letPillLeave(tester);
-    expect(text(), isNot(contains('Guiding Assistant')), reason: 'gone after 10 s');
+    expect(
+      text(),
+      isNot(contains('Guiding Assistant')),
+      reason: 'gone after 10 s',
+    );
   });
 
   testWidgets("a paused plan keeps its pill while an autofocus runs (#1884 audit)", (tester) async {
@@ -2965,24 +3228,58 @@ void main() {
     });
   });
 
-  testWidgets('the plan square sits beside the tab list, above Stop (no bottom row)', (tester) async {
-    await _pump(tester, const Size(1024, 768),
-        plan: const SimpleRun(sequenceId: 'seq-1', targets: [
-          SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
-        ]));
-    await openMode(tester, 'plan');
-    // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
-    await tester.tap(find.byKey(const Key('simple-settings')));
-    await tester.pump();
-    final square = tester.getRect(find.byKey(const Key('simple-run-tracker')));
-    // The tab list reaches down toward Stop, so the squares sit beside it (the shell's
-    // squaresBesideRail), from the first frame (no slide from the offer).
-    final rail = _panelOf(tester, find.byKey(const Key('simple-rail-tabs')));
-    expect(square.right, rail.left - kSimpleInset, reason: 'beside the tab list');
-    final stop = tester.getRect(find.byType(EmergencyStopButton));
-    expect(square.bottom, stop.top - kSimpleInset, reason: 'the bottom row is empty: just above Stop, not under it');
-    expect(find.descendant(of: find.byKey(const Key('simple-run-tracker')), matching: find.text('0 / 30')), findsOneWidget);
-  });
+  testWidgets(
+    'the plan square sits beside the tab list, in the corner (no bottom row)',
+    (tester) async {
+      await _pump(
+        tester,
+        const Size(1024, 768),
+        plan: const SimpleRun(
+          sequenceId: 'seq-1',
+          targets: [
+            SimpleTarget(
+              name: 'M31',
+              steps: [
+                FilterPlanStep(
+                  filterName: 'L',
+                  exposureSeconds: 120,
+                  frameCount: 30,
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+      await openMode(tester, 'plan');
+      // Picking Plan opens its sheet, which hides the plan squares: the chip puts it away.
+      await tester.tap(find.byKey(const Key('simple-settings')));
+      await tester.pump();
+      final square = tester.getRect(
+        find.byKey(const Key('simple-run-tracker')),
+      );
+      // The tab list reaches down toward Stop, so the squares sit beside it (the shell's
+      // squaresBesideRail), from the first frame (no slide from the offer).
+      final rail = _panelOf(tester, find.byKey(const Key('simple-rail-tabs')));
+      expect(
+        square.right,
+        rail.left - kSimpleInset,
+        reason: 'beside the tab list',
+      );
+      // Stop is the rail's foot (#1911): no block in the corner, so the square sits at the inset.
+      expect(
+        square.bottom,
+        768 - kSimpleInset,
+        reason: 'the bottom row is empty: the square hugs the corner',
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('simple-run-tracker')),
+          matching: find.text('0 / 30'),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
 
   // #1789: the plan squares belong to the shell, so every Screen shows them where Queue does.
   const squaresRun = SimpleRun(
@@ -3071,11 +3368,20 @@ void main() {
             isFalse,
             reason: '$mode: square $square, rail $rail',
           );
+          // Just above Stop's block; with Stop as the rail's foot (#1911),
+          // above the bottom row, at the inset.
+          final footed = find
+              .byKey(const Key('simple-rail-stop'))
+              .evaluate()
+              .isNotEmpty;
           final stop = tester.getRect(find.byType(EmergencyStopButton));
           expect(
             square.bottom,
-            closeTo(stop.top - kSimpleInset, 0.01),
-            reason: '$mode: still just above Stop',
+            closeTo(
+              footed ? size.height - kSimpleInset : stop.top - kSimpleInset,
+              0.01,
+            ),
+            reason: '$mode: still in the corner, clear of Stop',
           );
         }
       },
@@ -3434,10 +3740,12 @@ void main() {
 
   testWidgets('Rig sets the telescope with digit wheels and the site with this device\'s location, adjust wheels and '
       'an elevation stepper, saved to the profile; no text fields', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
-    c.read(opticsSettingsProvider.notifier)
-      ..setApertureMm(80)
-      ..setFocalLengthMm(480);
+    final optics = _OpticsApi(const OpticsSettings(apertureMm: 80, focalLengthMm: 480));
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(optics),
+    ]);
+    await tester.pump(); // the optics load themselves from the rig
     c.read(siteSettingsProvider.notifier)
       ..setLatitudeDeg(-37.2037)
       ..setLongitudeDeg(174.8824)
@@ -3464,7 +3772,8 @@ void main() {
     expect(tester.widget<CupertinoPicker>(find.byKey(const Key('simple-rig-aperture-wheel-0'))).useMagnifier, isTrue,
         reason: "iOS's own picker, the value under the band magnified");
     await roll('simple-rig-aperture-wheel-0', 2);
-    expect(c.read(opticsSettingsProvider).apertureMm, 82);
+    expect(c.read(opticsSettingsProvider).value!.apertureMm, 82);
+    expect(optics.puts.last.apertureMm, 82, reason: 'saved to the profile');
     await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-aperture')));
@@ -3476,7 +3785,8 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-rig-focal')));
     await tester.pumpAndSettle();
     await roll('simple-rig-focal-wheel-0', 1);
-    expect(c.read(opticsSettingsProvider).focalLengthMm, 1480);
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 1480);
+    expect(optics.puts.last.focalLengthMm, 1480);
 
     // Latitude: hemisphere, degrees, four decimals.
     await tester.ensureVisible(find.byKey(const Key('simple-rig-focal')));
@@ -3487,16 +3797,16 @@ void main() {
     await tester.tap(find.byKey(const Key('simple-rig-lat')));
     await tester.pumpAndSettle();
     await roll('simple-rig-lat-wheel-0', -1);
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2037, 1e-9), reason: 'S to N');
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(37.2037, 1e-9), reason: 'S to N');
     await roll('simple-rig-lat-wheel-6', 1);
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(37.2038, 1e-9));
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(37.2038, 1e-9));
 
     // Elevation: a tap is a metre; a hold runs.
     await tester.ensureVisible(find.byKey(const Key('simple-rig-elevation-up')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-elevation-up')));
     await tester.pump();
-    expect(c.read(siteSettingsProvider).elevationM, 72);
+    expect(c.read(siteSettingsProvider).value!.elevationM, 72);
     final hold = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-rig-elevation-up'))));
     await tester.pump(const Duration(milliseconds: 600));
     for (var i = 0; i < 20; i++) {
@@ -3504,7 +3814,7 @@ void main() {
     }
     await hold.up();
     await tester.pump();
-    expect(c.read(siteSettingsProvider).elevationM, greaterThan(90), reason: 'held: it runs, set on release');
+    expect(c.read(siteSettingsProvider).value!.elevationM, greaterThan(90), reason: 'held: it runs, set on release');
 
     expect(find.byKey(const Key('simple-rig-use-location')), findsOneWidget, reason: 'fill from this device');
   });
@@ -3514,6 +3824,8 @@ void main() {
     final c = await _pump(tester, const Size(1024, 768), gear: [
       timeSyncApiProvider.overrideWithValue(clock),
       clientGpsPrefsServiceProvider.overrideWithValue(_GpsPrefs()),
+      // A rig to save the site to (the site itself is the rig's copy, no HTTP).
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
     ]);
     c.read(siteSettingsProvider.notifier).setTimeZone('Europe/London');
     await _openSection(tester, 'Rig');
@@ -3524,10 +3836,14 @@ void main() {
     await tester.tap(button);
     await tester.pump(const Duration(seconds: 4)); // the fill waits up to 3 s on this computer's GPS setting
     await tester.pumpAndSettle();
-    final site = c.read(siteSettingsProvider);
+    final site = c.read(siteSettingsProvider).value!;
     expect((site.latitudeDeg, site.longitudeDeg, site.elevationM), (-37.2, 174.88, 71.0));
     expect(site.timeZone, 'Pacific/Auckland', reason: 'from the coordinates, like the full UI\'s GPS fill');
     expect(clock.pushed, hasLength(1), reason: "this device's clock goes to the rig");
+    // The rig's other reads fail here and retry: end them with the container.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Search finds Simple Mode\'s settings, modes and sky objects and opens each inside Simple Mode',
@@ -3603,6 +3919,50 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     c.dispose();
     await tester.pump(const Duration(seconds: 5));
+  });
+
+  // #2093: the Ara server's version row in Simple Mode carries the same
+  // update-both warning as the About panel and the first-run screen.
+  testWidgets('Simple Mode warns under the Ara server version when it is from another release line (#2093)',
+      (tester) async {
+    const warning = 'Server 1.1.0 and app 1.0.0-beta.2 differ; update both from the same release.';
+    Future<void> check(String daemon, {required bool warns}) async {
+      final c = await _pump(tester, const Size(1470, 854),
+          server: const AraServer(hostname: '10.0.0.5', port: 5555, mdnsName: 'astro'),
+          versions: DaemonVersions.fromJson({'daemon_version': daemon}),
+          gear: [appVersionProvider.overrideWithValue('1.0.0-beta.2')]);
+      // The Ara sheet, from the mark.
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      await tester.pump();
+      final sheet = find.byKey(const Key('simple-ara-sheet'));
+      expect(find.descendant(of: sheet, matching: find.text(daemon)), findsOneWidget, reason: daemon);
+      expect(find.descendant(of: sheet, matching: find.text(warning)), warns ? findsOneWidget : findsNothing,
+          reason: 'Ara sheet, server $daemon');
+      expect(find.descendant(of: sheet, matching: find.byKey(const Key('version-mismatch-warning'))),
+          warns ? findsOneWidget : findsNothing, reason: 'Ara sheet, server $daemon');
+      await tester.tap(find.byKey(const Key('simple-ara-mark')));
+      await tester.pump();
+      // Settings → Rig, the Versions block.
+      await _openSection(tester, 'Rig');
+      final menu = find.byKey(const Key('simple-menu'));
+      expect(find.descendant(of: menu, matching: find.byKey(const Key('version-mismatch-warning'))),
+          warns ? findsOneWidget : findsNothing, reason: 'Rig versions, server $daemon');
+      if (warns) {
+        // Right under the version table, not somewhere else on the page.
+        final table = tester.getRect(find.byKey(const Key('simple-versions')));
+        final line = tester.getRect(find.descendant(of: menu, matching: find.text(warning)));
+        expect(line.top, greaterThanOrEqualTo(table.bottom));
+        expect(line.top - table.bottom, lessThan(24));
+      }
+      await tester.pumpWidget(const SizedBox());
+      c.dispose();
+      await tester.pump(const Duration(seconds: 5));
+    }
+
+    await check('1.1.0', warns: true);
+    await check('1.0.3', warns: false);
+    await check('1.0.0.0', warns: false);
   });
 
   testWidgets("the running-plan warning wraps to the Ara sheet's width instead of widening it (user, 2026-11-11)",
@@ -3760,7 +4120,10 @@ void main() {
 
   testWidgets('on launch Rig shows the profile\'s site and telescope, not empty fields', (tester) async {
     var loaded = 0;
-    await _pump(tester, const Size(1024, 768), gear: [
+    await _pump(tester, const Size(1024, 768), rigOptics: false,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      // The optics load themselves from the rig (ADR 0015).
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings(apertureMm: 80))),
       planningSettingsBootstrapProvider.overrideWith((ref) async {
         loaded++;
         await Future<void>.value(); // like the real fetch: no writes during the provider's build
@@ -3768,7 +4131,6 @@ void main() {
           ..setLatitudeDeg(-37.2)
           ..setLongitudeDeg(174.9)
           ..setElevationM(71);
-        ref.read(opticsSettingsProvider.notifier).setApertureMm(80);
       }),
     ]);
     await tester.pump();
@@ -3779,6 +4141,27 @@ void main() {
     expect(value('lng', '174.9000° E'), findsOneWidget);
     expect(find.text('71 m'), findsOneWidget);
     expect(value('aperture', '80 mm'), findsOneWidget);
+  });
+
+  testWidgets('#2041 Rig shows the main camera\'s sensor and pixel size read only, Not set until the camera fills them',
+      (tester) async {
+    final c = await _pump(tester, const Size(1024, 768));
+    await _openSection(tester, 'Rig');
+    Finder value(String id, String text) => find.descendant(of: find.byKey(Key('simple-rig-$id')), matching: find.text(text));
+    expect(value('sensor', 'Not set'), findsOneWidget);
+    expect(value('pixel', 'Not set'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsOneWidget);
+    c.read(opticsSettingsProvider.notifier)
+      ..setSensorWidthPx(6248)
+      ..setSensorHeightPx(4176)
+      ..setPixelSizeUm(3.76);
+    await tester.pump();
+    expect(value('sensor', '6248 × 4176 px'), findsOneWidget);
+    expect(value('pixel', '3.76 µm'), findsOneWidget);
+    expect(find.text('Filled in when the main camera connects'), findsNothing, reason: 'filled: no longer to come');
+    for (final id in ['sensor', 'pixel']) {
+      expect(tester.widget<TextButton>(find.byKey(Key('simple-rig-$id'))).onPressed, isNull, reason: '$id is read only');
+    }
   });
 
   testWidgets('Rig\'s Name and Profile read like its other rows, a 44 pt row each', (tester) async {
@@ -3792,29 +4175,238 @@ void main() {
     expect(tester.getCenter(find.text('Profile')).dy - tester.getCenter(find.text('Name')).dy, closeTo(44, 4));
   });
 
-  testWidgets('a telescope the profile doesn\'t know comes from the mount, saved to the profile; a known one stays',
-      (tester) async {
-    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600));
-    final c = await _pump(tester, const Size(1024, 768), gear: [
+  testWidgets('#2041 a mount or camera connect reads the optics the rig filled; the app writes none', (tester) async {
+    // The rig filled the aperture from the mount (#1994); the focal length was the profile's.
+    final api = _OpticsApi(const OpticsSettings(focalLengthMm: 600, apertureMm: 80));
+    final camera = _SensorCamera();
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 480, 'aperture_diameter_mm': 80})),
+      cameraStatusProvider.overrideWith(() => camera),
     ]);
     await tester.pump();
     await tester.pump();
-    expect(api.puts.single.apertureMm, 80, reason: 'unknown: the mount\'s, saved to the profile');
-    expect(api.puts.single.focalLengthMm, 600, reason: 'the profile\'s own value wins');
-    expect(c.read(opticsSettingsProvider).apertureMm, 80);
+    expect(c.read(opticsSettingsProvider).value!.apertureMm, 80);
+    expect(c.read(opticsSettingsProvider).value!.focalLengthMm, 600);
+    // The camera connects: the rig takes its sensor, and the shell reads it.
+    api.optics = api.optics.copyWith(sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76);
+    camera.plugIn();
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(opticsSettingsProvider).value!.isConfigured, isTrue);
+    expect(api.puts, isEmpty);
+  });
+
+  testWidgets('the telescope rows wait for the profile from the rig: no wheel, and nothing is sent (ADR 0015)',
+      (tester) async {
+    final optics = _OpticsApi(const OpticsSettings(apertureMm: 80))..fail = true;
+    await _pump(tester, const Size(1024, 768), rigOptics: false,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(optics),
+    ]);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    expect(find.byKey(const Key('simple-rig-aperture')), findsNothing, reason: 'no client default shows');
+    expect(find.byKey(const Key('simple-rig-focal')), findsNothing);
+    // #2041 — nor a sensor or pixel size of 0 read as the rig's.
+    expect(find.byKey(const Key('simple-rig-sensor')), findsNothing);
+    expect(find.byKey(const Key('simple-rig-pixel')), findsNothing);
+    expect(find.textContaining('Not loaded'), findsWidgets);
+    optics.fail = false;
+    await tester.tap(find.byKey(const Key('section-retry')).first);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-aperture')), matching: find.text('80 mm')), findsOneWidget,
+        reason: 'Retry loads the rig\'s copy');
+    expect(optics.puts, isEmpty);
+  });
+
+  testWidgets('a telescope wheel on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
+      (tester) async {
+    final optics = _OpticsApi(const OpticsSettings())..fail = true;
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(optics),
+    ]);
+    await tester.pump();
+    c.read(opticsSettingsProvider.notifier).seed(const OpticsSettings(apertureMm: 80));
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    expect(optics.puts, isEmpty);
+    expect(c.read(opticsSettingsProvider).value!.apertureMm, 80, reason: 'the cache copy is never edited');
+    expect(find.textContaining('Settings not loaded from the rig'), findsWidgets);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('the site rows wait for the profile from the rig: no wheel, and nothing is sent (ADR 0015)',
+      (tester) async {
+    final site = _SiteSection(const SiteSettings(latitudeDeg: -37.2037));
+    await _pump(tester, const Size(1024, 768), rigSite: null,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      siteSettingsProvider.overrideWith(() => site),
+    ]);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    expect(find.byKey(const Key('simple-rig-lat')), findsNothing, reason: 'no client default shows');
+    expect(find.byKey(const Key('simple-rig-elevation-up')), findsNothing);
+    expect(find.textContaining('Not loaded'), findsWidgets);
+    site.fail = false;
+    // Under the telescope rows, the main sensor's two (#2041): scroll to it.
+    await tester.ensureVisible(find.byKey(const Key('section-retry')).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('section-retry')).first);
+    await tester.pump();
+    await tester.pump();
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-lat')), matching: find.text('37.2037° S')), findsOneWidget,
+        reason: 'Retry loads the rig\'s copy');
+    expect(site.puts, isEmpty);
+  });
+
+  testWidgets('a site change on the offline cache copy is refused: nothing sent, it says why (ADR 0015)',
+      (tester) async {
+    final site = _SiteSection(const SiteSettings());
+    final c = await _pump(tester, const Size(1024, 768), rigSite: null,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+      siteSettingsProvider.overrideWith(() => site),
+    ]);
+    await tester.pump();
+    c.read(siteSettingsProvider.notifier).seed(const SiteSettings(elevationM: 71));
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    final up = find.byKey(const Key('simple-rig-elevation-up'));
+    await tester.ensureVisible(up);
+    await tester.pumpAndSettle();
+    await tester.tap(up);
+    await tester.pumpAndSettle();
+    expect(site.puts, isEmpty);
+    expect(c.read(siteSettingsProvider).value!.elevationM, 71, reason: 'the cache copy is never edited');
+    expect(find.textContaining('Settings not loaded from the rig'), findsWidgets);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('a mount that reports no optics leaves the profile alone', (tester) async {
     final api = _OpticsApi(const OpticsSettings());
-    await _pump(tester, const Size(1024, 768), gear: [
+    await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
       profileApiProvider.overrideWithValue(api),
       mountProvider.overrideWith(() => _OpticsMount({})),
     ]);
     await tester.pump();
     await tester.pump();
     expect(api.puts, isEmpty);
+  });
+
+  testWidgets('#2041 two optics reads overlap at the mount connect: no save sends the rig\'s sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false, gear: [
+      profileApiProvider.overrideWithValue(api),
+      mountProvider.overrideWith(() => _OpticsMount({'focal_length_mm': 1260, 'aperture_diameter_mm': 200})),
+    ]);
+    await tester.pump();
+    expect(api.reads, isNotEmpty, reason: 'the optics are read from the rig');
+    // Another reader (the Rig setup, live sync) starts while those reads are in flight.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    // The older reads land first: their results are dropped.
+    for (var i = 0; i < api.reads.length; i++) {
+      if (!api.reads[i].isCompleted) api.reads[i].complete(rig);
+      await tester.pump();
+    }
+    await other;
+    await tester.pump();
+    // The rig had every field: nothing may be written, least of all its sensor as 0.
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], isEmpty);
+    expect(c.read(opticsSettingsProvider).value!.sensorWidthPx, 800);
+  });
+
+  testWidgets('#2041 no telescope wheel moves before the optics load from the rig; then it saves over the rig\'s sensor',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false,
+        gear: [profileApiProvider.overrideWithValue(api)]);
+    // Two reads overlap; the older one lands and is dropped, the newer one is still in flight.
+    final optics = c.read(opticsSettingsProvider.notifier);
+    await tester.pump();
+    unawaited(optics.hydrateFromServer(api));
+    api.reads.first.complete(rig);
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    expect(c.read(opticsSettingsProvider).value, isNull, reason: 'precondition: the newer read is still out');
+    expect(find.byKey(const Key('simple-rig-aperture')), findsNothing, reason: 'no wheel over values not read yet');
+    expect(find.byKey(const Key('simple-rig-sensor')), findsNothing);
+    for (final read in api.reads) {
+      if (!read.isCompleted) read.complete(rig);
+    }
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-sensor')), matching: find.text('800 × 600 px')),
+        findsOneWidget);
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], everyElement(endsWith('800x600 px, 5.6 µm')));
+    expect(api.puts, isNotEmpty, reason: 'the wheel is saved, on the rig\'s optics');
+    expect(api.puts.last.apertureMm, isNot(200), reason: 'the wheel\'s value, on top of the rig\'s optics');
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('#2041 a wheel on the offline copy whose own optics read is overtaken never sends the sensor back as 0',
+      (tester) async {
+    const rig = OpticsSettings(
+        focalLengthMm: 1260, apertureMm: 200, sensorWidthPx: 800, sensorHeightPx: 600, pixelSizeUm: 5.6);
+    final api = _GatedOpticsApi(rig);
+    final c = await _pump(tester, const Size(1024, 768), rigOptics: false, feature: true,
+        gear: [profileApiProvider.overrideWithValue(api)]);
+    await tester.pump();
+    // The offline cache's copy shows; it has no sensor (the camera never connected offline).
+    c.read(opticsSettingsProvider.notifier).seed(const OpticsSettings(focalLengthMm: 1260, apertureMm: 200));
+    await tester.pump();
+    await _openSection(tester, 'Rig');
+    await tester.ensureVisible(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('simple-rig-aperture')));
+    await tester.pumpAndSettle();
+    final before = api.reads.length;
+    await tester.drag(find.byKey(const Key('simple-rig-aperture-wheel-0')), const Offset(0, -88));
+    await tester.pumpAndSettle();
+    expect(api.reads.length, greaterThan(before), reason: 'the wheel reads the optics before it saves');
+    // A newer reader starts while the wheel's read is in flight: the wheel's result is dropped.
+    final other = c.read(opticsSettingsProvider.notifier).hydrateFromServer(api);
+    for (var i = 0; i < api.reads.length; i++) {
+      if (!api.reads[i].isCompleted) api.reads[i].complete(rig);
+      await tester.pumpAndSettle();
+    }
+    await other;
+    await tester.pumpAndSettle();
+    expect([
+      for (final p in api.puts)
+        '${p.focalLengthMm} mm, ${p.apertureMm} mm, ${p.sensorWidthPx}x${p.sensorHeightPx} px, ${p.pixelSizeUm} µm'
+    ], everyElement(endsWith('800x600 px, 5.6 µm')), reason: 'never the offline copy\'s sensor of 0');
+    expect(c.read(opticsSettingsProvider).value!.sensorWidthPx, 800);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('Change profile goes to the profile box; Change rig to the rig list', (tester) async {
@@ -4116,6 +4708,8 @@ void main() {
           activeId: 'p1',
           profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')],
         ),
+        rigSite: const SiteSettings(permanentPier: true),
+        siteRefuse: StateError('The rig refused the change.'),
         gear: [profileApiProvider.overrideWithValue(_PierRefusedApi())],
       );
       await _openSection(tester, 'Rig');
@@ -4153,10 +4747,12 @@ void main() {
   });
 
   testWidgets("Rig names the main scope's optics and shows the guide scope's, kept in the profile", (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
-    c.read(phd2SettingsProvider.notifier)
-      ..setGuideFocalLength(128)
-      ..setGuidePixelSize(3.75);
+    final api = _Phd2StoreApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
+        profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
+      guiderStatusProvider.overrideWith(_GuiderGone.new),
+      profileApiProvider.overrideWithValue(api),
+    ]);
     await _openSection(tester, 'Rig');
     for (final t in ['Main scope aperture', 'Main scope focal length', 'Guide scope focal length', 'Guide camera pixel size']) {
       await tester.ensureVisible(find.text(t));
@@ -4172,35 +4768,36 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
     await tester.pumpAndSettle();
-    expect(c.read(phd2SettingsProvider).guideFocalLength, 228, reason: 'per digit, like the main scope');
+    expect(c.read(phd2SettingsProvider).value!.guideFocalLength, 228, reason: 'per digit, like the main scope');
+    expect(api.saved.single.guideFocalLength, 228);
   });
 
-  testWidgets("Rig shows the guide optics the rig fills a few seconds after the guider connects", (tester) async {
-    // PR #1486 review: one read on Connected usually lands before the rig's fill, leaving 0 / Not set.
-    final guider = _GuiderComingUp();
-    final api = _GuideOpticsApi(2);
-    await _pump(tester, const Size(1024, 768), linkUp: true,
+  testWidgets("Guider: Rig shows the guide optics the rig fills once the guider connects, through its profile.updated (ADR 0015)",
+      (tester) async {
+    // PR #1486 review: the rig fills them a few round trips after the guider connects; the daemon
+    // announces the write and live sync reloads the section.
+    ProfileApi.forgetOwnWrites();
+    final api = _GuideOpticsApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
-      guiderStatusProvider.overrideWith(() => guider),
+      guiderStatusProvider.overrideWith(_GuiderUp.new),
       profileApiProvider.overrideWithValue(api),
     ]);
     await _openSection(tester, 'Rig');
-    guider.up();
-    for (var i = 0; i < 5; i++) {
-      await tester.pump(const Duration(seconds: 1));
-    }
+    await tester.pump();
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
+    expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('Not set')), findsOneWidget);
+    api.fill();
+    await applyProfileUpdated(c, 'phd2');
+    await tester.pump();
     expect(find.descendant(of: find.byKey(const Key('simple-rig-guidefocal')), matching: find.text('128 mm')), findsOneWidget);
     expect(find.text('3.75 µm'), findsOneWidget);
-    final settled = api.reads;
-    await tester.pump(const Duration(seconds: 5));
-    expect(api.reads, settled, reason: 'it stops reading once both are filled');
   });
 
   testWidgets("Rig reads the guide optics from the rig when it opens, the guider already connected", (tester) async {
     // On the iPad (2026-11-03): the rig held 128 mm / 3.75 µm but Rig showed Not set — nothing read the
     // profile's guider section unless the guider connected while Rig was open.
-    final api = _GuideOpticsApi(0);
+    final api = _GuideOpticsApi(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75));
     await _pump(tester, const Size(1024, 768), linkUp: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderUp.new),
@@ -4306,9 +4903,10 @@ void main() {
   testWidgets("saving the guide focal length keeps the pixel size the rig filled since Rig's read (ALP-4982)",
       (tester) async {
     // #1486 review: the save sent the whole client-side section, so a pixel size of 0 read before the
-    // rig's fill went back over the filled 3.75 µm.
+    // rig's fill went back over the filled 3.75 µm. Now the save carries the tag of the copy it was made
+    // from: the rig refuses it, nothing is written, and Rig shows the rig's copy (ADR 0015).
     final api = _Phd2StoreApi();
-    await _pump(tester, const Size(1024, 768), linkUp: true,
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true,
         profiles: const ProfileList(activeId: 'p1', profiles: [ProfileMeta(id: 'p1', name: 'Backyard Rig')]), gear: [
       guiderStatusProvider.overrideWith(_GuiderGone.new),
       profileApiProvider.overrideWithValue(api),
@@ -4316,7 +4914,7 @@ void main() {
     await _openSection(tester, 'Rig');
     await tester.pump();
     expect(find.text('Not set'), findsWidgets, reason: 'precondition: Rig read the section unset');
-    api.stored = const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75); // the rig's fill
+    api.daemonWrote(const Phd2Settings(guideFocalLength: 128, guidePixelSize: 3.75)); // the rig's fill, unheard
     await tester.ensureVisible(find.byKey(const Key('simple-rig-guidefocal')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('simple-rig-guidefocal')));
@@ -4325,9 +4923,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('simple-rig-guidefocal-wheel-1')), const Offset(0, -44.0));
     await tester.pumpAndSettle();
-    expect(api.saved, isNotEmpty);
-    expect(api.saved.last.guidePixelSize, 3.75, reason: 'the filled pixel size stays');
-    expect(api.stored.guideFocalLength, isNot(128), reason: "the user's focal length is saved");
+    expect(api.saved, isEmpty, reason: 'nothing written over the fill');
+    expect(api.stored.guidePixelSize, 3.75, reason: 'the filled pixel size stays');
+    expect(c.read(phd2SettingsProvider).value!.guidePixelSize, 3.75, reason: "Rig shows the rig's copy");
+    expect(c.read(simpleMessagesProvider).last.detail, contains('changed on the rig'));
   });
 
   testWidgets('Preview settings opens with no title: the chip says what it is', (tester) async {
@@ -4374,11 +4973,12 @@ void main() {
   });
 
   testWidgets('Devices shows the Polar Aligner the daemon found, read-only, with Turned by under it', (tester) async {
-    final profile = _PolarProfile();
-    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+    final profile = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4), loaded: true);
+    await _pump(tester, const Size(1024, 768), linkUp: true, polar: profile, gear: [
       polarAlignerApiProvider.overrideWithValue(_PolarAligner(
           const PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true))),
-      polarAlignApiProvider.overrideWithValue(profile),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
     ]);
     await _openSection(tester, 'Devices');
     await tester.pumpAndSettle();
@@ -4389,9 +4989,34 @@ void main() {
     await tester.ensureVisible(find.byKey(const Key('simple-gear-polaraligner-hand')));
     await tester.tap(find.byKey(const Key('simple-gear-polaraligner-hand')));
     await tester.pumpAndSettle();
-    expect(profile.puts.single['polar_aligner_auto'], isFalse);
-    expect(profile.puts.single['exposure_seconds'], 4, reason: 'saved over the loaded section, not defaults');
+    expect(profile.puts.single.polarAlignerAuto, isFalse);
+    expect(profile.puts.single.exposureSeconds, 4, reason: 'saved over the loaded section, not defaults');
     expect(find.text('Polar align shows the turns and you make them.'), findsOneWidget);
+  });
+
+  testWidgets('Devices: Turned by with the profile not loaded from the rig sends nothing and says why (ADR 0015)',
+      (tester) async {
+    final profile = FakePolarAlignSection(initial: null); // the rig does not answer the read
+    // Simple Mode on (the Experimental switch too): the message card, not a snackbar.
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, feature: true, polar: profile, gear: [
+      polarAlignerApiProvider.overrideWithValue(_PolarAligner(
+          const PolarAligner(present: true, carrier: 'switch', name: 'Polar base', drivable: true))),
+      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+    ]);
+    await _openSection(tester, 'Devices');
+    await tester.pumpAndSettle();
+    expect(find.text('Polar align turns the motors after each measurement.'), findsNothing,
+        reason: 'no made-up Motors or By hand');
+    final loads = profile.loads;
+    await tester.ensureVisible(find.byKey(const Key('simple-gear-polaraligner-hand')));
+    await tester.tap(find.byKey(const Key('simple-gear-polaraligner-hand')));
+    await tester.pumpAndSettle();
+    expect(profile.sent, isEmpty);
+    expect(profile.loads, greaterThan(loads), reason: 'the press loads the section once more first');
+    final m = c.read(simpleMessagesProvider).single;
+    expect(m.kind, SimpleMessageKind.error);
+    expect(m.detail, startsWith('Settings not loaded from the rig; nothing was saved'));
   });
 
   testWidgets('Devices: a Polar Aligner Ara cannot drive shows why and has no Turned by', (tester) async {
@@ -4403,18 +5028,6 @@ void main() {
     await _openSection(tester, 'Devices');
     await tester.pumpAndSettle();
     expect(find.text("Can't drive yet · Ara can't move this Polar Aligner yet: it only runs its own alignment."),
-        findsOneWidget);
-    expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
-  });
-
-  testWidgets('Devices: with no Polar Aligner found, its row says so', (tester) async {
-    await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
-      polarAlignerApiProvider.overrideWithValue(_PolarAligner(const PolarAligner())),
-      polarAlignApiProvider.overrideWithValue(_PolarProfile()),
-    ]);
-    await _openSection(tester, 'Devices');
-    await tester.pumpAndSettle();
-    expect(find.text('None · No connected device offers polar-alignment moves. Polar align shows the turns and you make them.'),
         findsOneWidget);
     expect(find.byKey(const Key('simple-gear-polaraligner-turned-by')), findsNothing);
   });
@@ -4454,6 +5067,10 @@ void main() {
     expect(find.byKey(const Key('simple-gear-filterwheel')), findsNothing, reason: 'never set up: no row of its own');
     await tester.tap(find.byKey(const Key('simple-gear-camera-disconnect')));
     await tester.tap(find.byKey(const Key('simple-gear-focuser-reconnect')));
+    await tester.ensureVisible(
+      find.byKey(const Key('simple-gear-mount-connect')),
+    );
+    await tester.pump();
     await tester.tap(find.byKey(const Key('simple-gear-mount-connect')));
     await tester.pump();
     expect(camera.calls, ['disconnect']);
@@ -5326,7 +5943,7 @@ void main() {
     expect(find.byKey(const Key('sky')), findsNothing);
   });
 
-  group('guiding and the histogram fill the bottom row, 16 px from the edge and from Stop', () {
+  group('guiding and the histogram fill the bottom row, 16 px from the edge on both sides', () {
     const size = Size(1024, 768);
     final histogram = FrameHistogram(
       bins: List<int>.generate(256, (i) => i < 40 ? 1000 - (i - 20).abs() * 40 : 0),
@@ -5334,7 +5951,8 @@ void main() {
       lowClipFraction: 0, highClipFraction: 0, width: 100, height: 100, bitDepth: 16);
     Rect guiding(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-guide-trace')));
     Rect hist(WidgetTester t) => _panelOf(t, find.byKey(const Key('simple-histogram')));
-    double end(WidgetTester t) => t.getRect(find.byType(EmergencyStopButton)).left - kSimpleInset;
+    // The Stop sits in the rail's foot (#1911), so the row runs to the right inset.
+    double end(WidgetTester t) => size.width - kSimpleInset;
 
     testWidgets('the graph fills its panel, not half of it (iPad, 2026-11-04)', (tester) async {
       await _pump(tester, size, steps: _someSteps, gear: [guiderStatusProvider.overrideWith(_GuiderUp.new)]);
@@ -5608,28 +6226,60 @@ void main() {
     await tester.pump(kSimpleErrorLife + const Duration(seconds: 1));
   });
 
-  testWidgets('the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
-      (tester) async {
-    // User, 2026-11-04: nothing on screen said the guider was calibrating.
-    final guider = _GuiderAt('calibrating');
-    final container = await _pump(tester, const Size(1024, 768), gear: [guiderStatusProvider.overrideWith(() => guider)]);
-    await tester.pump();
-    String pill() => tester
-        .widgetList<RichText>(find.descendant(of: find.byType(SimpleStatusPill), matching: find.byType(RichText)))
-        .map((t) => t.text.toPlainText())
-        .join(' ');
-    expect(pill(), allOf(contains('Guider'), contains('Calibrating'), contains('West step 3')));
-    expect(tester.getSemantics(find.byKey(const Key('simple-status-pill')).first), matchesSemantics(label: 'Guider, Calibrating', isLiveRegion: true, isButton: true, hasTapAction: true),
-        reason: 'each step is not read out');
-    guider.at('guiding');
-    await tester.pump();
-    expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
-    container.read(captureProgressProvider.notifier).beginExposing(const Duration(seconds: 5));
-    await tester.pump();
-    expect(pill(), contains('Taking a frame'), reason: 'the frame\'s pill first, the guider\'s under it (user, 2026-11-04)');
-    container.read(captureProgressProvider.notifier).reset();
-    await tester.pump(const Duration(seconds: 1));
-  });
+  testWidgets(
+    'the status pill reports the guider: its routine, then Guiding with the RMS; a frame comes first',
+    (tester) async {
+      // User, 2026-11-04: nothing on screen said the guider was calibrating.
+      final guider = _GuiderAt('calibrating');
+      final container = await _pump(
+        tester,
+        const Size(1024, 768),
+        gear: [guiderStatusProvider.overrideWith(() => guider)],
+      );
+      await tester.pump();
+      String pill() => tester
+          .widgetList<RichText>(
+            find.descendant(
+              of: find.byType(SimpleStatusPill),
+              matching: find.byType(RichText),
+            ),
+          )
+          .map((t) => t.text.toPlainText())
+          .join(' ');
+      expect(
+        pill(),
+        allOf(
+          contains('Guider'),
+          contains('Calibrating'),
+          contains('West step 3'),
+        ),
+      );
+      // Story 8 (#1895): a focus reads the leg with its target; the live region does not announce each step.
+      expect(
+        tester.getSemantics(find.byKey(const Key('simple-status-pill')).first),
+        matchesSemantics(
+          label: 'Guider, Calibrating, West step 3, 11.9 of 25 px',
+          isButton: true,
+          hasTapAction: true,
+        ),
+        reason: 'the full text is read on focus; each step is not announced',
+      );
+      guider.at('guiding');
+      await tester.pump();
+      expect(pill(), allOf(contains('Guiding'), contains('0.62″')));
+      container
+          .read(captureProgressProvider.notifier)
+          .beginExposing(const Duration(seconds: 5));
+      await tester.pump();
+      expect(
+        pill(),
+        contains('Taking a frame'),
+        reason: 'the frame\'s pill first, the guider\'s under it (user, 2026-11-04)',
+      );
+      container.read(captureProgressProvider.notifier).reset();
+      await tester.pump(const Duration(seconds: 1));
+    },
+  );
 
   testWidgets("the status pill keeps its width while its numbers change (ALP-4937)", (tester) async {
     // On the iPad (2026-11-03) the pill jittered narrower as '10 s left' became '9 s left'. The test font's
@@ -6048,6 +6698,31 @@ void main() {
     expect(pill.kind, SimpleMessageKind.error);
     expect(pill.title, contains('Calibration failed: star did not move enough'));
     expect(pill.origin, SimpleStatusOrigin.guide);
+  });
+
+  testWidgets('a cooler that does not respond shows one amber camera pill, and responding takes it away (#2076)', (tester) async {
+    final camera = _UnpoweredCooler();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [cameraStatusProvider.overrideWith(() => camera)]);
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
+
+    camera.notResponding(true);
+    await tester.pump();
+    await tester.pump();
+    final pill = c.read(simpleMessagesProvider).single;
+    expect(pill.kind, SimpleMessageKind.warning);
+    expect(pill.title, "Cooler not responding: is the camera's 12 V connected?");
+    expect(pill.origin, SimpleStatusOrigin.camera);
+
+    camera.notResponding(true); // the next poll: still one pill
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), hasLength(1));
+
+    camera.notResponding(false);
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(simpleMessagesProvider), isEmpty);
   });
 
   group('the failed-connect pill (#1559)', () {
@@ -6948,11 +7623,30 @@ void main() {
       weatherProvider.overrideWith(() => _Windy()),
       profileApiProvider.overrideWithValue(_PoliciesApi(null)),
     ]);
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
         findsNothing, reason: 'the defaults are not the rig\'s: nothing beats a wrong promise');
+  });
+
+  testWidgets(
+      'the Safety pill does not load the policies again when the rig\'s copy is in, so an unsaved edit stays (ADR 0015)',
+      (tester) async {
+    final api = _CountingPoliciesApi();
+    final c = await _pump(tester, const Size(1024, 768), linkUp: true, gear: [
+      safetyMonitorProvider.overrideWith(() => _Safety(EquipmentConnectionState.connected)),
+      weatherProvider.overrideWith(() => _Windy()),
+      profileApiProvider.overrideWithValue(api),
+      safetyPoliciesProvider.overrideWith(_EditedPolicies.new),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    expect(api.calls, 0, reason: 'the rig\'s copy is in already');
+    expect(c.read(safetyPoliciesProvider).value!.meridianPauseMin, 12,
+        reason: 'the unsaved edit stays');
+    expect(find.descendant(of: find.byType(SimpleStatusPill), matching: find.textContaining('Wind 41')),
+        findsOneWidget, reason: 'the copy in is the rig\'s, so the pill reads it');
   });
 
   testWidgets('a failed policies load is retried', (tester) async {
@@ -6966,7 +7660,7 @@ void main() {
     await tester.pump();
     expect(api.calls, greaterThan(0));
     // Anything that rebuilds the pill retries after the failed first load.
-    c.read(safetyPoliciesProvider.notifier).state = const SafetyPolicies(weatherTriggersEnabled: true);
+    c.read(safetyPoliciesProvider.notifier).seed(const SafetyPolicies(weatherTriggersEnabled: true));
     await tester.pump();
     await tester.pump();
     await tester.pump();
@@ -7222,6 +7916,15 @@ void main() {
       expect(find.byKey(const Key('simple-device-safety')), findsOneWidget);
     });
 
+    testWidgets('with no weather station, a Conditions tap closes Monitor and opens the Camera window', (tester) async {
+      await openMonitor(tester, gear: [cameraStatusProvider.overrideWith(() => _CoolingCamera(-10))]);
+      await tester.tap(find.byKey(const Key('simple-monitor-conditions')));
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byKey(const Key('simple-monitor')), findsNothing);
+      expect(find.byKey(const Key('simple-device-camera')), findsOneWidget);
+    });
+
     testWidgets('the safety alarm shows over it', (tester) async {
       final (c, _) = await openMonitor(tester, manualAlarm: true);
       (c.read(safetyAlarmProvider.notifier) as _ManualAlarm).raise('Safety monitor: unsafe (rain)');
@@ -7232,9 +7935,9 @@ void main() {
       await close(tester);
     });
 
-    testWidgets("the Weather tile's readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
+    testWidgets("the Conditions tile's weather readings carry the Weather window's icons (user, 2026-11-11)", (tester) async {
       await openMonitor(tester, gear: [weatherProvider.overrideWith(() => _WeatherAll())]);
-      final tile = find.byKey(const Key('simple-monitor-weather'));
+      final tile = find.byKey(const Key('simple-monitor-conditions'));
       expect(find.descendant(of: tile, matching: find.byIcon(Icons.cloud_outlined)), findsNWidgets(2), reason: 'the header and Cloud');
       for (final icon in [Icons.auto_awesome_outlined, Icons.thermostat, Icons.water_drop_outlined, CupertinoIcons.cloud_rain, Icons.air]) {
         expect(find.descendant(of: tile, matching: find.byIcon(icon)), findsOneWidget, reason: '$icon');
@@ -7471,15 +8174,78 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
   });
 
-  testWidgets('Stop is the compact STOP, reading HOLD while held', (tester) async {
-    await _pump(tester, const Size(1024, 768));
-    expect(find.descendant(of: find.byType(EmergencyStopButton), matching: find.text('STOP')), findsOneWidget);
-    final gesture = await tester.startGesture(tester.getCenter(find.byType(EmergencyStopButton)));
-    await tester.pump();
-    expect(find.text('HOLD'), findsOneWidget);
-    await gesture.up();
-    await tester.pump(const Duration(seconds: 3));
-    expect(find.text('STOP'), findsOneWidget);
+  group('the rail-foot Stop (#1911, S4a)', () {
+    Future<void> openStop(WidgetTester tester, Size size) async {
+      await _pump(tester, size);
+      await tester.pump();
+    }
+
+    for (final (name, size) in [
+      ('desktop 1280x800', const Size(1280, 800)),
+      ('iPad landscape 1024x768', const Size(1024, 768)),
+      ('iPad portrait 768x1024', const Size(768, 1024)),
+    ]) {
+      testWidgets('$name: exactly one Stop, at the foot of the right rail, and no red block', (tester) async {
+        await openStop(tester, size);
+        expect(find.byType(EmergencyStopButton), findsOneWidget);
+        final stop = find.byKey(const Key('simple-rail-stop'));
+        expect(stop, findsOneWidget);
+        final rail = tester.getRect(find.byKey(const Key('simple-rail-tabs')));
+        final foot = tester.getRect(stop);
+        expect(foot.top, greaterThanOrEqualTo(rail.bottom - 0.5), reason: 'under the tabs, in the rail');
+        expect(foot.right, lessThanOrEqualTo(size.width - kSimpleInset + 0.5));
+        expect(foot.left, greaterThanOrEqualTo(rail.left - 12), reason: 'the rail\'s width, not a block beside it');
+        expect(find.descendant(of: stop, matching: find.text('STOP')), findsOneWidget);
+      });
+    }
+
+    testWidgets('a hold of 99 ms sends nothing; HOLD shows from 500 ms; 2 s fires one Emergency Stop', (tester) async {
+      await openStop(tester, const Size(1280, 800));
+      final centre = tester.getCenter(find.byKey(const Key('simple-rail-stop')));
+      var g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 99));
+      await g.up();
+      await tester.pump();
+      expect(find.text('HOLD'), findsNothing);
+      expect(find.text(_en.estopNoServer), findsNothing);
+
+      g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 499));
+      expect(find.text('HOLD'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 2));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1000));
+      await g.up();
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsNothing, reason: 'released at 1.5 s');
+
+      g = await tester.startGesture(centre);
+      await tester.pump(const Duration(milliseconds: 2000));
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsOneWidget, reason: 'the shared stop ran');
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    });
+
+    testWidgets("the open mode's shutter holds for Emergency Stop too", (tester) async {
+      await openStop(tester, const Size(1280, 800));
+      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pump();
+      expect(find.text(_en.estopNoServer), findsOneWidget);
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    });
+
+    testWidgets('a phone held sideways keeps its red Stop block (two paths until S5)', (tester) async {
+      await _pump(tester, const Size(844, 390));
+      tester.takeException();
+      expect(find.byKey(const Key('simple-rail-stop')), findsNothing);
+      expect(find.byType(EmergencyStopButton), findsOneWidget);
+      expect(tester.getSize(find.byType(EmergencyStopButton)).width, greaterThanOrEqualTo(kSimpleStopSize));
+    });
   });
 
   testWidgets('the strip has Night mode and Settings, and nothing that leads to the full UI', (tester) async {
@@ -7712,7 +8478,7 @@ void main() {
   testWidgets('an interrupted hold on the elevation stepper stops, and sets nothing', (tester) async {
     final c = await _pump(tester, const Size(1024, 768));
     await _openSection(tester, 'Rig');
-    final before = c.read(siteSettingsProvider).elevationM;
+    final before = c.read(siteSettingsProvider).value!.elevationM;
     final up = find.byKey(const Key('simple-rig-elevation-up'));
     await tester.ensureVisible(up);
     await tester.pump();
@@ -7723,7 +8489,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 2));
     expect(find.text('${before.round()} m'), findsOneWidget, reason: 'the run stopped and the held value was dropped');
-    expect(c.read(siteSettingsProvider).elevationM, before);
+    expect(c.read(siteSettingsProvider).value!.elevationM, before);
   });
 
   testWidgets('Search tells screen readers what it found', (tester) async {
@@ -7774,9 +8540,12 @@ void main() {
   });
 
   testWidgets('a Rig wheel turns with the arrow keys and sets the value', (tester) async {
-    final c = await _pump(tester, const Size(1024, 768));
+    final c = await _pump(tester, const Size(1024, 768), gear: [
+      // A rig to save the site to (the site itself is the rig's copy, no HTTP).
+      profileApiProvider.overrideWithValue(_OpticsApi(const OpticsSettings())),
+    ]);
     await _openSection(tester, 'Rig');
-    final before = c.read(siteSettingsProvider).latitudeDeg;
+    final before = c.read(siteSettingsProvider).value!.latitudeDeg;
     final lat = find.byKey(const Key('simple-rig-lat'));
     await tester.ensureVisible(lat);
     await tester.pump();
@@ -7786,7 +8555,11 @@ void main() {
     expect(await _tabToLabel(tester, 'simple-rig-lat-wheel-1'), isTrue, reason: 'Tab reaches each wheel');
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(c.read(siteSettingsProvider).latitudeDeg, closeTo(before.abs() + 10, 0.001));
+    expect(c.read(siteSettingsProvider).value!.latitudeDeg, closeTo(before.abs() + 10, 0.001));
+    // The rig's other reads fail here and retry: end them with the container.
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('#1700: a pill asks once for the cooling fan; Choose opens the Camera window', (tester) async {
@@ -8057,7 +8830,7 @@ void main() {
     );
 
     testWidgets(
-      'the Rig page header next fix for the optics opens the optics panel',
+      '#2041 Set up optics in the Rig page header stays in Simple Mode and brings the telescope rows into view',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8067,12 +8840,25 @@ void main() {
             opticsConfigured: false,
           ),
           dismissed: true,
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(find.byTooltip('Settings'));
         await tester.pump();
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(
+          view.contains(tester.getCenter(sensor)),
+          isFalse,
+          reason: 'precondition: the telescope rows start below the fold',
+        );
         await tester.tap(find.byKey(const Key('simple-rig-setup-header-action')));
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
         await end(tester);
       },
     );
@@ -8194,7 +8980,7 @@ void main() {
     );
 
     testWidgets(
-      'the Main camera and telescope line opens the optics panel over Simple Mode',
+      '#2041 the Main camera and telescope line opens Settings › Rig at the telescope rows, in Simple Mode',
       (tester) async {
         final c = (await pumpSetup(
           tester,
@@ -8203,12 +8989,20 @@ void main() {
             longitudeDeg: 151.215297,
             opticsConfigured: false,
           ),
+          screen: const Size(1024, 420),
         )).$1;
         await tester.tap(
           find.byKey(const Key('simple-rig-setup-optics-action')),
         );
-        await tester.pump();
-        expect(c.read(selectedSettingsPanelProvider), 'img.optics');
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-menu')), findsOneWidget);
+        expect(c.read(simpleModeProvider).value, isTrue);
+        expect(c.read(selectedSettingsPanelProvider), isNot('img.optics'));
+        final sensor = find.byKey(const Key('simple-rig-sensor'));
+        final view = tester.getRect(
+          find.ancestor(of: sensor, matching: find.byType(Scrollable)).first,
+        );
+        expect(view.contains(tester.getCenter(sensor)), isTrue);
         await end(tester);
       },
     );
@@ -8514,7 +9308,8 @@ void main() {
 
 class _NoFan extends CoolingFanNotifier {
   @override
-  Future<CoolingFan> build() async => CoolingFan.none;
+  LoadedSection<CoolingFan> build() =>
+      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
 }
 
 /// The Rig setup facts a test sets and changes.

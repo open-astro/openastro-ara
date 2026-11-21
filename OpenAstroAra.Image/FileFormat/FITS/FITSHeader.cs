@@ -770,7 +770,7 @@ namespace OpenAstroAra.Image.FileFormat.FITS {
             Add("ROWORDER", "TOP-DOWN", "FITS Image Orientation");
 
             Add("EQUINOX", 2000.0d, "Equinox of celestial coordinate system");
-            Add("SWCREATE", string.Format(CultureInfo.InvariantCulture, "N.I.N.A. {0} ({1})", CoreUtil.Version, DllLoader.IsX86() ? "x86" : "x64"), "Software that created this file");
+            Add("SWCREATE", string.Format(CultureInfo.InvariantCulture, "OpenAstro Ara {0}", CoreUtil.Version), "Software that created this file");
 
             foreach (var elem in metaData.GenericHeaders) {
                 switch (elem) {

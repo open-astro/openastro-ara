@@ -40,7 +40,7 @@ namespace OpenAstroAra.Test {
         private readonly List<ServerUpdateService> created = [];
         private static readonly string[] OneWinsOneRefused = ["pending", "update_in_progress"];
 
-        private static readonly string[] ExpectedCompare = ["--compare-versions", "0.0.2-ara.1", "gt", "0.0.1-ara.1"];
+        private static readonly string[] ExpectedCompare = ["--compare-versions", "1.0.0~beta2", "gt", "1.0.0~beta1"];
 
         private string root = null!;
         private ServerUpdatePaths paths = null!;
@@ -58,10 +58,10 @@ namespace OpenAstroAra.Test {
             paths = new ServerUpdatePaths(Path.Combine(root, "stage"), Path.Combine(root, "run", "update"), unit);
             calls = [];
             answers = new Dictionary<string, (int, string)>(StringComparer.Ordinal) {
-                ["dpkg-query"] = (0, "0.0.1-ara.1"),
+                ["dpkg-query"] = (0, "1.0.0~beta1"),
                 ["dpkg --print-architecture"] = (0, "arm64\n"),
                 ["dpkg --compare-versions"] = (0, ""),
-                ["dpkg-deb"] = (0, "Package: openastroara-server\nVersion: 0.0.2-ara.1\nArchitecture: arm64\n"),
+                ["dpkg-deb"] = (0, "Package: openastroara-server\nVersion: 1.0.0~beta2\nArchitecture: arm64\n"),
                 ["systemctl"] = (0, ""),
             };
             published = [];
@@ -103,8 +103,8 @@ namespace OpenAstroAra.Test {
             var staged = await Service().StageAsync(Body(), 4096, null, CancellationToken.None);
             Assert.Multiple(() => {
                 Assert.That(staged.Package, Is.EqualTo("openastroara-server"));
-                Assert.That(staged.Version, Is.EqualTo("0.0.2-ara.1"));
-                Assert.That(staged.InstalledVersion, Is.EqualTo("0.0.1-ara.1"));
+                Assert.That(staged.Version, Is.EqualTo("1.0.0~beta2"));
+                Assert.That(staged.InstalledVersion, Is.EqualTo("1.0.0~beta1"));
                 Assert.That(staged.SizeBytes, Is.EqualTo(4096));
                 Assert.That(File.Exists(Path.Combine(paths.StageDirectory, staged.Id + ".deb")), Is.True);
             });
@@ -179,12 +179,12 @@ namespace OpenAstroAra.Test {
             Assert.That(request, Is.EqualTo(Path.Combine(paths.StageDirectory, staged.Id + ".deb") + "\n5555\n5\n"),
                 "staged path, the daemon's port and the drain time, one per line, like the storage request");
             var start = calls.Single(c => c.File == "systemctl");
-            Assert.That(start.Args, Is.EqualTo(new[] { "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
+            Assert.That(start.Args, Is.EqualTo(new[] { "--no-ask-password", "start", "--no-block", $"openastroara-update@{staged.Id}.service" }.ToList()),
                 "--no-block: the helper restarts this process before a blocking start could return");
             var evt = published.Single();
             Assert.That(evt.Type, Is.EqualTo(WsEventCatalog.ServerRestartImminent.Token));
             Assert.That(evt.Payload.GetProperty("reason").GetString(), Is.EqualTo("update"));
-            Assert.That(evt.Payload.GetProperty("version").GetString(), Is.EqualTo("0.0.2-ara.1"));
+            Assert.That(evt.Payload.GetProperty("version").GetString(), Is.EqualTo("1.0.0~beta2"));
             Assert.That(evt.Payload.GetProperty("update_id").GetString(), Is.EqualTo(staged.Id));
             Assert.That(evt.Payload.GetProperty("in_seconds").GetInt32(), Is.EqualTo(ServerUpdateService.DrainSeconds),
                 "the announced drain is the one handed to the helper");
@@ -285,14 +285,14 @@ namespace OpenAstroAra.Test {
             Assert.That((await svc.GetStatusAsync(staged.Id, CancellationToken.None))!.Status, Is.EqualTo("pending"));
 
             await File.WriteAllTextAsync(Path.Combine(paths.RequestDirectory, staged.Id + ".result"),
-                "3\nfrom=0.0.1-ara.1\nto=0.0.2-ara.1\nrollback=available\nnew daemon did not answer /healthz within 90s\nstatus=rolled_back\n");
+                "3\nfrom=1.0.0~beta1\nto=1.0.0~beta2\nrollback=available\nnew daemon did not answer /healthz within 90s\nstatus=rolled_back\n");
             var status = await svc.GetStatusAsync(staged.Id, CancellationToken.None);
             Assert.That(File.Exists(Path.Combine(paths.StageDirectory, staged.Id + ".deb")), Is.False,
                 "the daemon removes its own upload once the result is in");
             Assert.Multiple(() => {
                 Assert.That(status!.Status, Is.EqualTo("rolled_back"));
-                Assert.That(status.FromVersion, Is.EqualTo("0.0.1-ara.1"));
-                Assert.That(status.ToVersion, Is.EqualTo("0.0.2-ara.1"));
+                Assert.That(status.FromVersion, Is.EqualTo("1.0.0~beta1"));
+                Assert.That(status.ToVersion, Is.EqualTo("1.0.0~beta2"));
                 Assert.That(status.RollbackAvailable, Is.True);
                 Assert.That(status.Output, Does.Contain("did not answer /healthz"));
             });

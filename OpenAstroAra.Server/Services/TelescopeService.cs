@@ -18,10 +18,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using PierSide = OpenAstroAra.Core.Enums.PierSide;
@@ -87,6 +89,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private TelescopeCapabilitiesDto? _capabilities;
     // #1971 — the driver's actions, read with the capabilities once per connect (a Polar Aligner may ride on them).
     private IDriverActions? _mountActions;
+    // #2073 — the mount type, read with the capabilities once per connect; null = unknown (the counterweight
+    // check then runs, as for a German equatorial mount).
+    private AlignmentMode? _alignmentMode;
     // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
     // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver
     // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
@@ -142,17 +147,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public TelescopeService(ILogger<TelescopeService>? logger = null, EquipmentEventPublisher? events = null,
             IEquipmentFaultSink? faults = null, IWsBroadcaster? ws = null, IProfileService? profileService = null,
-            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null) {
+            Func<IGuiderMediator?>? guiderResolver = null, IProfileStore? profileStore = null, IMountPoseStore? poseStore = null,
+            Func<ITimeSyncService?>? timeSyncResolver = null) {
         _profileStore = profileStore;
+        _poseStore = poseStore;
+        // #2071 — the time-sync service, resolved lazily like the guider. Without it the mount-clock gate is off.
+        _timeSyncResolver = timeSyncResolver;
         _logger = logger ?? NullLogger<TelescopeService>.Instance;
         _guiderResolver = guiderResolver;
         _faults = faults;
         _ws = ws;
         _profileService = profileService;
-        // onConnected pushes the profile's site into the mount (one source of truth).
+        // onConnected pushes the profile's site into the mount (one source of truth), then sets and
+        // checks the mount's clock from the synced rig clock (#2071).
         _lifecycle = new DeviceLifecycle<ITelescopeDevice>(this, DeviceType.Telescope, "telescope",
             d => _createDevice(d), ReadTick, ResetSessionLocked, DeviceHealthTracker.DefaultThreshold, _logger, events, faults,
-            onConnected: () => PushProfileSite(force: true));
+            onConnected: OnMountConnected);
         _leaseTimer = new Timer(_ => CheckLeases(), state: null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -165,7 +175,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             }
             var state = _lifecycle.State;
             var connected = state == EquipmentConnectionState.Connected;
-            var runtime = connected ? _runtime : IdleRuntime;
+            // #2070 — read from the trust state itself, never a copy a tick old: a confirm shows at once.
+            var runtime = connected
+                ? _runtime with { PositionUnverified = PoseTrust.Reason is not null, PositionUnverifiedReason = PoseTrust.Reason }
+                : IdleRuntime;
             var caps = connected ? _capabilities : null;
             return Task.FromResult<TelescopeDto?>(new TelescopeDto(device.UniqueId, device.Name, state, caps, runtime));
         }
@@ -187,8 +200,10 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     // Caller holds the gate (adopt, disconnect and trip): a fresh, ended or tripped session forgets the last one's reads.
     private void ResetSessionLocked() {
+        Interlocked.Increment(ref _sessionEpoch); // #2089 — a pose kept across this boundary is stale
         _capabilities = null;       // re-read for the new device
         _mountActions = null;
+        _alignmentMode = null;
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -207,7 +222,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _trackingWatch.Reset();     // §42.2 — no expectations carry across sessions
         SlewWatch.Reset();          // §57.8 — no slew episode carries across sessions
         TargetLatch.Reset();        // §57.9 — a fresh session trusts the mount's own target registers again
+        BeginPoseSessionLocked();   // #2070 — the first read decides again; an unverified position stays unverified
         ForgetPushedSite();
+        ForgetMountClockLocked(); // #2071 — every session sets and checks the mount's clock again
     }
 
     public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) {
@@ -226,19 +243,81 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (client is null) {
             throw new InvalidOperationException("telescope is not connected");
         }
+        // #2071 — a GoTo or a Sync on a wrong mount clock points at (or bakes in) the wrong sky.
+        var clockRefusal = MountClockMotionRefusal();
+        if (clockRefusal is not null && !MountClockSettling()) {
+            LogMountOpRejectedClock(request.Sync == true ? "telescope.sync" : "telescope.slew", clockRefusal);
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
         var ra = request.RightAscensionHours;
         var dec = request.DeclinationDegrees;
         var sync = request.Sync ?? false;
-        // A sync moves nothing, so guiding carries on. The checks above still throw synchronously.
-        return sync ? Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey)) : SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey);
+        if (clockRefusal is not null) {
+            // #2071 — a clock push is running (the app's time sync just after it connects), or a host clock step is
+            // about to start one: wait for it, as a sequencer GoTo does, instead of refusing a GoTo the push is about
+            // to allow. A GoTo is noted as a move from its request (#2066), so a stop during the wait wins over it.
+            var (waitingMotion, waitingEpoch) = sync ? (0L, AbortEpoch) : NoteMotionRequested();
+            return SlewOnceMountClockSettledAsync(client, ra, dec, sync, idempotencyKey, waitingEpoch, sync ? null : waitingMotion, ct);
+        }
+        // A sync moves nothing, so guiding carries on, and it is allowed while the position is
+        // unverified (#2070). The checks above still throw synchronously.
+        if (sync) {
+            return Task.FromResult(DispatchSlew(client, ra, dec, sync: true, idempotencyKey, AbortEpoch, motion: null));
+        }
+        // #2073 — read before the pose check and the guider stop (up to StopGuidingBeforeMoveTimeout): an
+        // abort or an emergency stop that lands after this request must win over its goto. See SlewInBackground.
+        // #2066 — noted as a move from here, not from its send: a raced GoTo's second abort must not go out while this
+        // one waits for the guider and then race its PUT.
+        var (motion, abortEpoch) = NoteMotionRequested();
+        return SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, motion, ct);
     }
 
-    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey) {
-        await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
-        return DispatchSlew(client, ra, dec, sync: false, idempotencyKey);
+    private async Task<OperationAcceptedDto> SlewOnceMountClockSettledAsync(ITelescopeDevice requested, double ra, double dec, bool sync,
+            string? idempotencyKey, long abortEpoch, long? motion, CancellationToken ct) {
+        string? clockRefusal;
+        try {
+            clockRefusal = await MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false);
+        } catch {
+            if (motion is { } m) {
+                NoteMotionFailed(m, requested);
+            }
+            throw;
+        }
+        // The wait can span a reconnect: send to the device connected now, never the one read before the
+        // wait (disposed by then).
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (clockRefusal is not null || client is null) {
+            if (motion is { } m) {
+                NoteMotionFailed(m, client ?? requested);
+            }
+            if (clockRefusal is not null) {
+                LogMountOpRejectedClock(sync ? "telescope.sync" : "telescope.slew", clockRefusal);
+                throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+            }
+            throw new InvalidOperationException("telescope is not connected");
+        }
+        return motion is { } token
+            ? await SlewAfterGuidingStoppedAsync(client, ra, dec, idempotencyKey, abortEpoch, token, ct).ConfigureAwait(false)
+            : DispatchSlew(client, ra, dec, sync: true, idempotencyKey, AbortEpoch, motion: null);
     }
 
-    private OperationAcceptedDto DispatchSlew(ITelescopeDevice client, double ra, double dec, bool sync, string? idempotencyKey) {
+    private async Task<OperationAcceptedDto> SlewAfterGuidingStoppedAsync(ITelescopeDevice client, double ra, double dec, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
+        try {
+            // #2070 — before the guider stops: a refused GoTo leaves everything as it was. force does not bypass it.
+            // It runs before SlewInBackground's TryEnableTracking (#2073), so a refused GoTo turns nothing on.
+            await ThrowIfPoseUnverifiedAsync(client, "slew", ct).ConfigureAwait(false);
+            await StopGuidingBeforeMountMoveAsync("slew").ConfigureAwait(false);
+        } catch {
+            NoteMotionFailed(motion, client);
+            throw;
+        }
+        return DispatchSlew(client, ra, dec, sync: false, idempotencyKey, abortEpoch, motion);
+    }
+
+    private OperationAcceptedDto DispatchSlew(ITelescopeDevice client, double ra, double dec, bool sync, string? idempotencyKey, long abortEpoch, long? motion) {
         NoteMountCommand(w => w.NoteMotionCommanded());
         lock (_gate) {
             // §57.9 — a goto or sync re-arms the target display (a Home/Park may have cleared it).
@@ -249,7 +328,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 SlewWatch.NoteSlewTarget(ra, dec);
             }
         }
-        _ = Task.Run(() => SlewInBackground(client, ra, dec, sync), CancellationToken.None);
+        // #2066 — the GoTo's checks are done: its calls (the tracking enable, then the PUT) start here.
+        var reAbort = motion is long sending ? NoteMotionOnTheWire(sending) : Task.CompletedTask;
+        _ = Task.Run(() => SlewInBackgroundAsync(client, ra, dec, sync, abortEpoch, motion, reAbort), CancellationToken.None);
         return Accepted(sync ? "telescope.sync" : "telescope.slew", idempotencyKey);
     }
 
@@ -305,7 +386,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [LoggerMessage(EventId = 6369, Level = LogLevel.Warning, Message = "telescope.{Op}: could not stop guiding first; moving anyway")]
     private partial void LogGuidingStopBeforeMoveFailed(Exception exception, string op);
 
-    public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) {
+    // The safety and fault parks: never yield to the motion owner (they end Polar Align through its takeover first).
+    public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        ParkAsync(request, idempotencyKey, yieldToOwner: false, ct);
+
+    // #2066 (ARA-2) — the user's park (POST /park): counted in the motion dispatch, as a REST GoTo is.
+    public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) =>
+        ParkAsync(request, idempotencyKey, yieldToOwner: true, ct);
+
+    private Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, bool yieldToOwner, CancellationToken ct) {
         // No ArgumentNullException.ThrowIfNull(request): the /park endpoint substitutes
         // `request ?? new ParkRequestDto()`, so request is never null here, and the Reason field is
         // unused by the park itself — the param is kept only for the interface contract.
@@ -313,21 +402,59 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // Not-connected / disposed still throw synchronously (the endpoint and tests rely on it); only
         // the guider stop and the move itself are deferred.
         var client = RequireConnectedClient();
-        Lease.CancelAll();
-        return ParkAfterGuidingStoppedAsync(client, idempotencyKey);
+        // #2073 — read before the pose check and the guider stop, as the GoTo does: a Stop Mount or emergency
+        // stop that lands after this request must win over its tracking enable and park. #2066 — a move from here on.
+        var (motion, abortEpoch) = NoteMotionRequested();
+        return ParkAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, yieldToOwner, ct);
     }
 
-    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey) {
-        await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
-        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
-        NoteMountCommand(w => w.NoteParkCommanded());
-        _ = Task.Run(() => RunControlInBackground("telescope.park", client, c => {
-            // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
-            // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
-            // issue the park. The park itself stops tracking once the mount reaches the park position.
-            TryEnableTracking(c);
-            c.Park();
-        }), CancellationToken.None);
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
+    private async Task<OperationAcceptedDto> ParkAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, bool yieldToOwner, CancellationToken ct) {
+        try {
+            // #2070 — a park drives to a position the mount's model computes: refused while that model is
+            // not trusted, before the leases end or the guider stops. The safety and fault parks fall back to
+            // stopping tracking on this refusal.
+            await ThrowIfPoseUnverifiedAsync(client, "park", ct).ConfigureAwait(false);
+        } catch {
+            NoteMotionFailed(motion, client);
+            throw;
+        }
+        // #2066 (ARA-2) — the user's park: the owner was checked when it was accepted, and Polar Align may have taken the
+        // mount during the checks. Checked again and counted in one step with the owner, before the park ends anything:
+        // refused once Polar Align has it, and Polar Align cannot take it while the park is on its way (to its send).
+        var dispatch = yieldToOwner ? BeginRestMotionDispatchOrRefuse("telescope.park", "park", motion, client) : null;
+        try {
+            // #2066 — a park ends any routine that drives the motors (Polar Align): it counts as a stop, so the routine starts
+            // no further move and fails at its next check. A Stop Mount that landed since the request still wins (below).
+            abortEpoch = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.Park, motion);
+            Lease.CancelAll();
+            await StopGuidingBeforeMountMoveAsync("park").ConfigureAwait(false);
+            lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — parking isn't a target command
+            NoteMountCommand(w => w.NoteParkCommanded());
+            _ = Task.Run(() => {
+                using var sending = dispatch;
+                RunControlInBackground("telescope.park", client, c => {
+                    // Some mounts (e.g. iOptron) won't park from a stationary/home state with tracking off —
+                    // enable tracking first (best-effort), exactly as ConformU/NINA do before parking, then
+                    // issue the park. The park itself stops tracking once the mount reaches the park position.
+                    // #2073 — a stop that landed after this park was accepted wins: the park is dropped rather
+                    // than turning tracking back on and moving the mount after the stop.
+                    SettleOnThrow(motion, c, () => {
+                        if (!TryEnableTrackingUnlessAborted(c, abortEpoch)) {
+                            NoteMotionFailed(motion, c);
+                            LogParkDroppedAfterAbort(StoppedSinceWords(abortEpoch)); // #2107 — named: a second park in flight too
+                            return;
+                        }
+                        SendMotion(motion, c, c.Park);
+                    });
+                });
+            }, CancellationToken.None);
+        } catch {
+            dispatch?.Dispose();
+            NoteMotionFailed(motion, client);
+            throw;
+        }
         return Accepted("telescope.park", idempotencyKey);
     }
 
@@ -340,23 +467,60 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) {
         var client = RequireConnectedClient(); // synchronous throw when not connected / disposed, as before
-        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey);
+        var (motion, abortEpoch) = NoteMotionRequested(); // #2066 — read at the request, and a move from here on, as Park does
+        return FindHomeAfterGuidingStoppedAsync(client, idempotencyKey, abortEpoch, motion, ct);
     }
 
-    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey) {
-        await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
-        lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
-        // FindHome blocks until the mount reaches its home switch; run it off the request
-        // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
-        // AtHome when it settles. The panel gates this on CanFindHome.
-        // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
-        // workaround executes fine from a stationary state — verified on-device, the mount moves
-        // to home with tracking off — so homing doesn't need the motors pre-engaged.
-        // Park semantics for the watch (matching the mediator's RunMountOpAsync): homing ends
-        // idle-not-parked with tracking off, so a motion note would leave the old expectation
-        // armed and fire a spurious TrackingLost ~6 s after a normal Find Home (review finding).
-        NoteMountCommand(w => w.NoteParkCommanded());
-        _ = Task.Run(() => RunControlInBackground("telescope.findhome", client, c => c.FindHome()), CancellationToken.None);
+    [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
+    private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
+        try {
+            // #2070 — FindHome goes to Home by the mount's model on today's drivers (AlpacaBridge's iOptron
+            // sends :MH#, a no-op at a false zero), so it is refused while the position is unverified.
+            await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
+        } catch {
+            NoteMotionFailed(motion, client);
+            throw;
+        }
+        // #2066 (ARA-2) — the user's Find Home (nothing else calls this) is counted in the dispatch as the user's park is.
+        var dispatch = BeginRestMotionDispatchOrRefuse("telescope.findhome", "home", motion, client);
+        try {
+            // #2066 — like a park, a Find Home ends any routine that drives the motors (Polar Align), and ends the leases: a
+            // renewal it refuses must not leave a lease to run out and send MoveAxis 0 in the middle of the homing.
+            var fence = BumpAbortEpochUnlessAbortedSince(abortEpoch, MountStopReasons.FindHome, motion);
+            Lease.CancelAll();
+            await StopGuidingBeforeMountMoveAsync("findhome").ConfigureAwait(false);
+            lock (_gate) { TargetLatch.NoteNonTargetCommand(); } // §57.9 — homing isn't a target command
+            // FindHome blocks until the mount reaches its home switch; run it off the request
+            // thread like Park/Unpark so the endpoint returns 202 and the refresh cache surfaces
+            // AtHome when it settles. The panel gates this on CanFindHome.
+            // No TryEnableTracking here (unlike Park): the iOptron homing that motivated the park
+            // workaround executes fine from a stationary state — verified on-device, the mount moves
+            // to home with tracking off — so homing doesn't need the motors pre-engaged.
+            // Park semantics for the watch (matching the mediator's park and find home requests, which
+            // note NoteParkCommanded before dispatch): homing ends idle-not-parked with tracking off,
+            // so a motion note would leave the old expectation armed and fire a spurious TrackingLost
+            // ~6 s after a normal Find Home (review finding).
+            NoteMountCommand(w => w.NoteParkCommanded());
+            _ = Task.Run(() => {
+                using var sending = dispatch;
+                RunControlInBackground("telescope.findhome", client, c => {
+                    // #2066 — a stop that landed after this Find Home was accepted (Stop Mount, Emergency Stop's latch, the
+                    // watchdog) wins, as it does over a park or a GoTo: the homing is dropped rather than moving the mount
+                    // after the stop.
+                    if (AbortedSince(fence)) {
+                        NoteMotionFailed(motion, c);
+                        LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
+                        return;
+                    }
+                    SendMotion(motion, c, c.FindHome);
+                });
+            }, CancellationToken.None);
+        } catch {
+            dispatch.Dispose();
+            NoteMotionFailed(motion, client);
+            throw;
+        }
         return Accepted("telescope.findhome", idempotencyKey);
     }
 
@@ -394,13 +558,290 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         RefreshCacheOnce();
     }
 
-    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) {
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read is 'no fresh reading' (null) by contract; the caller falls back or fails its own way.")]
+    public async Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) {
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            return null;
+        }
+        try {
+            var (ra, dec) = await Task.Run(() => (client.RightAscension, client.Declination), ct).ConfigureAwait(false);
+            return double.IsFinite(ra) && double.IsFinite(dec) ? (ra, dec) : null;
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    private long _abortEpoch;
+
+    public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
+
+    // #2066 — who raised the latest counts (Stop Mount, Emergency Stop, the watchdog, a park, a Find Home, Polar Align's own
+    // stop), so a routine that sees the count change can say what stopped it. Only the last few are kept: a routine reads
+    // them right after the change. Every increment happens under this lock, so a conditional bump can test and count in one step.
+    private readonly object _abortReasonsGate = new();
+    private readonly Queue<(long Epoch, string Reason)> _abortReasons = new();
+    private const int AbortReasonsKept = 32;
+
+    private long BumpAbortEpoch(string reason) {
+        lock (_abortReasonsGate) {
+            var epoch = Interlocked.Increment(ref _abortEpoch);
+            _abortReasons.Enqueue((epoch, reason));
+            while (_abortReasons.Count > AbortReasonsKept) {
+                _abortReasons.Dequeue();
+            }
+            return epoch;
+        }
+    }
+
+    /// <summary>#2066 — a park or Find Home counts as a stop for the routines that drive the motors, unless a stop came since
+    /// <paramref name="abortEpoch"/> (the request's own reading): then the request is dropped later, as before, and the count
+    /// stays. Returns the reading the request fences its own steps on from here.</summary>
+    internal long BumpAbortEpochUnlessAbortedSince(long abortEpoch, string reason, long? motion = null) {
+        lock (_abortReasonsGate) {
+            if (Interlocked.Read(ref _abortEpoch) != abortEpoch) {
+                return abortEpoch;
+            }
+            var bumped = BumpAbortEpoch(reason);
+            if (motion is long token && _pendingMotions.TryGetValue(token, out var note)) {
+                note.From = bumped; // #2066 — the park or Find Home is as new as its own count
+            }
+            return bumped;
+        }
+    }
+
+    public void FenceMotion(string reason) {
+        BumpAbortEpoch(reason);
+        LogMotionFenced(reason);
+    }
+
+    public string? AbortReasonSince(long abortEpoch, string? except) {
+        lock (_abortReasonsGate) {
+            foreach (var (epoch, reason) in _abortReasons) {
+                if (epoch > abortEpoch && !string.Equals(reason, except, StringComparison.Ordinal)) {
+                    return reason;
+                }
+            }
+        }
+        return null;
+    }
+
+    // #2066 — the motion commands (a GoTo or slew, a park, a Find Home; REST, sequencer or mediator) and the abort-count
+    // reading each carries. A REST command carries its request's reading (a stop counted since then drops it, so it is no
+    // newer than that stop); a mediator one, the count when it is sent. A raced GoTo whose latest count is a stop is not
+    // aborted again when a command at least as new as that stop reached the mount: the user moved the mount after the stop,
+    // and an AbortSlew now would stop the newer move. A command whose call is on the wire when the raced GoTo returns may yet
+    // be refused, so the GoTo's second abort is kept back (_deferredReAbort) until it settles: sent if the command fails and
+    // nothing else as new is left. A command still in its checks (a guider stop, a pose or system read, a pier-side settle)
+    // does not hold the abort back: that would leave the mount driving on to the stopped GoTo's target for as long as the
+    // checks take. The abort goes out at once, and every command waits for an abort on its way (_reAbortSent) before its own
+    // call, so the abort cannot reach the mount after it. Guarded by _abortReasonsGate.
+    private sealed class PendingMotion(long? from) {
+        /// <summary>The abort-count reading; null for a mediator command until its send (it counts from then).</summary>
+        public long? From { get; set; } = from;
+        /// <summary>The command's call is on its way to the mount (from <see cref="SendMotion"/> on).</summary>
+        public bool OnTheWire { get; set; }
+    }
+
+    private long _acceptedMotionFrom = -1;
+    private readonly Dictionary<long, PendingMotion> _pendingMotions = new();
+    private long _nextMotionToken;
+    private (long Epoch, string Reason)? _deferredReAbort;
+    private Task _reAbortSent = Task.CompletedTask;
+
+    /// <summary>How long a motion command waits for a raced GoTo's second abort to reach the mount before its own call.</summary>
+    internal TimeSpan ReAbortWaitBound { get; set; } = TimeSpan.FromSeconds(15);
+
+    /// <summary>#2066 — notes a motion command on its way; returns the token <see cref="NoteMotionSent"/> or
+    /// <see cref="NoteMotionFailed"/> settles. <paramref name="abortEpoch"/> is its own reading; null = the count at its send
+    /// (a sequencer or mediator command, which no stop drops).</summary>
+    private long NoteMotionDispatched(long? abortEpoch) {
+        lock (_abortReasonsGate) {
+            var token = ++_nextMotionToken;
+            _pendingMotions[token] = new PendingMotion(abortEpoch);
+            return token;
+        }
+    }
+
+    /// <summary>#2066 — a REST move noted at its request: its reading and token, read and noted in one step.</summary>
+    private (long Token, long AbortEpoch) NoteMotionRequested() {
+        lock (_abortReasonsGate) {
+            var epoch = Interlocked.Read(ref _abortEpoch);
+            return (NoteMotionDispatched(epoch), epoch);
+        }
+    }
+
+    /// <summary>#2066 — the mount took the command: it replaces a raced GoTo, whose kept-back abort is dropped.</summary>
+    private void NoteMotionSent(long token) {
+        lock (_abortReasonsGate) {
+            if (!_pendingMotions.Remove(token, out var note)) {
+                return;
+            }
+            var from = note.From ?? Interlocked.Read(ref _abortEpoch);
+            if (from > _acceptedMotionFrom) {
+                _acceptedMotionFrom = from;
+            }
+            if (_deferredReAbort is { } deferred && from >= deferred.Epoch) {
+                _deferredReAbort = null;
+            }
+        }
+    }
+
+    /// <summary>#2066 — the command was refused or dropped and moved nothing. A raced GoTo's second abort that waited on it
+    /// is sent now, unless another command as new is still on its way or reached the mount.</summary>
+    private void NoteMotionFailed(long token, ITelescopeDevice client) {
+        string reason;
+        TaskCompletionSource sent;
+        lock (_abortReasonsGate) {
+            if (!_pendingMotions.Remove(token) || _deferredReAbort is not { } deferred || NewerMotion(deferred.Epoch) != NewerMotionState.None) {
+                return;
+            }
+            _deferredReAbort = null;
+            reason = deferred.Reason;
+            sent = ReAbortOnItsWayLocked();
+        }
+        LogDeferredReAbortSent(reason);
+        _ = SendReAbortAsync(client, reason, sent);
+    }
+
+    /// <summary>#2066 — a raced GoTo's second abort is going out: a command that starts its call from now on waits for it
+    /// (<see cref="SendMotion"/>). Under _abortReasonsGate, in the same step that decides the abort.</summary>
+    private TaskCompletionSource ReAbortOnItsWayLocked() {
+        var sent = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _reAbortSent = _reAbortSent.IsCompleted ? sent.Task : Task.WhenAll(_reAbortSent, sent.Task);
+        return sent;
+    }
+
+    /// <summary>#2066 — sends a raced GoTo's second abort and lets the commands waiting on it go (<paramref name="sent"/>).</summary>
+    private async Task SendReAbortAsync(ITelescopeDevice client, string reason, TaskCompletionSource sent) {
+        try {
+            await AbortSlewCoreAsync(client, reason, rethrow: false, counted: true).ConfigureAwait(false);
+        } finally {
+            sent.TrySetResult();
+        }
+    }
+
+    /// <summary>#2066 — sends a noted motion command and settles its note: sent when the call returns, failed when it throws.
+    /// A raced GoTo's second abort already on its way goes first: the command waits for it (bounded), so the abort cannot
+    /// reach the mount after the command and stop it. From here on the command is on the wire: a raced GoTo that returns now
+    /// keeps its abort back for it.</summary>
+    private void SendMotion(long token, ITelescopeDevice client, Action send) {
+        try {
+            WaitForReAbort(NoteMotionOnTheWire(token));
+            send();
+        } catch {
+            NoteMotionFailed(token, client);
+            throw;
+        }
+        NoteMotionSent(token);
+    }
+
+    /// <summary>#2066 — the command's checks are done and its calls start now: a raced GoTo that returns from here on keeps
+    /// its second abort back for it. Returns the second aborts already on their way, which the command waits for first.</summary>
+    private Task NoteMotionOnTheWire(long token) {
+        lock (_abortReasonsGate) {
+            if (_pendingMotions.TryGetValue(token, out var note)) {
+                note.OnTheWire = true;
+                note.From ??= Interlocked.Read(ref _abortEpoch);
+            }
+            return _reAbortSent;
+        }
+    }
+
+    private void WaitForReAbort(Task reAbort) {
+        if (reAbort.IsCompleted) {
+            return;
+        }
+        LogMoveWaitsForReAbort();
+        if (!reAbort.Wait(ReAbortWaitBound)) {
+            LogMoveReAbortWaitExpired((int)ReAbortWaitBound.TotalSeconds);
+        }
+    }
+
+    /// <summary>#2066 — runs a noted move's steps; a throw before its send settles the note as failed (never left on its way).</summary>
+    private void SettleOnThrow(long token, ITelescopeDevice client, Action steps) {
+        try {
+            steps();
+        } catch {
+            NoteMotionFailed(token, client); // a no-op once SendMotion settled it
+            throw;
+        }
+    }
+
+    private enum NewerMotionState { None, Pending, Sent }
+
+    // Under _abortReasonsGate. Only a command on the wire is Pending: one still in its checks has not started its call, and
+    // waits for the abort before it does (SendMotion).
+    private NewerMotionState NewerMotion(long epoch) =>
+        _acceptedMotionFrom >= epoch ? NewerMotionState.Sent
+        : _pendingMotions.Values.Any(note => note.OnTheWire && (note.From ?? long.MaxValue) >= epoch) ? NewerMotionState.Pending
+        : NewerMotionState.None;
+
+    /// <summary>#2066 — what a raced GoTo whose PUT returned after the counts since <paramref name="abortEpoch"/> does.
+    /// <c>Move</c> is the park or Find Home, when one was the LATEST count: a move that a later AbortSlew would stop. A park
+    /// or Find Home that a stop then stopped is not in force, so <c>Move</c> is null and the GoTo is aborted again.
+    /// <c>Stop</c> is the first count that is not a park or Find Home, the reason the re-abort carries. <c>Newer</c>: a
+    /// motion command at least as new as the latest count reached the mount (<c>Sent</c>), or its call is on the wire
+    /// (<c>Pending</c>: the second abort is kept back, and sent if that command fails). <c>AbortSent</c>: the GoTo is to be
+    /// aborted again, and every command that starts its call from now on waits until this is completed.</summary>
+    private (string? Move, string? Stop, NewerMotionState Newer, TaskCompletionSource? AbortSent) CountedSince(long abortEpoch) {
+        string? latest = null;
+        long latestEpoch = 0;
+        string? stop = null;
+        lock (_abortReasonsGate) {
+            foreach (var (epoch, reason) in _abortReasons) {
+                if (epoch <= abortEpoch) {
+                    continue;
+                }
+                latest = reason;
+                latestEpoch = epoch;
+                if (stop is null && reason is not (MountStopReasons.Park or MountStopReasons.FindHome)) {
+                    stop = reason;
+                }
+            }
+            var newer = latest is null ? NewerMotionState.None : NewerMotion(latestEpoch);
+            if (newer == NewerMotionState.Pending) {
+                _deferredReAbort = (latestEpoch, stop ?? latest ?? MountStopReasons.UserRequest);
+            }
+            var move = latest is MountStopReasons.Park or MountStopReasons.FindHome ? latest : null;
+            // Decided here, under the gate: a command that starts its call after this waits for the abort (SendMotion).
+            var abortSent = move is null && newer == NewerMotionState.None ? ReAbortOnItsWayLocked() : null;
+            return (move, stop, newer, abortSent);
+        }
+    }
+
+    // #2089 — bumped by ResetSessionLocked (adopt, disconnect, trip): a new mount session.
+    private long _sessionEpoch;
+
+    public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
+
+    // #2083 — bumped by each sync the driver accepted (the mediator's, the REST slew's sync).
+    private long _syncEpoch;
+
+    public long SyncEpoch => Interlocked.Read(ref _syncEpoch);
+
+    public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, unlessAbortedSince: null, ct);
+
+    public async Task MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) {
         // ct is intentionally NOT honored — see the ITelescopeService.MoveAxisAsync contract: a stop
         // must always run to completion even if the request token cancelled, or a dropped token could
         // strand the mount in motion (the same panic-stop reasoning as AbortSlewAsync). Discarded
         // explicitly so the omission reads as deliberate, not an oversight.
         _ = ct;
         var client = RequireConnectedClient();
+        // #2070 — a routine's motor move (polar alignment, the only unlessAbortedSince caller) turns the
+        // mount from where its model says it is: refused while that is unverified. The pad's own nudge
+        // (no unlessAbortedSince) and every stop stay allowed, so the user can always back the mount off.
+        if (unlessAbortedSince is not null && rate != 0 && !double.IsNaN(rate)) {
+            await ThrowIfPoseUnverifiedAsync(client, "moveaxis", CancellationToken.None).ConfigureAwait(false);
+        }
         // Manual nudge: start (rate != 0) or stop (rate 0) constant-rate motion on one axis. The
         // direction pad sends a rate on press and 0 on release; AbortSlew (the Stop button) is the
         // backstop that halts all axes.
@@ -425,18 +866,28 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         if (borrowedPrimary && rate != 0 && Interlocked.Exchange(ref _secondaryFallbackLogged, 1) == 0) {
             LogSecondaryBandsBorrowed(_logger);
         }
-        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
-            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
-        }
         // #1649 — a stop or an unleased move ends any lease on this axis before the driver call; a
         // leased move starts its deadline only once the mount took it. A renewal at the speed the
         // axis already moves at only extends the lease: the driver is not asked again.
+        // A routine's renewal after a stop (Stop Mount, Emergency Stop, a park or Find Home) would extend or restart its
+        // motor: refuse it. #2066 — checked before the renewal, not after it: Emergency Stop's first step and a park count
+        // the stop without cancelling the leases, so a renewal that only extended a lease would outlive them. A refused
+        // renewal lets the lease run out, and the lease timer stops the axis.
+        if (effective != 0 && unlessAbortedSince is long since && Interlocked.Read(ref _abortEpoch) != since) {
+            throw new InvalidOperationException($"the mount was stopped ({StoppedSinceWords(since)}) after this move began; the move is not restarted");
+        }
         if (effective == 0 || leaseMs is null) {
             Lease.Cancel(axis);
         } else if (Lease.TryRenew(axis, effective, leaseMs.Value, LeaseClock.GetUtcNow())) {
+            NotePoseAxis(axis, moving: true); // #2070 — still Ara's move
             return;
         }
+        // Logged once per driver call, not on every lease renewal (a polar-align move renews four times a second).
+        if (rate != 0 && !double.IsNaN(rate) && effective != rate) {
+            LogMoveAxisRateSnapped(_logger, axis, rate, effective);
+        }
         NoteMountCommand(w => w.NoteMotionCommanded());
+        NotePoseAxis(axis, moving: effective != 0); // #2070
         try {
             await Task.Run(() => client.MoveAxis(axisEnum, effective), CancellationToken.None).ConfigureAwait(false);
         } catch (ASCOM.DriverException ex) when (IsSuperseded(ex)) {
@@ -446,12 +897,23 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             LogMoveAxisSuperseded(_logger, axis, effective);
             return;
         }
+        // An abort that landed between the check above and the driver call: the move may have reached the mount
+        // after the AbortSlew, so stop the axis again rather than leave it running.
+        if (effective != 0 && unlessAbortedSince is long racedSince && Interlocked.Read(ref _abortEpoch) != racedSince) {
+            await Task.Run(() => client.MoveAxis(axisEnum, 0), CancellationToken.None).ConfigureAwait(false);
+            throw new InvalidOperationException($"the mount was stopped ({StoppedSinceWords(racedSince)}) while this move started; the axis is stopped again");
+        }
         if (effective != 0 && leaseMs is int ms) {
             Lease.Renew(axis, effective, ms, LeaseClock.GetUtcNow());
             ArmLeaseTimer(true);
         }
         RefreshCacheOnce();
     }
+
+    /// <summary>#2107 — who stopped the mount since <paramref name="since"/>, for a refused renewal's sentence: the stop
+    /// from outside the routine when there is one (Polar Align reads its own stop last), else whatever counted.</summary>
+    private string StoppedSinceWords(long since) =>
+        MountStopReasons.Describe(AbortReasonSince(since, except: MountStopReasons.PolarAlign) ?? AbortReasonSince(since, except: null));
 
     internal static bool IsSuperseded(Exception ex) =>
         ex.Message.Contains("superseded", StringComparison.OrdinalIgnoreCase);
@@ -477,6 +939,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         foreach (var axis in expired) {
             try {
                 NoteMountCommand(w => w.NoteMotionCommanded());
+                NotePoseAxis(axis, moving: false); // #2070
                 client.MoveAxis((TelescopeAxis)axis, 0);
                 LogMoveAxisLeaseExpired(_logger, axis);
             } catch (Exception ex) {
@@ -595,13 +1058,35 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         Message = "MoveAxis lease on axis {Axis} expired, but stopping the axis failed (#1649).")]
     private static partial void LogMoveAxisLeaseStopFailed(ILogger logger, Exception ex, int axis);
 
-    public async Task AbortSlewAsync(CancellationToken ct) {
+    public Task AbortSlewAsync(CancellationToken ct) => AbortSlewAsync(MountStopReasons.UserRequest, ct);
+
+    public async Task AbortSlewAsync(string reason, CancellationToken ct) {
         var client = RequireConnectedClient();
         // §57 panic stop: issue AbortSlew immediately (universal — every mount supports it).
         // CancellationToken.None (not ct) is critical: Task.Run(lambda, ct) returns a pre-cancelled
         // task WITHOUT running the lambda if ct is already cancelled, so an HTTP-timeout/disconnect
         // that cancelled the token would silently never send the abort and the slew would continue.
-        await AbortSlewCoreAsync(client, reason: "user_request", rethrow: true).ConfigureAwait(false);
+        _ = ct;
+        await AbortSlewCoreAsync(client, reason, rethrow: true).ConfigureAwait(false);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A failed read is 'no fresh reading' (null) by contract; the caller treats it as not confirmed.")]
+    public async Task<bool?> ReadSlewingNowAsync(CancellationToken ct) {
+        ITelescopeDevice? client;
+        lock (_gate) {
+            client = _lifecycle.Live;
+        }
+        if (client is null) {
+            return null;
+        }
+        try {
+            return await Task.Run(() => client.Slewing, ct).ConfigureAwait(false);
+        } catch (OperationCanceledException) {
+            throw;
+        } catch (Exception) {
+            return null;
+        }
     }
 
     /// <summary>The shared §57 abort flow — the user panic stop (<c>user_request</c>, throwing)
@@ -609,9 +1094,21 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     /// every abort source gets the same watch-noting races and lifecycle guarantees.</summary>
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Fire-and-forget abort boundary (rethrow=false): the watchdog's StopSlew must never throw into the flip-recovery path; the failure is logged. The throwing path (rethrow=true) re-raises after the lifecycle bookkeeping. CA1031's log-and-recover boundary applies.")]
-    private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow) {
+    private async Task AbortSlewCoreAsync(ITelescopeDevice client, string reason, bool rethrow, bool counted = false) {
+        // Before the lease goes: a routine's renewal must see the abort first. A renewal landing between the two only
+        // extends a lease that is cancelled on the next line, and makes no driver call, so the order is safe. A stop that
+        // is already counted (the GoTo's abort again, SlewInBackgroundAsync) is not counted twice.
+        if (!counted) {
+            BumpAbortEpoch(reason);
+        }
+        lock (_abortReasonsGate) {
+            _deferredReAbort = null; // #2066 — this AbortSlew stops a raced GoTo whose second abort was kept back
+        }
         Lease.CancelAll();
         NoteMountCommand(w => w.NoteMotionCommanded());
+        lock (_gate) {
+            PoseTrust.NoteAllAxesStopped(PoseClock.GetUtcNow()); // #2070
+        }
         // §57.5 — measure issue latency (request-received → device call returned) per Stop Mount
         // incident so the panic budget is tunable from the logs. The tap→request network leg is
         // client-side and unmeasurable here.
@@ -671,25 +1168,112 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Background slew boundary: the blocking ASCOM SlewToCoordinatesAsync/SyncToCoordinates can throw arbitrary driver/HTTP exceptions, and a concurrent Disconnect/Dispose can dispose the captured client mid-call; any escape must be contained and logged, never fault the fire-and-forget task or the daemon. CA1031's log-and-recover boundary applies.")]
-    private void SlewInBackground(ITelescopeDevice client, double raHours, double decDeg, bool sync) {
+    private async Task SlewInBackgroundAsync(ITelescopeDevice client, double raHours, double decDeg, bool sync, long abortEpoch, long? motion, Task reAbort) {
         try {
+            // #2066 (ARA-2) — the owner was checked when the GoTo or sync was accepted; Polar Align may have taken the
+            // mount since (a GoTo waits up to 3 s for the guider to stop). Checked again and counted in one step with the
+            // owner, so Polar Align cannot take the mount while this goes out, and it is dropped once Polar Align has it.
+            using var dispatch = TryBeginMotionDispatch(out var owner);
+            if (dispatch is null) {
+                if (motion is long owned) {
+                    NoteMotionFailed(owned, client); // #2066 — dropped: it moved nothing, so a kept-back second abort may go out
+                }
+                LogSlewDroppedOwned(sync ? "sync" : "slew", raHours, decDeg, owner!);
+                ClearPendingSlewTarget();
+                return;
+            }
             if (sync) {
                 // Sync recalibrates the pointing model to the given coordinates without moving.
                 client.SyncToCoordinates(raHours, decDeg);
+                Interlocked.Increment(ref _syncEpoch);
             } else {
+                // #2073 — a Stop Mount or emergency stop (AbortSlew, then Tracking off) that landed after
+                // this goto was accepted wins: the goto is dropped rather than turning tracking back on
+                // and moving the mount after the stop.
+                // Same pre-slew tracking enable as the mediator goto: ITelescopeV4 mounts refuse an
+                // equatorial goto with Tracking off (#2073; AlpacaBridge answers "SlewToCoordinatesAsync
+                // requires Tracking to be true", e.g. right after Find Home). Read fresh on this thread;
+                // a refused write is logged at Debug and the slew attempt stays authoritative.
+                // #2066 — a raced GoTo's second abort on its way when this GoTo was dispatched goes first.
+                WaitForReAbort(reAbort);
+                if (!TryEnableTrackingUnlessAborted(client, abortEpoch)) {
+                    if (motion is long dropped) {
+                        NoteMotionFailed(dropped, client);
+                    }
+                    LogSlewDroppedAfterAbort(raHours, decDeg);
+                    ClearPendingSlewTarget();
+                    return;
+                }
                 // Async goto: returns immediately, Slewing goes true; the refresh cache surfaces
                 // State="slewing" until the mount settles.
-                client.SlewToCoordinatesAsync(raHours, decDeg);
+                if (motion is long token) {
+                    SendMotion(token, client, () => client.SlewToCoordinatesAsync(raHours, decDeg));
+                } else {
+                    client.SlewToCoordinatesAsync(raHours, decDeg);
+                }
+                // #2066 (ADR rule 3) — a stop that landed while the GoTo's PUT was on the wire (Emergency Stop's latch, Stop
+                // Mount, the watchdog) may have reached the mount before the GoTo did: the mount then slews after the stop.
+                // Abort it again, under the stop's own reason; the stop is already counted. A park or Find Home counted
+                // LAST is a move of its own that must win: an AbortSlew now would stop it, so the GoTo is left to it. One
+                // that a later stop stopped wins nothing: the GoTo is aborted again. A GoTo, park or Find Home sent after
+                // the latest stop (REST, sequencer or mediator) is the user's newer move: it is not aborted either. One whose
+                // call is on the wire may yet be refused: the second abort is kept back, and sent if it is (NoteMotionFailed).
+                // One still in its checks does not hold the abort back: it goes out now, and that move waits for it (SendMotion).
+                if (AbortedSince(abortEpoch)) {
+                    var (move, stop, newer, abortSent) = CountedSince(abortEpoch);
+                    if (move is not null) {
+                        LogSlewNotAbortedAgainMoveWins(raHours, decDeg, move);
+                        return;
+                    }
+                    if (newer == NewerMotionState.Sent) {
+                        LogSlewNotAbortedAgainNewerCommand(raHours, decDeg);
+                        return;
+                    }
+                    if (newer == NewerMotionState.Pending) {
+                        LogSlewReAbortKeptBack(raHours, decDeg);
+                        return;
+                    }
+                    if (stop is null) {
+                        // The counts since the reading are no longer kept (more than AbortReasonsKept came while the PUT
+                        // was on the wire): the stop's reason is lost. Abort anyway, under a stand-in reason, and say so.
+                        LogSlewAbortReasonUnknown(raHours, decDeg);
+                    }
+                    var by = stop ?? MountStopReasons.UserRequest;
+                    LogSlewAbortedAgain(raHours, decDeg, by);
+                    await SendReAbortAsync(client, by, abortSent!).ConfigureAwait(false);
+                    return;
+                }
             }
             RefreshCacheOnce();
         } catch (Exception ex) {
-            LogSlewFailed(ex, raHours, decDeg);
+            // The reason goes in the one-line message too (#2073), not only in the exception (@x).
+            LogSlewFailed(ex, raHours, decDeg, ex.Message);
+            if (motion is long failed) {
+                NoteMotionFailed(failed, client); // #2066 — a no-op once the PUT was settled
+            }
             // The dispatch failed — no episode will open for this command, so its noted target
             // must not ride an unrelated later episode's slew_started (#836 r2).
-            lock (_gate) {
-                SlewWatch.ClearPendingTarget();
-            }
+            ClearPendingSlewTarget();
         }
+    }
+
+    private bool AbortedSince(long abortEpoch) => Interlocked.Read(ref _abortEpoch) != abortEpoch;
+
+    /// <summary>#2073 — the pre-move tracking enable of a REST GoTo or Park, unless a Stop Mount or emergency
+    /// stop came since <paramref name="abortEpoch"/>. False = drop the move: the stop came before the enable,
+    /// or during it (then tracking this call turned on is turned off again, as the stop left it).</summary>
+    private bool TryEnableTrackingUnlessAborted(ITelescopeDevice client, long abortEpoch) {
+        if (AbortedSince(abortEpoch)) {
+            return false;
+        }
+        var trackingTurnedOn = TryEnableTracking(client);
+        if (AbortedSince(abortEpoch)) {
+            if (trackingTurnedOn) {
+                _ = TrySetTracking(client, enabled: false);
+            }
+            return false;
+        }
+        return true;
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -699,7 +1283,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             action(client);
             RefreshCacheOnce();
         } catch (Exception ex) {
-            LogControlFailed(ex, op);
+            LogControlFailed(ex, op, ex.Message);
         }
     }
 
@@ -750,6 +1334,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         // clamp cache — one pair of GETs, only while either still needs them.
         var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
         var caps = needCaps ? ReadCapabilities(client, pad) : null;
+        var alignmentMode = needCaps ? ReadAlignmentMode(client) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -763,6 +1348,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         string? axisRatesUnknownReason = null;
         int? republishedBands = null;
         (double? Primary, double? Secondary) axisRatesUnknownValues = default;
+        var poseFlagged = false;
+        string? poseReason = null;
         // #1246 — the ladder's "recovered" waits for a tick without the latch and with RA/Dec read (the module's
         // clean-read gate); the same failure feeds read health (ADR 0011 rule 2).
         var latched = readError is not null && IsLatchedBridgeFault(readError);
@@ -781,6 +1368,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 if (caps is not null) {
                     _capabilities = caps;
                     _mountActions = actions;
+                    _alignmentMode = alignmentMode;
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -830,9 +1418,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 // driver whose Slewing is never implemented never opens an episode either, since
                 // the runtime state can never read "slewing" — so nothing is left unfinished.)
                 slewVerdict = slewingUnknown ? new SlewEventWatch.Verdict(SlewEventWatch.Kind.None) : SlewWatch.Observe(runtime.State == "slewing");
+                // #2070 — the same snapshot decides whether the position can be trusted.
+                poseFlagged = ObservePoseLocked(runtime, slewingUnknown);
+                poseReason = PoseTrust.Reason;
                 watchedDevice = _lifecycle.Device;
             },
             AfterCommit: () => {
+                if (poseFlagged && poseReason is not null) {
+                    AfterPoseFlagged(poseReason);
+                }
                 if (republishedBands is { } republished) {
                     LogPadBandsRepublished(_logger, republished);
                 }
@@ -864,8 +1458,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                 }
                 // Outside the lock: it does profile IO. caps is non-null only on the first read of a connect.
                 if (caps is not null) {
+                    if (alignmentMode is null) {
+                        LogAlignmentModeUnknown(watchedDevice?.Name ?? "?"); // once per connect, with the caps
+                    }
                     MaybeAutoPopulateOptics(caps);
                 }
+                WatchMountClock(); // #2071 — a host clock step, or a recheck of an unverified mount clock
             });
     }
 
@@ -976,6 +1574,14 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private void NoteMountCommand(Action<MountTrackingWatch> note) {
         lock (_gate) {
             note(_trackingWatch);
+            PoseTrust.NoteCommand(PoseClock.GetUtcNow()); // #2070 — an Ara command explains the next position change
+        }
+    }
+
+    // #2070 — a command the tracking watch does not see (a mediator sync) still explains a position change.
+    private void NotePoseCommand() {
+        lock (_gate) {
+            PoseTrust.NoteCommand(PoseClock.GetUtcNow());
         }
     }
 
@@ -1334,6 +1940,29 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         metres > 0 ? metres * 1000.0 : null;
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Per-field read boundary: a driver that does not implement AlignmentMode throws; null means 'unknown', which keeps the counterweight check on (fail-safe) rather than failing the capability read. CA1031's log-and-recover boundary applies.")]
+    private static AlignmentMode? ReadAlignmentMode(ITelescopeDevice c) {
+        try {
+            var mode = c.AlignmentMode;
+            return Enum.IsDefined(mode) ? mode : null;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    /// <summary>#2073 — the mount type read at connect; see <see cref="ITelescopeService.MountAlignmentMode"/>.</summary>
+    public AlignmentMode? MountAlignmentMode {
+        get {
+            lock (_gate) {
+                return _alignmentMode;
+            }
+        }
+    }
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Mount {Device} did not report its AlignmentMode; the counterweight check on a GoTo stays on, as for a German equatorial mount (#2073)")]
+    private partial void LogAlignmentModeUnknown(string device);
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: an unsupported/transiently-failing EquatorialSystem read throws; report null ('read failed, retry next pass') rather than failing the whole refresh — RefreshPass distinguishes a failed read from a device genuinely reporting Other. CA1031's log-and-recover boundary applies.")]
     private static EquatorialCoordinateType? ReadEquatorialSystem(ITelescopeDevice c) {
         try {
@@ -1476,9 +2105,12 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
             IdempotencyKey: idempotencyKey);
 
     // Extracted (internal) for direct unit testing. ASCOM equatorial coordinates: RA in [0, 24)
-    // hours, Dec in [-90, 90] degrees (the poles are valid).
+    // hours, Dec in [-90, 90] degrees (the poles are valid). #2075 — NaN and ±Infinity are out of
+    // range too: every ordered comparison with NaN is false, so without the IsFinite terms a NaN
+    // target passed this check and reached the mount.
     internal static bool IsCoordinateOutOfRange(double raHours, double decDeg) =>
-        raHours < 0 || raHours >= 24 || decDeg < -90 || decDeg > 90;
+        !double.IsFinite(raHours) || !double.IsFinite(decDeg)
+        || raHours < 0 || raHours >= 24 || decDeg < -90 || decDeg > 90;
 
     public void Dispose() {
         _leaseTimer.Dispose();
@@ -1486,9 +2118,45 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         GC.SuppressFinalize(this);
     }
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed")]
-    private partial void LogSlewFailed(Exception ex, double ra, double dec);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° failed: {Reason}")]
+    private partial void LogSlewFailed(Exception ex, double ra, double dec, string reason);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed")]
-    private partial void LogControlFailed(Exception ex, string op);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}° dropped: the mount was stopped after the GoTo was accepted")]
+    private partial void LogSlewDroppedAfterAbort(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a stop ({By}) landed while the GoTo was being sent; the mount was aborted again")]
+    private partial void LogSlewAbortedAgain(double ra, double dec, string by);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a {Move} came while the GoTo was being sent; the GoTo is not aborted again, so the {Move} is not stopped")]
+    private partial void LogSlewNotAbortedAgainMoveWins(double ra, double dec, string move);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a newer move was sent after the stop that landed while the GoTo was being sent; the GoTo is not aborted again, so that move is not stopped")]
+    private partial void LogSlewNotAbortedAgainNewerCommand(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: a newer move sent after the stop that landed while the GoTo was being sent is still on its way; the GoTo is aborted again only if that move fails")]
+    private partial void LogSlewReAbortKeptBack(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope: the move sent after a stop failed, so the GoTo that raced the stop is aborted again now ({By})")]
+    private partial void LogDeferredReAbortSent(string by);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Telescope: a move waits for the second abort of a GoTo that raced a stop to reach the mount first")]
+    private partial void LogMoveWaitsForReAbort();
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope: the second abort of a GoTo that raced a stop did not finish within {Seconds} s; the move is sent anyway")]
+    private partial void LogMoveReAbortWaitExpired(int seconds);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope slew to RA {Ra}h Dec {Dec}°: no stop reason was kept for the count that raced the GoTo; aborting it again as user_request")]
+    private partial void LogSlewAbortReasonUnknown(double ra, double dec);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope park dropped: the mount was stopped ({By}) after the Park was accepted")]
+    private partial void LogParkDroppedAfterAbort(string by);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope Find Home dropped: the mount was stopped ({By}) after the Find Home was accepted")]
+    private partial void LogFindHomeDroppedAfterAbort(string by);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "telescope: motion fenced ({Reason}) — every routine that drives the motors stops, and no queued GoTo or Park goes out")]
+    private partial void LogMotionFenced(string reason);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Telescope control op {Op} failed: {Reason}")]
+    private partial void LogControlFailed(Exception ex, string op, string reason);
 }

@@ -26,7 +26,6 @@ using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -57,9 +56,16 @@ internal readonly record struct SwitchPortSnapshot(
 /// </summary>
 public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTargeting {
 
-    // Wall-clock ceiling for the blocking ASCOM write: switch writes are prompt (a relay/PWM set),
-    // so a call that exceeds this is a hung driver, not a slow device. Cancellation cuts it short.
-    private static readonly TimeSpan SwitchWriteHardTimeout = TimeSpan.FromMinutes(1);
+    // ADR 0011 rule 5: the switch write's timeout values. Wall-clock ceiling for the blocking ASCOM write:
+    // switch writes are prompt (a relay/PWM set), so a call that exceeds this is a hung driver, not a slow
+    // device. No terminal condition: the write returning is the command done.
+    internal static readonly DeviceCommandPolicy WritePolicy = new(Contracts.DeviceType.Switch,
+        HardTimeout: TimeSpan.FromMinutes(1), PollInterval: TimeSpan.FromMilliseconds(100), MaxPolls: 600);
+
+    // Test seam: millisecond timeouts. Production keeps WritePolicy.
+    internal DeviceCommandPolicy CommandPolicy { get; init; } = WritePolicy;
+    private DeviceCommand? _command;
+    private DeviceCommand Command => _command ??= new DeviceCommand(CommandPolicy, _faults, _logger);
 
     /// <summary>
     /// Synchronous live snapshot for the Sequencer, served from the §32.4 cache (no blocking HTTP on
@@ -214,79 +220,28 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
         return null;
     }
 
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Sequencer switch-write boundary: the blocking ASCOM SetSwitchValue can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-write; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task RunSwitchWriteAsync(ISwitchDevice client, short portId, double value, CancellationToken ct) {
-        try {
-            // Race the blocking ASCOM call against both the sequencer token and a wall-clock bound so
-            // a hung HTTP call can't pin the sequence thread. The abandoned write is observed.
-            var writeTask = Task.Run(() => client.SetSwitchValue(portId, value), CancellationToken.None);
-            using (var linked = CancellationTokenSource.CreateLinkedTokenSource(ct)) {
-                linked.CancelAfter(SwitchWriteHardTimeout);
-                var completed = await Task.WhenAny(writeTask, Task.Delay(Timeout.Infinite, linked.Token)).ConfigureAwait(false);
-                if (completed != writeTask) {
-                    ObserveQuietly(writeTask);
-                    ct.ThrowIfCancellationRequested();      // sequencer cancel → propagate
-                    throw new TimeoutException(
-                        $"switch write to port {portId} did not complete within {SwitchWriteHardTimeout.TotalSeconds:0}s");
-                }
-                await linked.CancelAsync().ConfigureAwait(false);
-            }
-            await writeTask.ConfigureAwait(false); // observe the write's result / surface its exception
+    // The module owns the race, the faults and the abandoned write. A fault may only be blamed on a live
+    // client: the faulted device is resolved from the live CONNECTED connection whose client ran the write
+    // (ReferenceEquals scan under the gate); a write whose client was superseded or disposed mid-call stays a
+    // log line (the §42.3 probe owns genuine disconnects).
+    private Task RunSwitchWriteAsync(ISwitchDevice client, short portId, double value, CancellationToken ct) =>
+        Command.RunAsync(new DeviceCommandRequest($"switch write to port {portId}",
+            Call: () => client.SetSwitchValue(portId, value),
+            IsLive: () => LiveDevice(client) is not null,
+            CurrentDevice: () => LiveDevice(client),
             // §42.4 — the write succeeded: remember what was commanded so the refresh loop can
             // check the read-back (same recording the REST SetValueAsync path does).
-            RecordCommandedValue(client, portId, value);
-        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
-            throw; // genuine sequencer cancellation — propagate so the run aborts
-        } catch (TimeoutException ex) {
-            // The wall-clock bound above: the blocking write never returned — a stalled op (§42.4).
-            // §42.2: the mediator's Task return signals nothing, so the throw is the only way the
-            // SetSwitchValue instruction's retry/failure machinery can engage.
-            LogSwitchWriteFailed(ex, portId, value);
-            PublishOpFault(client, EquipmentFaultKind.StallTimeout, ex.Message);
-            throw new SequenceEntityFailedException(ex.Message, ex);
-        } catch (Exception ex) {
-            LogSwitchWriteFailed(ex, portId, value);
-            PublishOpFault(client, EquipmentFaultKind.OpError, $"switch write to port {portId} failed: {ex.Message}");
-            throw new SequenceEntityFailedException($"switch write to port {portId} failed: {ex.Message}", ex);
-        }
-    }
+            Dispatched: () => RecordCommandedValue(client, portId, value)), ct);
 
-    // §42.4 — op-channel fault publish: the service is multi-instance (no single _device), so the
-    // faulted device's identity is resolved from the live CONNECTED connection whose client ran the
-    // write (TripConnectionLost-style ReferenceEquals scan under the gate). A fault may only be
-    // blamed on a live client — a write whose client was superseded or disposed by a user
-    // disconnect/reconnect mid-call must stay a log line (the §42.3 probe owns genuine disconnects),
-    // so no live match means no publish. Publish runs off-lock (EquipmentFaultHub.Publish is
-    // non-blocking and never throws into the caller).
-    private void PublishOpFault(ISwitchDevice client, EquipmentFaultKind kind, string details) {
-        if (_faults is null) {
-            return;
-        }
-        DiscoveredDeviceDto? device = null;
+    private DiscoveredDeviceDto? LiveDevice(ISwitchDevice client) {
         lock (_gate) {
             foreach (var conn in _connections.Values) {
                 if (conn.Lifecycle.IsLive(client)) {
-                    device = conn.Device;
-                    break;
+                    return conn.Device;
                 }
             }
         }
-        if (device is null) {
-            return; // client superseded/disposed mid-write — not a device fault, already logged
-        }
-        _faults.Publish(new EquipmentFaultEvent(Contracts.DeviceType.Switch, device.UniqueId, device.Name,
-            kind, details, DateTimeOffset.UtcNow));
-    }
-
-    // Observes an abandoned (cancelled/timed-out) write task so a later fault can't surface as an
-    // UnobservedTaskException, and logs it at Debug for post-mortem.
-    private void ObserveQuietly(Task task) {
-        _ = task.ContinueWith(
-            t => LogAbandonedWriteFaulted(t.Exception!),
-            CancellationToken.None,
-            TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously,
-            TaskScheduler.Default);
+        return null;
     }
 
     // Current cached value for a port id on the primary switch; NaN when unknown (disconnected / port
@@ -332,7 +287,7 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
             } catch (SequenceEntityFailedException) {
                 // §42.2 — the write path now fails loudly for the sequencer's benefit, but this
                 // wrapper is fire-and-forget by contract (IWritableSwitch.SetValue returns void):
-                // the failure was already logged + fault-published inside RunSwitchWriteAsync,
+                // the failure was already logged + fault-published inside the command,
                 // and rethrowing here would only die as an unobserved task exception.
             }
         }, CancellationToken.None);
@@ -405,12 +360,6 @@ public sealed partial class SwitchService : ISwitchMediator, ISwitchDeviceTarget
     public event Func<object, EventArgs, Task>? Connected;
     public event Func<object, EventArgs, Task>? Disconnected;
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Switch mediator write to port {Port} (value {Value}) failed")]
-    private partial void LogSwitchWriteFailed(Exception ex, short port, double value);
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Switch mediator write skipped (not connected or no writable port at index {Index})")]
     private partial void LogSwitchWriteSkipped(short index);
-
-    [LoggerMessage(Level = LogLevel.Debug, Message = "abandoned switch write (cancelled/timed-out) later faulted")]
-    private partial void LogAbandonedWriteFaulted(Exception ex);
 }

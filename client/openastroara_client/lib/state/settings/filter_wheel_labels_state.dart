@@ -61,9 +61,10 @@ class FilterWheelLabelsNotifier extends SelfLoadingSection<FilterWheelLabels> {
   LoadedSection<FilterWheelLabels> build() {
     // The daemon mirrors the device's slot names into these labels
     // (MirrorSlotLabels, outside the profile routes) once the wheel reports
-    // them, so no `profile.updated` arrives. Reload when the reported names
-    // go from none to the device's list or one changes; the connect edge
-    // alone does not (the labels are not mirrored yet then).
+    // them. A daemon with #1807 publishes `profile.updated` for that write;
+    // an older one does not, so reload when the reported names go from none
+    // to the device's list or one changes; the connect edge alone does not
+    // (the labels are not mirrored yet then).
     ref.listen(
       filterWheelProvider.select(
         (s) => s.value?.slots.map((e) => e.name).join('\u0000') ?? '',

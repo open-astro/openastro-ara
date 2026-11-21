@@ -103,7 +103,7 @@ public sealed partial class TargetRecenter {
         if (ct.IsCancellationRequested) {
             return TargetRecenterResult.Of(TargetRecenterOutcome.Cancelled);
         }
-        if (TargetBelowHorizon(target) is { } low) {
+        if (HorizonGuard.TargetBelowHorizon(_profiles, target, _logger) is { } low) {
             LogTargetTooLow(low.AltitudeDeg, low.LimitDeg);
             return new TargetRecenterResult(TargetRecenterOutcome.TargetTooLow, low.AltitudeDeg, low.LimitDeg);
         }
@@ -137,47 +137,6 @@ public sealed partial class TargetRecenter {
         }
     }
 
-    /// <summary>§38.10a — the target's current altitude vs. the profile's horizon limit at its
-    /// azimuth (custom-horizon interpolation when enabled, else the flat default floor). Null =
-    /// fine to proceed: above the limit, or the altitude/limit can't be determined — the guard
-    /// only ever SKIPS a slew, never blocks one on a missing profile.</summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "A profile read or transform fault must degrade to 'unknown — proceed', never fault the caller. Log-and-recover boundary.")]
-    internal (double AltitudeDeg, double LimitDeg)? TargetBelowHorizon(Coordinates coords) {
-        try {
-            var site = _profiles?.GetSiteSettings();
-            if (site is null) {
-                return null;
-            }
-            // SiteAstrometry — the server's ONE managed sky model (shared with the §58.9 flip
-            // predictor and Tonight's Sky); sub-degree precision is irrelevant to a horizon floor.
-            var lst = SiteAstrometry.LocalSiderealTimeDeg(DateTimeOffset.UtcNow, site.LongitudeDeg);
-            var hourAngle = (lst - coords.RADegrees % 360.0 + 360.0) % 360.0;
-            var altitude = SiteAstrometry.AltitudeFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
-            var azimuth = SiteAstrometry.AzimuthFromHourAngleDeg(coords.Dec, site.LatitudeDeg, hourAngle);
-            var limit = HorizonLimitDeg(site, azimuth);
-            return altitude < limit ? (altitude, limit) : null;
-        } catch (Exception ex) {
-            LogAltitudeCheckFailed(ex);
-            return null;
-        }
-    }
-
-    /// <summary>The horizon altitude at <paramref name="azimuthDeg"/>: the §36 custom-horizon
-    /// skyline interpolated via the ONE shared implementation
-    /// (<see cref="CustomHorizonValidator.AltitudeAtAzimuth"/>), else the flat default floor.</summary>
-    private double HorizonLimitDeg(SiteSettingsDto site, double azimuthDeg) {
-        if (!site.UseCustomHorizon) {
-            return site.DefaultHorizonAltitudeDeg;
-        }
-        var (normalized, _) = CustomHorizonValidator.Normalize(_profiles?.GetCustomHorizon());
-        var points = normalized?.Points;
-        if (points is null || points.Count == 0) {
-            return site.DefaultHorizonAltitudeDeg;
-        }
-        return CustomHorizonValidator.AltitudeAtAzimuth(points, azimuthDeg);
-    }
-
     [LoggerMessage(EventId = 4240, Level = LogLevel.Information, Message = "Re-centering on the run's target (RA {RaDeg:F3}°, Dec {DecDeg:F3}°) by plate solve")]
     private partial void LogStarted(double raDeg, double decDeg);
 
@@ -196,6 +155,4 @@ public sealed partial class TargetRecenter {
     [LoggerMessage(EventId = 4245, Level = LogLevel.Information, Message = "§38.10a re-center skipped: target at {AltitudeDeg:F1}° is below the {LimitDeg:F1}° horizon limit")]
     private partial void LogTargetTooLow(double altitudeDeg, double limitDeg);
 
-    [LoggerMessage(EventId = 4246, Level = LogLevel.Warning, Message = "§38.10a altitude check failed; proceeding with the re-center")]
-    private partial void LogAltitudeCheckFailed(Exception exception);
 }

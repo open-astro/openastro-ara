@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <OutputType>Library</OutputType>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <AraVersionAttributesOnly>true</AraVersionAttributesOnly>
     <Configurations>Debug;Release;SignedRelease</Configurations>
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
@@ -51,7 +51,6 @@
   <PropertyGroup>
     <Description>Profile components of OpenAstro Ara (forked from N.I.N.A.).</Description>
     <Title>$(AssemblyName)</Title>
-    <Version>3.2.0.9001</Version>
     <Authors>Stefan Berg and the N.I.N.A. Contributors</Authors>
     <Product>OpenAstro Ara</Product>
     <Copyright>Copyright ©  2016 - 2025 Stefan Berg and the N.I.N.A. contributors</Copyright>

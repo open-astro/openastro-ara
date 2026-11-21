@@ -41,6 +41,7 @@ import '../../state/focus/bahtinov_focus_state.dart';
 import '../../state/focus/filter_offset_calibration_state.dart';
 import '../../state/focus/guide_focus_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
+import '../../widgets/emergency_stop_button.dart' show EmergencyStopHold;
 import '../../widgets/equipment/guider_chip.dart' show guiderStatusLevel;
 import '../../widgets/focus/focusing_pane.dart' show MainFocusCard;
 import '../../widgets/focus/guide_focus_card.dart'
@@ -193,7 +194,7 @@ class _PreviewShot extends Notifier<PreviewShot> {
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
     // The guider's own exposure: the one Preview › Guide's loop runs at.
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
     return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
@@ -383,10 +384,14 @@ class _GuideInfoTiles extends ConsumerWidget {
     // A focus loop found running reports its own exposure; otherwise the
     // frames are the guider's loop, at the guider's exposure.
     final guiderMs = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideExposureMs),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideExposureMs,
+      ),
     );
     final gain = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideCameraGain),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideCameraGain,
+      ),
     );
     return SimpleFactTiles(
       facts: [
@@ -682,7 +687,16 @@ class SimpleSettingsPopover extends ConsumerWidget {
                             ),
                           ),
                           if (detail.isNotEmpty)
-                            Text(detail, style: AraText.caption),
+                            Text(
+                              detail,
+                              // textPrimary on the tint: textSecondary reads
+                              // 4:1 there over a bright frame (#1953).
+                              style: selected
+                                  ? AraText.caption.copyWith(
+                                      color: AraColors.textPrimary,
+                                    )
+                                  : AraText.caption,
+                            ),
                         ],
                       ),
                     ),
@@ -727,7 +741,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         guide &&
         !guideActive &&
         ref.watch(
-          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
         ) &&
         !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return [
@@ -970,6 +984,10 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
   FixedExtentScrollController? _wheel;
   late T _spun;
 
+  /// The value when the wheel opened: a fold applies only a spin away from
+  /// it, so a value moved elsewhere meanwhile is not set back.
+  late T _opened;
+
   List<T> get _items => widget.options.contains(widget.value)
       ? widget.options
       : [widget.value, ...widget.options];
@@ -979,12 +997,22 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
     _wheel?.dispose();
     _wheel = null;
     if (_open) {
-      _spun = widget.value;
+      _spun = _opened = widget.value;
       _wheel = FixedExtentScrollController(
         initialItem: _items.indexOf(widget.value),
       );
     }
   });
+
+  /// A tap on the tile: folds the wheel, and applies a spin once (browsing
+  /// never moves the gear more than once).
+  void _onTileTap() {
+    if (!_open) return _toggle();
+    final spun = _spun;
+    final opened = _opened;
+    _toggle();
+    if (spun != opened && spun != widget.value) widget.onSelected?.call(spun);
+  }
 
   void _pick(T v) {
     _toggle();
@@ -1040,8 +1068,12 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
       ),
     );
     final controller = _wheel;
-    Widget label(T o) =>
-        Center(child: Text(widget.format(o), style: kSimpleText));
+    // A tap on a row picks it.
+    Widget label(T o) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => _pick(o),
+      child: Center(child: Text(widget.format(o), style: kSimpleText)),
+    );
     // Its own transparent Material: the fill and highlight paint here, over
     // the panel's scrim, not on a Material further down.
     return Column(
@@ -1060,7 +1092,7 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
             // An InkWell, not a bare tap: Tab reaches it and Enter opens it.
             child: InkWell(
               borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-              onTap: enabled ? _toggle : null,
+              onTap: enabled ? _onTileTap : null,
               // The label and value above say it once.
               child: ExcludeSemantics(child: tile),
             ),
@@ -1068,37 +1100,23 @@ class _SimplePresetTileState<T> extends State<SimplePresetTile<T>> {
         ),
         if (controller != null)
           SizedBox(
-            height: 176,
-            child: Column(
-              children: [
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton(
-                    style: TextButton.styleFrom(minimumSize: const Size(0, 44)),
-                    onPressed: () => _pick(_spun),
-                    child: Text(context.l10n.previewDone),
-                  ),
-                ),
-                Expanded(
-                  // Focused on opening, so the arrows turn it at once.
-                  child: SimpleWheelKeys(
-                    debugLabel: 'simple-wheel-${widget.label}',
-                    autofocus: true,
-                    onStep: SimpleWheelKeys.stepper(controller, items.length),
-                    // Each phone's own picker (user, 2026-11-13): the iOS
-                    // wheel, and on Android its flat number picker with
-                    // the pick between two accent lines.
-                    child: Theme.of(context).platform == TargetPlatform.android
-                        ? _androidWheel(controller, items, label)
-                        : CupertinoPicker(
-                            itemExtent: 44,
-                            scrollController: controller,
-                            onSelectedItemChanged: (i) => _spun = items[i],
-                            children: [for (final o in items) label(o)],
-                          ),
-                  ),
-                ),
-              ],
+            height: 132,
+            // Focused on opening, so the arrows turn it at once.
+            child: SimpleWheelKeys(
+              debugLabel: 'simple-wheel-${widget.label}',
+              autofocus: true,
+              onStep: SimpleWheelKeys.stepper(controller, items.length),
+              // Each phone's own picker (user, 2026-11-13): the iOS
+              // wheel, and on Android its flat number picker with
+              // the pick between two accent lines.
+              child: Theme.of(context).platform == TargetPlatform.android
+                  ? _androidWheel(controller, items, label)
+                  : CupertinoPicker(
+                      itemExtent: 44,
+                      scrollController: controller,
+                      onSelectedItemChanged: (i) => _spun = items[i],
+                      children: [for (final o in items) label(o)],
+                    ),
             ),
           ),
       ],
@@ -1357,12 +1375,13 @@ class SimpleShutterButton extends StatelessWidget {
           label ??
           (running ? context.l10n.previewStop : context.l10n.previewTakeFrame),
       hint: why,
-      child: InkResponse(
+      // Every shutter is also the hold for Emergency Stop (#1911): a tap does
+      // the mode's job, 2 s from pointer down is one Emergency Stop.
+      child: EmergencyStopHold(
         key: const Key('simple-shutter'),
         onTap:
             onPressed ??
             (why == null ? null : () => simpleSayWhy(context, why)),
-        radius: 36,
         child: Container(
           width: 60,
           height: 60,
@@ -1438,6 +1457,7 @@ class _PillData {
     this.shotProgress,
     this.footProgress,
     this.spoken,
+    this.live = true,
     this.holds = true,
   });
 
@@ -1466,6 +1486,10 @@ class _PillData {
 
   /// What screen readers hear when it changes (label and detail otherwise).
   final String? spoken;
+
+  /// Announced when it changes. A calibration leg is read on focus but not
+  /// announced at each step (#1895).
+  final bool live;
 }
 
 /// One status line of the status card: tapping it opens what it's about.
@@ -1510,7 +1534,7 @@ class _StatusPillState extends State<_StatusPill> {
     final maxWidth = kSimpleMessagesMaxWidth;
     return Semantics(
       container: true,
-      liveRegion: true,
+      liveRegion: d.live,
       label:
           d.spoken ??
           (d.detail == null
@@ -1677,14 +1701,18 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// The api the policies were (being) loaded from: another server loads again.
   ProfileApi? _loadedFor;
 
+  /// The api changed under the pill: the copy in may be the old server's.
+  bool _apiChanged = false;
+
   Future<void> _hydratePolicies(ProfileApi api) async {
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-      if (mounted && _loadedFor == api) setState(() => _policiesLoaded = true);
-    } catch (_) {
-      // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
-      if (mounted && _loadedFor == api) _hydrating = false;
-    }
+    // Already in from the rig when the pill mounts: a load would replace it,
+    // dropping unsaved edits in Unattended running and a conflict it shows.
+    final ok =
+        (!_apiChanged && ref.read(safetyPoliciesProvider).canSave) ||
+        await ref.read(safetyPoliciesProvider.notifier).load(api);
+    if (!mounted || _loadedFor != api) return;
+    // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
+    ok ? setState(() => _policiesLoaded = true) : _hydrating = false;
   }
 
   /// The Guiding Assistant's run, followed from the guider's word that it
@@ -1814,9 +1842,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final unsafe = safety != null && safety.isConnected && !safety.safe;
     // Weather past its limits holds a plan too (the daemon's same checks),
     // even while the monitor reads Safe: the pill says which (#1690 audit).
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Only the rig's copy (ADR 0015): a failed load changes nothing here, so
+    // it does not rebuild the pill into another load at once.
+    final policies = ref.watch(
+      safetyPoliciesProvider.select((s) => s.canSave ? s.value : null),
+    );
     final profileApi = ref.watch(profileApiProvider);
     if (profileApi != _loadedFor) {
+      _apiChanged = _loadedFor != null;
       _loadedFor = profileApi;
       _hydrating = false;
       _policiesLoaded = false;
@@ -1828,9 +1861,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       });
     }
     final weather = ref.watch(weatherProvider).value;
+    final limits = _policiesLoaded ? policies : null;
     final breach =
-        _policiesLoaded && policies.weatherTriggersEnabled && weather != null
-        ? simpleWeatherBreaches(l10n, weather, policies).firstOrNull
+        limits != null && limits.weatherTriggersEnabled && weather != null
+        ? simpleWeatherBreaches(l10n, weather, limits).firstOrNull
         : null;
     // The focuser moving, whoever moved it; autofocus has its own pill.
     final focuser = ref.watch(focuserProvider).value;
@@ -1986,6 +2020,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
               (paused && run.state != SequenceRunState.pausedAwaitingUser) ||
               ((flipWait || pausing) && planActive),
           working: planActive && !paused && !flipWait && !pausing,
+          live:
+              !(planCalibrating &&
+                  !pausing &&
+                  guider.calibrationText(l10n) != null),
           // A step that reports none (an exposure) follows the camera's
           // own frame; a paused plan shows no frame (#1755).
           footProgress:
@@ -2267,7 +2305,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ),
       // #1971 the Polar Aligner's motors, their own line under the routine's.
       if (polarAlignerStatusLine(l10n, polar,
-              southern: ref.watch(siteSettingsProvider).latitudeDeg < 0)
+              southern: (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0)
           case final c?)
         _PillData(
           SimpleStatusOrigin.polarAligner,
@@ -2330,10 +2368,15 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
           l10n.deviceGuider,
           guider!.runtimeSummary(l10n),
           simpleGuiderColour(guider),
+          // The leg is read on focus with its target, not announced at each
+          // step (#1895).
           spoken: l10n.previewStatusSpoken(
             l10n.deviceGuider,
-            guiderRuntimeText(l10n, guider.runtimeState),
+            guider.runtimeSummary(l10n).replaceAll(' · ', ', '),
           ),
+          live:
+              guider.runtimeState != GuiderRuntimeState.calibrating ||
+              guider.calibrationText(l10n) == null,
         ),
     ];
     // A Preflight step with nothing of its own running says it waits for the

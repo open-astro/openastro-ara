@@ -8,7 +8,6 @@ import '../models/frame_histogram.dart';
 import '../models/guider_status.dart';
 import '../models/sequence/sequence_summary.dart';
 import '../models/stats/guiding_rms.dart';
-import '../services/dso_catalog_service.dart' show objectTitle;
 import '../services/storage_space_api.dart';
 import '../util/tonight_sky_local.dart';
 import '../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
@@ -25,7 +24,7 @@ import 'settings/safety_policies_state.dart';
 import 'settings/site_settings_state.dart';
 import 'simple_messages_state.dart';
 import 'simple_run_state.dart';
-import 'sky_atlas/tonight_sky_state.dart';
+import 'sky_atlas/tonight_sky_state.dart' show clockProvider, skyClockProvider;
 import 'stats/guiding_rms_state.dart';
 import 'ws/ws_providers.dart';
 
@@ -167,16 +166,15 @@ enum MonitorNowWord {
   lastKnown,
 }
 
-enum MonitorUpKind { nextFrame, meridianFlip, nextTarget, park, best }
+enum MonitorUpKind { nextFrame, meridianFlip, nextTarget, park }
 
 /// One Up next row; [at] null reads "then".
 class MonitorUpNext {
-  const MonitorUpNext(this.kind, {this.at, this.name, this.frame, this.altitudeDeg});
+  const MonitorUpNext(this.kind, {this.at, this.name, this.frame});
   final MonitorUpKind kind;
   final DateTime? at;
   final String? name;
   final int? frame;
-  final double? altitudeDeg;
 }
 
 class MonitorTarget {
@@ -246,6 +244,37 @@ class MonitorWeather {
   final double? gustKmh;
 }
 
+/// The "Camera and focuser" group of Conditions: only what the gear reports,
+/// null (never zero) otherwise.
+class MonitorRigTemps {
+  const MonitorRigTemps({
+    this.sensorC,
+    this.sensorTargetC,
+    this.coolerPowerPct,
+    this.focuserC,
+    this.autofocusAt,
+    this.tempSinceAutofocus,
+  });
+
+  final double? sensorC;
+  final double? sensorTargetC;
+  final double? coolerPowerPct;
+  final double? focuserC;
+
+  /// The last autofocus (with a focuser in the rig) and the focuser's
+  /// temperature change since it.
+  final DateTime? autofocusAt;
+  final double? tempSinceAutofocus;
+}
+
+/// Monitor's Conditions tile (#2014): the weather figures and the rig's
+/// temperatures. Each group exists only when its gear is in the profile.
+class MonitorConditions {
+  const MonitorConditions({this.weather, this.rig});
+  final MonitorWeather? weather;
+  final MonitorRigTemps? rig;
+}
+
 class MonitorGuider {
   const MonitorGuider({
     required this.status,
@@ -301,16 +330,11 @@ class MonitorFrame {
 }
 
 class MonitorLastFrame {
-  const MonitorLastFrame({this.frames = const [], this.autofocusAt, this.tempSinceAutofocus, this.focuser = false});
+  const MonitorLastFrame({this.frames = const []});
 
   /// This run's saved frames, oldest first, at most [kMonitorTrendFrames]:
   /// its first [kMonitorBaselineFrames] (the session start) and the latest.
   final List<MonitorFrame> frames;
-  final DateTime? autofocusAt;
-  final double? tempSinceAutofocus;
-
-  /// The rig has a focuser: the autofocus line shows.
-  final bool focuser;
 
   MonitorFrame? get last => frames.isEmpty ? null : frames.last;
 
@@ -381,11 +405,10 @@ class MonitorSnapshot {
     required this.now,
     this.frozenSince,
     this.upNext = const [],
-    this.tonightsBest = false,
     this.target,
     required this.flip,
     this.safety,
-    this.weather,
+    this.conditions,
     this.guider,
     required this.lastFrame,
     required this.night,
@@ -401,14 +424,14 @@ class MonitorSnapshot {
   final MonitorNow now;
   final List<MonitorUpNext> upNext;
 
-  /// No plan: [upNext] is tonight's best Targets.
-  final bool tonightsBest;
   final MonitorTarget? target;
   final MonitorFlip flip;
 
   /// Null when the profile has none: no tile.
   final MonitorSafety? safety;
-  final MonitorWeather? weather;
+
+  /// Null when neither the weather nor the camera and focuser report.
+  final MonitorConditions? conditions;
   final MonitorGuider? guider;
   final MonitorLastFrame lastFrame;
   final MonitorNight night;
@@ -610,11 +633,10 @@ class MonitorState extends Notifier<MonitorSnapshot> {
             : MonitorVerdict(MonitorVerdictKind.linkLost, MonitorStatus.fault, at: since),
         now: last.now,
         upNext: last.upNext,
-        tonightsBest: last.tonightsBest,
         target: last.target,
         flip: last.flip,
         safety: last.safety,
-        weather: last.weather,
+        conditions: last.conditions,
         guider: last.guider,
         lastFrame: last.lastFrame,
         night: last.night,
@@ -632,12 +654,13 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final guider = ref.watch(guiderStatusProvider).value;
     final safetyMon = ref.watch(safetyMonitorProvider).value;
     final weatherSt = ref.watch(weatherProvider).value;
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Null until the rig's copy is in: no limits, no breaches (ADR 0015).
+    final policies = ref.watch(safetyPoliciesProvider).value;
     final messages = ref.watch(simpleMessagesProvider);
     final storage = ref.watch(storageSpaceProvider).value;
     final coolerOff = ref.watch(monitorCoolerOffProvider);
     final trends = ref.watch(monitorTrendsProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final guidingRms = ref.watch(guidingRmsProvider).value;
     ref.watch(skyClockProvider);
 
@@ -698,7 +721,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         ? MonitorDevice.weather
         : null;
 
-    final breaches = weatherSt != null && weatherSt.isConnected && policies.weatherTriggersEnabled
+    final breaches = weatherSt != null && weatherSt.isConnected && policies != null && policies.weatherTriggersEnabled
         ? weatherBreaches(weatherSt, policies)
         : const <({WeatherBreach kind, double value, double limit})>[];
     final unsafeMonitor = safetyMon != null && safetyMon.isConnected && !safetyMon.safe;
@@ -804,7 +827,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
     final runLeft = info?.estimatedRemainingSeconds;
     final parkAt = active && ours && runLeft != null ? now.add(Duration(seconds: runLeft.round())) : null;
     final upNext = <MonitorUpNext>[];
-    var best = false;
     if (active && target != null) {
       final nextFrame = done.fold<int>(0, (a, b) => a + b) + 2;
       if (nextFrame <= simplePlanTotal(target.steps)) {
@@ -831,12 +853,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       upNext
         ..clear()
         ..addAll(timed);
-    } else if (!active && startAt == null) {
-      best = true;
-      final sky = ref.watch(tonightSkyProvider).value ?? const [];
-      for (final o in sky.take(5)) {
-        upNext.add(MonitorUpNext(MonitorUpKind.best, name: objectTitle(o.id, o.aliases, o.name), altitudeDeg: o.altitudeDeg));
-      }
     }
 
     // Tonight's dark, for the timeline and the altitude curve.
@@ -971,15 +987,28 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       );
     }
 
-    // Last frame.
+    // Last frame, and the camera and focuser group of Conditions.
     final af = ref.watch(autofocusLiveProvider).run;
     final afTemp = af.focuserTemperatureC, liveTemp = focuser?.temperature;
-    final lastFrame = MonitorLastFrame(
-      frames: trends,
-      focuser: focuser != null,
-      autofocusAt: af.completedUtc?.toLocal(),
-      tempSinceAutofocus: afTemp != null && liveTemp != null ? liveTemp - afTemp : null,
+    final lastFrame = MonitorLastFrame(frames: trends);
+    final rig = MonitorRigTemps(
+      sensorC: cam?.ccdTemperature,
+      sensorTargetC: cam?.coolerOn ?? false ? cam?.coolerSetpointC : null,
+      coolerPowerPct: cam?.coolerPowerPct,
+      focuserC: liveTemp,
+      autofocusAt: focuser == null ? null : af.completedUtc?.toLocal(),
+      tempSinceAutofocus: focuser == null || afTemp == null || liveTemp == null
+          ? null
+          : liveTemp - afTemp,
     );
+    final hasRig =
+        rig.sensorC != null ||
+        rig.coolerPowerPct != null ||
+        rig.focuserC != null ||
+        rig.autofocusAt != null;
+    final conditions = weather == null && !hasRig
+        ? null
+        : MonitorConditions(weather: weather, rig: hasRig ? rig : null);
 
     // Tonight.
     final blocks = <({String name, DateTime start, DateTime end, double? progress})>[];
@@ -1012,7 +1041,6 @@ class MonitorState extends Notifier<MonitorSnapshot> {
       verdict: verdict,
       now: nowTile,
       upNext: upNext.take(5).toList(),
-      tonightsBest: best,
       target: targetTile,
       flip: MonitorFlip(
         state: flipInfo?.state == 'flipping' && waitLeft != null ? 'waiting_for_meridian' : flipInfo?.state,
@@ -1021,7 +1049,7 @@ class MonitorState extends Notifier<MonitorSnapshot> {
         step: flipping ? info?.currentInstructionDescription : null,
       ),
       safety: safety,
-      weather: weather,
+      conditions: conditions,
       guider: guiderTile,
       lastFrame: lastFrame,
       night: night,

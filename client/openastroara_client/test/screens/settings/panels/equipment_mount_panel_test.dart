@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/equipment_mount_panel.dart';
@@ -14,6 +15,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/util/slew_rates.dart';
 
@@ -32,14 +34,17 @@ class _FixedSite extends SiteSettingsNotifier {
   _FixedSite(this._site);
   final SiteSettings _site;
   @override
-  SiteSettings build() => _site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: _site, source: SectionSource.rig);
 }
 
 class _FakeProfileApi extends ProfileApi {
   _FakeProfileApi() : super(const AraServer(hostname: 'h', port: 5555));
   @override
-  Future<SiteSettings> getSiteSettings() async =>
-      const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408);
+  Future<({SiteSettings value, String? etag})> getSiteSection() async => (
+    value: const SiteSettings(latitudeDeg: 12.5989, longitudeDeg: -75.8408),
+    etag: '"v1"',
+  );
 }
 
 class _FakeMountApi implements EquipmentDeviceClient<MountStatus> {
@@ -119,6 +124,9 @@ MountStatus _status({
   double? targetDecDegrees,
   List<String> trackingRates = const [],
   String? trackingRate,
+  bool atHome = false,
+  bool positionUnverified = false,
+  String unverifiedReason = 'at_home_on_connect',
 }) => MountStatus(
   deviceId: 'mount-0',
   name: 'EQ6-R',
@@ -142,8 +150,10 @@ MountStatus _status({
   targetDeclinationDegrees: targetDecDegrees,
   tracking: tracking,
   parked: parked,
-  atHome: false,
+  atHome: atHome,
   trackingRate: trackingRate,
+  positionUnverified: positionUnverified,
+  positionUnverifiedReason: positionUnverified ? unverifiedReason : null,
 );
 
 Future<void> _wideSurface(WidgetTester tester) async {
@@ -234,7 +244,7 @@ void main() {
     expect(find.text('Longitude'), findsNothing);
   });
 
-  testWidgets('hydrates the site on mount and shows lat/long', (tester) async {
+  testWidgets('the site loads itself from the rig and shows lat/long', (tester) async {
     await _wideSurface(tester);
     final api = _FakeMountApi(_status());
     await tester.pumpWidget(
@@ -253,7 +263,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    // The panel hydrated the profile's site from the daemon (not overridden).
+    // The site loaded itself from the rig (ADR 0015; not overridden).
     expect(find.text('Latitude'), findsOneWidget);
     expect(find.text('12.60° N'), findsOneWidget);
     expect(find.text('Longitude'), findsOneWidget);
@@ -307,6 +317,77 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Home'),
     );
     expect(home.onPressed, isNull); // must unpark before homing
+  });
+
+  testWidgets('an unverified position turns Park and Home off and says to run the zero search (#2070)', (
+    tester,
+  ) async {
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true));
+    expect(find.byKey(const Key('mount_position_unverified')), findsOneWidget);
+    expect(find.text('Mount position unverified'), findsOneWidget);
+    final park = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Park'),
+    );
+    expect(park.onPressed, isNull, reason: 'the rig refuses a park from an unverified position');
+    final home = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Home'),
+    );
+    expect(home.onPressed, isNull, reason: 'Home by the mount model is refused too');
+    expect(
+      find.textContaining('Run the mount\'s zero search'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('mount_confirm_home')),
+      findsNothing,
+      reason: 'the mount does not report Home yet',
+    );
+  });
+
+  // #2066 polar alignment's stop was not confirmed: the warning says so, not
+  // "the mount may have lost power".
+  testWidgets('Advanced: a position left unverified by an unconfirmed stop says why', (tester) async {
+    await _pump(tester, _status(canFindHome: true, positionUnverified: true, unverifiedReason: 'stop_unconfirmed'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
+    expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
+  });
+
+  testWidgets('a trusted position keeps Park and Home on and shows no warning (#2070)', (
+    tester,
+  ) async {
+    await _pump(tester, _status(canFindHome: true, atHome: true));
+    expect(find.byKey(const Key('mount_position_unverified')), findsNothing);
+    expect(
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Park')).onPressed,
+      isNotNull,
+    );
+    expect(
+      tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Home')).onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('confirming Home at an unverified Home asks first, and Cancel sends nothing (#2070)', (
+    tester,
+  ) async {
+    final api = await _pump(
+      tester,
+      _status(atHome: true, positionUnverified: true),
+    );
+    await tester.tap(find.byKey(const Key('mount_confirm_home')));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty, reason: 'the panel asks first');
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+    expect(api.calls.where((c) => c.contains('confirm-home')), isEmpty);
+
+    await tester.tap(find.byKey(const Key('mount_confirm_home')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('mount_confirm_home_yes')));
+    await tester.pumpAndSettle();
+    expect(api.calls, contains('command:confirm-home:enabled=null'));
   });
 
   testWidgets('parked mount shows Unpark and hides Park; tracking disabled', (

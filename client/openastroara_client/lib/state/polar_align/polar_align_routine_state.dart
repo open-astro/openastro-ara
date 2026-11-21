@@ -5,13 +5,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/polar_align.dart';
 import '../../services/polar_align_api.dart';
-import '../settings/loaded_section.dart' show SectionNotLoadedException;
 import 'polar_align_state.dart';
 
 /// The Polar Align Routine both presentations render (ADR 0013 rule 3): the
-/// profile's settings, the routine camera's frame and the panel's busy and
-/// error state. The live phase itself is [polarAlignLiveProvider]; a panel
-/// opening hydrates it through [PolarAlignFrameNotifier.hydrate].
+/// routine camera's frame and the panel's busy and error state. The profile's
+/// settings are a profile section (polar_align_settings_state.dart, ADR
+/// 0015). The live phase itself is [polarAlignLiveProvider]; a panel opening
+/// hydrates it through [PolarAlignFrameNotifier.hydrate].
 
 /// An exposure the routine takes: more than 0 and at most 60 seconds.
 bool polarExposureValid(double? seconds) =>
@@ -20,62 +20,23 @@ bool polarExposureValid(double? seconds) =>
 /// The ranges the knobs accept (the settings registry's), shared by the
 /// Settings panel and the Start card's Advanced row so they refuse alike.
 typedef PolarKnobRange = ({double min, double max});
-const polarSeedRotationRange = (min: 5.0, max: 120.0);
-const polarCheckStepRange = (min: 5.0, max: 60.0);
+const polarSeedRotationRange = (min: 5.0, max: 30.0);
+const polarCheckStepRange = (min: 5.0, max: 30.0);
 const polarCoarseExposureRange = (min: 0.1, max: 60.0);
+
+/// #2082 frames averaged at each point: whole numbers only.
+const polarFramesPerPointRange = (min: 1, max: 5);
 
 /// A knob's value as its field shows it.
 String polarKnobText(double v) =>
     v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toStringAsFixed(2);
 
-/// The profile's polar-align settings (exposure, Loop/Single, tolerance). The
-/// running routine re-reads them before every frame, so a save applies to the
-/// next one; a failed save rolls back, so a panel never shows an exposure or
-/// mode the rig is not using. A failed read is an error, never defaults, and
-/// nothing is saved until a read succeeded (ADR 0015 rule 1, #1736).
-class PolarAlignSettingsNotifier extends AsyncNotifier<PolarAlignSettings> {
-  @override
-  Future<PolarAlignSettings> build() async {
-    final api = ref.watch(polarAlignApiProvider);
-    if (api == null) return const PolarAlignSettings();
-    return api.getSettings();
-  }
-
-  /// Not loaded from the rig: load once more and write nothing, as [next] was
-  /// built on no loaded copy and would put defaults over the rig's other knobs.
-  Future<void> save(PolarAlignSettings next) async {
-    final api = ref.read(polarAlignApiProvider);
-    if (api != null && !state.hasValue) {
-      try {
-        state = AsyncData(await api.getSettings());
-      } catch (e, st) {
-        state = AsyncError(e, st);
-        throw SectionNotLoadedException(e);
-      }
-      throw const SectionNotLoadedException(null);
-    }
-    final previous = state.requireValue;
-    state = AsyncData(next);
-    if (api == null) return;
-    try {
-      state = AsyncData(await api.putSettings(next));
-    } catch (_) {
-      state = AsyncData(previous);
-      rethrow;
-    }
-  }
-}
-
-final polarAlignSettingsProvider =
-    AsyncNotifierProvider<PolarAlignSettingsNotifier, PolarAlignSettings>(
-      PolarAlignSettingsNotifier.new,
-    );
-
 /// The routine camera's latest frame, fetched after each finished frame; null
 /// until there is one. A failed fetch keeps the previous picture. Fetches are
 /// coalesced: a frame that finishes while one is in flight is fetched once
-/// after it, or Single would keep showing the older image. Not in the rough
-/// stage: its frames are the main camera's, and the guider has none to show.
+/// after it, or Single would keep showing the older image. Not while the run
+/// shoots the main camera (the rough stage, or `polar_align.camera` = main,
+/// #2082): the guider has none of its frames to show.
 class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
   bool _loading = false;
   bool _reload = false;
@@ -83,7 +44,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
   @override
   Uint8List? build() {
     ref.listen(polarAlignLiveProvider, (prev, next) {
-      if (next.stage != PolarAlignStages.coarse &&
+      if (!next.usesMainCamera &&
           next.lastFrame != null &&
           !identical(prev?.lastFrame, next.lastFrame)) {
         unawaited(load());
@@ -91,7 +52,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
     });
     // A frame already finished before anything watched: fetch it too.
     final live = ref.read(polarAlignLiveProvider);
-    if (live.lastFrame != null && live.stage != PolarAlignStages.coarse) {
+    if (live.lastFrame != null && !live.usesMainCamera) {
       Future.microtask(load);
     }
     return null;
@@ -104,6 +65,7 @@ class PolarAlignFrameNotifier extends Notifier<Uint8List?> {
     if (status != null &&
         status.isActive &&
         status.stage != PolarAlignStages.coarse &&
+        status.camera != PolarAlignCameras.main &&
         ref.mounted) {
       await load();
     }

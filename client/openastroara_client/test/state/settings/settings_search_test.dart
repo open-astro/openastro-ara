@@ -86,6 +86,13 @@ void main() {
         'profile.active',
       ]));
     });
+
+    test('Advanced Mode search has no Advanced settings hit (#2036)', () {
+      bool advanced(SettingsSearchEntry e) =>
+          e.settingId == 'app.settings.advanced';
+      expect(buildSearchIndex(simple: false).where(advanced), isEmpty);
+      expect(buildSearchIndex(simple: true).where(advanced), hasLength(1));
+    });
   });
 
   group('§61.10 navigation entries', () {

@@ -4,11 +4,16 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../l10n/l10n.dart';
 import '../../services/target_preview_service.dart';
 import '../../services/tonight_sky_api.dart';
+import '../../state/album/album_art.dart';
+import '../../state/sky_atlas/dso_catalog_state.dart';
+import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/target_preview_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/mosaic_geometry.dart';
+import '../../util/search_route.dart' show isSolarSystemName;
 import '../adaptive_controls.dart';
 
 /// A landscape DSS2 cutout of [object] — what it actually looks like —
@@ -216,6 +221,109 @@ class TargetPreview extends ConsumerWidget {
       ),
     );
   }
+}
+
+/// The planetarium's type codes and names for the Sun, planets, moons, comets
+/// and minor planets: they move, so a survey cutout of their place is wrong.
+const _solarSystemKinds = {
+  'sso', 'solar system object', 'sun', 'pla', 'moo', 'moon', 'com', 'comet', //
+  'poc', 'periodic comet', 'mpl', 'minor planet', 'dpl', 'dwarf planet',
+  'ast', 'asteroid', 'artificial satellite',
+};
+
+bool _movesInSky(PlanetariumSelection sel) {
+  final kind = sel.kind.trim().toLowerCase();
+  return isSolarSystemName(sel.name) ||
+      _solarSystemKinds.contains(kind) ||
+      kind.endsWith(' comet') ||
+      kind.endsWith(' asteroid');
+}
+
+/// The DSS2 cutout of a sky pick, from the same cache and source as
+/// [TargetPreview] (nothing is forked): the bytes once cached or fetched, null
+/// while loading, offline, on any failure or for a solar-system body, so the
+/// caller keeps its placeholder. Waits for the Album manifest and catalog, so
+/// a target that has Art never fetches a survey in the meantime. Keyed on the
+/// J2000 position, as an unnamed object is named by its type word ("Star").
+/// The field is the default for an object of unknown size.
+Uint8List? surveyPicture(WidgetRef ref, PlanetariumSelection sel) {
+  if (_movesInSky(sel) ||
+      ref.watch(albumManifestProvider).isLoading ||
+      ref.watch(bundledCatalogProvider).isLoading) {
+    return null;
+  }
+  final raDeg = sel.raJ2000Hours * 15;
+  return ref
+      .watch(
+        targetPreviewProvider((
+          id:
+              'pick-${raDeg.toStringAsFixed(3)}_'
+              '${sel.decJ2000Deg.toStringAsFixed(3)}',
+          raDeg: raDeg,
+          decDeg: sel.decJ2000Deg,
+          fieldDeg: TargetPreviewService.fieldDegFor(null, null),
+        )),
+      )
+      .value;
+}
+
+/// A small square survey picture for a card whose target has no Album Art,
+/// rounded to the [radius] of the slot it fills. Decorative: the name beside
+/// it says it all. The survey credit is behind an info mark, shown on a tap,
+/// as the Album Art's is.
+class SurveyThumb extends StatelessWidget {
+  const SurveyThumb({
+    super.key,
+    required this.bytes,
+    required this.size,
+    required this.radius,
+  });
+
+  final Uint8List bytes;
+  final double size;
+  final double radius;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+    message: context.l10n.surveyPictureCredit,
+    triggerMode: TooltipTriggerMode.tap,
+    showDuration: const Duration(seconds: 4),
+    child: Stack(
+      children: [
+        ExcludeSemantics(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(radius),
+            child: Image.memory(
+              bytes,
+              width: size,
+              height: size,
+              // The cutout is landscape: cover fills the height.
+              cacheHeight: (size * MediaQuery.devicePixelRatioOf(context))
+                  .round(),
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, _, _) => SizedBox(width: size, height: size),
+            ),
+          ),
+        ),
+        const Positioned(
+          right: 2,
+          bottom: 2,
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: AraColors.overlayScrim,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.info_outline,
+              size: 14,
+              color: AraColors.textSecondary,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _NoPreview extends StatelessWidget {

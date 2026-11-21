@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart' show Locale;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
+import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/models/focuser_status.dart';
 import 'package:openastroara/models/frame_histogram.dart';
@@ -19,6 +20,7 @@ import 'package:openastroara/screens/simple/simple_monitor_screen.dart' show mon
 import 'package:openastroara/services/storage_space_api.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/equipment/camera_state.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/equipment/safety_monitor_state.dart';
@@ -26,6 +28,7 @@ import 'package:openastroara/state/equipment/weather_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
 import 'package:openastroara/state/simple_run_state.dart';
@@ -60,6 +63,13 @@ class _Focuser extends FocuserNotifier {
   final FocuserStatus? v;
   @override
   Future<FocuserStatus?> build() async => v;
+}
+
+class _AfLive extends AutofocusLiveNotifier {
+  _AfLive(this.run);
+  final AutofocusRun run;
+  @override
+  AutofocusLive build() => AutofocusLive(run: run);
 }
 
 class _Guider extends GuiderStatusNotifier {
@@ -116,7 +126,10 @@ class _Clock extends MonitorClock {
 
 class _Policies extends SafetyPoliciesNotifier {
   @override
-  SafetyPolicies build() => const SafetyPolicies(weatherTriggersEnabled: true);
+  LoadedSection<SafetyPolicies> build() => const LoadedSection(
+    value: SafetyPolicies(weatherTriggersEnabled: true),
+    source: SectionSource.rig,
+  );
 }
 
 class _Link extends Notifier<bool> {
@@ -209,34 +222,66 @@ Future<_Rig> _rig({
   int? freeBytes,
   List<TonightSkyObject> sky = const [],
   GuidingRmsSeries? rms,
+  AutofocusRun? autofocus,
   Stream<WsEvent> events = const Stream.empty(),
 }) async {
   late _Rig rig;
   final camN = _Cam(camera ? cam ?? _cam() : null);
   final guiderN = _Guider(guider ? guiderStatus ?? _guider() : null);
   final runN = _Run(run);
-  final c = ProviderContainer(overrides: [
-    clockProvider.overrideWithValue(() => rig.now),
-    monitorClockProvider.overrideWith(_Clock.new),
-    serverLinkUpProvider.overrideWith((ref) => ref.watch(_link)),
-    skyClockProvider.overrideWith((ref) => const Stream<int>.empty()),
-    wsEventsProvider.overrideWith((ref) => events),
-    frameHistogramProvider.overrideWith((ref, id) async => _histogram),
-    sequenceRunStateProvider.overrideWith(() => runN),
-    simpleRunProvider.overrideWith(() => _Plan(plan)),
-    cameraStatusProvider.overrideWith(() => camN),
-    mountProvider.overrideWith(() => _Mount(mount ?? MountStatus.fromJson(_wire('connected', {'tracking': true})))),
-    focuserProvider.overrideWith(() => _Focuser(focuser)),
-    guiderStatusProvider.overrideWith(() => guiderN),
-    safetyMonitorProvider.overrideWith(() => _Safety(safety
-        ? SafetyMonitorStatus.fromJson({..._wire('connected'), 'safe': safe, 'last_transition_at': '2026-11-11T07:14:00Z'})
-        : null)),
-    weatherProvider.overrideWith(() => _Weather(weather ? WeatherStatus.fromJson({..._wire('connected'), ...weatherReadings}) : null)),
-    storageSpaceProvider.overrideWith((ref) async => StorageSpace(saveDirectory: '/d', isFallback: false, freeBytes: freeBytes)),
-    tonightSkyProvider.overrideWith((ref) async => sky),
-    safetyPoliciesProvider.overrideWith(_Policies.new),
-    guidingRmsProvider.overrideWith(() => _Rms(rms)),
-  ]);
+  final c = ProviderContainer(
+    overrides: [
+      clockProvider.overrideWithValue(() => rig.now),
+      monitorClockProvider.overrideWith(_Clock.new),
+      serverLinkUpProvider.overrideWith((ref) => ref.watch(_link)),
+      skyClockProvider.overrideWith((ref) => const Stream<int>.empty()),
+      wsEventsProvider.overrideWith((ref) => events),
+      frameHistogramProvider.overrideWith((ref, id) async => _histogram),
+      sequenceRunStateProvider.overrideWith(() => runN),
+      simpleRunProvider.overrideWith(() => _Plan(plan)),
+      cameraStatusProvider.overrideWith(() => camN),
+      mountProvider.overrideWith(
+        () => _Mount(
+          mount ?? MountStatus.fromJson(_wire('connected', {'tracking': true})),
+        ),
+      ),
+      focuserProvider.overrideWith(() => _Focuser(focuser)),
+      guiderStatusProvider.overrideWith(() => guiderN),
+      safetyMonitorProvider.overrideWith(
+        () => _Safety(
+          safety
+              ? SafetyMonitorStatus.fromJson({
+                  ..._wire('connected'),
+                  'safe': safe,
+                  'last_transition_at': '2026-11-11T07:14:00Z',
+                })
+              : null,
+        ),
+      ),
+      weatherProvider.overrideWith(
+        () => _Weather(
+          weather
+              ? WeatherStatus.fromJson({
+                  ..._wire('connected'),
+                  ...weatherReadings,
+                })
+              : null,
+        ),
+      ),
+      storageSpaceProvider.overrideWith(
+        (ref) async => StorageSpace(
+          saveDirectory: '/d',
+          isFallback: false,
+          freeBytes: freeBytes,
+        ),
+      ),
+      tonightSkyProvider.overrideWith((ref) async => sky),
+      safetyPoliciesProvider.overrideWith(_Policies.new),
+      guidingRmsProvider.overrideWith(() => _Rms(rms)),
+      if (autofocus != null)
+        autofocusLiveProvider.overrideWith(() => _AfLive(autofocus)),
+    ],
+  );
   addTearDown(c.dispose);
   rig = _Rig(c, camN, guiderN, runN);
   final sub = c.listen(monitorProvider, (_, _) {});
@@ -298,16 +343,34 @@ void main() {
       expect(r.read().now.filter, isNull);
     });
 
-    test('Unsafe beats a question; the safety monitor or weather past its limit', () async {
-      final r = await _rig(run: _running(), safe: false);
-      r.c.read(simpleMessagesProvider.notifier).show(SimpleMessageKind.question, 'Swap in Ha',
-          actions: [SimpleMessageAction('Confirm', () {})]);
-      expect(r.read().verdict.kind, MonitorVerdictKind.unsafe);
-      final windy = await _rig(run: _running(), weatherReadings: const {'wind_speed_ms': 12.0});
-      final v = windy.read().verdict;
-      expect((v.kind, v.breach?.kind), (MonitorVerdictKind.unsafe, WeatherBreach.wind));
-      expect(windy.read().weather!.cells.single.overLimit, 36, reason: 'the wind cell marked with its limit');
-    });
+    test(
+      'Unsafe beats a question; the safety monitor or weather past its limit',
+      () async {
+        final r = await _rig(run: _running(), safe: false);
+        r.c
+            .read(simpleMessagesProvider.notifier)
+            .show(
+              SimpleMessageKind.question,
+              'Swap in Ha',
+              actions: [SimpleMessageAction('Confirm', () {})],
+            );
+        expect(r.read().verdict.kind, MonitorVerdictKind.unsafe);
+        final windy = await _rig(
+          run: _running(),
+          weatherReadings: const {'wind_speed_ms': 12.0},
+        );
+        final v = windy.read().verdict;
+        expect(
+          (v.kind, v.breach?.kind),
+          (MonitorVerdictKind.unsafe, WeatherBreach.wind),
+        );
+        expect(
+          windy.read().conditions!.weather!.cells.single.overLimit,
+          36,
+          reason: 'the wind cell marked with its limit',
+        );
+      },
+    );
 
     test('a question waits on the top line with its answers, above a lost guide star', () async {
       final r = await _rig(run: _running(), guiderStatus: _guider(runtime: 'star_lost'));
@@ -432,6 +495,98 @@ void main() {
     });
   });
 
+  group('Conditions (#2014)', () {
+    FocuserStatus focuser(double? temp) =>
+        FocuserStatus.fromJson(_wire('connected', {'temperature': ?temp}));
+
+    test('the camera and focuser group holds sensor, target, cooler power and focuser temperature', () async {
+      final r = await _rig(
+        run: _running(),
+        weather: false,
+        cam: CameraStatus.fromJson(
+          _wire('connected', {
+            'cooler_on': true,
+            'ccd_temperature': -9.6,
+            'cooler_setpoint_c': -10,
+            'cooler_power_pct': 62,
+          }),
+        ),
+        focuser: focuser(7.5),
+      );
+      final c = r.read().conditions!;
+      expect(c.weather, isNull, reason: 'no weather station');
+      expect(
+        (
+          c.rig!.sensorC,
+          c.rig!.sensorTargetC,
+          c.rig!.coolerPowerPct,
+          c.rig!.focuserC,
+        ),
+        (-9.6, -10.0, 62.0, 7.5),
+      );
+    });
+
+    test('a reading the device does not report is absent, not zero', () async {
+      final r = await _rig(
+        run: _running(),
+        weather: false,
+        cam: _cam(cooler: true, ccd: -9.6),
+        focuser: focuser(null),
+      );
+      final rig = r.read().conditions!.rig!;
+      expect(rig.sensorC, -9.6);
+      expect(
+        (rig.sensorTargetC, rig.coolerPowerPct, rig.focuserC),
+        (null, null, null),
+      );
+    });
+
+    test('the change since the last autofocus is in Conditions', () async {
+      final r = await _rig(
+        run: _running(),
+        weather: false,
+        focuser: focuser(6.7),
+        autofocus: AutofocusRun(
+          state: AutofocusRunStates.complete,
+          completedUtc: DateTime.utc(2026, 11, 11, 22, 50),
+          focuserTemperatureC: 7.5,
+        ),
+      );
+      final rig = r.read().conditions!.rig!;
+      expect(rig.tempSinceAutofocus, closeTo(-0.8, 1e-9));
+      expect(rig.autofocusAt, isNotNull);
+    });
+
+    test('a focuser with no probe still shows the last autofocus', () async {
+      final r = await _rig(
+        run: _running(),
+        weather: false,
+        focuser: focuser(null),
+        autofocus: AutofocusRun(
+          state: AutofocusRunStates.complete,
+          completedUtc: DateTime.utc(2026, 11, 11, 22, 50),
+          focuserTemperatureC: 7.5,
+        ),
+      );
+      expect(r.read().conditions?.rig?.autofocusAt, isNotNull);
+    });
+
+    test(
+      'no weather station and nothing the rig reports: no Conditions at all',
+      () async {
+        final r = await _rig(run: _running(), weather: false);
+        expect(r.read().conditions, isNull);
+      },
+    );
+
+    test('weather alone: its cells, no camera and focuser group', () async {
+      final r = await _rig(run: _running());
+      final c = r.read().conditions!;
+      expect(c.weather, isNotNull);
+      expect(c.rig, isNull);
+    });
+  });
+
   group('tiles follow the profile', () {
     for (final (name, guider, safety, weather) in const [
       ('full rig', true, true, true),
@@ -443,7 +598,10 @@ void main() {
       test(name, () async {
         final r = await _rig(run: _running(), guider: guider, safety: safety, weather: weather);
         final s = r.read();
-        expect((s.guider != null, s.safety != null, s.weather != null), (guider, safety, weather));
+        expect(
+          (s.guider != null, s.safety != null, s.conditions?.weather != null),
+          (guider, safety, weather),
+        );
       });
     }
 
@@ -495,23 +653,26 @@ void main() {
       expect(r.read().upNext.first.at, isNull);
     });
 
-    test("no plan: tonight's best, by designation and nickname", () async {
-      final r = await _rig(plan: const SimpleRun(), sky: [
-        TonightSkyObject.fromJson({'id': 'M 42', 'name': 'M 42', 'type': 'nebula', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0})!,
-        TonightSkyObject.fromJson({'id': 'NGC0246', 'name': 'Skull Nebula', 'type': 'PN', 'ra_deg': 11.76, 'dec_deg': -11.87, 'altitude_deg': 40.0, 'max_altitude_deg': 60.0})!,
-      ]);
-      final s = r.read();
-      expect(s.tonightsBest, isTrue);
-      expect((s.upNext.first.kind, s.upNext.first.name, s.upNext.first.altitudeDeg), (MonitorUpKind.best, 'M 42', 62.0));
-      expect(s.upNext.last.name, 'Skull Nebula (NGC 246)');
-    });
-
-    test("no plan: a curated Messier region in tonight's best leads with its M number", () async {
-      final r = await _rig(plan: const SimpleRun(), sky: [
-        TonightSkyObject.fromJson({'id': 'NGC1976', 'name': 'Orion Nebula + Running Man', 'type': 'HII', 'ra_deg': 83.8, 'dec_deg': -5.4, 'altitude_deg': 62.0, 'max_altitude_deg': 74.0, 'aliases': ['M 42']})!,
-      ]);
-      expect(r.read().upNext.first.name, 'Orion Nebula + Running Man (M 42)');
-    });
+    test(
+      "no plan: Up next stays empty with Tonight's Best candidates up",
+      () async {
+        final r = await _rig(
+          plan: const SimpleRun(),
+          sky: [
+            TonightSkyObject.fromJson({
+              'id': 'M 42',
+              'name': 'M 42',
+              'type': 'nebula',
+              'ra_deg': 83.8,
+              'dec_deg': -5.4,
+              'altitude_deg': 62.0,
+              'max_altitude_deg': 74.0,
+            })!,
+          ],
+        );
+        expect(r.read().upNext, isEmpty);
+      },
+    );
   });
 
   group('the meridian flip tile', () {

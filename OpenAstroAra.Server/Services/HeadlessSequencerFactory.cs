@@ -12,22 +12,23 @@
 
 #endregion "copyright"
 
-using System;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Interfaces;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
 using OpenAstroAra.Sequencer;
 using OpenAstroAra.Sequencer.Conditions;
-using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.Container;
+using OpenAstroAra.Sequencer.Format;
+using OpenAstroAra.Sequencer.Interfaces;
 using OpenAstroAra.Sequencer.SequenceItem;
+using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Sequencer.SequenceItem.Camera;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.SequenceItem.Dome;
 using OpenAstroAra.Sequencer.SequenceItem.FilterWheel;
 using OpenAstroAra.Sequencer.SequenceItem.FlatDevice;
 using OpenAstroAra.Sequencer.SequenceItem.Focuser;
-using OpenAstroAra.Sequencer.SequenceItem.Autofocus;
 using OpenAstroAra.Sequencer.SequenceItem.Guider;
 using OpenAstroAra.Sequencer.SequenceItem.Imaging;
 using OpenAstroAra.Sequencer.SequenceItem.Platesolving;
@@ -41,9 +42,9 @@ using OpenAstroAra.Sequencer.Trigger.Autofocus;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Sequencer.Trigger.Guider;
 using OpenAstroAra.Sequencer.Trigger.MeridianFlip;
-using OpenAstroAra.Astrometry;
 using OpenAstroAra.Sequencer.Utility.DateTimeProvider;
 using OpenAstroAra.Server.Services.Equipment;
+using System;
 using System.Windows.Data;
 
 namespace OpenAstroAra.Server.Services;
@@ -121,42 +122,38 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     public T GetTrigger<T>() where T : ISequenceTrigger =>
         (T)(Triggers.FirstOrDefault(x => x.GetType() == typeof(T))?.Clone() ?? default(T)!);
 
-        /// <summary>
-        /// §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
-        /// parameterless; every client-generated target block carries an AboveHorizonCondition and
-        /// the editor offers AltitudeCondition (unregistered, both degraded to
-        /// UnknownSequenceCondition, whose failed check skipped the whole target block). They read
-        /// the site (and custom horizon) from the store-backed profile.
-        /// </summary>
-        internal static List<ISequenceCondition> DefaultConditions(IProfileService profileService) {
-            var conditions = new List<ISequenceCondition> {
-                new LoopCondition(),
-                new TimeSpanCondition(),
-            };
-            // AboveHorizonCondition's constructor seeds its offset, which runs a NOVAS transform
-            // (WaitLoopData.Offset → SetTargetAltitudeWithHorizon). On a daemon without the
-            // astrometry natives that throws, and the prototype is built at DI time — so the
-            // whole daemon failed to start (CI's runtime smoke, Docker). Skip the prototype
-            // instead: Program.cs already warns at boot that altitude conditions will fail until
-            // the natives are installed, and a sequence carrying one degrades to
-            // UnknownSequenceCondition as it did before §38.10a.
-            TryAddCondition(conditions, () => new AboveHorizonCondition(profileService));
-            TryAddCondition(conditions, () => new AltitudeCondition(profileService));
-            return conditions;
-        }
-
-        /// <summary>Adds the prototype unless constructing it faults on a missing or mismatched native
-        /// library (absent, wrong architecture, or missing an entry point).</summary>
-        internal static bool TryAddCondition(List<ISequenceCondition> conditions, Func<ISequenceCondition> make) {
+    /// <summary>
+    /// Builds one prototype per entry, in entry order, with the constructor registered for the entry's engine
+    /// class. §38k-7 / §38.10a: every client-generated target block carries an AboveHorizonCondition and the
+    /// editor offers AltitudeCondition; unregistered, both degraded to UnknownSequenceCondition, whose failed
+    /// check skipped the whole target block. AboveHorizonCondition's constructor seeds its offset, which runs a
+    /// NOVAS transform (WaitLoopData.Offset → SetTargetAltitudeWithHorizon). On a daemon without the
+    /// astrometry natives that throws, and the prototype is built at DI time, so the whole daemon failed to
+    /// start (CI's runtime smoke, Docker). An entry flagged <see cref="SequenceKindEntry.NeedsAstrometryNatives"/>
+    /// whose constructor faults that way is skipped instead: Program.cs already warns at boot that altitude
+    /// conditions will fail until the natives are installed, and a sequence carrying one degrades to
+    /// UnknownSequenceCondition as it did before §38.10a. Any other fault, the same fault on an unflagged
+    /// entry, and an entry with no constructor propagate.
+    /// </summary>
+    internal static List<object> Instantiate(IEnumerable<SequenceKindEntry> entries, IReadOnlyDictionary<Type, Func<object>> constructors) {
+        var built = new List<object>();
+        foreach (var entry in entries) {
+            if (!constructors.TryGetValue(entry.EngineClass, out var make)) {
+                throw new InvalidOperationException("The kind table lists '" + entry.Kind + "' but the factory has no constructor for " + entry.EngineClass.Name + ".");
+            }
             try {
-                conditions.Add(make());
-                return true;
-            } catch (Exception ex) when (ex is TypeInitializationException or DllNotFoundException
-                    or EntryPointNotFoundException or BadImageFormatException) {
-                return false;
+                built.Add(make());
+            } catch (Exception ex) when (entry.NeedsAstrometryNatives && IsMissingNativeLibrary(ex)) {
+                // skipped, see above
             }
         }
+        return built;
+    }
 
+    /// <summary>True for a fault from constructing a prototype that needs a native library that is missing or
+    /// mismatched (absent, wrong architecture, or missing an entry point).</summary>
+    internal static bool IsMissingNativeLibrary(Exception ex) =>
+        ex is TypeInitializationException or DllNotFoundException or EntryPointNotFoundException or BadImageFormatException;
 
     /// <summary>
     /// Build a factory pre-populated with the equipment-independent
@@ -171,8 +168,6 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
     /// subsequent §38k sub-PRs as each instruction's equipment-service
     /// dependency tree gets DI-wired.
     /// </summary>
-    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
-        Justification = "The NighttimeCalculator behind the time sources lives as long as the factory, a daemon singleton; its only resource is a 10-minute reference-date timer.")]
     public static HeadlessSequencerFactory WithDefaults(
             ISafetyMonitorMediator? safetyMonitorMediator = null,
             ITelescopeMediator? telescopeMediator = null,
@@ -197,7 +192,45 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
             OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null,
-            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null) {
+            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null) =>
+        Build(safetyMonitorMediator, telescopeMediator, guiderMediator, focuserMediator, cameraMediator, rotatorMediator,
+            switchMediator, domeMediator, domeFollower, filterWheelMediator, flatDeviceMediator, weatherDataMediator,
+            profileService, imagingMediator, meridianFlipExecutor, centeringExecutor, autofocusExecutor, imageHistory,
+            autofocusConditionGate, flatCaptureExecutor, trackingProbeExecutor, frameQualityFeed, frameSolveFeed,
+            guidingRestartRecenter, constructorOverrides: null);
+
+    /// <summary>The same build with some constructors replaced, for a test that makes one prototype fault. Not for production code.</summary>
+    internal static HeadlessSequencerFactory WithDefaults(IReadOnlyDictionary<Type, Func<object>> constructorOverrides) =>
+        Build(constructorOverrides: constructorOverrides);
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
+        Justification = "The NighttimeCalculator behind the time sources lives as long as the factory, a daemon singleton; its only resource is a 10-minute reference-date timer.")]
+    private static HeadlessSequencerFactory Build(
+            ISafetyMonitorMediator? safetyMonitorMediator = null,
+            ITelescopeMediator? telescopeMediator = null,
+            IGuiderMediator? guiderMediator = null,
+            IFocuserMediator? focuserMediator = null,
+            ICameraMediator? cameraMediator = null,
+            IRotatorMediator? rotatorMediator = null,
+            ISwitchMediator? switchMediator = null,
+            IDomeMediator? domeMediator = null,
+            IDomeFollower? domeFollower = null,
+            IFilterWheelMediator? filterWheelMediator = null,
+            IFlatDeviceMediator? flatDeviceMediator = null,
+            IWeatherDataMediator? weatherDataMediator = null,
+            IProfileService? profileService = null,
+            IImagingMediator? imagingMediator = null,
+            IMeridianFlipExecutor? meridianFlipExecutor = null,
+            ICenteringExecutor? centeringExecutor = null,
+            IAutofocusExecutor? autofocusExecutor = null,
+            IImageHistory? imageHistory = null,
+            IAutofocusConditionGate? autofocusConditionGate = null,
+            IFlatCaptureExecutor? flatCaptureExecutor = null,
+            OpenAstroAra.Sequencer.SequenceItem.Telescope.ITrackingProbeExecutor? trackingProbeExecutor = null,
+            OpenAstroAra.Sequencer.Interfaces.IFrameQualityFeed? frameQualityFeed = null,
+            OpenAstroAra.Sequencer.Interfaces.IFrameSolveFeed? frameSolveFeed = null,
+            OpenAstroAra.Sequencer.Interfaces.IGuidingRestartRecenter? guidingRestartRecenter = null,
+            IReadOnlyDictionary<Type, Func<object>>? constructorOverrides = null) {
         // §38k-9 … §38k-22 — equipment-mediator stubs default to no-op headless
         // impls so call sites that don't yet have real Alpaca-backed mediators
         // still get a usable prototype set. As real drivers land (§14e Alpaca
@@ -248,194 +281,208 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             new MeridianProvider(profileService),
         };
 
+        // One constructor per engine class; the kind table (SequenceKinds.All) says which are built and in what order.
+        var constructors = new Dictionary<Type, Func<object>> {
+            // §38k-4 — utility instructions with no equipment deps.
+            [typeof(Annotation)] = () => new Annotation(),
+            // §58.12-b — pause-for-a-human step (manual filter swap on an
+            // OSC rig, etc.); arms the root's pause gate as Prompt.
+            [typeof(WaitForUser)] = () => new WaitForUser(),
+            [typeof(WaitForTimeSpan)] = () => new WaitForTimeSpan(),
+            [typeof(WaitForTime)] = () => new WaitForTime(timeSources, clockTime),
+            // §48.4 — WaitForSunAltitude gates the sky-flat generator's body (waits for the sun
+            // to drop through the twilight altitude); profile-only dep for the observer site.
+            [typeof(WaitForSunAltitude)] = () => new WaitForSunAltitude(profileService),
+            // §38k-9 — first equipment-bound instruction prototype.
+            // WaitUntilSafe polls ISafetyMonitorMediator.GetInfo() until
+            // IsSafe transitions true; with the headless stub it reports
+            // "not connected" so the JSON path still works for
+            // serialization round-trip + validation while the real
+            // Alpaca-backed wiring is pending.
+            [typeof(WaitUntilSafe)] = () => new WaitUntilSafe(safetyMonitorMediator),
+            // §38k-10 — second equipment-mediator + telescope-bound
+            // instruction. SetTracking calls telescopeMediator.SetTrackingMode
+            // at Execute time; the headless stub no-ops.
+            [typeof(SetTracking)] = () => new SetTracking(telescopeMediator),
+            // §38k-11 — telescope+guider-bound instructions. ParkScope
+            // stops guiding before parking; FindHome + SlewScopeToRaDec
+            // also coordinate the guider. UnparkScope is telescope-only
+            // but registered alongside for completeness of the telescope
+            // instruction surface.
+            [typeof(UnparkScope)] = () => new UnparkScope(telescopeMediator),
+            [typeof(ParkScope)] = () => new ParkScope(telescopeMediator, guiderMediator),
+            [typeof(FindHome)] = () => new FindHome(telescopeMediator, guiderMediator),
+            // #1446 — with "Center target after slew" on, the slew centres through the §28
+            // CenteringService (the same executor as Center and Rotate below).
+            [typeof(SlewScopeToRaDec)] = () => new SlewScopeToRaDec(telescopeMediator, guiderMediator, profileService, centeringExecutor),
+            // §48.4 — the §39.5 sky-flat generator emits SlewScopeToAltAz (point the mount at
+            // the twilight sky patch) wrapped by a WaitForSunAltitude gate; both must resolve
+            // through the factory or those generated bodies fail to load.
+            [typeof(SlewScopeToAltAz)] = () => new SlewScopeToAltAz(profileService, telescopeMediator, guiderMediator),
+            // §38k-12 — focuser-bound instructions. All three take only
+            // IFocuserMediator. The headless stub no-ops the move ops
+            // and returns 0 for the resulting position.
+            [typeof(MoveFocuserAbsolute)] = () => new MoveFocuserAbsolute(focuserMediator),
+            [typeof(MoveFocuserRelative)] = () => new MoveFocuserRelative(focuserMediator),
+            [typeof(MoveFocuserByTemperature)] = () => new MoveFocuserByTemperature(focuserMediator),
+            // §38k-13 — camera-control instructions. All five take only
+            // ICameraMediator (no IImagingMediator / image pipeline), so
+            // they register against the headless camera stub: Cool/Warm
+            // report "didn't succeed" off the not-connected sentinel, and
+            // SetUSBLimit / SetReadoutMode / DewHeater no-op.
+            // §14e PRb — the capture instruction itself; NINA-imported bodies + the §38.7
+            // starter templates resolve to it via the §38k-6 namespace remap.
+            [typeof(OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure)] = () => new OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure(cameraMediator, imagingMediator),
+            [typeof(CoolCamera)] = () => new CoolCamera(cameraMediator),
+            [typeof(WarmCamera)] = () => new WarmCamera(cameraMediator),
+            [typeof(SetUSBLimit)] = () => new SetUSBLimit(cameraMediator),
+            [typeof(SetReadoutMode)] = () => new SetReadoutMode(cameraMediator),
+            [typeof(DewHeater)] = () => new DewHeater(cameraMediator),
+            // §38k-14 — guider instructions on the existing guider stub.
+            // StartGuiding / StopGuiding depend only on IGuiderMediator.
+            [typeof(StartGuiding)] = () => new StartGuiding(guiderMediator),
+            [typeof(StopGuiding)] = () => new StopGuiding(guiderMediator),
+            // §38k-22 — Dither additionally needs IProfileService (settings);
+            // satisfied by the HeadlessProfileService stub.
+            // §42.2 — a restart after a long guiding gap re-centers the target first.
+            [typeof(Dither)] = () => new Dither(guiderMediator, profileService, guidingRestartRecenter),
+            // §38k-16 — rotator instruction. MoveRotatorMechanical depends
+            // only on IRotatorMediator.
+            [typeof(MoveRotatorMechanical)] = () => new MoveRotatorMechanical(rotatorMediator),
+            // §38k-17 — switch instruction. SetSwitchValue depends only on
+            // ISwitchMediator.
+            [typeof(SetSwitchValue)] = () => new SetSwitchValue(switchMediator),
+            // §38k-18 — dome instructions. Five depend only on IDomeMediator;
+            // Enable/DisableDomeSynchronization also take the telescope stub.
+            // (SynchronizeDome follows below: it also needs an IDomeFollower.)
+            [typeof(OpenDomeShutter)] = () => new OpenDomeShutter(domeMediator),
+            [typeof(CloseDomeShutter)] = () => new CloseDomeShutter(domeMediator),
+            [typeof(ParkDome)] = () => new ParkDome(domeMediator),
+            [typeof(FindHomeDome)] = () => new FindHomeDome(domeMediator),
+            [typeof(SlewDomeAzimuth)] = () => new SlewDomeAzimuth(domeMediator),
+            [typeof(EnableDomeSynchronization)] = () => new EnableDomeSynchronization(domeMediator, telescopeMediator),
+            [typeof(DisableDomeSynchronization)] = () => new DisableDomeSynchronization(domeMediator, telescopeMediator),
+            // §38k-21 — SynchronizeDome needs an IDomeFollower; the daemon passes the real
+            // DomeFollower (#1689), the factory default is the headless stub.
+            [typeof(SynchronizeDome)] = () => new SynchronizeDome(domeMediator, domeFollower, telescopeMediator),
+            // §38k-22 — filter-wheel instruction. SwitchFilter needs
+            // IProfileService (filter list) + IFilterWheelMediator.
+            [typeof(SwitchFilter)] = () => new SwitchFilter(profileService, filterWheelMediator),
+            // §38 NINA import fidelity — autofocus + center-and-rotate steps (one per target in
+            // real plans). Execution goes through the §59 AutofocusSweepService and the §28
+            // CenteringService (Program.cs wires both); a null executor keeps the prototype
+            // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
+            [typeof(RunAutofocus)] = () => new RunAutofocus(autofocusExecutor),
+            [typeof(CenterAndRotate)] = () => new CenterAndRotate(centeringExecutor, rotatorMediator),
+            // #1264 — the unguided tracking probe (run builder emits it only without a guider).
+            // Executes through ITrackingProbeExecutor (TrackingProbeService in Program.cs DI); a
+            // null executor keeps the prototype JSON-resolvable and its Execute fails loudly.
+            [typeof(OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe)] = () => new OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe(trackingProbeExecutor),
+            // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
+            // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
+            // JSON-resolvable and its Execute fails loudly rather than skipping flats.
+            [typeof(FlatPanelFlats)] = () => new FlatPanelFlats(flatCaptureExecutor),
+            // §48.4 — the twilight sky-flat set. Reuses the same IFlatCaptureExecutor seam
+            // (CaptureSkyFlatSetAsync); the generated sky sequence carries its own
+            // WaitForSunAltitude + SlewScopeToAltAz around this leaf, so the leaf only owns
+            // the drift-reprobe capture. Null executor keeps the prototype JSON-resolvable.
+            [typeof(SkyFlats)] = () => new SkyFlats(flatCaptureExecutor),
+            // Opens the panel's cover before a lens-cap pause (bias/darks after the flats).
+            [typeof(OpenFlatPanelCover)] = () => new OpenFlatPanelCover(flatCaptureExecutor),
+            // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
+            [typeof(CloseFlatPanelCover)] = () => new CloseFlatPanelCover(flatCaptureExecutor),
+            // §38k-22 — Connect dir. All take the full 11 device mediators;
+            // Connect*/SwitchProfile also take IProfileService (profile-first),
+            // Disconnect* do not (camera-first). The Disconnect* classes were
+            // flipped internal→public in this PR so the factory can construct
+            // them. Real connect/disconnect orchestration runs at execution
+            // time (none today); these register so saved bodies resolve.
+            [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(
+                profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(ConnectEquipment)] = () => new ConnectEquipment(
+                profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(
+                cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
+                telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
+                weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(DisconnectEquipment)] = () => new DisconnectEquipment(
+                cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
+                telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
+                weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(SwitchProfile)] = () => new SwitchProfile(
+                profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+
+            // §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
+            // parameterless; the two astrometry conditions read the site (and custom horizon) from the
+            // store-backed profile and are skipped without the natives (Instantiate). TimeCondition needs the time sources.
+            [typeof(LoopCondition)] = () => new LoopCondition(),
+            [typeof(TimeSpanCondition)] = () => new TimeSpanCondition(),
+            [typeof(AboveHorizonCondition)] = () => new AboveHorizonCondition(profileService),
+            [typeof(AltitudeCondition)] = () => new AltitudeCondition(profileService),
+            [typeof(TimeCondition)] = () => new TimeCondition(timeSources, clockTime),
+            [typeof(SequenceRootContainer)] = () => new SequenceRootContainer(),
+            [typeof(SequentialContainer)] = () => new SequentialContainer(),
+            [typeof(ParallelContainer)] = () => new ParallelContainer(),
+            // §38 NINA import fidelity — the per-target block and the dominant imaging
+            // block in real NINA exports. Both are SequentialContainer subclasses (they
+            // carry a Strategy.$type, so the item converter routes them here). Registering
+            // the prototypes lets DeepSkyObjectContainer / SmartExposure resolve to the
+            // real types instead of degrading to UnknownSequenceContainer (which gutted
+            // the bulk of every imported plan).
+            [typeof(DeepSkyObjectContainer)] = () => new DeepSkyObjectContainer(profileService),
+            [typeof(SmartExposure)] = () => new SmartExposure(),
+            // §58 — the meridian-flip trigger. Decision logic (#362) depends only on the telescope mediator
+            // + profile; the §58.4 orchestration runs through the injected executor. Registering the
+            // prototype lets a saved sequence body with a MeridianFlipTrigger resolve to the real trigger
+            // (rather than falling back to UnknownSequenceTrigger).
+            [typeof(MeridianFlipTrigger)] = () => new MeridianFlipTrigger(profileService, telescopeMediator, meridianFlipExecutor),
+            // §38 NINA import fidelity — the most common trigger in real plans (one per
+            // Smart Exposure). Carries AfterExposures + a TriggerRunner holding a Dither.
+            [typeof(DitherAfterExposures)] = () => new DitherAfterExposures(),
+            // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
+            [typeof(AutofocusAfterExposures)] = () => new AutofocusAfterExposures(autofocusConditionGate),
+            // #1264 — the unguided exposure guard: steps the imaging loop's exposure down/up a rung
+            // from the §59.5 analysis of each light (through IFrameQualityFeed).
+            [typeof(OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard)] = () => new OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard(frameQualityFeed),
+            // #1195 — NINA's Center After Drift: solve every Nth saved light from disk, re-centre through the
+            // §28 centering seam when the field has drifted past the threshold. Removed in #242, re-ported
+            // so imported plans no longer load it as UnknownSequenceTrigger.
+            [typeof(OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger)] = () => new OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger(
+                frameSolveFeed, centeringExecutor, telescopeMediator, cameraMediator),
+            // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
+            // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
+            // image history (plus the equipment it observes) and consults the §59.9
+            // conditions gate before firing; the RunAutofocus inside a deserialized
+            // TriggerRunner resolves through the item prototype above, which carries the
+            // §59 sweep executor.
+            [typeof(AutofocusAfterTimeTrigger)] = () => new AutofocusAfterTimeTrigger(imageHistory, autofocusConditionGate),
+            [typeof(AutofocusAfterTemperatureChangeTrigger)] = () => new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory, autofocusConditionGate),
+            [typeof(AutofocusAfterHFRIncreaseTrigger)] = () => new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator, autofocusConditionGate),
+            [typeof(AutofocusAfterFilterChange)] = () => new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService, autofocusConditionGate),
+            // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
+            // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
+            // prototype was already registered above; the trigger itself was missed.
+            [typeof(ReconnectTrigger)] = () => new ReconnectTrigger(
+                profileService, cameraMediator, filterWheelMediator, focuserMediator,
+                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
+                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+
+        };
+        if (constructorOverrides != null) {
+            foreach (var (type, make) in constructorOverrides) constructors[type] = make;
+        }
+
         return new HeadlessSequencerFactory(
-            items: new List<ISequenceItem> {
-                // §38k-4 — utility instructions with no equipment deps.
-                new Annotation(),
-                // §58.12-b — pause-for-a-human step (manual filter swap on an
-                // OSC rig, etc.); arms the root's pause gate as Prompt.
-                new WaitForUser(),
-                new WaitForTimeSpan(),
-                new WaitForTime(timeSources, clockTime),
-                // §48.4 — WaitForSunAltitude gates the sky-flat generator's body (waits for the sun
-                // to drop through the twilight altitude); profile-only dep for the observer site.
-                new WaitForSunAltitude(profileService),
-                // §38k-9 — first equipment-bound instruction prototype.
-                // WaitUntilSafe polls ISafetyMonitorMediator.GetInfo() until
-                // IsSafe transitions true; with the headless stub it reports
-                // "not connected" so the JSON path still works for
-                // serialization round-trip + validation while the real
-                // Alpaca-backed wiring is pending.
-                new WaitUntilSafe(safetyMonitorMediator),
-                // §38k-10 — second equipment-mediator + telescope-bound
-                // instruction. SetTracking calls telescopeMediator.SetTrackingMode
-                // at Execute time; the headless stub no-ops.
-                new SetTracking(telescopeMediator),
-                // §38k-11 — telescope+guider-bound instructions. ParkScope
-                // stops guiding before parking; FindHome + SlewScopeToRaDec
-                // also coordinate the guider. UnparkScope is telescope-only
-                // but registered alongside for completeness of the telescope
-                // instruction surface.
-                new UnparkScope(telescopeMediator),
-                new ParkScope(telescopeMediator, guiderMediator),
-                new FindHome(telescopeMediator, guiderMediator),
-                // #1446 — with "Center target after slew" on, the slew centres through the §28
-                // CenteringService (the same executor as Center and Rotate below).
-                new SlewScopeToRaDec(telescopeMediator, guiderMediator, profileService, centeringExecutor),
-                // §48.4 — the §39.5 sky-flat generator emits SlewScopeToAltAz (point the mount at
-                // the twilight sky patch) wrapped by a WaitForSunAltitude gate; both must resolve
-                // through the factory or those generated bodies fail to load.
-                new SlewScopeToAltAz(profileService, telescopeMediator, guiderMediator),
-                // §38k-12 — focuser-bound instructions. All three take only
-                // IFocuserMediator. The headless stub no-ops the move ops
-                // and returns 0 for the resulting position.
-                new MoveFocuserAbsolute(focuserMediator),
-                new MoveFocuserRelative(focuserMediator),
-                new MoveFocuserByTemperature(focuserMediator),
-                // §38k-13 — camera-control instructions. All five take only
-                // ICameraMediator (no IImagingMediator / image pipeline), so
-                // they register against the headless camera stub: Cool/Warm
-                // report "didn't succeed" off the not-connected sentinel, and
-                // SetUSBLimit / SetReadoutMode / DewHeater no-op.
-                // §14e PRb — the capture instruction itself; NINA-imported bodies + the §38.7
-                // starter templates resolve to it via the §38k-6 namespace remap.
-                new OpenAstroAra.Sequencer.SequenceItem.Imaging.TakeExposure(cameraMediator, imagingMediator),
-                new CoolCamera(cameraMediator),
-                new WarmCamera(cameraMediator),
-                new SetUSBLimit(cameraMediator),
-                new SetReadoutMode(cameraMediator),
-                new DewHeater(cameraMediator),
-                // §38k-14 — guider instructions on the existing guider stub.
-                // StartGuiding / StopGuiding depend only on IGuiderMediator.
-                new StartGuiding(guiderMediator),
-                new StopGuiding(guiderMediator),
-                // §38k-22 — Dither additionally needs IProfileService (settings);
-                // satisfied by the HeadlessProfileService stub.
-                // §42.2 — a restart after a long guiding gap re-centers the target first.
-                new Dither(guiderMediator, profileService, guidingRestartRecenter),
-                // §38k-16 — rotator instruction. MoveRotatorMechanical depends
-                // only on IRotatorMediator.
-                new MoveRotatorMechanical(rotatorMediator),
-                // §38k-17 — switch instruction. SetSwitchValue depends only on
-                // ISwitchMediator.
-                new SetSwitchValue(switchMediator),
-                // §38k-18 — dome instructions. Five depend only on IDomeMediator;
-                // Enable/DisableDomeSynchronization also take the telescope stub.
-                // (SynchronizeDome follows below: it also needs an IDomeFollower.)
-                new OpenDomeShutter(domeMediator),
-                new CloseDomeShutter(domeMediator),
-                new ParkDome(domeMediator),
-                new FindHomeDome(domeMediator),
-                new SlewDomeAzimuth(domeMediator),
-                new EnableDomeSynchronization(domeMediator, telescopeMediator),
-                new DisableDomeSynchronization(domeMediator, telescopeMediator),
-                // §38k-21 — SynchronizeDome needs an IDomeFollower; the daemon passes the real
-                // DomeFollower (#1689), the factory default is the headless stub.
-                new SynchronizeDome(domeMediator, domeFollower, telescopeMediator),
-                // §38k-22 — filter-wheel instruction. SwitchFilter needs
-                // IProfileService (filter list) + IFilterWheelMediator.
-                new SwitchFilter(profileService, filterWheelMediator),
-                // §38 NINA import fidelity — autofocus + center-and-rotate steps (one per target in
-                // real plans). Execution goes through the §59 AutofocusSweepService and the §28
-                // CenteringService (Program.cs wires both); a null executor keeps the prototype
-                // JSON-resolvable and its Execute fails loudly rather than skipping focus/centering.
-                new RunAutofocus(autofocusExecutor),
-                new CenterAndRotate(centeringExecutor, rotatorMediator),
-                // #1264 — the unguided tracking probe (run builder emits it only without a guider).
-                // Executes through ITrackingProbeExecutor (TrackingProbeService in Program.cs DI); a
-                // null executor keeps the prototype JSON-resolvable and its Execute fails loudly.
-                new OpenAstroAra.Sequencer.SequenceItem.Telescope.TrackingProbe(trackingProbeExecutor),
-                // §48.3 — the auto-exposure flat set. Executes through IFlatCaptureExecutor
-                // (FlatCaptureService in Program.cs DI); a null executor keeps the prototype
-                // JSON-resolvable and its Execute fails loudly rather than skipping flats.
-                new FlatPanelFlats(flatCaptureExecutor),
-                // §48.4 — the twilight sky-flat set. Reuses the same IFlatCaptureExecutor seam
-                // (CaptureSkyFlatSetAsync); the generated sky sequence carries its own
-                // WaitForSunAltitude + SlewScopeToAltAz around this leaf, so the leaf only owns
-                // the drift-reprobe capture. Null executor keeps the prototype JSON-resolvable.
-                new SkyFlats(flatCaptureExecutor),
-                // Opens the panel's cover before a lens-cap pause (bias/darks after the flats).
-                new OpenFlatPanelCover(flatCaptureExecutor),
-                // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
-                new CloseFlatPanelCover(flatCaptureExecutor),
-                // §38k-22 — Connect dir. All take the full 11 device mediators;
-                // Connect*/SwitchProfile also take IProfileService (profile-first),
-                // Disconnect* do not (camera-first). The Disconnect* classes were
-                // flipped internal→public in this PR so the factory can construct
-                // them. Real connect/disconnect orchestration runs at execution
-                // time (none today); these register so saved bodies resolve.
-                new ConnectAllEquipment(
-                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-                new ConnectEquipment(
-                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-                new DisconnectAllEquipment(
-                    cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
-                    telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
-                    weatherDataMediator, domeMediator, safetyMonitorMediator),
-                new DisconnectEquipment(
-                    cameraMediator, filterWheelMediator, focuserMediator, rotatorMediator,
-                    telescopeMediator, guiderMediator, switchMediator, flatDeviceMediator,
-                    weatherDataMediator, domeMediator, safetyMonitorMediator),
-                new SwitchProfile(
-                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-            },
-            conditions: [.. DefaultConditions(profileService), new TimeCondition(timeSources, clockTime)],
-            container: new List<ISequenceContainer> {
-                new SequenceRootContainer(),
-                new SequentialContainer(),
-                new ParallelContainer(),
-                // §38 NINA import fidelity — the per-target block and the dominant imaging
-                // block in real NINA exports. Both are SequentialContainer subclasses (they
-                // carry a Strategy.$type, so the item converter routes them here). Registering
-                // the prototypes lets DeepSkyObjectContainer / SmartExposure resolve to the
-                // real types instead of degrading to UnknownSequenceContainer (which gutted
-                // the bulk of every imported plan).
-                new DeepSkyObjectContainer(profileService),
-                new SmartExposure(),
-            },
-            triggers: new List<ISequenceTrigger> {
-                // §58 — the meridian-flip trigger. Decision logic (#362) depends only on the telescope mediator
-                // + profile; the §58.4 orchestration runs through the injected executor. Registering the
-                // prototype lets a saved sequence body with a MeridianFlipTrigger resolve to the real trigger
-                // (rather than falling back to UnknownSequenceTrigger).
-                new MeridianFlipTrigger(profileService, telescopeMediator, meridianFlipExecutor),
-                // §38 NINA import fidelity — the most common trigger in real plans (one per
-                // Smart Exposure). Carries AfterExposures + a TriggerRunner holding a Dither.
-                new DitherAfterExposures(),
-                // §38 NINA import fidelity — the autofocus sibling: run autofocus every N exposures.
-                new AutofocusAfterExposures(autofocusConditionGate),
-                // #1264 — the unguided exposure guard: steps the imaging loop's exposure down/up a rung
-                // from the §59.5 analysis of each light (through IFrameQualityFeed).
-                new OpenAstroAra.Sequencer.Trigger.Telescope.UnguidedExposureGuard(frameQualityFeed),
-                // #1195 — NINA's Center After Drift: solve every Nth saved light from disk, re-centre through the
-                // §28 centering seam when the field has drifted past the threshold. Removed in #242, re-ported
-                // so imported plans no longer load it as UnknownSequenceTrigger.
-                new OpenAstroAra.Sequencer.Trigger.Platesolving.CenterAfterDriftTrigger(
-                    frameSolveFeed, centeringExecutor, telescopeMediator, cameraMediator),
-                // §59.5 — the remaining autofocus trigger family: time interval, focuser-temp
-                // delta, HFR drift, first-use-of-a-filter. Each reads the daemon's session
-                // image history (plus the equipment it observes) and consults the §59.9
-                // conditions gate before firing; the RunAutofocus inside a deserialized
-                // TriggerRunner resolves through the item prototype above, which carries the
-                // §59 sweep executor.
-                new AutofocusAfterTimeTrigger(imageHistory, autofocusConditionGate),
-                new AutofocusAfterTemperatureChangeTrigger(focuserMediator, imageHistory, autofocusConditionGate),
-                new AutofocusAfterHFRIncreaseTrigger(imageHistory, filterWheelMediator, autofocusConditionGate),
-                new AutofocusAfterFilterChange(filterWheelMediator, imageHistory, profileService, autofocusConditionGate),
-                // Previously unregistered: a WILMA-added or NINA-imported ReconnectTrigger
-                // degraded to UnknownSequenceTrigger (never fired). Its ConnectEquipment item
-                // prototype was already registered above; the trigger itself was missed.
-                new ReconnectTrigger(
-                    profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                    rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                    flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
-            },
+            items: Instantiate(SequenceKinds.All.Where(e => e.Role == SequenceNodeRole.Instruction), constructors).Cast<ISequenceItem>().ToList(),
+            conditions: Instantiate(SequenceKinds.All.Where(e => e.Role == SequenceNodeRole.Condition), constructors).Cast<ISequenceCondition>().ToList(),
+            container: Instantiate(SequenceKinds.All.Where(e => e.Role == SequenceNodeRole.Container), constructors).Cast<ISequenceContainer>().ToList(),
+            triggers: Instantiate(SequenceKinds.All.Where(e => e.Role == SequenceNodeRole.Trigger), constructors).Cast<ISequenceTrigger>().ToList(),
             // A body naming a provider (the full UI's editor does) resolves through this list.
             dateTimeProviders: timeSources);
     }

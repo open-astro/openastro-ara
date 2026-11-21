@@ -1,0 +1,10 @@
+### Breaking changes
+- **Meridian flips are confirmed by you, once per profile** (#1589): a profile that was marked confirmed before this release is reset to unconfirmed, because the old confirmation was written before any flip ran. Until you confirm a flip, every flip sends a critical alert and waits 60 s before it starts. An older app cannot confirm a flip; update the app too. **After upgrading:** on each profile, watch one meridian flip from start to end, then press **Confirm** in Settings → Unattended running → When to stop.
+
+### Fixed (meridian flip)
+- **A flip is confirmed only after it completed** (#1589): the 60 s announce no longer counts as your consent. When a flip runs to the end on an unconfirmed profile, Ara records it and asks you to confirm it; a flip that fails or is stopped records nothing. With flip safety off, a flip whose mount reports the same pier side is recorded too, for you to check by eye (some drivers always report one side). The new **Confirm** button works only when a completed flip is on record (otherwise the rig answers `first-flip-not-completed`, worded in English and Brazilian Portuguese). Re-arm (also on a completed flip you have not confirmed yet), an optics change and a new profile (from the setup wizard or a duplicate) ask again.
+- **The pier side is checked right after the flip slew** (#1589): with flip safety on, a mount that reports the same pier side now fails the flip before Ara re-centers, re-focuses or restarts guiding. With flip safety off, Ara sends a warning at once instead of only logging it. Each flip logs the guider's "Meridian flip reverses Dec" setting.
+- **The user guide describes flips as they run** (#1589): which checks depend on flip safety and on Re-center after flip, how to confirm a flip, how to set the meridian pause per rig, and what to change if Dec runs away after a flip.
+
+### Removed (settings)
+- **The "On altitude limit" action is gone from Settings** (#1589): no part of the rig acted on it. The heading over "Park if no more targets" is now "When targets run out". The `on_altitude_limit` field stays in the profile so older apps keep working.

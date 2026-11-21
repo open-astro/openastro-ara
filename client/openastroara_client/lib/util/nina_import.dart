@@ -1,138 +1,413 @@
-import '../models/sequence/condition_catalog.dart' show conditionCatalog;
-import '../models/sequence/instruction_catalog.dart' show instructionCatalog;
-import '../models/sequence/trigger_catalog.dart' show triggerCatalog;
+import '../models/sequence/sequence_v2_kinds.dart';
 
-/// §38.4 — CLIENT-side NINA import translation, ported from the daemon's
-/// `NinaImportTypeNormalizer` + the import path of `ImportAsync` under the
-/// 2026-07-15 PORT_DECISIONS call (the file lives on THIS machine; uploading
-/// it purely so the Pi could run a JSON→JSON translation was the last
-/// planning flow that died without a server). The daemon's authoritative
-/// schema validator still gates the create/push — only the translation moved.
+/// Client-side NINA import (docs/specs/sequence-v2.md, "NINA JSON import",
+/// #2026): the successor of the `$type`-renaming translation. It maps a NINA
+/// Json.NET export to a sequence v2 document (a tree of `kind` nodes) and
+/// collects the warnings the user sees before the upload. The file lives on
+/// this machine, so the mapping is client code and the daemon's v2 validator
+/// gates the create. The kind table and the rename rules are data in
+/// `sequence_v2_kinds.dart`.
 ///
-/// **Lossless by construction:** only `$type` strings are rewritten, and only
-/// via the mechanical NINA→OpenAstroAra namespace rename (the port renamed
-/// namespaces 1:1, so every NINA type name maps to its OpenAstroAra twin
-/// string). Nothing is deserialized; every other property and child is
-/// preserved verbatim. Types the daemon build doesn't actually have resolve
-/// identically under either spelling at daemon load time — its
-/// `JsonCreationConverter.ResolveType` tries both forms — so the rename never
-/// changes a node's effective identity.
-///
-/// The "unsupported instruction" warning is computed against the CLIENT's
-/// instruction catalog — the honest user-facing meaning: these nodes will
-/// render as a generic fallback in the editor (they still execute if the
-/// daemon knows them).
+/// What cannot be mapped becomes a placeholder (`kind: "unknown"`) that keeps
+/// the source node; a file that cannot be imported at all is refused with
+/// [NinaImportRefused] and nothing is uploaded.
 class NinaImportTranslation {
   final Map<String, dynamic> body;
   final List<String> warnings;
   const NinaImportTranslation({required this.body, required this.warnings});
 }
 
-const String _schemaVersionField = 'schemaVersion';
+/// Why a whole import was refused. The widget shows the localized sentence for
+/// each; [NinaImportRefused.message] is the English one the spec words.
+enum NinaRefusal { notNina, sharedNode }
 
-/// Mirrors the daemon's `SequenceSchemaValidator.SchemaVersion` — the value
-/// backfilled when a raw NINA export (which never carries the field) is
-/// imported, so the daemon's persist-time validator accepts it.
-const String schemaVersion = 'openastroara-sequence-v1';
+class NinaImportRefused implements Exception {
+  const NinaImportRefused(this.refusal);
 
-/// The editor-known canonical types (lazy — the catalogs are const lists).
-/// Instructions AND their container strategies, conditions, and triggers —
-/// every `$type` the editor renders first-class. Missing any of these would
-/// false-flag "not yet supported" on essentially every real import (every
-/// container carries a Strategy node).
-final Set<String> _editorTypes = {
-  for (final def in instructionCatalog) def.type,
-  for (final def in instructionCatalog)
-    if (def.strategyType != null) def.strategyType!,
-  for (final def in conditionCatalog) def.type,
-  for (final def in triggerCatalog) def.type,
-};
+  final NinaRefusal refusal;
 
-/// Translate a decoded NINA sequence export into an ARA-canonical body +
-/// user-facing warnings. Pure; never throws on content (a malformed shape
-/// just translates to itself).
-NinaImportTranslation translateNinaSequence(Map<String, dynamic> nina) {
-  final warnings = <String>[];
+  String get message => switch (refusal) {
+    NinaRefusal.notNina => 'This file is not a NINA sequence.',
+    NinaRefusal.sharedNode =>
+      'This sequence has a shared node, which OpenAstro Ara cannot import.',
+  };
 
-  // §38.4 step 3: NINA exports carry no schemaVersion; ARA-saved exports do.
-  // Backfill so the daemon's persist-time validator accepts the first save.
-  Map<String, dynamic> body;
-  if (nina.containsKey(_schemaVersionField)) {
-    body = _deepCopy(nina);
-  } else {
-    body = <String, dynamic>{_schemaVersionField: schemaVersion, ..._deepCopy(nina)};
-    warnings.add(
-        "schemaVersion was missing; backfilled to '$schemaVersion'.");
-  }
-
-  // §38.4 — normalize $type names. Collect editor-unknown sequencer types for
-  // the warning (sorted, deduped — matching the daemon's SortedSet).
-  final unsupported = <String>{};
-  _normalizeNode(body, unsupported);
-  if (unsupported.isNotEmpty) {
-    final sorted = unsupported.toList()..sort();
-    warnings.add(
-        '${sorted.length} instruction type(s) are not yet supported and were '
-        'kept as-is: ${sorted.join(', ')}.');
-  }
-
-  return NinaImportTranslation(body: body, warnings: warnings);
+  @override
+  String toString() => 'NinaImportRefused: $message';
 }
 
-void _normalizeNode(Object? node, Set<String> unsupported) {
-  if (node is Map) {
-    final type = node[r'$type'];
-    if (type is String) {
-      final canonical = _remapNamespace(type);
-      if (canonical != type) node[r'$type'] = canonical;
-      // (_remapNamespace rewrites every NINA.Sequencer prefix, so no
-      // separate still-NINA branch can ever match here.)
-      if (canonical.startsWith('OpenAstroAra.Sequencer.') &&
-          !_editorTypes.contains(canonical)) {
-        unsupported.add(_shortName(canonical));
+/// The value of `schemaVersion` the importer writes.
+const String schemaVersion = 'openastroara-sequence-v2';
+
+const _reasonNoKind = 'OpenAstro Ara has no kind for this NINA type.';
+const _reasonPlugin =
+    'This type comes from a NINA plugin that OpenAstro Ara does not support.';
+const _reasonNoType = 'This node has no type.';
+
+String _placeholderWarning(String originalType) =>
+    '"$originalType" is not supported by OpenAstro Ara and was not imported. '
+    'It stays in the sequence as a placeholder that is skipped when the '
+    'sequence runs.';
+
+String _deviceWarning(String device, String kind) =>
+    'The device "$device" of "$kind" is not one of this rig\'s equipment '
+    'roles. It was kept as found; assign it in the editor.';
+
+/// Map a decoded NINA export to a v2 document and its warnings. A body that
+/// already says [schemaVersion] is returned as written; any other
+/// `schemaVersion`, or a body with no top-level `$type`, is refused. The input
+/// is never mutated. [fileName] and [now] fill `metadata.importedFrom`.
+NinaImportTranslation translateNinaSequence(
+  Map<String, dynamic> nina, {
+  String fileName = '',
+  DateTime? now,
+}) {
+  if (nina.containsKey('schemaVersion')) {
+    if (nina['schemaVersion'] != schemaVersion) {
+      throw const NinaImportRefused(NinaRefusal.notNina);
+    }
+    return NinaImportTranslation(body: nina, warnings: const []);
+  }
+  final type = nina[r'$type'];
+  final kind = type is String ? _kindFor(type) : null;
+  if (kind == null || kind.role != SequenceV2Role.container) {
+    throw const NinaImportRefused(NinaRefusal.notNina);
+  }
+  final mapper = _Mapper(nina);
+  final mapped = mapper.node(nina, kind);
+  final name = nina['Name'];
+  final title = name is String && name.trim().isNotEmpty
+      ? name
+      : fileName.replaceFirst(RegExp(r'\.json$', caseSensitive: false), '');
+  return NinaImportTranslation(
+    body: {
+      'schemaVersion': schemaVersion,
+      'name': title,
+      'metadata': {
+        'importedFrom': {
+          'format': 'nina',
+          'fileName': fileName,
+          'importedUtc': (now ?? DateTime.now()).toUtc().toIso8601String(),
+        },
+      },
+      'targets': mapper.targets,
+      // A registered container other than the root class is wrapped in one.
+      'root': kind.kind == 'root'
+          ? mapped
+          : {
+              'kind': 'root',
+              'name': title,
+              'items': [mapped],
+            },
+    },
+    warnings: mapper.warnings,
+  );
+}
+
+/// The kind of a `$type` token, or null when the table names none. Only the
+/// NINA and OpenAstroAra sequencer namespaces and the Connector plugin's six
+/// classes map; the assembly is not read, so a plugin class that shares a
+/// kind's name stays a placeholder.
+SequenceV2Kind? _kindFor(String type) {
+  final full = type.split(',').first.trim();
+  final dot = full.lastIndexOf('.');
+  if (dot < 0) return null;
+  final namespace = full.substring(0, dot + 1);
+  final cls = full.substring(dot + 1);
+  if (ninaSequencerNamespaces.any(namespace.startsWith)) {
+    return ninaAreaContainers.contains(cls)
+        ? sequenceV2KindByNinaClass['SequentialContainer']
+        : sequenceV2KindByNinaClass[cls];
+  }
+  if (namespace.startsWith(ninaConnectorNamespace) &&
+      ninaConnectorClasses.contains(cls)) {
+    return sequenceV2KindByNinaClass[cls];
+  }
+  return null;
+}
+
+/// The lists a node is found in, and the roles each takes.
+enum _List {
+  items({SequenceV2Role.container, SequenceV2Role.instruction}),
+  conditions({SequenceV2Role.condition}),
+  triggers({SequenceV2Role.trigger}),
+  run({SequenceV2Role.instruction});
+
+  const _List(this.roles);
+  final Set<SequenceV2Role> roles;
+}
+
+class _Mapper {
+  _Mapper(Map<String, dynamic> root) {
+    _index(root);
+  }
+
+  final targets = <Map<String, dynamic>>[];
+  final warnings = <String>[];
+  final _ids = <String, Map>{};
+  final _active = Set<Object>.identity();
+
+  void _index(Object? v) {
+    if (v is Map) {
+      final id = v[r'$id'];
+      if (id is String) _ids[id] = v;
+      v.values.forEach(_index);
+    } else if (v is List) {
+      v.forEach(_index);
+    }
+  }
+
+  Never _refuse([NinaRefusal why = NinaRefusal.notNina]) =>
+      throw NinaImportRefused(why);
+
+  /// A `$ref` in a value position is the earlier object with that `$id`.
+  Map _expand(Map v) {
+    if (!v.containsKey(r'$ref')) return v;
+    return _ids[v[r'$ref']] ?? _refuse();
+  }
+
+  /// A value copied as found but for its keys (lowerCamelCase, no `$type`,
+  /// `$id` or `$ref`) and its `$values` wrappers.
+  Object? value(Object? v) {
+    if (v is List) return [for (final e in v) value(e)];
+    if (v is! Map) return v;
+    final map = _expand(v);
+    if (!_active.add(map)) _refuse();
+    try {
+      final values = map[r'$values'];
+      if (values is List) return value(values);
+      return {
+        for (final e in map.entries)
+          if (!(e.key as String).startsWith(r'$'))
+            lowerCamel(e.key as String): field(
+              lowerCamel(e.key as String),
+              e.value,
+            ),
+      };
+    } finally {
+      _active.remove(map);
+    }
+  }
+
+  Object? field(String name, Object? v) =>
+      name == 'imageType' && v == 'DARKFLAT' ? 'DARK' : value(v);
+
+  /// A nested value that keeps only the keys [ninaNestedKeys] names.
+  Object? nested(String name, Object? v) {
+    if (v is! Map) return v;
+    final keep = ninaNestedKeys[name]!;
+    final map = _expand(v);
+    return {
+      for (final e in map.entries)
+        if (keep.contains(
+          lowerCamel((e.key as String).replaceFirst(RegExp('^_'), '')),
+        ))
+          lowerCamel((e.key as String).replaceFirst(RegExp('^_'), '')): value(
+            e.value,
+          ),
+    };
+  }
+
+  /// The entries of a collection value (`$values` or a plain array).
+  List<Object?> _entries(Object? v) {
+    final resolved = v is Map ? _expand(v) : v;
+    final list = resolved is Map ? resolved[r'$values'] : resolved;
+    if (list == null) return const [];
+    return list is List ? list : _refuse();
+  }
+
+  List<Map<String, dynamic>> _children(Object? v, _List list) => [
+    for (final e in _entries(v)) _listEntry(e, list),
+  ];
+
+  /// A node found in [list]: mapped by its kind, or a placeholder.
+  Map<String, dynamic> _listEntry(Object? entry, _List list) {
+    if (entry is! Map) _refuse();
+    if (entry.containsKey(r'$ref')) _refuse(NinaRefusal.sharedNode);
+    final src = entry.cast<String, dynamic>();
+    final type = src[r'$type'];
+    if (type is! String || type.isEmpty) {
+      return _placeholder(src, list, '', _reasonNoType);
+    }
+    final kind = _kindFor(type);
+    if (kind == null ||
+        kind.kind == 'root' ||
+        !list.roles.contains(kind.role)) {
+      final core = ninaSequencerNamespaces.any(type.startsWith);
+      return _placeholder(
+        src,
+        list,
+        type,
+        core ? _reasonNoKind : _reasonPlugin,
+      );
+    }
+    return node(src, kind);
+  }
+
+  Map<String, dynamic> _placeholder(
+    Map<String, dynamic> src,
+    _List list,
+    String originalType,
+    String reason,
+  ) {
+    warnings.add(_placeholderWarning(originalType));
+    final full = originalType.split(',').first.trim();
+    final dot = full.lastIndexOf('.');
+    final namespace = dot < 0 ? '' : full.substring(0, dot);
+    final role = switch (list) {
+      _List.conditions => 'condition',
+      _List.triggers => 'trigger',
+      _List.run => 'instruction',
+      _List.items =>
+        namespace.endsWith('Container') || full.endsWith('Container')
+            ? 'container'
+            : 'instruction',
+    };
+    return {
+      'kind': 'unknown',
+      'role': role,
+      'name': originalType,
+      'originalType': originalType,
+      'originalPayload': _copy(src),
+      'reason': reason,
+    };
+  }
+
+  Map<String, dynamic> node(Map<String, dynamic> src, SequenceV2Kind kind) {
+    final fields = kind.fields;
+    final out = <String, dynamic>{'kind': kind.kind};
+    Map<String, dynamic>? target;
+    if (kind.kind == 'target') {
+      // Reserved before the children are walked, so ids follow the tree order.
+      target = {'id': 't${targets.length + 1}'};
+      targets.add(target);
+      out['targetId'] = target['id'];
+    }
+    final shims = <String, Object?>{};
+    for (final e in src.entries) {
+      final key = e.key;
+      if (key.startsWith(r'$')) continue;
+      if (key == ninaTargetProperty && target != null) {
+        _fillTarget(target, e.value);
+        continue;
+      }
+      final name = ninaFieldRenames[key] ?? lowerCamel(key);
+      if (!fields.contains(name)) {
+        if (fields.contains('data') && altitudeShims.containsKey(key)) {
+          shims[key] = e.value;
+        }
+        continue;
+      }
+      final v = e.value;
+      switch (name) {
+        case 'items':
+          out[name] = _children(v, _List.items);
+        case 'conditions':
+          out[name] = _children(v, _List.conditions);
+        case 'triggers':
+          out[name] = _children(v, _List.triggers);
+        case 'run':
+          if (v is Map && v.containsKey(r'$ref')) {
+            _refuse(NinaRefusal.sharedNode);
+          }
+          // An empty runner is the default, so it is not written.
+          final run = v is Map ? _children(v['Items'], _List.run) : const [];
+          if (run.isNotEmpty) out[name] = run;
+        case 'errorBehavior':
+          _word(out, name, v, errorBehaviorTokens);
+        case 'trackingMode':
+          _word(out, name, v, trackingModeNames);
+        case 'provider':
+          final provider = v is Map ? _expand(v)[r'$type'] : null;
+          final cls = provider is String
+              ? provider.split(',').first.split('.').last.trim()
+              : null;
+          if (sequenceV2Providers[cls] case final p?) out[name] = p;
+        case 'binning' || 'filter':
+          out[name] = nested(name, v);
+        default:
+          out[name] = field(name, v);
       }
     }
-    for (final value in node.values) {
-      _normalizeNode(value, unsupported);
+    if (fields.contains('data')) _foldAltitude(out, shims);
+    _warnDevices(out, kind);
+    return out;
+  }
+
+  /// An enum the engine writes as a number is its word; a string stays.
+  void _word(
+    Map<String, dynamic> out,
+    String name,
+    Object? v,
+    List<String> words,
+  ) {
+    final word = v is int ? (v >= 0 && v < words.length ? words[v] : null) : v;
+    if (word is String) out[name] = word;
+  }
+
+  /// `data` is `Data` recased; a deprecation shim wins over it, and the
+  /// comparator is an engine name, the inclusive operators folded.
+  void _foldAltitude(Map<String, dynamic> out, Map<String, Object?> shims) {
+    final data = <String, dynamic>{
+      if (out['data'] case final Map d) ...d.cast<String, dynamic>(),
+    };
+    for (final e in shims.entries) {
+      data[altitudeShims[e.key]!] = value(e.value);
     }
-  } else if (node is List) {
-    for (final item in node) {
-      _normalizeNode(item, unsupported);
+    final comparator = data['comparator'];
+    if (comparator != null) {
+      final word = comparator is int
+          ? (comparator >= 0 && comparator < comparatorNames.length
+                ? comparatorNames[comparator]
+                : null)
+          : comparator;
+      if (word is String) data['comparator'] = comparatorFolds[word] ?? word;
+    }
+    if (data.isNotEmpty) out['data'] = data;
+  }
+
+  void _warnDevices(Map<String, dynamic> out, SequenceV2Kind kind) {
+    final device = out['selectedDevice'];
+    if (device is String &&
+        device.isNotEmpty &&
+        !rigRoleKeys.contains(device)) {
+      warnings.add(_deviceWarning(device, kind.kind));
+    }
+    final number = out['alpacaDeviceNumber'];
+    if (number is int && number != -1) {
+      warnings.add(_deviceWarning('$number', kind.kind));
     }
   }
-}
 
-/// The three §0.5g/h/l rename pairs (class AND assembly sides), plus the
-/// pre-module-split single-"NINA"-assembly fallback — mirrors the daemon's
-/// `NinaTypeRemapper.RemapNamespace` + its `, NINA` special case.
-String _remapNamespace(String typeString) {
-  var s = typeString
-      .replaceAll('NINA.Sequencer', 'OpenAstroAra.Sequencer')
-      .replaceAll('NINA.Astrometry', 'OpenAstroAra.Astrometry')
-      .replaceAll('NINA.Core', 'OpenAstroAra.Core');
-  // Legacy single-assembly bodies: "..., NINA" → the sequencer assembly (the
-  // daemon tries Sequencer/Core/Astrometry in turn; sequencer types dominate
-  // sequence bodies, and either spelling resolves at daemon load time).
-  if (s.endsWith(', NINA')) {
-    s = '${s.substring(0, s.length - ', NINA'.length)}, OpenAstroAra.Sequencer';
+  /// The element of `targets` for a `DeepSkyObjectContainer`'s `Target`.
+  void _fillTarget(Map<String, dynamic> target, Object? v) {
+    final src = v is Map ? _expand(v) : const {};
+    final coordinates = {...targetCoordinateKeys};
+    final input = src['InputCoordinates'];
+    if (input is Map) {
+      for (final e in _expand(input).entries) {
+        final key = lowerCamel(e.key as String);
+        if (coordinates.containsKey(key) && e.value != null) {
+          coordinates[key] = e.value as Object;
+        }
+      }
+    }
+    final name = src['TargetName'];
+    final angle = src['PositionAngle'];
+    final rotation = src['Rotation'];
+    target['name'] = name is String ? name : '';
+    target['coordinates'] = coordinates;
+    // `Rotation` is the legacy `360 - PositionAngle` (`InputTarget`).
+    target['positionAngle'] = angle is num
+        ? angle
+        : rotation is num
+        ? (360 - rotation) % 360
+        : 0.0;
   }
-  return s;
-}
 
-/// Short class name for warnings — strips generic args ('[' onward) before
-/// the assembly comma so a comma inside type params can't truncate the name.
-String _shortName(String typeString) {
-  final classSide = typeString.split('[').first.split(',').first;
-  final lastDot = classSide.lastIndexOf('.');
-  return lastDot >= 0 ? classSide.substring(lastDot + 1) : classSide;
-}
-
-Map<String, dynamic> _deepCopy(Map<String, dynamic> source) {
-  Object? copy(Object? v) => switch (v) {
-        Map<String, dynamic> m => {for (final e in m.entries) e.key: copy(e.value)},
-        Map m => {for (final e in m.entries) e.key.toString(): copy(e.value)},
-        List l => [for (final e in l) copy(e)],
-        _ => v,
-      };
-  return copy(source) as Map<String, dynamic>;
+  Object? _copy(Object? v) => switch (v) {
+    Map m => {for (final e in m.entries) e.key as String: _copy(e.value)},
+    List l => [for (final e in l) _copy(e)],
+    _ => v,
+  };
 }

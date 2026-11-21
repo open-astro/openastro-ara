@@ -100,6 +100,9 @@ public static class WsEventCatalog {
     public static readonly WsEvent TelescopeSlewStarted = new("telescope.slew_started");
     public static readonly WsEvent TelescopeSlewComplete = new("telescope.slew_complete");
     public static readonly WsEvent TelescopeSlewAborted = new("telescope.slew_aborted");
+    // #2044 — MeridianStopWatch stopped tracking at a mount limit (the meridian, with the flip off) and paused the
+    // active runs; it never slews or parks. Payload TelescopeLimitReachedPayload.
+    public static readonly WsEvent TelescopeLimitReached = new("telescope.limit_reached");
     // §63.18 — one event per guide frame while the guider is connected, straight from the
     // daemon's GuideStep stream: payload { frame, time_sec, ra_raw_px, dec_raw_px,
     // ra_arcsec?, dec_arcsec? (null until the guider reports a pixel scale), ra_duration_ms,
@@ -149,16 +152,17 @@ public static class WsEventCatalog {
     public static readonly WsEvent PolarAlignFrameComplete = new("polar_align.frame_complete");
     public static readonly WsEvent PolarAlignPaused = new("polar_align.paused");
     public static readonly WsEvent PolarAlignError = new("polar_align.error");
-    // Stages: stage when the routine moves to a new stage ({stage, state}); needs_home when the
-    // mount cannot find Home and the routine waits for the user's Continue ({stage, message});
-    // checked when the three-point check has its result (the PolarAlignCheckResultDto fields).
-    // started and progress also carry {stage}.
+    // Stages: stage when the routine moves to a new stage ({stage, state}); checked when the three-point check has its
+    // result (the PolarAlignCheckResultDto fields). needs_home was retired by #2048: the routine never sends the mount Home.
+    // started and progress also carry {stage}; started also carries {hand_turn} (#2083).
     public static readonly WsEvent PolarAlignStage = new("polar_align.stage");
-    public static readonly WsEvent PolarAlignNeedsHome = new("polar_align.needs_home");
     public static readonly WsEvent PolarAlignChecked = new("polar_align.checked");
     // #1971 — the Polar Aligner's state in a running routine, on every change: {state, moves,
     // axis?, arcmin?, seconds?, cause?, device_text?} (PolarAlignCorrectionDto).
     public static readonly WsEvent PolarAlignCorrection = new("polar_align.correction");
+    // #2083 — a hand-turn run waiting for the user to turn the RA axis, after each solve while it waits and once more
+    // when it takes the turn: {point, direction, target_deg, turned_deg?, waiting} (PolarAlignHandTurnDto).
+    public static readonly WsEvent PolarAlignHandTurn = new("polar_align.hand_turn");
 
     // §59.10 — collimation health verdict, a free byproduct of a completed autofocus sweep on an obstructed
     // scope (SCT/Mak/RC/Newtonian). Emitted once per sweep when the donut stars yield a confident read;
@@ -270,7 +274,8 @@ public static class WsEventCatalog {
     public static readonly WsEvent DiagnosticsSnapshot = new("diagnostics.snapshot");
 
     // #1644 — multi-device preference sync. profile.updated { section } after a successful profile-section
-    // write; client_settings.updated { keys, updated_utc } after a client-settings replace or merge.
+    // write, a route's or (#1807) the daemon's own (ProfileSectionChangePublisher); client_settings.updated
+    // { keys, updated_utc } after a client-settings replace or merge.
     public static readonly WsEvent ProfileUpdated = new("profile.updated");
     public static readonly WsEvent ClientSettingsUpdated = new("client_settings.updated");
 
@@ -306,6 +311,10 @@ public static class WsEventCatalog {
     // action == "emergency_stop".
     public static readonly WsEvent SafetyEmergencyStop = new("safety.emergency_stop");
 
+    // #1901 End Night: a change of the action (started, cancel requested, finished) or of one of its steps;
+    // payload { run_id, state, step, step_state, detail, cancellable }. GET /api/v1/end-night/status holds every step.
+    public static readonly WsEvent EndNightProgress = new("end_night.progress");
+
     /// <summary>
     /// The typed payload record of each event that has one (ADR 0014 step 2), by wire token. The snapshot
     /// (ws-events.json) reads the payload shape from these types; an event not listed here keeps a hand-built payload.
@@ -314,6 +323,8 @@ public static class WsEventCatalog {
         [CameraExposureStarted.Token] = typeof(ExposureStartedPayload),
         [CameraExposureComplete.Token] = typeof(ExposureCompletePayload),
         [CameraExposureFailed.Token] = typeof(ExposureFailedPayload),
+        [EndNightProgress.Token] = typeof(EndNightProgressPayload),
+        [TelescopeLimitReached.Token] = typeof(TelescopeLimitReachedPayload),
     };
 
     /// <summary>
@@ -337,6 +348,7 @@ public static class WsEventCatalog {
         TelescopeSlewStarted,
         TelescopeSlewComplete,
         TelescopeSlewAborted,
+        TelescopeLimitReached,
         GuiderStep,
         GuiderEvent,
         GuiderPaResidual,
@@ -352,9 +364,9 @@ public static class WsEventCatalog {
         PolarAlignPaused,
         PolarAlignError,
         PolarAlignStage,
-        PolarAlignNeedsHome,
         PolarAlignChecked,
         PolarAlignCorrection,
+        PolarAlignHandTurn,
         AutofocusCollimationVerdict,
         AutofocusStarted,
         AutofocusShotComplete,
@@ -417,6 +429,7 @@ public static class WsEventCatalog {
         SafetySafe,
         SafetyActionTaken,
         SafetyEmergencyStop,
+        EndNightProgress,
     };
 }
 

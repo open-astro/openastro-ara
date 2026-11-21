@@ -6,7 +6,6 @@ import '../../../models/equipment_device_status.dart';
 import '../../../models/mount_status.dart';
 import '../../../services/equipment_device_api.dart';
 import '../../../state/equipment/mount_state.dart';
-import '../../../state/profile_management_state.dart';
 import '../../../state/settings/equipment_connection_state.dart';
 import '../../../state/settings/site_settings_state.dart';
 import '../../../theme/ara_colors.dart';
@@ -14,7 +13,7 @@ import '../../../util/slew_rates.dart';
 import '../../../util/tracking_rate_words.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -32,27 +31,7 @@ class EquipmentMountPanel extends ConsumerStatefulWidget {
 
 class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
   @override
-  void initState() {
-    super.initState();
-    // Hydrate the profile's site (lat/long rows) on mount — the same explicit
-    // round-trip pattern the Safety → Site panel uses (§37.12).
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateSite());
-  }
-
-  Future<void> _hydrateSite() async {
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    try {
-      await ref.read(siteSettingsProvider.notifier).hydrateFromServer(api);
-    } catch (_) {
-      // Offline / bad response — keep the defaults; the rows stay hidden.
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(mountProvider);
     final notifier = ref.read(mountProvider.notifier);
     // The live mount when connected — gates the manual-control section (GoTo + the
@@ -78,12 +57,7 @@ class _EquipmentMountPanelState extends ConsumerState<EquipmentMountPanel> {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _MountBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.mount),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.mount, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.mount),
         // The press-and-hold direction pad sits between Auto-connect and the
         // Manual control section — shown whenever the mount can MoveAxis,
         // independent of GoTo (canSlew) capability.
@@ -121,8 +95,10 @@ class _MountBody extends ConsumerWidget {
       );
     }
     final caps = s.capabilities;
-    final site = ref.watch(siteSettingsProvider);
-    final hasSite = site.latitudeDeg != 0 || site.longitudeDeg != 0;
+    // The site loads itself from the rig (ADR 0015); not loaded, no rows.
+    final site = ref.watch(siteSettingsProvider).value;
+    final hasSite =
+        site != null && (site.latitudeDeg != 0 || site.longitudeDeg != 0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -140,6 +116,10 @@ class _MountBody extends ConsumerWidget {
         ],
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
+        // #2070 — the rig does not trust the mount's position (it may have
+        // lost power): GoTo, Park, Home and Polar Align are refused until the
+        // user confirms Home.
+        if (s.positionUnverified) _PositionUnverified(status: s),
         if (s.isBusy)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 4),
@@ -221,7 +201,7 @@ class _MountBody extends ConsumerWidget {
           children: [
             if ((caps?.canPark ?? false) && !s.parked)
               OutlinedButton(
-                onPressed: s.isBusy
+                onPressed: s.isBusy || s.positionUnverified
                     ? null
                     : () => _run(
                         context,
@@ -247,7 +227,7 @@ class _MountBody extends ConsumerWidget {
             // unpark first) or busy. Shown only when the mount supports FindHome.
             if (caps?.canFindHome ?? false)
               OutlinedButton(
-                onPressed: (s.isBusy || s.parked)
+                onPressed: (s.isBusy || s.parked || s.positionUnverified)
                     ? null
                     : () => _run(
                         context,
@@ -312,6 +292,95 @@ class _MountBody extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text("Couldn't $verb: ${failureReason(l10n, e)}"),
+          backgroundColor: AraColors.accentError,
+        ),
+      );
+    }
+  }
+}
+
+/// #2070 — the rig does not trust the mount's reported position (a mount
+/// without absolute encoders reports Home wherever it points after a power
+/// loss). The confirmation shows once the mount reports Home, and asks first.
+class _PositionUnverified extends ConsumerWidget {
+  final MountStatus status;
+  const _PositionUnverified({required this.status});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = context.l10n;
+    return Padding(
+      key: const Key('mount_position_unverified'),
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.warning_amber,
+                color: AraColors.accentError,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.mountPositionUnverifiedTitle,
+                  style: const TextStyle(color: AraColors.errorText),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            status.positionUnverifiedByStop
+                ? l10n.mountPositionStopUnconfirmedBody
+                : l10n.mountPositionUnverifiedBody,
+          ),
+          const SizedBox(height: 4),
+          if (status.atHome)
+            OutlinedButton(
+              key: const Key('mount_confirm_home'),
+              onPressed: () => _confirm(context, ref),
+              child: Text(l10n.mountConfirmAtHome),
+            )
+          else
+            Text(l10n.mountPositionUnverifiedRunZeroSearch),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _confirm(BuildContext context, WidgetRef ref) async {
+    final l10n = context.l10n;
+    final messenger = ScaffoldMessenger.of(context);
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.mountPositionUnverifiedTitle),
+        content: Text(l10n.mountConfirmAtHomeQuestion),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.deviceCancel),
+          ),
+          TextButton(
+            key: const Key('mount_confirm_home_yes'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.mountConfirmAtHomeYes),
+          ),
+        ],
+      ),
+    );
+    if (yes != true) return;
+    try {
+      await ref.read(mountProvider.notifier).confirmHome();
+    } catch (e) {
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            '${l10n.mountCouldntConfirmHome}: ${failureReason(l10n, e)}',
+          ),
           backgroundColor: AraColors.accentError,
         ),
       );

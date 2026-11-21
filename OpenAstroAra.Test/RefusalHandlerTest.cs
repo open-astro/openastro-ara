@@ -35,8 +35,8 @@ namespace OpenAstroAra.Test {
     [TestFixture]
     public class RefusalHandlerTest {
 
-        // The slice-1 (pointing) causes: token, status, parameter names. A row changed here is a wire change.
-        private static readonly object[] Slice1 = {
+        // Every declared cause (slice 1 pointing, then GoTo, then End Night, then the unverified mount, then Polar Align's start, #2048, and its sweep bound, #2089, then the mount clock, #2071): token, status, parameter names. A row changed here is a wire change.
+        private static readonly object[] Causes = {
             new object[] { "no-camera", 409, Array.Empty<string>() },
             new object[] { "camera-busy", 409, Array.Empty<string>() },
             new object[] { "gate-stuck", 409, Array.Empty<string>() },
@@ -45,6 +45,22 @@ namespace OpenAstroAra.Test {
             new object[] { "solver-not-set", 422, Array.Empty<string>() },
             new object[] { "capture-settings-unsupported", 422, Array.Empty<string>() },
             new object[] { "storage-unavailable", 409, Array.Empty<string>() },
+            new object[] { "below-horizon-limit", 409, new[] { "altitude_deg", "limit_deg" } },
+            new object[] { "counterweight-limit", 409, new[] { "hour_angle_hours", "counterweight_angle_deg", "limit_deg" } },
+            new object[] { "end-night-in-progress", 409, Array.Empty<string>() },
+            new object[] { "mount-position-unverified", 409, new[] { "position_unverified_reason" } },
+            new object[] { "polar-align-mount-parked", 409, Array.Empty<string>() },
+            new object[] { "polar-align-unconfirmed", 409, new[] { "direction" } },
+            new object[] { "polar-align-sweep-limit", 409, new[] { "offset_deg", "limit_deg" } },
+            new object[] { "polar-align-moving-mount", 409, Array.Empty<string>() },
+            new object[] { "polar-align-on-axis", 409, Array.Empty<string>() },
+            new object[] { "polar-align-pointing-unknown", 409, Array.Empty<string>() },
+            new object[] { "polar-align-pose-ambiguous", 409, Array.Empty<string>() },
+            new object[] { "polar-align-mount-busy", 409, Array.Empty<string>() },
+            new object[] { "first-flip-not-completed", 409, Array.Empty<string>() },
+            new object[] { "mount-clock-not-verified", 409, Array.Empty<string>() },
+            new object[] { "polar-align-already-running", 409, Array.Empty<string>() },
+            new object[] { "polar-align-clutch-turned", 409, Array.Empty<string>() },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };
@@ -69,13 +85,13 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void The_catalog_declares_exactly_the_pointing_causes_each_once() {
+        public void The_catalog_declares_exactly_the_tabled_causes_each_once() {
             Assert.That(RefusalCatalog.All.Select(c => c.Token),
-                Is.EquivalentTo(Slice1.Cast<object[]>().Select(r => (string)r[0])));
+                Is.EquivalentTo(Causes.Cast<object[]>().Select(r => (string)r[0])));
             Assert.That(RefusalCatalog.All.Select(c => c.Token), Is.Unique);
         }
 
-        [TestCaseSource(nameof(Slice1))]
+        [TestCaseSource(nameof(Causes))]
         public async Task A_refusal_answers_its_status_with_the_cause_as_reason_and_its_parameters(
                 string token, int status, string[] parameterNames) {
             var cause = Cause(token);

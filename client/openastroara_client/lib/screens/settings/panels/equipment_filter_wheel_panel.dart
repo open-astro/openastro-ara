@@ -18,6 +18,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../theme/ara_metrics.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/manual_filter_wheel_body.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/editable_field.dart';
 import '../../../widgets/settings/section_load_state.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -34,8 +35,6 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final connN = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(filterWheelProvider);
     final notifier = ref.read(filterWheelProvider.notifier);
     final labelsSection = ref.watch(filterWheelLabelsProvider);
@@ -77,13 +76,7 @@ class EquipmentFilterWheelPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _FilterWheelBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.filterWheel),
-          onChanged: (v) =>
-              connN.setAutoConnect(EquipmentDeviceType.filterWheel, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.filterWheel),
         if (policy == null)
           SectionNotLoaded(
             section: policySection,
@@ -554,7 +547,7 @@ class _FocusOffsetsSection extends ConsumerWidget {
     final running = live.isRunning;
     final picks = defaultOffsetPicks(slots);
     final reference = offsetReference(
-        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.afFilter)));
+        slots, picks, ref.watch(autofocusSettingsProvider.select((s) => s.value?.afFilter)) ?? '');
     final all = {...picks, ?reference}.toList()..sort();
     final theme = Theme.of(context).textTheme;
     final dim = theme.bodySmall?.copyWith(color: AraColors.textSecondary);

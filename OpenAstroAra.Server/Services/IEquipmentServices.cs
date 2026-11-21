@@ -82,7 +82,9 @@ public interface ICameraService {
     (ReadOnlyMemory<byte> Jpeg, long Seq, long SessionId)? GetLiveViewFrame();
 }
 
-public interface ITelescopeService {
+/// <summary>The mount. #2066 — it is the daemon's <see cref="IMountMotionControl"/>: a routine that drives the motors itself
+/// (Polar Align) takes that seam, never this interface.</summary>
+public interface ITelescopeService : IMountMotionControl {
     /// <summary>#1710 — keep the profile's site out of the mount while a profile switch swaps the devices; dispose when they are done.</summary>
     IDisposable? HoldSiteFollow() => null;
 
@@ -97,8 +99,17 @@ public interface ITelescopeService {
     /// on live hardware is always an explicit two-step.</summary>
     Task<bool> ForgetAsync(CancellationToken ct);
     Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct);
+    /// <summary>The park that never yields to the mount's motion owner: the safety and fault parks call it (they end Polar
+    /// Align through its takeover first). #2066 — the user's park is <see cref="ParkUnlessMotionOwnedAsync"/>.</summary>
     Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#2066 (ARA-2) — the user's park (<c>POST /park</c>): as <see cref="ParkAsync"/>, but counted in the motion
+    /// dispatch as a REST GoTo is. Refused (<c>polar-align-moving-mount</c>) when a routine took the mount's motion owner
+    /// during its checks, and while it is on its way no routine can take the owner.</summary>
+    Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct);
     Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct);
+    /// <summary>The user's Find Home (<c>POST /home</c>; nothing else calls it). #2066 (ARA-2) — counted in the motion dispatch
+    /// as <see cref="ParkUnlessMotionOwnedAsync"/> is.</summary>
     Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct);
     Task SetTrackingAsync(bool enabled, CancellationToken ct);
 
@@ -116,6 +127,48 @@ public interface ITelescopeService {
     /// renewal arrives within the lease; null keeps the move running until a stop.</summary>
     Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct);
     Task AbortSlewAsync(CancellationToken ct);
+
+    /// <summary><see cref="AbortSlewAsync(CancellationToken)"/> with the caller named in the abort's log line and its
+    /// <c>slew_aborted</c> event (<c>user_request</c> for Stop Mount; <c>polar_align</c> for the routine's own stop).
+    /// Like it, the abort reaches the driver even when <paramref name="ct"/> is already cancelled.</summary>
+    Task IMountMotionControl.AbortSlewAsync(string reason, CancellationToken ct) => AbortSlewAsync(ct);
+
+    /// <summary>The mount's Slewing read from the driver now, not the 2 s refresh; null when not connected or the read
+    /// fails. A routine that stops the mount confirms the stop on it.</summary>
+    Task<bool?> ReadSlewingNowAsync(CancellationToken ct) => Task.FromResult<bool?>(null);
+
+    /// <summary>The mount's RA (hours) and Dec (degrees) read from the driver now, not the 2 s refresh, in the
+    /// mount's own frame (<see cref="OpenAstroAra.Equipment.Interfaces.Mediator.ITelescopeMediator.GetCurrentPosition"/>'s);
+    /// null when not connected or the read fails. Polar Align reads <see cref="IMountMotionControl.ReadNowAsync"/>.</summary>
+    Task<(double RaHours, double DecDegrees)?> ReadPointingNowAsync(CancellationToken ct) =>
+        Task.FromResult<(double RaHours, double DecDegrees)?>(null);
+
+    /// <summary>#2066 — count a stop in <see cref="IMountMotionControl.AbortEpoch"/> without sending the mount anything: Emergency Stop's first
+    /// step, before any of its rungs. Every routine and queued GoTo or Park that read the count before treats it as a stop:
+    /// a leased motor renewal is refused (its lease then runs out and stops the axis), and Polar Align fails its run.</summary>
+    void FenceMotion(string reason) { }
+
+    /// <summary>#2073 — the connected mount's ASCOM <c>AlignmentMode</c>, read once per connection; null when
+    /// not connected, not yet read, or the driver would not answer. The counterweight check runs only for a
+    /// German equatorial mount, and treats null as one (fail-safe).</summary>
+    ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => null;
+
+    /// <summary><see cref="MoveAxisAsync(int, double, int?, CancellationToken)"/>, refused (InvalidOperationException,
+    /// nothing reaches the driver) when a non-zero <paramref name="rate"/> would start the motor after an abort that
+    /// came since <paramref name="unlessAbortedSince"/> (an <see cref="IMountMotionControl.AbortEpoch"/> reading): a
+    /// routine's lease renewal must never restart a motor the user just stopped.</summary>
+    Task IMountMotionControl.MoveAxisAsync(int axis, double rate, int? leaseMs, long? unlessAbortedSince, CancellationToken ct) =>
+        MoveAxisAsync(axis, rate, leaseMs, ct);
+
+    /// <summary>#2070 — the user says the mount is physically at Home: the position is trusted again.
+    /// Throws InvalidOperationException when the mount is not connected or does not report AtHome now.</summary>
+    Task ConfirmHomeAsync(CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors marks the mount's position unverified with
+    /// <paramref name="reason"/> (<c>stop_unconfirmed</c>): its stop was not confirmed, or the mount reconnected while it
+    /// ran. GoTo, Park, Home and polar alignment are then refused, as after a power loss, until
+    /// <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
+    void MarkPositionUnverified(string reason) { }
 }
 
 public interface IFocuserService {
@@ -403,19 +456,29 @@ public enum GuiderTwinDeleteStatus {
 public sealed record GuiderTwinDeleteOutcome(GuiderTwinDeleteStatus Status, string? Reason);
 
 public interface IPolarAlignService {
-    /// <summary>A routine is running (any stage, any state short of a terminal one) — the one test
-    /// Emergency Stop and the start gates need; never a list of state names that a new stage outgrows.</summary>
+    /// <summary>A routine is running (any stage, any state short of a terminal one), or a run that just ended is still
+    /// stopping the mount (#2048) — the one test Emergency Stop and the start gates need; never a list of state names
+    /// that a new stage outgrows.</summary>
     bool IsActive { get; }
     Task<PolarAlignStateDto> GetStatusAsync(CancellationToken ct);
-    Task<OperationAcceptedDto> StartAsync(string? idempotencyKey, CancellationToken ct);
-    /// <summary>Begin at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null = coarse, or fine
-    /// when the coarse stage cannot run). Throws <see cref="ArgumentException"/> for an unknown stage (the
-    /// endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
+    /// <summary>#2048 — what a start at <paramref name="stage"/> would do, for the confirm step: the RA turn direction
+    /// from the mount's current pointing, the step and the most the run turns the RA axis from where it starts. Refuses
+    /// like <see cref="StartAsync"/> does before any motion: a mount not connected, a parked mount
+    /// (<c>polar-align-mount-parked</c>), no site latitude, a pointing within 3° of the pole (<c>polar-align-on-axis</c>),
+    /// turns past the session's sweep limit (<c>polar-align-sweep-limit</c>). A null stage plans the fine measurement.</summary>
+    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
+    /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
+    /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
+    /// another. The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run would
+    /// turn now (else the <c>polar-align-unconfirmed</c> Refusal); a parked mount is refused
+    /// (<c>polar-align-mount-parked</c>) and never unparked; a pointing within 3° of the pole is refused
+    /// (<c>polar-align-on-axis</c>). A <c>check</c> while the routine adjusts ends the loop like Stop once the check's
+    /// plan and confirmation hold (the adjust screen's Check). Throws <see cref="ArgumentException"/> for an unknown
+    /// stage (the endpoint answers 400 before calling) and <see cref="InvalidOperationException"/> (→ 409) for a
     /// failed preflight.</summary>
-    Task<OperationAcceptedDto> StartAsync(string? stage, string? idempotencyKey, CancellationToken ct);
-    /// <summary>Advance: Continue when the routine waits for the mount at Home, Next from the coarse
-    /// stage to the fine stage, Next from the fine stage to the check. Throws
-    /// <see cref="InvalidOperationException"/> (→ 409) when nothing is waiting to advance.</summary>
+    Task<OperationAcceptedDto> StartAsync(string? stage, PolarAlignStartConfirmation? confirmation, string? idempotencyKey, CancellationToken ct);
+    /// <summary>Retired (#2082): a Start makes one measurement and never leads into another. Always throws
+    /// <see cref="InvalidOperationException"/> (→ 409).</summary>
     Task<OperationAcceptedDto> NextAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>#1971 — stop the Polar Aligner's motors; the routine carries on by hand. Throws
     /// <see cref="InvalidOperationException"/> (→ 409) when no routine is running with a Polar Aligner.</summary>
@@ -424,11 +487,20 @@ public interface IPolarAlignService {
     /// <see cref="InvalidOperationException"/> (→ 409) when the Polar Aligner is not stopped.</summary>
     Task<OperationAcceptedDto> ResumeAlignerAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>Abort: same unwind as complete, logged with outcome <c>aborted</c> (§45 step 10 —
-    /// the mount stays put).</summary>
+    /// the mount stops where it is: AbortSlew and MoveAxis 0 go out before any wait, the stop is
+    /// confirmed, and tracking is left off, #2048).</summary>
     Task<OperationAcceptedDto> StopAsync(string? idempotencyKey, CancellationToken ct);
     /// <summary>A sequence run starts over an open routine: the same unwind as <see cref="StopAsync"/>
     /// (state <c>stopped</c>), but no measured result is stored (no last result, no session row).</summary>
     Task<OperationAcceptedDto> StopForSequenceAsync(CancellationToken ct);
+    /// <summary>#2066 — Emergency Stop or the safety park takes the mount over (<paramref name="by"/> names it in the log):
+    /// the run ends like a Stop (its first stop round goes out before any wait, state <c>stopped</c>), but its exit sends
+    /// no stop of its own, does not confirm one and writes no tracking. The caller stops and checks the mount itself, or
+    /// parks it. Bounded by the run's unwind, not by the stop's confirmation.</summary>
+    Task<OperationAcceptedDto> StopForTakeoverAsync(string by, CancellationToken ct) => StopAsync(null, ct);
+    /// <summary>#2066 — a run's motor move is under way, or its stop is not confirmed yet: the telescope endpoints answer
+    /// GoTo, pad moves, Home and Park with the <c>polar-align-moving-mount</c> Refusal meanwhile.</summary>
+    bool IsMovingMount => false;
     /// <summary>§45 step 9 — the user marks alignment done; the achieved error is logged with
     /// outcome <c>complete</c> (§45.13).</summary>
     Task<OperationAcceptedDto> CompleteAsync(string? idempotencyKey, CancellationToken ct);

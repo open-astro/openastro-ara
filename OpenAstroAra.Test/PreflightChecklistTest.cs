@@ -148,6 +148,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void A_cooler_that_does_not_respond_carries_the_12_V_hint() {
+            // #2076 — the preflight says what the Simple Mode pill says.
+            var item = PreflightChecklistService.CoolerItem(
+                Camera(rt: new CameraStateDto("idle", 20.0, null, false, null, CoolerSetpointC: -10, CoolerNotResponding: true)), false);
+            Assert.That(item.Status, Is.EqualTo("warn"));
+            Assert.That(item.Detail, Does.Contain("12 V").And.Contain("20.0 °C"));
+        }
+
+        [Test]
         public void Mount_must_be_connected_unparked_and_tracking() {
             Assert.That(PreflightChecklistService.MountItem(Mount(), false).Status, Is.EqualTo("ok"));
             Assert.That(PreflightChecklistService.MountItem(Mount(rt: new TelescopeStateDto("parked", null, null, false, true, false)), false).Status, Is.EqualTo("fail"));
@@ -264,6 +273,7 @@ namespace OpenAstroAra.Test {
             public Task<bool> ForgetAsync(CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
+            public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task SetTrackingAsync(bool enabled, CancellationToken ct) => throw new NotSupportedException();

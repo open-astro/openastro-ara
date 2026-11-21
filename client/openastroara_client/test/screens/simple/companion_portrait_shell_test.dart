@@ -628,6 +628,30 @@ void main() {
   }
 
   testWidgets(
+    'a phone held upright keeps its deck STOP and its shutter also holds for Emergency Stop (two paths until S5, #1911)',
+    (tester) async {
+      await _pump(tester, _portrait);
+      expect(stop, findsOneWidget, reason: 'the deck STOP stays');
+      expect(find.byKey(const Key('simple-rail-stop')), findsNothing);
+      final no = lookupAppLocalizations(const Locale('en')).estopNoServer;
+      final g = await tester.startGesture(
+        tester.getCenter(find.byKey(const Key('simple-shutter'))),
+      );
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('HOLD'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1400));
+      await tester.pump();
+      expect(
+        find.text(no),
+        findsOneWidget,
+        reason: 'the shutter hold is a stop',
+      );
+      await g.up();
+      await tester.pump(const Duration(seconds: 15));
+    },
+  );
+
+  testWidgets(
     'a phone on its side (844x390) keeps the narrow layout: the rails, no deck',
     (tester) async {
       await _pump(tester, _landscape);

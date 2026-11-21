@@ -40,7 +40,7 @@ public sealed class SystemctlHostPoweroffStarter(
 
     public async Task<HostPoweroffResult> StartAsync(CancellationToken ct) {
         // --no-block: the host goes down while the job runs, so a blocking start may never return.
-        var (exitCode, output) = await run("systemctl", ["start", "--no-block", Unit], ct).ConfigureAwait(false);
+        var (exitCode, output) = await run("systemctl", [Systemctl.NoAskPassword, "start", "--no-block", Unit], ct).ConfigureAwait(false);
         return exitCode == 0
             ? new HostPoweroffResult(true, string.Empty)
             : new HostPoweroffResult(false,

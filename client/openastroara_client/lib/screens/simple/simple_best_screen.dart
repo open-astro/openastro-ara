@@ -52,7 +52,7 @@ class TonightsBestScreen extends ConsumerWidget {
     final list = ref.watch(tonightsBestListProvider);
     final ranked = ref.watch(tonightsBestProvider);
     final choices = ref.watch(tonightsBestChoicesProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final noSite = site.latitudeDeg == 0 && site.longitudeDeg == 0;
     final linkUp = ref.watch(serverLinkUpProvider);
     final rows = list.value;

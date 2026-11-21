@@ -12,7 +12,7 @@ import '../../../util/tonight_sky_local.dart'
     show moonPhase, sqmDerived, sunMoonAltitudeDeg;
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Weather (ObservingConditions) panel. Shows the connected device's live
@@ -23,10 +23,10 @@ class EquipmentWeatherPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(weatherProvider);
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
+    final policies =
+        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
     final notifier = ref.read(weatherProvider.notifier);
 
     return ListView(
@@ -45,12 +45,7 @@ class EquipmentWeatherPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _WeatherBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.weather),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.weather, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.weather),
         const SettingsSectionHeader('Thresholds'),
         // Live values from the §35 safety policies — the ONE place they are
         // configured. Shown read-only here so this panel can never disagree
@@ -141,7 +136,7 @@ class _WeatherBody extends ConsumerWidget {
     // Computed, not station sensors: the sun/moon geometry belongs with the
     // sky conditions the observer plans around, so it rides in the same list.
     final nowUtc = DateTime.now().toUtc();
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     // Same unset-site guard as tonight_sky_state._rankAt: the (0,0) default
     // would confidently report Null Island altitudes — skip the rows instead.
     final siteSet = site.latitudeDeg != 0 || site.longitudeDeg != 0;

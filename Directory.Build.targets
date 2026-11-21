@@ -1,0 +1,23 @@
+<Project>
+
+  <!--
+    The library projects forked from NINA keep their own Properties/AssemblyInfo.cs and
+    the shared CommonAssemblyInfo.cs (title, description, product, copyright). They set
+    AraVersionAttributesOnly so the SDK generates only the version attributes from
+    VERSION (Directory.Build.props) and nothing that would duplicate those files.
+  -->
+  <PropertyGroup Condition="'$(AraVersionAttributesOnly)' == 'true'">
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <GenerateAssemblyVersionAttribute>true</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>true</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>true</GenerateAssemblyInformationalVersionAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateNeutralResourcesLanguageAttribute>false</GenerateNeutralResourcesLanguageAttribute>
+  </PropertyGroup>
+
+</Project>

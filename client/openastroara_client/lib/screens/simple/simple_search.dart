@@ -77,6 +77,7 @@ List<(String, String, String)> _settings(AppLocalizations l) => [
   (l.searchSettingTracking, 'Mount', l.searchWordsTracking),
   (l.searchSettingPark, 'Mount', l.searchWordsPark),
   (l.searchSettingMeridianFlip, 'Mount', l.searchWordsMeridianFlip),
+  (l.searchSettingMountLimits, 'Mount', l.searchWordsMountLimits),
   (l.searchSectionFocuser, 'Focuser', l.searchWordsFocuser),
   (l.searchSettingFocuserStep, 'Focuser', l.searchWordsFocuserStep),
   (l.searchSectionGuider, 'Guider', l.searchWordsGuider),

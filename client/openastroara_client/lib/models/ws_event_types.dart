@@ -19,6 +19,7 @@ abstract final class WsEventTypes {
   static const String telescopeSlewStarted = 'telescope.slew_started';
   static const String telescopeSlewComplete = 'telescope.slew_complete';
   static const String telescopeSlewAborted = 'telescope.slew_aborted';
+  static const String telescopeLimitReached = 'telescope.limit_reached';
   static const String guiderStep = 'guider.step';
   static const String guiderEvent = 'guider.event';
   static const String guiderPaResidual = 'guider.pa_residual';
@@ -35,9 +36,9 @@ abstract final class WsEventTypes {
   static const String polarAlignPaused = 'polar_align.paused';
   static const String polarAlignError = 'polar_align.error';
   static const String polarAlignStage = 'polar_align.stage';
-  static const String polarAlignNeedsHome = 'polar_align.needs_home';
   static const String polarAlignChecked = 'polar_align.checked';
   static const String polarAlignCorrection = 'polar_align.correction';
+  static const String polarAlignHandTurn = 'polar_align.hand_turn';
   static const String autofocusCollimationVerdict =
       'autofocus.collimation_verdict';
   static const String autofocusStarted = 'autofocus.started';
@@ -111,6 +112,7 @@ abstract final class WsEventTypes {
   static const String safetySafe = 'safety.safe';
   static const String safetyActionTaken = 'safety.action_taken';
   static const String safetyEmergencyStop = 'safety.emergency_stop';
+  static const String endNightProgress = 'end_night.progress';
 }
 
 /// Payload of `camera.exposure_started`; a missing or mistyped field throws a [TypeError].
@@ -183,4 +185,59 @@ final class CameraExposureFailedPayload {
   final String frameId;
   final String kind;
   final String reason;
+}
+
+/// Payload of `telescope.limit_reached`; a missing or mistyped field throws a [TypeError].
+final class TelescopeLimitReachedPayload {
+  const TelescopeLimitReachedPayload({
+    required this.limit,
+    required this.minutes,
+    required this.trackingStopped,
+    required this.runsPaused,
+    required this.detail,
+  });
+
+  factory TelescopeLimitReachedPayload.fromJson(Map<String, dynamic> json) =>
+      TelescopeLimitReachedPayload(
+        limit: json['limit'] as String,
+        minutes: json['minutes'] as int,
+        trackingStopped: json['tracking_stopped'] as bool,
+        runsPaused: json['runs_paused'] as int,
+        detail: json['detail'] as String,
+      );
+
+  final String limit;
+  final int minutes;
+  final bool trackingStopped;
+  final int runsPaused;
+  final String detail;
+}
+
+/// Payload of `end_night.progress`; a missing or mistyped field throws a [TypeError].
+final class EndNightProgressPayload {
+  const EndNightProgressPayload({
+    required this.runId,
+    required this.state,
+    this.step,
+    this.stepState,
+    this.detail,
+    required this.cancellable,
+  });
+
+  factory EndNightProgressPayload.fromJson(Map<String, dynamic> json) =>
+      EndNightProgressPayload(
+        runId: json['run_id'] as String,
+        state: json['state'] as String,
+        step: json['step'] as String?,
+        stepState: json['step_state'] as String?,
+        detail: json['detail'] as String?,
+        cancellable: json['cancellable'] as bool,
+      );
+
+  final String runId;
+  final String state;
+  final String? step;
+  final String? stepState;
+  final String? detail;
+  final bool cancellable;
 }

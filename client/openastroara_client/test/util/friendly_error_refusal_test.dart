@@ -22,6 +22,14 @@ Refusal _known(RefusalCause cause) => Refusal(
         }
       : cause == RefusalCause.centerInProgress
       ? const {'job_id': '0b6c0e8e-4c1f-4d43-9b9a-2f7d1c4e5a10'}
+      : cause == RefusalCause.belowHorizonLimit
+      ? const {'altitude_deg': 14.2, 'limit_deg': 20}
+      : cause == RefusalCause.counterweightLimit
+      ? const {
+          'hour_angle_hours': -11.13,
+          'counterweight_angle_deg': 77.0,
+          'limit_deg': 60,
+        }
       : const {},
 );
 
@@ -75,6 +83,65 @@ void main() {
       ),
     );
     expect(words(['focal_length']), isNot(words(['pixel_size'])));
+  });
+
+  test('the below-horizon sentence names the altitude and the limit', () {
+    for (final l in [_en, _pt]) {
+      final words = failureReason(l, _known(RefusalCause.belowHorizonLimit));
+      expect(words, contains('14'));
+      expect(words, contains('20'));
+    }
+  });
+
+  test('an unverified mount position read too early says to try again (#2070)', () {
+    for (final l in [_en, _pt]) {
+      const early = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {'position_unverified_reason': 'not_read_yet'},
+      );
+      expect(failureReason(l, early), l.refusalMountPositionNotReadYet);
+      expect(failureReason(l, _known(RefusalCause.mountPositionUnverified)),
+          l.refusalMountPositionUnverified);
+    }
+  });
+
+  test('a position left unverified by an unconfirmed stop says so, in both languages (#2066)', () {
+    for (final l in [_en, _pt]) {
+      const stop = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {'position_unverified_reason': 'stop_unconfirmed'},
+      );
+      expect(failureReason(l, stop), l.refusalMountPositionStopUnconfirmed);
+    }
+    expect(_pt.refusalMountPositionStopUnconfirmed, isNot(_en.refusalMountPositionStopUnconfirmed));
+  });
+  test(
+    'the counterweight sentence names the hour angle, the angle and the limit',
+    () {
+      for (final l in [_en, _pt]) {
+        final words = failureReason(l, _known(RefusalCause.counterweightLimit));
+        expect(words, contains('-11.1'));
+        expect(words, contains('77'));
+        expect(words, contains('60'));
+      }
+    },
+  );
+  test('the sweep-limit sentence says how far the mount turned, in whole degrees (#2089)', () {
+    const r = Refusal(
+      cause: RefusalCause.polarAlignSweepLimit,
+      reason: 'polar-align-sweep-limit',
+      detail: _detail,
+      parameters: {'offset_deg': -60.3, 'limit_deg': 30},
+    );
+    expect(
+      failureReason(_en, r),
+      'The mount has turned 60° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.',
+    );
+    expect(failureReason(_pt, r), contains('60°'));
   });
 
   test('a cause the app does not know shows the daemon detail', () {

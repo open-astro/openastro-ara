@@ -84,7 +84,7 @@ final simpleRestOfNightProvider =
     Provider.autoDispose<({DateTime from, DateTime to})?>((ref) {
       ref.watch(skyClockProvider);
       return restOfNightSpan(
-        ref.watch(siteSettingsProvider),
+        ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
         ref.watch(clockProvider)().toUtc(),
       );
     });

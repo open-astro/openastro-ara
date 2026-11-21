@@ -3,6 +3,7 @@ import '../../support/storage_fixture.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/filter_wheel_status.dart';
@@ -28,6 +29,7 @@ import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import '../../support/site_section.dart';
 
 /// In-memory ProfileApi double whose create call can be held in-flight (so the
 /// blocking spinner is observable) and which records how many times the profile
@@ -117,6 +119,8 @@ Widget _host(_FakeProfileApi api, {required void Function() onComplete}) {
         const AraServer(hostname: 'daemon', port: 5555),
       ),
       filterWheelProvider.overrideWith(_NoWheel.new),
+      // The dome settings listen to the dome, which would dial a real stream.
+      wsEventStreamProvider.overrideWith((ref) => null),
     ],
     child: MaterialApp(
       home: WizardShell(createApi: (_) => api, onComplete: (_) => onComplete()),
@@ -220,6 +224,7 @@ void main() {
           // the same fake so we can count list re-fetches.
           profileApiProvider.overrideWithValue(api),
           filterWheelProvider.overrideWith(_NoWheel.new),
+          wsEventStreamProvider.overrideWith((ref) => null),
         ],
       );
       addTearDown(container.dispose);
@@ -262,6 +267,7 @@ void main() {
             ),
             dataManagerApiProvider.overrideWithValue(dm),
             filterWheelProvider.overrideWith(_NoWheel.new),
+            wsEventStreamProvider.overrideWith((ref) => null),
           ],
         );
         addTearDown(container.dispose);
@@ -301,6 +307,8 @@ void main() {
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'daemon', port: 5555),
           ),
+          // The basics step reads the saved site: the rig's copy, no network.
+          siteFromRig(),
         ],
       );
       addTearDown(container.dispose);

@@ -104,6 +104,32 @@ namespace OpenAstroAra.Test.Sequencer.Trigger.MeridianFlip {
             Assert.That(forecast.ExpectedUtc, Is.EqualTo(ForecastNow.AddMinutes(88)));
         }
 
+        // #2044 S2 — follows the store's meridian_pause_min through ProfileStoreMapper.ApplyMeridian into the
+        // flip window the trigger builds. With no minutes-after-meridian, the window starts that many minutes
+        // before the meridian and start = end, so the stored value is a stop BEFORE the meridian, not a pause after a flip.
+        [Test]
+        public void Meridian_pause_min_from_the_store_opens_the_flip_window_that_many_minutes_before_the_meridian() {
+            var policies = new OpenAstroAra.Server.Contracts.SafetyPoliciesDto(
+                OnUnsafe: "pause_and_park", AutoResumeWhenSafe: true, ResumeDelayMin: 10,
+                MeridianFlipAuto: true, MeridianPauseMin: 5, MeridianRecenter: true,
+                MeridianRecalGuider: false, OnAltitudeLimit: "skip_target",
+                ParkIfNoMoreTargets: true, OnGuiderLost: "pause_and_retry",
+                GuiderRetryTimeoutSec: 60, SkipTargetIfRecoveryFails: true);
+            var meridian = new Mock<IMeridianFlipSettings>();
+            meridian.SetupAllProperties();
+            var profile = new Mock<IProfile>();
+            profile.SetupGet(p => p.MeridianFlipSettings).Returns(meridian.Object);
+            OpenAstroAra.Server.Services.ProfileStoreMapper.ApplyMeridian(policies, profile.Object);
+            meridian.Object.MinutesAfterMeridian = 0;
+            meridian.Object.MaxMinutesAfterMeridian = 0;
+            profileServiceMock.SetupGet(m => m.ActiveProfile.MeridianFlipSettings).Returns(meridian.Object);
+            SetTelescope(2);
+            var forecast = CreateSUT().Forecast(ForecastNow);
+            Assert.That(forecast.State, Is.EqualTo(MeridianFlipStates.DueAt));
+            // 120 min to the meridian - 5 min pause - the two-minute margin (no side of pier) = 113.
+            Assert.That(forecast.ExpectedUtc, Is.EqualTo(ForecastNow.AddMinutes(113)));
+        }
+
         [Test]
         public void Forecast_waits_for_the_exposure_once_the_window_is_open() {
             SetFlipWindow(after: 5, maxAfter: 20);

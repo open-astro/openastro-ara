@@ -127,6 +127,10 @@ class AraColors {
   /// Emergency Stop's hold fill: darkens the button, keeping HOLD at 7.7:1.
   static const holdFill = Color(0x40000000);
 
+  /// The dark red under a shutter's or the rail-foot Stop's hold sweep; HOLD
+  /// in white reads at 11:1 on it.
+  static const holdBase = Color(0xFF5C1717);
+
   /// The near-black behind a camera frame in focus and guide cards.
   static const frameBackdrop = Color(0xFF07080B);
 

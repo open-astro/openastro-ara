@@ -13,9 +13,12 @@
 #endregion "copyright"
 
 using Microsoft.AspNetCore.Mvc;
+using OpenAstroAra.Astrometry;
 using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
+using System.Globalization;
 
 namespace OpenAstroAra.Server.Endpoints;
 
@@ -47,14 +50,82 @@ public static partial class EquipmentEndpoints {
     /// <summary><c>POST /equipment/telescope/slew</c>: 409 <c>run_in_progress</c> while a sequence run is
     /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
-    /// service answers. Testable without the host.</summary>
-    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, CancellationToken ct) {
+    /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
+    /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
+    /// meridian on a German equatorial mount with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
+    /// without the host.</summary>
+    internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null, IPolarAlignService? polarAlign = null) {
         ArgumentNullException.ThrowIfNull(telescope);
         ArgumentNullException.ThrowIfNull(sequencer);
+        ArgumentNullException.ThrowIfNull(request);
+        // #2066 — force does not bypass it. A sync is refused too: it moves no motor, but it shifts the RA reading Polar
+        // Align steers its turns by (a jump of 0.5° reverses the motor) and measures its sweep from.
+        ThrowIfPolarAlignMovesTheMount(polarAlign, request.Sync == true ? "sync" : "slew", telescope);
         if (SlewDuringRunRefusal(request, await sequencer.ActiveRunIdsAsync(ct)) is { } refusal) {
             return Results.Problem(refusal, statusCode: StatusCodes.Status409Conflict, title: "run_in_progress");
         }
+        // An out-of-range target keeps the range path's answer (TelescopeService.SlewAsync throws it).
+        if (request.Sync != true && !TelescopeService.IsCoordinateOutOfRange(request.RightAscensionHours, request.DeclinationDegrees)) {
+            var target = new Coordinates(request.RightAscensionHours, request.DeclinationDegrees, Epoch.J2000, Coordinates.RAType.Hours);
+            if (HorizonGuard.TargetBelowHorizon(profiles, target, logger) is { } low) {
+                throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
+                    string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
+                    new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
+            }
+            // #2073 — the daemon now turns tracking on before a GoTo, so the mount's "tracking is off"
+            // refusal no longer stops a target below the pole that would put the counterweight up. Only a
+            // German equatorial mount (or one whose type is unknown) is checked.
+            if (CounterweightGuard.TargetPastCounterweightLimit(profiles, target, DateTimeOffset.UtcNow, telescope.MountAlignmentMode, logger) is { } cw) {
+                throw new RefusalException(RefusalCatalog.CounterweightLimit,
+                    string.Create(CultureInfo.InvariantCulture, $"The target is below the pole at hour angle {cw.HourAngleHours:F1} h: the counterweight would be {cw.CounterweightAngleDeg:F0}° from down, past the {cw.LimitDeg:F0}° limit."),
+                    new Dictionary<string, object?> { ["hour_angle_hours"] = cw.HourAngleHours, ["counterweight_angle_deg"] = cw.CounterweightAngleDeg, ["limit_deg"] = cw.LimitDeg });
+            }
+        }
         return Results.Accepted(value: await telescope.SlewAsync(request, idempotencyKey, ct));
+    }
+
+    /// <summary>#2066 — the <c>polar-align-moving-mount</c> Refusal for a GoTo, a sync, a pad move, Home or Park while Polar Align
+    /// turns the mount, or its stop is not confirmed yet: two commands would drive the motors at once. With
+    /// <paramref name="mount"/> (a GoTo, a sync, Center, Home or Park; not a pad move) it is refused for Polar Align's whole run
+    /// too, the adjust loop included, while it holds the mount's motion owner (#2066 ARA-2, Joey 2026-11-20 on #2048).
+    /// Stop Polar Align (or Stop Mount, which ends it) first. A pad stop (rate 0) and Stop Mount are never refused.</summary>
+    internal static void ThrowIfPolarAlignMovesTheMount(IPolarAlignService? polarAlign, string what, IMountMotionControl? mount = null) {
+        if (polarAlign is { IsMovingMount: true }) {
+            throw new RefusalException(RefusalCatalog.PolarAlignMovingMount,
+                $"Polar alignment is turning the mount, so the {what} was not sent. Stop polar alignment first (or tap Stop Mount, which ends it).");
+        }
+        if (mount?.MotionOwner is { } owner) {
+            throw TelescopeService.MotionOwnedRefusal(owner, what);
+        }
+    }
+
+    /// <summary><c>POST /equipment/telescope/park</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// runs (#2066), else the 202 the telescope service answers. The service checks the owner again when the park's checks end
+    /// (<see cref="ITelescopeService.ParkUnlessMotionOwnedAsync"/>). The safety and fault parks call its ParkAsync, not this.</summary>
+    internal static async Task<IResult> TelescopeParkAsync(ParkRequestDto? request, string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "park", telescope);
+        return Results.Accepted(value: await telescope.ParkUnlessMotionOwnedAsync(request ?? new ParkRequestDto(), idempotencyKey, ct));
+    }
+
+    /// <summary><c>POST /equipment/telescope/home</c>: the <c>polar-align-moving-mount</c> Refusal while Polar Align
+    /// runs (#2066), else the 202 the telescope service answers.</summary>
+    internal static async Task<IResult> TelescopeFindHomeAsync(string? idempotencyKey, ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "home", telescope);
+        return Results.Accepted(value: await telescope.FindHomeAsync(idempotencyKey, ct));
+    }
+
+    /// <summary>#2070 — <c>POST /equipment/telescope/confirm-home</c>: 204 when the mount reports AtHome and its
+    /// position is trusted again; 409 when it is not connected or does not report AtHome now.</summary>
+    internal static async Task<IResult> ConfirmHomeAsync(ITelescopeService telescope, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(telescope);
+        try {
+            await telescope.ConfirmHomeAsync(ct);
+            return Results.NoContent();
+        } catch (InvalidOperationException ex) when (ex is not ObjectDisposedException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
+        }
     }
 
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
@@ -336,19 +407,30 @@ public static partial class EquipmentEndpoints {
             await ConnectAndRememberAsync(request, selectionStore, local => svc.ConnectAsync(local, key, ct), ct));
         telescope.MapPost("/disconnect", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.DisconnectAsync(key, ct)));
-        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) =>
-                SlewAsync(request, key, svc, sequencer, ct))
+        telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, IPolarAlignService polarAlign, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
+                SlewAsync(request, key, svc, sequencer, profiles, ct, logger, polarAlign))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress: a slew during a sequence run that was neither a sync nor forced
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit, counterweight-limit or polar-align-moving-mount Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
-        telescope.MapPost("/park", async ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.ParkAsync(request ?? new ParkRequestDto(), key, ct)));
+        // #2066 — Park and Home are the polar-align-moving-mount Refusal while Polar Align runs (it holds the mount).
+        telescope.MapPost("/park", ([FromBody] ParkRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeParkAsync(request, key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
         telescope.MapPost("/unpark", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.UnparkAsync(key, ct)));
-        telescope.MapPost("/home", async ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, CancellationToken ct) =>
-            Results.Accepted(value: await svc.FindHomeAsync(key, ct)));
+        telescope.MapPost("/home", ([FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            TelescopeFindHomeAsync(key, svc, polarAlign, ct))
+            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status409Conflict); // the mount-position-unverified or polar-align-moving-mount Refusal
+        // #2070 — the user says the mount is physically at Home: a position left unverified by a power loss is trusted again.
+        telescope.MapPost("/confirm-home", (ITelescopeService svc, CancellationToken ct) => ConfirmHomeAsync(svc, ct))
+            .Produces(StatusCodes.Status204NoContent)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithName("ConfirmTelescopeHome")
+            .WithSummary("Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.");
         telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
             // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
             // abort throws); the ordering contract lives in MountStopHandler where tests pin it.
@@ -358,8 +440,11 @@ public static partial class EquipmentEndpoints {
             return Results.Accepted();
         });
         // Manual nudge (direction pad): start (rate != 0) / stop (rate 0) one axis. /abort halts all axes.
-        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) =>
-            await MoveAxisAsync(request, svc, ct));
+        telescope.MapPost("/moveaxis", async ([FromBody] MoveAxisRequestDto request, ITelescopeService svc, IPolarAlignService polarAlign, CancellationToken ct) =>
+            await MoveAxisAsync(request, svc, ct, polarAlign))
+            .Produces(StatusCodes.Status202Accepted)
+            .ProducesProblem(StatusCodes.Status400BadRequest)
+            .ProducesProblem(StatusCodes.Status409Conflict); // not connected, a rate the mount cannot run, or the polar-align-moving-mount Refusal
         telescope.MapPost("/tracking", async ([FromBody] TelescopeTrackingRequestDto request, ITelescopeService svc, CancellationToken ct) => {
             await svc.SetTrackingAsync(request.Enabled, ct); return Results.Accepted();
         });
@@ -785,15 +870,29 @@ public static partial class EquipmentEndpoints {
         var polar = equipment.MapGroup("/polaralign");
         polar.MapGet("/status", async (IPolarAlignService svc, CancellationToken ct) =>
             Results.Ok(await svc.GetStatusAsync(ct)));
-        // Optional body {stage: coarse|fine|check}; none = coarse (Home + main-camera solves), or fine when
-        // the coarse stage cannot run (main camera off, optics unset, no solver).
+        // #2048 — the confirm step's plan: the RA turn direction from the current pointing, the step and the most the run
+        // turns from where it starts. 409 for a mount not connected, parked (polar-align-mount-parked) or no latitude.
+        polar.MapGet("/start-plan", async (string? stage, IPolarAlignService svc, CancellationToken ct) =>
+                await PolarAlignStartPlanAsync(svc, stage, ct))
+            .WithName("GetPolarAlignStartPlan")
+            .WithSummary("What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.")
+            .Produces<PolarAlignStartPlanDto>().ProducesProblem(StatusCodes.Status400BadRequest).ProducesProblem(StatusCodes.Status409Conflict);
+        // Body {stage: coarse|fine|check, confirmed, direction}; stage none = fine (guide-camera solves). One measurement
+        // per Start (#2082). The routine starts from where the mount points (no Home, no GoTo) and moves only with
+        // confirmed: true and the plan's direction (#2048); else the polar-align-unconfirmed Refusal. A parked mount is the
+        // polar-align-mount-parked Refusal, a pointing within 3° of the pole polar-align-on-axis; no fresh reading of the
+        // mount polar-align-pointing-unknown, a Dec past the pole polar-align-pose-ambiguous (#2066). A check while the
+        // routine adjusts ends the loop first (the adjust screen's Check).
         polar.MapPost("/start", async ([FromHeader(Name = "Idempotency-Key")] string? key,
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignStartAsync(svc, body?.Stage, key, ct));
-        // Continue (mount put at Home by hand) / Next (coarse → fine, fine → check). 409 when nothing waits.
+            await PolarAlignStartAsync(svc, body, key, ct));
+        // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
         polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
-            await PolarAlignNextAsync(svc, key, ct));
+                await PolarAlignNextAsync(svc, key, ct))
+            .WithName("PolarAlignNext")
+            .WithSummary("Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.")
+            .ProducesProblem(StatusCodes.Status409Conflict);
         polar.MapPost("/stop", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
             Results.Accepted(value: await svc.StopAsync(key, ct)));
         // §45 step 9 — "Done": same unwind as stop, but the §45.13 session row records `complete`
@@ -1168,17 +1267,37 @@ public static partial class EquipmentEndpoints {
     // InvalidOperationException → 409 (typed, same as the guide ops), and a daemon-rejected lease (e.g.
     // "starting rejected while guiding") throws GuiderRpcException → 422 — rather than a raw 500. Stop is
     // best-effort about the lease (it never throws not-connected), so it needs no such mapping.
-    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, string? stage, string? idempotencyKey, CancellationToken ct) {
+    /// <summary>#2048 — the start's confirmation: <c>confirmed</c> with the direction the user was shown, else none (the
+    /// service refuses a start without one).</summary>
+    internal static PolarAlignStartConfirmation? StartConfirmation(PolarAlignStartRequestDto? body) =>
+        body is { Confirmed: true, Direction: { Length: > 0 } direction } ? new PolarAlignStartConfirmation(direction, body.NewOrigin, body.HandTurn) : null;
+
+    public static async Task<IResult> PolarAlignStartAsync(IPolarAlignService svc, PolarAlignStartRequestDto? body, string? idempotencyKey, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        var stage = body?.Stage;
         // A typo in the stage is the caller's mistake (400), not a busy routine (409).
         if (stage is not null && !PolarAlignStages.IsValid(stage)) {
             return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
         }
         try {
-            return Results.Accepted(value: await svc.StartAsync(stage, idempotencyKey, ct));
+            return Results.Accepted(value: await svc.StartAsync(stage, StartConfirmation(body), idempotencyKey, ct));
         } catch (OpenAstroAra.Equipment.Equipment.MyGuider.PHD2.GuiderRpcException ex) {
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status422UnprocessableEntity);
-        } catch (System.InvalidOperationException ex) {
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            // A declared Refusal (parked, unconfirmed, #2070's unverified mount position, #2071's mount-clock-not-verified) keeps its own answer (RefusalHandler, ADR 0022).
             return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict, type: GuiderNotConnectedProblemType);
+        }
+    }
+
+    public static async Task<IResult> PolarAlignStartPlanAsync(IPolarAlignService svc, string? stage, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(svc);
+        if (stage is not null && !PolarAlignStages.IsValid(stage)) {
+            return Results.Problem($"unknown polar-align stage '{stage}' — use coarse, fine or check", statusCode: StatusCodes.Status400BadRequest);
+        }
+        try {
+            return Results.Ok(await svc.GetStartPlanAsync(stage, ct));
+        } catch (System.InvalidOperationException ex) when (ex is not RefusalException) {
+            return Results.Problem(ex.Message, statusCode: StatusCodes.Status409Conflict);
         }
     }
 
@@ -1334,7 +1453,7 @@ public static partial class EquipmentEndpoints {
     // while within 4x of it, moved to the nearest discrete step in a gap) — the UI speed picker is
     // UX only, never the guard; not connected, an axis with no usable rate, or a rate more than 4x
     // slower than the lowest band (#1085) refuses the nudge (409).
-    public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct) {
+    public static async Task<IResult> MoveAxisAsync(MoveAxisRequestDto request, ITelescopeService svc, CancellationToken ct, IPolarAlignService? polarAlign = null) {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(svc);
         if (request.Axis is < 0 or > 1) {
@@ -1344,6 +1463,15 @@ public static partial class EquipmentEndpoints {
         if (!double.IsFinite(request.Rate)) {
             return Results.Problem("rate must be a finite number of degrees per second.",
                 statusCode: StatusCodes.Status400BadRequest);
+        }
+        // #2066 — outside the try below, whose 409 would drop the Refusal's reason. A stop (rate 0) always goes through.
+        if (request.Rate != 0) {
+            ThrowIfPolarAlignMovesTheMount(polarAlign, "move");
+        } else if (polarAlign is { IsMovingMount: true }) {
+            // A pad stop while Polar Align turns the mount is a stop from outside, like Stop Mount: counted BEFORE the axis
+            // stops, so the routine's next lease renewal is refused rather than starting the motor again, and its run ends
+            // (slew_aborted_externally). Polar Align's own MoveAxis 0 never comes through this endpoint.
+            svc.FenceMotion(MountStopReasons.PadStop);
         }
         try {
             await svc.MoveAxisAsync(request.Axis, request.Rate, request.LeaseMs, ct).ConfigureAwait(false);

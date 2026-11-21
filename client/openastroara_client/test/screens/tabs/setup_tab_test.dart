@@ -9,9 +9,12 @@ import 'package:openastroara/state/focus/guide_focus_state.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/models/preflight_checklist.dart';
 import 'package:openastroara/state/preflight/preflight_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
 import 'package:openastroara/widgets/focus/focusing_pane.dart';
 import 'package:openastroara/widgets/imaging/polar_align_panel.dart';
+
+import '../../support/phd2_section.dart';
 
 /// Overridable live-state stub — same shape the polar align panel tests use.
 class _StubLiveNotifier extends PolarAlignLiveNotifier {
@@ -52,18 +55,20 @@ class _StubChecklist extends PreflightChecklistNotifier {
 
 class _ConfiguredPhd2Notifier extends Phd2SettingsNotifier {
   @override
-  Phd2Settings build() => const Phd2Settings(
+  LoadedSection<Phd2Settings> build() => LoadedSection(value: const Phd2Settings(
       guiderCamera: 'Alpaca Camera [rc91.lan:6800/0]',
       guideFocalLength: 240,
-      guidePixelSize: 2.9);
+      guidePixelSize: 2.9),
+      source: SectionSource.rig);
 }
 
 // Guide optics entered but no camera picked: the profile a fresh-install
 // field night saved, whose guider never connected a camera.
 class _OpticsOnlyPhd2Notifier extends Phd2SettingsNotifier {
   @override
-  Phd2Settings build() =>
-      const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9);
+  LoadedSection<Phd2Settings> build() => LoadedSection(
+      value: const Phd2Settings(guideFocalLength: 200, guidePixelSize: 2.9),
+      source: SectionSource.rig);
 }
 
 Widget _harness({
@@ -81,9 +86,13 @@ Widget _harness({
       autofocusLiveProvider.overrideWith(() => _StubAutofocus(autofocus)),
       guideFocusProvider.overrideWith(_StubGuideFocus.new),
       if (guiderConfigured)
-        phd2SettingsProvider.overrideWith(_ConfiguredPhd2Notifier.new),
-      if (opticsOnly)
-        phd2SettingsProvider.overrideWith(_OpticsOnlyPhd2Notifier.new),
+        phd2SettingsProvider.overrideWith(_ConfiguredPhd2Notifier.new)
+      else if (opticsOnly)
+        phd2SettingsProvider.overrideWith(_OpticsOnlyPhd2Notifier.new)
+      else
+        // The rig's copy of a guider never set up (ADR 0015: the verdict
+        // waits for the rig's copy).
+        phd2FromRig(),
     ],
     child: const MaterialApp(home: Scaffold(body: SetupTab())),
   );
@@ -167,6 +176,25 @@ void main() {
     await t.pump();
     expect(find.text('Set up the guider…'), findsOneWidget);
     expect(find.text('Re-run guider wizard…'), findsNothing);
+  });
+
+  testWidgets('Guider: the set-up verdict waits for the rig\'s copy, never a default (ADR 0015)',
+      (t) async {
+    await t.pumpWidget(ProviderScope(
+      overrides: [
+        preflightPromptProvider.overrideWith(_StubPrompt.new),
+        preflightChecklistProvider.overrideWith(() => _StubChecklist(null)),
+        polarAlignLiveProvider.overrideWith(() => _StubLiveNotifier(const PolarAlignLive())),
+        autofocusLiveProvider.overrideWith(() => _StubAutofocus(AutofocusLive.idle)),
+        guideFocusProvider.overrideWith(_StubGuideFocus.new),
+        // A rig that does not answer: the guider settings stay not loaded.
+        phd2SettingsProvider.overrideWith(() => FakePhd2Section(initial: null)),
+      ],
+      child: const MaterialApp(home: Scaffold(body: SetupTab())),
+    ));
+    await t.pump();
+    expect(find.text('Set up the guider…'), findsNothing);
+    expect(find.text('Re-run guider wizard…'), findsOneWidget);
   });
 
   testWidgets('guide optics without a guide camera still get the callout',

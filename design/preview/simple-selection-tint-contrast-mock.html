@@ -1,0 +1,143 @@
+<title>Ara Selection Tint Contrast</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: controls on top, then one card per selection-tint site, Before | After side by side. Ara DESIGN.md tokens, single dark theme on purpose. */
+:root {
+  --bg: #1A1A1A; --panel: #262626; --border: #404040; --input: #333333;
+  --text: #E0E0E0; --text2: #A0A0A0; --text3: #606060; --white: #FFFFFF;
+  --info: #42A5F5; --link: #64B5F6; --ok: #4CAF50; --busy: #FFB300; --btn: #1565C0; --err: #FF8A80;
+  --sel: #1976D2; --tint: rgba(25,118,210,.25); --scrim: rgba(26,26,26,.90);
+  --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 14px/1.4 var(--sys); font-variant-numeric: tabular-nums;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+h1 { font-size: 16px; font-weight: 600; margin: 0 0 6px; }
+.lede { color: var(--text2); font-size: 13px; max-width: 90ch; margin: 0 0 12px; }
+.lede b { color: var(--text); }
+.bar { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: var(--input); color: var(--text); font: 13px var(--sys); padding: 9px 12px; cursor: pointer; min-height: 40px; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--sel); color: var(--white); }
+.bar .l { color: var(--text2); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 520px), 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card h2 { font-size: 13px; font-weight: 600; margin: 0; display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.card h2 code { font: 11px ui-monospace, Menlo, monospace; color: var(--text3); font-weight: 400; }
+.tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px; }
+.tag.pass { color: var(--ok); background: rgba(76,175,80,.12); }
+.tag.fix { color: var(--busy); background: rgba(255,179,0,.12); }
+.tag.none { color: var(--text2); background: rgba(160,160,160,.12); }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 480px) { .pair { grid-template-columns: 1fr; } }
+.side { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.side .cap { color: var(--text3); font-size: 11px; font-weight: 600; letter-spacing: .5px; text-transform: uppercase; }
+.stage { border-radius: 10px; padding: 8px; background: var(--frame); position: relative; overflow: hidden; }
+.panel { background: var(--scrim); border-radius: 10px; padding: 6px; }
+.panel.flat { background: var(--panel); }
+.row { background: var(--tint); border-radius: 10px; padding: 8px 10px; display: flex; align-items: center; gap: 8px; min-height: 44px; }
+.ratios { display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--text2); }
+.ratios .bad { color: var(--err); font-weight: 600; }
+.ratios .good { color: var(--ok); }
+.simple { font-size: 14px; } .cap11 { font-size: 11.5px; } .n11 { font-size: 11px; }
+.circle { width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--info); display: inline-grid; place-items: center; flex: none; }
+.tb { margin-left: auto; font: 14px var(--sys); font-weight: 500; padding: 8px 10px; }
+.art { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #3a2550, #0d0d1a); flex: none; }
+.rail { flex-direction: column; justify-content: center; width: 76px; min-height: 56px; gap: 2px; font-size: 11.5px; }
+.ic { width: 22px; height: 22px; border-radius: 4px; border: 2px solid currentColor; }
+.band { height: 60px; position: relative; }
+.band .span { position: absolute; top: 0; bottom: 0; left: 30%; width: 35%; background: var(--tint); }
+.band .curve { position: absolute; inset: 0; }
+.foot { color: var(--text3); font-size: 11.5px; margin-top: 14px; max-width: 90ch; }
+:focus-visible { outline: 2px solid var(--link); outline-offset: 2px; }
+</style>
+
+<h1>Text on the selection tint (ara#1953)</h1>
+<p class="lede">Every <b>selection-tint</b> site in Simple Mode, measured from the code on master <code>cd917c750</code>. Ratios are computed live for the frame behind the panel. <b>Bright frame</b> is the worst case: the 90% scrim over a white image. Three sites fail there. The fix leaves the tint alone, because lowering its alpha to 18% still leaves 4.2:1. Pick a fix to see it in the After column.</p>
+
+<div class="bar">
+  <span class="l">Frame behind panel</span>
+  <div class="seg" id="frame">
+    <button data-v="0,0,0">Dark sky</button><button data-v="128,128,128">Mid</button><button data-v="255,255,255" aria-pressed="true">Bright frame</button>
+  </div>
+  <span class="l">Fix</span>
+  <div class="seg" id="fix">
+    <button data-v="link" aria-pressed="true">A · link-text</button><button data-v="primary">B · text-primary</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+<p class="foot">Sites with no text on the tint: Monitor's altitude chart (a shaded span behind the curve). The Storage drive dialog is shared and only uses the tint inline in Simple Mode. Its title and subtitle are already link-text. With fix A, "Pick in Sky" uses link-text as its colour override on the plan card only. The app-wide TextButton theme stays as it is. Each fix lands with a red test in <code>simple_contrast_test.dart</code> first.</p>
+
+<script>
+const HEX = { white: "#FFFFFF", primary: "#E0E0E0", secondary: "#A0A0A0", disabled: "#606060", info: "#42A5F5", link: "#64B5F6", btn: "#1565C0", ok: "#4CAF50" };
+const rgb = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const lin = c => (c /= 255) <= .03928 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4;
+const L = c => .2126 * lin(c[0]) + .7152 * lin(c[1]) + .0722 * lin(c[2]);
+const cr = (a, b) => { const x = L(a), y = L(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+const over = (fg, a, bg) => fg.map((f, i) => a * f + (1 - a) * bg[i]);
+let frame = [255, 255, 255], fix = "link";
+const tintOn = base => over([25, 118, 210], .25, base);
+const scrimOver = f => over([26, 26, 26], .9, f);
+
+// One site: what text sits on the tint, before and after each fix.
+const sites = [
+  { name: "Preview · camera row (selected)", file: "simple_preview_panel.dart:649", texts: [
+      { label: "Role name", size: "simple", before: "link", after: { link: "link", primary: "link" } },
+      { label: "Detail caption", size: "cap11", before: "secondary", after: { link: "link", primary: "primary" } },
+      { label: "Check icon", size: "icon", before: "link", after: { link: "link", primary: "link" } } ],
+    draw: c => `<span style="display:flex;flex-direction:column;flex:1;min-width:0"><span class="simple" style="color:${c[0]}">Guide camera</span><span class="cap11" style="color:${c[1]}">ZWO ASI120MM Mini · 3.75 µm</span></span><span style="color:${c[2]};font-size:18px">✓</span>` },
+  { name: "Plan · target card", file: "simple_plan_panel.dart:1701", texts: [
+      { label: "Target name", size: "simple", before: "primary", after: { link: "primary", primary: "primary" } },
+      { label: "Status line", size: "simple", before: "primary", after: { link: "primary", primary: "primary" } },
+      { label: "\"Pick in Sky\" button", size: "simple", before: "btn", after: { link: "link", primary: "link" } } ],
+    draw: c => `<span class="art" aria-hidden="true"></span><span style="display:flex;flex-direction:column;min-width:0"><span class="simple" style="color:${c[0]};font-weight:600">M42 Orion Nebula</span><span class="simple" style="color:${c[1]}">up 52° · 3.1 h left</span></span><span class="tb" style="color:${c[2]}">Pick in Sky</span>` },
+  { name: "Preflight · current step", file: "simple_preflight.dart:126", texts: [
+      { label: "Step number (11 px)", size: "n11", before: "info", after: { link: "link", primary: "primary" } },
+      { label: "Step label", size: "simple", before: "primary", after: { link: "primary", primary: "primary" } } ],
+    draw: c => `<span class="circle" style="border-color:${c[0]}"><span class="n11" style="color:${c[0]}">2</span></span><span class="simple" style="color:${c[1]}">Focus</span>` },
+  { name: "Rail · selected button", file: "simple_shell.dart:2428", texts: [
+      { label: "Icon + label", size: "cap11", before: "primary", after: { link: "primary", primary: "primary" } } ],
+    rail: true, draw: c => `<span class="ic" style="color:${c[0]}"></span><span style="color:${c[0]}">Guide</span>` },
+  { name: "Companion · selected tab", file: "companion_portrait_shell.dart:287", texts: [
+      { label: "Icon + label", size: "cap11", before: "primary", after: { link: "primary", primary: "primary" } } ],
+    rail: true, draw: c => `<span class="ic" style="color:${c[0]}"></span><span style="color:${c[0]}">Plan</span>` },
+  { name: "Settings · selected section", file: "simple_shell.dart:3413", texts: [
+      { label: "Section title", size: "simple", before: "link", after: { link: "link", primary: "link" } } ],
+    draw: c => `<span class="simple" style="color:${c[0]}">Focus</span>` },
+  { name: "Storage · selected drive (inline)", file: "storage_drive_dialog.dart:305", texts: [
+      { label: "Title + subtitle", size: "simple", before: "link", after: { link: "link", primary: "link" } } ],
+    draw: c => `<span style="color:${c[0]};font-size:22px">◉</span><span style="display:flex;flex-direction:column"><span class="simple" style="color:${c[0]}">SanDisk 256 GB</span><span class="cap11" style="color:${c[0]}">exFAT · 211 GB free</span></span>` },
+];
+
+function ratioList(texts, pick, bg) {
+  return texts.map(t => { const r = cr(rgb(HEX[pick(t)]), bg), need = 4.5;
+    return `<span>${t.label}: <span class="${r < need ? "bad" : "good"}">${r.toFixed(2)}:1</span></span>`; }).join("");
+}
+function render() {
+  const bg = tintOn(scrimOver(frame));
+  document.documentElement.style.setProperty("--frame", `rgb(${frame.join(",")})`);
+  document.getElementById("grid").innerHTML = sites.map(s => {
+    const before = s.texts.map(t => HEX[t.before]), after = s.texts.map(t => HEX[t.after[fix]]);
+    const changed = s.texts.some(t => t.before !== t.after[fix]);
+    const failsBefore = s.texts.some(t => cr(rgb(HEX[t.before]), bg) < 4.5);
+    const tag = changed ? `<span class="tag fix">changes</span>` : failsBefore ? `<span class="tag fix">fails</span>` : `<span class="tag pass">passes, unchanged</span>`;
+    const box = cols => `<div class="stage"><div class="panel"><div class="row${s.rail ? " rail" : ""}">${s.draw(cols)}</div></div></div>`;
+    return `<section class="card"><h2>${s.name} ${tag}</h2><h2><code>${s.file}</code></h2>
+      <div class="pair">
+        <div class="side"><span class="cap">Before</span>${box(before)}<div class="ratios">${ratioList(s.texts, t => t.before, bg)}</div></div>
+        <div class="side"><span class="cap">After</span>${box(after)}<div class="ratios">${ratioList(s.texts, t => t.after[fix], bg)}</div></div>
+      </div></section>`;
+  }).join("");
+}
+for (const id of ["frame", "fix"]) document.getElementById(id).addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  b.parentElement.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", x === b));
+  if (id === "frame") frame = b.dataset.v.split(",").map(Number); else fix = b.dataset.v;
+  render();
+});
+render();
+</script>
+

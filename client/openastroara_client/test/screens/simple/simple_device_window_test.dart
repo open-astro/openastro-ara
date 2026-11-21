@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/models/camera_status.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
@@ -9,12 +10,17 @@ import 'package:openastroara/state/equipment/camera_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/imaging_defaults_state.dart';
 import 'package:openastroara/state/imaging/exposure_state.dart';
+import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/imaging_sections.dart';
 
 /// A camera with a cooler; records the cooler commands instead of sending them.
 class _FixedFan extends CoolingFanNotifier {
   @override
-  Future<CoolingFan> build() async => CoolingFan.none;
+  LoadedSection<CoolingFan> build() =>
+      LoadedSection(value: CoolingFan.none, source: SectionSource.rig);
 }
 
 class _Camera extends CameraStatusNotifier {
@@ -52,18 +58,27 @@ Map<String, dynamic> _wire({
   },
 };
 
+/// The last pump's imaging defaults section (the cooler target).
+late FakeImagingDefaultsSection _defaults;
+
 Future<(ProviderContainer, _Camera)> _pump(
   WidgetTester tester,
   Map<String, dynamic> wire, {
   DeviceDriver? driver,
   bool inSettings = false,
+  bool defaultsLoad = true,
 }) async {
   // A test that pumps twice lets the first window's providers wind down.
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final camera = _Camera(wire);
+  final defaults = _defaults = FakeImagingDefaultsSection(
+    initial: defaultsLoad ? const ImagingDefaults() : null,
+  );
   final c = ProviderContainer(
     overrides: [
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      imagingDefaultsProvider.overrideWith(() => defaults),
       cameraStatusProvider.overrideWith(() => camera),
       deviceDriverProvider.overrideWith(
         (ref, type) async => type == 'camera' ? driver : null,
@@ -80,6 +95,8 @@ Future<(ProviderContainer, _Camera)> _pump(
       ),
     ),
   );
+  await tester.pump();
+  // The profile's imaging defaults load themselves (SelfLoadingSection).
   await tester.pump();
   return (c, camera);
 }
@@ -125,6 +142,17 @@ void main() {
     },
   );
 
+  testWidgets('a cooler that does not respond says to check the 12 V under the Cooler row (#2076)', (tester) async {
+    final caption = find.byKey(const Key('simple-camera-cooler-not-responding'));
+    await _pump(tester, _wire());
+    expect(caption, findsNothing);
+    final wire = _wire(on: false);
+    (wire['runtime'] as Map<String, dynamic>)['cooler_not_responding'] = true;
+    await _pump(tester, wire);
+    expect(caption, findsOneWidget);
+    expect(find.text("Cooler not responding: is the camera's 12 V connected?"), findsOneWidget);
+  });
+
   testWidgets('Off turns the cooler off; On cools to the target', (
     tester,
   ) async {
@@ -154,9 +182,61 @@ void main() {
     expect(camera.calls, isEmpty, reason: 'nothing is sent while dragging');
     tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-15);
     await tester.pump();
-    expect(c.read(imagingDefaultsProvider).coolerTargetC, -15);
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -15);
+    expect(_defaults.puts.single.coolerTargetC, -15, reason: 'saved in the profile');
     expect(camera.calls, [(true, -15.0)]);
 
+  });
+
+  testWidgets('the target waits for the profile from the rig: no slider, and On sends no target (ADR 0015)', (tester) async {
+    final (_, camera) = await _pump(tester, _wire(), defaultsLoad: false);
+    expect(find.byKey(const Key('simple-camera-target')), findsNothing);
+    expect(find.textContaining('Not loaded'), findsOneWidget);
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    final (_, off) = await _pump(tester, _wire(on: false, setpoint: null), defaultsLoad: false);
+    await tester.tap(find.byKey(const Key('simple-camera-cooler-on')));
+    await tester.pump();
+    expect(off.calls, [(true, null)], reason: 'no client default goes to the camera');
+    expect(camera.calls, isEmpty);
+    expect(_defaults.puts, isEmpty);
+  });
+
+  testWidgets('a target set on the offline cache copy is refused: nothing saved and the cooler stays (ADR 0015)', (tester) async {
+    final (c, camera) = await _pump(tester, _wire(), defaultsLoad: false);
+    c.read(imagingDefaultsProvider.notifier).seed(const ImagingDefaults());
+    await tester.pump();
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
+    await tester.pump();
+    expect(_defaults.puts, isEmpty);
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -10);
+    expect(camera.calls, isEmpty, reason: 'a target the rig did not keep moves nothing');
+    expect(find.textContaining("Couldn't save the target: Settings not loaded from the rig"), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a target the rig fails to save puts its copy back and leaves the cooler alone', (tester) async {
+    final (c, camera) = await _pump(tester, _wire());
+    _defaults.refuse = Exception('rig error');
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
+    await tester.pump();
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -10);
+    expect(camera.calls, isEmpty);
+    expect(find.textContaining("Couldn't save the target"), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('a target refused as stale shows the rig\'s newer one and leaves the cooler alone (ADR 0015)', (tester) async {
+    final (c, camera) = await _pump(tester, _wire());
+    _defaults
+      ..refuse = staleSave()
+      ..initial = const ImagingDefaults(coolerTargetC: -5);
+    tester.widget<Slider>(find.byKey(const Key('simple-camera-target'))).onChangeEnd!(-20);
+    await tester.pump();
+    expect(c.read(imagingDefaultsProvider).value!.coolerTargetC, -5, reason: 'the copy another device saved');
+    expect(c.read(imagingDefaultsProvider).conflict, isFalse);
+    expect(camera.calls, isEmpty);
+    expect(find.textContaining("Couldn't save the target"), findsOneWidget);
+    await tester.pump(const Duration(seconds: 5));
   });
 
   testWidgets('the target shows only while the cooler is on', (tester) async {
@@ -174,7 +254,7 @@ void main() {
     });
     c.read(exposureControllerProvider.notifier).setGain(100);
     await tester.pump();
-    final plans = c.read(imagingDefaultsProvider).defaultGain;
+    final plans = c.read(imagingDefaultsProvider).value!.defaultGain;
     final slider = tester.widget<Slider>(find.byKey(const Key('simple-camera-gain')));
     expect((slider.min, slider.max, slider.value), (0.0, 300.0, 100.0));
     slider.onChanged!(123);
@@ -183,7 +263,7 @@ void main() {
     tester.widget<Slider>(find.byKey(const Key('simple-camera-gain'))).onChangeEnd!(127);
     await tester.pump();
     expect(c.read(exposureControllerProvider).gain, 130, reason: 'steps of 10; Preview\'s chip shows it too');
-    expect(c.read(imagingDefaultsProvider).defaultGain, plans, reason: 'the plans\' gain is its own setting');
+    expect(c.read(imagingDefaultsProvider).value!.defaultGain, plans, reason: 'the plans\' gain is its own setting');
   });
 
   testWidgets('a camera with named gain modes slides through the names', (tester) async {

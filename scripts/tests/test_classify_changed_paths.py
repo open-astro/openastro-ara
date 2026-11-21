@@ -142,6 +142,20 @@ class ClassifyTest(unittest.TestCase):
     def test_the_packaging_tree_runs_the_dotnet_jobs(self):
         self.assertTrue(self.c("packaging/debian/control")["dotnet"])
 
+    def test_the_checked_in_v2_schema_runs_the_dotnet_jobs(self):
+        # SequenceV2FieldTableTest reads docs/specs/sequence-v2.schema.json, so
+        # a change to it must not take the docs/ shortcut.
+        p = "docs/specs/sequence-v2.schema.json"
+        self.assertTrue(self.c(p)["dotnet"])
+        self.assertFalse(self.c(p)["docs_only"])
+
+    def test_the_v2_spec_runs_the_dotnet_jobs_and_other_specs_do_not(self):
+        # SequenceV2Spec.Lines() reads docs/specs/sequence-v2.md.
+        p = "docs/specs/sequence-v2.md"
+        self.assertTrue(self.c(p)["dotnet"])
+        self.assertFalse(self.c(p)["docs_only"])
+        self.assertTrue(self.c("docs/specs/sky-album-v1.md")["docs_only"])
+
     # --- the closed bucket -------------------------------------------------
 
     def test_only_client_paths_reach_the_client_jobs(self):
@@ -268,6 +282,9 @@ class ClassifyTest(unittest.TestCase):
             ".github/workflows/label-trusted-authors.yml",
             ".github/workflows/merge-queue.yml",
             ".github/workflows/auto-queue.yml",
+            ".github/workflows/release.yml",
+            ".github/workflows/issue-labels.yml",
+            ".github/workflows/close-linked-issues.yml",
             ".github/dependabot.yml",
             ".github/FUNDING.yml",
             ".github/pull_request_template.md",
@@ -285,6 +302,16 @@ class ClassifyTest(unittest.TestCase):
             "scripts/fit-star-count-model.py",
             "scripts/merge-gate.sh",
             "scripts/auto-queue.sh",
+            # #2093 release tooling: no job gated on dotnet or client reads it.
+            "scripts/version.py",
+            "scripts/release-tag.py",
+            "scripts/release-tag-cases.txt",
+            "scripts/changelog-section.py",
+            "scripts/nightly-version.py",
+            "scripts/merge-down.py",
+            "scripts/close-linked-issues.py",
+            "scripts/check-issue-labels.py",
+            "scripts/source-archive.sh",
             "scripts/tests/<anything>",
         }
         probe = sorted(
@@ -639,7 +666,7 @@ class InertTreesTest(unittest.TestCase):
             ["git", "-c", "core.quotePath=false", "ls-files", "-z", "--", *cls.m.INERT_DIRS],
             cwd=REPO_ROOT, check=True, capture_output=True, text=True,
         ).stdout
-        cls.files = [f for f in out.split("\0") if f]
+        cls.files = [f for f in out.split("\0") if f and f not in cls.m.INERT_DIR_BUILD_INPUTS]
 
     def test_every_inert_dir_is_tracked_and_non_empty(self):
         for prefix in self.m.INERT_DIRS:

@@ -140,8 +140,9 @@ Future<List<CustomHorizonPoint>?> _tryHorizon(ProfileApi api) async {
 /// Seed the planning settings notifiers from [profileId]'s cached sections so
 /// an offline session plans with the user's real gear instead of constructor
 /// defaults. Returns false when no snapshot exists for that profile (the
-/// notifiers keep their defaults). Uses each notifier's hydrateGuarded seam —
-/// the same one server hydration uses — so a later real hydrate wins races.
+/// notifiers keep what they hold). Each section is seeded as a cache copy
+/// (ADR 0015): readable for planning, never saved, and replaced by the rig's
+/// copy once it loads.
 Future<bool> seedPlanningFromCache(
     ProviderContainer container, String profileId) async {
   final cache = await container.read(profileCacheServiceProvider).load();
@@ -153,23 +154,33 @@ Future<bool> seedPlanningFromCache(
     return v is Map ? Map<String, dynamic>.from(v) : const {};
   }
 
-  await container
-      .read(opticsSettingsProvider.notifier)
-      .hydrateGuarded(() async => ProfileApi.opticsFromJson(sec('optics')));
-  await container.read(imagingDefaultsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
-  await container.read(autofocusSettingsProvider.notifier).hydrateGuarded(
-      () async => ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
   // ADR 0015: a snapshot with no key for a section leaves it not loaded,
   // never a default that a Save could send. A cache copy is for planning only.
+  if (snap['optics'] is Map) {
+    container
+        .read(opticsSettingsProvider.notifier)
+        .seed(ProfileApi.opticsFromJson(sec('optics')));
+  }
+  if (snap['imaging_defaults'] is Map) {
+    container
+        .read(imagingDefaultsProvider.notifier)
+        .seed(ProfileApi.imagingDefaultsFromJson(sec('imaging_defaults')));
+  }
+  if (snap['autofocus'] is Map) {
+    container
+        .read(autofocusSettingsProvider.notifier)
+        .seed(ProfileApi.autofocusSettingsFromJson(sec('autofocus')));
+  }
   if (snap['unguided'] is Map) {
     container
         .read(unguidedSettingsProvider.notifier)
         .seed(ProfileApi.unguidedSettingsFromJson(sec('unguided')));
   }
-  await container
-      .read(siteSettingsProvider.notifier)
-      .hydrateGuarded(() async => ProfileApi.siteSettingsFromJson(sec('site')));
+  if (snap['site'] is Map) {
+    container
+        .read(siteSettingsProvider.notifier)
+        .seed(ProfileApi.siteSettingsFromJson(sec('site')));
+  }
   if (snap['filter_set'] is Map) {
     container
         .read(filterSetProvider.notifier)

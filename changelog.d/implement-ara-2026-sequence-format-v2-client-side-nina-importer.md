@@ -1,0 +1,2 @@
+### Changed
+- **NINA import writes sequence v2** (Sequencer, #2026): the importer maps each NINA class to its `kind`, imports the three area containers as `sequential` containers with their children, turns anything Ara cannot run into a placeholder that keeps the source node, and records `metadata.importedFrom`. A file that is not a NINA sequence (a v1 body included) is refused before anything is uploaded; the confirm dialog lists what will not run before the upload.

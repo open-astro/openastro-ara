@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
-import 'package:flutter/gestures.dart' show PointerDeviceKind, kPrimaryButton;
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, kLongPressTimeout, kPrimaryButton;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -38,6 +40,7 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
     this.simple = false,
     this.compact = false,
     this.large = false,
+    this.railFoot = false,
     this.enabled = true,
     this.label,
   });
@@ -57,6 +60,12 @@ class EmergencyStopButton extends ConsumerStatefulWidget {
   /// type and icon to match.
   final bool large;
 
+  /// Simple Mode's rail-foot Stop (#1911): the last row of the right rail on
+  /// desktop and iPad, no red block. A tap sends nothing; the shared hold
+  /// ([EmergencyStopHold]) is the stop, and keyboard and screen-reader
+  /// activation press twice within 3 s, as the compact square does.
+  final bool railFoot;
+
   /// False: drawn disabled in its place (a phone before any rig has been
   /// connected, #1775).
   final bool enabled;
@@ -71,7 +80,8 @@ const kEmergencyStopHold = Duration(seconds: 2);
 
 class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     with SingleTickerProviderStateMixin {
-  bool _inFlight = false;
+  /// A stop is on its way, from this button or a shutter's hold.
+  bool get _inFlight => ref.read(emergencyStopInFlightProvider);
 
   /// Runs while the button is held; reaching the end is the confirmation.
   late final AnimationController _hold =
@@ -190,104 +200,79 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
     await _stop();
   }
 
-  Future<void> _stop() async {
-    if (_inFlight) return;
-    final server = ref.read(activeServerProvider);
-    final notify = userNotifier(context);
+  Future<void> _stop() => emergencyStopNow(
+    context,
+    failuresFirst: widget.simple || widget.compact || widget.large,
+  );
+
+  /// The rail-foot Stop: a hairline over an octagon and the word, in Fault
+  /// Red's light tone. The shape and the word carry it, not the colour, so
+  /// Night mode needs no palette of its own (plan OPEN CHOICE 6).
+  Widget _buildRailFoot(BuildContext context) {
     final l10n = context.l10n;
-    if (server == null) {
-      notify(l10n.estopNoServer, error: true, snackBarRed: false);
-      return;
-    }
-    setState(() => _inFlight = true);
-    ref.read(localEmergencyStopProvider.notifier).pressed();
-    try {
-      final result = await ref
-          .read(serverApiFactoryProvider)(server)
-          .emergencyStop();
-      // The cooler toggle polls every 15 s; show the stop's cooler-off now.
-      if (ref.read(cameraStatusProvider.exists)) {
-        unawaited(ref.read(cameraStatusProvider.notifier).refresh());
-      }
-      // A rung that failed keeps its pill up until it is read.
-      notify(
-        _summarize(
-          l10n,
-          result,
-          failuresFirst: widget.simple || widget.compact || widget.large,
+    final scale = math.max(
+      1.0,
+      MediaQuery.textScalerOf(context).scale(1) / 1.1,
+    );
+    final inFlight = _inFlight;
+    final word = inFlight
+        ? '…'
+        : _armed
+        ? l10n.estopCompactPressAgain
+        : l10n.estopCompactStop;
+    final tone = widget.enabled ? AraColors.errorText : AraColors.textDisabled;
+    const radius = BorderRadius.vertical(bottom: Radius.circular(10));
+    return Semantics(
+      button: true,
+      enabled: widget.enabled && !inFlight,
+      label: l10n.estopCompactStop,
+      child: EmergencyStopHold(
+        enabled: widget.enabled && !inFlight,
+        borderRadius: radius,
+        onActivate: widget.enabled && !inFlight ? _pressAgain : null,
+        child: Container(
+          key: const Key('simple-rail-stop'),
+          height: 60 * scale,
+          decoration: const BoxDecoration(
+            borderRadius: radius,
+            border: Border(top: BorderSide(color: AraColors.border)),
+          ),
+          alignment: Alignment.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (inFlight)
+                const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: AdaptiveProgressIndicator(strokeWidth: 2),
+                )
+              else if (!_armed)
+                // Armed, the foot drops the icon: PRESS AGAIN needs both lines.
+                Icon(Icons.report, size: 26, color: tone),
+              Text(
+                word,
+                maxLines: _armed ? 2 : 1,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.4,
+                  color: tone,
+                ),
+              ),
+            ],
+          ),
         ),
-        error: result.failedRungs.isNotEmpty,
-        snackBarRed: false,
-        snackBarDuration: const Duration(seconds: 10),
-        // Red when a rung failed; else amber, done but the rig needs a look.
-        // Either way it waits to be read (user, 2026-11-04).
-        warning: true,
-        sticky: true,
-      );
-    } catch (e) {
-      notify(
-        l10n.estopFailed(friendlyError(l10n, e, action: l10n.estopActionReach)),
-        error: true,
-        snackBarRed: false,
-        snackBarDuration: const Duration(seconds: 10),
-        // The stop did NOT happen: it waits to be read (ALP-5016).
-        sticky: true,
-      );
-    } finally {
-      if (mounted) setState(() => _inFlight = false);
-    }
-  }
-
-  /// Wire tokens → operator-facing failure phrases. Every attempted-but-
-  /// failed rung is loud — a hung guider that kept correcting is exactly as
-  /// dangerous as a mount still moving, so no rung fails silently.
-  static String _failurePhrase(AppLocalizations l, String rung) =>
-      switch (rung) {
-        'abort_runs' => l.estopFailAbortRuns,
-        'abort_exposure' => l.estopFailAbortExposure,
-        'stop_guide_focus' => l.estopFailGuideFocus,
-        'stop_bahtinov' => l.estopFailBahtinov,
-        'cancel_autofocus' => l.estopFailAutofocus,
-        'stop_polar_align' => l.estopFailPolarAlign,
-        'stop_polar_aligner' => l.estopFailPolarAligner,
-        'stop_guiding' => l.estopFailStopGuiding,
-        'stop_mount' => l.estopFailStopMount,
-        'halt_rotator' => l.estopFailRotator,
-        'flat_panel_light_off' => l.estopFailFlatPanel,
-        'cooler_off' => l.estopFailCooler,
-        _ => l.estopFailOther(rung),
-      };
-
-  /// [failuresFirst]: Simple Mode's message pill shows two lines, so a
-  /// failed rung leads instead of trailing off past them.
-  static String _summarize(
-    AppLocalizations l,
-    EmergencyStopResult r, {
-    bool failuresFirst = false,
-  }) {
-    if (r.alreadyInProgress) {
-      return l.estopAlreadyRunning;
-    }
-    final parts = <String>[
-      r.runsAborted > 0 ? l.estopRunsAborted(r.runsAborted) : l.estopNoSequence,
-      if (r.exposureAborted) l.estopExposureAborted,
-      if (r.guidingStopped) l.estopGuidingStopped,
-      if (r.mountStopped) l.estopMountStopped,
-      if (r.flatPanelLightOff) l.estopFlatPanelOff,
-      if (r.coolerOff) l.estopCoolerOff,
-    ];
-    final failures = r.failedRungs
-        .map((rung) => _failurePhrase(l, rung))
-        .toList(growable: false);
-    final summary = l.estopSummary(parts.join(', '));
-    if (failures.isEmpty) return summary;
-    final check = l.estopCheckRig(failures.join('; '));
-    return failuresFirst ? '$check $summary' : '$summary $check';
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    ref.watch(emergencyStopInFlightProvider);
+    if (widget.railFoot) return _buildRailFoot(context);
     final large = widget.large;
     final compact = widget.compact || large;
     final simple = widget.simple || compact;
@@ -412,6 +397,318 @@ class _EmergencyStopButtonState extends ConsumerState<EmergencyStopButton>
       ),
     );
   }
+}
+
+/// A stop is on its way: one at a time, whichever control sent it.
+class _StopInFlight extends Notifier<bool> {
+  @override
+  bool build() => false;
+
+  void set(bool value) => state = value;
+}
+
+final emergencyStopInFlightProvider = NotifierProvider<_StopInFlight, bool>(
+  _StopInFlight.new,
+);
+
+/// The one Emergency Stop path (ADR 0009 rule 3): the status-bar button, the
+/// rail-foot Stop and every Simple Mode shutter's 2 s hold all end here, and
+/// nothing else calls the daemon's emergency-stop route. It shows no
+/// plan-running question (ADR 0013 rule 2). [failuresFirst]: Simple Mode's
+/// message pill shows two lines, so a failed rung leads.
+Future<void> emergencyStopNow(
+  BuildContext context, {
+  bool failuresFirst = true,
+}) async {
+  final container = ProviderScope.containerOf(context, listen: false);
+  if (container.read(emergencyStopInFlightProvider)) return;
+  final server = container.read(activeServerProvider);
+  final notify = userNotifier(context);
+  final l10n = context.l10n;
+  if (server == null) {
+    notify(l10n.estopNoServer, error: true, snackBarRed: false);
+    return;
+  }
+  container.read(emergencyStopInFlightProvider.notifier).set(true);
+  container.read(localEmergencyStopProvider.notifier).pressed();
+  try {
+    final result = await container
+        .read(serverApiFactoryProvider)(server)
+        .emergencyStop();
+    // The cooler toggle polls every 15 s; show the stop's cooler-off now.
+    if (container.read(cameraStatusProvider.exists)) {
+      unawaited(container.read(cameraStatusProvider.notifier).refresh());
+    }
+    // A rung that failed keeps its pill up until it is read.
+    notify(
+      _summarize(l10n, result, failuresFirst: failuresFirst),
+      error: result.failedRungs.isNotEmpty,
+      snackBarRed: false,
+      snackBarDuration: const Duration(seconds: 10),
+      // Red when a rung failed; else amber, done but the rig needs a look.
+      // Either way it waits to be read (user, 2026-11-04).
+      warning: true,
+      sticky: true,
+    );
+  } catch (e) {
+    notify(
+      l10n.estopFailed(friendlyError(l10n, e, action: l10n.estopActionReach)),
+      error: true,
+      snackBarRed: false,
+      snackBarDuration: const Duration(seconds: 10),
+      // The stop did NOT happen: it waits to be read (ALP-5016).
+      sticky: true,
+    );
+  } finally {
+    container.read(emergencyStopInFlightProvider.notifier).set(false);
+  }
+}
+
+/// Wire tokens → operator-facing failure phrases. Every attempted-but-
+/// failed rung is loud — a hung guider that kept correcting is exactly as
+/// dangerous as a mount still moving, so no rung fails silently.
+String _failurePhrase(AppLocalizations l, String rung) => switch (rung) {
+  'abort_runs' => l.estopFailAbortRuns,
+  'abort_exposure' => l.estopFailAbortExposure,
+  'stop_guide_focus' => l.estopFailGuideFocus,
+  'stop_bahtinov' => l.estopFailBahtinov,
+  'cancel_autofocus' => l.estopFailAutofocus,
+  'stop_polar_align' => l.estopFailPolarAlign,
+  'stop_polar_aligner' => l.estopFailPolarAligner,
+  'stop_guiding' => l.estopFailStopGuiding,
+  'stop_mount' => l.estopFailStopMount,
+  'halt_rotator' => l.estopFailRotator,
+  'flat_panel_light_off' => l.estopFailFlatPanel,
+  'cooler_off' => l.estopFailCooler,
+  _ => l.estopFailOther(rung),
+};
+
+/// [failuresFirst]: Simple Mode's message pill shows two lines, so a
+/// failed rung leads instead of trailing off past them.
+String _summarize(
+  AppLocalizations l,
+  EmergencyStopResult r, {
+  bool failuresFirst = false,
+}) {
+  if (r.alreadyInProgress) {
+    return l.estopAlreadyRunning;
+  }
+  final parts = <String>[
+    r.runsAborted > 0 ? l.estopRunsAborted(r.runsAborted) : l.estopNoSequence,
+    if (r.exposureAborted) l.estopExposureAborted,
+    if (r.guidingStopped) l.estopGuidingStopped,
+    if (r.mountStopped) l.estopMountStopped,
+    if (r.flatPanelLightOff) l.estopFlatPanelOff,
+    if (r.coolerOff) l.estopCoolerOff,
+  ];
+  final failures = r.failedRungs
+      .map((rung) => _failurePhrase(l, rung))
+      .toList(growable: false);
+  final summary = l.estopSummary(parts.join(', '));
+  if (failures.isEmpty) return summary;
+  final check = l.estopCheckRig(failures.join('; '));
+  return failuresFirst ? '$check $summary' : '$summary $check';
+}
+
+/// The hold every Simple Mode shutter and the rail-foot Stop share (#1911).
+/// The timer starts at pointer down. A release before [kLongPressTimeout]
+/// (500 ms) is a tap and runs [onTap]; the red fill and HOLD start at 500 ms;
+/// 2 s from pointer down fires one Emergency Stop through [emergencyStopNow].
+/// A release or a slide off the control after the fill started and before
+/// 2 s cancels and fires nothing, and is no tap. [onActivate] is what a
+/// keyboard's Enter or a screen reader's activate runs (default [onTap]): it
+/// never stops anything by itself.
+class EmergencyStopHold extends ConsumerStatefulWidget {
+  const EmergencyStopHold({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onActivate,
+    this.enabled = true,
+    this.borderRadius = const BorderRadius.all(Radius.circular(30)),
+    this.inkRadius = 36,
+  });
+
+  final Widget child;
+
+  /// A pointer tap: a release before 500 ms.
+  final VoidCallback? onTap;
+
+  /// Keyboard and screen-reader activation; [onTap] when null.
+  final VoidCallback? onActivate;
+
+  /// False: no hold arms (a stop is already on its way).
+  final bool enabled;
+
+  /// The shape the fill is clipped to: a 60 px circle by default.
+  final BorderRadius borderRadius;
+  final double inkRadius;
+
+  @override
+  ConsumerState<EmergencyStopHold> createState() => _EmergencyStopHoldState();
+}
+
+class _EmergencyStopHoldState extends ConsumerState<EmergencyStopHold>
+    with SingleTickerProviderStateMixin {
+  /// The fill's sweep, from 500 ms to 2 s after pointer down.
+  late final AnimationController _fill = AnimationController(
+    vsync: this,
+    duration: kEmergencyStopHold - kLongPressTimeout,
+  );
+  Timer? _fillTimer;
+  Timer? _fireTimer;
+
+  /// A press is down and counting.
+  bool _down = false;
+
+  /// 500 ms passed: the red fill and HOLD show.
+  bool _filling = false;
+
+  /// The press came from a pointer, which the [Listener] handled; the
+  /// [InkResponse] tap is for the keyboard and screen readers only.
+  bool _viaPointer = false;
+
+  @override
+  void dispose() {
+    _fillTimer?.cancel();
+    _fireTimer?.cancel();
+    _fill.dispose();
+    super.dispose();
+  }
+
+  void _pointerDown(PointerDownEvent e) {
+    _viaPointer = true;
+    // Only a finger or the main mouse button, as the Emergency Stop.
+    if (e.kind == PointerDeviceKind.mouse && e.buttons != kPrimaryButton) {
+      return;
+    }
+    if (_down || !widget.enabled) return;
+    _down = true;
+    _fillTimer = Timer(kLongPressTimeout, () {
+      _filling = true;
+      _fill.forward(from: 0);
+      setState(() {});
+    });
+    _fireTimer = Timer(kEmergencyStopHold, () {
+      _reset();
+      emergencyStopNow(context);
+    });
+  }
+
+  void _pointerMove(PointerMoveEvent e) {
+    if (!_down) return;
+    final size = context.size;
+    if (size != null && !(Offset.zero & size).contains(e.localPosition)) {
+      _reset();
+    }
+  }
+
+  void _pointerUp(PointerUpEvent _) {
+    scheduleMicrotask(() => _viaPointer = false);
+    if (!_down) return;
+    final tap = !_filling;
+    _reset();
+    if (tap) widget.onTap?.call();
+  }
+
+  void _pointerCancel(PointerCancelEvent _) {
+    scheduleMicrotask(() => _viaPointer = false);
+    _reset();
+  }
+
+  /// Ends the press: the timers stop and the fill goes. A press that fired
+  /// leaves [_down] false, so its release is no tap.
+  void _reset() {
+    _fillTimer?.cancel();
+    _fireTimer?.cancel();
+    _down = false;
+    if (_filling) {
+      _filling = false;
+      _fill.value = 0;
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final still = MediaQuery.disableAnimationsOf(context);
+    return Listener(
+      onPointerDown: _pointerDown,
+      onPointerMove: _pointerMove,
+      onPointerUp: _pointerUp,
+      onPointerCancel: _pointerCancel,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          InkResponse(
+            radius: widget.inkRadius,
+            onTap: widget.onTap == null && widget.onActivate == null
+                ? null
+                : () {
+                    if (!_viaPointer) {
+                      (widget.onActivate ?? widget.onTap)?.call();
+                    }
+                  },
+            child: widget.child,
+          ),
+          if (_filling)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: ClipRRect(
+                  key: const Key('emergency-hold-fill'),
+                  borderRadius: widget.borderRadius,
+                  child: AnimatedBuilder(
+                    animation: _fill,
+                    builder: (context, _) => CustomPaint(
+                      painter: _HoldSweep(
+                        // Reduced motion: four steps, not a smooth sweep.
+                        still ? (_fill.value * 4).ceil() / 4 : _fill.value,
+                      ),
+                      child: Center(
+                        child: Text(
+                          context.l10n.estopCompactHold,
+                          style: const TextStyle(
+                            color: AraColors.onEmergencyStop,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// The hold's progress: Fault Red sweeping clockwise from twelve o'clock over
+/// a dark red, so the word HOLD reads on both.
+class _HoldSweep extends CustomPainter {
+  const _HoldSweep(this.progress);
+
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawRect(Offset.zero & size, Paint()..color = AraColors.holdBase);
+    final centre = size.center(Offset.zero);
+    final reach = size.longestSide;
+    canvas.drawArc(
+      Rect.fromCircle(center: centre, radius: reach),
+      -math.pi / 2,
+      2 * math.pi * progress,
+      true,
+      Paint()..color = AraColors.emergencyStop,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_HoldSweep old) => old.progress != progress;
 }
 
 /// When Emergency Stop was last pressed on this device: Simple Mode doesn't

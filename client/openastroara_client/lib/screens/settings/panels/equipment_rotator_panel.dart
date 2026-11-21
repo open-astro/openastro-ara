@@ -16,7 +16,7 @@ import '../../../state/settings/equipment_connection_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/help_icon.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
@@ -30,8 +30,6 @@ class EquipmentRotatorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
     final status = ref.watch(rotatorProvider);
     final notifier = ref.read(rotatorProvider.notifier);
 
@@ -51,12 +49,7 @@ class EquipmentRotatorPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _RotatorBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.rotator),
-          onChanged: (v) => n.setAutoConnect(EquipmentDeviceType.rotator, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.rotator),
         const SettingsSectionHeader('Framing'),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),

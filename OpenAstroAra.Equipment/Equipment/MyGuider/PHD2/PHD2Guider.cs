@@ -111,7 +111,44 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
             private set {
                 lock (lockobj) {
                     _calibration = value;
+                    if (value is null) {
+                        _calibrationTargetPx = null;
+                    }
                 }
+            }
+        }
+
+        /// <summary>The distance in guide-camera pixels the guider moves on each leg of this calibration run
+        /// (its <c>calibration_distance</c>); null when unknown and outside a run.</summary>
+        public double? CalibrationTargetPx {
+            get {
+                lock (lockobj) {
+                    return _calibrationTargetPx;
+                }
+            }
+        }
+
+        private double? _calibrationTargetPx;
+        private int _calibrationRunId;
+
+        /// <summary>#1895 — once per calibration run, reads the guider's <c>calibration_distance</c> for the
+        /// leg text's "of N px". Best-effort and silent: a refusal, a missing key or a dropped link leaves the
+        /// target null and the leg still shows. A read that lands after its run ended is dropped.</summary>
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+            Justification = "Best-effort #1895 read of the leg's target: any fault leaves it unknown; the calibration must never fail, nor an inbox error appear, because a number could not be read.")]
+        private async Task ReadCalibrationTargetAsync(int runId) {
+            try {
+                var token = (await ReadProfileSetupAsync().ConfigureAwait(false))?["calibration_distance"];
+                if (token is not { Type: JTokenType.Integer or JTokenType.Float } || token.Value<double>() <= 0) {
+                    return;
+                }
+                lock (lockobj) {
+                    if (_calibrationRunState == "running" && _calibrationRunId == runId) {
+                        _calibrationTargetPx = token.Value<double>();
+                    }
+                }
+            } catch (Exception ex) {
+                Logger.Debug($"PHD2 - the calibration distance could not be read: {ex.Message}");
             }
         }
 
@@ -128,25 +165,33 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
         }
 
         private void BeginCalibrationRun() {
+            int runId;
             lock (lockobj) {
                 _calibrationSteps.Clear();
                 _calibrationRunState = "running";
                 _calibrationError = null;
+                runId = ++_calibrationRunId;
             }
+            _ = ReadCalibrationTargetAsync(runId);
         }
 
         private void RecordCalibrationStep(PhdEventCalibrating? step) {
             if (step is null) {
                 return;
             }
+            int? startedRun = null;
             lock (lockobj) {
                 if (_calibrationRunState != "running") {
                     // A step without a StartCalibration event (daemon connected mid-calibration).
                     _calibrationSteps.Clear();
                     _calibrationRunState = "running";
                     _calibrationError = null;
+                    startedRun = ++_calibrationRunId;
                 }
                 _calibrationSteps.Add(step);
+            }
+            if (startedRun is int runId) {
+                _ = ReadCalibrationTargetAsync(runId);
             }
         }
 
@@ -392,15 +437,24 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                     // could read. The profile steps stay ordered (twin before push) and gate
                     // `initialized`; the rest never does.
                     var profilesOk = await TryInitStepAsync("get_profiles", GetProfiles).ConfigureAwait(false);
+                    var restoreCalibration = false;
                     if (profilesOk) {
                         if (BeforeAraProfileEnsureAsync is { } drain) {
                             await TryInitStepAsync("drain_twin_deletes", () => drain(token)).ConfigureAwait(false);
                         }
                         await TryInitStepAsync("ensure_ara_profile", () => EnsureAraGuiderProfileAsync(token)).ConfigureAwait(false);
-                        await TryInitStepAsync("push_engine_config", () => PushGuiderEngineConfigAsync(token)).ConfigureAwait(false);
+                        await TryInitStepAsync("push_engine_config", async () => {
+                            var plan = await PushGuiderEngineConfigAsync(token).ConfigureAwait(false);
+                            restoreCalibration = plan.RestoreCalibrationAfterReconnect;
+                        }).ConfigureAwait(false);
                     }
                     var equipmentConnected = false;
                     await TryInitStepAsync("set_connected", async () => { equipmentConnected = await EnsurePHD2EquipmentConnected().ConfigureAwait(false); }).ConfigureAwait(false);
+                    // #2074 — a push that had to open the disconnect window over unchanged gear and optics
+                    // must not cost the guider its calibration.
+                    if (restoreCalibration && equipmentConnected) {
+                        await TryInitStepAsync("restore_calibration", () => RestoreCalibrationAfterPushAsync(token)).ConfigureAwait(false);
+                    }
                     // The gain belongs to the Ara profile's twin, and the daemon only accepts it from a
                     // connected camera: both must hold or it would land on the wrong profile or be refused.
                     if (profilesOk && equipmentConnected) {

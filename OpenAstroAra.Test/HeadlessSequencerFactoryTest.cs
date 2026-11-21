@@ -250,31 +250,33 @@ namespace OpenAstroAra.Test {
             Assert.That(container!.GetType().Name, Is.EqualTo("UnknownSequenceContainer"));
         }
 
+        // A daemon without the astrometry natives must still boot: the AboveHorizonCondition prototype
+        // runs a NOVAS transform in its constructor, which surfaces as a TypeInitializationException the
+        // first time and a DllNotFoundException underneath; a mismatched library surfaces as
+        // BadImageFormatException (wrong architecture) or EntryPointNotFoundException (an older build).
+        // WithDefaults builds every list through Instantiate, which asks this predicate.
         [Test]
-        public void TryAddCondition_skips_a_prototype_whose_native_library_is_missing() {
-            // A daemon without the astrometry natives must still boot: the AboveHorizonCondition
-            // prototype runs a NOVAS transform in its constructor, which surfaces as a
-            // TypeInitializationException the first time and a DllNotFoundException underneath.
-            var conditions = new System.Collections.Generic.List<ISequenceCondition>();
-            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libsupernovas.so"))), Is.False);
-            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.DllNotFoundException("libsupernovas.so")), Is.False);
-            // A mismatched library: wrong architecture, or an older build missing an export.
-            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.BadImageFormatException("libsupernovas.so")), Is.False);
-            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions,
-                () => throw new System.EntryPointNotFoundException("novas_transform")), Is.False);
-            Assert.That(conditions, Is.Empty);
-            Assert.That(HeadlessSequencerFactory.TryAddCondition(conditions, () => new LoopCondition()), Is.True);
-            Assert.That(conditions, Has.Count.EqualTo(1));
+        public void IsMissingNativeLibrary_is_true_for_the_four_native_faults_and_false_for_anything_else() {
+            Assert.That(HeadlessSequencerFactory.IsMissingNativeLibrary(
+                new System.TypeInitializationException("NOVAS", new System.DllNotFoundException("libsupernovas.so"))), Is.True);
+            Assert.That(HeadlessSequencerFactory.IsMissingNativeLibrary(new System.DllNotFoundException("libsupernovas.so")), Is.True);
+            Assert.That(HeadlessSequencerFactory.IsMissingNativeLibrary(new System.BadImageFormatException("libsupernovas.so")), Is.True);
+            Assert.That(HeadlessSequencerFactory.IsMissingNativeLibrary(new System.EntryPointNotFoundException("novas_transform")), Is.True);
+            Assert.That(HeadlessSequencerFactory.IsMissingNativeLibrary(new System.InvalidOperationException("bug")), Is.False);
         }
 
         [Test]
-        public void TryAddCondition_lets_other_constructor_faults_through() {
-            var conditions = new System.Collections.Generic.List<ISequenceCondition>();
-            Assert.Throws<System.InvalidOperationException>(() =>
-                HeadlessSequencerFactory.TryAddCondition(conditions, () => throw new System.InvalidOperationException("bug")));
+        public void WithDefaults_skips_an_astrometry_prototype_whose_native_library_is_missing() {
+            // The real build path: AltitudeCondition's constructor is overridden to fault as on a daemon
+            // without the natives. The list is today's conditions without it, and is not built outside Instantiate.
+            var expected = HeadlessSequencerFactory.WithDefaults().Conditions
+                .Select(c => c.GetType().Name).Where(n => n != nameof(AltitudeCondition)).ToList();
+            var overrides = new System.Collections.Generic.Dictionary<System.Type, System.Func<object>> {
+                [typeof(AltitudeCondition)] = () => throw new System.DllNotFoundException("libsupernovas.so"),
+            };
+            var f = HeadlessSequencerFactory.WithDefaults(overrides);
+            Assert.That(f.Conditions.Select(c => c.GetType().Name), Is.EqualTo(expected));
+            Assert.That(f.Conditions.Select(c => c.GetType().Name), Does.Contain("TimeCondition"));
         }
     }
 }

@@ -1,13 +1,17 @@
 import 'package:openastroara/models/polar_align.dart'
     show
+        PolarAlignDirections,
         PolarAlignLastResult,
         PolarAlignStages,
+        PolarAlignStartPlan,
         PolarAlignStates,
         PolarAlignStatus;
 import 'package:flutter/foundation.dart' show TargetPlatform;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/models/autofocus_run.dart';
 import 'package:openastroara/models/guider_status.dart';
+import 'package:openastroara/state/focus/autofocus_live_state.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/state/equipment/mount_state.dart';
 import 'package:openastroara/state/guider/guider_state.dart';
@@ -43,11 +47,12 @@ class _Side extends Notifier<double> {
 final _side = NotifierProvider<_Side, double>(_Side.new);
 
 class _PolarApi implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
-  Future<void> start({String? stage}) async => calls.add('start');
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async => calls.add('start');
   @override
   Future<void> stop() async => calls.add('stop');
   @override
@@ -89,12 +94,35 @@ class _Live extends PolarAlignLiveNotifier {
   );
 }
 
+class _FocusLive extends AutofocusLiveNotifier {
+  @override
+  AutofocusLive build() => AutofocusLive.idle;
+  void put(AutofocusLive v) => state = v;
+}
+
+AutofocusLive _focusRun(String state, {bool manual = false}) => AutofocusLive(
+  run: AutofocusRun(
+    state: state,
+    startedUtc: DateTime.now().toUtc(),
+    completedUtc: state == AutofocusRunStates.complete
+        ? DateTime.now().toUtc()
+        : null,
+  ),
+  focusedThisSession: true,
+  hydrated: true,
+  manualMarkSinceRun: manual,
+);
+
 /// The rig's status: only its last polar-align result, which the test moves.
 class _StatusApi implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   PolarAlignLastResult? last;
+  String state = PolarAlignStates.idle;
   @override
   Future<PolarAlignStatus?> getStatus() async =>
-      PolarAlignStatus(state: PolarAlignStates.idle, lastResult: last);
+      PolarAlignStatus(state: state, lastResult: last);
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
@@ -358,7 +386,7 @@ void main() {
     live.stopped(zone: 'yellow');
     expect(c.read(nightPolarAlignStateProvider), SetupStepState.pending);
     expect(
-      (await c.read(polarAlignLastResultProvider.future))?.errorArcmin,
+      (await c.read(polarAlignLastResultProvider.future)).last?.errorArcmin,
       18,
     );
 
@@ -367,6 +395,119 @@ void main() {
     live.stopped();
     await c.read(polarAlignLastResultProvider.future);
     expect(c.read(nightPolarAlignStateProvider), SetupStepState.pending);
+  });
+
+  group('doneTonight', () {
+    ProviderContainer container(_StatusApi api) {
+      final c = ProviderContainer(
+        overrides: [
+          autofocusLiveProvider.overrideWith(_FocusLive.new),
+          polarAlignLiveProvider.overrideWith(_Live.new),
+          polarAlignApiProvider.overrideWithValue(api),
+        ],
+      );
+      addTearDown(c.dispose);
+      c.listen(doneTonightProvider, (_, _) {});
+      return c;
+    }
+
+    test(
+      'Focus: a run that finished tonight counts; a failed re-run clears it',
+      () {
+        final c = container(_StatusApi());
+        final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+        expect(
+          c.read(doneTonightProvider),
+          isNot(contains(SimpleModeScreen.focus)),
+        );
+        focus.put(_focusRun(AutofocusRunStates.complete));
+        expect(c.read(doneTonightProvider), contains(SimpleModeScreen.focus));
+        focus.put(_focusRun(AutofocusRunStates.failed));
+        expect(
+          c.read(doneTonightProvider),
+          isNot(contains(SimpleModeScreen.focus)),
+        );
+      },
+    );
+
+    test('Focus: a manual in-focus mark after the failed run counts again', () {
+      final c = container(_StatusApi());
+      final focus = c.read(autofocusLiveProvider.notifier) as _FocusLive;
+      focus.put(_focusRun(AutofocusRunStates.failed));
+      focus.markFocusedManually();
+      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.focus));
+      // The same failed run read again keeps the mark; a new run drops it.
+      final same = c.read(autofocusLiveProvider).run;
+      focus.put(applyRunSnapshot(c.read(autofocusLiveProvider), same));
+      expect(c.read(doneTonightProvider), contains(SimpleModeScreen.focus));
+      final next = AutofocusRun(
+        state: AutofocusRunStates.failed,
+        startedUtc: same.startedUtc!.add(const Duration(minutes: 5)),
+      );
+      focus.put(applyRunSnapshot(c.read(autofocusLiveProvider), next));
+      expect(c.read(autofocusLiveProvider).manualMarkSinceRun, isFalse);
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.focus)),
+      );
+    });
+
+    test('Polar align: a failed routine clears the tick though its zone stays green', () {
+      final c = container(_StatusApi());
+      final polar = c.read(polarAlignLiveProvider.notifier) as _Live;
+      polar.state = const PolarAlignLive(
+        phase: PolarAlignStates.checked,
+        zone: 'green',
+        stage: PolarAlignStages.fine,
+      );
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
+      polar.state = const PolarAlignLive(
+        phase: PolarAlignStates.failed,
+        zone: 'green',
+        stage: PolarAlignStages.fine,
+      );
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.polarAlign)),
+      );
+    });
+
+    test('Polar align after a relaunch: green tonight but the daemon says failed, live idle: no tick', () async {
+      final api = _StatusApi()
+        ..last = PolarAlignLastResult(
+          errorArcmin: 4,
+          completedUtc: DateTime.now().toUtc(),
+        );
+      final c = container(api);
+      await c.read(polarAlignLastResultProvider.future);
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
+
+      api.state = PolarAlignStates.failed;
+      c.invalidate(polarAlignLastResultProvider);
+      await c.read(polarAlignLastResultProvider.future);
+      expect(
+        c.read(doneTonightProvider),
+        isNot(contains(SimpleModeScreen.polarAlign)),
+      );
+
+      // A live phase other than idle wins over the fetched status.
+      (c.read(polarAlignLiveProvider.notifier) as _Live).state =
+          const PolarAlignLive(
+            phase: PolarAlignStates.checked,
+            zone: 'green',
+            stage: PolarAlignStages.fine,
+          );
+      expect(
+        c.read(doneTonightProvider),
+        contains(SimpleModeScreen.polarAlign),
+      );
+    });
   });
 
   // Falsified by: simple_preflight_state.dart _go, call startGuiding instead of startGuidingTracked.

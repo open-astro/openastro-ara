@@ -298,6 +298,53 @@ namespace OpenAstroAra.Test {
             Assert.That(aborted.Payload, Does.Contain("\"reason\":\"watchdog\""));
         }
 
+        // #2048 — Polar Align's own stop names itself in the abort's event; the reasonless overload stays Stop Mount's.
+        [TestCase("polar_align")]
+        [TestCase(null)]
+        [Category("bench")] // loopback-only, runs in the default job too
+        public async Task A_named_abort_publishes_slew_aborted_with_that_reason(string? reason) {
+            var slewingValue = "false";
+            await using var mount = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/slewing", StringComparison.Ordinal) ? Volatile.Read(ref slewingValue)
+                : path.EndsWith("/tracking", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/atpark", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/athome", StringComparison.Ordinal) ? "false"
+                : path.EndsWith("/rightascension", StringComparison.Ordinal) ? "5.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "20.0"
+                : null);
+            var ws = new PayloadRecordingBroadcaster();
+
+            using var svc = new TelescopeService(ws: ws) { RefreshPeriod = Tick };
+            var device = new DiscoveredDeviceDto(
+                UniqueId: "mount-under-test", Name: "Bench Mount", Type: DeviceType.Telescope,
+                HostName: mount.BaseUri.Host, IpAddress: mount.BaseUri.Host, IpPort: mount.BaseUri.Port,
+                AlpacaDeviceNumber: 0, UseHttps: false);
+            await svc.ConnectAsync(new ConnectRequestDto(device), idempotencyKey: null, CancellationToken.None);
+            await WaitForAsync(async () => (await svc.GetAsync(CancellationToken.None))?.State == EquipmentConnectionState.Connected,
+                TimeSpan.FromSeconds(15), "mount never connected");
+
+            Volatile.Write(ref slewingValue, "true");
+            await WaitForAsync(() => Task.FromResult(Array.Exists(ws.Snapshot(),
+                    e => e.Type == "telescope.slew_started")),
+                TimeSpan.FromSeconds(15), "slew_started never published");
+
+#pragma warning disable CA1859 // the abort goes through the interface the endpoints and Polar Align call
+            ITelescopeService service = svc;
+#pragma warning restore CA1859
+            if (reason is null) {
+                await service.AbortSlewAsync(CancellationToken.None);
+            } else {
+                await service.AbortSlewAsync(reason, CancellationToken.None);
+            }
+            Volatile.Write(ref slewingValue, "false");
+            await WaitForAsync(() => Task.FromResult(Array.Exists(ws.Snapshot(),
+                    e => e.Type == "telescope.slew_aborted")),
+                TimeSpan.FromSeconds(10), "slew_aborted never published");
+
+            var aborted = Array.Find(ws.Snapshot(), e => e.Type == "telescope.slew_aborted");
+            Assert.That(aborted.Payload, Does.Contain($"\"reason\":\"{reason ?? "user_request"}\""));
+        }
+
         private static async Task WaitForAsync(Func<Task<bool>> condition, TimeSpan timeout, string failure) {
             var deadline = DateTime.UtcNow + timeout;
             while (DateTime.UtcNow < deadline) {

@@ -19,7 +19,7 @@ namespace OpenAstroAra.Test {
 
     [TestFixture]
     public class HostPoweroffStarterTest {
-        private static readonly string[] ExpectedArgs = ["start", "--no-block", "openastroara-poweroff.service"];
+        private static readonly string[] ExpectedArgs = ["--no-ask-password", "start", "--no-block", "openastroara-poweroff.service"];
 
         private static (SystemctlHostPoweroffStarter Starter, List<(string File, string[] Args)> Calls) Make(int exit, string output) {
             var calls = new List<(string, string[])>();
@@ -31,7 +31,7 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task StartAsync_runs_exactly_systemctl_start_no_block_of_the_poweroff_unit() {
+        public async Task StartAsync_runs_exactly_systemctl_no_ask_password_start_no_block_of_the_poweroff_unit() {
             var (starter, calls) = Make(0, string.Empty);
 
             var result = await starter.StartAsync(CancellationToken.None);

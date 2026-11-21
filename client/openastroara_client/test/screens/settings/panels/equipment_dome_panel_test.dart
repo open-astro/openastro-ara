@@ -15,6 +15,9 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/dome_state.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/widgets/settings/section_load_state.dart';
+
+import '../../../support/fake_section_rig.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -34,15 +37,20 @@ class _FakeProfileApi extends ProfileApi {
   DomeSettings settings;
   final puts = <DomeSettings>[];
   @override
-  Future<DomeSettings> getDomeSettings() async => settings;
+  Future<({DomeSettings value, String? etag})> getDomeSection() async =>
+      (value: settings, etag: '"dome-v1"');
   @override
-  Future<DomeSettings> putDomeSettings(DomeSettings value) async {
+  Future<({DomeSettings value, String? etag})> putDomeSection(
+    DomeSettings value, {
+    String? ifMatch,
+  }) async {
     puts.add(value);
     final offset = value.scopePositionNorthSouthMm.abs();
     if (offset > value.domeRadiusMm) {
       throw StateError('The scope sits outside the dome');
     }
-    return settings = value;
+    settings = value;
+    return (value: value, etag: '"dome-v1"');
   }
 }
 
@@ -113,7 +121,7 @@ Future<void> _wideSurface(WidgetTester tester) async {
 Future<_FakeDomeApi> _pump(
   WidgetTester tester,
   DomeStatus? status, {
-  _FakeProfileApi? profile,
+  ProfileApi? profile,
   Locale? locale,
 }) async {
   // A working device's status blinks (DESIGN.md status rule) and never settles: Reduce Motion holds it.
@@ -284,6 +292,8 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Mount axis length (mm)'), findsNothing);
+    // A new scope loads the dome again: the first one's copy is kept while it lives.
+    await tester.pumpWidget(const SizedBox());
     await _pump(
       tester,
       _status(),
@@ -323,5 +333,54 @@ void main() {
     await _pump(tester, null);
     expect(find.text('No dome connected.'), findsOneWidget);
     expect(find.widgetWithText(TextButton, 'Connect…'), findsOneWidget);
+  });
+
+  testWidgets('no rig: the geometry shows not loaded and the auto-connect '
+      'switch is off and disabled', (tester) async {
+    await _pump(tester, _status());
+    expect(find.byType(SectionNotLoaded), findsOneWidget);
+    expect(find.text('Dome radius (mm)'), findsNothing);
+    final autoConnect = tester.widget<Switch>(
+      find.descendant(
+        of: find.bySemanticsLabel('Auto-connect on boot'),
+        matching: find.byType(Switch),
+      ),
+    );
+    expect(autoConnect.onChanged, isNull);
+    expect(autoConnect.value, isFalse);
+  });
+
+  testWidgets('a failed geometry load: text and Retry line up with the rows', (
+    tester,
+  ) async {
+    final rig = FakeSectionRig({
+      'dome': rigDefaults['dome'],
+      'equipment-connection': rigDefaults['equipment-connection'],
+    })..failGet.add('dome');
+    await _pump(tester, _status(), profile: rig.api());
+    final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
+    expect(
+      tester.getTopLeft(find.textContaining('Not loaded — these settings')).dx,
+      rowX,
+    );
+    expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);
+  });
+
+  testWidgets('a copy another device replaced: the edit is refused with a '
+      'reload, and nothing is written', (tester) async {
+    final rig = FakeSectionRig({'dome': rigDefaults['dome']});
+    await _pump(tester, _status(), profile: rig.api());
+    rig.savedElsewhere('dome');
+    final radius = _field('Dome radius (mm)');
+    await tester.scrollUntilVisible(
+      radius,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.enterText(radius, '1000');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(rig.puts, isEmpty);
+    expect(find.byType(SectionConflictBanner), findsOneWidget);
   });
 }

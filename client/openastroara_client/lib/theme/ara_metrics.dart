@@ -98,6 +98,10 @@ class AraFontSize {
   static const double monitorCountdown = 120;
   static const double monitorCountdownLong = 96;
   static const double monitorWord = 44;
+
+  /// Monitor's Conditions readings, the approved mock's cells: seven weather
+  /// readings and the Camera and focuser group fit one 244 pt tile (#2014).
+  static const double monitorCell = 18;
 }
 
 /// Simple Mode's caption: a tile's label, a window's secondary line.

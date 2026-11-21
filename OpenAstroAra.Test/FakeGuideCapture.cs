@@ -79,6 +79,9 @@ namespace OpenAstroAra.Test {
 
         public (int Width, int Height)? FrameSize { get; set; } = (1280, 960);
 
+        /// <summary>Runs inside each frame-size read: something that lands while a run waits on that RPC (#2066).</summary>
+        public Action? OnFrameSizeRead { get; set; }
+
         /// <summary>When set, waiting for the capture to be idle fails with this message.</summary>
         public string? CaptureBusy { get; set; }
 
@@ -184,6 +187,9 @@ namespace OpenAstroAra.Test {
         Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>
             Custody.TakeAsync(use, _port, stop, ct);
 
+        /// <summary>Guide pressed while a setup activity holds the camera: what GuiderService does before it guides.</summary>
+        public Task TakeForGuidingAsync() => Custody.TakeForGuidingAsync(_port, CancellationToken.None);
+
         public Task WaitForCaptureIdleAsync(CancellationToken ct) {
             Interlocked.Increment(ref _idleWaits);
             return CaptureBusy is { } message ? Task.FromException(new InvalidOperationException(message)) : Task.CompletedTask;
@@ -196,6 +202,7 @@ namespace OpenAstroAra.Test {
 
         public Task<(int Width, int Height)?> GetCameraFrameSizeAsync(CancellationToken ct) {
             Interlocked.Increment(ref _frameSizeReads);
+            OnFrameSizeRead?.Invoke();
             return Task.FromResult(FrameSize);
         }
 

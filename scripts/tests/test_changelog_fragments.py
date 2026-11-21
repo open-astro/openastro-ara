@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for scripts/changelog-fragments.py (#1812).
+"""Tests for scripts/changelog-fragments.py (#1812; versions and --bump #2093).
 
 Run from the repo root:
 
@@ -73,7 +73,7 @@ class CheckTest(FragmentTestCase):
         self.assertRefused("fix-Issue-12.md", GOOD, "expected 'fix-issue-12.md'")
 
     def test_a_version_heading_is_refused(self):
-        self.assertRefused("a.md", "## [0.0.1-ara.1] - 2026-01-01\n### Fixed\n- x\n", "no '#' or '##' heading")
+        self.assertRefused("a.md", "## [1.0.0] - 2026-01-01\n### Fixed\n- x\n", "no '#' or '##' heading")
 
     def test_an_unknown_category_is_refused(self):
         self.assertRefused("a.md", "### Fixes\n- x\n", "unknown category '### Fixes'")
@@ -124,7 +124,7 @@ class PreviewTest(FragmentTestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(
             r.stdout,
-            "## [Unreleased]\n\n"
+            "## [1.0.0]\n\n"
             "### Breaking changes\n- **c break**\n\n"
             "### Added\n- **a add**\n\n"
             "### Added (calibration)\n- **b cal**\n\n"
@@ -136,12 +136,12 @@ class PreviewTest(FragmentTestCase):
         self.t.fragment("a.md", "### Fixed\n- **x**\n\nsecond paragraph\n")
         r = self.t.run("--preview")
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertEqual(r.stdout, "## [Unreleased]\n\n### Fixed\n- **x**\n\nsecond paragraph\n")
+        self.assertEqual(r.stdout, "## [0.0.1]\n\n### Fixed\n- **x**\n\nsecond paragraph\n")
 
     def test_preview_consumes_nothing(self):
         p = self.t.fragment("a.md", GOOD)
-        r = self.t.run("--preview", "--version", "0.0.1-ara.1")
-        self.assertTrue(r.stdout.startswith("## [0.0.1-ara.1]\n"), r.stdout)
+        r = self.t.run("--preview", "--version", "1.0.0~beta1")
+        self.assertTrue(r.stdout.startswith("## [1.0.0~beta1]\n"), r.stdout)
         self.assertTrue(p.exists())
         self.assertEqual(self.t.changelog.read_text(), "# Changelog\n")
 
@@ -154,51 +154,51 @@ class ReleaseTest(FragmentTestCase):
     def test_the_first_release_goes_above_the_pre_release_history(self):
         self.t.changelog.write_text(HEADER + HISTORY)
         p = self.t.fragment("a.md", "### Fixed\n- **x**\n")
-        r = self.t.run("--release", "0.0.1-ara.1", "--date", "2026-12-01")
+        r = self.t.run("--release", "1.0.0", "--date", "2026-12-01")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(
             self.t.changelog.read_text(),
-            HEADER + "## [0.0.1-ara.1] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY,
+            HEADER + "## [1.0.0] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY,
         )
         self.assertFalse(p.exists())
         self.assertTrue((self.t.fragments / "README.md").exists())
 
     def test_the_previous_release_is_collapsed(self):
-        self.t.changelog.write_text(HEADER + "## [0.0.1-ara.1] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY)
+        self.t.changelog.write_text(HEADER + "## [1.0.0] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY)
         self.t.fragment("a.md", "### Added\n- **y**\n")
-        r = self.t.run("--release", "0.0.1-ara.2", "--date", "2026-12-20")
+        r = self.t.run("--release", "1.1.0", "--date", "2026-12-20")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(
             self.t.changelog.read_text(),
             HEADER
-            + "## [0.0.1-ara.2] - 2026-12-20\n\n### Added\n- **y**\n\n"
-            + "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
+            + "## [1.1.0] - 2026-12-20\n\n### Added\n- **y**\n\n"
+            + "<details>\n<summary><strong>[1.0.0] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
             + HISTORY,
         )
 
     def test_the_third_release_collapses_only_the_second(self):
-        ara1 = "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
-        ara2 = "<details>\n<summary><strong>[0.0.1-ara.2] - 2026-12-20</strong></summary>\n\n### Added\n- **y**\n\n</details>\n\n"
-        self.t.changelog.write_text(HEADER + "## [0.0.1-ara.2] - 2026-12-20\n\n### Added\n- **y**\n\n" + ara1 + HISTORY)
+        rel1 = "<details>\n<summary><strong>[1.0.0] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n"
+        rel2 = "<details>\n<summary><strong>[1.1.0] - 2026-12-20</strong></summary>\n\n### Added\n- **y**\n\n</details>\n\n"
+        self.t.changelog.write_text(HEADER + "## [1.1.0] - 2026-12-20\n\n### Added\n- **y**\n\n" + rel1 + HISTORY)
         self.t.fragment("a.md", "### Fixed\n- **z**\n")
-        r = self.t.run("--release", "0.0.1-ara.3", "--date", "2027-01-10")
+        r = self.t.run("--release", "1.1.1", "--date", "2027-01-10")
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(
             self.t.changelog.read_text(),
-            HEADER + "## [0.0.1-ara.3] - 2027-01-10\n\n### Fixed\n- **z**\n\n" + ara2 + ara1 + HISTORY,
+            HEADER + "## [1.1.1] - 2027-01-10\n\n### Fixed\n- **z**\n\n" + rel2 + rel1 + HISTORY,
         )
 
     def test_a_collapsed_release_counts_as_released(self):
-        before = HEADER + "<details>\n<summary><strong>[0.0.1-ara.1] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n" + HISTORY
+        before = HEADER + "<details>\n<summary><strong>[1.0.0] - 2026-12-01</strong></summary>\n\n### Fixed\n- **x**\n\n</details>\n\n" + HISTORY
         self.t.changelog.write_text(before)
         self.t.fragment("a.md", GOOD)
-        r = self.t.run("--release", "0.0.1-ara.1", "--date", "2026-12-20")
+        r = self.t.run("--release", "1.0.0", "--date", "2026-12-20")
         self.assertNotEqual(r.returncode, 0)
         self.assertIn("already released", r.stderr)
         self.assertEqual(self.t.changelog.read_text(), before)
 
     def assertReleaseRefused(self, version: str, date: str, words: str, body: str = GOOD):
-        before = HEADER + "## [0.0.1-ara.1] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY
+        before = HEADER + "## [1.0.0] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY
         self.t.changelog.write_text(before)
         p = self.t.fragment("a.md", body)
         r = self.t.run("--release", version, "--date", date)
@@ -207,26 +207,83 @@ class ReleaseTest(FragmentTestCase):
         self.assertEqual(self.t.changelog.read_text(), before)
         self.assertTrue(p.exists())
 
-    def test_a_version_outside_the_ara_convention_is_refused(self):
-        self.assertReleaseRefused("1.2.3", "2026-12-20", "not an Ara release version")
+    def test_the_retired_ara_form_is_refused(self):
+        self.assertReleaseRefused("0.0.1-ara.2", "2026-12-20", "the X.Y.Z-ara.N form is retired")
+
+    def test_a_beta_is_refused(self):
+        self.assertReleaseRefused("1.0.1~beta1", "2026-12-20", "a beta is not released this way")
+
+    def test_a_version_below_the_bump_is_refused(self):
+        self.assertReleaseRefused("1.0.1", "2026-12-20", "below the proposed bump 1.1.0", body="### Added\n- **x**\n")
+
+    def test_a_version_below_the_latest_release_is_refused(self):
+        self.assertReleaseRefused("0.9.0", "2026-12-20", "not greater than the latest dated release 1.0.0")
 
     def test_a_malformed_date_is_refused(self):
-        self.assertReleaseRefused("0.0.1-ara.2", "20-12-2026", "not a YYYY-MM-DD date")
+        self.assertReleaseRefused("1.0.1", "20-12-2026", "not a YYYY-MM-DD date")
 
     def test_an_impossible_date_is_refused(self):
-        self.assertReleaseRefused("0.0.1-ara.2", "2026-02-30", "not a real date")
+        self.assertReleaseRefused("1.0.1", "2026-02-30", "not a real date")
 
     def test_a_version_already_released_is_refused(self):
-        self.assertReleaseRefused("0.0.1-ara.1", "2026-12-20", "already released")
+        self.assertReleaseRefused("1.0.0", "2026-12-20", "already released")
 
     def test_an_invalid_fragment_stops_the_release(self):
-        self.assertReleaseRefused("0.0.1-ara.2", "2026-12-20", "fix the fragments first", body="### Fixes\n- x\n")
+        self.assertReleaseRefused("1.0.1", "2026-12-20", "fix the fragments first", body="### Fixes\n- x\n")
 
     def test_nothing_to_release_is_refused(self):
         self.t.changelog.write_text(HEADER + HISTORY)
-        r = self.t.run("--release", "0.0.1-ara.1", "--date", "2026-12-01")
+        r = self.t.run("--release", "1.0.0", "--date", "2026-12-01")
         self.assertEqual(r.returncode, 1)
         self.assertIn("nothing to release", r.stderr)
+
+
+class BumpTest(FragmentTestCase):
+    RELEASED = HEADER + "## [1.2.0] - 2026-12-01\n\n### Fixed\n- **x**\n\n" + HISTORY
+
+    def bump(self, *args: str) -> str:
+        r = self.t.run("--bump", *args)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return r.stdout.strip()
+
+    def test_breaking_is_major_added_minor_anything_else_patch(self):
+        self.t.changelog.write_text(self.RELEASED)
+        for body, want in (("### Fixed\n- x\n", "1.2.1"), ("### Added (tests)\n- x\n", "1.2.1"),
+                           ("### Added\n- x\n", "1.3.0"), ("### Breaking changes\n- x\n", "2.0.0")):
+            self.t.fragment("a.md", body)
+            self.assertEqual(self.bump(), want, body)
+
+    def test_the_version_is_a_floor_and_a_beta_counts_as_its_base(self):
+        self.t.changelog.write_text(self.RELEASED)
+        self.t.fragment("a.md", "### Fixed\n- x\n")
+        self.assertEqual(self.bump("--version", "1.5.0~beta2"), "1.5.0")
+        (self.t.root / "VERSION").write_text("1.4.0\n")
+        self.assertEqual(self.bump(), "1.4.0")
+
+    def test_before_the_first_release_a_stable_version_file_is_the_start(self):
+        self.t.changelog.write_text(HEADER + HISTORY)
+        (self.t.root / "VERSION").write_text("0.0.1\n")
+        self.t.fragment("a.md", "### Fixed\n- x\n")
+        self.assertEqual(self.bump(), "0.0.2")
+        self.t.fragment("a.md", "### Added\n- x\n")
+        self.assertEqual(self.bump(), "0.1.0")
+        self.t.fragment("a.md", "### Breaking changes\n- x\n")
+        self.assertEqual(self.bump(), "1.0.0")
+
+    def test_a_malformed_version_is_a_usage_error(self):
+        self.t.fragment("a.md", GOOD)
+        r = self.t.run("--bump", "--version", "0.0.1-ara.1")
+        self.assertEqual(r.returncode, 2)
+        self.assertIn("is not X.Y.Z or X.Y.Z~betaN", r.stderr)
+
+    def test_is_beta_exit_codes(self):
+        for v, rc in (("1.0.0~beta1", 0), ("1.0.0", 1), ("1.0.0~beta0", 2), ("0.0.1-ara.1", 2)):
+            self.assertEqual(self.t.run("--is-beta", v).returncode, rc, v)
+
+    def test_self_test_passes(self):
+        r = subprocess.run([sys.executable, str(SCRIPT), "--self-test"], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("changelog-fragments self-test OK", r.stdout)
 
 
 if __name__ == "__main__":

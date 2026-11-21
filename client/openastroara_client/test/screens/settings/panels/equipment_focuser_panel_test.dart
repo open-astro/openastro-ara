@@ -14,6 +14,7 @@ import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/equipment/focuser_state.dart';
 import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/settings/advanced_settings_state.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   _FakeSavedServerService(this._stored);
@@ -158,6 +159,8 @@ Future<_FakeFocuserApi> _pump(
           _FakeSavedServerService(const [AraServer(hostname: 'h', port: 5555)]),
         ),
         focuserApiFactoryProvider.overrideWithValue((_) => api),
+        // #2036: the switch rules in Simple Mode only.
+        simpleModeActiveProvider.overrideWithValue(true),
         advancedSettingsProvider.overrideWith(() => _Advanced(advanced)),
         autofocusApiFactoryProvider.overrideWithValue(
           (_) => autofocus ?? _FakeAutofocusApi(),

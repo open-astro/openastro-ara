@@ -6,23 +6,33 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/screens/simple/simple_polar_panel.dart';
+import 'package:openastroara/screens/simple/simple_shell.dart';
+import 'package:openastroara/services/simple_mode_prefs_service.dart';
+import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/guider/guide_step_state.dart';
+import 'package:openastroara/state/rig_setup_state.dart';
+import 'package:openastroara/state/server_state.dart';
+import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/simple_mode_state.dart';
+import 'package:openastroara/state/sky_atlas/planetarium_selection_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
+import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/simple/simple_preview_panel.dart';
 import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
 
+import '../../support/polar_align_section.dart';
+
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<PolarAlignSettings> getSettings() async => const PolarAlignSettings(targetToleranceArcmin: 2);
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => next;
-  @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -98,6 +108,9 @@ Future<_Aligner> _pump(WidgetTester tester, PolarAlignLive live, {PolarAligner? 
   await tester.pumpWidget(ProviderScope(
     overrides: [
       polarAlignApiProvider.overrideWithValue(_Api()),
+      // The profile's section: the rig's copy, a 2′ tolerance (ADR 0015).
+      ...polarAlignSectionOverrides(
+          FakePolarAlignSection(initial: rigPolarAlign.copyWith(targetToleranceArcmin: 2), loaded: true)),
       polarAlignerApiProvider.overrideWithValue(aligner),
       polarAlignLiveProvider.overrideWith(() => _liveNotifier),
     ],
@@ -183,7 +196,7 @@ void main() {
     expect(_key('simple-polar-done'), findsOneWidget);
   });
 
-  testWidgets('the rough stage keeps Next: fine but its Done steps aside while the motors work', (tester) async {
+  testWidgets("the rough stage's Done steps aside while the motors work", (tester) async {
     await _pump(
         tester,
         const PolarAlignLive(
@@ -194,8 +207,18 @@ void main() {
           totalErrorArcmin: 0.7,
           correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
         ));
-    expect(_key('simple-polar-next-fine'), findsOneWidget);
+    expect(_key('simple-polar-next-fine'), findsNothing, reason: 'one measurement per Start (#2082)');
     expect(_key('simple-polar-done-rough'), findsNothing);
+    _liveNotifier.set(const PolarAlignLive(
+      phase: PolarAlignStates.adjusting,
+      stage: PolarAlignStages.coarse,
+      altErrorArcmin: 0.5,
+      azErrorArcmin: 0.5,
+      totalErrorArcmin: 0.7,
+      correction: PolarAlignerRun(state: 'converged', moves: 2),
+    ));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-done-rough'), findsOneWidget, reason: 'back once the motors rest');
   });
 
   testWidgets('Stop motors in the panel stops them in the routine', (tester) async {
@@ -224,4 +247,70 @@ void main() {
     expect(c.calls, ['home']);
     expect(find.text('no Polar Aligner is connected'), findsOneWidget);
   });
+
+  testWidgets('Devices has no Polar Aligner row while the daemon finds none', (tester) async {
+    await _pumpDevices(tester, const PolarAligner());
+    expect(find.byKey(const Key('simple-gear')), findsOneWidget);
+    expect(find.textContaining('Polar Aligner'), findsNothing);
+    expect(_key('simple-gear-polaraligner-turned-by'), findsNothing);
+  });
+
+  testWidgets('Devices has a Polar Aligner row once the daemon finds one', (tester) async {
+    await _pumpDevices(tester, _base);
+    expect(find.text('Polar Aligner · Polar base'), findsOneWidget);
+  });
+}
+
+class _MemPrefs extends SimpleModePrefsService {
+  @override
+  Future<bool> load() async => true;
+  @override
+  Future<void> save(bool enabled) async {}
+}
+
+class _StartOnLive extends SelectedTabIndexNotifier {
+  @override
+  int build() => kLiveTabIndex;
+}
+
+class _SkyReady extends PlanetariumReadyNotifier {
+  @override
+  bool build() => true;
+}
+
+class _NoSteps extends GuideStepNotifier {
+  @override
+  List<GuideStep> build() => const [];
+}
+
+/// Settings > Devices with the daemon reporting [device] for the Polar Aligner.
+Future<void> _pumpDevices(WidgetTester tester, PolarAligner device) async {
+  tester.view.physicalSize = const Size(1024, 768);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        simpleModePrefsProvider.overrideWithValue(_MemPrefs()),
+        serverLinkUpProvider.overrideWithValue(true),
+        discoveredServersProvider.overrideWith(
+          (ref) => const Stream<AraServer>.empty(),
+        ),
+        rigSetupHydratedProvider.overrideWith((ref) async => false),
+        selectedTabIndexProvider.overrideWith(_StartOnLive.new),
+        planetariumReadyProvider.overrideWith(_SkyReady.new),
+        guideStepsProvider.overrideWith(_NoSteps.new),
+        polarAlignerApiProvider.overrideWithValue(_Aligner(device)),
+        polarAlignApiProvider.overrideWithValue(_Api()),
+      ],
+      child: MaterialApp(
+        home: const SimpleShell(planetarium: SizedBox(key: Key('sky'))),
+      ),
+    ),
+  );
+  await tester.pump();
+  await tester.tap(find.byTooltip('Settings'));
+  await tester.pump();
+  await tester.tap(find.byKey(const Key('simple-menu-nav-Devices')));
+  await tester.pumpAndSettle();
 }

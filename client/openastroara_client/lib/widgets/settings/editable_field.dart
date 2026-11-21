@@ -93,11 +93,13 @@ class _EditableTextRowState extends State<EditableTextRow> {
                   // instead of overflowing past the help icon (#1306 panel
                   // tests surfaced it on the guider rows).
                   Flexible(
-                    child: Text(
-                      widget.label,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: AraColors.textSecondary,
-                          ),
+                    // The field carries the label as its name (below).
+                    child: ExcludeSemantics(
+                      child: Text(
+                        widget.label,
+                        style: Theme.of(context).textTheme.bodyMedium
+                            ?.copyWith(color: AraColors.textSecondary),
+                      ),
                     ),
                   ),
                   if (widget.helpKey != null) HelpIcon(helpKey: widget.helpKey!),
@@ -106,15 +108,20 @@ class _EditableTextRowState extends State<EditableTextRow> {
             ),
           ),
           Expanded(
-            child: TextField(
-              controller: _controller,
-              focusNode: _focusNode,
-              maxLines: widget.maxLines,
-              decoration: InputDecoration(
-                isDense: true,
-                hintText: widget.hint,
+            // TextField builds its own text-field node; a Semantics parent
+            // without `container` merges the label into it: one node.
+            child: Semantics(
+              label: widget.label,
+              child: TextField(
+                controller: _controller,
+                focusNode: _focusNode,
+                maxLines: widget.maxLines,
+                decoration: InputDecoration(
+                  isDense: true,
+                  hintText: widget.hint,
+                ),
+                onSubmitted: (_) => _commit(),
               ),
-              onSubmitted: (_) => _commit(),
             ),
           ),
         ],
@@ -178,33 +185,41 @@ class SettingsDropdownRow<T> extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      child: Row(children: [
-        SizedBox(
-          width: 280,
-          child: Row(
-            children: [
-              Flexible(
-                child: Text(label,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: AraColors.textSecondary,
-                        )),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 280,
+            child: Row(
+              children: [
+                Flexible(
+                  child: ExcludeSemantics(
+                    child: Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodyMedium
+                          ?.copyWith(color: AraColors.textSecondary),
+                    ),
+                  ),
+                ),
+                if (helpKey != null) HelpIcon(helpKey: helpKey!),
+              ],
+            ),
+          ),
+          Expanded(
+            child: Semantics(
+              label: label,
+              child: DropdownButtonFormField<T>(
+                initialValue: value,
+                isDense: true,
+                items: [
+                  for (final e in items.entries)
+                    DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
+                ],
+                onChanged: onChanged,
               ),
-              if (helpKey != null) HelpIcon(helpKey: helpKey!),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: DropdownButtonFormField<T>(
-            initialValue: value,
-            isDense: true,
-            items: [
-              for (final e in items.entries)
-                DropdownMenuItem<T>(value: e.key, child: Text(e.value)),
-            ],
-            onChanged: onChanged,
-          ),
-        ),
-      ]),
+        ],
+      ),
     );
   }
 }
@@ -218,7 +233,9 @@ class SettingsDropdownRow<T> extends StatelessWidget {
 class SettingsSwitchRow extends StatelessWidget {
   final String label;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// Null disables the switch (a section that is not loaded yet).
+  final ValueChanged<bool>? onChanged;
   final String? hint;
   final String? helpKey;
   const SettingsSwitchRow({

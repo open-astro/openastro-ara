@@ -87,6 +87,13 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
     internal Func<DiscoveredDeviceDto, ICameraDevice> DeviceFactory { init => _createDevice = value; }
 
     private readonly CoolingDriftMonitor _coolingDrift = new();
+    // #2076 — a cooler Ara switched on that never responds (no 12 V). Guarded by _gate.
+    private readonly CoolerResponseWatch _coolerResponse = new();
+    private Func<DateTimeOffset> _clock = () => DateTimeOffset.UtcNow;
+
+    /// <summary>Test seam: the wall clock the #2076 cooler-response watch reads, so a bench test
+    /// does not wait its one-minute window. Init-only; never used by the daemon.</summary>
+    internal Func<DateTimeOffset> Clock { init => _clock = value; }
 
     // Cooler writes run one at a time under this lock, and every cooler-off bumps _coolerOffs,
     // so a cancelled ramp's hold can tell an off (Emergency Stop, the REST control) landed
@@ -519,6 +526,15 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                         client.SetCCDTemperature = target;
                     }
                     client.CoolerOn = enabled;
+                    // #2076 — remember that the cooler was commanded on (only the off→on edge arms
+                    // the watch, so a ramp's 15 s re-sends do not restart its window) or off
+                    // (disarms it). Inside the write gate, so the watch sees commands in the order
+                    // the camera did: recorded after the gate, an Emergency Stop's off could land
+                    // before an in-flight ramp step's on and leave the watch armed on a cooler
+                    // that was switched off, which then warns "12 V?" a minute later.
+                    lock (_gate) {
+                        _coolerResponse.Command(enabled);
+                    }
                 }
             }, CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
@@ -1482,7 +1498,9 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
             // in a shared frame reveal where someone lives.
             var prefs = ReadHeaderPrefsBestEffort();
 
-            fits.SetHeader("SWCREATE", FrameAlbumFields.AraSoftware, "capture software");
+            // Name and display version (#2093), as the library FITS/XISF writers spell it; the album
+            // matches the name prefix (FrameAlbumFields.FromHeaders).
+            fits.SetHeader("SWCREATE", $"{FrameAlbumFields.AraSoftware} {OpenAstroAra.Core.Utility.CoreUtil.Version}", "capture software");
             if (!string.IsNullOrWhiteSpace(targetName) && targetName != ManualCaptureTarget) {
                 fits.SetHeader("OBJECT", targetName!, "target name");
             }
@@ -1934,9 +1952,16 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         var runtime = ReadRuntime(client, _heatSink, out var readError);
         var caps = needCaps ? ReadCapabilities(client) : null;
         var driftVerdict = CoolingDriftVerdict.Idle;
+        var responseVerdict = CoolerResponseVerdict.Idle;
+        var responseSymptom = CoolerResponseSymptom.None;
         DiscoveredDeviceDto? watchedDevice = null;
         return new DeviceRead(readError,
             CommitLocked: () => {
+                // #2076 — the cooler-response watch, on the same commit lock as the drift monitor.
+                responseVerdict = _coolerResponse.Observe(runtime.CoolerOn, runtime.CoolerStateKnown,
+                    runtime.CoolerPowerPct, runtime.CcdTemperature, runtime.CoolerSetpointC, _clock());
+                responseSymptom = _coolerResponse.Symptom;
+                runtime = runtime with { CoolerNotResponding = _coolerResponse.NotResponding };
                 _runtime = runtime;
                 if (caps is not null) {
                     _capabilities = caps;
@@ -1961,6 +1986,11 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
                 } else if (driftVerdict == CoolingDriftVerdict.Recovered) {
                     LogCoolingRecovered(watchedDevice?.Name ?? "?");
                 }
+                if (responseVerdict == CoolerResponseVerdict.NotResponding) {
+                    PublishCoolerNotResponding(watchedDevice, responseSymptom, runtime);
+                } else if (responseVerdict == CoolerResponseVerdict.Recovered) {
+                    LogCoolerResponding(watchedDevice?.Name ?? "?");
+                }
                 // §36/§25.5: the first caps read after a connect carries the camera's sensor geometry —
                 // cache it into the profile's optics section so the Planning Frame FOV works without the
                 // user typing it (and re-cache on a swapped camera). Outside the lock: it does profile IO.
@@ -1976,6 +2006,7 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
         _capabilities = null;       // re-read for the new device
         _runtime = IdleRuntime;     // don't serve a prior device's runtime
         _coolingDrift.Reset();      // §42.2 — no drift accumulation carries across sessions
+        _coolerResponse.Reset();    // #2076 — nor a cooler-on command
         _heatSink.Reset();          // a new driver may implement HeatSinkTemperature (#1185)
         ClearSessionStackForNewSession(); // ↑ara#1787 — the old camera's session stack (the switch stays on)
     }
@@ -2306,6 +2337,54 @@ public sealed partial class CameraService : ICameraService, IRetainedDeviceSourc
 
     [LoggerMessage(Level = Microsoft.Extensions.Logging.LogLevel.Information, Message = "Camera '{Device}' cooler back within band — drift monitor re-armed (§42.2)")]
     private partial void LogCoolingRecovered(string device);
+
+    /// <summary>#2076 — the one warning per episode, from the refresh pass or from a Cool Camera
+    /// step that counted the minute first. Notify-only: ValueMismatch is "a commanded value read
+    /// back wrong", a Warning with no retry, pause or escalation (FaultPolicyMatrix,
+    /// OpFaultEscalator). Nothing re-sends the cooler write.</summary>
+    private void PublishCoolerNotResponding(DiscoveredDeviceDto? device, CoolerResponseSymptom symptom, CameraStateDto runtime) {
+        var detail = CoolerNotRespondingDetail(symptom, runtime);
+        LogCoolerNotResponding(device?.Name ?? "?", detail);
+        _faults?.Publish(new EquipmentFaultEvent(DeviceType.Camera,
+            device?.UniqueId, device?.Name, EquipmentFaultKind.ValueMismatch,
+            detail, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>#2076 — a Cool Camera step is about to fail because CoolerOn read off for the
+    /// minute: warn first, unless the refresh pass already did for this episode.</summary>
+    private void ReportCoolerNotRespondingFromStep() {
+        DiscoveredDeviceDto? device;
+        CameraStateDto runtime;
+        lock (_gate) {
+            if (!_coolerResponse.ReportReadsOff(_runtime.CcdTemperature)) {
+                return;
+            }
+            _runtime = _runtime with { CoolerNotResponding = true };
+            runtime = _runtime;
+            device = _lifecycle.Device;
+        }
+        PublishCoolerNotResponding(device, CoolerResponseSymptom.ReadsOff, runtime);
+    }
+
+    /// <summary>#2076 — the warning sentence, with the symptom that fired it.</summary>
+    internal static string CoolerNotRespondingDetail(CoolerResponseSymptom symptom, CameraStateDto runtime) {
+        var minutes = CoolerResponseWatch.DefaultWindow.TotalMinutes;
+        var why = symptom == CoolerResponseSymptom.NoPower
+            ? string.Create(CultureInfo.InvariantCulture,
+                $"the cooler reads on at {runtime.CoolerPowerPct ?? 0:0} % power with the sensor at {runtime.CcdTemperature ?? double.NaN:0.0} °C vs set-point {runtime.CoolerSetpointC ?? double.NaN:0.0} °C for {minutes:0} min")
+            : string.Create(CultureInfo.InvariantCulture,
+                $"CoolerOn still reads off {minutes:0} min after it was switched on");
+        return $"{CoolerNotRespondingSentence} ({why})";
+    }
+
+    /// <summary>#2076 — the one user-facing sentence (the client's pill says the same).</summary>
+    internal const string CoolerNotRespondingSentence = "Cooler not responding: is the camera's 12 V connected?";
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Camera '{Device}': {Detail} — #2076 fault published; the cooler write is not retried")]
+    private partial void LogCoolerNotResponding(string device, string detail);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Camera '{Device}' cooler responds again — cooler-response watch re-armed (#2076)")]
+    private partial void LogCoolerResponding(string device);
 
     public void Dispose() {
         if (Interlocked.Exchange(ref _disposeStarted, 1) == 1) {

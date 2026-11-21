@@ -29,6 +29,8 @@ import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/util/slew_rates.dart';
 import 'package:openastroara/widgets/status_indicator.dart' show StatusBlink;
 
+import '../../support/safety_section.dart';
+
 /// #1649 / #1650 — Simple Mode's Mount window moves the mount by hand and
 /// checks where it points. Fakes record what the rig is asked.
 class _Mount extends MountNotifier {
@@ -160,6 +162,7 @@ Map<String, dynamic> _wire({
   bool home = true,
   bool rates = true,
   String? trackingRate = 'Sidereal',
+  bool unverified = false,
 }) => {
   'device_id': 'm',
   'name': 'EQ6-R',
@@ -184,6 +187,7 @@ Map<String, dynamic> _wire({
     'tracking': !parked,
     'parked': parked,
     'at_home': atHome,
+    'position_unverified': unverified,
     'right_ascension_hours': 0.712,
     'declination_degrees': 41.27,
     'tracking_rate': ?trackingRate,
@@ -213,6 +217,8 @@ Future<(ProviderContainer, _Mount, _Solver, _Centre)> _pump(
       if (imaging) sequenceRunStateProvider.overrideWith(_Imaging.new),
       simpleModeActiveProvider.overrideWithValue(true),
       simpleRunProvider.overrideWith(_Run.new),
+      // The meridian flip row reads the rig's copy of the policies.
+      safetyFromRig(),
     ],
   );
   addTearDown(c.dispose);
@@ -597,6 +603,16 @@ void main() {
       expect(find.text('Position · At home'), findsOneWidget);
       expect(find.byKey(const Key('simple-mount-park-home')), findsNothing, reason: 'Parked / Unparked only');
       expect(c.read(simpleMountHomeProvider), isFalse);
+    });
+
+    testWidgets('an unverified Home is no Home: the row says Position and the pad centre sends nothing (#2070)', (tester) async {
+      final (_, mount, _, _) = await _pump(tester, _wire(atHome: true, runtime: 'idle', unverified: true));
+      expect(find.text('Position · At home'), findsNothing, reason: 'the mount reports Home wherever it points');
+      expect(find.text('Position'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-mount-pad-home')));
+      await tester.pump();
+      expect(mount.calls, isEmpty, reason: 'Home by the mount model is refused while unverified');
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('Parking… blinks green, as Finding home… does', (tester) async {

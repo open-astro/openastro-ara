@@ -376,7 +376,14 @@ void main() {
     await _pump(tester, null, policyLoadFails: true);
     final rowX = tester.getTopLeft(find.text('Auto-connect on boot')).dx;
     expect(
-      tester.getTopLeft(find.textContaining('Not loaded — these settings')).dx,
+      tester
+          .getTopLeft(
+            find.descendant(
+              of: find.byType(SectionNotLoaded),
+              matching: find.textContaining('Not loaded — these settings'),
+            ),
+          )
+          .dx,
       rowX,
     );
     expect(tester.getTopLeft(find.byKey(const Key('section-retry'))).dx, rowX);

@@ -9,7 +9,7 @@ import '../../../state/settings/safety_policies_state.dart';
 import '../../../theme/ara_colors.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/equipment/equipment_time_format.dart';
-import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
 
 /// §37.4 Safety Monitor panel. Shows the device's live `is_safe` reading +
@@ -20,9 +20,9 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final connection = ref.watch(equipmentConnectionProvider);
-    final policies = ref.watch(safetyPoliciesProvider);
-    final n = ref.read(equipmentConnectionProvider.notifier);
+    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
+    final policies =
+        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
     final status = ref.watch(safetyMonitorProvider);
     final notifier = ref.read(safetyMonitorProvider.notifier);
 
@@ -42,13 +42,7 @@ class EquipmentSafetyMonitorPanel extends ConsumerWidget {
           onRetry: notifier.refresh,
           connectedBody: (context, s) => _SafetyBody(status: s),
         ),
-        SettingsSwitchRow(
-          label: 'Auto-connect on boot',
-          helpKey: 'eq.auto_connect_on_boot',
-          value: connection.autoConnect(EquipmentDeviceType.safetyMonitor),
-          onChanged: (v) =>
-              n.setAutoConnect(EquipmentDeviceType.safetyMonitor, v),
-        ),
+        AutoConnectRow(EquipmentDeviceType.safetyMonitor),
         const SettingsSectionHeader('Behavior'),
         SettingsRow(
           label: 'On unsafe',

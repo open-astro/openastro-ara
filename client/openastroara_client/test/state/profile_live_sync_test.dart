@@ -5,27 +5,38 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/models/server.dart';
-import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/services/profile_cache_service.dart';
-import 'package:openastroara/state/polar_align/polar_align_routine_state.dart';
-import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/profile_cache_state.dart';
 import 'package:openastroara/state/profile_live_sync.dart';
 import 'package:openastroara/state/profile_management_state.dart';
 import 'package:openastroara/state/settings/cooling_fan_state.dart';
 import 'package:openastroara/state/settings/dome_settings_state.dart';
 import 'package:openastroara/state/settings/filter_wheel_labels_state.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
+
+import '../support/fake_section_rig.dart';
+import '../support/section_load.dart';
 
 /// The rig's profile endpoints, as far as this test needs: the site section
 /// (whatever name it currently holds), the profile list, and any other
 /// section's stored JSON in [stored].
 class _Rig implements HttpClientAdapter {
-  String siteName = 'Backyard';
+  /// The site name the rig holds; setting it is another device's save, so
+  /// the copy's tag moves too.
+  String get siteName => _siteName;
+  set siteName(String name) {
+    _siteName = name;
+    siteVersion++;
+  }
+
+  String _siteName = 'Backyard';
   int siteReads = 0;
+
+  /// The site copy's version, served as its `ETag`; each write moves it.
+  int siteVersion = 1;
 
   /// Other sections' JSON by request path, and how often each path was read.
   final stored = <String, Object>{};
@@ -59,9 +70,12 @@ class _Rig implements HttpClientAdapter {
       reads.update(options.path, (n) => n + 1, ifAbsent: () => 1);
     }
     Object body;
-    if (options.path.endsWith('/profile/site')) {
+    final site = options.path.endsWith('/profile/site');
+    if (site) {
       if (options.method == 'GET') siteReads++;
-      body = {'site_name': siteName};
+      if (options.method != 'GET' && status == 200) siteVersion++;
+      // The whole section, as the rig serves it (ADR 0015: no client default).
+      body = {...rigDefaults['site']!, 'site_name': siteName};
     } else if (options.path.endsWith('/profiles')) {
       body = {'active_id': null, 'profiles': <Object>[]};
     } else {
@@ -72,6 +86,7 @@ class _Rig implements HttpClientAdapter {
       status,
       headers: {
         Headers.contentTypeHeader: [Headers.jsonContentType],
+        if (site) 'etag': ['"site-v$siteVersion"'],
       },
     );
   }
@@ -102,11 +117,9 @@ class _Cache extends ProfileCacheService {
 
 ProviderContainer _container(_Rig rig, {_Cache? cache}) {
   final api = ProfileApi(_server, dio: Dio()..httpClientAdapter = rig);
-  final polar = PolarAlignApi(_server, dio: Dio()..httpClientAdapter = rig);
   final c = ProviderContainer(
     overrides: [
       profileApiProvider.overrideWithValue(api),
-      polarAlignApiProvider.overrideWithValue(polar),
       if (cache != null) profileCacheServiceProvider.overrideWithValue(cache),
     ],
   );
@@ -118,14 +131,16 @@ void main() {
   setUp(ProfileApi.forgetOwnWrites);
 
   test('profile.updated for a section re-reads it, so an open screen never shows stale values', () async {
-    final rig = _Rig()..siteName = 'Seen on the other device';
+    final rig = _Rig();
     final cache = _Cache();
     final c = _container(rig, cache: cache);
-    expect(c.read(siteSettingsProvider).siteName, 'Backyard');
+    await settleLoaded(c, siteSettingsProvider);
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Backyard');
+    rig.siteName = 'Seen on the other device';
 
     await applyProfileUpdated(c, 'site');
 
-    expect(c.read(siteSettingsProvider).siteName, 'Seen on the other device');
+    expect(c.read(siteSettingsProvider).value!.siteName, 'Seen on the other device');
     expect(
       cache.listSaves,
       1,
@@ -138,19 +153,15 @@ void main() {
     () async {
       final rig = _Rig()..siteName = 'Saved';
       final c = _container(rig);
+      await settleLoaded(c, siteSettingsProvider);
       // The write this device just made (the event for it comes back too).
-      await c
-          .read(profileApiProvider)!
-          .putSiteSettings(const SiteSettings(siteName: 'Saved'));
-      c
-          .read(siteSettingsProvider.notifier)
-          .setSiteName('Typing after the save');
-      final reads = rig.siteReads;
+      final site = c.read(siteSettingsProvider.notifier)..setSiteName('Saved');
+      await site.save(c.read(profileApiProvider)!);
+      site.setSiteName('Typing after the save');
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).siteName, 'Typing after the save');
-      expect(rig.siteReads, reads);
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing after the save');
     },
   );
 
@@ -161,31 +172,28 @@ void main() {
         ..siteName = 'Saved'
         ..holdWrites = Completer<void>();
       final c = _container(rig);
-      final put = c
-          .read(profileApiProvider)!
-          .putSiteSettings(const SiteSettings(siteName: 'Saved'));
+      await settleLoaded(c, siteSettingsProvider);
+      final site = c.read(siteSettingsProvider.notifier)..setSiteName('Saved');
+      final put = site.save(c.read(profileApiProvider)!);
       await _sent(rig, 1); // the answer is still held
-      c
-          .read(siteSettingsProvider.notifier)
-          .setSiteName('Typing while it saves');
-      final reads = rig.siteReads;
+      site.setSiteName('Typing while it saves');
 
-      await applyProfileUpdated(c, 'site');
+      final event = applyProfileUpdated(c, 'site');
       rig.holdWrites!.complete();
       await put;
+      await event;
 
-      expect(c.read(siteSettingsProvider).siteName, 'Typing while it saves');
-      expect(rig.siteReads, reads);
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Typing while it saves');
     },
   );
 
   test(
     "a write the rig refused does not hide another device's change",
     () async {
-      final rig = _Rig()
-        ..siteName = 'Set on the other device'
-        ..refuseWrites = 1;
+      final rig = _Rig()..refuseWrites = 1;
       final c = _container(rig);
+      await settleLoaded(c, siteSettingsProvider);
+      rig.siteName = 'Set on the other device';
       await expectLater(
         c.read(profileApiProvider)!.putSiteSettings(const SiteSettings()),
         throwsA(isA<DioException>()),
@@ -193,7 +201,7 @@ void main() {
 
       await applyProfileUpdated(c, 'site');
 
-      expect(c.read(siteSettingsProvider).siteName, 'Set on the other device');
+      expect(c.read(siteSettingsProvider).value!.siteName, 'Set on the other device');
     },
   );
 
@@ -211,11 +219,8 @@ void main() {
       rig.holdWrites!.complete();
       await expectLater(refused, throwsA(isA<DioException>()));
       await saved;
-      final reads = rig.siteReads;
 
-      await applyProfileUpdated(c, 'site'); // the event for the saved write
-
-      expect(rig.siteReads, reads);
+      expect(ProfileApi.wroteRecently('site'), isTrue);
     },
   );
 
@@ -246,44 +251,44 @@ void main() {
     const fan = '/api/v1/profile/cooling-fan';
     final rig = _Rig()..stored[fan] = {'device_id': 'switch-1', 'port_id': 0};
     final c = _container(rig);
-    expect((await c.read(coolingFanProvider.future)).portId, 0);
+    await settleLoaded(c, coolingFanProvider);
+    expect(c.read(coolingFanProvider).value!.portId, 0);
     rig.stored[fan] = {'device_id': 'switch-1', 'port_id': 3};
 
     await applyProfileUpdated(c, 'cooling-fan');
 
-    expect((await c.read(coolingFanProvider.future)).portId, 3);
+    expect(c.read(coolingFanProvider).value!.portId, 3);
   });
 
   test('profile.updated for dome reads the dome geometry again', () async {
     const dome = '/api/v1/profile/dome';
-    final rig = _Rig()..stored[dome] = {'dome_radius_mm': 1000};
+    final rig = _Rig()
+      ..stored[dome] = {...rigDefaults['dome']!, 'dome_radius_mm': 1000};
     final c = _container(rig);
-    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1000);
-    rig.stored[dome] = {'dome_radius_mm': 1500};
+    await settleLoaded(c, domeSettingsProvider);
+    expect(c.read(domeSettingsProvider).value!.domeRadiusMm, 1000);
+    rig.stored[dome] = {...rigDefaults['dome']!, 'dome_radius_mm': 1500};
 
     await applyProfileUpdated(c, 'dome');
 
-    expect((await c.read(domeSettingsProvider.future)).domeRadiusMm, 1500);
+    expect(c.read(domeSettingsProvider).value!.domeRadiusMm, 1500);
   });
 
   test(
     'profile.updated for polar-align reads the routine settings again',
     () async {
       const path = '/api/v1/profile/polar-align';
-      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final rig = _Rig()
+        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
       final c = _container(rig);
-      expect(
-        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
-        2,
-      );
-      rig.stored[path] = {'exposure_seconds': 5};
+      c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
+      await settleLoaded(c, polarAlignSettingsProvider);
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 2);
+      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
 
       await applyProfileUpdated(c, 'polar-align');
 
-      expect(
-        (await c.read(polarAlignSettingsProvider.future)).exposureSeconds,
-        5,
-      );
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 5);
     },
   );
 
@@ -291,23 +296,28 @@ void main() {
     'a polar-align save from this device is not read back over it',
     () async {
       const path = '/api/v1/profile/polar-align';
-      final rig = _Rig()..stored[path] = {'exposure_seconds': 2};
+      final rig = _Rig()
+        ..stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 2};
       final c = _container(rig);
       c.listen(polarAlignSettingsProvider, (_, _) {}); // a screen shows them
-      await c.read(polarAlignSettingsProvider.future);
+      await settleLoaded(c, polarAlignSettingsProvider);
       rig.holdWrites = Completer<void>();
       final save = c
           .read(polarAlignSettingsProvider.notifier)
-          .save(const PolarAlignSettings(exposureSeconds: 5));
+          .saveKnob((s) => s.copyWith(exposureSeconds: 5));
       await _sent(rig, 1); // the answer is still held
+      // The daemon wrote it and announced it before answering the PUT.
+      rig.stored[path] = {...rigDefaults['polar-align']!, 'exposure_seconds': 5};
       final reads = rig.reads[path];
 
-      await applyProfileUpdated(c, 'polar-align');
+      final event = applyProfileUpdated(c, 'polar-align');
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(rig.reads[path], reads, reason: 'nothing is read over a save in flight');
       rig.holdWrites!.complete();
       await save;
-      await c.read(polarAlignSettingsProvider.future);
+      await event;
 
-      expect(rig.reads[path], reads);
+      expect(c.read(polarAlignSettingsProvider).value!.exposureSeconds, 5);
     },
   );
 

@@ -64,10 +64,11 @@ import '../../l10n/l10n.dart';
 import '../../state/app_locale_state.dart';
 import '../../services/plate_solve_database_api.dart';
 import '../../services/server_maintenance_api.dart';
+import '../../models/camera_status.dart' show CameraStatus;
 import '../../models/equipment_device_status.dart';
-import '../../models/polar_align.dart' show PolarAlignSettings, PolarAligner;
+import '../../models/polar_align.dart' show PolarAligner;
 import '../../state/equipment/camera_state.dart';
-import '../../state/polar_align/polar_align_routine_state.dart' show polarAlignSettingsProvider;
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/polar_align/polar_align_state.dart' show polarAlignLiveProvider;
 import '../../state/polar_align/polar_aligner_state.dart';
 import '../../widgets/imaging/polar_aligner_block.dart' show polarAlignerMotorsBusy, polarAlignerNotDrivableText;
@@ -77,15 +78,15 @@ import '../../state/equipment/filter_wheel_state.dart';
 import '../../state/equipment/flat_panel_state.dart';
 import '../../state/equipment/focuser_state.dart';
 import '../../state/equipment/mount_state.dart';
-import '../../models/mount_status.dart' show MountCapabilities;
 import '../../state/equipment/rotator_state.dart';
 import '../../state/equipment/weather_state.dart';
 import '../../state/ws/ws_providers.dart';
+import '../../state/settings/loaded_section.dart';
 import '../../state/settings/optics_settings_state.dart';
+import '../../widgets/settings/section_load_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../util/gps_site_fill.dart';
 import '../../util/friendly_error.dart';
-import '../../services/profile_api.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/reduce_motion.dart';
@@ -106,6 +107,9 @@ import '../../widgets/imaging/frame_viewer.dart';
 import '../../widgets/imaging/guiding_strip.dart';
 import '../../widgets/imaging/histogram_strip.dart' show frameHistogramProvider;
 import '../../widgets/sky_atlas/stellarium_view.dart';
+import '../../widgets/sky_atlas/target_preview.dart'
+    show SurveyThumb, surveyPicture;
+import '../../widgets/version_mismatch_warning.dart';
 import '../library/image_library_screen.dart';
 import '../settings/settings_shell.dart';
 import '../stats/stats_dashboard_screen.dart';
@@ -115,7 +119,7 @@ import 'simple_device_windows.dart';
 import 'simple_rig_storage.dart';
 import '../../state/focus/guide_focus_state.dart' show guideFocusProvider;
 import '../../state/settings/phd2_settings_state.dart'
-    show phd2SettingsProvider;
+    show Phd2Settings, phd2SettingsProvider;
 import 'simple_message_pills.dart' show kSimpleMessageHeight;
 import 'simple_status_card.dart';
 import '../album/sky_album_screen.dart';
@@ -160,6 +164,9 @@ const double kSimplePreflightRowHeight = 56;
 
 /// Side of the compact Stop at the bottom right.
 const double kSimpleStopSize = 60;
+
+/// The rail-foot Stop's height (#1911); grows with the rails.
+const double kSimpleRailFootHeight = 60;
 
 /// The modes, in the decided order.
 
@@ -321,6 +328,36 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     }
   }
 
+  int? _coolerPill;
+
+  /// #2076 — one warning each time a cooler the daemon switched on stops
+  /// responding (no 12 V); it goes when the cooler responds or the camera
+  /// drops.
+  void _syncCoolerPill(CameraStatus? next) {
+    final on = next != null &&
+        next.connectionState == EquipmentConnectionState.connected &&
+        next.coolerNotResponding;
+    final messages = ref.read(simpleMessagesProvider.notifier);
+    // A pill closed with × stays closed for this episode.
+    if (on && _coolerPill == null) {
+      final l10n = context.l10n;
+      _coolerPill = messages.show(
+        SimpleMessageKind.warning,
+        l10n.simpleCoolerNotResponding,
+        origin: SimpleStatusOrigin.camera,
+        actions: [
+          SimpleMessageAction(
+            l10n.shellSectionCamera,
+            () => _openFromPill(SimpleStatusOrigin.camera),
+          ),
+        ],
+      );
+    } else if (!on && _coolerPill != null) {
+      messages.dismiss(_coolerPill!);
+      _coolerPill = null;
+    }
+  }
+
   int? _calibrationPill;
 
   /// #1716 — one warning each time the Guider falls back to its earlier
@@ -385,15 +422,33 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     ref.listenManual(coolingFanAskDueProvider, (_, due) {
       if (due) unawaited(_askCoolingFan());
     }, fireImmediately: true);
-    ref.listenManual(mountProvider, (previous, next) {
-      final caps = next.value?.capabilities;
-      final was = previous?.value?.capabilities;
-      if (caps != null &&
-          (was == null || previous?.value?.deviceId != next.value?.deviceId)) {
-        _opticsFromMount(caps);
-      }
-    }, fireImmediately: true);
+    // #2041 — the rig fills empty optics from the mount (#1994) and the
+    // sensor from the main camera when one connects: read them again then.
+    // Never written from here: a save sent from a read that had not landed
+    // put the rig's sensor back to 0.
+    // A reconnect of the same device reads again because the rig reports no
+    // capabilities while it is disconnected: never cache them here.
+    void readOpticsOnConnect((Object?, String?)? was, (Object?, String?)? now) {
+      if (now?.$1 == null || (was?.$1 != null && was?.$2 == now?.$2)) return;
+      final api = ref.read(profileApiProvider);
+      if (api == null) return;
+      // Never a load: that would drop an edit not saved yet. Takes the
+      // rig's copy only when its tag moved; failures stay in the section.
+      unawaited(ref.read(opticsSettingsProvider.notifier).syncFromServer(api));
+    }
+    ref.listenManual(mountProvider.select((m) => (m.value?.capabilities, m.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
+    ref.listenManual(cameraStatusProvider.select((c) => (c.value?.capabilities, c.value?.deviceId)),
+        readOpticsOnConnect, fireImmediately: true);
     _watchDeviceFailures();
+    // #2044 — kept alive with the shell: a meridian stop shows its pill on any screen.
+    ref.listenManual(simpleMountLimitProvider, (_, _) {});
+    // #2076 — a frame late, as a pill changes a provider.
+    ref.listenManual(cameraStatusProvider, (_, next) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _syncCoolerPill(next.value);
+      });
+    }, fireImmediately: true);
     // #1563 — a run that isn't the Plan's (calibration frames) waiting for the
     // person; a frame late, as a pill changes a provider.
     void syncAwaiting() => WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -520,33 +575,6 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     watch('safety', safetyMonitorProvider, (l) => l.shellSafetyMonitor);
   }
 
-  /// The profile owns the telescope; a value it doesn't know (0) is filled
-  /// from what the connected mount reports and saved to the profile.
-  Future<void> _opticsFromMount(MountCapabilities caps) async {
-    if (caps.apertureMm == null && caps.focalLengthMm == null) return;
-    final api = ref.read(profileApiProvider);
-    if (api == null) return;
-    final optics = ref.read(opticsSettingsProvider.notifier);
-    try {
-      // The profile's own values first: never fill over one not loaded yet.
-      await optics.hydrateFromServer(api);
-      if (!mounted) return;
-      final known = ref.read(opticsSettingsProvider);
-      var changed = false;
-      if (known.apertureMm <= 0 && caps.apertureMm != null) {
-        optics.setApertureMm(caps.apertureMm!);
-        changed = true;
-      }
-      if (known.focalLengthMm <= 0 && caps.focalLengthMm != null) {
-        optics.setFocalLengthMm(caps.focalLengthMm!);
-        changed = true;
-      }
-      if (changed) await optics.persistToServer(api);
-    } catch (e) {
-      debugPrint('[simple] telescope from the mount: $e');
-    }
-  }
-
   late final _onTop = ref.read(simpleShellOnTopProvider.notifier);
   late SimpleMessagesNotifier _messages;
 
@@ -567,6 +595,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     _publishOnTop(false);
     final dewPill = _dewPill;
     final calibrationPill = _calibrationPill;
+    final coolerPill = _coolerPill;
     final devicePills = [..._devicePills.values];
     WidgetsBinding.instance.addPostFrameCallback((_) {
       devicePills.forEach(_messages.dismiss);
@@ -574,6 +603,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
       // Its button belongs to this shell too, and the next one shows its own.
       if (dewPill != null) _messages.dismiss(dewPill);
       if (calibrationPill != null) _messages.dismiss(calibrationPill);
+      if (coolerPill != null) _messages.dismiss(coolerPill);
     });
     _focus.dispose();
     _rigBarConnect.dispose();
@@ -745,6 +775,8 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                 _openFromPill(SimpleStatusOrigin.safetyMonitor);
               case MonitorDestination.weather:
                 _openDevice('eq.weather');
+              case MonitorDestination.camera:
+                _openDevice('eq.camera');
               case MonitorDestination.sky:
                 setState(() => _sky = true);
               case MonitorDestination.frameInfo:
@@ -823,6 +855,51 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
   /// Open Storage's one scroll: only the sheet it opens jumps to Storage.
   bool _revealStoragePending = false;
 
+  /// Keys 1 to 6 pick a mode, the arrows walk the tabs (wrapping): only where
+  /// the rail is a tab list, and never while a text field has focus. A key it
+  /// does not take is left `ignored`, so a field still gets its digits and
+  /// arrows.
+  KeyEventResult _railKey(FocusNode _, KeyEvent event) {
+    if (event is KeyUpEvent) return KeyEventResult.ignored;
+    final keyboard = HardwareKeyboard.instance;
+    if (keyboard.isControlPressed ||
+        keyboard.isMetaPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed) {
+      return KeyEventResult.ignored;
+    }
+    const digits = [
+      LogicalKeyboardKey.digit1,
+      LogicalKeyboardKey.digit2,
+      LogicalKeyboardKey.digit3,
+      LogicalKeyboardKey.digit4,
+      LogicalKeyboardKey.digit5,
+      LogicalKeyboardKey.digit6,
+    ];
+    final key = event.logicalKey;
+    final digit = digits.indexOf(key);
+    final back =
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowLeft;
+    final forward =
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowRight;
+    if (digit < 0 && !back && !forward) return KeyEventResult.ignored;
+    final typing =
+        FocusManager.instance.primaryFocus?.context
+            ?.findAncestorWidgetOfExactType<EditableText>() !=
+        null;
+    if (typing || !simpleRailTabs(context, ref)) return KeyEventResult.ignored;
+    final at = railOrder.indexOf(ref.read(simpleShowingProvider));
+    final n = railOrder.length;
+    _pickTab(
+      digit >= 0
+          ? railOrder[digit]
+          : railOrder[((at < 0 ? 0 : at) + (back ? n - 1 : 1)) % n],
+    );
+    return KeyEventResult.handled;
+  }
+
   void _openMenu({String section = 'Rig'}) {
     _menuSection = section;
     _toggle(_Popover.menu);
@@ -839,6 +916,15 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     } else {
       _openMenu();
     }
+  }
+
+  /// #2041 — Settings › Rig scrolled to the telescope rows, a frame late so
+  /// the page is up.
+  void _showRigOptics() {
+    _showRigPage();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ThisRig._reveal(_ThisRig.opticsKey, 0),
+    );
   }
 
   /// A search hit, opened where it lives in Simple Mode.
@@ -1177,6 +1263,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final railWidth = kSimpleRailWidth * simpleRailScale(context);
     // Stop grows with the rails, so its label fits at the user's text size.
     final stopSize = kSimpleStopSize * simpleRailScale(context);
+    // #1911 — desktop and iPad: Stop is the foot of the right rail, so no
+    // block sits in the corner and the rows beside the rail run to the inset.
+    final railFoot = railTabs;
+    final footHeight = kSimpleRailFootHeight * simpleRailScale(context);
+    // Where the bottom row and the rig bar end on the right.
+    final rowRight = deck || railFoot
+        ? kSimpleInset
+        : kSimpleInset * 2 + (railWidth + stopSize) / 2;
     // The bottom row (guiding, histogram) grows with the text like the
     // rails, so its two lines of labels fit at the user's size.
     final bottomRow = kSimpleBarHeight * simpleRailScale(context);
@@ -1192,11 +1286,16 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     final aboveRow = statsShown
         ? (deck ? rowBottom + bottomRow + AraSpace.s8 : kSimpleInset * 2 + bottomRow)
         : rowBottom;
+    // What the right rail leaves clear under it: Stop's block, or the
+    // bottom row when Stop is the rail's own foot.
+    final railBottom = railFoot ? aboveRow : kSimpleInset * 2 + stopSize;
     // Beside the rail, the right edge the panels keep: the deck has no rail.
     final railGap = deck ? kSimpleInset : kSimpleInset * 2 + railWidth;
     // What reaches the right edge stays clear of Stop, which sits over
     // everything (iPad, 2026-11-04: Settings ran under it).
-    final aboveStop = deck ? aboveRow : math.max(aboveRow, kSimpleInset * 2 + stopSize);
+    final aboveStop = deck || railFoot
+        ? aboveRow
+        : math.max(aboveRow, kSimpleInset * 2 + stopSize);
     final width = MediaQuery.sizeOf(context).width;
     // Preflight's step strip, under the status strip; its offer sits at the
     // bottom (user, 2026-11-03).
@@ -1241,8 +1340,14 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
         : railTop;
     _measure();
     final rightRailTop =
-        railTop +
-        (height - railTop - kSimpleInset * 2 - stopSize - _rightRailHeight) / 2;
+        railTop + (height - railTop - railBottom - _rightRailHeight) / 2;
+    // The rail's foot, where the tabs end (not drawn before the rail is
+    // measured, as the plan squares are not).
+    final footShown = railFoot && _rightRailHeight > 0;
+    final footTop = rightRailTop + _rightRailHeight - footHeight;
+    // What a sheet over the right edge leaves clear: Stop, whose foot sits
+    // over every veil and sheet.
+    final aboveFoot = footShown ? height - footTop + kSimpleInset : aboveStop;
     final messagesRoom = panels
         ? leftRailTop - messagesTop - kSimpleInset
         : double.infinity;
@@ -1330,7 +1435,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
     );
     final rigBar = Positioned(
       left: kSimpleInset,
-      right: deck ? kSimpleInset : kSimpleInset * 2 + (railWidth + stopSize) / 2,
+      right: rowRight,
       bottom: deck ? rowBottom : kSimpleInset,
       child: SimpleRigBar(focusNode: _rigBarConnect, onOpen: () => setState(() => _rigCardOpen = true)),
     );
@@ -1416,6 +1521,10 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                   ): _stopRun,
                 },
                 child: Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onKeyEvent: _railKey,
+                  child: Focus(
                   focusNode: _focus,
                   child: SafeArea(
                     // One shared blur for every frosted panel over the image
@@ -1589,10 +1698,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               // once it has data: 16 px from the edge and from Stop.
                               Positioned(
                                 left: kSimpleInset,
-                                right: deck
-                                    ? kSimpleInset
-                                    : kSimpleInset * 2 +
-                                          (railWidth + stopSize) / 2,
+                                right: rowRight,
                                 bottom: rowBottom,
                                 height: bottomRow,
                                 child: const _StatsRow(),
@@ -1655,7 +1761,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                               Positioned(
                                 right: kSimpleInset,
                                 top: railTop,
-                                bottom: kSimpleInset * 2 + stopSize,
+                                bottom: railBottom,
                                 width: railWidth,
                                 child: Center(
                                   child: CompositedTransformTarget(
@@ -1671,6 +1777,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                             onPick: _pickTab,
                                             onSettings: () =>
                                                 _toggle(_Popover.settings),
+                                            footHeight: footHeight,
                                           )
                                         : _RightRail(
                                             key: _rightRailKey,
@@ -1700,6 +1807,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                 child: SimpleRigSetupHost(
                                   autoOpened: _rigSetupOpened,
                                   onOpenRig: _showRigPage,
+                                  onOpenOptics: _showRigOptics,
                                   onOpenGuider: () => _openFromPill(SimpleStatusOrigin.guide),
                                 ),
                               ),
@@ -1919,7 +2027,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   left: kSimpleInset,
                                   right: kSimpleInset,
                                   top: railTop,
-                                  bottom: aboveStop,
+                                  bottom: aboveFoot,
                                   // Under the gear, as wide as its content
                                   // needs (user, 2026-11-04: window-wide was
                                   // mostly empty space).
@@ -1950,8 +2058,17 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                                   ),
                                 ),
                               ],
-                              // Stop on its own at the bottom, under the rail.
-                              if (!deck)
+                              // Stop on its own at the bottom, under the rail (a phone
+                              // held sideways; desktop and iPad have it as the foot).
+                              if (footShown)
+                                Positioned(
+                                  right: kSimpleInset,
+                                  top: footTop,
+                                  width: railWidth,
+                                  height: footHeight,
+                                  child: const EmergencyStopButton(railFoot: true),
+                                )
+                              else if (!deck && !railFoot)
                               Positioned(
                                 right:
                                     kSimpleInset + (railWidth - stopSize) / 2,
@@ -1972,6 +2089,7 @@ class _SimpleShellState extends ConsumerState<SimpleShell> {
                     ),
                     ),
                   ),
+                ),
                 ),
               ),
             ),
@@ -2039,10 +2157,16 @@ class _SkyPick extends ConsumerWidget {
     final art = manifest == null || catalog == null
         ? null
         : skyPickArt(selection.designations, selection.name, catalog, manifest);
-    return _card(context, art);
+    // No Art: the survey cutout stands in once it is cached or fetched.
+    final survey = art == null ? surveyPicture(ref, selection) : null;
+    return _card(context, art, survey);
   }
 
-  Widget _card(BuildContext context, AlbumArt? art) => SimplePanel(
+  Widget _card(
+    BuildContext context,
+    AlbumArt? art,
+    Uint8List? survey,
+  ) => SimplePanel(
     padding: const EdgeInsets.fromLTRB(16, 10, 10, 10),
     child: Row(
       mainAxisSize: MainAxisSize.min,
@@ -2081,6 +2205,13 @@ class _SkyPick extends ConsumerWidget {
                 ),
               ),
             ),
+          ),
+        if (survey != null)
+          SurveyThumb(
+            key: const Key('simple-sky-survey'),
+            bytes: survey,
+            size: 52,
+            radius: AraRadius.container,
           ),
         // Wraps in a narrow window (or a longer language) so Image this
         // keeps its place.
@@ -2847,6 +2978,7 @@ class _RailTabs extends ConsumerWidget {
     required this.popover,
     required this.onPick,
     required this.onSettings,
+    required this.footHeight,
   });
 
   final SimpleModeScreen mode;
@@ -2855,12 +2987,18 @@ class _RailTabs extends ConsumerWidget {
   final ValueChanged<SimpleModeScreen> onPick;
   final VoidCallback onSettings;
 
+  /// The rail's last row, Stop's, which the shell draws over the panel.
+  final double footHeight;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final pinned = simpleRailScale(context) > 1;
-    final open = _openBlock(context, ref);
+    final done = ref.watch(doneTonightProvider);
+    final running = ref.watch(railRunningProvider);
+    final open = _openBlock(context, ref, done, running);
     return SimplePanel(
-      padding: const EdgeInsets.symmetric(vertical: AraSpace.s8, horizontal: 6),
+      // The bottom is Stop's room: the shell draws it over the rail's foot (#1911).
+      padding: EdgeInsets.fromLTRB(6, AraSpace.s8, 6, footHeight),
       // No tabBar role: it allows tab children only, and the open block holds
       // the shutter and the settings chip too.
       child: Semantics(
@@ -2885,6 +3023,8 @@ class _RailTabs extends ConsumerWidget {
                           key: Key('simple-rail-tab-${_railSlug(m)}'),
                           mode: m,
                           selected: false,
+                          done: done.contains(m),
+                          running: running.contains(m),
                           compact: pinned,
                           onTap: () => onPick(m),
                         ),
@@ -2906,45 +3046,65 @@ class _RailTabs extends ConsumerWidget {
     );
   }
 
-  Widget _openBlock(BuildContext context, WidgetRef ref) => Container(
-    key: const Key('simple-rail-open'),
-    decoration: BoxDecoration(
-      color: AraColors.selectionTint,
-      borderRadius: BorderRadius.circular(AraRadius.container),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      spacing: AraSpace.s8,
-      children: [
-        KeyedSubtree(
-          key: const Key('simple-mode'),
-          child: _RailTab(
-            key: Key('simple-rail-tab-${_railSlug(mode)}'),
-            mode: named ?? mode,
-            selected: true,
-            // In Preflight a pick of its step's mode would end it.
-            onTap: named == null ? () => onPick(mode) : () {},
-            name: true,
+  Widget _openBlock(
+    BuildContext context,
+    WidgetRef ref,
+    Set<SimpleModeScreen> done,
+    Set<SimpleModeScreen> running,
+  ) {
+    // The plan's frames taken, under the name of the open Plan.
+    final figure = mode == SimpleModeScreen.plan
+        ? ref.watch(railFigureProvider)
+        : null;
+    return Container(
+      key: const Key('simple-rail-open'),
+      decoration: BoxDecoration(
+        color: AraColors.selectionTint,
+        borderRadius: BorderRadius.circular(AraRadius.container),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        spacing: AraSpace.s8,
+        children: [
+          KeyedSubtree(
+            key: const Key('simple-mode'),
+            child: _RailTab(
+              key: Key('simple-rail-tab-${_railSlug(mode)}'),
+              mode: named ?? mode,
+              selected: true,
+              done: done.contains(mode),
+              running: running.contains(mode),
+              // In Preflight a pick of its step's mode would end it.
+              onTap: named == null ? () => onPick(mode) : () {},
+              name: true,
+            ),
           ),
-        ),
-        SimpleScreen.of(mode).shutter,
-        _RailButton(
-          key: const Key('simple-settings'),
-          icon: Icons.tune,
-          tall: true,
-          label: _railChipLabel(context, ref, mode, named),
-          selected: popover == _Popover.settings,
-          onTap: onSettings,
-        ),
-      ],
-    ),
-  );
+          if (figure != null)
+            Text(
+              figure,
+              key: const Key('simple-rail-figure'),
+              style: AraText.caption.copyWith(color: AraColors.selectionFg),
+            ),
+          SimpleScreen.of(mode).shutter,
+          _RailButton(
+            key: const Key('simple-settings'),
+            icon: Icons.tune,
+            tall: true,
+            label: _railChipLabel(context, ref, mode, named),
+            selected: popover == _Popover.settings,
+            onTap: onSettings,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// One tab: the mode's icon over its caption. [name] is the open block's
 /// header, which shows the short name alone, as the rail did. [compact] (large
 /// text) drops the icon and keeps the caption to one line; the tab list
-/// scrolls when the tabs outgrow the rail.
+/// scrolls when the tabs outgrow the rail. [done] draws a tick (done tonight)
+/// and [running] a steady dot in the corner; neither animates.
 class _RailTab extends StatelessWidget {
   const _RailTab({
     super.key,
@@ -2953,10 +3113,14 @@ class _RailTab extends StatelessWidget {
     required this.onTap,
     this.name = false,
     this.compact = false,
+    this.done = false,
+    this.running = false,
   });
 
   final SimpleModeScreen mode;
   final bool selected;
+  final bool done;
+  final bool running;
   final VoidCallback onTap;
   final bool name;
   final bool compact;
@@ -2987,7 +3151,11 @@ class _RailTab extends StatelessWidget {
       role: SemanticsRole.tab,
       selected: selected,
       enabled: true,
-      label: mode.labelOf(context.l10n),
+      label: running
+          ? context.l10n.shellRailTabRunning(mode.labelOf(context.l10n))
+          : done
+          ? context.l10n.shellRailTabDone(mode.labelOf(context.l10n))
+          : mode.labelOf(context.l10n),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(AraRadius.container),
@@ -3000,32 +3168,66 @@ class _RailTab extends StatelessWidget {
               maxWidth: 60 * scale,
               minHeight: name ? 48 : (compact ? 44 : 46),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+            child: Stack(
+              alignment: Alignment.center,
               children: [
-                if (!name && !compact) Icon(mode.icon, size: 20, color: color),
-                // "Polar align" wraps to two lines at the rail's width (or
-                // its longest word's), and FittedBox shrinks the caption to
-                // the tab, never cut. Compact keeps one line and shrinks it
-                // whole, so no fixed width there.
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 2),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: SizedBox(
-                      width: compact
-                          ? null
-                          : math.max(60 * scale, longestWord.ceilToDouble()),
-                      child: Text(
-                        label,
-                        maxLines: compact ? 1 : 2,
-                        softWrap: !compact,
-                        textAlign: TextAlign.center,
-                        style: style,
+                Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (!name && !compact)
+                      Icon(mode.icon, size: 20, color: color),
+                    // "Polar align" wraps to two lines at the rail's width (or
+                    // its longest word's), and FittedBox shrinks the caption to
+                    // the tab, never cut. Compact keeps one line and shrinks it
+                    // whole, so no fixed width there.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: SizedBox(
+                          width: compact
+                              ? null
+                              : math.max(
+                                  60 * scale,
+                                  longestWord.ceilToDouble(),
+                                ),
+                          child: Text(
+                            label,
+                            maxLines: compact ? 1 : 2,
+                            softWrap: !compact,
+                            textAlign: TextAlign.center,
+                            style: style,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (done)
+                  Positioned(
+                    top: 2,
+                    right: 4,
+                    child: Icon(
+                      Icons.check,
+                      key: Key('simple-rail-tick-${_railSlug(mode)}'),
+                      size: 12,
+                      color: AraColors.accentConnected,
+                    ),
+                  ),
+                if (running)
+                  Positioned(
+                    top: 4,
+                    right: 6,
+                    child: Container(
+                      key: Key('simple-rail-dot-${_railSlug(mode)}'),
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AraColors.accentConnected,
+                        shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -3943,13 +4145,11 @@ class _PolarAlignerGearRows extends ConsumerWidget {
       case AsyncLoading():
         return const SizedBox.shrink();
     }
-    // No rig, or a daemon that predates the Polar Aligner (404).
-    if (device == null) return const SizedBox.shrink();
+    // No rig, a daemon that predates the Polar Aligner (404), or none found (#2042).
+    if (device == null || !device.present) return const SizedBox.shrink();
     final moving = device.moving || polarAlignerMotorsBusy(ref.watch(polarAlignLiveProvider));
     final unreadable = device.notDrivableReason != 'device_runs_its_own_loop';
-    final (dot, word, caption) = !device.present
-        ? (StatusLevel.disconnected, l10n.polarAlignerNone, l10n.polarAlignerFoundNone)
-        : !device.drivable
+    final (dot, word, caption) = !device.drivable
         ? (
             StatusLevel.busy,
             unreadable ? l10n.polarAlignerCantRead : l10n.polarAlignerCantDrive,
@@ -3960,7 +4160,7 @@ class _PolarAlignerGearRows extends ConsumerWidget {
             moving ? l10n.deviceMoving : l10n.polarAlignerReady,
             device.carrier == 'mount' ? l10n.polarAlignerFoundMount : l10n.polarAlignerFoundBase,
           );
-    final title = device.name == null || !device.present
+    final title = device.name == null
         ? l10n.polarAligner
         : l10n.shellGearTitle(l10n.polarAligner, device.name!);
     final row = _gearRow(
@@ -3974,18 +4174,22 @@ class _PolarAlignerGearRows extends ConsumerWidget {
       onOpen: null,
       toggle: null,
     );
-    if (!device.present || !device.drivable) return row;
+    if (!device.drivable) return row;
     final auto = ref.watch(polarAlignSettingsProvider).value?.polarAlignerAuto;
     Future<void> pick(bool next) async {
       final notify = userNotifier(context);
       try {
-        // Not loaded yet: save() loads the section and writes nothing (ADR 0015).
-        final settings = ref.read(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-        await ref.read(polarAlignSettingsProvider.notifier).save(settings.copyWith(polarAlignerAuto: next));
+        // On the rig's copy (ADR 0015): not loaded, it is loaded once more and
+        // nothing is sent when that fails; a 412 shows the rig's newer copy.
+        await ref
+            .read(polarAlignSettingsProvider.notifier)
+            .changeAndSave((s) => s.copyWith(polarAlignerAuto: next));
       } catch (e) {
         notify(
           l10n.shellGearActionFailed(l10n.polarAlignerTurnedBy, l10n.polarAligner),
-          detail: failureReason(l10n, e),
+          detail: e is SectionNotLoadedException || e is SectionConflictException
+              ? e.toString()
+              : failureReason(l10n, e),
           error: true,
         );
       }
@@ -4516,6 +4720,49 @@ Widget _gearRow({
   );
 }
 
+/// A Settings › Rig value the rig finds out itself: its button, never
+/// enabled, read as text, in the same tile as the wheels above it.
+class _RigReadOnlyRow extends StatelessWidget {
+  const _RigReadOnlyRow({required this.id, required this.label, required this.value, this.hint});
+
+  final String id;
+  final String label;
+  final String value;
+  final String? hint;
+
+  @override
+  Widget build(BuildContext context) => ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: 44),
+    child: Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: kSimpleText),
+              if (hint case final hint?) Text(hint, style: AraText.caption),
+            ],
+          ),
+        ),
+        Semantics(
+          excludeSemantics: true,
+          label: value,
+          child: TextButton(
+            key: Key('simple-rig-$id'),
+            style: TextButton.styleFrom(
+              backgroundColor: AraColors.tileFill,
+              disabledBackgroundColor: AraColors.tileFill,
+              minimumSize: const Size(kSimpleRigControlWidth, 44),
+            ),
+            onPressed: null,
+            child: Text(value, style: kSimpleText),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Settings › Rig: what belongs to no device. The rig's figures, the rig
 /// and profile with the way to change them, the one setting Ara can't find out
 /// (a permanent pier, asked once), the way out of Simple Mode, the version
@@ -4535,6 +4782,17 @@ class _ThisRig extends ConsumerWidget {
   /// One Rig page is up at a time, so a global key by name is safe.
   static const _siteKey = GlobalObjectKey('simple-rig-site');
   static const _guideKey = GlobalObjectKey('simple-rig-guide-scope');
+  static const opticsKey = GlobalObjectKey('simple-rig-optics');
+
+  /// A pixel size, or Not set.
+  static String _micrometres(AppLocalizations l10n, double um) =>
+      um > 0 ? '${um.toStringAsFixed(2)} µm' : l10n.shellNotSet;
+
+  /// A sensor size in pixels, or null while the rig has none.
+  static String? _sensor(OpticsSettings o) =>
+      o.sensorWidthPx > 0 && o.sensorHeightPx > 0
+      ? '${o.sensorWidthPx} × ${o.sensorHeightPx} px'
+      : null;
 
   /// Scrolls the Rig page so [key]'s block shows: [alignment] 0 puts it at
   /// the top, 1 at the bottom.
@@ -4550,19 +4808,17 @@ class _ThisRig extends ConsumerWidget {
     );
   }
 
-  /// Apply a value and keep it in the profile; a failed save says so.
-  static Future<void> _save(
+  /// Keep [change] in the profile's optics: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveOptics(
     BuildContext context,
     WidgetRef ref,
-    void Function() apply,
-    Future<Object?> Function(ProfileApi api) persist,
+    OpticsSettings Function(OpticsSettings) change,
   ) async {
-    apply();
     final notify = userNotifier(context);
     final l10n = context.l10n;
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
-      // Shown, not kept: the next read from the rig puts the old value back.
+    if (ref.read(profileApiProvider) == null) {
       notify(
         l10n.shellCouldntSave,
         detail: l10n.shellRigNotConnected,
@@ -4571,13 +4827,49 @@ class _ThisRig extends ConsumerWidget {
       return;
     }
     try {
-      await persist(api);
+      await ref.read(opticsSettingsProvider.notifier).changeAndSave(change);
     } catch (e) {
       notify(
         l10n.shellCouldntSave,
-        detail: friendlyError(l10n, e),
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
         error: true,
       );
+    }
+  }
+
+  /// Keep [change] in the profile's site: applied to the rig's copy (loaded
+  /// once more first when it isn't in) and saved whole. Not loaded, refused
+  /// or stale: nothing is sent and it says why (ADR 0015). Returns whether it
+  /// was saved.
+  static Future<bool> _saveSite(
+    BuildContext context,
+    WidgetRef ref,
+    SiteSettings Function(SiteSettings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: l10n.shellRigNotConnected,
+        error: true,
+      );
+      return false;
+    }
+    try {
+      await ref.read(siteSettingsProvider.notifier).changeAndSave(change);
+      return true;
+    } catch (e) {
+      notify(
+        l10n.shellCouldntSaveSite,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
+        error: true,
+      );
+      return false;
     }
   }
 
@@ -4606,55 +4898,49 @@ class _ThisRig extends ConsumerWidget {
       notify(l10n.shellCouldntGetLocation, detail: r.message, error: true);
       return;
     }
-    final site = ref.read(siteSettingsProvider.notifier);
-    site.setLatitudeDeg(r.lat);
-    site.setLongitudeDeg(r.lng);
-    if (r.alt != null) site.setElevationM(r.alt!);
-    site.setTimeZone(tz_map.latLngToTimezoneString(r.lat, r.lng));
-    final api = ref.read(profileApiProvider);
-    if (api == null) {
+    final saved = await _saveSite(
+      context,
+      ref,
+      (c) => SiteSettingsNotifier.withFix(
+        c,
+        lat: r.lat,
+        lng: r.lng,
+        alt: r.alt,
+        timeZone: tz_map.latLngToTimezoneString(r.lat, r.lng),
+      ),
+    );
+    if (saved) notify(l10n.shellSiteFrom(r.sourceLabel));
+  }
+
+  /// Keep [change] in the profile's guider settings: applied to the rig's
+  /// copy (loaded once more first when it isn't in) and saved whole, so a
+  /// pixel size the rig filled is sent back as the rig holds it (ALP-4982).
+  /// Not loaded, refused or stale: nothing is sent and it says why (ADR 0015).
+  static Future<void> _saveGuider(
+    BuildContext context,
+    WidgetRef ref,
+    Phd2Settings Function(Phd2Settings) change,
+  ) async {
+    final notify = userNotifier(context);
+    final l10n = context.l10n;
+    if (ref.read(profileApiProvider) == null) {
       notify(
-        l10n.shellCouldntSaveSite,
+        l10n.shellCouldntSave,
         detail: l10n.shellRigNotConnected,
         error: true,
       );
       return;
     }
     try {
-      await site.persistToServer(api);
+      await ref.read(phd2SettingsProvider.notifier).changeAndSave(change);
     } catch (e) {
       notify(
-        l10n.shellCouldntSaveSite,
-        detail: friendlyError(l10n, e),
+        l10n.shellCouldntSave,
+        detail: e is SectionNotLoadedException || e is SectionConflictException
+            ? e.toString()
+            : friendlyError(l10n, e),
         error: true,
       );
-      return;
-    }
-    notify(l10n.shellSiteFrom(r.sourceLabel));
-  }
-
-  /// The profile's guide optics. With [retry] (the guider connected): the
-  /// rig fills unset ones a few guider round trips later, so one read then
-  /// usually beats it: read again each second, up to ten times, until both
-  /// are set.
-  static Future<void> _readGuideOptics(
-    BuildContext context,
-    WidgetRef ref, {
-    bool retry = true,
-  }) async {
-    for (var i = 0; i < (retry ? 10 : 1); i++) {
-      if (i > 0) await Future<void>.delayed(const Duration(seconds: 1));
-      if (!context.mounted) return;
-      final api = ref.read(profileApiProvider);
-      if (api == null) return;
-      try {
-        await ref.read(phd2SettingsProvider.notifier).hydrateFromServer(api);
-      } catch (_) {
-        // Unreachable for a moment: the next try reads again.
-      }
-      if (!context.mounted) return;
-      final s = ref.read(phd2SettingsProvider);
-      if (s.guideFocalLength > 0 && s.guidePixelSize > 0) return;
     }
   }
 
@@ -4720,7 +5006,7 @@ class _ThisRig extends ConsumerWidget {
               case RigSetupGap.guideScope:
                 _reveal(_guideKey, 0);
               case RigSetupGap.mainOptics:
-                openSettingsPanel(ref, 'img.optics');
+                _reveal(opticsKey, 0);
               case RigSetupGap.guiderCalibration:
                 onOpenGuider?.call();
             }
@@ -4752,145 +5038,164 @@ class _ThisRig extends ConsumerWidget {
           ),
         // The telescope and the site: set once, kept in the profile (plate
         // solving, framing and the night's times use them).
-        const Divider(height: AraSpace.s16),
-        for (final (id, label, digits, value, set)
-            in <(String, String, int?, double, void Function(double))>[
-              // Aperture on one wheel of millimetres; focal length per digit.
-              (
-                'aperture',
-                l10n.shellAperture,
-                null,
-                ref.watch(opticsSettingsProvider).apertureMm,
-                ref.read(opticsSettingsProvider.notifier).setApertureMm,
-              ),
-              (
-                'focal',
-                l10n.shellFocalLength,
-                4,
-                ref.watch(opticsSettingsProvider).focalLengthMm,
-                ref.read(opticsSettingsProvider.notifier).setFocalLengthMm,
-              ),
-            ])
-          _RigWheelRow.millimetres(
-            l10n,
-            id: id,
-            label: label,
-            digits: digits,
-            value: value,
-            onSet: (v) => _save(
-              context,
-              ref,
-              () => set(v),
-              (api) => ref
-                  .read(opticsSettingsProvider.notifier)
-                  .persistToServer(api),
+        const Divider(key: opticsKey, height: AraSpace.s16),
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(opticsSettingsProvider) case final optics
+            when optics.value == null)
+          SectionNotLoaded(
+            section: optics,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(opticsSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else ...[
+          for (final (id, label, digits, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  int?,
+                  double,
+                  OpticsSettings Function(OpticsSettings, double),
+                )
+              >[
+                // Aperture on one wheel of millimetres; focal length per digit.
+                (
+                  'aperture',
+                  l10n.shellAperture,
+                  null,
+                  ref.watch(opticsSettingsProvider).value!.apertureMm,
+                  (c, v) => c.copyWith(apertureMm: v),
+                ),
+                (
+                  'focal',
+                  l10n.shellFocalLength,
+                  4,
+                  ref.watch(opticsSettingsProvider).value!.focalLengthMm,
+                  (c, v) => c.copyWith(focalLengthMm: v),
+                ),
+              ])
+            _RigWheelRow.millimetres(
+              l10n,
+              id: id,
+              label: label,
+              digits: digits,
+              value: value,
+              onSet: (v) => _saveOptics(context, ref, (c) => change(c, v)),
+            ),
+          // #2041 — read only: the rig takes the sensor from the main camera
+          // when it connects.
+          _RigReadOnlyRow(
+            id: 'sensor',
+            label: l10n.shellMainSensor,
+            // The hint only while the sensor is still to come.
+            hint: _sensor(ref.watch(opticsSettingsProvider).value!) == null
+                ? l10n.shellFromMainCamera
+                : null,
+            value:
+                _sensor(ref.watch(opticsSettingsProvider).value!) ??
+                l10n.shellNotSet,
+          ),
+          _RigReadOnlyRow(
+            id: 'pixel',
+            label: l10n.shellMainPixelSize,
+            value: _micrometres(
+              l10n,
+              ref.watch(opticsSettingsProvider).value!.pixelSizeUm,
             ),
           ),
-        // The guide scope: read from the guider when the profile left it
-        // unset, kept in the profile (polar alignment solves with it).
-        _GuideOpticsReader(
+        ],
+        // The guide scope: the rig fills it from the guider when the
+        // profile left it unset (its profile.updated reloads it here), kept
+        // in the profile (polar alignment solves with it).
+        KeyedSubtree(
           key: _guideKey,
           child: _RigWheelRow.millimetres(
             l10n,
             id: 'guidefocal',
             label: l10n.shellGuideFocalLength,
             digits: 4,
-            value: ref.watch(phd2SettingsProvider).guideFocalLength.toDouble(),
-            onSet: (v) => _save(
+            value: (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guideFocalLength
+                .toDouble(),
+            onSet: (v) => _saveGuider(
               context,
               ref,
-              () => ref
-                  .read(phd2SettingsProvider.notifier)
-                  .setGuideFocalLength(v.round()),
-              // The save sends the whole section: re-read it first so a
-              // pixel size the rig filled since Rig's read isn't sent back
-              // as 0 (ALP-4982).
-              (api) async {
-                final guider = ref.read(phd2SettingsProvider.notifier);
-                await guider.hydrateFromServer(api);
-                guider.setGuideFocalLength(v.round());
-                return guider.persistToServer(api);
-              },
+              (c) => c.copyWith(guideFocalLength: math.max(0, v.round())),
             ),
           ),
         ),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 44),
-          child: Row(
-            children: [
-              Expanded(
-                child: Text(l10n.shellGuidePixelSize, style: kSimpleText),
-              ),
-              // Read only (it comes from the guider), in the same tile as
-              // the value above it: its button, never enabled, read as text.
-              Builder(
-                builder: (context) {
-                  final pixel = switch (ref
-                      .watch(phd2SettingsProvider)
-                      .guidePixelSize) {
-                    final p when p > 0 => '${p.toStringAsFixed(2)} µm',
-                    _ => l10n.shellNotSet,
-                  };
-                  return Semantics(
-                    excludeSemantics: true,
-                    label: pixel,
-                    child: TextButton(
-                      key: const Key('simple-rig-guidepixel'),
-                      style: TextButton.styleFrom(
-                        backgroundColor: AraColors.tileFill,
-                        disabledBackgroundColor: AraColors.tileFill,
-                        minimumSize: const Size(kSimpleRigControlWidth, 44),
-                      ),
-                      onPressed: null,
-                      child: Text(pixel, style: kSimpleText),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-        for (final (id, label, value, set)
-            in <(String, String, double, void Function(double))>[
-              (
-                'lat',
-                l10n.shellLatitude,
-                ref.watch(siteSettingsProvider).latitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLatitudeDeg,
-              ),
-              (
-                'lng',
-                l10n.shellLongitude,
-                ref.watch(siteSettingsProvider).longitudeDeg,
-                ref.read(siteSettingsProvider.notifier).setLongitudeDeg,
-              ),
-            ])
-          _RigWheelRow.coordinate(
+        // Read only: it comes from the guider.
+        _RigReadOnlyRow(
+          id: 'guidepixel',
+          label: l10n.shellGuidePixelSize,
+          value: _micrometres(
             l10n,
-            id: id,
-            label: label,
-            value: value,
-            onSet: (v) => _save(
-              context,
-              ref,
-              () => set(v),
-              (api) =>
-                  ref.read(siteSettingsProvider.notifier).persistToServer(api),
-            ),
-          ),
-        _RigStepper(
-          id: 'elevation',
-          label: l10n.shellElevation,
-          unit: 'm',
-          value: ref.watch(siteSettingsProvider).elevationM,
-          onSet: (v) => _save(
-            context,
-            ref,
-            () => ref.read(siteSettingsProvider.notifier).setElevationM(v),
-            (api) =>
-                ref.read(siteSettingsProvider.notifier).persistToServer(api),
+            (ref.watch(phd2SettingsProvider).value ?? const Phd2Settings())
+                .guidePixelSize,
           ),
         ),
+        // Null until the profile's copy is in from the rig (ADR 0015): the
+        // rows say so, with Retry, and nothing can be sent.
+        if (ref.watch(siteSettingsProvider) case final site
+            when site.value == null)
+          SectionNotLoaded(
+            section: site,
+            padding: EdgeInsets.zero,
+            onRetry: () {
+              final api = ref.read(profileApiProvider);
+              if (api != null) {
+                ref.read(siteSettingsProvider.notifier).load(api);
+              }
+            },
+          )
+        else ...[
+          for (final (id, label, value, change)
+              in <
+                (
+                  String,
+                  String,
+                  double,
+                  SiteSettings Function(SiteSettings, double),
+                )
+              >[
+                (
+                  'lat',
+                  l10n.shellLatitude,
+                  ref.watch(siteSettingsProvider).value!.latitudeDeg,
+                  SiteSettingsNotifier.withLatitude,
+                ),
+                (
+                  'lng',
+                  l10n.shellLongitude,
+                  ref.watch(siteSettingsProvider).value!.longitudeDeg,
+                  SiteSettingsNotifier.withLongitude,
+                ),
+              ])
+            _RigWheelRow.coordinate(
+              l10n,
+              id: id,
+              label: label,
+              value: value,
+              onSet: (v) => _saveSite(context, ref, (c) => change(c, v)),
+            ),
+          _RigStepper(
+            id: 'elevation',
+            label: l10n.shellElevation,
+            unit: 'm',
+            value: ref.watch(siteSettingsProvider).value!.elevationM,
+            onSet: (v) => _saveSite(
+              context,
+              ref,
+              (c) => SiteSettingsNotifier.withElevation(c, v),
+            ),
+          ),
+        ],
         Align(
           key: _siteKey,
           alignment: Alignment.centerLeft,
@@ -4962,38 +5267,45 @@ class _ThisRig extends ConsumerWidget {
         const Divider(height: AraSpace.s16),
         // Every version on the rig, for a bug report or a support question;
         // a part the rig can't read is left out. Last, as in each device's
-        // window in Settings.
-        SimpleVersions(
-          key: const Key('simple-versions'),
-          rows: [
-            for (final (name, v) in <(String, String?)>[
-              (l10n.shellThisApp, version),
-              (l10n.shellAraServer, rig?.daemonVersion),
-              if (rig?.guiderVersion != null)
-                (l10n.deviceGuider, rig!.guiderVersion),
-              for (final a in servers)
-                (
-                  servers.length > 1
-                      ? '${a.label} (${a.host}:${a.port})'
-                      : a.label,
-                  a.version,
-                ),
-              if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
-              if (stars != null && stars.isNotEmpty)
-                (
-                  l10n.shellStarDatabase,
-                  stars.map((d) => d.toUpperCase()).join(', '),
-                ),
-              if (rig != null && rig.osRelease.isNotEmpty)
-                (
-                  l10n.shellSystem,
-                  [
-                    rig.osRelease,
-                    if (rig.boardModel != null) rig.boardModel!,
-                  ].join(' · '),
-                ),
-            ])
-              (name, v ?? '—'),
+        // window in Settings. Under it, #2093's warning when the server is
+        // from another release line (no gap when there is none).
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SimpleVersions(
+              key: const Key('simple-versions'),
+              rows: [
+                for (final (name, v) in <(String, String?)>[
+                  (l10n.shellThisApp, version),
+                  (l10n.shellAraServer, rig?.daemonVersion),
+                  if (rig?.guiderVersion != null)
+                    (l10n.deviceGuider, rig!.guiderVersion),
+                  for (final a in servers)
+                    (
+                      servers.length > 1
+                          ? '${a.label} (${a.host}:${a.port})'
+                          : a.label,
+                      a.version,
+                    ),
+                  if (rig?.astapVersion != null) ('ASTAP', rig!.astapVersion),
+                  if (stars != null && stars.isNotEmpty)
+                    (
+                      l10n.shellStarDatabase,
+                      stars.map((d) => d.toUpperCase()).join(', '),
+                    ),
+                  if (rig != null && rig.osRelease.isNotEmpty)
+                    (
+                      l10n.shellSystem,
+                      [
+                        rig.osRelease,
+                        if (rig.boardModel != null) rig.boardModel!,
+                      ].join(' · '),
+                    ),
+                ])
+                  (name, v ?? '—'),
+              ],
+            ),
+            VersionMismatchWarning(serverVersion: rig?.daemonVersion),
           ],
         ),
       ],
@@ -5016,37 +5328,6 @@ class _SettingsPage extends ConsumerWidget {
       body: const SettingsShell(),
     );
   }
-}
-
-/// Reads the profile's guide optics when Rig opens, and again each time the
-/// guider connects (the rig fills unset ones then); draws [child].
-class _GuideOpticsReader extends ConsumerStatefulWidget {
-  const _GuideOpticsReader({super.key, required this.child});
-
-  final Widget child;
-
-  @override
-  ConsumerState<_GuideOpticsReader> createState() => _GuideOpticsReaderState();
-}
-
-class _GuideOpticsReaderState extends ConsumerState<_GuideOpticsReader> {
-  @override
-  void initState() {
-    super.initState();
-    ref.listenManual(
-      guiderStatusProvider.select((s) => s.value?.isConnected ?? false),
-      (was, now) {
-        // Open (was null), or the guider just connected.
-        if (was == null || (now && !was)) {
-          unawaited(_ThisRig._readGuideOptics(context, ref, retry: now));
-        }
-      },
-      fireImmediately: true,
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) => widget.child;
 }
 
 /// A value the rig keeps, set by wheels: tap it and one wheel per digit
@@ -5635,6 +5916,11 @@ class _AraSheet extends ConsumerWidget {
                 if (rig?.guiderVersion != null)
                   (l10n.deviceGuider, rig!.guiderVersion!),
               ],
+            ),
+            // #2093: a server from another release line. Wraps to the sheet's
+            // width rather than widening it.
+            _NoIntrinsicWidth(
+              child: VersionMismatchWarning(serverVersion: rig?.daemonVersion),
             ),
             // Half of the version table's 4 px line gap on each side.
             Padding(

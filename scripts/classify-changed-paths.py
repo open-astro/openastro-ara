@@ -74,6 +74,14 @@ INERT_DIRS = (
     "changelog.d/",
 )
 
+# Files under an INERT_DIRS prefix that a .NET test reads: they run the dotnet
+# jobs and are not docs_only. SequenceV2FieldTableTest compares the checked-in
+# v2 schema with the one the daemon generates from its tables, and the v2
+# tests read the kind and field rows of the spec through SequenceV2Spec (#2025).
+INERT_DIR_BUILD_INPUTS = frozenset(
+    {"docs/specs/sequence-v2.md", "docs/specs/sequence-v2.schema.json"}
+)
+
 # Root-level files that are prose and nothing else. Deliberately short:
 # every other root file falls through to the open `dotnet` default. In
 # particular `.editorconfig` is NOT here -- it carries the
@@ -101,6 +109,10 @@ DOTNET_ROOT_FILES = frozenset(
         ".editorconfig",  # dotnet_diagnostic.* severities feed the analyzer
         "CommonAssemblyInfo.cs",
         "Directory.Build.props",
+        # #2093: the version attributes for the NINA library projects.
+        "Directory.Build.targets",
+        # #2093: Directory.Build.props reads the release version from it.
+        "VERSION",
         "Dockerfile",
         "OpenAstroAra.sln",
         "OpenAstroAra.sln.licenseheader",
@@ -141,6 +153,21 @@ SCRIPT_RULES = {
     "scripts/merge-gate.sh": NONE,
     # Run by auto-queue.yml after a review run only.
     "scripts/auto-queue.sh": NONE,
+    # Release tooling (#2093, docs/RELEASES.md): run by release.yml,
+    # issue-labels.yml, close-linked-issues.yml, pr-body.yml (merge-down.py via
+    # check-falsified-by.py) and the Sanity job's tests. version.py and
+    # nightly-version.py (which reads changelog-fragments.py) also name
+    # server-build's .deb; server-build is gated on docs_only, not dotnet, so
+    # it runs for them regardless. No job gated on dotnet or client reads them.
+    "scripts/version.py": NONE,
+    "scripts/release-tag.py": NONE,
+    "scripts/release-tag-cases.txt": NONE,
+    "scripts/changelog-section.py": NONE,
+    "scripts/nightly-version.py": NONE,
+    "scripts/merge-down.py": NONE,
+    "scripts/close-linked-issues.py": NONE,
+    "scripts/check-issue-labels.py": NONE,
+    "scripts/source-archive.sh": NONE,
 }
 
 # .github/ is mixed the same way. An explicit list, not a suffix rule: a
@@ -160,6 +187,10 @@ GITHUB_RULES = {
     ".github/workflows/label-trusted-authors.yml": NONE,
     ".github/workflows/merge-queue.yml": NONE,
     ".github/workflows/auto-queue.yml": NONE,
+    # #2093 release workflows: tag pushes, issue events and merged stable PRs only.
+    ".github/workflows/release.yml": NONE,
+    ".github/workflows/issue-labels.yml": NONE,
+    ".github/workflows/close-linked-issues.yml": NONE,
     ".github/dependabot.yml": NONE,
     ".github/FUNDING.yml": NONE,
     ".github/pull_request_template.md": NONE,
@@ -177,6 +208,9 @@ def buckets_for(path: str) -> frozenset:
         return GITHUB_RULES[path]
     if path in SCRIPT_RULES:
         return SCRIPT_RULES[path]
+
+    if path in INERT_DIR_BUILD_INPUTS:
+        return frozenset({"dotnet"})
 
     for prefix in INERT_DIRS:
         if path.startswith(prefix):
@@ -229,6 +263,8 @@ def is_docs_path(path: str) -> bool:
     analyzer-gate and re-downloaded by the Alpaca jobs, and the §14.5.1
     auto-bump PR touches that file and nothing else.
     """
+    if path in INERT_DIR_BUILD_INPUTS:
+        return False
     for prefix in INERT_DIRS:
         if path.startswith(prefix):
             return True

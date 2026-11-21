@@ -70,7 +70,7 @@ class SimpleQueueScreen extends SimpleScreen {
   );
 
   /// The first ⌘. / Ctrl+. asks; a second within 3 s stops (the keyboard's
-  /// stand-in for the shutter's 2 s hold, as the Emergency Stop does).
+  /// stand-in for Stop plan… in Plan's panel, #1911).
   @override
   void onStopShortcut(BuildContext context, WidgetRef ref) {
     final phase = simpleRunPhase(

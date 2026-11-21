@@ -59,7 +59,7 @@ namespace OpenAstroAra.Test {
             var port = ((IPEndPoint)probe.LocalEndpoint).Port;
             probe.Stop();
             Environment.SetEnvironmentVariable("OPENASTROARA_PORT", port.ToString(System.Globalization.CultureInfo.InvariantCulture));
-            app = Program.BuildApp([]);
+            app = Program.BuildApp([], TestHostSeams.Replace);
             await app.StartAsync();
             http = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
         }
@@ -88,6 +88,18 @@ namespace OpenAstroAra.Test {
             Assert.That(seen, Does.Contain("\"section\":\"site\""));
         }
 
+        /// <summary>#1807 — <c>PublishDaemonProfileWrites</c> in Program.cs: a section the daemon writes itself,
+        /// outside the profile routes (here the store write time sync makes), reaches the broadcaster too.</summary>
+        [Test]
+        public async Task A_daemon_site_write_reaches_the_broadcaster_as_profile_updated() {
+            var store = app.Services.GetRequiredService<IProfileStore>();
+            var seen = await Collect(() => {
+                store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = 38.85, LongitudeDeg = -77.04 });
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK));
+            }, "profile.updated");
+            Assert.That(seen, Does.Contain("\"section\":\"site\""));
+        }
+
         [Test]
         public async Task A_client_settings_patch_over_HTTP_reaches_the_broadcaster_as_client_settings_updated() {
             var seen = await Collect(() => http.PatchAsync(new Uri("/api/v1/client-settings", UriKind.Relative),
@@ -111,15 +123,18 @@ namespace OpenAstroAra.Test {
             Assert.That(OpenAstroAra.Server.Contracts.Refusals.RefusalCatalog.All.Select(c => c.Token), Does.Contain(reason));
         }
 
-        /// <summary>Subscribes first, sends the request, and returns the payload of the first event of
-        /// <paramref name="type"/> (empty when none arrives within 10 s).</summary>
+        /// <summary>Subscribes on the calling thread before the request starts, sends the request, and
+        /// returns the payload of the first event of <paramref name="type"/> (empty when none arrives
+        /// within 10 s). ReadAllAsync registers the subscriber at call time, so an event published
+        /// synchronously by the request is never missed, however late the reader task starts.</summary>
         private async Task<string> Collect(Func<Task<HttpResponseMessage>> request, string type) {
             var ws = app.Services.GetRequiredService<IWsEventChannel>();
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
             var found = new TaskCompletionSource<string>();
+            var stream = ws.ReadAllAsync(cts.Token);
             var reader = Task.Run(async () => {
                 try {
-                    await foreach (var e in ws.ReadAllAsync(cts.Token)) {
+                    await foreach (var e in stream) {
                         if (e.Type == type) {
                             found.TrySetResult(e.Payload.GetRawText());
                             return;

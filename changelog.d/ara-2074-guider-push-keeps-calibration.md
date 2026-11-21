@@ -1,0 +1,3 @@
+### Fixed (guiding)
+
+- **Connecting to the Guider no longer throws away its calibration** (#2074): every connect and every Guider settings push disconnected the Guider's equipment and sent the camera, mount, rotator and Alpaca server again, even when nothing had changed. The Guider rebuilds its mount for each of those, so the calibration was lost and the next guide start calibrated again. Ara now reads what the Guider holds first and leaves out the selections and setup that already match, so an unchanged rig stays connected and calibrated. A multi-star change disconnects the equipment for the setup alone. If that reconnect still loses the calibration while the camera, mount and optics are unchanged, Ara restores the saved calibration.

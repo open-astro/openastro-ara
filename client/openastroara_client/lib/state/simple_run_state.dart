@@ -17,6 +17,7 @@ import 'settings/imaging_defaults_state.dart';
 import 'settings/site_settings_state.dart';
 import '../services/dso_catalog_service.dart'
     show bestCatalogDesignation, catalogTag;
+import 'sky_atlas/plan_framing_state.dart';
 import 'sky_atlas/planetarium_selection_state.dart';
 import 'sky_atlas/tonight_sky_state.dart';
 import '../l10n/l10n.dart';
@@ -27,6 +28,7 @@ import '../util/tonight_sky_local.dart'
 import '../widgets/sequencer/target_plan_dialog.dart'
     show planFrameCount, planOptionsAvailable;
 import 'ws/ws_providers.dart';
+import '../models/ws_event_types.dart';
 import '../widgets/stop_mount_overlay.dart' show SlewWsEvents;
 
 /// The first plan for a filter set: LRGB when the set has any of it, else the
@@ -111,6 +113,22 @@ String? simpleTargetTag(String name, List<String> designations) {
   return best == null ? null : catalogTag(best)!.$2;
 }
 
+/// A name as a framing and a selection share it: without a leading `NAME `
+/// or `*`, trimmed.
+String _cleanName(String d) {
+  var n = d.trim();
+  if (n.startsWith('NAME ')) n = n.substring(5);
+  if (n.startsWith('*')) n = n.substring(1);
+  return n.trim();
+}
+
+/// Whether [f] frames [sel]: on, with a centre, and named by the Target's
+/// name or one of its designations (#1899). Pure — unit-tested.
+bool simpleFramingFits(PlanFraming f, PlanetariumSelection sel) =>
+    f.hasTarget &&
+    (_cleanName(f.name) == _cleanName(sel.name) ||
+        sel.designations.any((d) => _cleanName(f.name) == _cleanName(d)));
+
 /// [t]'s time of day at its next occurrence after [now], on the wheel's
 /// 5-minute grid.
 DateTime simpleNextAt(DateTime t, DateTime now) {
@@ -124,7 +142,7 @@ DateTime simpleNextAt(DateTime t, DateTime now) {
 final simpleDarkStartProvider = Provider<DateTime?>((ref) {
   ref.watch(skyClockProvider);
   return darkStart(
-    ref.watch(siteSettingsProvider),
+    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
     ref.watch(clockProvider)().toUtc(),
   )?.toLocal();
 });
@@ -134,7 +152,7 @@ final simpleDarkStartProvider = Provider<DateTime?>((ref) {
 final simpleScheduleAllowedProvider = Provider<bool>((ref) {
   ref.watch(skyClockProvider);
   return scheduleAllowed(
-    ref.watch(siteSettingsProvider),
+    ref.watch(siteSettingsProvider).value ?? const SiteSettings(),
     ref.watch(clockProvider)().toUtc(),
   );
 });
@@ -181,7 +199,7 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
       (_, _) => _reseed(),
     );
     ref.listen(
-      imagingDefaultsProvider.select((d) => d.defaultExposure),
+      imagingDefaultsProvider.select((d) => d.value?.defaultExposure),
       (_, _) => _reseed(),
     );
     ref.listen(filterWheelProvider.select((w) => w.value != null), (_, _) => _reseed());
@@ -191,7 +209,11 @@ class SimpleRunPlanNotifier extends Notifier<List<FilterPlanStep>> {
 
   List<FilterPlanStep> _defaults() => simpleRunDefaultPlan(
     ref.read(filterSetProvider).value?.filters ?? const [],
-    ref.read(imagingDefaultsProvider).defaultExposure.inMilliseconds / 1000,
+    // Not loaded yet: the class's 5 s, until the rig's copy reseeds the rows.
+    (ref.read(imagingDefaultsProvider).value ?? const ImagingDefaults())
+            .defaultExposure
+            .inMilliseconds /
+        1000,
     remainingDarkHours: _darkHours,
     // A wheel the daemon retains, connected or not (readRigCapabilities' rule).
     canChangeFilters: ref.read(filterWheelProvider).value != null,
@@ -312,9 +334,20 @@ class SimpleTarget {
     this.gain,
     this.calibration = false,
     this.flats = SimpleTargetFlats.none,
+    this.positionAngleDeg,
+    this.framingRaDeg,
+    this.framingDecDeg,
   });
 
   final String name;
+
+  /// #1899 — the planetarium framing this Target was queued with: the dialed
+  /// angle (east of north) and the framing centre (J2000 degrees). All null:
+  /// a plain centred go-to on [raDeg], [decDeg]. Kept with the Target so edit
+  /// and Undo rebuild its block as it was queued, whatever the page holds now.
+  final double? positionAngleDeg;
+  final double? framingRaDeg;
+  final double? framingDecDeg;
 
   /// When this target's flats are shot (#1757).
   final SimpleTargetFlats flats;
@@ -507,7 +540,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final steps = ref.read(simpleRunPlanProvider);
     final gain = ref.read(simpleRunGainProvider);
     final flats = ref.read(simpleRunFlatsProvider);
+    final framing = ref.read(planFramingProvider);
     if (sel == null || state.busy) return false;
+    final framed = simpleFramingFits(framing, sel) ? framing : null;
     // One block per name (the rig finds a target's block by it): a queued
     // target isn't added again; Start now moves it to the front instead.
     final queued = state.targets.indexWhere((t) => t.name == sel.name);
@@ -525,7 +560,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
     final dawn = queue != null
         ? state.dawnStop
         : dawnStopFor(
-            ref.read(siteSettingsProvider),
+            ref.read(siteSettingsProvider).value ?? const SiteSettings(),
             (startsAt ??
                     (ref.read(simpleScheduleAllowedProvider)
                         ? ref.read(simpleDarkStartProvider)
@@ -542,8 +577,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
       final r = await createImagingRun(
         null,
         container: ref.container,
-        raDeg: sel.raJ2000Hours * 15,
-        decDeg: sel.decJ2000Deg,
+        raDeg: framed?.raDeg ?? sel.raJ2000Hours * 15,
+        decDeg: framed?.decDeg ?? sel.decJ2000Deg,
+        positionAngleDeg: framed?.rotationDeg,
         targetName: sel.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -585,6 +621,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         rise: sel.belowHorizon ? sel.rise : null,
         gain: gain,
         flats: flats,
+        positionAngleDeg: framed?.rotationDeg,
+        framingRaDeg: framed?.raDeg,
+        framingDecDeg: framed?.decDeg,
       );
       if (queue == null) {
         state = SimpleRun(
@@ -663,8 +702,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         null,
         pauseForFilterSwap: false,
         container: ref.container,
-        raDeg: t.raDeg,
-        decDeg: t.decDeg,
+        raDeg: t.framingRaDeg ?? t.raDeg,
+        decDeg: t.framingDecDeg ?? t.decDeg,
+        positionAngleDeg: t.positionAngleDeg,
         targetName: t.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -691,6 +731,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         rise: t.rise,
         gain: gain,
         flats: t.flats,
+        positionAngleDeg: t.positionAngleDeg,
+        framingRaDeg: t.framingRaDeg,
+        framingDecDeg: t.framingDecDeg,
       );
       state = state.copyWith(
         targets: [...state.targets]..[i] = edited,
@@ -752,8 +795,9 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         null,
         pauseForFilterSwap: false,
         container: ref.container,
-        raDeg: t.raDeg,
-        decDeg: t.decDeg,
+        raDeg: t.framingRaDeg ?? t.raDeg,
+        decDeg: t.framingDecDeg ?? t.decDeg,
+        positionAngleDeg: t.positionAngleDeg,
         targetName: t.name,
         jumpToRun: false,
         alwaysCenter: true,
@@ -764,6 +808,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         gain: t.gain,
         stopAtDawn: state.dawnStop,
         recalibrateGuider: true,
+        flatsAfterTarget: t.flats == SimpleTargetFlats.afterTarget,
       );
       if (r == null || r.draft || r.sequenceId != id) {
         throw StateError("the rig didn't take it back");
@@ -1125,7 +1170,7 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
         ref.read(sequenceRunStateProvider).value?.state?.isActive ?? false;
     if (api == null || id == null || active || state.busy) return true;
     final dawn = dawnStopFor(
-      ref.read(siteSettingsProvider),
+      ref.read(siteSettingsProvider).value ?? const SiteSettings(),
       (state.startAt ?? ref.read(clockProvider)()).toUtc(),
     );
     if (dawn == state.dawnStop) return true;
@@ -1248,5 +1293,48 @@ class SimpleMountStoppedNotifier extends Notifier<bool> {
 final simpleMountStoppedProvider =
     NotifierProvider<SimpleMountStoppedNotifier, bool>(
       SimpleMountStoppedNotifier.new,
+    );
+
+/// #2044 — the rig stopped tracking at a mount limit (`telescope.limit_reached`:
+/// the meridian, with the flip off): an error pill, and while the plan it
+/// paused stays paused, the same sentence as the run's reason (run state has
+/// no pause reason, as for [SimpleMountStoppedNotifier]).
+class SimpleMountLimitNotifier extends Notifier<String?> {
+  @override
+  String? build() {
+    ref.listen(wsEventsProvider, (_, next) {
+      final e = next.value;
+      if (e?.type != WsEventTypes.telescopeLimitReached) return;
+      final TelescopeLimitReachedPayload p;
+      try {
+        p = TelescopeLimitReachedPayload.fromJson(e!.payload);
+      } on TypeError {
+        return;
+      }
+      final l = l10nFor(ref.read(appLocaleProvider));
+      final text = [
+        p.trackingStopped
+            ? l.limitStoppedMeridian(p.minutes)
+            : l.limitNotStoppedMeridian(p.minutes),
+        if (p.runsPaused > 0) l.limitPlanPaused,
+        l.limitDidntMove,
+      ].join(' ');
+      ref
+          .read(simpleMessagesProvider.notifier)
+          .show(SimpleMessageKind.error, text, origin: SimpleStatusOrigin.mount);
+      state = p.runsPaused > 0 ? text : null;
+    });
+    ref.listen(sequenceRunStateProvider, (prev, next) {
+      if (simpleRunPaused(prev?.value?.state) && !simpleRunPaused(next.value?.state)) {
+        state = null;
+      }
+    });
+    return null;
+  }
+}
+
+final simpleMountLimitProvider =
+    NotifierProvider<SimpleMountLimitNotifier, String?>(
+      SimpleMountLimitNotifier.new,
     );
 

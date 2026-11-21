@@ -3,16 +3,26 @@ import 'package:flutter_riverpod/misc.dart' show ProviderListenable;
 
 import '../profile_management_state.dart';
 import '../saved_server_state.dart';
+import 'autofocus_settings_state.dart';
 import 'camera_electronics_state.dart';
+import 'cooling_fan_state.dart';
 import 'custom_horizon_state.dart';
 import 'diagnostics_mode_state.dart';
+import 'dome_settings_state.dart';
+import 'equipment_connection_state.dart';
 import 'filenames_settings_state.dart';
 import 'filter_set_state.dart';
 import 'filter_wheel_labels_state.dart';
 import 'filter_wheel_policy_state.dart';
+import 'imaging_defaults_state.dart';
 import 'loaded_section.dart';
 import 'notifications_settings_state.dart';
+import 'optics_settings_state.dart';
+import 'phd2_settings_state.dart';
 import 'plate_solve_settings_state.dart';
+import 'polar_align_settings_state.dart';
+import 'safety_policies_state.dart';
+import 'site_settings_state.dart';
 import 'storage_settings_state.dart';
 import 'unguided_settings_state.dart';
 
@@ -23,8 +33,8 @@ import 'unguided_settings_state.dart';
 ///
 /// [read] is a `ref.read`, so a widget's `WidgetRef` can reset after a wizard
 /// save and a replay: they write sections from this device without a version
-/// and live-sync skips its own `profile.updated`, so a section loaded before
-/// would keep a stale tag (a false 412 on the next Save).
+/// and outside the section notifier, so a section loaded before would keep a
+/// stale tag until live sync lands (a false 412 on the next Save).
 void resetMigratedSections(T Function<T>(ProviderListenable<T>) read) {
   for (final section in migratedSections) {
     read(section.provider.notifier).reset();
@@ -41,15 +51,25 @@ typedef MigratedSection = ({
 /// that [resetMigratedSections] and the live-sync table (profile_live_sync.dart)
 /// read, and a test checks both against.
 final List<MigratedSection> migratedSections = [
+  (route: 'autofocus', provider: autofocusSettingsProvider),
   (route: 'camera-electronics', provider: cameraElectronicsProvider),
+  (route: 'cooling-fan', provider: coolingFanProvider),
   (route: 'custom-horizon', provider: customHorizonProvider),
   (route: 'diagnostics-mode', provider: diagnosticsModeProvider),
+  (route: 'dome', provider: domeSettingsProvider),
+  (route: 'equipment-connection', provider: equipmentConnectionProvider),
   (route: 'filenames', provider: filenamesSettingsProvider),
   (route: 'filter-set', provider: filterSetProvider),
   (route: 'filter-wheel', provider: filterWheelLabelsProvider),
   (route: 'filter-wheel', provider: filterWheelPolicyProvider),
+  (route: 'imaging-defaults', provider: imagingDefaultsProvider),
   (route: 'notifications', provider: notificationsSettingsProvider),
+  (route: 'optics', provider: opticsSettingsProvider),
+  (route: 'phd2', provider: phd2SettingsProvider),
   (route: 'plate-solve', provider: plateSolveSettingsProvider),
+  (route: 'polar-align', provider: polarAlignSettingsProvider),
+  (route: 'safety', provider: safetyPoliciesProvider),
+  (route: 'site', provider: siteSettingsProvider),
   (route: 'storage', provider: storageSettingsProvider),
   (route: 'unguided', provider: unguidedSettingsProvider),
 ];

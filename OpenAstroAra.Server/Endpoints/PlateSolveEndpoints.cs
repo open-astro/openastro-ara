@@ -52,7 +52,7 @@ public static class PlateSolveEndpoints {
         solve.MapPost("/center", CenterAsync)
             .Produces<BatchJobDto>(StatusCodes.Status202Accepted)
             .ProducesProblem(StatusCodes.Status400BadRequest)
-            .ProducesProblem(StatusCodes.Status409Conflict) // #1149 — a centering job for another target is running
+            .ProducesProblem(StatusCodes.Status409Conflict) // #1149 — a centering job for another target is running; #2066 — polar-align-moving-mount while Polar Align runs
             .WithName("CenterOnCoordinates")
             .WithSummary("Slew the mount to coordinates and center by iterative plate solves, as a background job.");
 
@@ -113,8 +113,10 @@ public static class PlateSolveEndpoints {
     }
 
     // Extracted (not an inline lambda) so the wiring is unit-testable with mocked services.
-    public static IResult CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
-            OpenAstroAra.Profile.Interfaces.IProfileService profileService) {
+    public static async Task<IResult> CenterAsync(CenterRequestDto? request, ICenteringService centering, IBatchJobService jobs,
+            OpenAstroAra.Profile.Interfaces.IProfileService profileService,
+            [Microsoft.AspNetCore.Mvc.FromServices] IMountClockGate? mountClock = null,
+            [Microsoft.AspNetCore.Mvc.FromServices] ITelescopeService? telescope = null, CancellationToken ct = default) {
         // Doubles reject NaN too: NaN fails every range comparison, so `is not` catches it.
         if (request is null
                 || request.RaHours is not (>= 0 and < 24)
@@ -122,6 +124,9 @@ public static class PlateSolveEndpoints {
             return Results.Problem("Centering needs ra_hours in [0, 24) and dec_degrees in [-90, 90].",
                 statusCode: StatusCodes.Status400BadRequest);
         }
+        // #2066 (ARA-2) — Polar Align holds the mount for its whole run: Center's GoTo would run beside its next turn.
+        // Refused before a job is queued (the mediator's GoTo refuses it again, for a center that started first).
+        EquipmentEndpoints.ThrowIfPolarAlignMovesTheMount(null, "centering GoTo", telescope);
         var target = new OpenAstroAra.Astrometry.Coordinates(request.RaHours, request.DecDegrees,
             OpenAstroAra.Astrometry.Epoch.J2000, OpenAstroAra.Astrometry.Coordinates.RAType.Hours);
         // Job total = the profile's solve-attempt budget, read at enqueue time (the autofocus
@@ -133,6 +138,14 @@ public static class PlateSolveEndpoints {
         // running job (the §65.5 policy); one for OTHER coordinates is a 409 naming the running job,
         // not a silent join that reports the wrong target as centred.
         var identity = CenterIdentity(request.RaHours, request.DecDegrees);
+        // #2071 — the centring slews would be refused inside the job; answer the cause now instead. Checked
+        // before Enqueue on purpose: while the gate is closed a repeat Center for the running job's target
+        // is refused too rather than joining it, so the user sees the cause instead of a job that cannot slew.
+        // Like a REST GoTo, a Center sent while a clock push is running (the app's time sync just after it
+        // connects) waits for it, up to about 10 s, instead of a 409 the push is about to lift.
+        if (mountClock is not null && await mountClock.MountClockRefusalAfterPushAsync(ct).ConfigureAwait(false) is { } clockRefusal) {
+            throw new RefusalException(RefusalCatalog.MountClockNotVerified, clockRefusal);
+        }
         BatchJobDto job;
         try {
             job = jobs.Enqueue("center", totalSteps: attempts, CenterWork(centering, target, attempts), identity);

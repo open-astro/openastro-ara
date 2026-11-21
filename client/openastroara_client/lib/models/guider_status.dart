@@ -123,6 +123,10 @@ class GuiderStatus {
   final String? calibrationDirection;
   final int? calibrationStep;
   final double? calibrationDistancePx;
+  /// The distance the guider is set to move on each leg, in guide pixels
+  /// (`runtime.calibration_target_px`); null when it reports none (#1895).
+  final double? calibrationTargetPx;
+
   /// Why the guider does not hold the active profile's guider settings, and
   /// how to fix it; null when it does or that is not known yet (#1665).
   final String? outOfStepReason;
@@ -146,22 +150,32 @@ class GuiderStatus {
     this.calibrationDirection,
     this.calibrationStep,
     this.calibrationDistancePx,
+    this.calibrationTargetPx,
     this.outOfStepReason,
     this.profiles = const {},
   });
 
-  /// "North step 7 · 11.9 px" while a calibration leg is reported; null otherwise.
+  /// "North step 7 · 11.9 of 25 px" while a calibration leg is reported, "North
+  /// step 7 · 11.9 px" when the guider reports no target; null otherwise.
   String? calibrationText(AppLocalizations l) {
     final dir = calibrationDirection;
     if (dir == null || dir.isEmpty) return null;
+    final moved = calibrationDistancePx?.toStringAsFixed(1);
+    final target = calibrationTargetPx;
     final parts = [
       calibrationStep == null ? dir : l.guiderStateCalibrationStep(dir, '$calibrationStep'),
-      if (calibrationDistancePx != null) '${calibrationDistancePx!.toStringAsFixed(1)} px',
+      if (moved != null)
+        target == null
+            ? '$moved px'
+            : l.guiderStateCalibrationDistanceOf(
+                moved,
+                target.toStringAsFixed(target % 1 == 0 ? 0 : 1),
+              ),
     ];
     return parts.join(' · ');
   }
 
-  /// "Calibrating · North step 7 · 11.9 px", "Guiding", "Not connected".
+  /// "Calibrating · North step 7 · 11.9 of 25 px", "Guiding", "Not connected".
   String runtimeSummary(AppLocalizations l) {
     if (!isConnected) return l.guiderStateNotConnected;
     final base = guiderRuntimeText(l, runtimeState);
@@ -224,6 +238,7 @@ class GuiderStatus {
       calibrationDirection: _str(runtimeMap['calibration_direction']),
       calibrationStep: (runtimeMap['calibration_step'] as num?)?.toInt(),
       calibrationDistancePx: _asDouble(runtimeMap['calibration_distance_px']),
+      calibrationTargetPx: _asDouble(runtimeMap['calibration_target_px']),
       outOfStepReason: _str(runtimeMap['out_of_step_reason']),
       profiles: _profiles(runtimeMap['profiles']),
     );

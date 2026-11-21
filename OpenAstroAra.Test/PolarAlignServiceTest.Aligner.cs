@@ -113,22 +113,23 @@ namespace OpenAstroAra.Test {
             public IPolarAligner? Current() => Device;
         }
 
-        /// <summary>Seed frames A and B as the bench's fixed sky; every live frame is B's pointing moved by the
+        /// <summary>Seed frames A, B and C as the bench's fixed sky; every live frame is C's pointing moved by the
         /// aligner's offset: azimuth is a turn about the vertical, altitude a tilt.</summary>
         private sealed class CorrectedSky(FakeAligner aligner, double latDeg = SiteLatDeg) : IPolarAlignFrameSolver {
-            // The bench's two seed frames, mirrored to the southern sky for a southern site.
+            // The bench's three seed frames, mirrored to the southern sky for a southern site.
             private readonly PolarAlignSolveOutcome _a = new(true, SolveA.RaDegJnow, Math.Sign(latDeg) * SolveA.DecDegJnow);
             private readonly PolarAlignSolveOutcome _b = new(true, SolveB.RaDegJnow, Math.Sign(latDeg) * SolveB.DecDegJnow);
+            private readonly PolarAlignSolveOutcome _c = new(true, SolveC.RaDegJnow, Math.Sign(latDeg) * SolveC.DecDegJnow);
             private int _solves;
             public Task<double?> MeasureFocalLengthAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) =>
                 Task.FromResult<double?>(null);
             public Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRa, double? hintDec, CancellationToken ct) {
                 var n = Interlocked.Increment(ref _solves);
-                if (n <= 2) {
-                    return Task.FromResult(n == 1 ? _a : _b);
+                if (n <= 3) {
+                    return Task.FromResult(n == 1 ? _a : n == 2 ? _b : _c);
                 }
                 var now = DateTimeOffset.UtcNow;
-                var p = PolarAlignGeometry.PointingAltAz(_b.RaDegJnow, _b.DecDegJnow, latDeg, SiteLonDeg, now);
+                var p = PolarAlignGeometry.PointingAltAz(_c.RaDegJnow, _c.DecDegJnow, latDeg, SiteLonDeg, now);
                 var (az, alt) = aligner.Offset;
                 var (newAlt, newAz) = MovedWithTheMount(p.AltDeg, p.AzDeg, alt / 60.0, az / 60.0, latDeg);
                 var (ra, dec) = SiteAstrometry.EquatorialFromAltAz(newAlt, newAz, latDeg,
@@ -173,7 +174,7 @@ namespace OpenAstroAra.Test {
             if (moveTimeout is { } t) {
                 svc.AlignerMoveTimeout = t;
             }
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             return (svc, ws);
         }
 
@@ -448,7 +449,7 @@ namespace OpenAstroAra.Test {
             var source = new SwappableSource(dead);
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, aligner: source);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
 
             var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
@@ -522,12 +523,18 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_device_that_cannot_move_while_the_mount_tracks_is_not_sent_a_move() {
-            // The bench mount keeps reporting tracking on.
+            // The bench mount keeps reporting tracking on: since #2072 the live readout ends the run before the
+            // device is asked for anything (the aligner's own MountTracking check stays as a second guard).
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { InfoReply = AlignerInfo(movesWhileTracking: false) };
-            var (svc, stopped, _) = await RunUntilStoppedAsync(aligner, NewMount(tracking: true)).ConfigureAwait(false);
+            var mount = NewMount(tracking: true);
+            mount.Setup(m => m.SetTrackingEnabled(Moq.It.IsAny<bool>())).Returns(true); // accepted, never applied
+            var (svc, ws) = await StartWithAlignerAsync(aligner, mount).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.MountTracking));
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            Assert.That(ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload.GetProperty("reason").GetString(),
+                Is.EqualTo(PolarAlignService.TrackingNotOff));
             Assert.That(aligner.Moves, Is.Empty);
         }
 

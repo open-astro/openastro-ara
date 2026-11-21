@@ -48,7 +48,7 @@ namespace OpenAstroAra.Server.Services;
 /// the hooks live at the HTTP layer precisely so internal calls don't
 /// masquerade as attention.
 ///
-/// The shutdown ladder (each step best-effort, logged, never throws):
+/// The shutdown ladder (the shared <see cref="ShutdownLadder"/>; each step best-effort, logged, never throws):
 ///   1. stop the guider (corrections on a mis-aimed scope drift it further)
 ///   2. park the mount when it can park (90 s cap), else stop tracking
 ///   3. disconnect filter wheel / focuser / rotator / flat panel
@@ -73,13 +73,7 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
 
     private readonly IProfileStore? _profiles;
     private readonly Func<ISequencerService?>? _sequencerResolver;
-    private readonly IGuiderMediator? _guider;
-    private readonly ITelescopeMediator? _telescope;
-    private readonly ICameraService? _camera;
-    private readonly IFilterWheelService? _filterWheel;
-    private readonly IFocuserService? _focuser;
-    private readonly IRotatorService? _rotator;
-    private readonly IFlatDeviceService? _flatDevice;
+    private readonly ShutdownLadder _ladder;
     private readonly INotificationService? _notifications;
     private readonly ILogger<UnattendedShutdownService> _logger;
 
@@ -110,19 +104,17 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     // ─── test seams (the ClientSessionService knob pattern) ───
     /// <summary>Maps the profile's wait_minutes to the actual delay; tests compress it.</summary>
     internal Func<int, TimeSpan> WaitFromMinutes { get; set; } = m => TimeSpan.FromMinutes(m);
-    /// <summary>Time scale for the warm-up loop: the set-point steps ramp °C
-    /// once per (1 minute / scale). Production stays 1.0 — the camera sees the
-    /// profile's true °C/min; tests raise it to compress minutes into ms.</summary>
-    internal double WarmTimeScale { get; set; } = 1.0;
+    /// <summary>The ladder's warm-up time scale (see <see cref="ShutdownLadder.WarmTimeScale"/>).</summary>
+    internal double WarmTimeScale { get => _ladder.WarmTimeScale; set => _ladder.WarmTimeScale = value; }
     /// <summary>Hard cap on the whole warm-up, per §58.12 step 5.</summary>
-    internal TimeSpan WarmHardCap { get; set; } = TimeSpan.FromMinutes(30);
+    internal TimeSpan WarmHardCap { get => _ladder.WarmHardCap; set => _ladder.WarmHardCap = value; }
     /// <summary>Cap on the park attempt (mirrors §58.9 SafeRest's bound).</summary>
-    internal TimeSpan ParkTimeout { get; set; } = TimeSpan.FromSeconds(90);
+    internal TimeSpan ParkTimeout { get => _ladder.ParkTimeout; set => _ladder.ParkTimeout = value; }
 
     /// <summary>The set-point the warm-up ramps toward. +10 °C is a safely
     /// "warm" TEC target for any climate; the cooler turns OFF once reached, so
     /// the sensor finishes settling to true ambient passively.</summary>
-    internal const double WarmTargetC = 10.0;
+    internal const double WarmTargetC = ShutdownLadder.WarmTargetC;
 
     /// <summary>The wait when the profile cannot be read; the same as a new profile's default.</summary>
     internal const int DefaultWaitMinutes = 30;
@@ -139,16 +131,12 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             IFlatDeviceService? flatDevice = null,
             INotificationService? notifications = null,
             ILogger<UnattendedShutdownService>? logger = null,
-            TimeProvider? time = null) {
+            TimeProvider? time = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null) {
         _profiles = profiles;
         _sequencerResolver = sequencerResolver;
-        _guider = guider;
-        _telescope = telescope;
-        _camera = camera;
-        _filterWheel = filterWheel;
-        _focuser = focuser;
-        _rotator = rotator;
-        _flatDevice = flatDevice;
+        // #2066 — the ladder ends a running polar alignment before it parks (the mediator refuses a park while it runs).
+        _ladder = new ShutdownLadder(profiles, guider, telescope, camera, filterWheel, focuser, rotator, flatDevice, logger, polarAlignResolver);
         _notifications = notifications;
         _logger = logger ?? NullLogger<UnattendedShutdownService>.Instance;
         _time = time ?? TimeProvider.System;
@@ -335,9 +323,9 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
     }
 
     /// <summary>
-    /// The §58.12 ladder. Every step is best-effort: a dead device mid-ladder
-    /// must not stop the remaining equipment from being put to bed. Between
-    /// steps the ladder honors <paramref name="abandon"/> — user activity
+    /// The §58.12 ladder, run through the shared <see cref="ShutdownLadder"/>. Every step is
+    /// best-effort: a dead device mid-ladder must not stop the remaining equipment from being put to
+    /// bed. Between steps the ladder honors <paramref name="abandon"/> — user activity
     /// mid-ladder cancels it, and the teardown must never continue underneath
     /// a user who just came back and started driving the rig (the resumed
     /// sequence believes it is Running; disconnecting its camera under it is a
@@ -357,101 +345,28 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             return true;
         }
 
-        // 1 — stop the guider. GetInfo is only an optimization to skip a
-        // disconnected guider — if the read itself throws, the state is
-        // UNKNOWN and the stop is still attempted (an unknown guider quietly
-        // correcting a safe-rested mount is the failure mode, not a wasted
-        // no-op stop call).
-        if (_guider is not null) {
-            bool? guiderConnected = null;
-            try {
-                guiderConnected = _guider.GetInfo().Connected;
-            } catch (Exception ex) {
-                LogStepFailed("guider-info", ex);
-            }
-            if (guiderConnected != false) {
-                try {
-                    await _guider.StopGuiding(CancellationToken.None).ConfigureAwait(false);
-                    summary.Append("Guider stopped. ");
-                } catch (Exception ex) {
-                    LogStepFailed("stop-guider", ex);
-                    summary.Append("Guider stop FAILED. ");
-                }
-            }
-        }
-
-        // 2 — park the mount (or stop tracking). Same moves as §58.9 SafeRest,
-        // (skipped, like every later step, once the user is back — see Abandoned)
-        // including its two-stage shape: the park attempt gets its OWN catch so
-        // a park that fails by THROWING (the 90 s timeout cancels the token)
-        // still falls through to the tracking-stop — a tracking, unattended
-        // mount is the exact outcome this feature exists to prevent. Both moves
-        // are idempotent when safe rest already ran.
-        try {
-            if (!Abandoned() && _telescope is not null) {
-                OpenAstroAra.Equipment.Equipment.MyTelescope.TelescopeInfo? mount = null;
-                try {
-                    mount = _telescope.GetInfo();
-                } catch (Exception ex) {
-                    LogStepFailed("mount-info", ex);
-                }
-                if (mount is null) {
-                    // State unreadable — the one thing still worth trying blind
-                    // is the tracking stop: an unattended TRACKING mount is the
-                    // outcome this feature exists to prevent, and a stop sent
-                    // to a parked/disconnected mount is a harmless no-op.
-                    _telescope.SetTrackingEnabled(false);
-                    summary.Append("Mount state unreadable — tracking stop attempted. ");
-                } else if (mount.CanPark && !mount.AtPark) {
-                    var parked = false;
-                    try {
-                        using var parkCts = new CancellationTokenSource(ParkTimeout);
-                        var progress = new Progress<OpenAstroAra.Core.Model.ApplicationStatus>();
-                        parked = await _telescope.ParkTelescope(progress, parkCts.Token).ConfigureAwait(false);
-                    } catch (Exception ex) {
-                        LogStepFailed("park-mount", ex);
-                    }
-                    if (parked) {
-                        summary.Append("Mount parked. ");
-                    } else {
-                        _telescope.SetTrackingEnabled(false);
-                        summary.Append("Park failed — tracking stopped instead. ");
-                    }
-                } else if (mount.AtPark) {
-                    summary.Append("Mount already parked. ");
-                } else if (mount.Connected) {
-                    _telescope.SetTrackingEnabled(false);
-                    summary.Append("Mount cannot park — tracking stopped. ");
-                }
-            }
-        } catch (Exception ex) {
-            LogStepFailed("mount-rest", ex);
-            summary.Append("Mount park/tracking-stop FAILED. ");
-        }
+        // 1 — stop the guider. 2 — park the mount, or stop tracking (skipped, like every later step,
+        // once the user is back — see Abandoned).
+        summary.Append((await _ladder.StopGuidingAsync().ConfigureAwait(false)).Text);
+        if (!Abandoned()) summary.Append((await _ladder.RestMountAsync().ConfigureAwait(false)).Step.Text);
 
         // 3 — disconnect the ancillary devices. The camera deliberately waits
         // for the warm-up (step 5).
-        if (!Abandoned()) await DisconnectQuietly("filter wheel", _filterWheel is null ? null : ct => _filterWheel.DisconnectAsync(null, ct), summary).ConfigureAwait(false);
-        if (!Abandoned()) await DisconnectQuietly("focuser", _focuser is null ? null : ct => _focuser.DisconnectAsync(null, ct), summary).ConfigureAwait(false);
-        if (!Abandoned()) await DisconnectQuietly("rotator", _rotator is null ? null : ct => _rotator.DisconnectAsync(null, ct), summary).ConfigureAwait(false);
-        if (!Abandoned()) await DisconnectQuietly("flat panel", _flatDevice is null ? null : ct => _flatDevice.DisconnectAsync(null, ct), summary).ConfigureAwait(false);
+        foreach (var device in Enum.GetValues<AncillaryDevice>()) {
+            if (!Abandoned()) summary.Append((await _ladder.DisconnectAsync(device).ConfigureAwait(false)).Text);
+        }
 
         // 4 — warm the cooler, then 5 — disconnect the camera. An abandon
         // during the (long) ramp leaves the cooler ON at its current set-point
         // and the camera CONNECTED: the returning user may resume imaging, and
         // killing their cooling or yanking the camera is exactly the race this
         // signal exists to prevent.
-        try {
-            if (!Abandoned() && _camera is not null) {
-                var rampCompleted = await WarmCoolerAsync(summary, abandon).ConfigureAwait(false);
-                if (rampCompleted && !Abandoned()) {
-                    await _camera.DisconnectAsync(null, CancellationToken.None).ConfigureAwait(false);
-                    summary.Append("Camera disconnected. ");
-                }
+        if (!Abandoned()) {
+            var warm = await _ladder.WarmCoolerAsync(abandon).ConfigureAwait(false);
+            summary.Append(warm.Text);
+            if (warm.Outcome is (LadderOutcome.Done or LadderOutcome.Skipped) && !Abandoned()) {
+                summary.Append((await _ladder.DisconnectCameraAsync().ConfigureAwait(false)).Text);
             }
-        } catch (Exception ex) {
-            LogStepFailed("camera", ex);
-            summary.Append("Camera warm-up/disconnect FAILED. ");
         }
 
         var summaryText = summary.ToString();
@@ -485,98 +400,6 @@ public sealed partial class UnattendedShutdownService : IHostedService, IDisposa
             }
         } catch (Exception ex) {
             LogStepFailed("summary-notification", ex);
-        }
-    }
-
-    /// <summary>
-    /// §58.12 step "warm cooler": step the set-point from the current CCD
-    /// temperature toward <see cref="WarmTargetC"/> at the profile's
-    /// <c>CoolerRampCPerMin</c> (default 1 °C/min), then switch the cooler off.
-    /// Bounded by <see cref="WarmHardCap"/>. A camera with the cooler already
-    /// off (or no readable temperature) skips the ramp entirely.
-    /// </summary>
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown, and a ramp step that throws (interlock refusal, driver rejection) is logged and cuts the ramp short so the final cooler-off still runs.")]
-    private async Task<bool> WarmCoolerAsync(System.Text.StringBuilder summary, CancellationToken abandon) {
-        if (_camera is null) return true;
-        var dto = await _camera.GetAsync(CancellationToken.None).ConfigureAwait(false);
-        var runtime = dto?.Runtime;
-        if (runtime is not { CoolerOn: true }) return true; // nothing to warm
-        if (runtime.CcdTemperature is not double startTemp || startTemp >= WarmTargetC) {
-            // No readable temperature to ramp from (or already warm): just cut
-            // the cooler — with the TEC near ambient there's no thermal shock.
-            await _camera.SetCoolerAsync(false, null, CancellationToken.None).ConfigureAwait(false);
-            summary.Append("Cooler switched off. ");
-            return true;
-        }
-
-        double rampPerMin = 1.0;
-        try {
-            var ramp = _profiles?.GetImagingDefaults().CoolerRampCPerMin;
-            if (ramp is > 0) rampPerMin = ramp.Value;
-        } catch (Exception ex) {
-            LogPolicyReadFailed(ex);
-        }
-        // One ramp-°C step per scaled minute: the slope the hardware sees is
-        // exactly the profile's °C/min at scale 1; a test scale only shortens
-        // the sleeps, never changes the per-step temperature delta.
-        var stepC = rampPerMin;
-        var stepSleep = TimeSpan.FromMinutes(1.0 / WarmTimeScale);
-        var setpoint = startTemp;
-        var started = DateTimeOffset.UtcNow;
-        var stepFailed = false;
-        while (setpoint < WarmTargetC && DateTimeOffset.UtcNow - started < WarmHardCap) {
-            setpoint = Math.Min(WarmTargetC, setpoint + stepC);
-            try {
-                await _camera.SetCoolerAsync(true, setpoint, CancellationToken.None).ConfigureAwait(false);
-            } catch (Exception ex) {
-                // A ramp step that the camera service refuses (the #1076 fan interlock: fan
-                // write failed with the cooler state unreadable) or that the driver rejects must
-                // never skip the final cooler-off below — that is the step that matters
-                // overnight. Log it, stop stepping, and fall through to the cut-off.
-                LogRampStepFailed(setpoint, ex);
-                stepFailed = true;
-                break;
-            }
-            if (setpoint >= WarmTargetC) break;
-            try {
-                await Task.Delay(stepSleep, abandon).ConfigureAwait(false);
-            } catch (OperationCanceledException) {
-                // User came back mid-ramp: leave the cooler ON at the current
-                // set-point (they may resume imaging — cutting their cooling is
-                // the race the abandon signal prevents) and keep the camera
-                // connected. False tells the ladder to skip the disconnect.
-                summary.Append($"Cooler warm-up abandoned at {setpoint:F0}°C set-point — cooler left ON. ");
-                return false;
-            }
-        }
-        await _camera.SetCoolerAsync(false, null, CancellationToken.None).ConfigureAwait(false);
-        // Be honest about WHICH condition ended the ramp: a hard-cap exit cut
-        // the cooler off short of the target — the abrupt-ish cutoff the ramp
-        // exists to soften — and the morning summary must not read like a
-        // completed warm-up (the sensor may still have been cold at power cut).
-        summary.Append(stepFailed
-            ? $"Cooler warm-up step to {setpoint:F0}°C FAILED — cooler switched off early. "
-            : setpoint >= WarmTargetC
-                ? $"Cooler warmed from {startTemp:F0}°C and switched off. "
-                : $"Cooler warm-up HIT THE {WarmHardCap.TotalMinutes:F0}-minute cap at {setpoint:F0}°C set-point (target {WarmTargetC:F0}°C) — switched off early. ");
-        return true;
-    }
-
-    [LoggerMessage(Level = LogLevel.Warning, Message = "UNATTENDED_SHUTDOWN cooler warm-up step to {Setpoint}°C failed; cutting the cooler off early")]
-    private partial void LogRampStepFailed(double setpoint, Exception ex);
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Best-effort by design: a fault in one step must not stop the rest of the shutdown/countdown.")]
-    private async Task DisconnectQuietly(string name, Func<CancellationToken, Task<OperationAcceptedDto>>? disconnect,
-            System.Text.StringBuilder summary) {
-        if (disconnect is null) return;
-        try {
-            await disconnect(CancellationToken.None).ConfigureAwait(false);
-            summary.Append($"{char.ToUpperInvariant(name[0])}{name[1..]} disconnected. ");
-        } catch (Exception ex) {
-            LogStepFailed($"disconnect-{name}", ex);
-            summary.Append($"{char.ToUpperInvariant(name[0])}{name[1..]} disconnect FAILED. ");
         }
     }
 

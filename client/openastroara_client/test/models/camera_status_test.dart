@@ -127,4 +127,17 @@ void main() {
     });
     expect(absent.capabilities!.hasCooler, isFalse);
   });
+
+  test('cooler_not_responding parses, defaults to false and counts in equality (#2076)', () {
+    Map<String, dynamic> wire(Map<String, dynamic> runtime) => {
+          'state': 'connected',
+          'runtime': {'state': 'idle', 'cooler_on': false, ...runtime},
+        };
+    final dead = CameraStatus.fromJson(wire({'cooler_not_responding': true}));
+    final older = CameraStatus.fromJson(wire({}));
+    expect(dead.coolerNotResponding, isTrue);
+    expect(older.coolerNotResponding, isFalse, reason: 'an older daemon omits it');
+    expect(dead == older, isFalse);
+    expect(CameraStatus.fromJson(wire({'cooler_not_responding': false})), older);
+  });
 }

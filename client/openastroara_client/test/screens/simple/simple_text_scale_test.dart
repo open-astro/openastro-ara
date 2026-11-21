@@ -52,6 +52,17 @@ import 'package:openastroara/widgets/inline_choices.dart';
 import 'package:openastroara/widgets/support/bug_report_card.dart';
 import 'package:openastroara/state/rig_setup_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart' show serverLinkUpProvider;
+import 'package:openastroara/state/settings/loaded_section.dart';
+import 'package:openastroara/state/settings/optics_settings_state.dart';
+
+import '../../support/site_section.dart';
+
+/// The profile's optics, in from the rig from the start (no load, no network).
+class _RigOptics extends OpticsSettingsNotifier {
+  @override
+  LoadedSection<OpticsSettings> build() =>
+      const LoadedSection(value: OpticsSettings(), source: SectionSource.rig, etag: '"v1"');
+}
 
 class _MemPrefs extends SimpleModePrefsService {
   bool value = true;
@@ -201,6 +212,10 @@ void main() {
           selectedTabIndexProvider.overrideWith(_StartOnLive.new),
           // The Connect to your rig card (no rig link here) scans: no network in a test.
           discoveredServersProvider.overrideWith((ref) => const Stream<AraServer>.empty()),
+          // The profile's optics in from the rig (ADR 0015): Rig shows its telescope wheels.
+          opticsSettingsProvider.overrideWith(_RigOptics.new),
+          // The profile's site, in from the rig from the start (ADR 0015).
+          siteFromRig(),
           // Plan with real content: Tonight's best (one picked) and a queue.
           if (open == 'Camera') cameraStatusProvider.overrideWith(_Camera.new),
           if (open == 'Settings Focuser') focuserProvider.overrideWith(_Focuser.new),
@@ -270,9 +285,16 @@ void main() {
           }
         } else if (open == 'Stop armed') {
           // A keyboard press arms it: PRESS AGAIN, the longest label it shows.
-          tester.widget<FilledButton>(find.descendant(
-                  of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton)))
-              .onPressed!();
+          final filled = find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(FilledButton));
+          if (filled.evaluate().isNotEmpty) {
+            tester.widget<FilledButton>(filled).onPressed!();
+          } else {
+            // The rail-foot Stop (#1911): its keyboard activation is the InkResponse's.
+            tester
+                .widget<InkResponse>(
+                    find.descendant(of: find.byType(EmergencyStopButton), matching: find.byType(InkResponse)))
+                .onTap!();
+          }
           await tester.pump();
           expect(find.textContaining(l.estopCompactPressAgain.split('\n').last), findsOneWidget);
           // A clipped or mid-word-broken label throws nothing, so check the lines.

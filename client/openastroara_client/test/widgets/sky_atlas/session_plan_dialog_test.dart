@@ -8,6 +8,7 @@ import 'package:openastroara/services/draft_sequence_service.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/optics_settings_state.dart';
 import 'package:openastroara/state/sky_atlas/sky_atlas_state.dart';
 import 'package:openastroara/state/sky_atlas/target_preview_state.dart';
@@ -337,12 +338,15 @@ class _HangingDraftService extends DraftSequenceService {
 
 class _FixedOptics extends OpticsSettingsNotifier {
   @override
-  OpticsSettings build() => const OpticsSettings(
+  LoadedSection<OpticsSettings> build() => const LoadedSection(
+    value: OpticsSettings(
       focalLengthMm: 250,
       reducerFactor: 1,
       sensorWidthPx: 6248,
       sensorHeightPx: 4176,
       pixelSizeUm: 3.76,
-      apertureMm: 51);
+      apertureMm: 51),
+    source: SectionSource.rig,
+  );
 
 }

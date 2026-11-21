@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
 import '../models/guider_twin.dart';
+import '../models/polar_align.dart';
 import '../models/profile_list.dart';
 import '../models/profile_meta.dart';
 import '../models/profile_share_export.dart';
@@ -61,8 +62,7 @@ class ProfileApi {
   /// Notes each profile-section write as it goes out (the daemon publishes the
   /// event before its HTTP answer) and drops the note when the daemon refuses
   /// the write (an error answer, e.g. 409 stale-session): that published
-  /// nothing, and must not hide another device's change to the section. Shared
-  /// with `PolarAlignApi`, whose settings save is a profile write too.
+  /// nothing, and must not hide another device's change to the section.
   static final Interceptor ownWriteRecorder = InterceptorsWrapper(
     onRequest: (req, handler) {
       const prefix = '/api/v1/profile/';
@@ -568,6 +568,120 @@ class ProfileApi {
     ifMatch,
   );
 
+  Future<({ImagingDefaults value, String? etag})> getImagingDefaultsSection() =>
+      _getTagged('imaging-defaults', _imagingDefaultsFromRig);
+  Future<({ImagingDefaults value, String? etag})> putImagingDefaultsSection(
+    ImagingDefaults v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'imaging-defaults',
+    imagingDefaultsToJson(v),
+    _imagingDefaultsFromRig,
+    ifMatch,
+  );
+
+  Future<({OpticsSettings value, String? etag})> getOpticsSection() =>
+      _getTagged('optics', _opticsFromRig);
+  Future<({OpticsSettings value, String? etag})> putOpticsSection(
+    OpticsSettings v, {
+    String? ifMatch,
+  }) => _putTagged('optics', opticsToJson(v), _opticsFromRig, ifMatch);
+
+  Future<({SiteSettings value, String? etag})> getSiteSection() =>
+      _getTagged('site', _siteFromRig);
+  Future<({SiteSettings value, String? etag})> putSiteSection(
+    SiteSettings v, {
+    String? ifMatch,
+  }) => _putTagged('site', siteSettingsToJson(v), _siteFromRig, ifMatch);
+
+  Future<({SafetyPolicies value, String? etag})> getSafetySection() =>
+      _getTagged('safety', _safetyFromRig);
+  Future<({SafetyPolicies value, String? etag})> putSafetySection(
+    SafetyPolicies v, {
+    String? ifMatch,
+  }) => _putTagged('safety', safetyPoliciesToJson(v), _safetyFromRig, ifMatch);
+
+  /// §58.8 — re-arm the unconfirmed-flip announce (the daemon clears
+  /// `first_flip_confirmed` and the completed-flip record, so the next flip
+  /// alerts and waits again). Answers the rig's policies with their new tag
+  /// (#1807): this device's own write, so no `profile.updated` reloads it.
+  Future<({SafetyPolicies value, String? etag})> rearmFirstFlip() =>
+      _postSafetyAction('first-flip/rearm');
+
+  /// #1589 — confirm the profile's completed meridian flip: the user watched
+  /// it and the scope cleared the mount. The daemon sets
+  /// `first_flip_confirmed` and keeps the record; with no completed flip on
+  /// record it refuses (409 `first-flip-not-completed`). Answers the rig's
+  /// policies with their new tag, as [rearmFirstFlip] does.
+  Future<({SafetyPolicies value, String? etag})> confirmFirstFlip() =>
+      _postSafetyAction('first-flip/confirm');
+
+  Future<({SafetyPolicies value, String? etag})> _postSafetyAction(
+    String route,
+  ) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/profile/safety/$route',
+    );
+    return (
+      value: _safetyFromRig(res.data ?? const {}),
+      etag: res.headers.value('etag'),
+    );
+  }
+
+  Future<({PolarAlignSettings value, String? etag})> getPolarAlignSection() =>
+      _getTagged('polar-align', _polarAlignFromRig);
+  Future<({PolarAlignSettings value, String? etag})> putPolarAlignSection(
+    PolarAlignSettings v, {
+    String? ifMatch,
+  }) => _putTagged('polar-align', v.toJson(), _polarAlignFromRig, ifMatch);
+
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() =>
+      _getTagged('phd2', _phd2FromRig);
+  Future<({Phd2Settings value, String? etag})> putPhd2Section(
+    Phd2Settings v, {
+    String? ifMatch,
+  }) => _putTagged('phd2', phd2SettingsToJson(v), _phd2FromRig, ifMatch);
+
+  Future<({AutofocusSettings value, String? etag})> getAutofocusSection() =>
+      _getTagged('autofocus', _autofocusSettingsFromRig);
+  Future<({AutofocusSettings value, String? etag})> putAutofocusSection(
+    AutofocusSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'autofocus',
+    autofocusSettingsToJson(v),
+    _autofocusSettingsFromRig,
+    ifMatch,
+  );
+
+  Future<({EquipmentConnectionSettings value, String? etag})>
+  getEquipmentConnectionSection() =>
+      _getTagged('equipment-connection', _equipmentConnectionFromRig);
+  Future<({EquipmentConnectionSettings value, String? etag})>
+  putEquipmentConnectionSection(
+    EquipmentConnectionSettings v, {
+    String? ifMatch,
+  }) => _putTagged(
+    'equipment-connection',
+    _equipmentConnectionToJson(v),
+    _equipmentConnectionFromRig,
+    ifMatch,
+  );
+
+  Future<({CoolingFan value, String? etag})> getCoolingFanSection() =>
+      _getTagged('cooling-fan', _coolingFanFromRig);
+  Future<({CoolingFan value, String? etag})> putCoolingFanSection(
+    CoolingFan v, {
+    String? ifMatch,
+  }) => _putTagged('cooling-fan', v.toJson(), _coolingFanFromRig, ifMatch);
+
+  Future<({DomeSettings value, String? etag})> getDomeSection() =>
+      _getTagged('dome', _domeFromRig);
+  Future<({DomeSettings value, String? etag})> putDomeSection(
+    DomeSettings v, {
+    String? ifMatch,
+  }) => _putTagged('dome', v.toJson(), _domeFromRig, ifMatch);
+
   // The rig's copy (a GET or a PUT reply) takes no client default (ADR 0015
   // rule 3): as with storage, a missing or mistyped key fails the load or the
   // Save, and so does an unknown engine, so no default is written back. The
@@ -665,6 +779,249 @@ class ProfileApi {
         .toDouble(),
   );
 
+  // Strict like the readers above: an unknown frame type, autofocus method or
+  // telescope type fails the load instead of reading as light, the V-curve or
+  // `other` (the lenient readers stay for the offline cache and the wizard).
+  static ImagingDefaults _imagingDefaultsFromRig(Map<String, dynamic> j) =>
+      ImagingDefaults(
+        defaultExposure: Duration(
+          seconds: (j['exposure_seconds'] as num).toInt(),
+        ),
+        defaultGain: (j['gain'] as num).toInt(),
+        defaultOffset: (j['offset'] as num).toInt(),
+        defaultBin: (j['bin'] as num).toInt(),
+        defaultFrameKind: FrameKind.values.firstWhere(
+          (k) => k.name == j['frame_kind'],
+          orElse: () => throw FormatException('unknown frame kind', j['frame_kind']),
+        ),
+        coolerTargetC: (j['cooler_target_c'] as num).toDouble(),
+        coolerRampRatePerMin: (j['cooler_ramp_c_per_min'] as num).toDouble(),
+        warmupAtSessionEnd: j['warmup_at_session_end'] as bool,
+      );
+
+  static AutofocusSettings _autofocusSettingsFromRig(Map<String, dynamic> j) =>
+      AutofocusSettings(
+        method: AutofocusMethod.values.firstWhere(
+          (m) => _autofocusMethodToString(m) == j['method'],
+          orElse: () => throw FormatException('unknown method', j['method']),
+        ),
+        steps: (j['steps'] as num).toInt(),
+        stepSize: (j['step_size'] as num).toInt(),
+        stepSizeAuto: j['step_size_auto'] as bool,
+        exposureSeconds: (j['exposure_seconds'] as num).toInt(),
+        binning: (j['binning'] as num).toInt(),
+        afFilter: j['af_filter'] as String,
+        runAfterFilterChange: j['run_after_filter_change'] as bool,
+        triggerTempDeltaC: (j['trigger_temp_delta_c'] as num).toDouble(),
+        triggerHfrDriftPct: (j['trigger_hfr_drift_pct'] as num).toDouble(),
+        everyNHours: (j['every_n_hours'] as num).toInt(),
+        abortSequenceOnAfFailure: j['abort_sequence_on_af_failure'] as bool,
+        restorePositionOnFailure: j['restore_position_on_failure'] as bool,
+        telescopeType: TelescopeType.values.firstWhere(
+          (t) => telescopeTypeToWire(t) == j['telescope_type'],
+          orElse: () =>
+              throw FormatException('unknown telescope type', j['telescope_type']),
+        ),
+        backlashInSteps: (j['backlash_in_steps'] as num).toInt(),
+        backlashOutSteps: (j['backlash_out_steps'] as num).toInt(),
+      );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as 0 ("unset") or a 1.0 reducer, which a Save would then write
+  // over the rig's sensor or focal length (#2041). The reducer is read as the
+  // rig holds it; the daemon refuses a Save of one at or below 0.
+  static OpticsSettings _opticsFromRig(Map<String, dynamic> j) =>
+      OpticsSettings(
+        focalLengthMm: (j['focal_length_mm'] as num).toDouble(),
+        reducerFactor: (j['reducer_factor'] as num).toDouble(),
+        sensorWidthPx: (j['sensor_width_px'] as num).toInt(),
+        sensorHeightPx: (j['sensor_height_px'] as num).toInt(),
+        pixelSizeUm: (j['pixel_size_um'] as num).toDouble(),
+        apertureMm: (j['aperture_mm'] as num).toDouble(),
+        telescopeName: j['telescope_name'] as String,
+      );
+
+  // Strict like the readers above: a missing key, or a twilight line the
+  // client does not know, fails the load instead of reading as "Backyard" at
+  // 0/0, which a Save would then write over the rig's site.
+  static SiteSettings _siteFromRig(Map<String, dynamic> j) => SiteSettings(
+    siteName: j['site_name'] as String,
+    latitudeDeg: (j['latitude_deg'] as num).toDouble(),
+    longitudeDeg: (j['longitude_deg'] as num).toDouble(),
+    elevationM: (j['elevation_m'] as num).roundToDouble(),
+    timeZone: j['time_zone'] as String,
+    useCustomHorizon: j['use_custom_horizon'] as bool,
+    defaultHorizonAltitudeDeg: (j['default_horizon_altitude_deg'] as num)
+        .toDouble(),
+    bortleClass: (j['bortle_class'] as num).toInt(),
+    sqmMagPerArcsec2: (j['sqm_mag_per_arcsec2'] as num).toDouble(),
+    typicalSeeingArcsec: (j['typical_seeing_arcsec'] as num).toDouble(),
+    twilightDefinition: TwilightDefinition.values.byName(
+      j['twilight_definition'] as String,
+    ),
+    maxSequenceRuntimeMin: (j['max_sequence_runtime_min'] as num).toInt(),
+    softWarningAltitudeDeg: (j['soft_warning_altitude_deg'] as num).toDouble(),
+    observerName: j['observer_name'] as String,
+    permanentPier: j['permanent_pier'] as bool,
+  );
+
+  // Strict like the readers above: a missing key, or an action the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (pause and park, auto flip on), which a Save would then write over
+  // the rig's unattended running rules. The guider mode of a profile from
+  // before the mode and a blank unattended window come as null, but their keys
+  // are there.
+  static SafetyPolicies _safetyFromRig(Map<String, dynamic> j) {
+    E pick<E>(List<E> values, String Function(E) wire, String key) {
+      final raw = j[key];
+      return values.firstWhere(
+        (v) => wire(v) == raw,
+        orElse: () => throw FormatException('unknown $key', raw),
+      );
+    }
+
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final recal = nullable('meridian_guider_recal');
+    return SafetyPolicies(
+      onUnsafe: pick(UnsafeAction.values, _unsafeActionToString, 'on_unsafe'),
+      autoResumeWhenSafe: j['auto_resume_when_safe'] as bool,
+      resumeDelayMin: (j['resume_delay_min'] as num).toInt(),
+      meridianFlipAuto: j['meridian_flip_auto'] as bool,
+      meridianPauseMin: (j['meridian_pause_min'] as num).toInt(),
+      // #2044 — a blank flip-off stop comes as null, but its key is there.
+      minutesAfterMeridian: (j['minutes_after_meridian'] as num).toInt(),
+      maxMinutesAfterMeridian: (j['max_minutes_after_meridian'] as num)
+          .toInt(),
+      stopBeforeMeridianMin:
+          (nullable('stop_before_meridian_min') as num?)?.toInt() ?? 0,
+      meridianRecenter: j['meridian_recenter'] as bool,
+      meridianRecalGuider: j['meridian_recal_guider'] as bool,
+      meridianRefocus: pick(
+        MeridianRefocusMode.values,
+        _meridianRefocusToString,
+        'meridian_refocus',
+      ),
+      meridianRefocusTempThresholdC:
+          (j['meridian_refocus_temp_threshold_c'] as num).toDouble(),
+      meridianGuiderRecal: recal == null
+          ? null
+          : pick<GuiderRecalMode>(
+              GuiderRecalMode.values,
+              _guiderRecalToString,
+              'meridian_guider_recal',
+            ),
+      unattendedWindowStart:
+          (nullable('unattended_window_start') as String?) ?? '',
+      unattendedWindowEnd: (nullable('unattended_window_end') as String?) ?? '',
+      onAltitudeLimit: pick(
+        AltitudeLimitAction.values,
+        _altitudeLimitActionToString,
+        'on_altitude_limit',
+      ),
+      parkIfNoMoreTargets: j['park_if_no_more_targets'] as bool,
+      onGuiderLost: pick(
+        GuiderLostAction.values,
+        _guiderLostActionToString,
+        'on_guider_lost',
+      ),
+      guiderRetryTimeoutSec: (j['guider_retry_timeout_sec'] as num).toInt(),
+      skipTargetIfRecoveryFails: j['skip_target_if_recovery_fails'] as bool,
+      // The lenient reader takes any case here; so does this one.
+      onDiskSpaceCritical: DiskSpaceCriticalAction.values.firstWhere(
+        (a) => a.name == (j['on_disk_space_critical'] as String).toLowerCase(),
+        orElse: () => throw FormatException(
+          'unknown on_disk_space_critical',
+          j['on_disk_space_critical'],
+        ),
+      ),
+      flipSafetyEnabled: j['flip_safety_enabled'] as bool,
+      expectedFlipSlewSeconds: (j['expected_flip_slew_seconds'] as num).toInt(),
+      firstFlipConfirmed: j['first_flip_confirmed'] as bool,
+      // #1589 — the daemon's completed-flip record (null: no flip on record;
+      // the key is still there).
+      firstFlipCompletedUtc: switch (nullable('first_flip_completed_utc')) {
+        null => null,
+        final String at => DateTime.parse(at).toUtc(),
+        final other => throw FormatException(
+          'bad first_flip_completed_utc',
+          other,
+        ),
+      },
+      firstFlipPierSideChanged: j['first_flip_pier_side_changed'] as bool,
+      unattendedEscalation: j['unattended_escalation'] as bool,
+      unattendedShutdownEnabled: j['unattended_shutdown_enabled'] as bool,
+      unattendedShutdownWaitMinutes:
+          (j['unattended_shutdown_wait_minutes'] as num).toInt(),
+      calibrationCaptureDefault: pick(
+        CalibrationCaptureDefault.values,
+        _calibrationCaptureDefaultToString,
+        'calibration_capture_default',
+      ),
+      weatherTriggersEnabled: j['weather_triggers_enabled'] as bool,
+      maxWindKmh: (j['max_wind_kmh'] as num).toInt(),
+      maxHumidityPct: (j['max_humidity_pct'] as num).toInt(),
+      minDewDeltaC: (j['min_dew_delta_c'] as num).toDouble(),
+      flatTargetAdu: (j['flat_target_adu'] as num).toInt(),
+      flatTargetPercent: (j['flat_target_percent'] as num).toDouble(),
+      flatTargetAduTolerancePct: (j['flat_target_adu_tolerance_pct'] as num)
+          .toDouble(),
+      flatFramesPerFilter: (j['flat_frames_per_filter'] as num).toInt(),
+      postFlatParkMount: j['post_flat_park_mount'] as bool,
+      skyFlatTargetAdu: (j['sky_flat_target_adu'] as num).toInt(),
+      skyFlatFramesPerFilter: (j['sky_flat_frames_per_filter'] as num).toInt(),
+      skyFlatTargetAzimuth: (j['sky_flat_target_azimuth'] as num).toDouble(),
+      skyFlatTargetAltitude: (j['sky_flat_target_altitude'] as num).toDouble(),
+      skyFlatStopAtMaxAdu: (j['sky_flat_stop_at_max_adu'] as num).toDouble(),
+      skyFlatStopAtMinAdu: (j['sky_flat_stop_at_min_adu'] as num).toDouble(),
+      skyFlatSunAltitude: (j['sky_flat_sun_altitude'] as num).toDouble(),
+      unmodeled: _safetyUnmodeled(j),
+    );
+  }
+
+  // Strict like the readers above: a missing key, or a loop mode the client
+  // does not know, fails the load instead of reading as the client's own
+  // default (1 s, Loop, motors on), which a Save would then write over the
+  // rig's polar-align knobs (#1807).
+  static PolarAlignSettings _polarAlignFromRig(Map<String, dynamic> j) {
+    final mode = j['loop_mode'];
+    if (mode != PolarAlignLoopModes.loop &&
+        mode != PolarAlignLoopModes.single) {
+      throw FormatException('unknown loop_mode', mode);
+    }
+    final camera = j['camera'];
+    if (camera != PolarAlignCameras.guide && camera != PolarAlignCameras.main) {
+      throw FormatException('unknown camera', camera);
+    }
+    return PolarAlignSettings(
+      exposureSeconds: (j['exposure_seconds'] as num).toDouble(),
+      binning: (j['binning'] as num).toInt(),
+      targetToleranceArcmin: (j['target_tolerance_arcmin'] as num).toDouble(),
+      seedRotationDeg: (j['seed_rotation_deg'] as num).toDouble(),
+      loopCadenceMs: (j['loop_cadence_ms'] as num).toInt(),
+      settleSeconds: (j['settle_seconds'] as num).toDouble(),
+      loopMode: mode as String,
+      checkStepDeg: (j['check_step_deg'] as num).toDouble(),
+      coarseExposureSeconds: (j['coarse_exposure_seconds'] as num).toDouble(),
+      polarAlignerAuto: j['polar_aligner_auto'] as bool,
+      stopTrackingWhenDone: j['stop_tracking_when_done'] as bool,
+      camera: camera as String,
+      framesPerPoint: (j['frames_per_point'] as num).toInt(),
+    );
+  }
+
+  /// Every safety key the client has a field for.
+  static final Set<String> _safetyModeledKeys = safetyPoliciesToJson(
+    const SafetyPolicies(),
+  ).keys.toSet();
+
+  /// The keys of a safety reply the client has no field for, as served, so a
+  /// Save sends them back unchanged (SafetyPolicies.unmodeled).
+  static Map<String, Object?> _safetyUnmodeled(Map<String, dynamic> j) => {
+    for (final e in j.entries)
+      if (!_safetyModeledKeys.contains(e.key)) e.key: e.value,
+  };
+
   /// PUT the active profile's storage-settings section.
   Future<StorageSettings> putStorageSettings(StorageSettings value) async {
     final res = await _dio.put<Map<String, dynamic>>(
@@ -695,25 +1052,15 @@ class ProfileApi {
     return safetyPoliciesFromJson(res.data ?? const {});
   }
 
-  /// PUT the active profile's safety policies. `first_flip_confirmed` is
-  /// daemon-owned and ignored server-side on PUT (the stored value is
-  /// preserved and echoed back) — a stale panel Save can never clobber a
-  /// confirmation an overnight flip set; re-arming goes through
-  /// [rearmFirstFlip].
+  /// PUT the active profile's safety policies. `first_flip_confirmed` and
+  /// the completed-flip record are daemon-owned and ignored server-side on
+  /// PUT (the stored values are preserved and echoed back) — a stale panel
+  /// Save can never clobber them; confirming and re-arming go through
+  /// [confirmFirstFlip] and [rearmFirstFlip].
   Future<SafetyPolicies> putSafetyPolicies(SafetyPolicies value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/safety',
       data: safetyPoliciesToJson(value),
-    );
-    return safetyPoliciesFromJson(res.data ?? const {});
-  }
-
-  /// §58.8 — re-arm the one-time first-flip announce (the daemon clears
-  /// `first_flip_confirmed`; deliberately one-way — only the daemon's flip
-  /// executor ever confirms a flip). Returns the updated policies.
-  Future<SafetyPolicies> rearmFirstFlip() async {
-    final res = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/profile/safety/first-flip/rearm',
     );
     return safetyPoliciesFromJson(res.data ?? const {});
   }
@@ -819,55 +1166,14 @@ class ProfileApi {
     return _phd2SettingsFromJson(res.data ?? const {});
   }
 
-  /// GET the switch port designated as the profile's cooling fan (#1700).
-  Future<CoolingFan> getCoolingFan() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/cooling-fan',
-    );
-    return CoolingFan.fromJson(res.data ?? const {});
-  }
-
-  /// PUT the cooling fan designation. Returns Ara's echo.
+  /// PUT the cooling fan designation from the wizard, which writes without a
+  /// loaded version (see [putCoolingFanSection] for the loaded path).
   Future<CoolingFan> putCoolingFan(CoolingFan value) async {
     final res = await _dio.put<Map<String, dynamic>>(
       '/api/v1/profile/cooling-fan',
       data: value.toJson(),
     );
     return CoolingFan.fromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's dome geometry and follow-the-mount setting (#1689).
-  Future<DomeSettings> getDomeSettings() async {
-    final res = await _dio.get<Map<String, dynamic>>('/api/v1/profile/dome');
-    return DomeSettings.fromJson(res.data ?? const {});
-  }
-
-  /// PUT the dome settings. The daemon refuses a scope outside the dome (422).
-  Future<DomeSettings> putDomeSettings(DomeSettings value) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/dome',
-      data: value.toJson(),
-    );
-    return DomeSettings.fromJson(res.data ?? const {});
-  }
-
-  /// GET the active profile's equipment auto-connect bools.
-  Future<EquipmentConnectionSettings> getEquipmentConnection() async {
-    final res = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/profile/equipment-connection',
-    );
-    return _equipmentConnectionFromJson(res.data ?? const {});
-  }
-
-  /// PUT the active profile's equipment auto-connect bools.
-  Future<EquipmentConnectionSettings> putEquipmentConnection(
-    EquipmentConnectionSettings value,
-  ) async {
-    final res = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/profile/equipment-connection',
-      data: _equipmentConnectionToJson(value),
-    );
-    return _equipmentConnectionFromJson(res.data ?? const {});
   }
 
   // ── JSON mapping ────────────────────────────────────────────────────────
@@ -1018,26 +1324,54 @@ class ProfileApi {
 
   // ── Equipment-connection JSON mapping ──────────────────────────────────
 
-  static EquipmentConnectionSettings _equipmentConnectionFromJson(
+  static const _equipmentConnectionKeys = {
+    EquipmentDeviceType.camera: 'camera',
+    EquipmentDeviceType.mount: 'mount',
+    EquipmentDeviceType.focuser: 'focuser',
+    EquipmentDeviceType.filterWheel: 'filter_wheel',
+    EquipmentDeviceType.rotator: 'rotator',
+    EquipmentDeviceType.guider: 'guider',
+    EquipmentDeviceType.flatPanel: 'flat_panel',
+    EquipmentDeviceType.dome: 'dome',
+    EquipmentDeviceType.weather: 'weather',
+    EquipmentDeviceType.safetyMonitor: 'safety_monitor',
+    EquipmentDeviceType.switchDevice: 'switch',
+  };
+
+  // Strict (ADR 0015 rule 3): a device type the rig did not report fails the
+  // load instead of reading as a default, so Save never writes one back.
+  static EquipmentConnectionSettings _equipmentConnectionFromRig(
     Map<String, dynamic> j,
-  ) {
-    bool read(String key, bool dflt) => (j[key] as bool?) ?? dflt;
-    return EquipmentConnectionSettings(
-      autoConnectOnBoot: {
-        EquipmentDeviceType.camera: read('camera', true),
-        EquipmentDeviceType.mount: read('mount', true),
-        EquipmentDeviceType.focuser: read('focuser', true),
-        EquipmentDeviceType.filterWheel: read('filter_wheel', true),
-        EquipmentDeviceType.rotator: read('rotator', true),
-        EquipmentDeviceType.guider: read('guider', false),
-        EquipmentDeviceType.flatPanel: read('flat_panel', true),
-        EquipmentDeviceType.dome: read('dome', false),
-        EquipmentDeviceType.weather: read('weather', false),
-        EquipmentDeviceType.safetyMonitor: read('safety_monitor', true),
-        EquipmentDeviceType.switchDevice: read('switch', true),
-      },
-    );
+  ) => EquipmentConnectionSettings(
+    autoConnectOnBoot: {
+      for (final e in _equipmentConnectionKeys.entries)
+        e.key: j[e.value] as bool,
+    },
+  );
+
+  // Both keys must be present: null is "no fan", an absent key is a bad reply.
+  static CoolingFan _coolingFanFromRig(Map<String, dynamic> j) {
+    if (!j.containsKey('device_id') || !j.containsKey('port_id')) {
+      throw const FormatException('cooling fan keys missing');
+    }
+    return CoolingFan.fromJson(j);
   }
+
+  static DomeSettings _domeFromRig(Map<String, dynamic> j) => DomeSettings(
+    domeRadiusMm: (j['dome_radius_mm'] as num).toDouble(),
+    scopePositionNorthSouthMm: (j['scope_position_north_south_mm'] as num)
+        .toDouble(),
+    scopePositionEastWestMm: (j['scope_position_east_west_mm'] as num)
+        .toDouble(),
+    scopePositionUpDownMm: (j['scope_position_up_down_mm'] as num).toDouble(),
+    mountType: j['mount_type'] as String,
+    gemAxisMm: (j['gem_axis_mm'] as num).toDouble(),
+    lateralAxisMm: (j['lateral_axis_mm'] as num).toDouble(),
+    decOffsetHorizontalMm: (j['dec_offset_horizontal_mm'] as num).toDouble(),
+    azimuthToleranceDegrees: (j['azimuth_tolerance_degrees'] as num).toDouble(),
+    synchronizeDuringMountSlew: j['synchronize_during_mount_slew'] as bool,
+    domeSyncTimeoutSeconds: (j['dome_sync_timeout_seconds'] as num).toInt(),
+  );
 
   static Map<String, dynamic> _equipmentConnectionToJson(
     EquipmentConnectionSettings v,
@@ -1104,6 +1438,53 @@ class ProfileApi {
     guideCameraGain: (j['guide_camera_gain'] as num?)?.toInt() ?? 50,
     guiderProfileId: (j['phd2_profile_id'] as num?)?.toInt() ?? 0,
   );
+
+  // Strict like the readers above: a missing key fails the load instead of
+  // reading as the client's own default (localhost, dither every frame, no
+  // guide camera), which a Save would then write over the rig's guider
+  // settings. The Dec minimum move of a profile from before the split and an
+  // Automatic guider profile come as null, but their keys are there.
+  static Phd2Settings _phd2FromRig(Map<String, dynamic> j) {
+    Object? nullable(String key) =>
+        j.containsKey(key) ? j[key] : throw FormatException('missing $key');
+    final decMinimumMove = nullable('dec_minimum_move') as num?;
+    final profileId = nullable('phd2_profile_id') as num?;
+    return Phd2Settings(
+      host: j['host'] as String,
+      port: (j['port'] as num).toInt(),
+      phd2Profile: j['phd2_profile'] as String,
+      ditherEnabled: j['dither_enabled'] as bool,
+      ditherEveryNFrames: (j['dither_every_n_frames'] as num).toInt(),
+      ditherPixels: (j['dither_pixels'] as num).toDouble(),
+      settlePixels: (j['settle_pixels'] as num).toDouble(),
+      settleTimeSec: (j['settle_time_sec'] as num).toInt(),
+      settleTimeoutSec: (j['settle_timeout_sec'] as num).toInt(),
+      forceCalibrationEachSession: j['force_calibration_each_session'] as bool,
+      guiderSetupType: Phd2SettingsNotifier.normalizeGuiderSetupType(
+        j['guider_setup_type'] as String,
+      ),
+      guideFocalLength: (j['guide_focal_length'] as num).toInt(),
+      guidePixelSize: (j['guide_pixel_size'] as num).toDouble(),
+      raAggressiveness: (j['ra_aggressiveness'] as num).toDouble(),
+      decAggressiveness: (j['dec_aggressiveness'] as num).toDouble(),
+      minimumMove: (j['minimum_move'] as num).toDouble(),
+      decMinimumMove: (decMinimumMove ?? j['minimum_move'] as num).toDouble(),
+      decGuideMode: j['dec_guide_mode'] as String,
+      guiderCamera: j['guider_camera'] as String,
+      guiderCameraId: j['guider_camera_id'] as String,
+      guiderCameraAlpacaUniqueId: j['guider_camera_alpaca_unique_id'] as String,
+      guiderMount: j['guider_mount'] as String,
+      guiderAuxMount: j['guider_aux_mount'] as String,
+      guiderRotator: j['guider_rotator'] as String,
+      guiderAlpacaHost: j['guider_alpaca_host'] as String,
+      guiderAlpacaPort: (j['guider_alpaca_port'] as num).toInt(),
+      guideExposureMinMs: (j['guide_exposure_min_ms'] as num).toInt(),
+      guideExposureMaxMs: (j['guide_exposure_max_ms'] as num).toInt(),
+      guideExposureMs: (j['guide_exposure_ms'] as num).toInt(),
+      guideCameraGain: (j['guide_camera_gain'] as num).toInt(),
+      guiderProfileId: profileId?.toInt() ?? 0,
+    );
+  }
 
   /// The guider settings as sent on PUT (also how the guider panel tells a
   /// real edit from a write that changes nothing).
@@ -1305,6 +1686,11 @@ class ProfileApi {
     resumeDelayMin: (j['resume_delay_min'] as num?)?.toInt() ?? 10,
     meridianFlipAuto: (j['meridian_flip_auto'] as bool?) ?? true,
     meridianPauseMin: (j['meridian_pause_min'] as num?)?.toInt() ?? 5,
+    minutesAfterMeridian: (j['minutes_after_meridian'] as num?)?.toInt() ?? 5,
+    maxMinutesAfterMeridian:
+        (j['max_minutes_after_meridian'] as num?)?.toInt() ?? 10,
+    stopBeforeMeridianMin:
+        (j['stop_before_meridian_min'] as num?)?.toInt() ?? 0,
     meridianRecenter: (j['meridian_recenter'] as bool?) ?? true,
     meridianRecalGuider: (j['meridian_recal_guider'] as bool?) ?? true,
     meridianRefocus: _meridianRefocusFromString(
@@ -1338,6 +1724,11 @@ class ProfileApi {
     expectedFlipSlewSeconds:
         (j['expected_flip_slew_seconds'] as num?)?.toInt() ?? 90,
     firstFlipConfirmed: (j['first_flip_confirmed'] as bool?) ?? false,
+    firstFlipCompletedUtc: j['first_flip_completed_utc'] is String
+        ? DateTime.tryParse(j['first_flip_completed_utc'] as String)?.toUtc()
+        : null,
+    firstFlipPierSideChanged:
+        (j['first_flip_pier_side_changed'] as bool?) ?? false,
     unattendedEscalation: (j['unattended_escalation'] as bool?) ?? true,
     unattendedShutdownEnabled:
         (j['unattended_shutdown_enabled'] as bool?) ?? true,
@@ -1369,15 +1760,21 @@ class ProfileApi {
         (j['sky_flat_stop_at_min_adu'] as num?)?.toDouble() ?? 5000.0,
     skyFlatSunAltitude:
         (j['sky_flat_sun_altitude'] as num?)?.toDouble() ?? -9.0,
+    unmodeled: _safetyUnmodeled(j),
   );
 
-  @visibleForTesting
   static Map<String, dynamic> safetyPoliciesToJson(SafetyPolicies v) => {
+    ...v.unmodeled,
     'on_unsafe': _unsafeActionToString(v.onUnsafe),
     'auto_resume_when_safe': v.autoResumeWhenSafe,
     'resume_delay_min': v.resumeDelayMin,
     'meridian_flip_auto': v.meridianFlipAuto,
     'meridian_pause_min': v.meridianPauseMin,
+    'minutes_after_meridian': v.minutesAfterMeridian,
+    'max_minutes_after_meridian': v.maxMinutesAfterMeridian,
+    // 0 is the client's Off; the wire's is null.
+    'stop_before_meridian_min':
+        v.stopBeforeMeridianMin > 0 ? v.stopBeforeMeridianMin : null,
     'meridian_recenter': v.meridianRecenter,
     'meridian_recal_guider': v.meridianRecalGuider,
     'meridian_refocus': _meridianRefocusToString(v.meridianRefocus),
@@ -1401,6 +1798,10 @@ class ProfileApi {
     'flip_safety_enabled': v.flipSafetyEnabled,
     'expected_flip_slew_seconds': v.expectedFlipSlewSeconds,
     'first_flip_confirmed': v.firstFlipConfirmed,
+    'first_flip_completed_utc': v.firstFlipCompletedUtc
+        ?.toUtc()
+        .toIso8601String(),
+    'first_flip_pier_side_changed': v.firstFlipPierSideChanged,
     'unattended_escalation': v.unattendedEscalation,
     'unattended_shutdown_enabled': v.unattendedShutdownEnabled,
     'unattended_shutdown_wait_minutes': v.unattendedShutdownWaitMinutes,

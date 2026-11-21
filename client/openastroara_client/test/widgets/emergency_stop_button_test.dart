@@ -19,6 +19,8 @@ import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/state/ws/client_session_state.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/theme/ara_theme.dart';
+import 'package:openastroara/screens/simple/simple_preview_panel.dart'
+    show SimpleShutterButton;
 import 'package:openastroara/widgets/emergency_stop_button.dart';
 import 'package:openastroara/services/simple_mode_prefs_service.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
@@ -89,7 +91,7 @@ void main() {
 
   Future<void> pumpButton(
     WidgetTester tester, {
-    EmergencyStopButton button = const EmergencyStopButton(),
+    Widget button = const EmergencyStopButton(),
     bool simpleMode = false,
     bool pills = false,
   }) async {
@@ -119,7 +121,7 @@ void main() {
     // Materialize + settle the async saved-servers load so
     // activeServerProvider resolves to the fixed server at tap time.
     final container = ProviderScope.containerOf(
-      tester.element(find.byType(EmergencyStopButton)),
+      tester.element(find.byType(Scaffold)),
     );
     await container.read(savedServersProvider.future);
     await container.read(simpleModeProvider.future);
@@ -642,5 +644,112 @@ void main() {
         variant: TargetPlatformVariant.only(platform),
       );
     }
+  });
+
+  // #1911 S4a: every Simple Mode shutter is the hold. A release before 500 ms
+  // is a tap; the red fill and HOLD start at 500 ms; 2 s from pointer down is
+  // one Emergency Stop; a release or slide-off between the two fires nothing.
+  group('the shutter hold is Emergency Stop (#1911)', () {
+    var taps = 0;
+    Future<void> pumpShutter(WidgetTester tester, {bool enabled = true}) async {
+      taps = 0;
+      await pumpButton(
+        tester,
+        simpleMode: true,
+        button: Center(
+          child: SimpleShutterButton(
+            running: false,
+            onPressed: enabled ? () => taps++ : null,
+          ),
+        ),
+      );
+    }
+
+    Future<TestGesture> press(WidgetTester tester) =>
+        tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+
+    testWidgets('a release at 99 ms is one tap and sends no stop', (tester) async {
+      await pumpShutter(tester);
+      final g = await press(tester);
+      await tester.pump(const Duration(milliseconds: 99));
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(taps, 1);
+      expect(fake.calls, 0);
+      expect(find.text('HOLD'), findsNothing);
+    });
+
+    testWidgets('the red fill and HOLD start at 500 ms, not before', (tester) async {
+      await pumpShutter(tester);
+      final g = await press(tester);
+      await tester.pump(const Duration(milliseconds: 499));
+      expect(find.text('HOLD'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 2));
+      expect(find.text('HOLD'), findsOneWidget);
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+    });
+
+    testWidgets('a release at 1000 ms, after the fill started, fires nothing and is no tap', (tester) async {
+      await pumpShutter(tester);
+      final g = await press(tester);
+      await tester.pump(const Duration(milliseconds: 1000));
+      expect(find.text('HOLD'), findsOneWidget);
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(taps, 0);
+      expect(fake.calls, 0);
+      expect(find.text('HOLD'), findsNothing, reason: 'the fill is gone');
+    });
+
+    testWidgets('1999 ms sends no stop; 2000 ms sends exactly one', (tester) async {
+      await pumpShutter(tester);
+      final g = await press(tester);
+      await tester.pump(const Duration(milliseconds: 1999));
+      expect(fake.calls, 0);
+      await tester.pump(const Duration(milliseconds: 1));
+      await tester.pump();
+      expect(fake.calls, 1);
+      await tester.pump(const Duration(seconds: 3));
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(fake.calls, 1, reason: 'held on: still one stop');
+      expect(taps, 0, reason: 'the release after a stop is no tap');
+    });
+
+    testWidgets('sliding off the shutter after the fill started cancels and fires nothing', (tester) async {
+      await pumpShutter(tester);
+      final g = await press(tester);
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(find.text('HOLD'), findsOneWidget);
+      await g.moveBy(const Offset(200, 0));
+      await tester.pump();
+      expect(find.text('HOLD'), findsNothing);
+      await tester.pump(const Duration(seconds: 3));
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(fake.calls, 0);
+      expect(taps, 0);
+    });
+
+    testWidgets('a shutter greyed out for its own mode still holds for Emergency Stop', (tester) async {
+      await pumpShutter(tester, enabled: false);
+      final g = await press(tester);
+      await tester.pump(const Duration(seconds: 2));
+      await tester.pump();
+      await g.up();
+      await tester.pump(const Duration(seconds: 3));
+      expect(fake.calls, 1);
+    });
+
+    testWidgets('a keyboard or screen-reader activation is still a tap and never a stop', (tester) async {
+      await pumpShutter(tester);
+      final handle = tester.ensureSemantics();
+      tester.semantics.tap(find.semantics.byLabel('Take a frame'));
+      await tester.pump(const Duration(seconds: 3));
+      expect(taps, 1);
+      expect(fake.calls, 0);
+      handle.dispose();
+    });
   });
 }

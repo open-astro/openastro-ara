@@ -2,7 +2,7 @@
 
 Ara's own stored format for a sequence: a tree of containers, instructions, conditions and triggers, each node tagged with a stable `kind` string, under `"schemaVersion": "openastroara-sequence-v2"`. NINA's execution engine keeps running the sequence; only the stored format changes. NINA JSON becomes a one-way import.
 
-Status: design spec for [#1623](https://github.com/open-astro/openastro-ara/issues/1623). Nothing here is built. It supersedes [ADR 0018](../adr/0018-a-sequence-is-stored-in-ninas-json-format.md) once follow-up (a) lands; this file does not edit that record. Follow-ups (a) to (d) are the last section.
+Status: design spec for [#1623](https://github.com/open-astro/openastro-ara/issues/1623). The kind table (`SequenceKinds`), the field table, the validator and the generated [`sequence-v2.schema.json`](sequence-v2.schema.json) exist in `OpenAstroAra.Sequencer/Format/` (follow-up (a), part A); nothing calls the validator yet, and the stored format, the reader and writer, and the client are not built. It supersedes [ADR 0018](../adr/0018-a-sequence-is-stored-in-ninas-json-format.md) once follow-up (a) lands; this file does not edit that record. Follow-ups (a) to (d) are the last section.
 
 ## Decisions already made
 
@@ -40,7 +40,7 @@ These come from the issue and are not open here.
 | Field | Type | Required | Notes |
 |---|---|---|---|
 | `schemaVersion` | string | yes | exactly `openastroara-sequence-v2` |
-| `name` | string | yes | the sequence title; maps to `SequenceRootContainer`'s `SequenceTitle` |
+| `name` | string | yes | the sequence title, kept as found. `SequenceRootContainer.SequenceTitle` is not stored (it has no `[JsonProperty]`; v1 keeps the title as the root container's `Name`), so how the title is stored is part B's decision |
 | `description` | string | no | free text, not read by the engine |
 | `metadata` | object | no | not read by the engine. `importedFrom` is set by the client importer (see NINA JSON import) |
 | `targets` | array | yes, may be empty | the targets the sequence points at; a `target` container names one by `targetId` |
@@ -56,13 +56,14 @@ Fields whose v2 name is not the plain lowerCamelCase of the engine property:
 
 | v2 field | Engine property | Kind |
 |---|---|---|
-| `name` (document) | `SequenceTitle` | the document root (`SequenceRootContainer`) |
 | `expanded` | `IsExpanded` | every container |
 | `run` | `TriggerRunner.Items` | every trigger |
 | `provider` | `SelectedProvider` (the `$type` object becomes a name string) | `wait-for-time`, `loop-until-time` |
 | `targetId` | the hoisted `Target` (`InputTarget`) | `target` |
 | `binning` `{ "x", "y" }` | `Binning` (`BinningMode`) | `capture`, `glover-exposure` |
 | `usbLimit` | `USBLimit` (acronym rule) | `set-usb-limit` |
+
+The document `name` is the sequence title and the root node's own `name` is the root container's name; both are kept as found, and `sequenceTitle` is not a field.
 
 Every other field in the tables below is the plain lowerCamelCase of its engine property, including `positionAngle` (`InputTarget.PositionAngle`, and `CenterAndRotate.PositionAngle`).
 
@@ -84,8 +85,8 @@ Coordinates keep the engine's sexagesimal fields. The v1 body stores a target in
 | Field | On | Type | Default | Engine property |
 |---|---|---|---|---|
 | `kind` | every node | string | required | none (picks the engine class) |
-| `name` | every node | string | the engine class's default name | `Name` |
-| `errorBehavior` | instruction, container | `continue-on-error`, `skip-instruction-set-on-error`, `abort-on-error` | engine default | `SequenceItem.ErrorBehavior` (`InstructionErrorBehavior`) |
+| `name` | container, `unknown` | string | the engine class's default name | `SequenceContainer.Name` (the engine stores a name for containers only; an instruction, condition or trigger has none, so `name` on one is an unknown field) |
+| `errorBehavior` | instruction, container | `continue-on-error`, `skip-instruction-set-on-error`, `abort-on-error`, `skip-to-sequence-end-instructions` | engine default | `SequenceItem.ErrorBehavior` (`InstructionErrorBehavior`; the fourth token is `SkipToSequenceEndInstructions`) |
 | `attempts` | instruction, container | int | engine default | `SequenceItem.Attempts` |
 | `items` | container | array of instruction or container nodes | `[]` | `SequenceContainer.Items` |
 | `conditions` | container | array of condition nodes | `[]` | `SequenceContainer.Conditions` |
@@ -98,21 +99,21 @@ A node's `Parent` is never stored; the tree gives it. The v1 `$id` / `$ref` refe
 
 ## Kind to engine class
 
-The namespace for every class is `OpenAstroAra.Sequencer.<group>` as listed; the assembly is `OpenAstroAra.Sequencer`. This is every class `HeadlessSequencerFactory.WithDefaults` registers at the head this spec was written against (47 instructions, 5 conditions, 5 containers, 10 triggers). `DefaultConditions` skips `AboveHorizonCondition` and `AltitudeCondition` on a daemon without the astrometry natives; the kinds stay valid there, but a body naming them loads as a placeholder (today's behaviour, and the user sees the placeholder message below).
+The namespace for every class is `OpenAstroAra.Sequencer.<group>` as listed; the assembly is `OpenAstroAra.Sequencer`. This is every class `HeadlessSequencerFactory.WithDefaults` registers at the head this spec was written against (47 instructions, 5 conditions, 5 containers, 10 triggers). `HeadlessSequencerFactory.Instantiate` skips `AboveHorizonCondition` and `AltitudeCondition` on a daemon without the astrometry natives; the kinds stay valid there, but a body naming them loads as a placeholder (today's behaviour, and the user sees the placeholder message below).
 
-Units are the engine's. A unit that is not obvious is in the Fields column. Any field not listed for a kind is the engine's `[JsonProperty]` set for that class and follows the lowerCamelCase rule; follow-up (a) pins the exhaustive per-kind table in the validator.
+Units are the engine's. A unit that is not obvious is in the Fields column. Any field not listed for a kind is the engine's `[JsonProperty]` set for that class and follows the lowerCamelCase rule; `SequenceV2Fields` computes the exhaustive per-kind table from that contract, and tests pin it to these cells both ways.
 
 ### Containers
 
 | `kind` | Engine class (`...Container`) | Fields (type, unit, default) |
 |---|---|---|
-| `root` | `SequenceRootContainer` | `pauseGate` (object, optional, runtime state of the pause gate, daemon-written). Exactly one, only at `root` |
+| `root` | `SequenceRootContainer` | common fields only (the pause gate is runtime state and is not stored). Exactly one, only at `root` |
 | `sequential` | `SequentialContainer` | common fields only |
 | `parallel` | `ParallelContainer` | common fields only |
 | `target` | `DeepSkyObjectContainer` | `targetId` (string, required, an `id` in `targets`); `exposureInfoList` (array of `ExposureInfo`: `count` (int), `filter` (string), `exposureTime` (double, seconds), `gain` (int), `offset` (int), `imageType` (string), `binningX` (short), `binningY` (short), `roi` (double); default `[]`); `exposureInfoListExpanded` (bool, editor state) |
 | `smart-exposure` | `SmartExposure` (namespace `...SequenceItem.Imaging`) | common fields only; the engine builds its own children as NINA's Smart Exposure does, and they travel in `items` and `triggers` |
 
-`StartAreaContainer`, `TargetAreaContainer`, `EndAreaContainer` and NINA's `ConditionalContainer` exist as classes or NINA types but are not registered in the factory, so a v1 body naming them loads as `UnknownSequenceContainer` today. v2 has no `kind` for them (see NINA JSON import).
+`StartAreaContainer`, `TargetAreaContainer` and `EndAreaContainer` are not registered in the factory, so a v1 body naming them loads as `UnknownSequenceContainer` today; they are `SequentialContainer`s, so v2 has no `kind` of their own and an import writes each as a `sequential` (see NINA JSON import). NINA's `ConditionalContainer` exists as a NINA type but not as a class here, and v2 has no `kind` for it (it becomes a placeholder).
 
 ### Instructions
 
@@ -122,9 +123,9 @@ Units are the engine's. A unit that is not obvious is in the Fields column. Any 
 | `wait-for-user` | `WaitForUser` | `SequenceItem.Utility` | `text` (string); arms the root pause gate as a prompt |
 | `wait-for-duration` | `WaitForTimeSpan` | `SequenceItem.Utility` | `time` (double, seconds, default `1`) |
 | `wait-for-time` | `WaitForTime` | `SequenceItem.Utility` | `provider` (string, see Time sources, default `clock`), `hours` (int), `minutes` (int), `minutesOffset` (int), `seconds` (int) |
-| `wait-for-sun-altitude` | `WaitForSunAltitude` | `SequenceItem.Utility` | `data` (`WaitLoopData` from `WaitForAltitudeBase`: altitude offset in degrees and the comparator) |
+| `wait-for-sun-altitude` | `WaitForSunAltitude` | `SequenceItem.Utility` | `data` (`WaitLoopData` from `WaitForAltitudeBase`: `offset`, altitude offset in degrees, and `comparator`, an engine `ComparisonOperator` name: `EQUALS`, `LessThan`, `GreaterThan`, `NotEqual`) |
 | `wait-until-safe` | `WaitUntilSafe` | `SequenceItem.SafetyMonitor` | none |
-| `set-tracking` | `SetTracking` | `SequenceItem.Telescope` | `trackingMode` (`TrackingMode`, default `Sidereal`) |
+| `set-tracking` | `SetTracking` | `SequenceItem.Telescope` | `trackingMode` (`TrackingMode`: `Sidereal`, `Lunar`, `Solar`, `King`, `Custom`, `Stopped`, the engine names; default `Sidereal`) |
 | `unpark-mount` | `UnparkScope` | `SequenceItem.Telescope` | none |
 | `park-mount` | `ParkScope` | `SequenceItem.Telescope` | none |
 | `find-home-mount` | `FindHome` | `SequenceItem.Telescope` | none |
@@ -134,7 +135,7 @@ Units are the engine's. A unit that is not obvious is in the Fields column. Any 
 | `move-focuser-absolute` | `MoveFocuserAbsolute` | `SequenceItem.Focuser` | `position` (int, steps) |
 | `move-focuser-relative` | `MoveFocuserRelative` | `SequenceItem.Focuser` | `relativePosition` (int, steps) |
 | `move-focuser-by-temperature` | `MoveFocuserByTemperature` | `SequenceItem.Focuser` | `slope` (double, steps per degree C, default `1`), `intercept` (double, steps), `absolute` (bool, default `true`) |
-| `capture` | `TakeExposure` | `SequenceItem.Imaging` | `exposureTime` (double, seconds), `gain` (int, default `-1` = camera's current), `offset` (int, default `-1` = camera's current), `binning` (`{ "x": 1, "y": 1 }`, default 1x1), `imageType` (`LIGHT`, `DARK`, `FLAT`, `BIAS`, ..., default `LIGHT`), `exposureCount` (int, runtime counter, daemon-written), `calibrationTarget` (string or absent), `calibrationNight` (`yyyy-MM-dd` or absent) |
+| `capture` | `TakeExposure` | `SequenceItem.Imaging` | `exposureTime` (double, seconds), `gain` (int, default `-1` = camera's current), `offset` (int, default `-1` = camera's current), `binning` (`{ "x": 1, "y": 1 }`, default 1x1), `imageType` (`LIGHT`, `DARK`, `FLAT`, `BIAS`, ..., default `LIGHT`), `exposureCount` (int, runtime counter, daemon-written), `calibrationTarget` (string, null or absent), `calibrationNight` (`yyyy-MM-dd`, null or absent) |
 | `cool-camera` | `CoolCamera` | `SequenceItem.Camera` | `temperature` (double, degrees C), `duration` (double, minutes, default `0`), `waitForTemperature` (bool) |
 | `warm-camera` | `WarmCamera` | `SequenceItem.Camera` | `duration` (double, minutes) |
 | `set-usb-limit` | `SetUSBLimit` | `SequenceItem.Camera` | `usbLimit` (int); refuses at run time on Alpaca ([ADR 0023](../adr/0023-the-sequencer-owns-its-equipment-seam.md) rule 7) |
@@ -173,8 +174,8 @@ Units are the engine's. A unit that is not obvious is in the Fields column. Any 
 | `loop-iterations` | `LoopCondition` | `Conditions` | `iterations` (int), `completedIterations` (int, runtime counter, daemon-written) |
 | `loop-for-duration` | `TimeSpanCondition` | `Conditions` | `hours` (int), `minutes` (int), `seconds` (int) |
 | `loop-until-time` | `TimeCondition` | `Conditions` | `provider` (string, see Time sources), `hours` (int), `minutes` (int), `minutesOffset` (int), `seconds` (int) |
-| `loop-while-above-horizon` | `AboveHorizonCondition` | `Conditions` | `hasDsoParent` (bool), `data` (`WaitLoopData` from `LoopForAltitudeBase`: offset in degrees, comparator) |
-| `loop-while-altitude` | `AltitudeCondition` | `Conditions` | `hasDsoParent` (bool), `data` (`WaitLoopData` from `LoopForAltitudeBase`: altitude in degrees, comparator) |
+| `loop-while-above-horizon` | `AboveHorizonCondition` | `Conditions` | `hasDsoParent` (bool), `data` (`WaitLoopData` from `LoopForAltitudeBase`: `offset` in degrees, `comparator` as for `wait-for-sun-altitude`) |
+| `loop-while-altitude` | `AltitudeCondition` | `Conditions` | `hasDsoParent` (bool), `data` (`WaitLoopData` from `LoopForAltitudeBase`: altitude in degrees as `offset`, `comparator` as for `wait-for-sun-altitude`) |
 
 ### Triggers
 
@@ -222,7 +223,7 @@ A trigger's `run` is a list of instruction nodes. It maps to the trigger's `Trig
 | `originalPayload` | object | the source node, kept so nothing is lost and a later Ara release can retry it |
 | `reason` | string | why it was not mapped |
 
-A placeholder is written only by the client importer and the migration. The importer is client code, so the validator accepts an `unknown` node only with `originalType`, `originalPayload` and `reason`, and the editor never offers one to add. The daemon keeps it in the library as it keeps it today. The engine behaviour is today's: an `unknown` instruction throws `SequenceItemSkippedException` ("Unknown instruction will be skipped - &lt;name&gt;"), and the placeholder's validation never passes (`Validate()` returns `false`). A failed condition check on an `unknown` condition ends its container's loop, which is how an unregistered altitude condition skipped a whole target block before `AboveHorizonCondition` was registered (`HeadlessSequencerFactory.DefaultConditions`).
+A placeholder is written only by the client importer and the migration. The importer is client code, so the validator accepts an `unknown` node only with `role`, `originalType`, `originalPayload` and `reason` (`role` picks the engine class, so it is required), and the editor never offers one to add. The daemon keeps it in the library as it keeps it today. The engine behaviour is today's: an `unknown` instruction throws `SequenceItemSkippedException` ("Unknown instruction will be skipped - &lt;name&gt;"), and the placeholder's validation never passes (`Validate()` returns `false`). A failed condition check on an `unknown` condition ends its container's loop, which is how an unregistered altitude condition skipped a whole target block before `AboveHorizonCondition` was registered (`HeadlessSequencerFactory.Instantiate`).
 
 ### Ara-only kind: `glover-exposure`
 
@@ -232,31 +233,37 @@ See the adaptive section below. It has no engine class today; follow-up (d) adds
 
 Import is client-side and one-way. The NINA file lives on the client machine, so the client reads it, maps it and uploads the result; the daemon has no import endpoint and never reads a NINA `$type` for this purpose. This is the recorded 2026-07-15 decision that removed `POST /sequences/import` (see the removal note in `OpenAstroAra.Server/Endpoints/SequenceEndpoints.cs`).
 
-**Today.** [`nina_import.dart`](../../client/openastroara_client/lib/util/nina_import.dart) reads the NINA `.json`, rewrites only the `$type` strings (NINA namespace to `OpenAstroAra` namespace), collects a `warnings` list for sequencer types the client's editor catalog does not know, backfills `schemaVersion` `openastroara-sequence-v1`, and the result is uploaded through the ordinary idempotent create (or saved as an offline draft). The daemon's schema validator gates that create. The daemon still loads NINA-flavoured bodies at run time through `JsonCreationConverter` (v1 compatibility; follow-up (c) ends the need).
+**Before.** [`nina_import.dart`](../../client/openastroara_client/lib/util/nina_import.dart) read the NINA `.json`, rewrote only the `$type` strings (NINA namespace to `OpenAstroAra` namespace), collected a `warnings` list for sequencer types the client's editor catalog does not know, backfilled `schemaVersion` `openastroara-sequence-v1`, and the result was uploaded through the ordinary idempotent create (or saved as an offline draft). The daemon's schema validator gates that create. The daemon still loads NINA-flavoured bodies at run time through `JsonCreationConverter` (v1 compatibility; follow-up (c) ends the need).
 
 **Target.** The importer stays in the client, as the successor of `nina_import.dart`, and writes v2:
 
-1. **Detect.** A body with a top-level `$type` and no `schemaVersion` is NINA JSON. A body that already has `schemaVersion` is not imported. Anything else is refused on the client with "This file is not a NINA sequence." Malformed JSON, a body that is not an object, or a root that is not a container refuses the whole import; nothing is uploaded.
-2. **Map `$type` to `kind`.** The client strips the NINA or `OpenAstroAra` namespace from each `$type` and looks the class name up in this spec's kind tables. The five `NINA.Plugins.Connector` instructions (`ConnectAllEquipment`, `ConnectEquipment`, `DisconnectEquipment`, `DisconnectAllEquipment`, `SwitchProfile`) map to the same-named Ara classes, as `SequenceItemCreationConverter.PluginMergeMigration` does on the daemon today, and the Connector `ReconnectTrigger` maps to `reconnect`, as `SequenceTriggerCreationConverter.PluginMergeMigration` does. That converter also maps the Connector `ReconnectOnDownloadFailure`, but Ara has no such class (`OpenAstroAra.Sequencer/Trigger/Connect/` holds only `ReconnectTrigger`), so it loads as `UnknownSequenceTrigger` today and the importer writes a placeholder for it. No `NinaTypeRemapper.ResolveType` step runs on the server.
-3. **Map fields.** Each property becomes its v2 field (see "Renamed fields"). `ImageType` `DARKFLAT` becomes `DARK`. A NINA `Strategy.$type` is dropped (the `kind` decides it). A `SelectedProvider.$type` becomes a `provider` string. A `DeepSkyObjectContainer`'s `Target` is hoisted into `targets` and the container gets a `targetId`. A `$ref` to a node already seen is refused as "shared node"; NINA files do not produce one for the types Ara supports.
+1. **Detect.** A body with a top-level `$type` and no `schemaVersion` is NINA JSON. A body whose `schemaVersion` is `openastroara-sequence-v2` is not mapped and is uploaded as written. A body with any other `schemaVersion` (`openastroara-sequence-v1` included) is not a NINA file and is refused. Anything else is refused on the client with "This file is not a NINA sequence.", the one sentence for every refusal but a shared node. Malformed JSON, a body that is not an object, or a root that is not a container refuses the whole import; nothing is uploaded.
+2. **Map `$type` to `kind`.** The client takes the class name of each `$type` when its namespace is `NINA.Sequencer.` or `OpenAstroAra.Sequencer.` (any assembly form) and looks it up in this spec's kind tables; a class in another namespace never maps, even when its name is a kind's class name. The five `NINA.Plugins.Connector` instructions (`ConnectAllEquipment`, `ConnectEquipment`, `DisconnectEquipment`, `DisconnectAllEquipment`, `SwitchProfile`) map to the same-named Ara classes, as `SequenceItemCreationConverter.PluginMergeMigration` does on the daemon today, and the Connector `ReconnectTrigger` maps to `reconnect`, as `SequenceTriggerCreationConverter.PluginMergeMigration` does. That converter also maps the Connector `ReconnectOnDownloadFailure`, but Ara has no such class (`OpenAstroAra.Sequencer/Trigger/Connect/` holds only `ReconnectTrigger`), so it loads as `UnknownSequenceTrigger` today and the importer writes a placeholder for it. No `NinaTypeRemapper.ResolveType` step runs on the server.
+3. **Map fields.** Each property becomes its v2 field (see "Renamed fields"); a property that is not a field of the node's `kind` is dropped. `ImageType` `DARKFLAT` becomes `DARK`. A NINA `Strategy.$type` is dropped (the `kind` decides it). A `SelectedProvider.$type` becomes a `provider` string; a provider the table does not name is left out, so the field takes its default. A `DeepSkyObjectContainer`'s `Target` is hoisted into `targets` and the container gets a `targetId`. A `$ref` to a node already seen is refused as "shared node" (a node position is a list entry, a trigger's `TriggerRunner` or the root); a `$ref` in a value position (a `Binning` or `Filter` two instructions share) is the earlier object with that `$id`, expanded. A registered container other than `SequenceRootContainer` at the top is wrapped in a `root`.
+   - **Area containers.** `StartAreaContainer`, `TargetAreaContainer` and `EndAreaContainer` each become a `sequential` container with the same `Name`; their children, conditions and triggers are imported. (A real NINA export is a root holding the three area containers, with the target blocks inside `TargetAreaContainer`.)
+   - **Enum words.** NINA writes an enum as a number; the v2 field holds a word. `errorBehavior` is `continue-on-error`, `skip-instruction-set-on-error`, `abort-on-error` or `skip-to-sequence-end-instructions` for 0 to 3. `trackingMode` is the engine name, `Sidereal`, `Lunar`, `Solar`, `King`, `Custom` or `Stopped` for 0 to 5. `data.comparator` is the engine `ComparisonOperator` name (`EQUALS`, `LessThan`, `LessThanOrEqual`, `GreaterThan`, `GreaterThanOrEqual`, `NotEqual` for 0 to 5), with `GreaterThanOrEqual` becoming `GreaterThan` and `LessThanOrEqual` becoming `LessThan`. A string stays as found.
+   - **Keys.** Every key is lowerCamelCase at every depth (a leading acronym lowercased whole: `RAHours` is `raHours`, `ROI` is `roi`), inside `exposureInfoList` elements, `coordinates` and `data` too, except inside a placeholder's `originalPayload`, which is the source node as found. `filter` keeps only `name`, `position`, `focusOffset`, `autoFocusExposureTime` and `autoFocusFilter`, from NINA's `_name`, `_position`, ... (the underscore is removed); `binning` keeps `x` and `y`. A key of a nested value that is not listed is dropped. `$type`, `$id` and `Parent` never reach the output.
+   - **Old altitude fields.** `Altitude`, `AltitudeOffset`, `UserMoonAltitude`, `UserSunAltitude` (all `data.offset`), `Comparator` (`data.comparator`) and `Coordinates` (`data.coordinates`) on `wait-for-sun-altitude`, `loop-while-above-horizon` and `loop-while-altitude` fold into `data`. When a file has both, the old field wins over `Data`, as in the engine.
 4. **Supported constructs import losslessly**: every NINA class the tables list, with every field the class carries. There is no export back to NINA, so lossless means "nothing the engine runs is dropped or changed".
 5. **Not supported: placeholder or refusal.**
 
 | NINA construct | What import does |
 |---|---|
-| a `$type` with no `kind` in the tables (a NINA instruction Ara does not ship, any third-party plugin type, MGEN, `StartAreaContainer`, `TargetAreaContainer`, `EndAreaContainer`, `ConditionalContainer`, `IfContainer`-style containers) | the node becomes a placeholder (`kind: "unknown"`) with `originalType`, `originalPayload` and `reason`; its children are inside `originalPayload` and are not imported; the import goes on |
+| a `$type` with no `kind` in the tables (a NINA instruction Ara does not ship, any third-party plugin type, MGEN, `ConditionalContainer`, `IfContainer`-style containers) | the node becomes a placeholder (`kind: "unknown"`) with `originalType`, `originalPayload` and `reason`; its children are inside `originalPayload` and are not imported; the import goes on |
 | a plugin type under `NINA.Plugins.*` other than the five Connector instructions and the Connector `ReconnectTrigger` (the Connector `ReconnectOnDownloadFailure` included) | the same placeholder |
 | a node with no `$type` | the same placeholder, `originalType` empty |
-| a device id (`SelectedDevice`, `AlpacaDeviceNumber`) that names a NINA ASCOM device | kept as found; the client adds a warning `equipment_unmatched` (the user reassigns it in the editor) |
+| a device id (`SelectedDevice`, `AlpacaDeviceNumber`) that names a NINA ASCOM device: a non-empty `selectedDevice` that is not a rig role key (`Camera`, `Filter Wheel`, `Focuser`, `Rotator`, `Telescope`, `Mount`, `Guider`, `Switch`, `Flat Panel`, `Weather`, `Dome`, `Safety Monitor`), or an `alpacaDeviceNumber` other than `-1` | kept as found; the client adds a warning `equipment_unmatched` (the user reassigns it in the editor) |
 | malformed JSON, a body that is not an object, or a root that is not a container | the whole import is refused; nothing is uploaded |
 
 6. **What the user is told.** The client collects `warnings`, one per placeholder and per unmatched device, and shows them before upload. The text of a placeholder warning is exactly:
 
    `"<originalType>" is not supported by OpenAstro Ara and was not imported. It stays in the sequence as a placeholder that is skipped when the sequence runs.`
 
+   The text of an `equipment_unmatched` warning is `The device "<id>" of "<kind>" is not one of this rig's equipment roles. It was kept as found; assign it in the editor.` (`<id>` is the device number for an `alpacaDeviceNumber`).
+
    The placeholder node itself shows, in the editor and in the sequence's validation list, today's engine text unchanged: the name `<Unknown Instruction - <name>> ` (the node's `name`, which the importer sets to `originalType`) and the issue "Unknown instruction detected! Please double check your sequence and inspect which instructions became invalid. Furthermore validate that everything is up to date." (`LblUnknownInstruction`, `LblUnknownInstructionValidation`). When the engine reaches it, the run log says "Unknown instruction will be skipped - <name>". The client banner counts the warnings ("3 issues need attention"). An import with at least one placeholder still saves; it cannot start until the user removes or replaces each placeholder, because a sequence with a placeholder fails its validation (`Validate()` is `false`).
-7. **Provenance.** The client sets `metadata.importedFrom` to `{ "format": "nina", "fileName": "<name>", "importedUtc": "<ISO 8601>" }` in the v2 body. The daemon keeps no source file and no `sequences/imported/` directory.
-8. **Daemon gate.** The daemon's v2 validator (follow-up (a)) gates the create and answers HTTP 422 on an invalid body. A placeholder from the client passes the create only when it carries `originalType`, `originalPayload` and `reason`.
+7. **Provenance.** The client sets `metadata.importedFrom` to `{ "format": "nina", "fileName": "<name>", "importedUtc": "<ISO 8601>" }` in the v2 body (`fileName` is the picked file's name with its extension, `importedUtc` is UTC). The daemon keeps no source file and no `sequences/imported/` directory.
+8. **Daemon gate.** The daemon's v2 validator (follow-up (a)) gates the create and answers HTTP 422 on an invalid body. A placeholder from the client passes the create only when it carries `role`, `originalType`, `originalPayload` and `reason`.
 9. **No Glover.** NINA has no equivalent of `glover-exposure`, so import never creates one; a NINA `TakeExposure` becomes a `capture`.
 
 [`design/PORT_PLAYBOOK.md`](../../design/PORT_PLAYBOOK.md) section 38.4 still describes the old server import flow and is out of date; this PR does not edit the playbook.
@@ -347,13 +354,20 @@ The `loop-until-time` condition is the container's loop test: the filter loop re
 
 ## Validation
 
-Follow-up (a) writes the validator. The rules it must hold, beyond today's `SequenceSchemaValidator` ones (object body, schema version, at least one capturable instruction reachable from root):
+`SequenceV2Validator.Validate` (part A of follow-up (a)) holds these rules, beyond today's `SequenceSchemaValidator` ones (object body, schema version, at least one capturable instruction reachable from root). It returns every error it finds, in walk order (document members, `targets`, then `root` depth first: node fields, `conditions`, `triggers` with each `run`, `items`), at most 100:
 
-- every `kind` is in the tables above, or the daemon has the Glover class for `glover-exposure`;
-- `root` is the only `root`, and a `target`'s `targetId` is an `id` in `targets`;
-- a `capture`, `flat-panel-flats` or `sky-flats` node or a `glover-exposure` counts as capturable;
-- no unknown fields (a typo is a 422 naming the node path);
-- an `unknown` node carries `originalType`, `originalPayload` and `reason` (the client importer and the migration write it; the editor never offers one).
+- every `kind` is in the tables above, or the daemon has the Glover class for `glover-exposure` (`unknown_kind`);
+- the document has `schemaVersion` (`openastroara-sequence-v2`), `name`, `targets` and `root` (`missing_field`, `schema_version`);
+- `root` is the document member `root` and its `kind` is `root` (`root_kind`); a `root` anywhere else is `misplaced_root`; a `target`'s `targetId` is an `id` in `targets` (`unknown_target`), target ids are unique (`duplicate_target_id`), and a target element has `id` and `coordinates`;
+- a node sits in a list that takes its role: `items` take containers and instructions, `conditions` conditions, `triggers` triggers, a trigger's `run` instructions (`wrong_role`; a placeholder counts by its `role`);
+- a `capture`, `flat-panel-flats` or `sky-flats` node or a `glover-exposure` counts as capturable, only when it is reachable from `root` through `items`: one in a trigger's `run`, in a condition or inside a placeholder's payload does not count (`no_capturable_instruction`); a template body may waive the rule;
+- no unknown fields, on the document, on a target element and on each node (`unknown_field`; a typo is a 422 naming the node path);
+- a known field has the JSON value kind of the engine property's type: a string for a string, an enum or a GUID, an integer token that fits the property's integer type, a number, a boolean, an array for a collection, an object for another class (`wrong_type`). `null` is valid only where the engine declares the property nullable (`center`, `filter`, `priorSeconds`, `ceilingSeconds`, `calibrationTarget`, `calibrationNight`). `kind`, `targetId` and `provider` are strings and never null. Enum vocabulary, GUID format and the keys inside nested objects (`coordinates`, `binning`, `filter`, `data`) are not checked;
+- an `unknown` node carries `role`, `originalType`, `originalPayload` and `reason` (the client importer and the migration write it; the editor never offers one); its payload is opaque and is not walked.
+
+An error is `{ code, path, message }` with a path such as `$.root.items[2].triggers[0].run[1]`; a member of the wrong JSON kind is one `wrong_type` at the member's path and never an exception. The codes are `body_not_object`, `schema_version`, `missing_field`, `wrong_type`, `unknown_field`, `unknown_kind`, `wrong_role`, `root_kind`, `misplaced_root`, `duplicate_target_id`, `unknown_target` and `no_capturable_instruction`. A client name quoted in a message is cut to 64 characters. The validator logs nothing; a caller that logs a path or message escapes it (CWE-117).
+
+[`sequence-v2.schema.json`](sequence-v2.schema.json) is the machine-readable form of the field table (JSON Schema 2020-12, one `$defs` object per kind, `additionalProperties: false`). It is generated by `SequenceV2Schema.Generate()` and a test fails when the checked-in file differs. It states names and value kinds only; the rules that need the whole document (roles by list, `targetId` resolution, capturable) are the validator's.
 
 ## Follow-up issues
 
@@ -384,7 +398,7 @@ Four issues, filed after the maintainer signs this spec off. Each is a separate 
 **Acceptance criteria.**
 - A fixture set of real NINA files (a target block, a Smart Exposure with triggers, the Connector plugin instructions, the Connector `ReconnectTrigger` and `ReconnectOnDownloadFailure` triggers, a plugin instruction Ara does not ship) imports with the node counts and field values asserted, in Dart tests.
 - The warning text for a placeholder equals the sentence in this spec, and the placeholder shows the `LblUnknownInstruction` and `LblUnknownInstructionValidation` text.
-- `DARKFLAT` becomes `DARK`; the five Connector instructions and the Connector `ReconnectTrigger` (to `reconnect`) map; `ReconnectOnDownloadFailure` and `StartAreaContainer` become placeholders.
+- `DARKFLAT` becomes `DARK`; the five Connector instructions and the Connector `ReconnectTrigger` (to `reconnect`) map; `ReconnectOnDownloadFailure` and `ConditionalContainer` become placeholders; the three area containers become `sequential` and a real NINA file (a root holding them) imports with a capture reachable through `items`.
 - Malformed JSON, a non-object body and a non-container root are refused and upload nothing.
 - The client import tests (`test/util/nina_import_test.dart`, `test/widgets/sequencer/sequence_import_test.dart`) are ported to v2, not deleted. The daemon's `NinaImportFidelityTest` and `JsonCreationConverterRemapTest` pin the run-time `$type` path (`NinaTypeRemapper`), which v1 compatibility and the migration (c) still use; this issue does not touch them.
 
@@ -423,7 +437,8 @@ Four issues, filed after the maintainer signs this spec off. Each is a separate 
 
 ## Known limits
 
-- The per-kind field table lists the engine properties this spec could confirm; follow-up (a) pins the exhaustive table against `[JsonProperty]` in code, and a field it finds that is not listed here is added to this spec in the same PR.
-- A document with a `$ref` shared node is refused by the client importer; no NINA type Ara supports produces one.
+- The per-kind field table is computed from the engine's `[JsonProperty]` set and pinned to the cells above in both directions; a field an engine class gains changes the table, the schema and a test, and is added to this spec in the same PR.
+- The setter-only NINA deprecation shims on the altitude classes (`altitude`, `altitudeOffset`, `comparator`, `coordinates`, `userMoonAltitude`, `userSunAltitude` on `wait-for-sun-altitude`, `loop-while-above-horizon`, `loop-while-altitude`) are read by v1 and NINA bodies but never written, so they are not v2 fields; the importer and the migration fold them into `data`, and the old field wins over `Data`.
+- A document with a `$ref` to a shared node is refused by the client importer; no NINA type Ara supports produces one. A `$ref` to a value is expanded.
 - No NINA export, by decision.
 - Migration cannot restore a v1 body's `$id` numbering; the v1 backup is the only way back to it.

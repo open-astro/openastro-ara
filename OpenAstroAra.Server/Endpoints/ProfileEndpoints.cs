@@ -19,8 +19,10 @@ using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using OpenAstroAra.Profile;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Services;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -40,35 +42,76 @@ namespace OpenAstroAra.Server.Endpoints;
 /// already holds the full state client-side.
 /// </summary>
 public static partial class ProfileEndpoints {
+    private const string ProfilePrefix = "/api/v1/profile/";
+
+    /// <summary>The section name <c>profile.updated</c> carries for a path: its first segment under
+    /// <c>/api/v1/profile/</c> ("site", "filter-wheel", ...); null outside the group.</summary>
+    private static string? SectionOf(string path) =>
+        path.StartsWith(ProfilePrefix, StringComparison.OrdinalIgnoreCase) ? path[ProfilePrefix.Length..].Split('/')[0] : null;
+
     /// <summary>Runs the write, then publishes <c>profile.updated</c> with the section name (the first path segment
     /// under <c>/api/v1/profile/</c>) when it was a 2xx write. Reads, rejected writes (4xx) and thrown errors publish
-    /// nothing. A failed publish never fails the write.</summary>
+    /// nothing. A failed publish never fails the write. While the write runs, the section is announced
+    /// (<see cref="ProfileWriteScope"/>), so the daemon-write publisher does not send it a second time.</summary>
     internal static async ValueTask<object?> PublishUpdatedAfterWrite(
         HttpContext http, Func<ValueTask<object?>> next, IWsBroadcaster? ws) {
-        var result = await next();
         var method = http.Request.Method;
-        if (ws is null || HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method)) {
-            return result;
+        if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method) || HttpMethods.IsOptions(method)
+                || SectionOf(http.Request.Path.Value ?? string.Empty) is not { } section) {
+            return await next();
+        }
+        object? result;
+        using (ProfileWriteScope.Announce(section)) {
+            result = await next();
         }
         var status = (result as IStatusCodeHttpResult)?.StatusCode ?? StatusCodes.Status200OK;
-        if (status < 200 || status >= 300) {
+        if (ws is null || status < 200 || status >= 300) {
             return result;
         }
-        const string prefix = "/api/v1/profile/";
-        var path = http.Request.Path.Value ?? string.Empty;
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) {
-            return result;
-        }
-        var section = path[prefix.Length..].Split('/')[0];
+        await PublishSectionUpdatedAsync(ws, section);
+        return result;
+    }
+
+    /// <summary>Publishes <c>profile.updated { section }</c>. Best-effort: the profile write already landed, so a
+    /// dead broadcaster must not turn it into a failure.</summary>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort broadcast after the write landed; the daemon-write path does not await it, so any exception, cancellation included, must stop here.")]
+    internal static async Task PublishSectionUpdatedAsync(IWsBroadcaster ws, string section) {
         try {
             using var doc = System.Text.Json.JsonDocument.Parse(
                 new System.Text.Json.Nodes.JsonObject { ["section"] = section }.ToJsonString());
             await ws.PublishAsync(Contracts.WsEvents.WsEventCatalog.ProfileUpdated, doc.RootElement.Clone(),
                 CancellationToken.None);
-        } catch (Exception ex) when (ex is not OperationCanceledException) {
-            // Best-effort: the profile write already landed; a dead broadcaster must not turn it into a 500.
+        } catch (Exception) {
+            // Includes OperationCanceledException: the daemon-write path fires this without awaiting it,
+            // so nothing would observe a canceled task.
         }
-        return result;
+    }
+
+    /// <summary>#1807 — a section the daemon writes outside these routes publishes <c>profile.updated</c> too
+    /// (<see cref="ProfileSectionChangePublisher"/>). Call right after <see cref="MapProfileEndpoints"/>: the route
+    /// names are read from the mapped section routes here, once at startup. Reading the endpoint table rebuilds
+    /// every mapped endpoint, so it must not land on the first writer's thread (camera connect, time sync).</summary>
+    internal static ProfileSectionChangePublisher PublishDaemonProfileWrites(this IEndpointRouteBuilder app) =>
+        new(app.ServiceProvider.GetRequiredService<IProfileStore>(),
+            app.ServiceProvider.GetRequiredService<IWsBroadcaster>(),
+            SectionRoutes(app.DataSources),
+            app.ServiceProvider.GetService<Microsoft.Extensions.Logging.ILogger<ProfileSectionChangePublisher>>());
+
+    /// <summary>Each client-loadable section (a route marked <see cref="WithSection"/>) and the name
+    /// <c>profile.updated</c> gives it, the same first path segment a route write publishes.</summary>
+    internal static IReadOnlyDictionary<ProfileSection, string> SectionRoutes(IEnumerable<EndpointDataSource> sources) {
+        var routes = new Dictionary<ProfileSection, string>();
+        foreach (var endpoint in sources.SelectMany(d => d.Endpoints).OfType<RouteEndpoint>()) {
+            if (endpoint.Metadata.GetMetadata<ProfileSection>() is { } section
+                    && SectionOf(endpoint.RoutePattern.RawText ?? string.Empty) is { } route
+                    && !routes.TryAdd(section, route) && routes[section] != route) {
+                // One section, one profile.updated name: a client reloads the section by that name.
+                throw new InvalidOperationException(
+                    $"Profile section {section.Name} is mapped under both '{routes[section]}' and '{route}'.");
+            }
+        }
+        return routes;
     }
 
     /// <summary>Marks a route as one profile section: its GET and PUT answer an <c>ETag</c> of the stored
@@ -287,14 +330,14 @@ public static partial class ProfileEndpoints {
             .WithSummary("Get the active profile's safety policies.");
 
         profile.MapPut("/safety", (SafetyPoliciesDto body, IProfileStore store) => {
-            // §58.8 — FirstFlipConfirmed is DAEMON-owned, not client-editable: the flip executor
-            // sets it out-of-band whenever a first flip actually runs, so a client Save PUTting
-            // back a stale hydrate must never clobber it (an overnight flip's confirmation would
-            // be silently cleared and the announce would repeat — the exact behaviour §58.8
-            // exists to prevent). The stored value always wins; re-arming goes through the
-            // dedicated endpoint below.
+            // §58.8 — FirstFlipConfirmed and the completed-flip record are DAEMON-owned, not
+            // client-editable: the flip executor records a completed flip out-of-band and the
+            // user confirms it through the dedicated endpoint, so a client Save PUTting back a
+            // stale hydrate must never clobber either, nor invent a completed flip to confirm.
+            // The stored values always win; confirming and re-arming go through the dedicated
+            // endpoints below.
             // Atomic read-merge-write under the store lock: a Get→Put pair from here could
-            // lose a concurrent executor confirmation / re-arm to a stale snapshot — the exact
+            // lose a concurrent completed-flip record, confirm or re-arm to a stale snapshot — the exact
             // lost-update class this merge exists to close.
             var merged = store.UpdateSafetyPolicies(current => PreserveDaemonOwnedSafetyFields(body, current));
             return Results.Ok(merged);
@@ -303,19 +346,38 @@ public static partial class ProfileEndpoints {
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
             .WithSection(ProfileSections.SafetyPolicies)
             .WithName("PutSafetyPolicies")
-            .WithSummary("Replace the active profile's safety policies. first_flip_confirmed is " +
-                "daemon-owned and ignored on PUT (the stored value is preserved and echoed) — " +
-                "use POST /safety/first-flip/rearm to re-arm the §58.8 announce.");
+            .WithSummary("Replace the active profile's safety policies. first_flip_confirmed, " +
+                "first_flip_completed_utc and first_flip_pier_side_changed are daemon-owned and ignored " +
+                "on PUT (the stored values are preserved and echoed) — use POST /safety/first-flip/confirm " +
+                "and POST /safety/first-flip/rearm.");
 
-        // §58.8 — the one-way re-arm: clears first_flip_confirmed so the NEXT flip announces
-        // again (after re-balancing or a rig change the optics-based auto-reset can't see).
-        // Deliberately no inverse endpoint: only the flip executor ever confirms a flip.
+        // §58.8 — the re-arm: clears first_flip_confirmed and the completed-flip record so the NEXT
+        // flip announces again and the user watches one again (after re-balancing or a rig change
+        // the optics-based auto-reset can't see).
         profile.MapPost("/safety/first-flip/rearm", (IProfileStore store) =>
-            Results.Ok(store.UpdateSafetyPolicies(current => current with { FirstFlipConfirmed = false })))
+            Results.Ok(store.UpdateSafetyPolicies(ProfileSections.WithoutFirstFlip)))
             .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .WithSection(ProfileSections.SafetyPolicies) // #1807 — answers the safety tag, as a PUT does
             .WithName("RearmFirstFlipAnnounce")
-            .WithSummary("Re-arm the §58.8 one-time first-flip announce (clears first_flip_confirmed). " +
-                "Returns the updated safety policies.");
+            .WithSummary("Re-arm the §58.8 unconfirmed-flip announce (clears first_flip_confirmed and the " +
+                "completed-flip record). Returns the updated safety policies.");
+
+        // §58.8 (#1589) — the user's confirm: only after a flip ran to the end on this profile (the
+        // executor's record), never on its own. Confirming twice writes nothing.
+        profile.MapPost("/safety/first-flip/confirm", (IProfileStore store) => {
+            var confirmed = store.UpdateSafetyPolicies(current =>
+                ConfirmedFirstFlip(current) ?? throw new RefusalException(RefusalCatalog.FirstFlipNotCompleted,
+                    "No meridian flip has completed on this profile since the last re-arm or optics change; " +
+                    "watch one flip from start to end, then confirm it."));
+            return Results.Ok(confirmed);
+        })
+            .Produces<SafetyPoliciesDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .WithSection(ProfileSections.SafetyPolicies)
+            .WithName("ConfirmFirstFlip")
+            .WithSummary("#1589 Confirm the active profile's completed meridian flip (sets first_flip_confirmed; " +
+                "later flips run without the §58.8 announce). Refused with first-flip-not-completed when no " +
+                "completed flip is on record. Returns the updated safety policies.");
 
         profile.MapGet("/autofocus", (IProfileStore store) =>
                 Results.Ok(store.GetAutofocusSettings()))
@@ -716,13 +778,26 @@ public static partial class ProfileEndpoints {
     }
 
     /// <summary>§58.8 — the safety-policies PUT merge: daemon-owned fields keep their STORED
-    /// value regardless of what the client sent. Today that is only <c>FirstFlipConfirmed</c>
-    /// (set out-of-band by the flip executor when a first flip actually runs; a stale panel
-    /// hydrate PUT back later must not clobber an overnight confirmation). Extracted so the
-    /// ownership rule is unit-testable without a web host.</summary>
+    /// value regardless of what the client sent: <c>FirstFlipConfirmed</c> and the completed-flip
+    /// record (#1589; the executor records a completed flip out-of-band and the user confirms it
+    /// through its own endpoint — a stale panel hydrate PUT back later must neither clobber them
+    /// nor invent a flip to confirm). Extracted so the ownership rule is unit-testable without a
+    /// web host.</summary>
     internal static SafetyPoliciesDto PreserveDaemonOwnedSafetyFields(
         SafetyPoliciesDto incoming, SafetyPoliciesDto stored) =>
-        incoming with { FirstFlipConfirmed = stored.FirstFlipConfirmed };
+        incoming with {
+            FirstFlipConfirmed = stored.FirstFlipConfirmed,
+            FirstFlipCompletedUtc = stored.FirstFlipCompletedUtc,
+            FirstFlipPierSideChanged = stored.FirstFlipPierSideChanged,
+        };
+
+    /// <summary>§58.8 (#1589) — the user's confirm of a completed flip: the policies with
+    /// <c>FirstFlipConfirmed</c> set and the record kept; <paramref name="current"/> itself when it
+    /// is already confirmed (no write); null when no completed flip is on record (refused).</summary>
+    internal static SafetyPoliciesDto? ConfirmedFirstFlip(SafetyPoliciesDto current) =>
+        current.FirstFlipConfirmed ? current
+        : current.FirstFlipCompletedUtc is null ? null
+        : current with { FirstFlipConfirmed = true };
 
     /// <summary>§63.19 — write-boundary normalization for the guide setup type: only the openapi enum
     /// tokens pass through; anything else (case/whitespace variants included, matching the client's
@@ -854,6 +929,12 @@ public static partial class ProfileEndpoints {
         }
         if (body.LoopMode is not (PolarAlignLoopModes.Loop or PolarAlignLoopModes.SingleFrame)) {
             return Results.Problem(detail: "loop_mode must be \"loop\" or \"single\"",
+                statusCode: StatusCodes.Status400BadRequest);
+        }
+        // #2082 — a camera the routine cannot pick: refused like an unknown loop mode (a typo must not become the guide
+        // camera silently). An absent key is the guide camera (the record's default).
+        if (!PolarAlignCameras.IsValid(body.Camera)) {
+            return Results.Problem(detail: "camera must be \"guide\" or \"main\"",
                 statusCode: StatusCodes.Status400BadRequest);
         }
         // The turn and rough-exposure knobs have no control in the app yet (#1736), and an older build

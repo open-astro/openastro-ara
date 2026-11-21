@@ -13,7 +13,23 @@ enum RefusalCause {
   opticsNotSet('optics-not-set'),
   solverNotSet('solver-not-set'),
   captureSettingsUnsupported('capture-settings-unsupported'),
-  storageUnavailable('storage-unavailable');
+  storageUnavailable('storage-unavailable'),
+  belowHorizonLimit('below-horizon-limit'),
+  endNightInProgress('end-night-in-progress'),
+  mountPositionUnverified('mount-position-unverified'),
+  counterweightLimit('counterweight-limit'),
+  polarAlignMountParked('polar-align-mount-parked'),
+  polarAlignUnconfirmed('polar-align-unconfirmed'),
+  polarAlignSweepLimit('polar-align-sweep-limit'),
+  polarAlignMovingMount('polar-align-moving-mount'),
+  polarAlignOnAxis('polar-align-on-axis'),
+  polarAlignPointingUnknown('polar-align-pointing-unknown'),
+  polarAlignPoseAmbiguous('polar-align-pose-ambiguous'),
+  polarAlignMountBusy('polar-align-mount-busy'),
+  firstFlipNotCompleted('first-flip-not-completed'),
+  mountClockNotVerified('mount-clock-not-verified'),
+  polarAlignAlreadyRunning('polar-align-already-running'),
+  polarAlignClutchTurned('polar-align-clutch-turned');
 
   const RefusalCause(this.token);
 
@@ -46,7 +62,8 @@ class Refusal implements Exception {
   final String? reason;
   final String? detail;
 
-  /// The problem's extensions other than `reason` (`missing`, `job_id`).
+  /// The problem's extensions other than `reason` (`missing`, `job_id`, `altitude_deg`, `limit_deg`,
+  /// `position_unverified_reason`, `hour_angle_hours`, `counterweight_angle_deg`, `direction`, `offset_deg`).
   final Map<String, Object?> parameters;
   final int? status;
 

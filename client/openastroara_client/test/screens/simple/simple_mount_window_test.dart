@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/mount_status.dart';
 import 'package:openastroara/screens/simple/simple_device_windows.dart';
 import 'package:openastroara/services/equipment_driver_api.dart';
@@ -10,6 +11,11 @@ import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_shell.dart' show SimpleSegment;
+import 'package:openastroara/state/profile_management_state.dart';
+
+import '../../support/fake_section_rig.dart';
+import '../../support/safety_section.dart';
+import '../../support/site_section.dart';
 
 /// A mount that records what it was asked to do.
 class _Mount extends MountNotifier {
@@ -49,6 +55,12 @@ class _Mount extends MountNotifier {
     calls.add('unpark');
     return true;
   }
+
+  @override
+  Future<bool> confirmHome() async {
+    calls.add('confirm-home');
+    return true;
+  }
 }
 
 Map<String, dynamic> _wire({bool tracking = true, bool parked = false, String state = 'connected', String runtime = 'tracking'}) => {
@@ -66,7 +78,11 @@ class _Running extends SequenceRunStateNotifier {
 }
 
 Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynamic> wire,
-    {bool inSettings = false, DeviceDriver? driver, bool planRunning = false, double? width}) async {
+    {bool inSettings = false,
+    DeviceDriver? driver,
+    bool planRunning = false,
+    double? width,
+    FakeSafetySection? safety}) async {
   await tester.pumpWidget(const SizedBox());
   await tester.pump();
   final mount = _Mount(wire);
@@ -74,6 +90,12 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
     mountProvider.overrideWith(() => mount),
     deviceDriverProvider.overrideWith((ref, type) async => type == 'telescope' ? driver : null),
     if (planRunning) sequenceRunStateProvider.overrideWith(_Running.new),
+    // The Limits group (#2044) reads the rig's site (ADR 0015).
+    siteFromRig(),
+    if (safety != null) ...[
+      profileApiProvider.overrideWithValue(FakeSectionRig({}).api()),
+      safetyPoliciesProvider.overrideWith(() => safety),
+    ],
   ]);
   addTearDown(c.dispose);
   await tester.pumpWidget(UncontrolledProviderScope(
@@ -82,7 +104,10 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
       home: Scaffold(
         body: Align(
           alignment: Alignment.topLeft,
-          child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          // Scrolls, as the shell's window does: the Limits group (#2044) makes it tall.
+          child: SingleChildScrollView(
+            child: SizedBox(width: width, child: SimpleMountWindow(inSettings: inSettings)),
+          ),
         ),
       ),
     ),
@@ -91,7 +116,48 @@ Future<(ProviderContainer, _Mount)> _pump(WidgetTester tester, Map<String, dynam
   return (c, mount);
 }
 
+/// #2070 — a mount at its false zero after a power loss: the rig does not trust its position.
+Map<String, dynamic> _unverified({required bool atHome, String reason = 'at_home_on_connect'}) {
+  final w = _wire(tracking: false, runtime: 'idle');
+  w['runtime'] = {
+    ...w['runtime'] as Map<String, dynamic>,
+    'at_home': atHome,
+    'position_unverified': true,
+    'position_unverified_reason': reason,
+  };
+  return w;
+}
+
 void main() {
+  testWidgets('an unverified position is said, Park is off, and Home is confirmed only after asking (#2070)', (tester) async {
+    final (_, mount) = await _pump(tester, _unverified(atHome: true));
+    expect(find.byKey(const Key('simple-mount-position-unverified')), findsOneWidget);
+    expect(find.text('Mount position unverified'), findsOneWidget);
+    expect(tester.widget<SimpleSegment>(find.byKey(const Key('simple-mount-park-parked'))).onTap, isNull,
+        reason: 'the rig refuses a park from an unverified position');
+    await tester.tap(find.byKey(const Key('simple-mount-confirm-home')));
+    await tester.pump();
+    expect(mount.calls, isEmpty, reason: 'the window asks first');
+    await tester.tap(find.text('Yes, it is at Home'));
+    await tester.pump();
+    expect(mount.calls, ['confirm-home']);
+  });
+
+  // #2066 polar alignment's stop was not confirmed: the window says so, not
+  // "the mount may have lost power".
+  testWidgets('Simple: a position left unverified by an unconfirmed stop says why', (tester) async {
+    await _pump(tester, _unverified(atHome: false, reason: 'stop_unconfirmed'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(find.text(en.mountPositionStopUnconfirmedBody), findsOneWidget);
+    expect(find.text(en.mountPositionUnverifiedBody), findsNothing);
+  });
+
+  testWidgets('an unverified mount off Home is told to run its zero search, with no confirm (#2070)', (tester) async {
+    await _pump(tester, _unverified(atHome: false));
+    expect(find.byKey(const Key('simple-mount-run-zero-search')), findsOneWidget);
+    expect(find.byKey(const Key('simple-mount-confirm-home')), findsNothing);
+  });
+
   testWidgets('a tap dropped while the last command runs says so in a pill, once (ALP-4982)', (tester) async {
     // #1486 review: Tracking Off then Parked before the first answer dropped the second with no word.
     final (c, mount) = await _pump(tester, _wire());
@@ -107,20 +173,61 @@ void main() {
     expect(c.read(simpleMessagesProvider), isEmpty, reason: 'it fades like a result');
   });
 
+  testWidgets('the Limits group sits under the rows and the pad, in the window and in Settings (#2044)', (tester) async {
+    for (final inSettings in [false, true]) {
+      await _pump(tester, _wire(), inSettings: inSettings, safety: FakeSafetySection());
+      await tester.pump();
+      final flip = tester.getTopLeft(find.byKey(const Key('simple-window-row-Meridian flip')));
+      final pad = tester.getBottomLeft(find.byKey(const Key('simple-mount-pad-none')));
+      final limits = tester.getTopLeft(find.byKey(const Key('simple-mount-limits')));
+      expect(limits.dy, greaterThan(flip.dy));
+      expect(limits.dy, greaterThan(pad.dy), reason: 'the pad stays at the top');
+      expect(find.text('LIMITS'), findsOneWidget);
+    }
+  });
+
   testWidgets('the mount window: tracking, park and meridian flip, rows of one height', (tester) async {
-    final (c, mount) = await _pump(tester, _wire());
+    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianPauseMin: 12));
+    final (c, mount) = await _pump(tester, _wire(), safety: safety);
     expect(find.text('Mount · EQM-35 Pro'), findsOneWidget);
     await tester.tap(find.byKey(const Key('simple-mount-tracking-off')));
     await tester.pump();
     expect(mount.calls, ['tracking false']);
-    c.read(safetyPoliciesProvider.notifier).setMeridianFlipAuto(true);
-    await tester.pump();
     await tester.tap(find.byKey(const Key('simple-mount-flip-off')));
     await tester.pump();
-    expect(c.read(safetyPoliciesProvider).meridianFlipAuto, isFalse, reason: 'kept in the profile');
+    expect(c.read(safetyPoliciesProvider).value!.meridianFlipAuto, isFalse, reason: 'kept in the profile');
+    expect(safety.puts.single.meridianPauseMin, 12, reason: 'over the rig\'s copy');
     double row(String label) => tester.getSize(find.byKey(Key('simple-window-row-$label'))).height;
     expect(row('Position'), row('Tracking'));
     expect(row('Meridian flip'), row('Tracking'));
+  });
+
+  testWidgets('the meridian flip waits for the profile from the rig: no switch shows, and nothing is sent (ADR 0015)',
+      (tester) async {
+    final safety = FakeSafetySection(initial: null);
+    await _pump(tester, _wire(), safety: safety);
+    await tester.pump();
+    expect(find.byKey(const Key('simple-mount-flip-off')), findsNothing, reason: 'no default shows');
+    expect(find.byKey(const Key('section-retry')), findsOneWidget);
+    safety.initial = const SafetyPolicies(meridianFlipAuto: true);
+    await tester.tap(find.byKey(const Key('section-retry')));
+    await tester.pump();
+    await tester.pump();
+    expect(find.byKey(const Key('simple-mount-flip-off')), findsOneWidget, reason: 'Retry loads it');
+    expect(safety.puts, isEmpty);
+  });
+
+  testWidgets("a meridian flip change the rig refuses says why and shows the rig's setting again (ADR 0015)",
+      (tester) async {
+    final safety = FakeSafetySection(initial: const SafetyPolicies(meridianFlipAuto: true))
+      ..refuse = StateError('rig error');
+    final (c, _) = await _pump(tester, _wire(), safety: safety);
+    await tester.pump();
+    await tester.tap(find.byKey(const Key('simple-mount-flip-off')));
+    await tester.pump();
+    await tester.pump();
+    expect(c.read(safetyPoliciesProvider).value!.meridianFlipAuto, isTrue, reason: 'the rig still flips');
+    expect(find.textContaining("Couldn't save the meridian flip"), findsOneWidget, reason: 'it says why');
   });
 
   testWidgets('Park is Parked / Unparked segments; while it moves it reads Parking…, then the new state', (tester) async {

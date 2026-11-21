@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../util/friendly_error.dart';
 import '../../../l10n/l10n.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../services/profile_api.dart';
-import '../../../state/saved_server_state.dart';
+import '../../../state/settings/loaded_section.dart';
 import '../../../state/settings/panel_save_registry.dart';
 import '../../../state/settings/safety_policies_state.dart';
 import '../../../widgets/settings/editable_field.dart';
+import '../../../widgets/settings/section_panel.dart';
 import '../../../widgets/settings/settings_row.dart';
 
-/// §35 Safety Policies panel — editable. Phase 12h.6g added the daemon
-/// round-trip — values hydrate from the active server on mount and
-/// persist back on Save.
+/// §35 Safety Policies panel — editable. The fields show the rig's copy of the
+/// `safety` section (ADR 0015: loaded before it is saved; not loaded, they are
+/// not shown) and save back on Save.
 class SafetyPoliciesPanel extends ConsumerStatefulWidget {
   const SafetyPoliciesPanel({super.key});
 
@@ -22,96 +23,96 @@ class SafetyPoliciesPanel extends ConsumerStatefulWidget {
 }
 
 class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
-    with PanelSaveRegistration {
+    with PanelSaveRegistration, SectionPanel {
   String? _lastError;
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrate());
-  }
-
-  Future<void> _hydrate() async {
-    final api = _api();
-    if (api == null) return;
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-    } catch (e) {
-      if (mounted) {
-        setState(
-          () =>
-              _lastError = friendlyError(context.l10n, e, action: context.l10n.actionLoadSettings),
-        );
-      }
-    }
-  }
+  List<PanelSection> get sections => [safetyPoliciesProvider];
 
   @override
-  Future<void> panelSave() => _save();
-
-  Future<void> _save() async {
+  Future<void> panelSave() async {
     setState(() => _lastError = null);
-    final api = _api();
-    final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      setState(
-        () => _lastError = 'Not connected — connect to your rig to save this.',
-      );
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-      return;
-    }
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).persistToServer(api);
-      if (!mounted) return;
-      messenger.showSnackBar(const SnackBar(content: Text('Saved.')));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _lastError = friendlyError(context.l10n, e, action: context.l10n.actionSave));
-      messenger.showSnackBar(SnackBar(content: Text(_lastError!)));
-    }
+    // A field still being edited commits on focus loss; drop focus first so
+    // the typed value is what gets sent.
+    FocusManager.instance.primaryFocus?.unfocus();
+    final error = await saveSections();
+    if (mounted) setState(() => _lastError = error);
   }
 
   Future<void> _rearmFirstFlip() async {
-    final api = _api();
     final messenger = ScaffoldMessenger.of(context);
-    if (api == null) {
-      messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Not connected — connect to your rig to save this.'),
-        ),
-      );
-      return;
-    }
+    final l10n = context.l10n;
     try {
-      await ref.read(safetyPoliciesProvider.notifier).rearmFirstFlip(api);
+      await ref.read(safetyPoliciesProvider.notifier).rearmFirstFlip();
       if (!mounted) return;
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text(
-            'First-flip announce re-armed — the next flip will '
-            'alert and wait 60 s.',
-          ),
-        ),
+        SnackBar(content: Text(l10n.safetyFirstFlipRearmedSnack)),
       );
     } catch (e) {
       if (!mounted) return;
-      messenger.showSnackBar(SnackBar(content: Text(friendlyError(context.l10n, e, action: context.l10n.actionRearmSafety))));
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is SectionNotLoadedException || e is SectionConflictException
+                ? e.toString()
+                : friendlyError(l10n, e, action: l10n.actionRearmSafety),
+          ),
+        ),
+      );
     }
   }
 
-  ProfileApi? _api() {
-    final server = ref.read(activeServerProvider);
-    return server == null ? null : ProfileApi(server);
+  Future<void> _confirmFirstFlip() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final l10n = context.l10n;
+    try {
+      await ref.read(safetyPoliciesProvider.notifier).confirmFirstFlip();
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(content: Text(l10n.safetyFirstFlipConfirmedSnack)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            e is SectionNotLoadedException || e is SectionConflictException
+                ? e.toString()
+                : friendlyError(l10n, e, action: l10n.actionConfirmFlip),
+          ),
+        ),
+      );
+    }
+  }
+
+  /// #1589 — what the first-flip row says: not confirmed and no completed
+  /// flip, a completed flip waiting for the user's confirm, or confirmed.
+  static String _firstFlipStatus(AppLocalizations l10n, SafetyPolicies s) {
+    final completed = s.firstFlipCompletedUtc;
+    if (s.firstFlipConfirmed) {
+      return l10n.safetyFirstFlipConfirmedStatus;
+    }
+    if (completed == null) {
+      return l10n.safetyFirstFlipUnconfirmedStatus;
+    }
+    final when = DateFormat('yyyy-MM-dd HH:mm').format(completed.toLocal());
+    return s.firstFlipPierSideChanged
+        ? l10n.safetyFirstFlipCompletedPierChanged(when)
+        : l10n.safetyFirstFlipCompletedCheckByEye(when);
   }
 
   @override
   Widget build(BuildContext context) {
-    final s = ref.watch(safetyPoliciesProvider);
+    final gate = sectionGate();
+    if (gate != null) return gate;
+    final s = ref.watch(safetyPoliciesProvider).value!;
     final n = ref.read(safetyPoliciesProvider.notifier);
+    SafetyPolicies now() => ref.read(safetyPoliciesProvider).value!;
 
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
+        ?sectionConflict(),
         const SettingsSectionHeader('On unsafe weather'),
         SettingsDropdownRow<UnsafeAction>(
           label: 'Action',
@@ -137,8 +138,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'Resume delay (min)',
           helpKey: 'safety.policies.resume_delay',
           currentValue: s.resumeDelayMin.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).resumeDelayMin.toString(),
+          getCanonical: () => now().resumeDelayMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setResumeDelayMin(v);
@@ -161,8 +161,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             label: 'Max wind (km/h, sustained or gust)',
             helpKey: 'safety.policies.max_wind_kmh',
             currentValue: s.maxWindKmh.toString(),
-            getCanonical: () =>
-                ref.read(safetyPoliciesProvider).maxWindKmh.toString(),
+            getCanonical: () => now().maxWindKmh.toString(),
             parse: (str) {
               final v = int.tryParse(str);
               if (v != null) n.setMaxWindKmh(v);
@@ -172,8 +171,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             label: 'Max humidity (%)',
             helpKey: 'safety.policies.max_humidity_pct',
             currentValue: s.maxHumidityPct.toString(),
-            getCanonical: () =>
-                ref.read(safetyPoliciesProvider).maxHumidityPct.toString(),
+            getCanonical: () => now().maxHumidityPct.toString(),
             parse: (str) {
               final v = int.tryParse(str);
               if (v != null) n.setMaxHumidityPct(v);
@@ -183,10 +181,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             label: 'Min dew delta (°C above dew point)',
             helpKey: 'safety.policies.min_dew_delta_c',
             currentValue: s.minDewDeltaC.toStringAsFixed(1),
-            getCanonical: () => ref
-                .read(safetyPoliciesProvider)
-                .minDewDeltaC
-                .toStringAsFixed(1),
+            getCanonical: () => now().minDewDeltaC.toStringAsFixed(1),
             parse: (str) {
               final v = double.tryParse(str);
               if (v != null) n.setMinDewDeltaC(v);
@@ -201,14 +196,45 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           onChanged: n.setMeridianFlipAuto,
         ),
         EditableNumberRow(
-          label: 'Pause after flip (min)',
+          label: 'Stop before meridian (min)',
           helpKey: 'safety.policies.meridian_pause_min',
           currentValue: s.meridianPauseMin.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).meridianPauseMin.toString(),
+          getCanonical: () => now().meridianPauseMin.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setMeridianPauseMin(v);
+          },
+        ),
+        // #2044 — the flip window after the meridian, and the flip-off stop
+        // (also set from Simple Mode's Mount window).
+        EditableNumberRow(
+          label: 'Flip after the meridian (min)',
+          helpKey: 'safety.policies.minutes_after_meridian',
+          currentValue: s.minutesAfterMeridian.toString(),
+          getCanonical: () => now().minutesAfterMeridian.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setMinutesAfterMeridian(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Latest flip after the meridian (min)',
+          helpKey: 'safety.policies.max_minutes_after_meridian',
+          currentValue: s.maxMinutesAfterMeridian.toString(),
+          getCanonical: () => now().maxMinutesAfterMeridian.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setMaxMinutesAfterMeridian(v);
+          },
+        ),
+        EditableNumberRow(
+          label: 'Stop before meridian, flip off (min)',
+          helpKey: 'safety.policies.stop_before_meridian_min',
+          currentValue: s.stopBeforeMeridianMin.toString(),
+          getCanonical: () => now().stopBeforeMeridianMin.toString(),
+          parse: (str) {
+            final v = int.tryParse(str);
+            if (v != null) n.setStopBeforeMeridianMin(v);
           },
         ),
         SettingsSwitchRow(
@@ -236,10 +262,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
             label: 'Re-focus when drift exceeds (°C)',
             helpKey: 'safety.policies.meridian_refocus_temp_threshold_c',
             currentValue: s.meridianRefocusTempThresholdC.toString(),
-            getCanonical: () => ref
-                .read(safetyPoliciesProvider)
-                .meridianRefocusTempThresholdC
-                .toString(),
+            getCanonical: () => now().meridianRefocusTempThresholdC.toString(),
             parse: (str) {
               final v = double.tryParse(str);
               if (v != null) n.setMeridianRefocusTempThresholdC(v);
@@ -274,10 +297,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'Expected flip-slew duration (s)',
           helpKey: 'safety.policies.expected_flip_slew_s',
           currentValue: s.expectedFlipSlewSeconds.toString(),
-          getCanonical: () => ref
-              .read(safetyPoliciesProvider)
-              .expectedFlipSlewSeconds
-              .toString(),
+          getCanonical: () => now().expectedFlipSlewSeconds.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setExpectedFlipSlewSeconds(v);
@@ -298,16 +318,14 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'Unattended from (HH:mm, blank = dusk)',
           helpKey: 'safety.policies.unattended_window',
           currentValue: s.unattendedWindowStart,
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).unattendedWindowStart,
+          getCanonical: () => now().unattendedWindowStart,
           parse: n.setUnattendedWindowStart,
         ),
         EditableNumberRow(
           label: 'Unattended until (HH:mm, blank = dawn)',
           helpKey: 'safety.policies.unattended_window',
           currentValue: s.unattendedWindowEnd,
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).unattendedWindowEnd,
+          getCanonical: () => now().unattendedWindowEnd,
           parse: n.setUnattendedWindowEnd,
         ),
         SettingsSwitchRow(
@@ -324,59 +342,55 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'Unattended shutdown wait (min)',
           helpKey: 'safety.policies.unattended_shutdown_wait_min',
           currentValue: s.unattendedShutdownWaitMinutes.toString(),
-          getCanonical: () => ref
-              .read(safetyPoliciesProvider)
-              .unattendedShutdownWaitMinutes
-              .toString(),
+          getCanonical: () => now().unattendedShutdownWaitMinutes.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setUnattendedShutdownWaitMinutes(v);
           },
         ),
-        // §58.8 — first-flip announce status + manual re-arm. The daemon owns
-        // the flag (set after the first announced flip, cleared automatically
-        // on an optics change); the panel offers only the one-way re-arm, so
-        // there is no way to silently skip the announce.
+        // §58.8 / #1589 — first-flip status, Confirm and Re-arm. The daemon
+        // owns the fields: it records a flip that ran to the end, and only
+        // the user confirms it, here, once one is on record. Re-arm (and an
+        // optics change) asks again.
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 8),
           child: Row(
             children: [
               Expanded(
                 child: Text(
-                  s.firstFlipConfirmed
-                      ? 'First-flip announce: already ran — later flips '
-                            'are silent. Re-arm after re-balancing or a rig change.'
-                      : 'First-flip announce: armed — the next meridian '
-                            'flip alerts and waits 60 s before proceeding.',
+                  _firstFlipStatus(context.l10n, s),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               const SizedBox(width: 8),
+              FilledButton(
+                key: const Key('confirm_first_flip'),
+                // Immediate daemon round-trip, like Re-arm: the confirmation
+                // is daemon-owned and the general Save can't touch it.
+                onPressed: !s.firstFlipConfirmed &&
+                        s.firstFlipCompletedUtc != null
+                    ? _confirmFirstFlip
+                    : null,
+                child: Text(context.l10n.safetyFirstFlipConfirmButton),
+              ),
+              const SizedBox(width: 8),
               OutlinedButton(
                 key: const Key('rearm_first_flip'),
-                // Immediate daemon round-trip (not deferred to Save): the flag
-                // is daemon-owned and the general Save deliberately can't touch
-                // it, so the button is the only client-side path — one-way.
-                onPressed: s.firstFlipConfirmed ? _rearmFirstFlip : null,
+                // Immediate daemon round-trip (not deferred to Save): the
+                // fields are daemon-owned and the general Save deliberately
+                // can't touch them. A completed flip awaiting Confirm can be
+                // dropped too (the rig changed since it ran).
+                onPressed: s.firstFlipConfirmed || s.firstFlipCompletedUtc != null
+                    ? _rearmFirstFlip
+                    : null,
                 child: const Text('Re-arm'),
               ),
             ],
           ),
         ),
-        const SettingsSectionHeader('On altitude limit'),
-        SettingsDropdownRow<AltitudeLimitAction>(
-          label: 'Action',
-          helpKey: 'safety.policies.on_altitude_limit',
-          value: s.onAltitudeLimit,
-          items: const {
-            AltitudeLimitAction.skipTarget: 'Skip + advance to next target',
-            AltitudeLimitAction.pauseSequence: 'Pause sequence',
-            AltitudeLimitAction.abortSequence: 'Abort sequence',
-          },
-          onChanged: (v) {
-            if (v != null) n.setOnAltitudeLimit(v);
-          },
-        ),
+        // #1589 — the old "On altitude limit" action had no daemon behind it
+        // and is gone; the park switch stays.
+        const SettingsSectionHeader('When targets run out'),
         SettingsSwitchRow(
           label: 'Park if no more targets',
           value: s.parkIfNoMoreTargets,
@@ -400,8 +414,7 @@ class _SafetyPoliciesPanelState extends ConsumerState<SafetyPoliciesPanel>
           label: 'Retry timeout (s)',
           helpKey: 'safety.policies.guider_retry_timeout',
           currentValue: s.guiderRetryTimeoutSec.toString(),
-          getCanonical: () =>
-              ref.read(safetyPoliciesProvider).guiderRetryTimeoutSec.toString(),
+          getCanonical: () => now().guiderRetryTimeoutSec.toString(),
           parse: (str) {
             final v = int.tryParse(str);
             if (v != null) n.setGuiderRetryTimeoutSec(v);

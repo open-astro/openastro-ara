@@ -1881,52 +1881,22 @@ abstract class AppLocalizations {
   /// **' and '**
   String get polarSideJoin;
 
-  /// Simple Mode Polar align panel: what to do when the mount cannot find Home
-  ///
-  /// In en, this message translates to:
-  /// **'This mount cannot find Home by itself. Counterweights down, tube pointing at the pole, then Continue.'**
-  String get polarNeedsHomeHint;
-
   /// Simple Mode Polar align panel: the check's verdict
   ///
   /// In en, this message translates to:
   /// **'Three-point check: {verdict}'**
   String polarCheckedLine(String verdict);
 
-  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the fine stage
+  /// Simple Mode Polar align panel: the check's verdict and its disagreement with the readout of the last run (#2082)
   ///
   /// In en, this message translates to:
-  /// **'Three-point check: {verdict}, {delta}′ from the fine readout'**
+  /// **'Three-point check: {verdict}, {delta}′ from the last run\'s readout'**
   String polarCheckedVsFine(String verdict, String delta);
 
-  /// Simple Mode Polar align panel: button once the mount is at Home by hand
+  /// Polar align: the button that starts a three-point check, a confirmed new measurement (#2082): on the adjust screen it ends the adjust loop first
   ///
   /// In en, this message translates to:
-  /// **'Continue'**
-  String get polarContinue;
-
-  /// Completes "Couldn't …" for the Continue button
-  ///
-  /// In en, this message translates to:
-  /// **'continue polar alignment'**
-  String get polarActionContinue;
-
-  /// Simple Mode Polar align panel: button from the rough stage to the fine stage
-  ///
-  /// In en, this message translates to:
-  /// **'Next: fine'**
-  String get polarNextFine;
-
-  /// Completes "Couldn't …" for the Next: fine button
-  ///
-  /// In en, this message translates to:
-  /// **'move on to the fine step'**
-  String get polarActionNextFine;
-
-  /// Simple Mode Polar align panel: button from the fine stage to the three-point check
-  ///
-  /// In en, this message translates to:
-  /// **'Verify'**
+  /// **'Check'**
   String get polarCheck;
 
   /// Completes "Couldn't …" for the Check it button
@@ -2535,6 +2505,18 @@ abstract class AppLocalizations {
   /// **'Modes'**
   String get shellRailTabs;
 
+  /// Simple Mode screen reader label of a right rail tab whose step is done tonight; mode is the mode name
+  ///
+  /// In en, this message translates to:
+  /// **'{mode}, done tonight'**
+  String shellRailTabDone(String mode);
+
+  /// Simple Mode screen reader label of the right rail tab of the mode that runs now; mode is the mode name
+  ///
+  /// In en, this message translates to:
+  /// **'{mode}, running'**
+  String shellRailTabRunning(String mode);
+
   /// Simple Mode screen reader label of the mode button on the right rail; mode is the mode name
   ///
   /// In en, this message translates to:
@@ -3099,18 +3081,6 @@ abstract class AppLocalizations {
   /// **'Resume'**
   String get planResume;
 
-  /// Shutter screen-reader custom action: stop the run
-  ///
-  /// In en, this message translates to:
-  /// **'Stop the run'**
-  String get planStopTheRun;
-
-  /// Hint beside the shutter: hold it to stop the run
-  ///
-  /// In en, this message translates to:
-  /// **'Hold to stop'**
-  String get planHoldToStop;
-
   /// Plan sheet caption above tonight's suggested targets (uppercase)
   ///
   /// In en, this message translates to:
@@ -3390,7 +3360,7 @@ abstract class AppLocalizations {
   /// Progress panel hint while paused
   ///
   /// In en, this message translates to:
-  /// **'Tap the shutter to resume and re-center; hold it to stop.'**
+  /// **'Tap the shutter to resume and re-center.'**
   String get planHintResume;
 
   /// Progress panel button while paused
@@ -3408,8 +3378,32 @@ abstract class AppLocalizations {
   /// Progress panel hint while imaging
   ///
   /// In en, this message translates to:
-  /// **'Tap the shutter to pause after this frame; hold it to stop.'**
+  /// **'Tap the shutter to pause after this frame.'**
   String get planHintPause;
+
+  /// Plan's panel button while a plan runs: asks in place before it stops the plan (the shutter pauses; a 2 s hold is Emergency Stop)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop plan…'**
+  String get planStopPlan;
+
+  /// Plan's panel: the in-place question after Stop plan…; count is every frame the run took, across all its targets
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{Stop the plan? The mount keeps tracking.} =1{Stop the plan? The 1 frame taken is kept; the mount keeps tracking.} other{Stop the plan? The {count} frames taken are kept; the mount keeps tracking.}}'**
+  String planStopPlanAsk(int count);
+
+  /// Plan's panel: confirms stopping the plan (not an Emergency Stop)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop plan'**
+  String get planStopPlanConfirm;
+
+  /// Plan's panel: answers the stop question with no stop
+  ///
+  /// In en, this message translates to:
+  /// **'Keep imaging'**
+  String get planKeepImaging;
 
   /// Progress panel button: queue another target
   ///
@@ -4022,6 +4016,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{direction} step {step}'**
   String guiderStateCalibrationStep(String direction, String step);
+
+  /// Guider state (Simple Mode guider pill, plan pill, guiding strip, run dashboard): how far the star has moved on this calibration leg, of the distance the guider is set to move, in guide-camera pixels; both are numbers
+  ///
+  /// In en, this message translates to:
+  /// **'{moved} of {target} px'**
+  String guiderStateCalibrationDistanceOf(String moved, String target);
 
   /// Find star failed; reason is a full sentence
   ///
@@ -4790,6 +4790,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Guide camera pixel size'**
   String get shellGuidePixelSize;
+
+  /// Settings › Rig: the main camera's sensor size in pixels, read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera sensor'**
+  String get shellMainSensor;
+
+  /// Settings › Rig: the main camera's pixel size (µm), read only (#2041)
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera pixel size'**
+  String get shellMainPixelSize;
+
+  /// Settings › Rig: the hint under the main camera sensor row; the rig reads it from the camera
+  ///
+  /// In en, this message translates to:
+  /// **'Filled in when the main camera connects'**
+  String get shellFromMainCamera;
 
   /// Simple search: other words that find the guide scope rows (not shown)
   ///
@@ -6669,6 +6687,12 @@ abstract class AppLocalizations {
   /// **'The guider could not calibrate, so it is guiding on its earlier calibration. Guiding may be less accurate tonight.'**
   String get simpleGuiderCalibrationFailed;
 
+  /// Simple Mode warning pill and camera-window caption while a cooler the daemon switched on does not respond (#2076)
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler not responding: is the camera\'s 12 V connected?'**
+  String get simpleCoolerNotResponding;
+
   /// Simple Mode warning pill while the daemon's dew_formation diagnostic is open
   ///
   /// In en, this message translates to:
@@ -7353,12 +7377,6 @@ abstract class AppLocalizations {
   /// **'Up next'**
   String get monitorUpNext;
 
-  /// Monitor Now tile with no plan: tonight's best Targets
-  ///
-  /// In en, this message translates to:
-  /// **'Tonight\'s best'**
-  String get monitorTonightsBest;
-
   /// Monitor Up next row: the next frame (the filter follows when the camera has one)
   ///
   /// In en, this message translates to:
@@ -7376,12 +7394,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'then'**
   String get monitorThen;
-
-  /// Monitor Tonight's best row: the Target's altitude now
-  ///
-  /// In en, this message translates to:
-  /// **'{alt}° up'**
-  String monitorAltitudeUp(String alt);
 
   /// Monitor tile: the Target
   ///
@@ -7485,7 +7497,7 @@ abstract class AppLocalizations {
   /// **'Since {time} · {duration}'**
   String monitorSince(String time, String duration);
 
-  /// Monitor Weather tile status word
+  /// Monitor Conditions tile status word
   ///
   /// In en, this message translates to:
   /// **'Past limit'**
@@ -7581,11 +7593,11 @@ abstract class AppLocalizations {
   /// **'Clipped stars'**
   String get monitorClippedStars;
 
-  /// Monitor Last frame: the last autofocus and the temperature change since
+  /// Monitor Conditions: label under the focuser's signed temperature change since the last autofocus, which ran at the given clock time
   ///
   /// In en, this message translates to:
-  /// **'Autofocus {time} · {delta} since then'**
-  String monitorAutofocusSince(String time, String delta);
+  /// **'Autofocus {time}'**
+  String monitorAutofocusAt(String time);
 
   /// Monitor Now tile: frames saved so far
   ///
@@ -7610,6 +7622,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Drifting'**
   String get monitorDrifting;
+
+  /// Monitor tile: weather with the camera and focuser temperatures
+  ///
+  /// In en, this message translates to:
+  /// **'Conditions'**
+  String get monitorConditions;
+
+  /// Monitor Conditions tile: section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Camera and focuser'**
+  String get monitorCameraAndFocuser;
+
+  /// Monitor Conditions tile: the camera sensor's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Sensor'**
+  String get monitorSensor;
+
+  /// Monitor Conditions tile: the cooler's power
+  ///
+  /// In en, this message translates to:
+  /// **'Cooler power'**
+  String get monitorCoolerPower;
+
+  /// Monitor Conditions tile: the focuser's temperature
+  ///
+  /// In en, this message translates to:
+  /// **'Focuser'**
+  String get monitorFocuserTemp;
 
   /// Monitor altitude graph key: the plan's imaging span
   ///
@@ -8955,7 +8997,7 @@ abstract class AppLocalizations {
   /// **'The sensor or the focal length is not set.'**
   String get rigSetupOpticsMissing;
 
-  /// Rig setup: button that opens the optics panel
+  /// Rig setup: button that opens Simple Mode's Settings › Rig at the telescope rows
   ///
   /// In en, this message translates to:
   /// **'Set up optics'**
@@ -10164,7 +10206,7 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align stepper: the verify step
   ///
   /// In en, this message translates to:
-  /// **'Verify'**
+  /// **'Check'**
   String get polarStepVerify;
 
   /// Simple Mode Polar align panel: heading over the routine's settings
@@ -10182,20 +10224,74 @@ abstract class AppLocalizations {
   /// Simple Mode Polar align rough step: caption once the error is inside the profile's tolerance
   ///
   /// In en, this message translates to:
-  /// **'Inside your {tolerance}′ tolerance. Done keeps this alignment; Next: fine refines it.'**
+  /// **'Inside your {tolerance}′ tolerance. Done keeps this alignment; stop and start again to refine it with the guide camera.'**
   String polarInsideTolerance(String tolerance);
 
   /// Simple Mode Polar align rough step: caption while the error is outside the profile's tolerance
   ///
   /// In en, this message translates to:
-  /// **'Outside your {tolerance}′ tolerance: refine it, or stop with the shutter.'**
+  /// **'Outside your {tolerance}′ tolerance: stop with the shutter, then start again to refine it with the guide camera.'**
   String polarOutsideTolerance(String tolerance);
 
-  /// Simple Mode Polar align fine step: caption under the Verify button
+  /// Polar align (#2082): caption with the Check button, how far it turns the mount (the profile's check step, whole degrees) before it moves
   ///
   /// In en, this message translates to:
-  /// **'Verify moves the mount and takes three frames to confirm the alignment.'**
-  String get polarVerifyCaption;
+  /// **'Check turns the mount 2 × {step}° and takes three frames to measure the alignment.'**
+  String polarCheckCaption(String step);
+
+  /// Polar align (#2082): after the guide camera could not solve the pole field, a start that measures with the main camera first (it goes through the confirm step)
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first (main camera)'**
+  String get polarRoughFirst;
+
+  /// Polar align (#2082): caption with the Rough first button, how far it turns the mount (the profile's turn, whole degrees) before it moves
+  ///
+  /// In en, this message translates to:
+  /// **'Rough first turns the mount 2 × {step}° and measures with the main camera.'**
+  String polarRoughFirstCaption(String step);
+
+  /// Polar align (#2082): caution under the readout or the check's verdict when a point's frames stayed scattered after their retake
+  ///
+  /// In en, this message translates to:
+  /// **'Noisy measurement: the solves at one point scattered more than 3″, even after a retake. Check focus and seeing, or take more frames per point.'**
+  String get polarNoisyMeasurement;
+
+  /// Settings > Imaging > Polar align (#2082): which camera measures the axis and runs the live loop
+  ///
+  /// In en, this message translates to:
+  /// **'Camera'**
+  String get polarKnobCamera;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the guide camera (the default)
+  ///
+  /// In en, this message translates to:
+  /// **'Guide camera'**
+  String get polarKnobCameraGuide;
+
+  /// Settings > Imaging > Polar align (#2082): camera choice, the main camera with its own solver
+  ///
+  /// In en, this message translates to:
+  /// **'Main camera'**
+  String get polarKnobCameraMain;
+
+  /// Settings > Imaging > Polar align (#2082): how many frames are averaged at each of the three points, with its accepted range
+  ///
+  /// In en, this message translates to:
+  /// **'Frames per point (1 to 5)'**
+  String get polarKnobFramesPerPoint;
+
+  /// Settings > Imaging > Polar align (#2082): hint under frames per point
+  ///
+  /// In en, this message translates to:
+  /// **'Averaged; a point scattered over 3″ is retaken once'**
+  String get polarKnobFramesPerPointHint;
+
+  /// Polar align start confirm dialog (#2082): shown when the run measures with the main camera (Rough first, or the profile's camera)
+  ///
+  /// In en, this message translates to:
+  /// **'This measurement uses the main camera.'**
+  String get polarConfirmMainCamera;
 
   /// Simple Mode Polar align stepper: what a screen reader says for a step with a tick
   ///
@@ -10218,13 +10314,13 @@ abstract class AppLocalizations {
   /// Settings → Imaging → Polar align: RA turn field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Turn (°, 5 to 120)'**
+  /// **'Turn (°, 5 to 30)'**
   String get polarKnobTurn;
 
   /// Settings → Imaging → Polar align: Verify step field label with its accepted range
   ///
   /// In en, this message translates to:
-  /// **'Verify step (°, 5 to 60)'**
+  /// **'Check step (°, 5 to 30)'**
   String get polarKnobVerifyStep;
 
   /// Settings → Imaging → Polar align: rough step exposure field label with its accepted range
@@ -10242,31 +10338,13 @@ abstract class AppLocalizations {
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Send the mount Home first'**
-  String get polarKnobUseHome;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
-  /// **'Every stage starts from Home'**
-  String get polarKnobUseHomeOn;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
-  /// **'Off: where the mount points now counts as Home'**
-  String get polarKnobUseHomeOff;
-
-  /// Imaging > Polar align settings panel hint
-  ///
-  /// In en, this message translates to:
-  /// **'Kept between 5° and 120°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobTurnHint;
 
   /// Imaging > Polar align settings panel hint
   ///
   /// In en, this message translates to:
-  /// **'Kept between 5° and 60°'**
+  /// **'Kept between 5° and 30°'**
   String get polarKnobVerifyStepHint;
 
   /// The Polar Aligner (glossary term): a motorised device that turns the mount's polar axis. Block heading in Polar align, row in Settings > Devices, status line
@@ -10320,8 +10398,14 @@ abstract class AppLocalizations {
   /// Polar Aligner block: the motors rest inside the tolerance
   ///
   /// In en, this message translates to:
-  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Verify or Done. If the error drifts out, the motors correct again.'**
+  /// **'{moves, plural, =1{Inside your {tolerance}′ tolerance after 1 move.} other{Inside your {tolerance}′ tolerance after {moves} moves.}} Finish with Check or Done. If the error drifts out, the motors correct again.'**
   String polarAlignerConverged(int moves, String tolerance);
+
+  /// Polar Aligner block: the motors rest inside the tolerance, while the polar-align settings (and so the tolerance in arcminutes) are not loaded from the rig
+  ///
+  /// In en, this message translates to:
+  /// **'{moves, plural, =1{Inside your tolerance after 1 move.} other{Inside your tolerance after {moves} moves.}} Check and Done wait for your polar-align settings to load. If the error drifts out, the motors correct again.'**
+  String polarAlignerConvergedPlain(int moves);
 
   /// Fills polarAlignerTestMove / polarAlignerMoving and the stop sentences: the azimuth axis, lower case
   ///
@@ -10610,6 +10694,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Off: Polar align shows the turns and you make them'**
   String get polarKnobAlignerAutoOff;
+
+  /// Imaging > Polar align settings panel: switch for the profile's stop_tracking_when_done (NINA's StopTrackingWhenDone)
+  ///
+  /// In en, this message translates to:
+  /// **'Stop tracking when polar align ends'**
+  String get polarKnobStopTracking;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is on
+  ///
+  /// In en, this message translates to:
+  /// **'Every end of a run turns tracking off'**
+  String get polarKnobStopTrackingOn;
+
+  /// Imaging > Polar align settings panel hint while stop_tracking_when_done is off
+  ///
+  /// In en, this message translates to:
+  /// **'Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'**
+  String get polarKnobStopTrackingOff;
 
   /// Advanced Mode Polar Align Start card: the row that opens the routine's four knobs
   ///
@@ -11031,6 +11133,358 @@ abstract class AppLocalizations {
   /// **'The storage disk is missing. Plug it back in, then try again.'**
   String get refusalStorageUnavailable;
 
+  /// Refusal (below-horizon-limit): a GoTo to a target under the profile's horizon; altitude and limit are degrees with one decimal
+  ///
+  /// In en, this message translates to:
+  /// **'That target is at {altitude}°, below your {limit}° horizon limit. Pick a higher target, or lower the horizon limit.'**
+  String refusalBelowHorizonLimit(String altitude, String limit);
+
+  /// Refusal (counterweight-limit): a GoTo to a target below the pole that would turn the counterweight past the limit; hourAngle is hours with one decimal, angle and limit are whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'That target is below the pole, at hour angle {hourAngle} h: the counterweight would swing {angle}° up from hanging straight down, past the {limit}° limit. Pick another target, or wait until this one is higher.'**
+  String refusalCounterweightLimit(
+    String hourAngle,
+    String angle,
+    String limit,
+  );
+
+  /// Refusal (end-night-in-progress): End Night was started while it is already running
+  ///
+  /// In en, this message translates to:
+  /// **'End Night is already running. Wait for it to finish, or cancel it, before starting it again.'**
+  String get refusalEndNightInProgress;
+
+  /// Refusal (mount-position-unverified): GoTo, Park, Home and Polar Align are blocked because the mount's reported position is not trusted after a power loss
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionUnverified;
+
+  /// Refusal (mount-position-unverified, not yet read): a move right after the mount connected, before its first position read
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position has not been read since it connected. Try again in a few seconds.'**
+  String get refusalMountPositionNotReadYet;
+
+  /// Refusal (mount-position-unverified, reason stop_unconfirmed, #2066): GoTo, Park, Home and Polar Align are blocked because a polar alignment's stop of the mount was not confirmed, or the mount reconnected during it
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Run the mount\'s zero search from its hand controller or app, or confirm it is physically at Home.'**
+  String get refusalMountPositionStopUnconfirmed;
+
+  /// Mount window: heading of the warning shown when the rig does not trust the mount's reported position (it may have lost power)
+  ///
+  /// In en, this message translates to:
+  /// **'Mount position unverified'**
+  String get mountPositionUnverifiedTitle;
+
+  /// Mount window: what the unverified-position warning means and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'The mount may have lost power: it reports Home wherever it points. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionUnverifiedBody;
+
+  /// Mount window: the unverified-position fix while the mount does not report Home (the confirm button shows once it does)
+  ///
+  /// In en, this message translates to:
+  /// **'Run the mount\'s zero search from its hand controller or app. When it reports Home, confirm it here.'**
+  String get mountPositionUnverifiedRunZeroSearch;
+
+  /// Mount window: what the unverified-position warning means when polar alignment's stop was not confirmed (reason stop_unconfirmed, #2066), and what still works
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park, Home and Polar Align are blocked. Stop, the direction pad and tracking still work.'**
+  String get mountPositionStopUnconfirmedBody;
+
+  /// Mount window: button that confirms the mount is physically at Home, so its position is trusted again
+  ///
+  /// In en, this message translates to:
+  /// **'The mount IS at Home'**
+  String get mountConfirmAtHome;
+
+  /// Mount window: the question asked before confirming Home
+  ///
+  /// In en, this message translates to:
+  /// **'Is the mount physically at Home, counterweights down and the tube along the polar axis? Confirm only if you checked it by eye.'**
+  String get mountConfirmAtHomeQuestion;
+
+  /// Mount window: the confirm button of the Home question
+  ///
+  /// In en, this message translates to:
+  /// **'Yes, it is at Home'**
+  String get mountConfirmAtHomeYes;
+
+  /// Mount window: notice when the rig refused the Home confirmation
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t confirm Home'**
+  String get mountCouldntConfirmHome;
+
+  /// Refusal (polar-align-mount-parked): polar alignment was started on a parked mount; it never unparks the mount itself
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is parked. Unpark it and point it near the pole first.'**
+  String get refusalPolarAlignMountParked;
+
+  /// Refusal (polar-align-unconfirmed): a start reached the rig without the confirm step, or the turn direction changed since the user confirmed it
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment moves the mount only after you confirm it. Start it again and confirm.'**
+  String get refusalPolarAlignUnconfirmed;
+
+  /// Refusal (polar-align-sweep-limit, #2089): the RA axis has turned too far from where polar alignment started this session; offset is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'The mount has turned {offset}° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.'**
+  String refusalPolarAlignSweepLimit(String offset);
+
+  /// Refusal (polar-align-moving-mount, #2066): a GoTo, Center, Home or Park was refused because polar alignment holds the mount for its whole run (its turns, solves and adjust loop); a direction-pad move only while it turns the RA motor; Stop Mount ends polar alignment too
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is using the mount. Stop polar alignment first, or tap Stop Mount.'**
+  String get refusalPolarAlignMovingMount;
+
+  /// Polar Align card (both modes): why the run ended when a stop it did not send ended it (polar_align.error slew_aborted_externally, #2066, #2107); {by} is the stop's stopped_by token
+  ///
+  /// In en, this message translates to:
+  /// **'{by, select, user_request{The mount was stopped from outside polar alignment (Stop Mount). Polar alignment ended. Start again when ready.} emergency_stop{Emergency Stop stopped the mount. Polar alignment ended. Start again when ready.} watchdog{The meridian-flip watchdog stopped the mount. Polar alignment ended. Check the mount, then start again.} park{The mount was parked from outside polar alignment. Polar alignment ended. Unpark it and start again when ready.} findhome{The mount was sent Home from outside polar alignment. Polar alignment ended. Start again when ready.} pad_stop{The mount was stopped from the direction pad. Polar alignment ended. Start again when ready.} fault_reaction{The equipment-fault reaction stopped the mount (its park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} pose_unverified{The safety reaction stopped the mount (conditions turned unsafe, and the park was refused because the mount\'s position is unverified). Polar alignment ended. Check the rig before you start again.} other{The mount was stopped from outside polar alignment. Polar alignment ended. Start again when ready.}}'**
+  String polarAlignStoppedFromOutside(String by);
+
+  /// Polar Align card (both modes): added after the polarAlignStoppedFromOutside sentence when the run could not confirm its own stop afterwards (polar_align.error stop_unconfirmed, #2066); the mount may still be moving
+  ///
+  /// In en, this message translates to:
+  /// **'Ara could not confirm that the mount stopped. Cut the mount\'s power now, and check the mount before you start again.'**
+  String get polarAlignStopNotConfirmed;
+
+  /// Refusal (polar-align-on-axis, #2082): polar alignment was started with the scope pointing within 3° of the celestial pole, where the camera looks along the RA axis; nothing tilts it off any more
+  ///
+  /// In en, this message translates to:
+  /// **'The scope points within 3° of the pole. Point it 2–5° from the pole, counterweights down, then start again.'**
+  String get refusalPolarAlignOnAxis;
+
+  /// Refusal (polar-align-pointing-unknown, #2066): polar alignment plans only from a reading of the mount taken now; none came, it was the (0, 0) placeholder, or it was more than 2 s old
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align got no fresh reading of where the mount points. Check the mount\'s connection, then start again.'**
+  String get refusalPolarAlignPointingUnknown;
+
+  /// Refusal (polar-align-pose-ambiguous, #2066): the mount reads a declination beyond ±90° (its Dec axis over the pole, e.g. after a sync), so which side of the pier it is on is ambiguous; polar alignment moves nothing
+  ///
+  /// In en, this message translates to:
+  /// **'The mount reports a Dec past the pole, so its pier side is not known. Point the tube 2–5° from the pole, counterweights down, with the hand controller (or send the mount Home), then start again.'**
+  String get refusalPolarAlignPoseAmbiguous;
+
+  /// Refusal (polar-align-mount-busy, #2066): polar alignment was started while the mount slews (or does not say whether it does), or while the guider guides or calibrates; it would turn the mount beside another motion
+  ///
+  /// In en, this message translates to:
+  /// **'The mount is moving or the guider is guiding. Let the slew finish or stop guiding, then start polar alignment again.'**
+  String get refusalPolarAlignMountBusy;
+
+  /// Error message tail after "Couldn't " (friendlyError action); lower-case verb phrase, no period
+  ///
+  /// In en, this message translates to:
+  /// **'confirm the meridian flip'**
+  String get actionConfirmFlip;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): the user confirmed a completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed: later flips run without the alert. Re-arm after re-balancing or a rig change.'**
+  String get safetyFirstFlipConfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): no flip confirmed and none completed since the last re-arm
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip not confirmed yet: every flip alerts and waits 60 s. Watch one flip from start to end, then confirm it here.'**
+  String get safetyFirstFlipUnconfirmedStatus;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported a new pier side. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount reported its pier side changed. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedPierChanged(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): a flip ran to the end and waits for the user's confirm; the mount reported no pier side, or the same one. {when} is a local date and time like 2026-11-20 23:15
+  ///
+  /// In en, this message translates to:
+  /// **'A flip completed at {when}: the mount did not report a pier side change, so check by eye. Confirm if the scope cleared the mount and the tripod, and frames and guiding came back.'**
+  String safetyFirstFlipCompletedCheckByEye(String when);
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): button that confirms the completed flip
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get safetyFirstFlipConfirmButton;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Confirm succeeds
+  ///
+  /// In en, this message translates to:
+  /// **'Meridian flip confirmed. Later flips run without the alert.'**
+  String get safetyFirstFlipConfirmedSnack;
+
+  /// Settings → Unattended running → When to stop, first-flip row (#1589): snackbar after Re-arm succeeds; the confirmation and any completed-flip record are cleared
+  ///
+  /// In en, this message translates to:
+  /// **'Re-armed. Every flip alerts and waits 60 s again until you confirm one.'**
+  String get safetyFirstFlipRearmedSnack;
+
+  /// Refusal (first-flip-not-completed, #1589): the user pressed Confirm for the profile's meridian flip, but no flip has run to the end since the last re-arm or optics change
+  ///
+  /// In en, this message translates to:
+  /// **'No meridian flip has completed on this profile yet. Watch one flip from start to end, then confirm it.'**
+  String get refusalFirstFlipNotCompleted;
+
+  /// Refusal (polar-align-already-running, #2083): a Start reached the rig while a polar alignment run was active, with the other choice of turning RA by hand or with the mount's motor (for example from a second device)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.'**
+  String get refusalPolarAlignAlreadyRunning;
+
+  /// Refusal (polar-align-clutch-turned, #2083): a polar alignment start that turns RA with the motor, after a hand-turn run saw RA turned with the clutch open (the mount's reading is off by those turns); 'Turn RA by hand' is polarConfirmHandTurn
+  ///
+  /// In en, this message translates to:
+  /// **'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.'**
+  String get refusalPolarAlignClutchTurned;
+
+  /// Polar align start confirm dialog (#2048): title. The routine starts from where the mount points and turns its RA axis
+  ///
+  /// In en, this message translates to:
+  /// **'Before the mount moves'**
+  String get polarConfirmTitle;
+
+  /// Polar align start confirm dialog: where the user must point the mount before it moves; no Home, no GoTo
+  ///
+  /// In en, this message translates to:
+  /// **'Point the tube 2–5° from the pole, with the counterweights down.'**
+  String get polarConfirmPoint;
+
+  /// Polar align start confirm dialog: the RA turns of the first step; step and total are whole degrees, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'RA will turn about {step}° twice toward the {direction} ({total}° in all).'**
+  String polarConfirmTurns(String step, String direction, String total);
+
+  /// Polar align start confirm dialog (#2089): how far the RA axis has turned from the session's first start, whole degrees; direction is polarDirectionEast or polarDirectionWest. The run turns back toward that start
+  ///
+  /// In en, this message translates to:
+  /// **'RA is {offset}° {direction} of where Polar Align started; these turns go back toward it.'**
+  String polarConfirmFromOrigin(String offset, String direction);
+
+  /// Polar align start confirm dialog (#2089): the pose becomes the session's start (first start since the mount connected, or the mount was moved by other means); limit is whole degrees
+  ///
+  /// In en, this message translates to:
+  /// **'This pose is Polar Align\'s new start: until the mount is moved some other way, RA stays within {limit}° of it.'**
+  String polarConfirmNewOrigin(String limit);
+
+  /// Polar align start confirm dialog: safety line, the user cuts power if the mount heads for the pier
+  ///
+  /// In en, this message translates to:
+  /// **'Keep a hand on the mount\'s power switch.'**
+  String get polarConfirmPower;
+
+  /// Polar align start confirm dialog: the button that starts the routine and lets the mount move
+  ///
+  /// In en, this message translates to:
+  /// **'Move the mount'**
+  String get polarConfirmGo;
+
+  /// Polar align start confirm dialog: the button that closes it; nothing moves
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get polarConfirmCancel;
+
+  /// Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)
+  ///
+  /// In en, this message translates to:
+  /// **'east'**
+  String get polarDirectionEast;
+
+  /// Polar align start confirm dialog: the RA turn direction, inside polarConfirmTurns (lower case)
+  ///
+  /// In en, this message translates to:
+  /// **'west'**
+  String get polarDirectionWest;
+
+  /// Refusal (mount-clock-not-verified): a GoTo, Sync, Center or polar alignment before the mount's clock was set from the synced rig clock and checked
+  ///
+  /// In en, this message translates to:
+  /// **'The mount\'s clock is not verified yet. Ara sets it from the synced rig clock: wait a moment and try again, or sync the time in Settings.'**
+  String get refusalMountClockNotVerified;
+
+  /// Polar align start confirm dialog (#2083): NINA's guidance on where to point before the start
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a field fairly high toward the pole for your hemisphere, at least about 15° above the horizon when you can.'**
+  String get polarConfirmGuideField;
+
+  /// Polar align start confirm dialog (#2083): NINA's guidance, keep the RA turns on one side of the meridian (pier collision)
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.'**
+  String get polarConfirmGuideMeridian;
+
+  /// Polar align start confirm dialog (#2083): the hand-turn option (NINA's manual mode); 'Turn RA by hand' is polarConfirmHandTurn. With the hand pad the turn is measured from the mount's RA reading (and its angle shown); with the clutch open the reading stands, so it is judged from the frames and no angle is shown
+  ///
+  /// In en, this message translates to:
+  /// **'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.'**
+  String get polarConfirmHandTurnHint;
+
+  /// Polar align start confirm dialog (#2083): button that starts a run in which the user turns the RA axis by hand and the mount's motors never move
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand'**
+  String get polarConfirmHandTurn;
+
+  /// Polar align hand-turn run (#2083): what the user must do now; step is whole degrees, direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'Turn RA by hand about {step}° toward the {direction}, then let go.'**
+  String polarHandTurnAsk(String step, String direction);
+
+  /// Polar align hand-turn run (#2083): how far the mount's own RA reading shows the axis turned the asked way (hand pad), one decimal; not shown with the clutch open, where the mount's reading does not move
+  ///
+  /// In en, this message translates to:
+  /// **'Turned {turned}° so far.'**
+  String polarHandTurnTurned(String turned);
+
+  /// Polar align hand-turn run (#2083): the user turned RA the wrong way; direction is polarDirectionEast or polarDirectionWest
+  ///
+  /// In en, this message translates to:
+  /// **'That went the other way: turn toward the {direction}.'**
+  String polarHandTurnWrongWay(String direction);
+
+  /// Polar align hand-turn run (#2083): reminder while it measures that the mount's motors are never used
+  ///
+  /// In en, this message translates to:
+  /// **'You turn RA by hand: Ara does not move the mount.'**
+  String get polarHandTurnRunNote;
+
+  /// Polar align readout (#2083): the azimuth error's convention, an arc on the sky (NINA shows the unscaled angle, larger by 1/cos(latitude))
+  ///
+  /// In en, this message translates to:
+  /// **'true arc (cos alt)'**
+  String get polarAzimuthArc;
+
+  /// Polar align readout (#2083): the same azimuth error as NINA would show it; value is a signed arcminute figure like +1.5′
+  ///
+  /// In en, this message translates to:
+  /// **'NINA {value}'**
+  String polarAzimuthNina(String value);
+
+  /// Polar align readout (#2083): NINA's large-error warning, the stage started more than 2° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 2°: get closer, then run again. The readout is less reliable this far out.'**
+  String get polarInitialErrorLarge;
+
+  /// Polar align readout (#2083): NINA's huge-error warning, the stage started more than 10° from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The error at the start was over 10°: check the site location and the start field, and that the mount turned only in RA.'**
+  String get polarInitialErrorHuge;
+
   /// Add your devices: heading above the detected devices
   ///
   /// In en, this message translates to:
@@ -11252,6 +11706,484 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Frame too large to stack'**
   String get simpleLiveStackTooLarge;
+
+  /// Simple Mode Mount window: the heading of the Limits group under the Meridian flip switch
+  ///
+  /// In en, this message translates to:
+  /// **'Limits'**
+  String get limitsTitle;
+
+  /// Simple Mode Mount window, Limits: the row for the lowest altitude Ara points at (the profile's flat horizon)
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude'**
+  String get limitsLowestAltitude;
+
+  /// Screen-reader label of the + button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise lowest altitude'**
+  String get limitsLowestRaise;
+
+  /// Screen-reader label of the - button of the Lowest altitude stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower lowest altitude'**
+  String get limitsLowestLower;
+
+  /// Simple Mode Mount window, Limits: an altitude in whole degrees, like '20°'
+  ///
+  /// In en, this message translates to:
+  /// **'{deg}°'**
+  String limitsDegrees(int deg);
+
+  /// Simple Mode Mount window, Limits: the read-only Lowest altitude when the profile uses a measured (custom) horizon
+  ///
+  /// In en, this message translates to:
+  /// **'Your measured horizon'**
+  String get limitsMeasuredHorizon;
+
+  /// Caption under 'Your measured horizon': where the measured horizon is edited
+  ///
+  /// In en, this message translates to:
+  /// **'Change it in Advanced Mode › Settings › Site.'**
+  String get limitsMeasuredHorizonCaption;
+
+  /// Simple Mode Mount window, Limits (flip Auto): the row for when the flip runs, before or after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'At the meridian'**
+  String get limitsAtMeridian;
+
+  /// Screen-reader label of the + button of the At the meridian stepper (moves the flip later)
+  ///
+  /// In en, this message translates to:
+  /// **'Later at the meridian'**
+  String get limitsAtMeridianLater;
+
+  /// Screen-reader label of the - button of the At the meridian stepper (moves the flip earlier)
+  ///
+  /// In en, this message translates to:
+  /// **'Earlier at the meridian'**
+  String get limitsAtMeridianEarlier;
+
+  /// At the meridian value: stop tracking n minutes before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min before'**
+  String limitsMinBefore(int n);
+
+  /// At the meridian value: flip as the target crosses the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'On it'**
+  String get limitsOnMeridian;
+
+  /// At the meridian value: keep tracking n minutes after the meridian, then flip
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min after'**
+  String limitsMinAfter(int n);
+
+  /// Caption under At the meridian when it is before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.'**
+  String limitsCaptionBefore(int n);
+
+  /// Caption under At the meridian when it is on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips as soon as the target crosses the meridian.'**
+  String get limitsCaptionOn;
+
+  /// Caption under At the meridian when it is after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Keeps tracking {n} min past the meridian, then flips.'**
+  String limitsCaptionAfter(int n);
+
+  /// Simple Mode Mount window, Limits (flip Off): minutes before the meridian at which Ara stops tracking and pauses the plan
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian'**
+  String get limitsStopBefore;
+
+  /// Screen-reader label of the + button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Raise stop before meridian'**
+  String get limitsStopBeforeRaise;
+
+  /// Screen-reader label of the - button of the Stop before meridian stepper
+  ///
+  /// In en, this message translates to:
+  /// **'Lower stop before meridian'**
+  String get limitsStopBeforeLower;
+
+  /// Stop before meridian value: a number of minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{n} min'**
+  String limitsMinutes(int n);
+
+  /// Caption under Stop before meridian when it is set
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking and pauses the plan {n} min before the meridian.'**
+  String limitsStopCaption(int n);
+
+  /// Caption under Stop before meridian when it is Off
+  ///
+  /// In en, this message translates to:
+  /// **'The mount tracks through the meridian. Only its own firmware limit stops it.'**
+  String get limitsStopCaptionOff;
+
+  /// Pill after the Lowest altitude was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Lowest altitude {deg}°'**
+  String limitsPillLowest(int deg);
+
+  /// Pill after At the meridian was saved as before the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Stops tracking {n} min before the meridian, flips after it'**
+  String limitsPillBefore(int n);
+
+  /// Pill after At the meridian was saved as on the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips at the meridian'**
+  String get limitsPillOn;
+
+  /// Pill after At the meridian was saved as after the meridian
+  ///
+  /// In en, this message translates to:
+  /// **'Flips {n} min after the meridian'**
+  String limitsPillAfter(int n);
+
+  /// Pill after Stop before meridian was saved
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian {n} min'**
+  String limitsPillStop(int n);
+
+  /// Pill after Stop before meridian was turned off
+  ///
+  /// In en, this message translates to:
+  /// **'Stop before meridian off'**
+  String get limitsPillStopOff;
+
+  /// Error pill when a Limits row could not be saved; the old value is back
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save the limit'**
+  String get limitsCouldntSave;
+
+  /// Screen-reader label of the Limits sky arc
+  ///
+  /// In en, this message translates to:
+  /// **'Allowed sky from {deg}° to the zenith'**
+  String limitsArcLabel(int deg);
+
+  /// Sky arc label: the band under the lowest altitude
+  ///
+  /// In en, this message translates to:
+  /// **'too low'**
+  String get limitsArcTooLow;
+
+  /// Sky arc label: the band where the mount may point
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get limitsArcOk;
+
+  /// Sky arc label: the horizon line
+  ///
+  /// In en, this message translates to:
+  /// **'horizon'**
+  String get limitsArcHorizon;
+
+  /// Error pill: the rig stopped tracking n minutes before the meridian (meridian flip off, Stop before meridian set)
+  ///
+  /// In en, this message translates to:
+  /// **'Tracking stopped {n} min before the meridian.'**
+  String limitStoppedMeridian(int n);
+
+  /// Error pill: the rig asked the mount to stop tracking before the meridian and the mount did not
+  ///
+  /// In en, this message translates to:
+  /// **'The mount didn\'t stop tracking {n} min before the meridian. Stop it by hand.'**
+  String limitNotStoppedMeridian(int n);
+
+  /// Added to the meridian stop pill when the plan was paused
+  ///
+  /// In en, this message translates to:
+  /// **'Plan paused.'**
+  String get limitPlanPaused;
+
+  /// Ends the meridian stop pill: Ara never slews or parks for a limit
+  ///
+  /// In en, this message translates to:
+  /// **'Ara didn\'t move the mount.'**
+  String get limitDidntMove;
+
+  /// Simple Mode search: the Limits group of the Mount window
+  ///
+  /// In en, this message translates to:
+  /// **'Mount limits'**
+  String get searchSettingMountLimits;
+
+  /// Simple Mode search keywords for Mount limits, space-separated
+  ///
+  /// In en, this message translates to:
+  /// **'limit horizon altitude lowest meridian stop flip'**
+  String get searchWordsMountLimits;
+
+  /// Sequencer, Import NINA: the picked file is over the 32 MiB cap
+  ///
+  /// In en, this message translates to:
+  /// **'That sequence file is too large to import (32 MiB limit).'**
+  String get sequenceImportTooLarge;
+
+  /// Sequencer, Import NINA: the picked file could not be read (missing, no access)
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t read that file — check it still exists and you have access.'**
+  String get sequenceImportReadError;
+
+  /// Sequencer, Import NINA: the file is not JSON, or is JSON that is not a NINA sequence (a v1 or other schemaVersion body, no type, a root that is not a container); the sentence docs/specs/sequence-v2.md words
+  ///
+  /// In en, this message translates to:
+  /// **'This file is not a NINA sequence.'**
+  String get sequenceImportNotNina;
+
+  /// Sequencer, Import NINA: the file shares one node between two places ($ref), which the importer refuses
+  ///
+  /// In en, this message translates to:
+  /// **'This sequence has a shared node, which OpenAstro Ara cannot import.'**
+  String get sequenceImportSharedNode;
+
+  /// Sequencer, Import NINA: the create or the draft save failed after the file was accepted
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t import the sequence. Check the file and connection.'**
+  String get sequenceImportFailed;
+
+  /// Sequencer, Import NINA: SnackBar after the import; name is the sequence name
+  ///
+  /// In en, this message translates to:
+  /// **'Imported \"{name}\".'**
+  String sequenceImportDone(String name);
+
+  /// Sequencer, Import NINA: title of the dialog that lists what will not run, before anything is uploaded; name is the sequence name
+  ///
+  /// In en, this message translates to:
+  /// **'Import \"{name}\" with warnings?'**
+  String sequenceImportConfirmTitle(String name);
+
+  /// Sequencer, Import NINA: line above the warnings in the confirm dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Check these before you import:'**
+  String get sequenceImportConfirmBody;
+
+  /// Sequencer, Import NINA: the button that uploads after the warnings
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get sequenceImportConfirm;
+
+  /// Sequencer, Import NINA: the button that closes the warnings and uploads nothing
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get sequenceImportCancel;
+
+  /// Guiding strip chip: the polar-alignment residual is being measured (elapsed / target, m:ss)
+  ///
+  /// In en, this message translates to:
+  /// **'PA residual · measuring {elapsed} / {target}'**
+  String paResidualChipMeasuring(String elapsed, String target);
+
+  /// Guiding strip chip tooltip while the polar-alignment residual is measured
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure for polar alignment: measuring the error left after Align from the Dec corrections over the first {target} of clean guiding (dithers and settling are left out).'**
+  String paResidualTipMeasuring(String target);
+
+  /// Guiding strip chip: no polar-alignment residual for this guiding run
+  ///
+  /// In en, this message translates to:
+  /// **'PA residual n/a'**
+  String get paResidualChipUnavailable;
+
+  /// Guiding strip chip tooltip: no residual, with the reason sentence
+  ///
+  /// In en, this message translates to:
+  /// **'No polar alignment residual for this guiding run. {reason}'**
+  String paResidualTipUnavailable(String reason);
+
+  /// Guiding strip chip: the residual (a lower bound) and its rating word
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · {rating}'**
+  String paResidualChipRated(String value, String rating);
+
+  /// Guiding strip chip: the residual is well above what Polar Align measured (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · disagrees with Polar Align'**
+  String paResidualChipDisagrees(String value);
+
+  /// Guiding strip chip: the residual is too uncertain for a firm figure
+  ///
+  /// In en, this message translates to:
+  /// **'PA ≥ {value} · noisy'**
+  String paResidualChipNoisy(String value);
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.'**
+  String get paResidualReasonLockShift;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.'**
+  String get paResidualReasonAo;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.'**
+  String get paResidualReasonGuidingNotHolding;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'A settle failed during this run, so guiding was not holding the star.'**
+  String get paResidualReasonSettleFailed;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.'**
+  String get paResidualReasonMountNotTracking;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The guider\'s calibration data could not be read.'**
+  String get paResidualReasonNoCalibration;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'The guider has not reported its pixel scale.'**
+  String get paResidualReasonNoPixelScale;
+
+  /// Why a guiding run has no polar-alignment residual
+  ///
+  /// In en, this message translates to:
+  /// **'Not enough clean guiding to fit the drift.'**
+  String get paResidualReasonNoFit;
+
+  /// Guiding residual tooltip, first line: what the figure measures and its value (a lower bound)
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over {duration} of guiding: at least {value}.'**
+  String paResidualDetailFigure(String duration, String value);
+
+  /// Guiding residual tooltip, first line with the 1-sigma uncertainty
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding\'s figure: the polar alignment left after Align, read from the guider\'s Dec corrections over {duration} of guiding: at least {value} (± {sigma}).'**
+  String paResidualDetailFigureSigma(
+    String duration,
+    String value,
+    String sigma,
+  );
+
+  /// Guiding residual tooltip: the Dec drift the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'Dec drift {drift}″/min'**
+  String paResidualDetailDrift(String drift);
+
+  /// Guiding residual tooltip: the hour angle the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'hour angle {hours} h'**
+  String paResidualDetailHourAngle(String hours);
+
+  /// Guiding residual tooltip: the Dec drift and the hour angle the figure came from
+  ///
+  /// In en, this message translates to:
+  /// **'Dec drift {drift}″/min at hour angle {hours} h'**
+  String paResidualDetailDriftAtHourAngle(String drift, String hours);
+
+  /// Guiding residual tooltip: why the figure is a lower bound
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding at one hour angle sees only part of the error, so the total can be larger.'**
+  String get paResidualDetailLowerBound;
+
+  /// Guiding residual tooltip: the residual is well above Polar Align's figure; names both causes and how to tell them apart (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align and guiding disagree ({align} vs at least {guiding}). Either Dec backlash ate guide pulses, so the guiding figure is too high, or the mount shifted since the alignment or its reference was wrong, so the Polar Align figure is too low. Run Polar Align again: about {align} again points at backlash, much more points at the mount or the alignment.'**
+  String paResidualDetailDisagree(String align, String guiding);
+
+  /// Guiding residual tooltip: the figure is too uncertain
+  ///
+  /// In en, this message translates to:
+  /// **'Guiding was too noisy for a firm figure.'**
+  String get paResidualDetailNoisy;
+
+  /// Guiding residual tooltip: tonight's last Polar Align result for comparison
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: {value}, from plate solves at the time of the run.'**
+  String paResidualDetailAlign(String value);
+
+  /// Guiding residual tooltip: tonight's last Polar Align result and when it was measured
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: {value}, from plate solves at {time}.'**
+  String paResidualDetailAlignAt(String value, String time);
+
+  /// Polar align full UI: what the live readout measures, and the azimuth convention (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Polar Align\'s figure: the RA axis against the refracted pole, from plate solves, live as you turn the bolts. Azimuth is the true arc on the sky (cos alt applied).'**
+  String get polarReadoutMeasures;
+
+  /// Polar align full UI checked card: what the check's figure measures, and the azimuth convention (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'Verify\'s figure: a fresh three-point measurement of the RA axis against the refracted pole. Azimuth is the true arc on the sky (cos alt applied).'**
+  String get polarCheckMeasures;
+
+  /// Polar align (Simple Mode panel and full UI): the live readout is weak in altitude for this camera position (#2072)
+  ///
+  /// In en, this message translates to:
+  /// **'The camera points nearly due east or west of the pole, where this readout reads the altitude bolt poorly. Trust Verify, or start again with the scope nearer the pole.'**
+  String get polarReadoutCautionAltitudeWeak;
+
+  /// Warning on the About panel, the first-run screen and Simple Mode's version rows when the server and the app come from different X.Y release lines; {server} and {app} are versions like '1.2.0'
+  ///
+  /// In en, this message translates to:
+  /// **'Server {server} and app {app} differ; update both from the same release.'**
+  String versionMismatchWarning(String server, String app);
+
+  /// Simple Mode Plan target card and Sky Map pick card: credit shown on a tap on the survey picture that stands in for missing Album Art (#1958)
+  ///
+  /// In en, this message translates to:
+  /// **'DSS2 color survey (CDS hips2fits)'**
+  String get surveyPictureCredit;
 }
 
 class _AppLocalizationsDelegate

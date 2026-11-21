@@ -75,6 +75,7 @@ class _CommandPaletteDialogState extends ConsumerState<_CommandPaletteDialog> {
       templateNames: templates.map((t) => t.name),
       targets: targets.map((o) => (o.id, o.name, o.type)),
       companion: ref.read(companionModeProvider),
+      simple: ref.read(simpleModeActiveProvider),
     );
     _results = searchSettings(_index, _controller.text);
     _selectedIndex = _selectedIndex.clamp(0, _results.isEmpty ? 0 : _results.length - 1);

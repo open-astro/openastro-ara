@@ -549,8 +549,18 @@ paths:
                 - type: 'null'
                 - $ref: '#/components/schemas/ParkRequestDto'
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/unpark:
     post:
       tags:
@@ -573,8 +583,33 @@ paths:
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationAcceptedDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/equipment/telescope/confirm-home:
+    post:
+      tags:
+        - Equipment
+      summary: 'Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.'
+      operationId: ConfirmTelescopeHome
+      responses:
+        '204':
+          description: No Content
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/abort:
     post:
       tags:
@@ -593,8 +628,20 @@ paths:
               $ref: '#/components/schemas/MoveAxisRequestDto'
         required: true
       responses:
-        '200':
-          description: OK
+        '202':
+          description: Accepted
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/telescope/tracking:
     post:
       tags:
@@ -2298,6 +2345,36 @@ paths:
       responses:
         '200':
           description: OK
+  /api/v1/equipment/polaralign/start-plan:
+    get:
+      tags:
+        - Equipment
+      summary: 'What a confirmed polar-align start would do: the RA turn direction, the step and the most it turns from where it starts.'
+      operationId: GetPolarAlignStartPlan
+      parameters:
+        - name: stage
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolarAlignStartPlanDto'
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/start:
     post:
       tags:
@@ -2321,14 +2398,20 @@ paths:
     post:
       tags:
         - Equipment
+      summary: 'Retired: Polar Align makes one measurement per Start. Always answers 409; start a check with POST /polaralign/start {stage: check}.'
+      operationId: PolarAlignNext
       parameters:
         - name: Idempotency-Key
           in: header
           schema:
             type: string
       responses:
-        '200':
-          description: OK
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/equipment/polaralign/stop:
     post:
       tags:
@@ -4609,6 +4692,58 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PreflightChecklistDto'
+  /api/v1/end-night:
+    post:
+      tags:
+        - EndNight
+      summary: '#1901 End Night: abort the run, stop guiding, Find Home, park, disconnect, warm the cooler, then (when chosen) shut the host down. Returns at once; progress is the end_night.progress event and the status read. A second start while one runs is the end-night-in-progress refusal.'
+      operationId: StartEndNight
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - type: 'null'
+                - $ref: '#/components/schemas/EndNightStartRequestDto'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /api/v1/end-night/status:
+    get:
+      tags:
+        - EndNight
+      summary: The state of the End Night action and each of its steps; the last run stays readable until the next start.
+      operationId: GetEndNightStatus
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
+  /api/v1/end-night/cancel:
+    post:
+      tags:
+        - EndNight
+      summary: Stop End Night at the next step boundary and leave the rig as it is. Nothing cancels it once the host poweroff has started (cancellable is false in the answer).
+      operationId: CancelEndNight
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EndNightStatusDto'
   /api/v1/planning/sky-model:
     get:
       tags:
@@ -6761,7 +6896,7 @@ paths:
     put:
       tags:
         - Profile
-      summary: Replace the active profile's safety policies. first_flip_confirmed is daemon-owned and ignored on PUT (the stored value is preserved and echoed) — use POST /safety/first-flip/rearm to re-arm the §58.8 announce.
+      summary: 'Replace the active profile''s safety policies. first_flip_confirmed, first_flip_completed_utc and first_flip_pier_side_changed are daemon-owned and ignored on PUT (the stored values are preserved and echoed) — use POST /safety/first-flip/confirm and POST /safety/first-flip/rearm.'
       operationId: PutSafetyPolicies
       parameters:
         - name: If-Match
@@ -6791,7 +6926,7 @@ paths:
     post:
       tags:
         - Profile
-      summary: Re-arm the §58.8 one-time first-flip announce (clears first_flip_confirmed). Returns the updated safety policies.
+      summary: Re-arm the §58.8 unconfirmed-flip announce (clears first_flip_confirmed and the completed-flip record). Returns the updated safety policies.
       operationId: RearmFirstFlipAnnounce
       responses:
         '200':
@@ -6800,6 +6935,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SafetyPoliciesDto'
+  /api/v1/profile/safety/first-flip/confirm:
+    post:
+      tags:
+        - Profile
+      summary: '#1589 Confirm the active profile''s completed meridian flip (sets first_flip_confirmed; later flips run without the §58.8 announce). Refused with first-flip-not-completed when no completed flip is on record. Returns the updated safety policies.'
+      operationId: ConfirmFirstFlip
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SafetyPoliciesDto'
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /api/v1/profile/autofocus:
     get:
       tags:
@@ -10438,6 +10592,66 @@ components:
         cooler_off:
           type: boolean
           default: false
+    EndNightStartRequestDto:
+      type: object
+      properties:
+        shut_down_host:
+          type: boolean
+          default: true
+    EndNightStatusDto:
+      required:
+        - state
+        - run_id
+        - shut_down_host
+        - cancellable
+        - cancel_requested
+        - started_utc
+        - ended_utc
+        - steps
+      type: object
+      properties:
+        state:
+          type: string
+        run_id:
+          type:
+            - 'null'
+            - string
+          format: uuid
+        shut_down_host:
+          type: boolean
+        cancellable:
+          type: boolean
+        cancel_requested:
+          type: boolean
+        started_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        ended_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/EndNightStepDto'
+    EndNightStepDto:
+      required:
+        - id
+        - state
+        - detail
+      type: object
+      properties:
+        id:
+          type: string
+        state:
+          type: string
+        detail:
+          type:
+            - 'null'
+            - string
     EquipmentConnectionDto:
       required:
         - camera
@@ -13798,6 +14012,10 @@ components:
           type:
             - 'null'
             - string
+        above_align:
+          type:
+            - 'null'
+            - boolean
     ParkRequestDto:
       type: object
       properties:
@@ -14317,7 +14535,7 @@ components:
             - number
             - string
           format: double
-          default: 60
+          default: 10
         loop_cadence_ms:
           pattern: '^-?(?:0|[1-9]\d*)$'
           type:
@@ -14341,7 +14559,7 @@ components:
             - number
             - string
           format: double
-          default: 30
+          default: 10
         coarse_exposure_seconds:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
@@ -14349,10 +14567,76 @@ components:
             - string
           format: double
           default: 3
-        use_home:
+        polar_aligner_auto:
           type: boolean
           default: true
-        polar_aligner_auto:
+        stop_tracking_when_done:
+          type: boolean
+          default: true
+        camera:
+          type: string
+          default: guide
+        frames_per_point:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 3
+    PolarAlignStartPlanDto:
+      required:
+        - stage
+        - direction
+        - step_deg
+        - turns
+        - max_sweep_deg
+      type: object
+      properties:
+        stage:
+          type:
+            - 'null'
+            - string
+        direction:
+          type: string
+        step_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        turns:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+        max_sweep_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+        new_origin:
+          type: boolean
+          default: true
+        origin_offset_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 0
+        sweep_limit_deg:
+          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
+          type:
+            - number
+            - string
+          format: double
+          default: 30
+        camera:
+          type: string
+          default: guide
+        hand_turn_available:
           type: boolean
           default: true
     PolarAlignStartRequestDto:
@@ -14362,6 +14646,19 @@ components:
           type:
             - 'null'
             - string
+        confirmed:
+          type: boolean
+          default: false
+        direction:
+          type:
+            - 'null'
+            - string
+        new_origin:
+          type: boolean
+          default: false
+        hand_turn:
+          type: boolean
+          default: false
     PreflightChecklistDto:
       required:
         - generated_utc
@@ -14877,6 +15174,22 @@ components:
         - solver-not-set
         - capture-settings-unsupported
         - storage-unavailable
+        - end-night-in-progress
+        - below-horizon-limit
+        - mount-position-unverified
+        - counterweight-limit
+        - polar-align-mount-parked
+        - polar-align-unconfirmed
+        - polar-align-sweep-limit
+        - polar-align-moving-mount
+        - polar-align-on-axis
+        - polar-align-pointing-unknown
+        - polar-align-pose-ambiguous
+        - polar-align-mount-busy
+        - first-flip-not-completed
+        - mount-clock-not-verified
+        - polar-align-already-running
+        - polar-align-clutch-turned
       type: string
       description: 'The cause of a refusal: the `reason` extension of a 409 or 422 problem. See ADR 0022.'
     ReleaseNotesDto:
@@ -15463,6 +15776,35 @@ components:
             - string
           format: double
           default: 50
+        minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 5
+        max_minutes_after_meridian:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - integer
+            - string
+          format: int32
+          default: 10
+        stop_before_meridian_min:
+          pattern: '^-?(?:0|[1-9]\d*)$'
+          type:
+            - 'null'
+            - integer
+            - string
+          format: int32
+        first_flip_completed_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
+        first_flip_pier_side_changed:
+          type: boolean
+          default: false
     SavedTargetDto:
       required:
         - name
@@ -18011,6 +18353,7 @@ tags:
   - name: Diagnostics
   - name: Faults
   - name: Preflight
+  - name: EndNight
   - name: Planning
   - name: Server
   - name: ServerUpdate

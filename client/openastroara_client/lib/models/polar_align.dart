@@ -31,8 +31,26 @@ abstract final class PolarAlignStates {
       state == checking;
 }
 
+/// #2072 `readout_caution` tokens (`PolarAlignStateDto.readout_caution`, the
+/// `polar_align.progress` payload).
+abstract final class PolarAlignReadoutCautions {
+  /// The camera sits nearly due east or west of the pole: the live readout
+  /// reads the altitude bolt poorly, so the Check is the number to trust.
+  static const altitudeWeak = 'altitude_weak';
+}
+
+/// #2082 the camera a measurement uses (`polar_align.camera`, the start
+/// plan's and the status's `camera`).
+abstract final class PolarAlignCameras {
+  /// Through the guider, with the guide optics (the default).
+  static const guide = 'guide';
+
+  /// The main camera with its own solver, at the main-camera exposure.
+  static const main = 'main';
+}
+
 /// The routine's stages (`PolarAlignStateDto.stage`): coarse (Home, then the
-/// seed turn + live loop on the main camera), fine (the same on the guide
+/// three-point seed — two RA-motor turns — + live loop on the main camera), fine (the same on the guide
 /// camera), check (Home, three guide-camera solves, an exact fit).
 abstract final class PolarAlignStages {
   static const coarse = 'coarse';
@@ -71,6 +89,9 @@ class PolarAlignCheckResult {
   /// `excellent` | `very_good` | `good` | `rough` | `far_off`.
   final String verdict;
 
+  /// #2082 a point of the check stayed scattered over 3″ after its retake.
+  final bool noisy;
+
   const PolarAlignCheckResult({
     required this.altErrorArcmin,
     required this.azErrorArcmin,
@@ -80,6 +101,7 @@ class PolarAlignCheckResult {
     this.fineErrorArcmin,
     this.fineDeltaArcmin,
     this.verdict = '',
+    this.noisy = false,
   });
 
   factory PolarAlignCheckResult.fromJson(Map<String, dynamic> json) =>
@@ -92,6 +114,7 @@ class PolarAlignCheckResult {
         fineErrorArcmin: (json['fine_error_arcmin'] as num?)?.toDouble(),
         fineDeltaArcmin: (json['fine_delta_arcmin'] as num?)?.toDouble(),
         verdict: json['verdict'] is String ? json['verdict'] as String : '',
+        noisy: json['noisy'] == true,
       );
 }
 
@@ -281,6 +304,45 @@ class PolarAlignFrameInfo {
       );
 }
 
+/// #2083 a hand-turn run waiting for the user to turn the RA axis
+/// (`hand_turn_wait` on the status, and the `polar_align.hand_turn` payload):
+/// the [point] it waits for (2 or 3 of three), the turn asked for
+/// ([direction], [targetDeg]) and how far the mount's reading shows the axis
+/// turned that way so far ([turnedDeg]; negative is the other way, null before
+/// a solve and with the clutch open, when no angle can be claimed).
+/// [waiting] is false once the turn is in.
+class PolarAlignHandTurn {
+  final int point;
+
+  /// [PolarAlignDirections.east] or [PolarAlignDirections.west].
+  final String direction;
+  final double targetDeg;
+  final double? turnedDeg;
+  final bool waiting;
+
+  const PolarAlignHandTurn({
+    required this.point,
+    required this.direction,
+    required this.targetDeg,
+    this.turnedDeg,
+    this.waiting = true,
+  });
+
+  /// Null for anything that is not an object with a point.
+  static PolarAlignHandTurn? tryParse(Object? json) {
+    if (json is! Map || json['point'] is! num) return null;
+    return PolarAlignHandTurn(
+      point: (json['point'] as num).toInt(),
+      direction: json['direction'] == PolarAlignDirections.west
+          ? PolarAlignDirections.west
+          : PolarAlignDirections.east,
+      targetDeg: (json['target_deg'] as num?)?.toDouble() ?? 10.0,
+      turnedDeg: (json['turned_deg'] as num?)?.toDouble(),
+      waiting: json['waiting'] != false,
+    );
+  }
+}
+
 /// Snapshot of the routine (`GET /api/v1/equipment/polaralign/status`).
 /// Error fields are null until the live-adjust loop has produced its first
 /// solve (and always null for `idle`/`stopped`).
@@ -312,6 +374,23 @@ class PolarAlignStatus {
   /// #1971 null without a Polar Aligner Ara drives, or before its first measurement.
   final PolarAlignerRun? correction;
 
+  /// #2072 [PolarAlignReadoutCautions]; null when the readout is sound or
+  /// from an older daemon.
+  final String? readoutCaution;
+
+  /// #2082 the run's camera ([PolarAlignCameras]); null before a run or from
+  /// an older daemon.
+  final String? camera;
+
+  /// #2082 a point of the measurement stayed scattered over 3″ after its
+  /// retake: the readout rests on noisy solves.
+  final bool measurementNoisy;
+  /// #2083 the current or last run turns RA by hand (Ara moves nothing).
+  final bool handTurn;
+
+  /// #2083 a hand-turn run waiting for the user's turn; null otherwise.
+  final PolarAlignHandTurn? handTurnWait;
+
   const PolarAlignStatus({
     required this.state,
     this.currentErrorArcmin,
@@ -327,6 +406,11 @@ class PolarAlignStatus {
     this.checkResult,
     this.lastResult,
     this.correction,
+    this.readoutCaution,
+    this.camera,
+    this.measurementNoisy = false,
+    this.handTurn = false,
+    this.handTurnWait,
   });
 
   factory PolarAlignStatus.fromJson(Map<String, dynamic> json) =>
@@ -349,14 +433,20 @@ class PolarAlignStatus {
             : null,
         lastResult: PolarAlignLastResult.tryParse(json['last_result']),
         correction: PolarAlignerRun.tryParse(json['correction']),
+        readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
+        camera: json['camera'] is String ? json['camera'] as String : null,
+        measurementNoisy: json['measurement_noisy'] == true,
+        handTurn: json['hand_turn'] == true,
+        handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
       );
 
   /// True while the server is running any phase of the routine.
   bool get isActive => PolarAlignStates.isActive(state);
 }
 
-/// §45.12 profile section. Field defaults are the playbook defaults, matching
-/// the server's ctor defaults for a missing key.
+/// §45.12 profile section. No field has a client default (ADR 0015 rule 3):
+/// the daemon's section table owns them, and the client holds the rig's copy
+/// or nothing (`polarAlignSettingsProvider`).
 class PolarAlignSettings {
   final double exposureSeconds;
 
@@ -377,44 +467,36 @@ class PolarAlignSettings {
   /// Coarse stage: the main-camera exposure.
   final double coarseExposureSeconds;
 
-  /// Coarse and check stages send the mount Home first.
-  final bool useHome;
-
   /// #1971 the routine turns the Polar Aligner's motors (off: by hand).
   final bool polarAlignerAuto;
 
-  const PolarAlignSettings({
-    this.exposureSeconds = 1.0,
-    this.binning = 0,
-    this.targetToleranceArcmin = 1.0,
-    this.seedRotationDeg = 60.0,
-    this.loopCadenceMs = 1000,
-    this.settleSeconds = 2.0,
-    this.loopMode = PolarAlignLoopModes.loop,
-    this.checkStepDeg = 30.0,
-    this.coarseExposureSeconds = 3.0,
-    this.useHome = true,
-    this.polarAlignerAuto = true,
-  });
+  /// #2048 every end of a run turns tracking off (NINA's StopTrackingWhenDone,
+  /// on by default). Off: a run that finishes gives back the tracking it
+  /// found; a Stop or a failure still leaves tracking off.
+  final bool stopTrackingWhenDone;
 
-  factory PolarAlignSettings.fromJson(Map<String, dynamic> json) =>
-      PolarAlignSettings(
-        exposureSeconds: (json['exposure_seconds'] as num?)?.toDouble() ?? 1.0,
-        binning: (json['binning'] as num?)?.toInt() ?? 0,
-        targetToleranceArcmin:
-            (json['target_tolerance_arcmin'] as num?)?.toDouble() ?? 1.0,
-        seedRotationDeg: (json['seed_rotation_deg'] as num?)?.toDouble() ?? 60.0,
-        loopCadenceMs: (json['loop_cadence_ms'] as num?)?.toInt() ?? 1000,
-        settleSeconds: (json['settle_seconds'] as num?)?.toDouble() ?? 2.0,
-        loopMode: json['loop_mode'] == PolarAlignLoopModes.single
-            ? PolarAlignLoopModes.single
-            : PolarAlignLoopModes.loop,
-        checkStepDeg: (json['check_step_deg'] as num?)?.toDouble() ?? 30.0,
-        coarseExposureSeconds:
-            (json['coarse_exposure_seconds'] as num?)?.toDouble() ?? 3.0,
-        useHome: json['use_home'] != false,
-        polarAlignerAuto: json['polar_aligner_auto'] != false,
-      );
+  /// #2082 the camera of the measurement, its live loop and the check
+  /// ([PolarAlignCameras]). Rough first is always the main camera.
+  final String camera;
+
+  /// #2082 frames averaged at each of a measurement's three points (1–5).
+  final int framesPerPoint;
+
+  const PolarAlignSettings({
+    required this.exposureSeconds,
+    required this.binning,
+    required this.targetToleranceArcmin,
+    required this.seedRotationDeg,
+    required this.loopCadenceMs,
+    required this.settleSeconds,
+    required this.loopMode,
+    required this.checkStepDeg,
+    required this.coarseExposureSeconds,
+    required this.polarAlignerAuto,
+    required this.stopTrackingWhenDone,
+    required this.camera,
+    required this.framesPerPoint,
+  });
 
   Map<String, dynamic> toJson() => <String, dynamic>{
         'exposure_seconds': exposureSeconds,
@@ -426,8 +508,10 @@ class PolarAlignSettings {
         'loop_mode': loopMode,
         'check_step_deg': checkStepDeg,
         'coarse_exposure_seconds': coarseExposureSeconds,
-        'use_home': useHome,
         'polar_aligner_auto': polarAlignerAuto,
+        'stop_tracking_when_done': stopTrackingWhenDone,
+        'camera': camera,
+        'frames_per_point': framesPerPoint,
       };
 
   PolarAlignSettings copyWith({
@@ -440,8 +524,10 @@ class PolarAlignSettings {
     String? loopMode,
     double? checkStepDeg,
     double? coarseExposureSeconds,
-    bool? useHome,
     bool? polarAlignerAuto,
+    bool? stopTrackingWhenDone,
+    String? camera,
+    int? framesPerPoint,
   }) =>
       PolarAlignSettings(
         exposureSeconds: exposureSeconds ?? this.exposureSeconds,
@@ -455,7 +541,99 @@ class PolarAlignSettings {
         checkStepDeg: checkStepDeg ?? this.checkStepDeg,
         coarseExposureSeconds:
             coarseExposureSeconds ?? this.coarseExposureSeconds,
-        useHome: useHome ?? this.useHome,
         polarAlignerAuto: polarAlignerAuto ?? this.polarAlignerAuto,
+        stopTrackingWhenDone: stopTrackingWhenDone ?? this.stopTrackingWhenDone,
+        camera: camera ?? this.camera,
+        framesPerPoint: framesPerPoint ?? this.framesPerPoint,
+      );
+}
+
+/// The RA turn directions of a [PolarAlignStartPlan].
+abstract final class PolarAlignDirections {
+  static const east = 'east';
+  static const west = 'west';
+}
+
+/// #2048 — what a start will do, read from the rig before the mount moves
+/// (`GET /api/v1/equipment/polaralign/start-plan`): the routine starts from
+/// where the mount points, and its RA axis turns [stepDeg] [turns] times toward
+/// [direction] first, never more than [maxSweepDeg] from where it starts. The
+/// user confirms it; the start sends [direction] back, and the rig refuses a
+/// start whose direction changed since.
+///
+/// #2089 — [newOrigin] is true when this pose becomes Polar Align's start for
+/// the session (the first start since the mount connected, or the mount was
+/// moved some other way since Polar Align last turned it); otherwise
+/// [originOffsetDeg] is how far RA has turned from that start (+ east,
+/// − west) and [direction] turns back toward it. No turn goes more than
+/// [sweepLimitDeg] from that start. The start sends [newOrigin] back too.
+///
+/// #2083 — [handTurnAvailable]: the rig takes a hand-turn start (an older rig
+/// leaves it out, and would turn the mount with its motor). [handTurn] is the
+/// user's choice in the confirm step, never the rig's ([byHand]).
+class PolarAlignStartPlan {
+  /// The stage the start asks for ([PolarAlignStages]; null = the default).
+  final String? stage;
+
+  /// [PolarAlignDirections.east] or [PolarAlignDirections.west].
+  final String direction;
+  final double stepDeg;
+  final int turns;
+  final double maxSweepDeg;
+  final bool newOrigin;
+  final double originOffsetDeg;
+  final double sweepLimitDeg;
+  final bool handTurnAvailable;
+  final bool handTurn;
+
+  /// #2082 the camera the run measures with ([PolarAlignCameras]): the main
+  /// camera for Rough first, else the profile's.
+  final String camera;
+
+  const PolarAlignStartPlan({
+    this.stage,
+    required this.direction,
+    this.stepDeg = 10.0,
+    this.turns = 2,
+    this.maxSweepDeg = 20.0,
+    this.newOrigin = true,
+    this.originOffsetDeg = 0.0,
+    this.sweepLimitDeg = 30.0,
+    this.camera = PolarAlignCameras.guide,
+    this.handTurnAvailable = false,
+    this.handTurn = false,
+  });
+
+  /// This plan, turned by hand: the start asks the rig to move nothing.
+  PolarAlignStartPlan byHand() => PolarAlignStartPlan(
+        stage: stage,
+        direction: direction,
+        stepDeg: stepDeg,
+        turns: turns,
+        maxSweepDeg: maxSweepDeg,
+        newOrigin: newOrigin,
+        originOffsetDeg: originOffsetDeg,
+        sweepLimitDeg: sweepLimitDeg,
+        camera: camera,
+        handTurnAvailable: handTurnAvailable,
+        handTurn: true,
+      );
+
+  factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
+      PolarAlignStartPlan(
+        stage: json['stage'] as String? ?? stage,
+        direction: json['direction'] == PolarAlignDirections.west
+            ? PolarAlignDirections.west
+            : PolarAlignDirections.east,
+        stepDeg: (json['step_deg'] as num?)?.toDouble() ?? 10.0,
+        turns: (json['turns'] as num?)?.toInt() ?? 2,
+        maxSweepDeg: (json['max_sweep_deg'] as num?)?.toDouble() ?? 20.0,
+        newOrigin: json['new_origin'] != false,
+        originOffsetDeg: (json['origin_offset_deg'] as num?)?.toDouble() ?? 0.0,
+        sweepLimitDeg: (json['sweep_limit_deg'] as num?)?.toDouble() ?? 30.0,
+        camera: json['camera'] == PolarAlignCameras.main
+            ? PolarAlignCameras.main
+            : PolarAlignCameras.guide,
+        handTurnAvailable: json['hand_turn_available'] == true,
       );
 }

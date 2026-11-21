@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mount Limits</title>
+<style>
+  /* Layout: one iPad-sized stage with the Simple Mode Mount window over the image, scenario controls above, notes below.
+     Single dark look on purpose: DESIGN.md tokens (lib/theme/ara_colors.dart), as the other design/preview mocks. */
+  :root {
+    color-scheme: dark;
+    --page: #0E0E0E; --bg: #1A1A1A; --border: #404040; --text: #E0E0E0; --text2: #A0A0A0; --dis: #606060;
+    --ok: #4CAF50; --info: #42A5F5; --sel: #1976D2; --warn: #FFB300; --err: #E53935; --errt: #FF8A80;
+    --sys: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text); font: 14px/1.45 var(--sys);
+         padding-block: 28px 64px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+  body.night { filter: sepia(1) saturate(6) hue-rotate(-35deg) brightness(.75); }
+  .page { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  h1 { font-size: 22px; font-weight: 600; margin: 0; text-wrap: balance; }
+  p.note { color: var(--text2); margin: 0; max-width: 80ch; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; }
+  .group { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .lbl { color: var(--text2); font-size: 13px; }
+  .seg { display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .seg button { background: transparent; color: var(--text); border: 0; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button[aria-pressed="true"] { background: var(--sel); color: #fff; }
+  button:focus-visible { outline: 2px solid var(--info); outline-offset: 2px; }
+  .act { background: rgba(56,56,56,.55); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; font: 13px var(--sys); cursor: pointer; }
+
+  .stage-wrap { overflow-x: auto; }
+  .ipad { width: 1024px; height: 760px; position: relative; border-radius: 18px; overflow: hidden; border: 1px solid #333;
+          background: radial-gradient(ellipse at 60% 45%, #3a3f4c 0, #12141a 55%, #08090c 100%); }
+  .strip { position: absolute; left: 16px; right: 16px; top: 16px; height: 56px; background: rgba(26,26,26,.9); border-radius: 10px;
+           display: flex; align-items: center; gap: 18px; padding: 0 14px; font-size: 13px; color: var(--text2); }
+  .dot { display: inline-flex; align-items: center; gap: 6px; } .dot i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+  .dot.hot { outline: 1.5px solid var(--sel); outline-offset: 4px; border-radius: 6px; color: var(--text); }
+  .pills { position: absolute; right: 16px; top: 88px; display: flex; flex-direction: column; gap: 6px; align-items: flex-end; max-width: 520px; }
+  .pill { background: rgba(26,26,26,.9); border-radius: 18px; padding: 6px 14px; font-size: 13px; display: flex; gap: 8px; align-items: center; }
+  .pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+  .pill.e { color: var(--errt); } .pill.e i { background: var(--err); }
+  .pill.w { color: var(--warn); } .pill.w i { background: var(--warn); }
+
+  .win { position: absolute; left: 16px; top: 88px; background: rgba(26,26,26,.9); backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
+         border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; width: 400px; }
+  .head { display: flex; align-items: center; gap: 8px; font-weight: 600; min-height: 32px; }
+  .head i { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); }
+  .r { display: flex; align-items: center; gap: 12px; min-height: 44px; }
+  .r .l { flex: 1; min-width: 0; }
+  .r .seg button { min-height: 36px; min-width: 70px; }
+  .hr { border-top: 1px solid var(--border); margin: 6px 0; }
+  .sect { font-size: 11px; font-weight: 600; letter-spacing: .6px; text-transform: uppercase; color: var(--text2); padding-top: 4px; }
+  .caption { color: var(--text2); font-size: 12px; }
+  .warnt { color: var(--warn); }
+
+  /* stepper: − value +, 44 pt targets */
+  .step { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .step button { width: 44px; height: 40px; background: transparent; border: 0; color: var(--text); font: 600 18px var(--sys); cursor: pointer; }
+  .step button:disabled { color: var(--dis); cursor: default; }
+  .step output { min-width: 104px; text-align: center; font-variant-numeric: tabular-nums; border-left: 1px solid var(--border); border-right: 1px solid var(--border); line-height: 40px; }
+  .ro { color: var(--text2); font-size: 13px; text-align: right; }
+  .arc { display: block; margin: 6px auto 0; }
+
+  .notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .notes div { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+  .notes h2 { font-size: 14px; margin: 0 0 4px; }
+  .notes p { margin: 0; color: var(--text2); font-size: 13px; }
+  @media (prefers-reduced-motion: no-preference) { .pill { animation: in .18s ease-out; } @keyframes in { from { transform: translateY(-4px); opacity: .4; } } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Mount limits in Simple Mode: lowest altitude, highest altitude, flip after the meridian</h1>
+  <p class="note">v1 (2026-11-19). A Limits group in the Mount window, under the Meridian flip switch. The steppers work, the arc follows them, and the buttons in the Try row show what the user sees when a limit is hit. Advanced Mode is unchanged.</p>
+
+  <div class="controls">
+    <div class="group"><span class="lbl">Horizon</span>
+      <div class="seg" role="group" aria-label="Horizon" id="hz">
+        <button aria-pressed="true" data-v="flat">Flat (one number)</button>
+        <button aria-pressed="false" data-v="custom">Measured horizon (set in Advanced)</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Meridian flip</span>
+      <div class="seg" role="group" aria-label="Meridian flip" id="flip">
+        <button aria-pressed="true" data-v="1">Auto</button>
+        <button aria-pressed="false" data-v="0">Off</button>
+      </div>
+    </div>
+    <div class="group"><span class="lbl">Try</span>
+      <button class="act" id="tryLow">GoTo M 33 (now at 14°)</button>
+      <button class="act" id="tryHigh">Track M 31 up to the zenith</button>
+    </div>
+    <div class="group"><span class="lbl">Night</span>
+      <div class="seg" role="group" aria-label="Night" id="night">
+        <button aria-pressed="true" data-v="0">Off</button>
+        <button aria-pressed="false" data-v="1">Red</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stage-wrap"><div class="ipad">
+    <div class="strip">
+      <span class="dot"><i></i>Camera</span><span class="dot hot"><i></i>Mount</span>
+      <span class="dot"><i></i>Focuser</span><span class="dot"><i></i>Guider</span>
+    </div>
+    <div class="pills" id="pills" aria-live="polite"></div>
+    <div class="win" id="win" aria-label="Mount window"></div>
+  </div></div>
+
+  <div class="notes">
+    <div><h2>Lowest altitude</h2><p>The profile's flat horizon (today 20° by default, Advanced › Settings › Site). 0° to 60° in 5° steps. Plans already skip targets under it and Tonight's Best greys them. New: a GoTo under it is refused with the reason. With a measured horizon the row is read-only and says where to change it.</p></div>
+    <div><h2>Highest altitude</h2><p>For a camera or rotator that can hit the tripod near the zenith. 60° to 85° in 5° steps, then Off (the default). A GoTo above it is refused. When tracking climbs to it, Ara stops tracking, pauses the plan and says why. It never slews on its own. Needs the server limit from #1589.</p></div>
+    <div><h2>At the meridian (flip Auto)</h2><p>One signed stepper, −30 to +30 min in 5 min steps. Before (−): stop tracking that early, wait for the meridian to pass, then flip; the server already does this as PauseTimeBeforeMeridian. After (+): keep tracking that long past it, then flip (MinutesAfterMeridian; the window's end follows as + 5). Only one of the two is ever non-zero.</p></div>
+    <div><h2>Stop before meridian (flip Off)</h2><p>Off, or 5 to 30 min. Stops tracking and pauses the plan that long before the meridian, and says why. Needs server work: today nothing stops a mount with the flip off except its own firmware.</p></div>
+    <div><h2>Arc</h2><p>Horizon on the left, zenith at the top. Green is where the mount may point; red is outside a limit. Drawn from the same values as the steppers, so the numbers and the picture never disagree.</p></div>
+    <div><h2>Saving</h2><p>Each tap saves at once, like the Meridian flip switch: a pill confirms, a failed save puts the old value back and says so. Lowest must stay at least 15° under highest; the stepper stops there.</p></div>
+    <div><h2>Where else</h2><p>The same window shows in Settings › Mount (it is reused there), so the limits are in both places with no second copy.</p></div>
+  </div>
+</div>
+
+<script>
+const st = { low: 20, high: 90, flipMin: 5, stopMin: 0, hz: 'flat', flip: true };
+// Signed: negative = stop tracking that many minutes before the meridian and flip after it passes.
+const fmTxt = v => v < 0 ? `${-v} min before` : v === 0 ? 'On it' : `${v} min after`;
+const fmPill = v => v < 0 ? `Mount · Stops tracking ${-v} min before the meridian, flips after it` : v === 0 ? 'Mount · Flips at the meridian' : `Mount · Flips ${v} min after the meridian`;
+const win = document.getElementById('win'), pills = document.getElementById('pills');
+
+function pill(text, kind = '') {
+  const p = document.createElement('div');
+  p.className = 'pill ' + kind; p.innerHTML = `<i></i><span></span>`; p.querySelector('span').textContent = text;
+  pills.prepend(p); while (pills.children.length > 3) pills.lastChild.remove();
+  setTimeout(() => p.remove(), 7000);
+}
+const highTxt = v => v >= 90 ? 'Off' : v + '°';
+
+function stepper(id, label, val, txt, canDown, canUp) {
+  return `<div class="r"><span class="l">${label}</span><div class="step" role="group" aria-label="${label}">
+    <button id="${id}-dn" aria-label="Lower ${label.toLowerCase()}" ${canDown ? '' : 'disabled'}>−</button>
+    <output id="${id}-v">${txt}</output>
+    <button id="${id}-up" aria-label="Raise ${label.toLowerCase()}" ${canUp ? '' : 'disabled'}>+</button></div></div>`;
+}
+
+// Quarter-circle sky: angle 0° = horizon (left), 90° = zenith (top). One scale for every mark.
+function arc() {
+  const W = 360, H = 150, cx = 40, cy = 138, R = 118;
+  const pt = (a, r = R) => [cx + r * Math.cos(a * Math.PI / 180), cy - r * Math.sin(a * Math.PI / 180)];
+  const wedge = (a0, a1, fill) => { const [x0, y0] = pt(a0), [x1, y1] = pt(a1);
+    return `<path d="M${cx},${cy} L${x0.toFixed(1)},${y0.toFixed(1)} A${R},${R} 0 0 0 ${x1.toFixed(1)},${y1.toFixed(1)} Z" fill="${fill}"/>`; };
+  const low = st.hz === 'custom' ? 25 : st.low, hi = Math.min(st.high, 90);
+  let s = `<svg class="arc" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Allowed sky from ${low}° to ${highTxt(st.high)}">`;
+  s += wedge(0, low, 'rgba(229,57,53,.35)') + wedge(low, hi, 'rgba(76,175,80,.28)');
+  if (hi < 90) s += wedge(hi, 90, 'rgba(229,57,53,.35)');
+  for (const a of [0, 30, 60, 90]) { const [x, y] = pt(a, R + 4), [tx, ty] = pt(a, R + 14);
+    s += `<line x1="${pt(a)[0].toFixed(1)}" y1="${pt(a)[1].toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="#606060"/>`;
+    s += `<text x="${tx.toFixed(1)}" y="${(ty + 4).toFixed(1)}" fill="#A0A0A0" font-size="10" text-anchor="${a === 90 ? 'middle' : 'start'}">${a}°</text>`; }
+  const lbl = (a, t) => { const [x, y] = pt(a, R * .62); return `<text x="${x.toFixed(1)}" y="${(y + 4).toFixed(1)}" fill="#E0E0E0" font-size="11">${t}</text>`; };
+  s += lbl(Math.max(low / 2, 4), st.hz === 'custom' ? 'measured' : 'too low');
+  s += lbl((low + hi) / 2, 'OK');
+  if (hi < 90) s += lbl((hi + 90) / 2 + 1, 'too high');
+  s += `<line x1="${cx}" y1="${cy}" x2="${cx + R + 6}" y2="${cy}" stroke="#606060"/><text x="${cx + R + 10}" y="${cy + 4}" fill="#A0A0A0" font-size="10">horizon</text>`;
+  return s + '</svg>';
+}
+
+function render() {
+  const lowRow = st.hz === 'custom'
+    ? `<div class="r"><span class="l">Lowest altitude</span><span class="ro">Your measured horizon</span></div>
+       <span class="caption">Change it in Advanced Mode › Settings › Site.</span>`
+    : stepper('low', 'Lowest altitude', st.low, st.low + '°', st.low > 0, st.low + 5 <= Math.min(st.high, 90) - 15 && st.low < 60);
+  win.innerHTML = `
+    <div class="head"><i></i>Mount</div>
+    <div class="r"><span class="l">Tracking</span><div class="seg"><button aria-pressed="true">On</button><button aria-pressed="false">Off</button></div></div>
+    <div class="r"><span class="l">Meridian flip</span><div class="seg" id="wflip"><button aria-pressed="${st.flip}" data-v="1">Auto</button><button aria-pressed="${!st.flip}" data-v="0">Off</button></div></div>
+    <div class="hr"></div>
+    <div class="sect">Limits</div>
+    ${lowRow}
+    ${stepper('high', 'Highest altitude', st.high, highTxt(st.high), st.high > 60 && st.high - 5 >= (st.hz === 'custom' ? 0 : st.low) + 15, st.high < 90)}
+    ${st.flip
+      ? stepper('fm', 'At the meridian', st.flipMin, fmTxt(st.flipMin), st.flipMin > -30, st.flipMin < 30)
+        + `<span class="caption">${st.flipMin < 0 ? `Stops tracking ${-st.flipMin} min before the meridian, waits for it to pass, then flips. For a scope that can touch the tripod there.` : st.flipMin === 0 ? 'Flips as soon as the target crosses the meridian.' : `Keeps tracking ${st.flipMin} min past the meridian, then flips.`}</span>`
+      : stepper('stop', 'Stop before meridian', st.stopMin, st.stopMin ? st.stopMin + ' min' : 'Off', st.stopMin > 0, st.stopMin < 30)
+        + `<span class="caption">${st.stopMin ? `Stops tracking and pauses the plan ${st.stopMin} min before the meridian.` : 'The mount tracks through the meridian. Only its own firmware limit stops it.'}</span>`}
+    ${arc()}`;
+  const on = (id, f) => { const b = document.getElementById(id); if (b) b.onclick = f; };
+  on('low-dn', () => { st.low -= 5; render(); pill(`Mount · Lowest altitude ${st.low}°`); });
+  on('low-up', () => { st.low += 5; render(); pill(`Mount · Lowest altitude ${st.low}°`); });
+  on('high-dn', () => { st.high = st.high >= 90 ? 85 : st.high - 5; render(); pill(`Mount · Highest altitude ${highTxt(st.high)}`); });
+  on('high-up', () => { st.high = st.high >= 85 ? 90 : st.high + 5; render(); pill(`Mount · Highest altitude ${highTxt(st.high)}`); });
+  on('fm-dn', () => { st.flipMin -= 5; render(); pill(fmPill(st.flipMin)); });
+  on('fm-up', () => { st.flipMin += 5; render(); pill(fmPill(st.flipMin)); });
+  on('stop-dn', () => { st.stopMin -= 5; render(); pill(`Mount · Stop before meridian ${st.stopMin ? st.stopMin + ' min' : 'off'}`); });
+  on('stop-up', () => { st.stopMin += 5; render(); pill(`Mount · Stop before meridian ${st.stopMin} min`); });
+  win.querySelectorAll('#wflip button').forEach(b => b.onclick = () => setFlip(b.dataset.v === '1'));
+}
+function setFlip(v) { st.flip = v; syncSeg('flip', v ? '1' : '0'); render(); pill(`Mount · Meridian flip ${v ? 'auto' : 'off'}`); }
+function syncSeg(id, v) { document.querySelectorAll(`#${id} button`).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === v)); }
+function seg(id, f) { document.querySelectorAll(`#${id} button`).forEach(b => b.onclick = () => { syncSeg(id, b.dataset.v); f(b.dataset.v); }); }
+
+seg('hz', v => { st.hz = v; render(); });
+seg('flip', v => setFlip(v === '1'));
+seg('night', v => document.body.classList.toggle('night', v === '1'));
+document.getElementById('tryLow').onclick = () => {
+  const lim = st.hz === 'custom' ? 'your measured horizon (22° there)' : `your ${st.low}° lowest altitude`;
+  if (st.hz === 'flat' && st.low <= 14) pill('Mount · Going to M 33'); else pill(`Mount · M 33 is at 14°, under ${lim}. Ara didn't move the mount.`, 'e');
+};
+document.getElementById('tryHigh').onclick = () => {
+  if (st.high >= 90) { pill('Mount · No highest altitude set. M 31 tracks through the zenith.', 'w'); return; }
+  pill(`Mount · Tracking stopped at ${st.high}°, your highest altitude. Plan paused. Ara didn't move the mount.`, 'e');
+};
+render();
+</script>
+</body>
+</html>

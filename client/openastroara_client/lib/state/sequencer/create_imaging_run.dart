@@ -21,6 +21,7 @@ import '../settings/autofocus_settings_state.dart';
 import '../settings/unguided_settings_state.dart';
 import '../settings/filter_set_state.dart';
 import '../settings/imaging_defaults_state.dart';
+import '../settings/loaded_section.dart';
 import '../settings/phd2_settings_state.dart';
 import '../settings/settings_nav.dart';
 import 'draft_sequences_state.dart';
@@ -253,7 +254,9 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   // choreography as the connected append-to-open-sequence path.
   if (api == null) {
     // No daemon to ask what the rig has — settings are the best we know.
-    final rig = rigCapabilitiesFromSettings(container.read(phd2SettingsProvider))
+    final rig = rigCapabilitiesFromSettings(
+      container.read(phd2SettingsProvider).value ?? const Phd2Settings(),
+    )
         .copyWith(pauseForFilterSwap: pauseForFilterSwap);
     final choice = filterPlan != null
         ? TargetPlanChoice(filterPlan: filterPlan, guide: rig.guider)
@@ -267,8 +270,13 @@ Future<ImagingRunResult?> _createImagingRunPinned(
       rig: rig,
     );
     if (choice == null) return ImagingRunResult.userCancelled;
-    final defaults = container.read(imagingDefaultsProvider);
-    final af = container.read(autofocusSettingsProvider);
+    // Not loaded (no rig to load from): the classes' values, as with the
+    // unguided options below. A run reads them; nothing saves them.
+    final defaults =
+        container.read(imagingDefaultsProvider).value ?? const ImagingDefaults();
+    final af =
+        container.read(autofocusSettingsProvider).value ??
+        const AutofocusSettings();
     final exposureSeconds = exposureOverride ??
         defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
     final frameCount = frameCountOverride ??
@@ -387,12 +395,21 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   }
 
   // The run is "built from the user's configured Imaging Defaults" — which
-  // live on the daemon. The settings notifiers hydrate lazily (when their
-  // Settings panels mount), so a fresh session that goes straight to Planning
-  // would otherwise bake the CLIENT'S constructor defaults into the run. Pull
-  // them fresh here; a failure keeps whatever the notifiers already hold (the
-  // same best-effort contract the panels use).
+  // live on the daemon. Pull them fresh here; a failed load keeps whatever
+  // the notifiers already hold.
   await hydratePlanningSettings(container);
+  // Connected: a run goes to the rig, so it is built from the profile's own
+  // copy (the rig's, or its offline cache), never from the classes' values.
+  // Either one not loaded: the create stops before the plan chooser, with
+  // nothing sent (ADR 0015).
+  final loadedDefaults = container.read(imagingDefaultsProvider);
+  final loadedAf = container.read(autofocusSettingsProvider);
+  final defaults = loadedDefaults.value;
+  final af = loadedAf.value;
+  if (defaults == null) {
+    throw SectionNotLoadedException(loadedDefaults.lastFailure);
+  }
+  if (af == null) throw SectionNotLoadedException(loadedAf.lastFailure);
   // The rig cooks the run: guiding only with a guider, filter switches only
   // with a wheel, autofocus only with a focuser (see RigCapabilities).
   final rig = (await readRigCapabilities(container))
@@ -414,8 +431,6 @@ Future<ImagingRunResult?> _createImagingRunPinned(
   if (choice == null) return ImagingRunResult.userCancelled;
   final ditherEvery = _ditherCadence(container, choice);
 
-  final defaults = container.read(imagingDefaultsProvider);
-  final af = container.read(autofocusSettingsProvider);
   final exposureSeconds = exposureOverride ??
       defaults.defaultExposure.inMilliseconds / Duration.millisecondsPerSecond;
   final frameCount = frameCountOverride ?? defaultFrameCount(
@@ -650,7 +665,8 @@ Future<TargetPlanChoice?> _choosePlan(
 /// nudges nothing).
 int? _ditherCadence(ProviderContainer container, TargetPlanChoice choice) {
   if (!choice.guide) return null;
-  final phd2 = container.read(phd2SettingsProvider);
+  final phd2 =
+      container.read(phd2SettingsProvider).value ?? const Phd2Settings();
   return phd2.ditherEnabled ? math.max(1, phd2.ditherEveryNFrames) : null;
 }
 

@@ -12,6 +12,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/services/profile_api.dart';
 import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/phd2_settings_state.dart';
+
+import '../../support/phd2_section.dart';
 import 'package:openastroara/state/simple_messages_state.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/services/dso_catalog_service.dart';
@@ -39,6 +41,10 @@ import 'package:openastroara/models/sky_model_calibration.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/services/sequence_api.dart';
+import 'package:openastroara/services/server_api.dart';
+import 'package:openastroara/state/ws/client_session_state.dart' show serverApiFactoryProvider;
+import 'package:openastroara/models/server.dart';
+import 'package:openastroara/state/saved_server_state.dart';
 import 'package:openastroara/services/tonight_sky_api.dart';
 import 'package:openastroara/theme/ara_colors.dart';
 import 'package:openastroara/state/sky_atlas/tonight_sky_state.dart';
@@ -71,6 +77,8 @@ import 'package:openastroara/models/library/live_library.dart';
 import 'package:openastroara/state/library/live_library_state.dart';
 
 import '../../support/fake_section_rig.dart';
+import 'selection_tint_contrast.dart';
+import '../../support/imaging_sections.dart';
 
 const _m42 = PlanetariumSelection(
     name: 'M42', kind: 'Nebula', raHours: 5.59, decDeg: -5.39, raJ2000Hours: 5.59, decJ2000Deg: -5.39, altDeg: 30, maxAltDeg: 45);
@@ -246,8 +254,11 @@ void _whole(WidgetTester tester, Finder text) {
 // target_plan_dialog_test).
 class _Optics extends OpticsSettingsNotifier {
   @override
-  OpticsSettings build() => const OpticsSettings(
-      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91);
+  LoadedSection<OpticsSettings> build() => const LoadedSection(
+    value: OpticsSettings(
+      focalLengthMm: 447, reducerFactor: 1.0, sensorWidthPx: 6248, sensorHeightPx: 4176, pixelSizeUm: 3.76, apertureMm: 91),
+    source: SectionSource.rig,
+  );
 }
 
 class _Electronics extends CameraElectronicsNotifier {
@@ -260,7 +271,8 @@ class _Electronics extends CameraElectronicsNotifier {
 
 class _Site extends SiteSettingsNotifier {
   @override
-  SiteSettings build() => SiteSettings(bortleClass: 6);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: SiteSettings(bortleClass: 6), source: SectionSource.rig);
 }
 
 /// A filter wheel the daemon retains, or none.
@@ -279,7 +291,8 @@ class _SiteAt extends SiteSettingsNotifier {
   _SiteAt(this.site);
   final SiteSettings site;
   @override
-  SiteSettings build() => site;
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: site, source: SectionSource.rig);
 }
 
 class _NoSkyModel extends SkyModelCalibrationNotifier {
@@ -328,6 +341,7 @@ Future<ProviderContainer> _pump(
       ...overrides.cast(),
       tonightSkyProvider.overrideWith((ref) async => tonight),
       tonightsBestProvider.overrideWith((ref) async => tonight),
+      ...imagingSectionsFromRig(),
       sequenceApiProvider.overrideWith((ref) => seq),
       planetariumSelectionProvider.overrideWith(() => _Sel(sel)),
       if (filtersLoaded)
@@ -345,6 +359,62 @@ Future<ProviderContainer> _pump(
   ));
   await tester.pumpAndSettle();
   return container;
+}
+
+/// Records Emergency Stop calls, as the button's own tests do.
+class _EStopApi implements ServerApi {
+  int calls = 0;
+  @override
+  Future<EmergencyStopResult> emergencyStop() async {
+    calls++;
+    return const EmergencyStopResult(
+      alreadyInProgress: false,
+      runsAborted: 1,
+      exposureAborted: true,
+      guidingStopped: true,
+      mountStopped: true,
+      flatPanelLightOff: true,
+    );
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) =>
+      throw UnimplementedError('${invocation.memberName}');
+}
+
+/// A rig is plugged in only once the plan runs: a server present from the
+/// start makes the sheet hydrate its settings over the network, and a change
+/// of server clears the selected run.
+class _PluggedIn extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void plug() => state = true;
+}
+
+final _pluggedIn = NotifierProvider<_PluggedIn, bool>(_PluggedIn.new);
+
+List<Object> _estopOverrides(_EStopApi api) => [
+      activeServerProvider.overrideWith(
+        (ref) => ref.watch(_pluggedIn) ? const AraServer(hostname: 'pi-test', port: 5555) : null,
+      ),
+      serverApiFactoryProvider.overrideWithValue((server) => api),
+    ];
+
+/// Ends a test that plugged a rig in: its pollers die with the container.
+Future<void> _unplug(WidgetTester tester, ProviderContainer c) async {
+  await tester.pumpWidget(const SizedBox());
+  c.dispose();
+  await tester.pump(const Duration(seconds: 30));
+}
+
+/// The rig arrives while the plan images: the selected run is re-selected,
+/// as the screen's own selection would be.
+Future<void> _plug(WidgetTester tester, ProviderContainer c) async {
+  c.read(_pluggedIn.notifier).plug();
+  await tester.pump();
+  c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+  await c.read(sequenceRunStateProvider.notifier).refresh();
+  await tester.pumpAndSettle();
 }
 
 final _en = lookupAppLocalizations(const Locale('en'));
@@ -814,10 +884,13 @@ void main() {
         if (locale != null) appLocaleProvider.overrideWith(() => _Locale(locale)),
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
         tonightSkyProvider.overrideWith((ref) async => const <TonightSkyObject>[]),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => api ? seq : null),
         planetariumSelectionProvider.overrideWith(() => _Sel(_m31)),
         filterSetProvider.overrideWith(() => _Filters()),
         filterWheelProvider.overrideWith(() => _Wheel(true)),
+        // The guider settings as the rig's copy (ADR 0015).
+        phd2FromRig(),
       ]);
       addTearDown(c.dispose);
       c.listen(simpleRunProvider, (_, _) {});
@@ -1243,6 +1316,29 @@ void main() {
   });
 
   group('the sheet', () {
+    testWidgets(
+      'the target card\'s Pick in Sky reads 4.5:1 on the selection tint without the app theme',
+      (tester) async {
+        await _pump(
+          tester,
+          _Seq(),
+          SimpleRunSheet(
+            onShowSky: () {},
+            onPickInSky: () {},
+            onCreated: () {},
+          ),
+          overrides: _rig,
+        );
+        expectReadsOnSelectionTint(
+          tester,
+          find.descendant(
+            of: find.byKey(const Key('simple-run-target-card')),
+            matching: find.text('Pick in Sky'),
+          ),
+        );
+      },
+    );
+
     testWidgets('with nothing picked: search or Pick in Sky; both buttons are off', (tester) async {
       var showSky = 0, pick = 0;
       final c = await _pump(
@@ -2639,6 +2735,69 @@ void main() {
       expect(find.text('Mount stopped'), findsNothing);
     });
 
+    group('Stop plan… (#1911)', () {
+      Future<(ProviderContainer, _Seq, _EStopApi)> imagingPanel(WidgetTester tester) async {
+        final seq = _Seq();
+        final estop = _EStopApi();
+        final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}),
+            overrides: _estopOverrides(estop));
+        c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        await imaging(tester, c, seq, _imaging(24));
+        await _plug(tester, c);
+        return (c, seq, estop);
+      }
+
+      testWidgets('the panel offers Stop plan…, and it asks in place before anything is sent', (tester) async {
+        final (c, seq, estop) = await imagingPanel(tester);
+        final calls = seq.calls.length;
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        expect(find.text('Stop the plan? The 24 frames taken are kept; the mount keeps tracking.'), findsOneWidget);
+        expect(seq.calls.length, calls, reason: 'asked, not stopped');
+        await tester.tap(find.byKey(const Key('simple-run-stop-keep')));
+        await tester.pumpAndSettle();
+        expect(find.byKey(const Key('simple-run-stop-confirm')), findsNothing);
+        expect(find.byKey(const Key('simple-run-stop')), findsOneWidget);
+        expect(seq.calls.length, calls, reason: 'Keep imaging sends nothing');
+        expect(estop.calls, 0);
+        await _unplug(tester, c);
+      });
+
+      testWidgets('the question counts every frame the run took, across all its targets', (tester) async {
+        final seq = _Seq();
+        final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+        c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+        const single = [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)];
+        c.read(simpleRunProvider.notifier).state = SimpleRun(sequenceId: 'seq-1', started: true, targets: const [
+          SimpleTarget(name: 'M 31', steps: single),
+          SimpleTarget(name: 'M 33', steps: single),
+        ]);
+        // 30 on M 31, 4 on M 33: Stop keeps all 34.
+        await imaging(tester, c, seq, _imaging(34));
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        expect(find.text('Stop the plan? The 34 frames taken are kept; the mount keeps tracking.'), findsOneWidget);
+      });
+
+      testWidgets('confirming stops the plan and is not an Emergency Stop', (tester) async {
+        final (c, seq, estop) = await imagingPanel(tester);
+        await tester.tap(find.byKey(const Key('simple-run-stop')));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byKey(const Key('simple-run-stop-confirm')));
+        await tester.pumpAndSettle();
+        expect(seq.calls.last, 'stop seq-1');
+        expect(estop.calls, 0);
+        expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty);
+        await _unplug(tester, c);
+      });
+
+      testWidgets('no run, no Stop plan…', (tester) async {
+        final seq = _Seq();
+        await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+        expect(find.byKey(const Key('simple-run-stop')), findsNothing);
+      });
+    });
+
     group('each fact once (#1719)', () {
       Future<void> running(WidgetTester tester, List<SimpleTarget> targets) async {
         final seq = _Seq();
@@ -2825,18 +2984,27 @@ void main() {
       await tester.pump(kSimpleResultLife);
     });
 
-    testWidgets('a slowish tap (0.6 s: gloves, cold hands) still pauses', (tester) async {
+    testWidgets('a slowish tap (0.45 s: gloves, cold hands) still pauses; 0.6 s is a cancelled hold, not a pause (#1911)',
+        (tester) async {
       final (c, seq) = await run(tester);
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
-      final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 450));
+      await g.up();
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      final calls = seq.calls.length;
+      await imaging(tester, c, seq, _imaging(24));
+      g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 600));
       await g.up();
       await tester.pumpAndSettle();
-      expect(seq.calls.last, 'pause seq-1');
+      expect(seq.calls.length, calls, reason: 'a release after the fill started sends nothing');
     });
 
     testWidgets('the keyboard reaches the shutter: Enter starts, pauses and resumes the plan', (tester) async {
@@ -2876,46 +3044,71 @@ void main() {
       expect(seq.calls, ['create M31'], reason: 'not started');
     });
 
-    testWidgets('holding 2 s stops the run; letting go early does nothing', (tester) async {
-      final (c, seq) = await run(tester);
+    testWidgets('holding 2 s is Emergency Stop, not the plan stop; letting go early does nothing (#1911)',
+        (tester) async {
+      final estop = _EStopApi();
+      final (c, seq) = await run(tester, overrides: _estopOverrides(estop));
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
       final before = seq.calls.length;
 
       var g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump(); // the hold's first frame
       await tester.pump(const Duration(seconds: 1));
-      expect(find.text('Hold to stop'), findsOneWidget);
+      expect(find.text('HOLD'), findsOneWidget);
       await g.up();
       await tester.pumpAndSettle();
       expect(seq.calls.length, before, reason: 'released at 1 s: neither a pause nor a stop');
+      expect(estop.calls, 0);
 
       g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 2100));
       await g.up();
       await tester.pumpAndSettle();
-      expect(seq.calls.sublist(before), ['stop seq-1']);
+      expect(estop.calls, 1, reason: 'one Emergency Stop through the shared path');
+      expect(seq.calls.sublist(before), isNot(contains('stop seq-1')), reason: 'the plan stop is Stop plan…');
+      expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
+          reason: 'Emergency Stop never shows the plan-running question (ADR 0013 rule 2)');
+      await _unplug(tester, c);
     });
 
-    testWidgets('on iPhone and iPad the hold-to-stop ring stays the 60 px Material sweep, not a spoke wheel',
-        (tester) async {
-      final (c, seq) = await run(tester);
+    testWidgets('the running plan shows pause bars, and a tap pauses without a stop (#1911)', (tester) async {
+      final estop = _EStopApi();
+      final (c, seq) = await run(tester, overrides: _estopOverrides(estop));
       await create(tester);
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pumpAndSettle();
       await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
+      expect(find.descendant(of: find.byKey(const Key('simple-shutter')), matching: find.byIcon(Icons.pause)), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause seq-1');
+      expect(seq.calls, isNot(contains('stop seq-1')));
+      expect(estop.calls, 0);
+      await _unplug(tester, c);
+    });
+
+    testWidgets('on iPhone and iPad the hold fill is the same 60 px sweep, not a spoke wheel (#1911)',
+        (tester) async {
+      final (c, seq) = await run(tester, overrides: _estopOverrides(_EStopApi()));
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      await _plug(tester, c);
       final g = await tester.startGesture(tester.getCenter(find.byKey(const Key('simple-shutter'))));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
-      final ring = find.byWidgetPredicate((w) => w is CircularProgressIndicator && w.value != null);
-      expect(ring, findsOneWidget);
-      expect(tester.getSize(ring), const Size(60, 60));
+      expect(tester.getSize(find.byKey(const Key('emergency-hold-fill'))), const Size(60, 60));
       await g.up();
       await tester.pumpAndSettle();
+      await _unplug(tester, c);
     }, variant: TargetPlatformVariant.only(TargetPlatform.iOS));
   });
 }

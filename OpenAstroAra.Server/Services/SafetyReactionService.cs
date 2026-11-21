@@ -14,6 +14,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenAstroAra.Server.Contracts;
+using OpenAstroAra.Server.Contracts.Refusals;
 using OpenAstroAra.Server.Contracts.WsEvents;
 using System;
 using System.Collections.Generic;
@@ -52,6 +53,10 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     private readonly IWsBroadcaster? _ws;
     // #1689 — an unsafe reaction wins over following the mount.
     private readonly Func<DomeFollower?>? _domeFollower;
+    // #2066 — the park stops a running polar alignment and the Polar Aligner first. Func<>: polar alignment is built from
+    // services registered around this one.
+    private readonly Func<IPolarAlignService?>? _polarAlignResolver;
+    private readonly IPolarAlignerService? _polarAligner;
     private readonly ILogger<SafetyReactionService> _logger;
 
     private readonly object _lock = new();
@@ -103,6 +108,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
     internal TimeSpan RecenterTimeout { get; set; } = TimeSpan.FromMinutes(10);
     /// <summary>Cadence of the unpark read-back poll inside <see cref="UnparkTimeout"/>.</summary>
     internal TimeSpan UnparkPollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
+    /// hangs must not hold the park back: the park also counts as a stop, so the routine starts no move after it.</summary>
+    internal TimeSpan StopPolarAlignBeforeParkTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
     public SafetyReactionService(
             ISafetyMonitorService? safetyMonitor = null,
@@ -116,8 +124,12 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             ILogger<SafetyReactionService>? logger = null,
             Func<ICenteringService?>? centeringResolver = null,
             TargetRecenter? recenter = null,
-            Func<DomeFollower?>? domeFollower = null) {
+            Func<DomeFollower?>? domeFollower = null,
+            Func<IPolarAlignService?>? polarAlignResolver = null,
+            IPolarAlignerService? polarAligner = null) {
         _domeFollower = domeFollower;
+        _polarAlignResolver = polarAlignResolver;
+        _polarAligner = polarAligner;
         _safetyMonitor = safetyMonitor;
         _weather = weather;
         _profiles = profiles;
@@ -652,12 +664,40 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
             if (_telescope is null) {
                 return false;
             }
+            // #2066 — a polar alignment turning the RA motor (and its Polar Aligner) is stopped before the park: its next
+            // turn, or its own stop, would otherwise land on the park.
+            await StopPolarAlignQuietlyAsync().ConfigureAwait(false);
             await _telescope.ParkAsync(new ParkRequestDto("safety.unsafe"), null, CancellationToken.None).ConfigureAwait(false);
             return true;
+        } catch (RefusalException refusal) when (refusal.Cause == RefusalCatalog.MountPositionUnverified) {
+            // #2070 — a park from a false zero drives the tube to the wrong place: the mount stops instead.
+            await StopTrackingInsteadOfParkAsync(refusal).ConfigureAwait(false);
+            return false;
         } catch (Exception ex) {
             LogRungFailed("park", ex);
             return false;
         }
+    }
+
+    /// <summary>#2066 — the park's first step (<see cref="ReactionMountStops.StopPolarAlignBeforeParkAsync"/>, shared with the
+    /// other reaction's park so the two stay in step), each step bounded by <see cref="StopPolarAlignBeforeParkTimeout"/>.</summary>
+    private Task StopPolarAlignQuietlyAsync() =>
+        ReactionMountStops.StopPolarAlignBeforeParkAsync(_polarAlignResolver, _polarAligner, MountStopReasons.SafetyPark,
+            StopPolarAlignBeforeParkTimeout, LogRungFailed);
+
+    // #2070 — the park was refused because the mount's position is unverified: stop its motion and its
+    // tracking (best effort) and say so loudly, since the mount is now unparked in unsafe conditions. The
+    // abort also ends any axis lease (a pad move): the refused park no longer cancels them itself.
+    private async Task StopTrackingInsteadOfParkAsync(RefusalException refusal) {
+        // #2107 — counted under its own reason: a polar alignment this stop ends names this reaction, not Stop Mount.
+        var (motionStopped, stopped) = await ReactionMountStops.StopMotionAndTrackingAsync(_telescope, MountStopReasons.PoseUnverified, LogRungFailed)
+            .ConfigureAwait(false);
+        LogParkRefusedUnverified(stopped);
+        await NotifyQuietlyAsync(NotificationSeverity.Critical, "Unsafe — mount NOT parked (position unverified)",
+            "Conditions are UNSAFE, but the mount was not parked: its position is unverified (it may have lost power), so a park could drive it to the wrong place. "
+            + (motionStopped ? "Its motion was stopped. " : "Stopping its motion FAILED. ")
+            + (stopped ? "Tracking was stopped instead. " : "Stopping tracking FAILED too. ")
+            + "Go to the rig: cover or park the mount by hand. " + refusal.Message).ConfigureAwait(false);
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -858,6 +898,9 @@ public sealed partial class SafetyReactionService : IHostedService, IDisposable 
 
     [LoggerMessage(EventId = 3508, Level = LogLevel.Error, Message = "§35 auto-resume failed; the run stays paused for the user")]
     private partial void LogResumeFailed(Exception exception);
+
+    [LoggerMessage(Level = LogLevel.Error, Message = "§35 unsafe park refused: the mount's position is unverified (#2070); tracking stopped instead: {Stopped}")]
+    private partial void LogParkRefusedUnverified(bool stopped);
 
     [LoggerMessage(EventId = 3509, Level = LogLevel.Warning, Message = "§35 reaction rung '{Rung}' failed (best-effort; continuing)")]
     private partial void LogRungFailed(string rung, Exception exception);

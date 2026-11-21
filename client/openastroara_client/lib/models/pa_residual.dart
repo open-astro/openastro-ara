@@ -33,6 +33,11 @@ class PaResidual {
   /// Why an `unavailable` run could not be measured.
   final String? reason;
 
+  /// #2072 the daemon's own call that this figure disagrees with
+  /// [alignErrorArcmin] (`above_align`); null from an older daemon, a stored
+  /// row, or with no Polar Align result to compare.
+  final bool? aboveAlignFlag;
+
   const PaResidual({
     required this.id,
     required this.status,
@@ -49,11 +54,16 @@ class PaResidual {
     this.alignEndedUtc,
     this.completedUtc,
     this.reason,
+    this.aboveAlignFlag,
   });
 
-  /// #1731 — unreliable because the lower bound sits past the total error
-  /// Polar Align measured, the daemon's second rule; Dec lost motion, not noise.
+  /// #1731 / #2072 — the lower bound sits past the total error Polar Align
+  /// measured: the two numbers disagree. The daemon's `above_align` decides;
+  /// without it (an older daemon, a stored row) the same rule is applied here:
+  /// the value less 2σ more than [alignDisagreementMarginArcmin] above Align.
   bool get aboveAlign {
+    final flag = aboveAlignFlag;
+    if (flag != null) return flag;
     final value = paErrorMinArcmin,
         sigma = uncertaintyArcmin,
         align = alignErrorArcmin;
@@ -61,8 +71,12 @@ class PaResidual {
         value != null &&
         sigma != null &&
         align != null &&
-        value - 2 * sigma > align + 2;
+        value - 2 * sigma > align + alignDisagreementMarginArcmin;
   }
+
+  /// The daemon's margin for Polar Align's own error
+  /// (`GuiderService.AlignDisagreementMarginArcmin`).
+  static const alignDisagreementMarginArcmin = 2.0;
 
   /// Null for `{status: "idle"}` (nothing measured) or an unreadable payload.
   static PaResidual? fromJson(Object? json) {
@@ -95,6 +109,7 @@ class PaResidual {
       alignEndedUtc: _t(json['align_ended_utc']),
       completedUtc: _t(json['completed_utc']),
       reason: json['reason'] is String ? json['reason'] as String : null,
+      aboveAlignFlag: json['above_align'] is bool ? json['above_align'] as bool : null,
     );
   }
 
@@ -104,19 +119,6 @@ class PaResidual {
   }
 
   static DateTime? _t(Object? v) => v is String ? DateTime.tryParse(v) : null;
-
-  /// What an `unavailable` reason means, in the user's words.
-  static String reasonText(String? reason) => switch (reason) {
-    'lock_shift' => 'Lock-position shift (comet tracking) is on, so the guide star drifts in Dec on purpose.',
-    'ao' => 'An adaptive optics unit makes the Dec corrections, so the mount drift cannot be read from them.',
-    'guiding_not_holding' => 'Guiding was not holding the star (the guide pulses were at their maximum and the star kept drifting), so the drift is not a polar alignment signal.',
-    'settle_failed' =>
-      'A settle failed during this run, so guiding was not holding the star.',
-    'mount_not_tracking' => 'The mount was not tracking when guiding started, so the star drift is not a polar alignment signal.',
-    'no_calibration' => "The guider's calibration data could not be read.",
-    'no_pixel_scale' => 'The guider has not reported its pixel scale.',
-    _ => 'Not enough clean guiding to fit the drift.',
-  };
 
   @override
   bool operator ==(Object other) =>
@@ -128,7 +130,8 @@ class PaResidual {
       other.paErrorMinArcmin == paErrorMinArcmin &&
       other.uncertaintyArcmin == uncertaintyArcmin &&
       other.alignErrorArcmin == alignErrorArcmin &&
-      other.reason == reason;
+      other.reason == reason &&
+      other.aboveAlignFlag == aboveAlignFlag;
 
   @override
   int get hashCode => Object.hash(
@@ -140,5 +143,6 @@ class PaResidual {
     uncertaintyArcmin,
     alignErrorArcmin,
     reason,
+    aboveAlignFlag,
   );
 }
