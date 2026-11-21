@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -5,11 +6,13 @@ import '../../models/guider_advanced_settings.dart';
 import '../../models/server.dart';
 import '../../services/guider_advanced_api.dart';
 import '../../state/saved_server_state.dart';
+import '../../state/settings/loaded_section.dart' show SectionConflictException;
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
 import '../../util/friendly_error.dart';
 import '../../l10n/l10n.dart';
 import '../adaptive_controls.dart';
+import '../settings/section_load_state.dart' show SectionConflictBanner;
 
 /// Builds a [GuiderAdvancedClient] for a server. Overridable in tests.
 final guiderAdvancedApiFactoryProvider =
@@ -43,9 +46,14 @@ Future<void> showGuiderAdvancedDialog(BuildContext context) => showDialog<void>(
 /// connected, write it to the guider. The chip in the guide camera window
 /// uses this path; the settings dialog's Apply does the same write. A guide
 /// session makes the daemon refuse the write (the profile keeps the value).
+/// Written over the copy just read, with its tag (ADR 0015): a copy another
+/// device saved in between is refused (412), not written over.
 Future<void> setMultiStar(GuiderAdvancedClient api, bool on) async {
   final profile = await api.getProfile();
-  await api.putProfile(profile.withValue('multi_star_enabled', on));
+  await api.putProfile(
+    profile.value.withValue('multi_star_enabled', on),
+    ifMatch: profile.etag,
+  );
   await api.applyMultiStar();
 }
 
@@ -121,6 +129,11 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
   // block has actually loaded: from the empty draft a failed load leaves, it
   // would erase every saved value.
   bool _profileLoaded = false;
+  // The rig's tag for the loaded block, sent back as `If-Match` (ADR 0015).
+  String? _etag;
+  // The rig refused Apply: another device saved a newer block. The edits
+  // stay until Reload.
+  bool _conflict = false;
   bool _applying = false;
   String? _status;
   bool _statusIsError = false;
@@ -152,7 +165,8 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       return;
     }
     try {
-      final profile = await api.getProfile();
+      final loaded = await api.getProfile();
+      final profile = loaded.value;
       GuiderAdvancedView guider = GuiderAdvancedView.disconnected;
       try {
         guider = await api.getGuider();
@@ -162,6 +176,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       if (!mounted) return;
       setState(() {
         _draft = profile;
+        _etag = loaded.etag;
+        _conflict = false;
+        _errors.clear();
         _guider = guider;
         _loading = false;
         _profileLoaded = true;
@@ -286,7 +303,9 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       _status = null;
     });
     try {
-      final saved = await api.putProfile(_draft);
+      final put = await api.putProfile(_draft, ifMatch: _etag);
+      final saved = put.value;
+      _etag = put.etag;
       var pushed = false;
       Object? multiStarProblem;
       if (_guider.connected) {
@@ -323,12 +342,26 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
       });
     } catch (e) {
       if (!mounted) return;
+      final stale = e is DioException && e.response?.statusCode == 412;
       setState(() {
         _applying = false;
         _statusIsError = true;
-        _status = failureReason(context.l10n, e);
+        _conflict = stale;
+        _status = stale
+            ? const SectionConflictException().toString()
+            : failureReason(context.l10n, e);
       });
     }
+  }
+
+  /// The rig's block again, dropping the edits (after a refused Apply).
+  void _reload() {
+    setState(() {
+      _loading = true;
+      _status = null;
+      _statusIsError = false;
+    });
+    _load();
   }
 
   void _resetAll() {
@@ -387,6 +420,7 @@ class _GuiderAdvancedPanelState extends ConsumerState<GuiderAdvancedPanel> {
                 ? const Center(child: AdaptiveProgressIndicator())
                 : ListView(
                     children: [
+                      if (_conflict) SectionConflictBanner(onReload: _reload),
                       if (_guider.notApplied.isNotEmpty)
                         GuiderNotAppliedList(_guider.notApplied),
                       for (final group in GuiderAdvancedField.groups) ...[

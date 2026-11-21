@@ -238,13 +238,13 @@ public sealed class InMemoryProfileStore : IProfileStore {
     }
 
     // §58.8 — mirror FileProfileStore.WithOptics: an optics-train change invalidates the
-    // first-flip confirmation; an identical re-save keeps it. Shared by the Put AND Update
-    // paths — the camera-connect auto-populate (CameraService.MaybeAutoPopulateOptics) writes
-    // through Update, and a swapped camera is exactly the rig change the safety net re-arms
-    // on. Caller holds _lock.
+    // first-flip confirmation and the completed flip waiting for one (#1589); an identical
+    // re-save keeps both. Shared by the Put AND Update paths — the camera-connect auto-populate
+    // (CameraService.MaybeAutoPopulateOptics) writes through Update, and a swapped camera is
+    // exactly the rig change the safety net re-arms on. Caller holds _lock.
     private void SetOpticsLocked(OpticsSettingsDto value) {
-        if (value != _optics && _safety.FirstFlipConfirmed) {
-            _safety = _safety with { FirstFlipConfirmed = false };
+        if (value != _optics) {
+            _safety = ProfileSections.WithoutFirstFlip(_safety);
         }
         _optics = value;
     }

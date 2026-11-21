@@ -117,7 +117,7 @@ class PreflightPromptNotifier extends AsyncNotifier<PreflightPromptState> {
       ...await ref.read(preflightPrefsProvider).loadAcknowledgedNights(),
     };
     ref.watch(skyClockProvider);
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     // Await the list (not its AsyncValue): the first build must not answer
     // "nothing running" while the list is still loading.
     List<SequenceListItem>? runs;

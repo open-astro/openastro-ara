@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
             if (moveTimeout is { } t) {
                 svc.AlignerMoveTimeout = t;
             }
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             return (svc, ws);
         }
 
@@ -449,7 +449,7 @@ namespace OpenAstroAra.Test {
             var source = new SwappableSource(dead);
             var ws = new WsRecorder();
             using var svc = NewService(NewFake(), new CorrectedSky(dead), ws: ws, aligner: source);
-            await svc.StartAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
+            await svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None).ConfigureAwait(false);
             await AlignerEventAsync(ws, PolarAlignCorrectionStates.Stopped).ConfigureAwait(false);
 
             var reconnected = new FakeAligner(azOffset: 0, altOffset: 0);
@@ -523,12 +523,18 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task A_device_that_cannot_move_while_the_mount_tracks_is_not_sent_a_move() {
-            // The bench mount keeps reporting tracking on.
+            // The bench mount keeps reporting tracking on: since #2072 the live readout ends the run before the
+            // device is asked for anything (the aligner's own MountTracking check stays as a second guard).
             var aligner = new FakeAligner(azOffset: 20, altOffset: 10) { InfoReply = AlignerInfo(movesWhileTracking: false) };
-            var (svc, stopped, _) = await RunUntilStoppedAsync(aligner, NewMount(tracking: true)).ConfigureAwait(false);
+            var mount = NewMount(tracking: true);
+            mount.Setup(m => m.SetTrackingEnabled(Moq.It.IsAny<bool>())).Returns(true); // accepted, never applied
+            var (svc, ws) = await StartWithAlignerAsync(aligner, mount).ConfigureAwait(false);
             using var __ = svc;
 
-            Assert.That(stopped.GetProperty("cause").GetString(), Is.EqualTo(PolarAlignCorrectionCauses.MountTracking));
+            var status = await PollStateAsync(svc, "failed").ConfigureAwait(false);
+            Assert.That(status.State, Is.EqualTo("failed"));
+            Assert.That(ws.Events.First(e => e.Type == WsEventCatalog.PolarAlignError).Payload.GetProperty("reason").GetString(),
+                Is.EqualTo(PolarAlignService.TrackingNotOff));
             Assert.That(aligner.Moves, Is.Empty);
         }
 

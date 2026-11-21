@@ -13,6 +13,7 @@ import 'package:openastroara/state/library/mosaics_state.dart';
 import 'package:openastroara/state/sequencer/create_imaging_run.dart';
 import 'package:openastroara/state/sequencer/draft_sequences_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import '../../support/imaging_sections.dart';
 
 /// §47 / #1146 — a connected MOSAIC run also registers a mosaic project on the
 /// daemon (name, grid, the per-panel centres, the run's frame count as "done");
@@ -183,6 +184,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+          ...imagingSectionsFromRig(),
           sequenceApiProvider.overrideWith((ref) => seq),
           mosaicApiProvider.overrideWithValue(mosaics),
         ],
@@ -239,6 +241,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => seq),
         mosaicApiProvider.overrideWithValue(mosaics),
       ],
@@ -277,6 +280,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+          ...imagingSectionsFromRig(),
           sequenceApiProvider.overrideWith((ref) => seq),
           mosaicApiProvider.overrideWithValue(mosaics),
         ],
@@ -311,6 +315,7 @@ void main() {
       final container = ProviderContainer(
         overrides: [
           draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+          ...imagingSectionsFromRig(),
           sequenceApiProvider.overrideWith((ref) => seq),
           mosaicApiProvider.overrideWithValue(mosaics),
         ],
@@ -339,6 +344,7 @@ void main() {
     final container = ProviderContainer(
       overrides: [
         draftSequenceServiceProvider.overrideWithValue(_MemDraftService()),
+        ...imagingSectionsFromRig(),
         sequenceApiProvider.overrideWith((ref) => _SeqClient()),
         mosaicApiProvider.overrideWithValue(mosaics),
       ],

@@ -93,7 +93,28 @@ namespace OpenAstroAra.Test {
     public class TelescopeMoveAxisLeaseTest {
 
         private sealed class ManualClock : TimeProvider {
-            public DateTimeOffset Now { get; set; } = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+            private readonly object _lock = new();
+            private DateTimeOffset _now = new(2026, 11, 11, 10, 0, 0, TimeSpan.Zero);
+
+            public DateTimeOffset Now {
+                get {
+                    lock (_lock) {
+                        return _now;
+                    }
+                }
+                set {
+                    lock (_lock) {
+                        _now = value;
+                    }
+                }
+            }
+
+            public void Advance(TimeSpan by) {
+                lock (_lock) {
+                    _now += by;
+                }
+            }
+
             public override DateTimeOffset GetUtcNow() => Now;
         }
 
@@ -113,12 +134,16 @@ namespace OpenAstroAra.Test {
             : null;
 
         private static async Task<(ScriptedAlpacaDevice Box, TelescopeService Svc, ManualClock Clock)> ArmedAsync(
-                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null) {
+                Func<string, string?>? putResponder = null, Microsoft.Extensions.Logging.ILogger<TelescopeService>? logger = null,
+                TimeProvider? poseClock = null) {
             var box = ScriptedAlpacaDevice.Start(Mount(), putResponder);
             box.RespondWithQuery((path, _) => path.EndsWith("/axisrates", StringComparison.Ordinal)
                 ? "[{\"Minimum\":0.002,\"Maximum\":4.0}]" : null);
             var clock = new ManualClock();
-            var svc = new TelescopeService(logger) { RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan };
+            var svc = new TelescopeService(logger) {
+                RefreshPeriod = TimeSpan.FromMilliseconds(100), LeaseClock = clock, LeaseCheckInterval = Timeout.InfiniteTimeSpan,
+                PoseClock = poseClock ?? TimeProvider.System,
+            };
             await svc.ConnectAsync(new ConnectRequestDto(Device(box)), null, CancellationToken.None);
             var sw = Stopwatch.StartNew();
             while ((await svc.GetAsync(CancellationToken.None))?.Capabilities?.MoveAxisRateBandsDegPerSec is not { Count: > 0 }) {
@@ -182,6 +207,75 @@ namespace OpenAstroAra.Test {
             Assert.That(await svc.ReadPointingNowAsync(CancellationToken.None), Is.Null);
         }
 
+        // #2066 (ARA-5) — Polar Align plans and moves only from this reading: the driver's raw answer now (a Dec past the pole
+        // is not folded, so the routine can refuse it), stamped when the read began and with the mount session it came from.
+        [Test]
+        public async Task ReadNow_returns_the_drivers_raw_pose_stamped_with_its_time_and_session() {
+            var stamp = new ManualClock { Now = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero) };
+            var (box, svc, _) = await ArmedAsync(poseClock: stamp);
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            // Every Dec read takes 3 s on the stamp's clock (a stalled Wi-Fi link): a reading stamped when it ended would
+            // look 3 s younger than it is. The refresh's own reads move the clock too, so only the gap is checked.
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? Slow("90.9")
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "1"
+                : mount(path));
+            string Slow(string answer) {
+                stamp.Advance(TimeSpan.FromSeconds(3));
+                return answer;
+            }
+
+            var now = await svc.ReadNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.Not.Null);
+            Assert.That((now!.RaHours, now.DecDegrees), Is.EqualTo((7.5, 90.9)), "the driver's answer, never folded");
+            Assert.That(now.Slewing, Is.True, "Slewing read now, not the cached false");
+            Assert.That(now.SideOfPier, Is.EqualTo(PierSide.pierWest), "pointing state 1 (through the pole)");
+            Assert.That(stamp.Now - now.ReadAtUtc, Is.GreaterThanOrEqualTo(TimeSpan.FromSeconds(3)), "stamped when the read began, before its slow Dec");
+            Assert.That(now.SessionEpoch, Is.EqualTo(svc.SessionEpoch).And.Not.Zero, "the session the read came from");
+        }
+
+        // #2066 — Polar Align polls its own turn four times a second on this read: RA and Dec only, so the poll is not
+        // stretched by the Slewing and pier-side round trips the turn never uses.
+        [Test]
+        public async Task ReadPositionNow_asks_the_driver_for_RA_and_Dec_only() {
+            var stamp = new ManualClock { Now = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero) };
+            var (box, svc, _) = await ArmedAsync(poseClock: stamp);
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/rightascension", StringComparison.Ordinal) ? "7.5"
+                : path.EndsWith("/declination", StringComparison.Ordinal) ? "80.0"
+                : path.EndsWith("/slewing", StringComparison.Ordinal) ? "true"
+                : path.EndsWith("/sideofpier", StringComparison.Ordinal) ? "1"
+                : mount(path));
+
+            var now = await ((IMountMotionControl)svc).ReadPositionNowAsync(CancellationToken.None);
+
+            Assert.That(now, Is.Not.Null);
+            Assert.That((now!.RaHours, now.DecDegrees), Is.EqualTo((7.5, 80.0)));
+            Assert.That((now.Slewing, now.SideOfPier), Is.EqualTo(((bool?)null, PierSide.pierUnknown)), "neither asked of the driver");
+            Assert.That((now.ReadAtUtc, now.SessionEpoch), Is.EqualTo((stamp.Now, svc.SessionEpoch)), "stamped and tagged as ReadNow");
+        }
+
+        [Test]
+        public async Task ReadNow_is_null_when_the_position_read_fails_and_unknown_when_only_slewing_fails() {
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var mount = Mount();
+            box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("busy") : mount(path));
+            var slewingUnknown = await svc.ReadNowAsync(CancellationToken.None);
+            box.Respond(path => path.EndsWith("/declination", StringComparison.Ordinal) ? ScriptedAlpacaDevice.Error("no reading") : mount(path));
+
+            Assert.That(await svc.ReadNowAsync(CancellationToken.None), Is.Null, "no position, no reading");
+            Assert.That(slewingUnknown, Is.Not.Null);
+            Assert.That(slewingUnknown!.Slewing, Is.Null, "a failed Slewing read is unknown, never 'not slewing'");
+        }
+
         // #2048 — Polar Align confirms its stop on this read: the driver's Slewing now, not the 2 s refresh.
         [TestCase("true", true)]
         [TestCase("false", false)]
@@ -194,6 +288,25 @@ namespace OpenAstroAra.Test {
             box.Respond(path => path.EndsWith("/slewing", StringComparison.Ordinal) ? answer : mount(path));
 
             Assert.That(await svc.ReadSlewingNowAsync(CancellationToken.None), Is.EqualTo(expected));
+        }
+
+        // #2089 — Polar Align forgets its sweep origin when the mount session changes: a connect and a disconnect each count.
+        [Test]
+        public async Task SessionEpoch_changes_on_connect_and_on_disconnect() {
+            using var idle = new TelescopeService();
+            var (box, svc, _) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var connected = svc.SessionEpoch;
+
+            await svc.DisconnectAsync(null, CancellationToken.None);
+            var sw = Stopwatch.StartNew();
+            while (svc.SessionEpoch == connected && sw.Elapsed < TimeSpan.FromSeconds(15)) {
+                await Task.Delay(20);
+            }
+
+            Assert.That(connected, Is.GreaterThan(idle.SessionEpoch), "the connect began a new session");
+            Assert.That(svc.SessionEpoch, Is.GreaterThan(connected), "the disconnect ended it");
         }
 
         [Test]
@@ -250,6 +363,102 @@ namespace OpenAstroAra.Test {
             await svc.MoveAxisAsync(0, 0, null, since, CancellationToken.None); // a stop is always allowed
             await svc.MoveAxisAsync(0, 1.0, 1000, svc.AbortEpoch, CancellationToken.None); // a new move after the abort is fine
             Assert.That(MoveAxisPuts(box).Count(b => !IsStop(b, 0)), Is.EqualTo(2));
+        }
+
+        // #2066 — Emergency Stop's first step counts the stop before any rung, with no command to the mount and no lease
+        // cancelled. A routine's renewal at the same speed would only extend its lease: it is refused all the same, so the
+        // lease runs out and stops the axis.
+        [Test]
+        public async Task A_renewal_after_Emergency_Stops_latch_is_refused_though_its_lease_still_runs() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            svc.FenceMotion("emergency_stop");
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(svc.AbortReasonSince(since, except: "polar_align"), Is.EqualTo("emergency_stop"));
+            Assert.That(box.Puts.Any(p => p.Path.EndsWith("/abortslew", StringComparison.Ordinal)), Is.False, "the latch sends nothing");
+        }
+
+        // #2107 — the refused renewal says what stopped the mount (only Polar Align reads it, in its failure): a park, Emergency
+        // Stop's latch or the direction pad is no longer called "Stop Mount".
+        [TestCase(MountStopReasons.Park, "(a park)")]
+        [TestCase(MountStopReasons.EmergencyStop, "(Emergency Stop)")]
+        [TestCase(MountStopReasons.PadStop, "(the direction pad)")]
+        [TestCase(MountStopReasons.FaultReaction, "(the equipment-fault reaction)")]
+        [TestCase(MountStopReasons.UserRequest, "(Stop Mount)")]
+        public async Task A_refused_renewal_names_the_stop_that_came_since_it_began(string by, string named) {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            svc.FenceMotion(by);
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            var refused = await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+            Assert.That(refused!.Message, Does.Contain(named));
+        }
+
+        // #2066 — a REST Park or Find Home ends a routine that drives the motors: it counts as a stop, named for what raised it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public async Task A_park_or_find_home_counts_as_a_stop_for_a_routines_renewal(string what) {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            var since = svc.AbortEpoch;
+            await svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None);
+
+            await (what == "park"
+                ? svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None)
+                : svc.FindHomeAsync(null, CancellationToken.None));
+            clock.Now = clock.Now.AddMilliseconds(250);
+
+            Assert.That(svc.AbortEpoch, Is.Not.EqualTo(since));
+            Assert.That(svc.AbortReasonSince(since, except: "polar_align"), Is.EqualTo(what));
+            await Assert.ThrowsAsync<InvalidOperationException>(() => svc.MoveAxisAsync(0, 1.0, 1000, since, CancellationToken.None));
+        }
+
+        // #2066 — a Park or Find Home counts as a stop only when no stop came since its request read the count: a Stop Mount or
+        // Emergency Stop's latch that landed while the request checked the pose keeps the request's reading, so the park or
+        // homing is still dropped before it goes out. Counting over it would hide that stop and send the move after it.
+        [TestCase("park")]
+        [TestCase("findhome")]
+        public void A_stop_since_the_request_keeps_its_reading_and_is_not_counted_over(string what) {
+            using var svc = new TelescopeService();
+            var request = svc.AbortEpoch;
+            svc.FenceMotion("emergency_stop");
+
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(request, what), Is.EqualTo(request), "the request keeps its own reading");
+            Assert.That(svc.AbortEpoch, Is.EqualTo(request + 1), "no count of its own over the stop");
+            Assert.That(svc.AbortReasonSince(request, except: null), Is.EqualTo("emergency_stop"));
+
+            var quiet = svc.AbortEpoch;
+            Assert.That(svc.BumpAbortEpochUnlessAbortedSince(quiet, what), Is.EqualTo(quiet + 1), "no stop since: it counts as one");
+            Assert.That(svc.AbortReasonSince(quiet, except: null), Is.EqualTo(what));
+        }
+
+        // #2066 — a Find Home ends the leases, as a Park does: a lease left to run out would send MoveAxis 0 in the middle
+        // of the homing.
+        [Test]
+        public async Task A_find_home_ends_the_leases_so_no_lease_stop_lands_on_the_homing() {
+            var (box, svc, clock) = await ArmedAsync();
+            await using var _ = box;
+            using var __ = svc;
+            await svc.MoveAxisAsync(0, 1.0, 1000, CancellationToken.None); // a pad press, leased
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+            var stopsBefore = MoveAxisPuts(box).Count(b => IsStop(b, 0));
+            clock.Now = clock.Now.AddSeconds(5);
+            svc.CheckLeases();
+
+            Assert.That(MoveAxisPuts(box).Count(b => IsStop(b, 0)), Is.EqualTo(stopsBefore), "no lease-expiry stop after the Find Home");
         }
 
         // The race the check before the driver call cannot see: Stop Mount lands while the move's own PUT is in flight,

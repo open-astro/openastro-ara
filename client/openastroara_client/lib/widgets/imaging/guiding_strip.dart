@@ -83,7 +83,7 @@ class GuidingStrip extends ConsumerWidget {
     // Watched collapsed too: the settle windows keep a dither's own frames
     // out of the header RMS, the one figure the collapsed strip shows.
     final markers = ref.watch(guideMarkersProvider);
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     // Client-side arcsec/px from the §63.5 guide train — the fallback when
     // the daemon has not reported the guider's own pixel scale yet.
     final fallbackScale =
@@ -553,6 +553,7 @@ class PaResidualChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final base = Theme.of(context).textTheme.bodySmall;
+    final l = context.l10n;
     final r = residual;
     final IconData icon;
     final Color color;
@@ -562,27 +563,26 @@ class PaResidualChip extends StatelessWidget {
       case PaResidualStatus.measuring:
         icon = Icons.timelapse;
         color = AraColors.textSecondary;
-        label =
-            'PA residual · measuring ${paResidualClock(r.sampleSeconds)} / ${paResidualClock(r.targetSeconds)}';
-        tooltip =
-            'Measuring the polar alignment left after Align from the Dec '
-            'corrections over the first ${paResidualClock(r.targetSeconds)} of clean '
-            'guiding (dithers and settling are left out).';
+        label = l.paResidualChipMeasuring(paResidualClock(r.sampleSeconds), paResidualClock(r.targetSeconds));
+        tooltip = l.paResidualTipMeasuring(paResidualClock(r.targetSeconds));
       case PaResidualStatus.unavailable:
         icon = Icons.do_not_disturb_on_outlined;
         color = AraColors.textSecondary;
-        label = 'PA residual n/a';
-        tooltip = 'No polar alignment residual for this guiding run. '
-            '${PaResidual.reasonText(r.reason)}';
+        label = l.paResidualChipUnavailable;
+        tooltip = l.paResidualTipUnavailable(paResidualReasonText(l, r.reason));
       case PaResidualStatus.done:
         final error = r.paErrorMinArcmin!;
+        final value = formatPoleOffset(error).$1;
         final rating = polarErrorRating(error);
-        icon = r.reliable ? polarErrorRatingIcon(error) : Icons.blur_on;
-        color = r.reliable ? zoneColor(error) : AraColors.textSecondary;
-        label = r.reliable
-            ? 'PA ≥ ${formatPoleOffset(error).$1} · ${rating.$1}'
-            : 'PA ≥ ${formatPoleOffset(error).$1} · ${r.aboveAlign ? 'above Polar Align' : 'noisy'}';
-        tooltip = paResidualDetail(r);
+        // #2072 a disagreement with Polar Align is said as one, never as a rating.
+        icon = r.aboveAlign ? Icons.compare_arrows : r.reliable ? polarErrorRatingIcon(error) : Icons.blur_on;
+        color = r.reliable && !r.aboveAlign ? zoneColor(error) : AraColors.textSecondary;
+        label = r.aboveAlign
+            ? l.paResidualChipDisagrees(value)
+            : r.reliable
+            ? l.paResidualChipRated(value, rating.$1)
+            : l.paResidualChipNoisy(value);
+        tooltip = paResidualDetail(l, r);
     }
     return Tooltip(
       message: tooltip,

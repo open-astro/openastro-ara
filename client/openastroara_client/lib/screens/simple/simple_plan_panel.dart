@@ -42,6 +42,8 @@ import '../../state/sky_atlas/dso_catalog_state.dart'
 import '../../services/tonight_sky_api.dart';
 import '../../state/sky_atlas/planetarium_selection_state.dart';
 import '../../state/sky_atlas/tonight_sky_state.dart';
+import '../../widgets/sky_atlas/target_preview.dart'
+    show SurveyThumb, surveyPicture;
 import '../../state/simple_recent_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -202,7 +204,7 @@ PlanetariumSelection simplePickDso(
   PlanningDso d, {
   String? designation,
 }) {
-  final site = ref.read(siteSettingsProvider);
+  final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
   return simpleSelectionOfDso(
     d,
     ref.read(tonightSkyProvider).value ?? const [],
@@ -785,7 +787,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
   // once per minute and site (Start now is a new instant on every rebuild).
   (DateTime, SiteSettings, DateTime?, bool)? _night;
   (DateTime?, bool) _nightOf(DateTime start) {
-    final site = ref.read(siteSettingsProvider);
+    final site = ref.read(siteSettingsProvider).value ?? const SiteSettings();
     final minute = DateTime(
       start.year,
       start.month,
@@ -914,11 +916,11 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
                 raDeg: sel.raJ2000Hours * 15,
                 decDeg: sel.decJ2000Deg,
                 defaultExposure:
-                    ref
-                        .watch(imagingDefaultsProvider)
-                        .defaultExposure
-                        .inMilliseconds /
-                    1000,
+                    (ref.watch(imagingDefaultsProvider).value ??
+                                const ImagingDefaults())
+                            .defaultExposure
+                            .inMilliseconds /
+                        1000,
                 skyCalibrationK: k,
               ),
     ];
@@ -981,7 +983,7 @@ class _SimpleRunSheetState extends ConsumerState<SimpleRunSheet> {
           _ => r.name,
         },
     ];
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final span = ref.watch(simpleRestOfNightProvider);
     // Null: unknown (no site set, or no night ahead), never zero hours.
     double? hoursOf(double raDeg, double decDeg) =>
@@ -1658,18 +1660,37 @@ class _TargetCard extends StatelessWidget {
               ),
             )
           else
-            ExcludeSemantics(
-              child: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(AraRadius.simplePanel),
-                  gradient: const RadialGradient(
-                    colors: [AraColors.targetArtGlow, AraColors.targetArtNight],
-                  ),
-                ),
-                child: const Icon(Icons.auto_awesome, size: 20),
-              ),
+            // No Art: the survey cutout when there is one, else the drawn
+            // placeholder.
+            Consumer(
+              builder: (context, ref, _) {
+                final survey = surveyPicture(ref, sel);
+                return survey != null
+                    ? SurveyThumb(
+                        key: const Key('simple-run-target-survey'),
+                        bytes: survey,
+                        size: 40,
+                        radius: AraRadius.simplePanel,
+                      )
+                    : ExcludeSemantics(
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(
+                              AraRadius.simplePanel,
+                            ),
+                            gradient: const RadialGradient(
+                              colors: [
+                                AraColors.targetArtGlow,
+                                AraColors.targetArtNight,
+                              ],
+                            ),
+                          ),
+                          child: const Icon(Icons.auto_awesome, size: 20),
+                        ),
+                      );
+              },
             ),
           Expanded(
             child: Column(
@@ -1974,7 +1995,7 @@ class _NightDone extends ConsumerWidget {
     // frame that would end after dawn, so such a run ends up to a sub early (2
     // min more for the client's sun model and the park). A run waiting for
     // dark started in daylight, so its night begins at dark.
-    final site = ref.watch(siteSettingsProvider);
+    final site = ref.watch(siteSettingsProvider).value ?? const SiteSettings();
     final dawn = start == null || run.dawnStop == null
         ? null
         : nightEnd(

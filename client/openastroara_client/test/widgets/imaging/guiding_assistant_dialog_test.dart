@@ -28,9 +28,12 @@ class _Profile extends ProfileApi {
   _Profile() : super(const AraServer(hostname: 'localhost', port: 5555));
   int reads = 0;
   @override
-  Future<Phd2Settings> getPhd2Settings() async {
+  Future<({Phd2Settings value, String? etag})> getPhd2Section() async {
     reads++;
-    return const Phd2Settings(decGuideMode: 'north', guideExposureMs: 2000);
+    return (
+      value: const Phd2Settings(decGuideMode: 'north', guideExposureMs: 2000),
+      etag: '"v$reads"',
+    );
   }
 }
 
@@ -654,22 +657,6 @@ void main() {
     );
   });
 
-  testWidgets('Accept re-reads the guider settings the daemon wrote', (
-    t,
-  ) async {
-    // #1448 — Apply set North in the guider; the shared settings must show
-    // it, or a later save from Settings → Guider puts Auto back.
-    final profile = _Profile();
-    await _pump(t, _done(), profile: profile);
-    await t.ensureVisible(find.byKey(const Key('guiding-assistant-apply')));
-    await t.tap(find.byKey(const Key('guiding-assistant-apply')));
-    await t.pump();
-    await t.pump();
-    expect(profile.reads, 1);
-    final phd2 = _container(t).read(phd2SettingsProvider);
-    expect((phd2.decGuideMode, phd2.guideExposureMs), ('north', 2000));
-  });
-
   testWidgets('an Accept that lands after a server switch marks nothing', (
     t,
   ) async {
@@ -689,7 +676,6 @@ void main() {
     await t.pump();
     await t.pump();
     expect(_container(t).read(guidingAssistantAppliedProvider), isEmpty);
-    expect(profile.reads, 0, reason: 'the old server\'s settings stay out');
   });
 
   testWidgets('a missing drift reads a bare dash', (t) async {

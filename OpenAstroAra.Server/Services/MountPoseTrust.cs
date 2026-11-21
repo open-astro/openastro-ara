@@ -33,6 +33,8 @@ namespace OpenAstroAra.Server.Services;
 /// (<see cref="PoseJumpInSession"/>) between two still ticks with no Ara mount command and no
 /// slewing tick within <see cref="QuietWindow"/> (a power blip the session survived).</item>
 /// </list>
+/// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
+/// reconnected while it ran (#2066).
 /// Only <see cref="Confirm"/> (the user says the mount is at Home) clears it; a new session for the
 /// same device keeps it, and the owner persists it per device so a daemon restart keeps it too.
 /// Until a session's first read is observed the mount is not trusted either (<see cref="Observed"/>).
@@ -46,6 +48,11 @@ internal sealed class MountPoseTrust {
     public const string PoseJumpOnReconnect = "pose_jump_on_reconnect";
     public const string AtHomeWithoutCommand = "at_home_without_command";
     public const string PoseJumpInSession = "pose_jump_in_session";
+
+    /// <summary>#2066, #2065 (ARA-10) — a routine that drove the motors (Polar Align) could not confirm the mount stopped
+    /// (<c>mount_did_not_stop</c>), or the mount's session changed (a reconnect, a power cycle) while the routine ran: the
+    /// mount may have moved on, so its reported position is not trusted. Set by the routine (<see cref="Flag"/>).</summary>
+    public const string StopUnconfirmed = "stop_unconfirmed";
 
     /// <summary>Not a stored reason: the session's first position read has not been observed yet.</summary>
     public const string NotReadYet = "not_read_yet";
@@ -164,6 +171,16 @@ internal sealed class MountPoseTrust {
             _motionSinceTrusted = _movingAxes != 0 || now - _lastMotionAt <= QuietWindow;
         }
         return flagged;
+    }
+
+    /// <summary>#2066 — a routine marks the position unverified (<see cref="StopUnconfirmed"/>). An earlier reason stays: it
+    /// says first why the mount is not trusted, and only <see cref="Confirm"/> clears either. True when this set it.</summary>
+    public bool Flag(string reason) {
+        if (_reason is not null) {
+            return false;
+        }
+        _reason = reason;
+        return true;
     }
 
     /// <summary>The user confirmed the mount is physically at Home (the owner checked that it reports

@@ -26,7 +26,9 @@ class EquipmentFlatPanel extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Read only: the rig's copy once it loads (ADR 0015), the defaults until.
+    final policies =
+        ref.watch(safetyPoliciesProvider).value ?? const SafetyPolicies();
     final status = ref.watch(flatPanelProvider);
     final notifier = ref.read(flatPanelProvider.notifier);
 

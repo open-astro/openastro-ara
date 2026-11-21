@@ -9,6 +9,7 @@ import 'package:openastroara/models/server.dart';
 import 'package:openastroara/services/client_error_log.dart';
 import 'package:openastroara/services/saved_server_service.dart';
 import 'package:openastroara/state/saved_server_state.dart';
+import 'package:openastroara/version/ara_version.dart';
 import 'package:openastroara/widgets/help_dialog.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -128,7 +129,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(copied, isNotNull);
-    expect(copied, contains('app version: 0.0.1a+37'));
+    expect(copied, contains('app version: ${displayVersion(kAraAppVersion)}+37'));
     expect(copied,
         contains('\n  client log: 1 entry, last 2026-09-27 14:12 uncaught: boom\n'));
     expect(find.text('Diagnostics copied to clipboard.'), findsOneWidget);

@@ -87,6 +87,43 @@ namespace OpenAstroAra.Test {
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never);
         }
 
+        [TestCase("Main")]
+        [TestCase("both")]
+        [TestCase("")]
+        [TestCase(null)]
+        public void Unknown_camera_is_400_and_not_stored(string? camera) {
+            // #2082 — the measurement's camera is guide or main: a typo must not become the guide camera silently.
+            var store = new Mock<IProfileStore>();
+
+            var result = ProfileEndpoints.PutPolarAlignSettings(
+                new PolarAlignSettingsDto(Camera: camera!), store.Object);
+
+            Assert.That((result as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
+            store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never);
+        }
+
+        [TestCase(0, 1)]
+        [TestCase(-3, 1)]
+        [TestCase(1, 1)]
+        [TestCase(3, 3)]
+        [TestCase(5, 5)]
+        [TestCase(9, 5)]
+        public void Frames_per_point_are_held_to_1_to_5_on_PUT_and_GET(int framesPerPoint, int expected) {
+            // #2082 — clamped like the turns, never a 400: an older or hand-edited profile.json may hold any number.
+            var store = new Mock<IProfileStore>();
+            store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(FramesPerPoint: framesPerPoint, Camera: "sideways"));
+
+            var put = (ProfileEndpoints.PutPolarAlignSettings(
+                new PolarAlignSettingsDto(FramesPerPoint: framesPerPoint, Camera: PolarAlignCameras.Main), store.Object) as Ok<PolarAlignSettingsDto>)?.Value;
+            var view = (ProfileEndpoints.GetPolarAlignSettings(store.Object) as Ok<PolarAlignSettingsDto>)?.Value;
+
+            Assert.That(put?.FramesPerPoint, Is.EqualTo(expected));
+            Assert.That(put?.Camera, Is.EqualTo(PolarAlignCameras.Main));
+            store.Verify(s => s.PutPolarAlignSettings(It.Is<PolarAlignSettingsDto>(d => d.FramesPerPoint == expected)), Times.Once);
+            Assert.That(view?.FramesPerPoint, Is.EqualTo(expected));
+            Assert.That(view?.Camera, Is.EqualTo(PolarAlignCameras.Guide), "a stored camera the daemon does not know reads as the guide camera");
+        }
+
         // §45.12 — the turn and rough-exposure knobs have no control in the app yet (#1736), so an
         // out-of-range or non-finite value is clamped, never a 400 that would fail the panel's own edits.
         [TestCase(200.0, 90.0, 0.0, 30.0, 30.0, 3.0)]

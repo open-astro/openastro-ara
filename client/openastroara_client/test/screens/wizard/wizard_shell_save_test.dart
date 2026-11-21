@@ -29,6 +29,7 @@ import 'package:openastroara/state/settings/plate_solve_settings_state.dart';
 import 'package:openastroara/state/settings/safety_policies_state.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/state/settings/storage_settings_state.dart';
+import '../../support/site_section.dart';
 
 /// In-memory ProfileApi double whose create call can be held in-flight (so the
 /// blocking spinner is observable) and which records how many times the profile
@@ -306,6 +307,8 @@ void main() {
           activeServerProvider.overrideWithValue(
             const AraServer(hostname: 'daemon', port: 5555),
           ),
+          // The basics step reads the saved site: the rig's copy, no network.
+          siteFromRig(),
         ],
       );
       addTearDown(container.dispose);

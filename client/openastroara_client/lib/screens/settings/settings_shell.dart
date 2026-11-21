@@ -238,24 +238,27 @@ class _PanelHeaderState extends ConsumerState<_PanelHeader> {
               const SizedBox(width: 12),
             ],
             // #1544 — the one global Advanced toggle, on by default: off shows
-            // only the Autofocus panel's Simple tier.
-            MergeSemantics(
-              child: Row(
-                children: [
-                  Text(
-                    context.l10n.settingsAdvancedToggle,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  Switch(
-                    key: const Key('settings-advanced-toggle'),
-                    value: ref.watch(advancedSettingsProvider).value ?? true,
-                    onChanged: (v) =>
-                        ref.read(advancedSettingsProvider.notifier).set(v),
-                  ),
-                ],
+            // only the Autofocus panel's Simple tier. #2036: Simple Mode's
+            // Settings only; Advanced Mode shows every tier and has no switch.
+            if (ref.watch(simpleModeActiveProvider)) ...[
+              MergeSemantics(
+                child: Row(
+                  children: [
+                    Text(
+                      context.l10n.settingsAdvancedToggle,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    Switch(
+                      key: const Key('settings-advanced-toggle'),
+                      value: ref.watch(advancedSettingsProvider).value ?? true,
+                      onChanged: (v) =>
+                          ref.read(advancedSettingsProvider.notifier).set(v),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
+            ],
             // §61 smart search — opens the global command palette (also
             // reachable via ⌘K / Ctrl+K from anywhere in AppShell). Hint
             // adapts to host platform so the displayed shortcut matches

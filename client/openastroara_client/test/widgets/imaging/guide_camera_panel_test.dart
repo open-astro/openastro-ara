@@ -79,10 +79,13 @@ class _FakeAdvanced implements GuiderAdvancedClient {
   int applies = 0;
   _FakeAdvanced(this.live);
   @override
-  Future<GuiderAdvancedSettings> getProfile() async => profile;
+  Future<({GuiderAdvancedSettings value, String? etag})> getProfile() async =>
+      (value: profile, etag: '"v1"');
   @override
-  Future<GuiderAdvancedSettings> putProfile(GuiderAdvancedSettings s) async =>
-      profile = s;
+  Future<({GuiderAdvancedSettings value, String? etag})> putProfile(
+    GuiderAdvancedSettings s, {
+    String? ifMatch,
+  }) async => (value: profile = s, etag: '"v2"');
   @override
   Future<GuiderAdvancedView> getGuider() async =>
       GuiderAdvancedView.disconnected;

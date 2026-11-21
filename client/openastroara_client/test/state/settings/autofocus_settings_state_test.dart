@@ -1,15 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import '../../support/section_load.dart';
 import 'package:openastroara/state/settings/autofocus_settings_state.dart';
 
 void main() {
   group('AutofocusSettingsNotifier', () {
     late ProviderContainer container;
-    setUp(() => container = ProviderContainer());
+    setUp(() async {
+      container = ProviderContainer();
+      await loadSection(container, autofocusSettingsProvider, 'autofocus');
+    });
     tearDown(() => container.dispose());
 
     test('defaults match playbook §37.11', () {
-      final s = container.read(autofocusSettingsProvider);
+      final s = container.read(autofocusSettingsProvider).value!;
       expect(s.method, AutofocusMethod.hfrVCurve);
       expect(s.steps, 7);
       expect(s.stepSize, 50);
@@ -29,20 +34,20 @@ void main() {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setStepSize(80);
       n.setStepSizeAuto(false);
-      expect(container.read(autofocusSettingsProvider).stepSizeAuto, isFalse);
-      expect(container.read(autofocusSettingsProvider).stepSize, 80);
+      expect(container.read(autofocusSettingsProvider).value!.stepSizeAuto, isFalse);
+      expect(container.read(autofocusSettingsProvider).value!.stepSize, 80);
       n.setStepSizeAuto(true);
-      expect(container.read(autofocusSettingsProvider).stepSizeAuto, isTrue);
+      expect(container.read(autofocusSettingsProvider).value!.stepSizeAuto, isTrue);
     });
 
     test('setSteps clamps to [3, 31]', () {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setSteps(2);
       n.setSteps(32);
-      expect(container.read(autofocusSettingsProvider).steps, 7);
+      expect(container.read(autofocusSettingsProvider).value!.steps, 7);
       n.setSteps(5);
       n.setSteps(15);
-      expect(container.read(autofocusSettingsProvider).steps, 15);
+      expect(container.read(autofocusSettingsProvider).value!.steps, 15);
     });
 
     test('setStepSize + setExposureSeconds reject non-positive', () {
@@ -51,7 +56,7 @@ void main() {
       n.setStepSize(-10);
       n.setExposureSeconds(0);
       n.setExposureSeconds(-1);
-      final s = container.read(autofocusSettingsProvider);
+      final s = container.read(autofocusSettingsProvider).value!;
       expect(s.stepSize, 50);
       expect(s.exposureSeconds, 5);
     });
@@ -60,9 +65,9 @@ void main() {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setBinning(0);
       n.setBinning(-1);
-      expect(container.read(autofocusSettingsProvider).binning, 1);
+      expect(container.read(autofocusSettingsProvider).value!.binning, 1);
       n.setBinning(2);
-      expect(container.read(autofocusSettingsProvider).binning, 2);
+      expect(container.read(autofocusSettingsProvider).value!.binning, 2);
     });
 
     test('setAfFilter trims + rejects empty or whitespace-only', () {
@@ -70,19 +75,19 @@ void main() {
       n.setAfFilter('');
       n.setAfFilter('   ');
       n.setAfFilter('\t\n');
-      expect(container.read(autofocusSettingsProvider).afFilter, 'L');
+      expect(container.read(autofocusSettingsProvider).value!.afFilter, 'L');
       n.setAfFilter('  Hα  ');
-      expect(container.read(autofocusSettingsProvider).afFilter, 'Hα');
+      expect(container.read(autofocusSettingsProvider).value!.afFilter, 'Hα');
     });
 
     test('triggerHfrDriftPct clamps to [0, 100]', () {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setTriggerHfrDriftPct(-1);
       n.setTriggerHfrDriftPct(101);
-      expect(container.read(autofocusSettingsProvider).triggerHfrDriftPct,
+      expect(container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
           15);
       n.setTriggerHfrDriftPct(25);
-      expect(container.read(autofocusSettingsProvider).triggerHfrDriftPct,
+      expect(container.read(autofocusSettingsProvider).value!.triggerHfrDriftPct,
           25);
     });
 
@@ -90,7 +95,7 @@ void main() {
       final n = container.read(autofocusSettingsProvider.notifier);
       n.setTriggerTempDeltaC(-1);
       n.setEveryNHours(-1);
-      final s = container.read(autofocusSettingsProvider);
+      final s = container.read(autofocusSettingsProvider).value!;
       expect(s.triggerTempDeltaC, 2.0);
       expect(s.everyNHours, 2);
     });
@@ -101,7 +106,7 @@ void main() {
       n.setRunAfterFilterChange(false);
       n.setAbortSequenceOnAfFailure(false);
       n.setRestorePositionOnFailure(false);
-      final s = container.read(autofocusSettingsProvider);
+      final s = container.read(autofocusSettingsProvider).value!;
       expect(s.method, AutofocusMethod.fwhm);
       expect(s.runAfterFilterChange, isFalse);
       expect(s.abortSequenceOnAfFailure, isFalse);
@@ -109,12 +114,12 @@ void main() {
     });
 
     test('telescope type defaults to other and assigns directly (§59.4)', () {
-      expect(container.read(autofocusSettingsProvider).telescopeType,
+      expect(container.read(autofocusSettingsProvider).value!.telescopeType,
           TelescopeType.other);
       container
           .read(autofocusSettingsProvider.notifier)
           .setTelescopeType(TelescopeType.sct);
-      expect(container.read(autofocusSettingsProvider).telescopeType,
+      expect(container.read(autofocusSettingsProvider).value!.telescopeType,
           TelescopeType.sct);
     });
 

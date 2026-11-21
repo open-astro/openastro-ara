@@ -17,6 +17,7 @@ import 'package:openastroara/state/sky_atlas/tonights_best_list_state.dart';
 import 'package:openastroara/state/stats/stats_targets_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
+import 'package:openastroara/state/settings/loaded_section.dart';
 import 'package:openastroara/state/settings/site_settings_state.dart';
 import 'package:openastroara/services/monitor_device_service.dart';
 import 'package:openastroara/state/simple_monitor_state.dart';
@@ -45,8 +46,8 @@ class _Stats extends StatsTargetsNotifier {
 
 class _Site extends SiteSettingsNotifier {
   @override
-  SiteSettings build() =>
-      const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297);
+  LoadedSection<SiteSettings> build() =>
+      LoadedSection(value: const SiteSettings(latitudeDeg: -33.856784, longitudeDeg: 151.215297), source: SectionSource.rig);
 }
 
 const _m42 = TonightSkyObject(

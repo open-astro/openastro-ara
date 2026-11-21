@@ -273,6 +273,7 @@ namespace OpenAstroAra.Test {
             public Task<bool> ForgetAsync(CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> SlewAsync(SlewRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> ParkAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
+            public Task<OperationAcceptedDto> ParkUnlessMotionOwnedAsync(ParkRequestDto request, string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> UnparkAsync(string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task<OperationAcceptedDto> FindHomeAsync(string? idempotencyKey, CancellationToken ct) => throw new NotSupportedException();
             public Task SetTrackingAsync(bool enabled, CancellationToken ct) => throw new NotSupportedException();

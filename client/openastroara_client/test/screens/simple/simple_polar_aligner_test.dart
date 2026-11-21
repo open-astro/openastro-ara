@@ -22,18 +22,17 @@ import 'package:openastroara/services/polar_align_api.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/polar_align/polar_aligner_state.dart';
 
+import '../../support/polar_align_section.dart';
+
 class _Api implements PolarAlignClient {
+  @override
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
+      PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
   @override
-  Future<PolarAlignSettings> getSettings() async => const PolarAlignSettings(targetToleranceArcmin: 2);
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async => next;
-  @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async => calls.add('next');
+  Future<void> start(PolarAlignStartPlan plan) async {}
   @override
   Future<void> stop() async {}
   @override
@@ -109,6 +108,9 @@ Future<_Aligner> _pump(WidgetTester tester, PolarAlignLive live, {PolarAligner? 
   await tester.pumpWidget(ProviderScope(
     overrides: [
       polarAlignApiProvider.overrideWithValue(_Api()),
+      // The profile's section: the rig's copy, a 2′ tolerance (ADR 0015).
+      ...polarAlignSectionOverrides(
+          FakePolarAlignSection(initial: rigPolarAlign.copyWith(targetToleranceArcmin: 2), loaded: true)),
       polarAlignerApiProvider.overrideWithValue(aligner),
       polarAlignLiveProvider.overrideWith(() => _liveNotifier),
     ],
@@ -194,7 +196,7 @@ void main() {
     expect(_key('simple-polar-done'), findsOneWidget);
   });
 
-  testWidgets('the rough stage keeps Next: fine but its Done steps aside while the motors work', (tester) async {
+  testWidgets("the rough stage's Done steps aside while the motors work", (tester) async {
     await _pump(
         tester,
         const PolarAlignLive(
@@ -205,8 +207,18 @@ void main() {
           totalErrorArcmin: 0.7,
           correction: PolarAlignerRun(state: 'probing', axis: 'altitude', arcmin: 2),
         ));
-    expect(_key('simple-polar-next-fine'), findsOneWidget);
+    expect(_key('simple-polar-next-fine'), findsNothing, reason: 'one measurement per Start (#2082)');
     expect(_key('simple-polar-done-rough'), findsNothing);
+    _liveNotifier.set(const PolarAlignLive(
+      phase: PolarAlignStates.adjusting,
+      stage: PolarAlignStages.coarse,
+      altErrorArcmin: 0.5,
+      azErrorArcmin: 0.5,
+      totalErrorArcmin: 0.7,
+      correction: PolarAlignerRun(state: 'converged', moves: 2),
+    ));
+    await tester.pumpAndSettle();
+    expect(_key('simple-polar-done-rough'), findsOneWidget, reason: 'back once the motors rest');
   });
 
   testWidgets('Stop motors in the panel stops them in the routine', (tester) async {

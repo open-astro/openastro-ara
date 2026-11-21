@@ -1,4 +1,4 @@
-<Project>
+<Project InitialTargets="AraValidateVersion">
 
   <!--
     Repo-wide Roslyn analyzer escalation (2026-06 compliance sweep).
@@ -24,5 +24,38 @@
          (#1386), so a NEW framework or prerelease package surfaces as an error and gets a
          conscious decision rather than slipping in silently. -->
   </PropertyGroup>
+
+  <!--
+    Product version (#2093). The root VERSION file is the one source: one line,
+    X.Y.Z or X.Y.Z~betaN (N >= 1). Every project gets
+      AssemblyVersion / FileVersion = X.Y.Z.0
+      Version / InformationalVersion = the SemVer display spelling (1.0.0-beta.1),
+    and the SDK appends +<git sha> to InformationalVersion when the build has one
+    (the daemon's /server/versions DaemonGitSha reads it). A malformed or missing
+    VERSION fails the build (AraValidateVersion, an initial target). AraVersionFile
+    can be overridden on the command line to try another file.
+  -->
+  <PropertyGroup>
+    <AraVersionFile Condition="'$(AraVersionFile)' == ''">$(MSBuildThisFileDirectory)VERSION</AraVersionFile>
+    <AraVersionPattern>^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(~beta[1-9][0-9]*)?$</AraVersionPattern>
+    <AraVersionRaw Condition="Exists('$(AraVersionFile)')">$([System.IO.File]::ReadAllText('$(AraVersionFile)').Trim())</AraVersionRaw>
+    <AraVersionValid>false</AraVersionValid>
+    <AraVersionValid Condition="'$(AraVersionRaw)' != '' and $([System.Text.RegularExpressions.Regex]::IsMatch('$(AraVersionRaw)', '$(AraVersionPattern)'))">true</AraVersionValid>
+    <!-- Stand-in values keep evaluation going so AraValidateVersion reports the real problem. -->
+    <AraVersionBase>0.0.0</AraVersionBase>
+    <AraVersionSemver>0.0.0</AraVersionSemver>
+    <AraVersionBase Condition="'$(AraVersionValid)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(AraVersionRaw)', '~beta[0-9]+$', ''))</AraVersionBase>
+    <AraVersionSemver Condition="'$(AraVersionValid)' == 'true'">$([System.Text.RegularExpressions.Regex]::Replace('$(AraVersionRaw)', '~beta([0-9]+)$', '-beta.$1'))</AraVersionSemver>
+    <Version>$(AraVersionSemver)</Version>
+    <AssemblyVersion>$(AraVersionBase).0</AssemblyVersion>
+    <FileVersion>$(AraVersionBase).0</FileVersion>
+  </PropertyGroup>
+
+  <Target Name="AraValidateVersion">
+    <Error Condition="!Exists('$(AraVersionFile)')"
+           Text="VERSION file not found at $(AraVersionFile). It must hold one line: X.Y.Z or X.Y.Z~betaN." />
+    <Error Condition="Exists('$(AraVersionFile)') and '$(AraVersionValid)' != 'true'"
+           Text="VERSION file $(AraVersionFile) holds '$(AraVersionRaw)'; it must be one line: X.Y.Z or X.Y.Z~betaN (N &gt;= 1, no leading zeros)." />
+  </Target>
 
 </Project>

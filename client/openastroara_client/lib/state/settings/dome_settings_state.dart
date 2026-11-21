@@ -15,8 +15,9 @@ class DomeSettingsNotifier extends SelfLoadingSection<DomeSettings> {
   LoadedSection<DomeSettings> build() {
     // The follow switch (or the daemon turning following off: park, safety,
     // emergency stop) makes the daemon write this section outside the profile
-    // routes, so no `profile.updated` arrives. Load it again, or the next
-    // geometry edit is sent against a tag the rig no longer holds.
+    // routes. A daemon with #1807 publishes `profile.updated` for it; an older
+    // one does not, so load it again here, or the next geometry edit is sent
+    // against a tag the rig no longer holds.
     ref.listen(domeProvider.select((s) => s.value?.following), (before, after) {
       final api = ref.read(profileApiProvider);
       if (before != null && before != after && api != null) load(api);

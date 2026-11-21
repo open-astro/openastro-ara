@@ -14,45 +14,11 @@
 
 using System.Reflection;
 
-// General Information about an assembly is controlled through the following
-// set of attributes. Change these attribute values to modify the information
-// associated with an assembly.
+// Attributes shared by the library projects forked from NINA. The version attributes are
+// not here: every project takes its version from the root VERSION file through
+// Directory.Build.props (#2093).
 [assembly: AssemblyCompany("")]
 [assembly: AssemblyCopyright("Copyright ©  2016 - 2025 Stefan Berg and the N.I.N.A. contributors")]
-[assembly: AssemblyProduct("N.I.N.A. - Nighttime Imaging 'N' Astronomy")]
+[assembly: AssemblyProduct("OpenAstro Ara")]
 [assembly: AssemblyTrademark("")]
 [assembly: AssemblyCulture("")]
-
-//Versioning in N.I.N.A.
-//N.I.N.A. utilizes the versioning scheme MAJOR.MINOR.PATCH.CHANNEL|BUILDNRXXX
-//There is currently no automation used and versions are maintained manually.
-
-//MAJOR version increases for big changes, like changing technologies etc.
-
-//MINOR version will increase for every new released version
-
-//PATCH version is reserved to apply Hotfixes to a released versions
-
-//CHANNEL|BUILDNR will not be displayed for Released versions, as these are only used to identify Release, RC, Beta and Develop versions
-
-//CHANNEL consists of the following values:
-//1: Nightly
-//2: Beta
-//3: Release Candidate
-//9: Release
-
-//BUILDNR should be incremented each nightly build (only in develop, beta and rc versions) by using 3 digits.
-
-//Examples:
-//Release: 1.8.0.9001 (Displayed as "1.8")
-//Release: 1.8.1.9001 (Displayed as "1.8 HF1")
-//Release Candidate: 1.8.0.3001 (Displayed as "1.8 RC1")
-//Beta: 1.8.0.2004 (Displayed as "1.8 BETA004")
-//Develop: 1.8.0.1022 (Displayed as "1.8 NIGHTLY #022")
-[assembly: AssemblyVersion("3.2.0.9001")]
-[assembly: AssemblyFileVersion("3.2.0.9001")]
-[assembly: AssemblyInformationalVersion("3.2.0.9001")]
-
-// The PluginMinimumApplicationVersion specifies the minimum application version the plugin needs to specify in order to be compatible
-// Plugins that have a version specified that is below this version are marked as incompatible
-[assembly: AssemblyMetadata("PluginMinimumApplicationVersion", "3.0.0.0")]

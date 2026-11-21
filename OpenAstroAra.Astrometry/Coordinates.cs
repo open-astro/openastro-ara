@@ -585,6 +585,22 @@ namespace OpenAstroAra.Astrometry {
             return $"RA: {this.RAString}; Dec: {this.DecString}; Epoch: {Epoch}";
         }
 
+        /// <summary>
+        /// The same sky point with |Dec| ≤ 90°. A synced mount can report a Dec past ±90° when its Dec
+        /// axis is over the pole, and an offset added near the pole can push a target past it too
+        /// (<c>operator +</c> does not fold). The same point is then
+        /// (RA + 180°, ±180° − Dec). Epoch, reference date and clock are kept. Any other value is
+        /// returned as a clone (#2075).
+        /// </summary>
+        public Coordinates FoldedOverPole() {
+            var dec = Dec;
+            if (!(Math.Abs(dec) > 90.0)) {
+                return Clone();
+            }
+            var ra = AstroUtil.EuclidianModulus(RADegrees + 180.0, 360);
+            return new Coordinates(Angle.ByDegree(ra), Angle.ByDegree(Math.CopySign(180.0, dec) - dec), this.Epoch, this.creationDate, this.DateTime);
+        }
+
         public Coordinates Clone() =>
             new Coordinates(
                 this.raAngle,

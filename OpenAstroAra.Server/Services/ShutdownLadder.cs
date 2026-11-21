@@ -67,6 +67,7 @@ public sealed partial class ShutdownLadder {
     private readonly IFocuserService? _focuser;
     private readonly IRotatorService? _rotator;
     private readonly IFlatDeviceService? _flatDevice;
+    private readonly Func<IPolarAlignService?>? _polarAlign;
     private readonly ILogger _logger;
 
     // ─── test seams (the ClientSessionService knob pattern) ───
@@ -80,6 +81,10 @@ public sealed partial class ShutdownLadder {
     internal TimeSpan ParkTimeout { get; set; } = TimeSpan.FromSeconds(90);
     /// <summary>Cap on the Find Home attempt.</summary>
     internal TimeSpan FindHomeTimeout { get; set; } = TimeSpan.FromSeconds(120);
+    /// <summary>#2066 — cap on ending a running polar alignment before the Find Home or park (its own end is bounded
+    /// too, under a minute for a run stuck in a hung call). Past it the step goes on: the mount refuses the move while the
+    /// routine still holds it, and the park step stops tracking instead.</summary>
+    internal TimeSpan PolarAlignTakeoverTimeout { get; set; } = TimeSpan.FromSeconds(60);
 
     public ShutdownLadder(
             IProfileStore? profiles = null,
@@ -90,7 +95,8 @@ public sealed partial class ShutdownLadder {
             IFocuserService? focuser = null,
             IRotatorService? rotator = null,
             IFlatDeviceService? flatDevice = null,
-            ILogger? logger = null) {
+            ILogger? logger = null,
+            Func<IPolarAlignService?>? polarAlign = null) {
         _profiles = profiles;
         _guider = guider;
         _telescope = telescope;
@@ -99,7 +105,27 @@ public sealed partial class ShutdownLadder {
         _focuser = focuser;
         _rotator = rotator;
         _flatDevice = flatDevice;
+        _polarAlign = polarAlign;
         _logger = logger ?? NullLogger.Instance;
+    }
+
+    /// <summary>#2066 (ARA-2) — the mount steps' first move: a running polar alignment holds the mount, and the mediator
+    /// refuses a Find Home or park while it does. It ends through its takeover, as before the safety and fault parks: it
+    /// stops its motor and leaves the mount to this step, and gives the mount back. Bounded by
+    /// <see cref="PolarAlignTakeoverTimeout"/>; a fault or a hang is logged and the step goes on.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort by design: a routine that faults or hangs must not stop the rest of the shutdown.")]
+    private async Task EndPolarAlignFirstAsync() {
+        var polarAlign = _polarAlign?.Invoke();
+        if (polarAlign is null
+                || !(polarAlign.IsActive || (_telescope as IMountMotionControl)?.MotionOwner == MotionOwners.PolarAlign)) {
+            return;
+        }
+        try {
+            await polarAlign.StopForTakeoverAsync("shutdown", CancellationToken.None).WaitAsync(PolarAlignTakeoverTimeout).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogStepFailed("stop-polar-align", ex);
+        }
     }
 
     /// <summary>Stop the guider. GetInfo is only an optimization to skip a
@@ -136,6 +162,7 @@ public sealed partial class ShutdownLadder {
         try {
             var mount = _telescope.GetInfo();
             if (!mount.Connected || !mount.CanFindHome || mount.AtPark) return new(LadderOutcome.Skipped, string.Empty);
+            await EndPolarAlignFirstAsync().ConfigureAwait(false);
             using var cts = new CancellationTokenSource(FindHomeTimeout);
             var found = await _telescope.FindHome(new Progress<OpenAstroAra.Core.Model.ApplicationStatus>(), cts.Token).ConfigureAwait(false);
             return found
@@ -170,6 +197,9 @@ public sealed partial class ShutdownLadder {
                 // to a parked/disconnected mount is a harmless no-op.
                 _telescope.SetTrackingEnabled(false);
                 return new(new(LadderOutcome.Failed, "Mount state unreadable — tracking stop attempted. "), MountRest.Unknown);
+            }
+            if (mount.Connected) {
+                await EndPolarAlignFirstAsync().ConfigureAwait(false);
             }
             if (mount.CanPark && !mount.AtPark) {
                 var parked = false;

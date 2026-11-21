@@ -157,3 +157,29 @@ _Avoid_: date, day
 **Placeholder**:
 What a Card shows when it has no Art.
 _Avoid_: silhouette, fallback
+
+### Releases
+
+**VERSION file**:
+The one-line root file that holds the project's version: `X.Y.Z` for a stable release or `X.Y.Z~betaN` for a beta. The daemon, the app and the README badge carry the version it names. `master` always holds the last stable version; a beta version lives only on a Stable Branch.
+_Avoid_: version number (for the file), build number
+
+**Stable Branch**:
+The long-lived `stable/X.Y` branch one minor or major release is cut onto at its first Beta, which then takes only fixes for defects new since the previous stable release.
+_Avoid_: release branch (that is the short-lived `release/X.Y.Z` PR branch), maintenance branch
+
+**Beta**:
+A pre-release of the next minor or major release, tagged `vX.Y.Z-beta.N` on its Stable Branch for people who want to try it early.
+_Avoid_: release candidate, RC, nightly (a nightly is an untagged dev build, never published)
+
+**Promotion**:
+Turning the final Beta into the stable release `X.Y.Z` on the same Stable Branch, once the promotion criteria in `docs/RELEASES.md` hold.
+_Avoid_: release (alone, for this step), graduation
+
+**Merge Down**:
+A pull request that brings a Stable Branch's fixes into `master` or a newer Stable Branch, from a `merge-down/X.Y-to-<branch>` head, merged with a merge commit by a maintainer. Fixes never travel by cherry-pick.
+_Avoid_: back-port, forward-port, cherry-pick, sync
+
+**Release Notes**:
+The plain-language page `docs/releases/<version>.md` that is the body of a GitHub Release, written for an astronomer deciding whether to build it tonight. `CHANGELOG.md` is the technical record, not the release notes.
+_Avoid_: changelog (for the notes), release summary

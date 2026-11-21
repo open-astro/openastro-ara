@@ -106,6 +106,19 @@ void main() {
           l.refusalMountPositionUnverified);
     }
   });
+
+  test('a position left unverified by an unconfirmed stop says so, in both languages (#2066)', () {
+    for (final l in [_en, _pt]) {
+      const stop = Refusal(
+        cause: RefusalCause.mountPositionUnverified,
+        reason: 'mount-position-unverified',
+        detail: 'The daemon detail.',
+        parameters: {'position_unverified_reason': 'stop_unconfirmed'},
+      );
+      expect(failureReason(l, stop), l.refusalMountPositionStopUnconfirmed);
+    }
+    expect(_pt.refusalMountPositionStopUnconfirmed, isNot(_en.refusalMountPositionStopUnconfirmed));
+  });
   test(
     'the counterweight sentence names the hour angle, the angle and the limit',
     () {
@@ -117,6 +130,19 @@ void main() {
       }
     },
   );
+  test('the sweep-limit sentence says how far the mount turned, in whole degrees (#2089)', () {
+    const r = Refusal(
+      cause: RefusalCause.polarAlignSweepLimit,
+      reason: 'polar-align-sweep-limit',
+      detail: _detail,
+      parameters: {'offset_deg': -60.3, 'limit_deg': 30},
+    );
+    expect(
+      failureReason(_en, r),
+      'The mount has turned 60° from where Polar Align started. Slew it back near the pole, counterweights down, and start again.',
+    );
+    expect(failureReason(_pt, r), contains('60°'));
+  });
 
   test('a cause the app does not know shows the daemon detail', () {
     const r = Refusal(

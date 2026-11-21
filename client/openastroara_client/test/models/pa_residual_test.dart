@@ -1,7 +1,12 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/guider_status.dart';
 import 'package:openastroara/models/pa_residual.dart';
 import 'package:openastroara/widgets/imaging/polar_error_rating.dart';
+
+final _en = lookupAppLocalizations(const Locale('en'));
+final _pt = lookupAppLocalizations(const Locale('pt', 'BR'));
 
 void main() {
   const done = <String, dynamic>{
@@ -55,17 +60,17 @@ void main() {
           'reason': 'lock_shift',
         })!;
         expect(u.reason, 'lock_shift');
-        expect(PaResidual.reasonText(u.reason), contains('comet'));
+        expect(paResidualReasonText(_en, u.reason), contains('comet'));
         for (final (reason, word) in [
           ('guiding_not_holding', 'not holding'),
           ('settle_failed', 'settle'),
           ('mount_not_tracking', 'not tracking'),
         ]) {
-          final text = PaResidual.reasonText(reason);
+          final text = paResidualReasonText(_en, reason);
           expect(text, contains(word), reason: reason);
           expect(
             text,
-            isNot(PaResidual.reasonText(null)),
+            isNot(paResidualReasonText(_en, null)),
             reason: '$reason is not the fallback',
           );
         }
@@ -101,14 +106,14 @@ void main() {
   test(
     'the tooltip says it is a lower bound and compares with Polar Align',
     () {
-      final text = paResidualDetail(PaResidual.fromJson(done)!);
+      final text = paResidualDetail(_en, PaResidual.fromJson(done)!);
       expect(text, contains('at least 48″ (± 12″)'));
       expect(text, contains('Dec drift 0.21″/min at hour angle −1.3 h'));
       expect(text, contains('the total can be larger'));
-      expect(text, contains('Polar Align measured 41″'));
+      expect(text, contains("Polar Align's figure: 41″"));
       expect(text, isNot(contains('too noisy')));
       final noisy = PaResidual.fromJson({...done, 'reliable': false})!;
-      expect(paResidualDetail(noisy), contains('too noisy'));
+      expect(paResidualDetail(_en, noisy), contains('too noisy'));
     },
   );
 
@@ -120,8 +125,44 @@ void main() {
       'align_error_arcmin': 0.9,
       'reliable': false,
     })!;
-    final text = paResidualDetail(far);
+    final text = paResidualDetail(_en, far);
     expect(text, isNot(contains('too noisy')));
-    expect(text, contains('more than Polar Align measured'));
+    expect(text, contains('Polar Align and guiding disagree'));
+  });
+
+  test("the daemon's above_align decides a disagreement; without it the same rule stands in (#2072)", () {
+    final far = {
+      ...done,
+      'pa_error_min_arcmin': 17.0,
+      'uncertainty_arcmin': 0.5,
+      'align_error_arcmin': 0.9,
+      'reliable': false,
+    };
+    expect(PaResidual.fromJson(far)!.aboveAlign, isTrue, reason: 'an older daemon: 17 − 1 > 0.9 + 2');
+    expect(PaResidual.fromJson({...far, 'above_align': false})!.aboveAlign, isFalse,
+        reason: "the daemon's call wins over the copy of its rule");
+    expect(PaResidual.fromJson({...done, 'above_align': true})!.aboveAlign, isTrue);
+    expect(PaResidual.fromJson(done)!.aboveAlign, isFalse);
+  });
+
+  test('a disagreement names both causes and what to do, in English and pt-BR (#2072)', () {
+    final far = PaResidual.fromJson({
+      ...done,
+      'pa_error_min_arcmin': 16.54,
+      'uncertainty_arcmin': 1.17,
+      'align_error_arcmin': 0.2,
+      'reliable': false,
+      'above_align': true,
+    })!;
+    final en = paResidualDetail(_en, far);
+    expect(en, contains('Polar Align and guiding disagree (12″ vs at least 17′)'));
+    expect(en, contains('Dec backlash'));
+    expect(en, contains('the mount shifted since the alignment or its reference was wrong'));
+    expect(en, contains('Run Polar Align again'));
+    expect(en, contains("Guiding's figure"));
+    final pt = paResidualDetail(_pt, far);
+    expect(pt, contains('Polar Align e guiagem divergem'));
+    expect(pt, contains('folga em Dec'));
+    expect(pt, isNot(contains('Dec backlash')));
   });
 }

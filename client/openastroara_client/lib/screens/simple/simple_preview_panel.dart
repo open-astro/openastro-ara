@@ -194,7 +194,7 @@ class _PreviewShot extends Notifier<PreviewShot> {
 String simpleSettingsSummary(BuildContext context, WidgetRef ref) {
   if (simplePreviewGuide(ref)) {
     // The guider's own exposure: the one Preview › Guide's loop runs at.
-    final phd2 = ref.watch(phd2SettingsProvider);
+    final phd2 = ref.watch(phd2SettingsProvider).value ?? const Phd2Settings();
     final exposure = simpleGuiderExposureText(context.l10n, phd2.guideExposureMs);
     return '${context.l10n.focusScopeGuide}\n$exposure · ${phd2.guideCameraGain}';
   }
@@ -384,10 +384,14 @@ class _GuideInfoTiles extends ConsumerWidget {
     // A focus loop found running reports its own exposure; otherwise the
     // frames are the guider's loop, at the guider's exposure.
     final guiderMs = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideExposureMs),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideExposureMs,
+      ),
     );
     final gain = ref.watch(
-      phd2SettingsProvider.select((p) => p.guideCameraGain),
+      phd2SettingsProvider.select(
+        (p) => (p.value ?? const Phd2Settings()).guideCameraGain,
+      ),
     );
     return SimpleFactTiles(
       facts: [
@@ -737,7 +741,7 @@ class SimpleSettingsPopover extends ConsumerWidget {
         guide &&
         !guideActive &&
         ref.watch(
-          phd2SettingsProvider.select((p) => p.guiderSetupType == 'oag'),
+          phd2SettingsProvider.select((p) => p.value?.guiderSetupType == 'oag'),
         ) &&
         !ref.watch(autofocusLiveProvider.select((s) => s.focusedThisSession));
     return [
@@ -1697,14 +1701,18 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
   /// The api the policies were (being) loaded from: another server loads again.
   ProfileApi? _loadedFor;
 
+  /// The api changed under the pill: the copy in may be the old server's.
+  bool _apiChanged = false;
+
   Future<void> _hydratePolicies(ProfileApi api) async {
-    try {
-      await ref.read(safetyPoliciesProvider.notifier).hydrateFromServer(api);
-      if (mounted && _loadedFor == api) setState(() => _policiesLoaded = true);
-    } catch (_) {
-      // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
-      if (mounted && _loadedFor == api) _hydrating = false;
-    }
+    // Already in from the rig when the pill mounts: a load would replace it,
+    // dropping unsaved edits in Unattended running and a conflict it shows.
+    final ok =
+        (!_apiChanged && ref.read(safetyPoliciesProvider).canSave) ||
+        await ref.read(safetyPoliciesProvider.notifier).load(api);
+    if (!mounted || _loadedFor != api) return;
+    // Stays unloaded (nothing said beats a wrong promise); a rebuild retries.
+    ok ? setState(() => _policiesLoaded = true) : _hydrating = false;
   }
 
   /// The Guiding Assistant's run, followed from the guider's word that it
@@ -1834,9 +1842,14 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
     final unsafe = safety != null && safety.isConnected && !safety.safe;
     // Weather past its limits holds a plan too (the daemon's same checks),
     // even while the monitor reads Safe: the pill says which (#1690 audit).
-    final policies = ref.watch(safetyPoliciesProvider);
+    // Only the rig's copy (ADR 0015): a failed load changes nothing here, so
+    // it does not rebuild the pill into another load at once.
+    final policies = ref.watch(
+      safetyPoliciesProvider.select((s) => s.canSave ? s.value : null),
+    );
     final profileApi = ref.watch(profileApiProvider);
     if (profileApi != _loadedFor) {
+      _apiChanged = _loadedFor != null;
       _loadedFor = profileApi;
       _hydrating = false;
       _policiesLoaded = false;
@@ -1848,9 +1861,10 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
       });
     }
     final weather = ref.watch(weatherProvider).value;
+    final limits = _policiesLoaded ? policies : null;
     final breach =
-        _policiesLoaded && policies.weatherTriggersEnabled && weather != null
-        ? simpleWeatherBreaches(l10n, weather, policies).firstOrNull
+        limits != null && limits.weatherTriggersEnabled && weather != null
+        ? simpleWeatherBreaches(l10n, weather, limits).firstOrNull
         : null;
     // The focuser moving, whoever moved it; autofocus has its own pill.
     final focuser = ref.watch(focuserProvider).value;
@@ -2291,7 +2305,7 @@ class _SimpleStatusPillState extends ConsumerState<SimpleStatusPill>
         ),
       // #1971 the Polar Aligner's motors, their own line under the routine's.
       if (polarAlignerStatusLine(l10n, polar,
-              southern: ref.watch(siteSettingsProvider).latitudeDeg < 0)
+              southern: (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0)
           case final c?)
         _PillData(
           SimpleStatusOrigin.polarAligner,

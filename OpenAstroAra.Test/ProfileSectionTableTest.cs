@@ -64,7 +64,7 @@ internal static class ProfileSectionSamples {
         var nudged = false;
         for (var i = 0; i < ps.Length; i++) {
             var t = Nullable.GetUnderlyingType(ps[i].ParameterType) ?? ps[i].ParameterType;
-            if (t == typeof(string)) { args[i] = args[i] + "-x"; nudged = true; } else if (t == typeof(int)) { args[i] = args[i] is int n ? n + 1 : 7; nudged = true; } else if (t == typeof(double)) { args[i] = args[i] is double d ? d + 1.5 : 7.5; nudged = true; } else if (t == typeof(bool)) { args[i] = args[i] is bool b ? !b : true; nudged = true; }
+            if (t == typeof(string)) { args[i] = args[i] + "-x"; nudged = true; } else if (t == typeof(int)) { args[i] = args[i] is int n ? n + 1 : 7; nudged = true; } else if (t == typeof(double)) { args[i] = args[i] is double d ? d + 1.5 : 7.5; nudged = true; } else if (t == typeof(bool)) { args[i] = args[i] is bool b ? !b : true; nudged = true; } else if (t == typeof(DateTimeOffset)) { args[i] = Now; nudged = true; }
         }
         if (nudged) { return ctor.Invoke(args); }
         throw new InvalidOperationException($"No sample for section {section.Name}: add one to ProfileSectionSamples.Hand.");

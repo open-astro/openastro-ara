@@ -1,62 +1,26 @@
-import 'dart:typed_data';
-
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/l10n/app_localizations.dart';
 import 'package:openastroara/models/polar_align.dart';
-import 'package:openastroara/models/server.dart';
 import 'package:openastroara/screens/settings/panels/imaging_polar_panel.dart';
-import 'package:openastroara/services/polar_align_api.dart';
-import 'package:openastroara/state/polar_align/polar_align_state.dart'
-    show polarAlignApiProvider;
-import 'package:openastroara/state/saved_server_state.dart'
-    show activeServerProvider;
+import 'package:openastroara/state/settings/loaded_section.dart'
+    show SectionNotLoadedException;
+import 'package:openastroara/state/settings/migrated_sections.dart';
+import 'package:openastroara/state/settings/polar_align_settings_state.dart';
 
-class _Api implements PolarAlignClient {
-  PolarAlignSettings settings = const PolarAlignSettings();
-  final saved = <PolarAlignSettings>[];
-  Object? getError;
-  @override
-  Future<PolarAlignStatus?> getStatus() async => null;
-  @override
-  Future<PolarAlignSettings> getSettings() async {
-    if (getError != null) throw getError!;
-    return settings;
-  }
+import '../../../support/polar_align_section.dart';
 
-  @override
-  Future<PolarAlignSettings> putSettings(PolarAlignSettings next) async {
-    saved.add(next);
-    return settings = next;
-  }
-
-  @override
-  Future<void> start({String? stage}) async {}
-  @override
-  Future<void> next() async {}
-  @override
-  Future<void> stop() async {}
-  @override
-  Future<void> complete() async {}
-  @override
-  Future<void> requestCapture() async {}
-  @override
-  Future<Uint8List?> getLiveFrame() async => null;
-  @override
-  void close() {}
-}
-
-Future<_Api> _pump(WidgetTester tester, {_Api? rig, Locale? locale}) async {
-  final api = rig ?? _Api();
+Future<FakePolarAlignSection> _pump(
+  WidgetTester tester, {
+  FakePolarAlignSection? rig,
+  Locale? locale,
+}) async {
+  final section = rig ?? FakePolarAlignSection();
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [
-        polarAlignApiProvider.overrideWithValue(api),
-        activeServerProvider.overrideWithValue(
-          const AraServer(hostname: 'rig', port: 1),
-        ),
-      ],
+      overrides: polarAlignSectionOverrides(section),
       child: MaterialApp(
         locale: locale,
         localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -66,17 +30,16 @@ Future<_Api> _pump(WidgetTester tester, {_Api? rig, Locale? locale}) async {
     ),
   );
   await tester.pumpAndSettle();
-  return api;
+  return section;
 }
 
 void main() {
-  testWidgets('the Home switch saves use_home to the profile (#1736)', (
+  testWidgets('there is no Home switch: polar align never sends the mount Home (#2048)', (
     tester,
   ) async {
-    final api = await _pump(tester);
-    await tester.tap(find.byType(Switch).first);
-    await tester.pumpAndSettle();
-    expect(api.saved.single.useHome, isFalse);
+    await _pump(tester);
+    expect(find.textContaining('Home'), findsNothing);
+    expect(find.byType(Switch), findsNWidgets(2), reason: 'the Polar Aligner and stop-tracking switches only');
   });
 
   testWidgets(
@@ -84,7 +47,7 @@ void main() {
     (tester) async {
       final api = await _pump(tester);
       final fields = find.byType(TextField);
-      expect(fields, findsNWidgets(4));
+      expect(fields, findsNWidgets(5), reason: 'and frames per point (#2082)');
       // Row order: tolerance, turn, verify step, rough exposure.
       final entered = ['2', '25', '20', '7.5'];
       for (var i = 0; i < 4; i++) {
@@ -92,7 +55,7 @@ void main() {
         await tester.testTextInput.receiveAction(TextInputAction.done);
         await tester.pumpAndSettle();
       }
-      final last = api.saved.last;
+      final last = api.puts.last;
       expect(last.targetToleranceArcmin, 2.0);
       expect(last.seedRotationDeg, 25.0);
       expect(last.checkStepDeg, 20.0);
@@ -103,17 +66,45 @@ void main() {
   testWidgets(
     'a failed load shows not loaded with Retry, and nothing can be saved (#1736)',
     (tester) async {
-      final rig = _Api()..getError = StateError('rig gone');
+      final rig = FakePolarAlignSection(initial: null);
       await _pump(tester, rig: rig);
       expect(find.byKey(const Key('section-retry')), findsOneWidget);
       expect(find.byType(TextField), findsNothing);
       expect(find.byType(Switch), findsNothing);
-      expect(rig.saved, isEmpty);
+      expect(rig.puts, isEmpty);
 
-      rig.getError = null;
+      rig.initial = rigPolarAlign;
       await tester.tap(find.byKey(const Key('section-retry')));
       await tester.pumpAndSettle();
-      expect(find.byType(TextField), findsNWidgets(4));
+      expect(find.byType(TextField), findsNWidgets(5));
+    },
+  );
+
+  testWidgets(
+    'the camera saves main, and frames per point saves a whole number from 1 to 5 (#2082)',
+    (tester) async {
+      final rig = await _pump(tester);
+      await tester.tap(find.byKey(const Key('polar-knob-camera')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Main camera').last);
+      await tester.pumpAndSettle();
+      expect(rig.puts.single.camera, PolarAlignCameras.main);
+
+      final frames = find.descendant(
+        of: find.byKey(const Key('polar-knob-frames-per-point')),
+        matching: find.byType(TextField),
+      );
+      for (final refused in ['6', '0', '2.5']) {
+        await tester.enterText(frames, refused);
+        await tester.testTextInput.receiveAction(TextInputAction.done);
+        await tester.pumpAndSettle();
+      }
+      expect(rig.puts, hasLength(1), reason: 'out of range or not whole: nothing sent');
+      await tester.enterText(frames, '5');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect((rig.puts.last.framesPerPoint, rig.puts.last.camera), (5, PolarAlignCameras.main),
+          reason: 'saved over the rig copy the camera change left');
     },
   );
 
@@ -129,7 +120,7 @@ void main() {
       await tester.enterText(fields.at(0), '50');
       await tester.testTextInput.receiveAction(TextInputAction.done);
       await tester.pumpAndSettle();
-      expect(api.saved, isEmpty);
+      expect(api.puts, isEmpty);
       expect(tester.widget<TextField>(fields.at(1)).controller!.text, '10');
       expect(tester.widget<TextField>(fields.at(0)).controller!.text, '1');
       expect(find.textContaining('Turn (°, 5 to 30)'), findsOneWidget);
@@ -144,9 +135,11 @@ void main() {
         'Polar align',
         'Tolerance',
         'Turn',
-        'Verify step',
+        'Check step',
         'Rough step exposure',
         'Stop tracking when polar align ends',
+        'Frames per point',
+        'Guide camera',
       ]) {
         expect(find.textContaining(english), findsNothing, reason: english);
       }
@@ -157,18 +150,19 @@ void main() {
   testWidgets(
     'the Polar Aligner switch shows the profile value and saves polar_aligner_auto, keeping the other fields (#1971)',
     (tester) async {
-      final rig = _Api()
-        ..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false, polarAlignerAuto: false);
+      final rig = FakePolarAlignSection(
+        initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15, polarAlignerAuto: false),
+      );
       await _pump(tester, rig: rig);
       expect(find.text("Correct with the Polar Aligner's motors"), findsOneWidget);
       expect(find.text('Off: Polar align shows the turns and you make them'), findsOneWidget);
-      final aligner = find.byType(Switch).at(1);
+      final aligner = find.byType(Switch).at(0);
       expect(tester.widget<Switch>(aligner).value, isFalse);
       await tester.tap(aligner);
       await tester.pumpAndSettle();
-      final saved = rig.saved.single;
+      final saved = rig.puts.single;
       expect(saved.polarAlignerAuto, isTrue);
-      expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
+      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
         find.text('On a rig with a Polar Aligner, Polar align turns its motors after each measurement'),
         findsOneWidget,
@@ -179,21 +173,76 @@ void main() {
   testWidgets(
     'the stop-tracking switch shows the profile value and saves stop_tracking_when_done, keeping the other fields (#2048)',
     (tester) async {
-      final rig = _Api()..settings = const PolarAlignSettings(exposureSeconds: 4, useHome: false);
+      final rig = FakePolarAlignSection(initial: rigPolarAlign.copyWith(exposureSeconds: 4, checkStepDeg: 15));
       await _pump(tester, rig: rig);
       expect(find.text('Stop tracking when polar align ends'), findsOneWidget);
       expect(find.text('Every end of a run turns tracking off'), findsOneWidget);
-      final stopTracking = find.byType(Switch).at(2);
+      final stopTracking = find.byType(Switch).at(1);
       expect(tester.widget<Switch>(stopTracking).value, isTrue);
       await tester.tap(stopTracking);
       await tester.pumpAndSettle();
-      final saved = rig.saved.single;
+      final saved = rig.puts.single;
       expect(saved.stopTrackingWhenDone, isFalse);
-      expect((saved.exposureSeconds, saved.useHome), (4.0, false), reason: 'saved over the loaded section');
+      expect((saved.exposureSeconds, saved.checkStepDeg), (4.0, 15.0), reason: 'saved over the loaded section');
       expect(
         find.text('Off: a run that finishes gives back the tracking it found. A Stop always leaves tracking off'),
         findsOneWidget,
       );
+    },
+  );
+
+  testWidgets(
+    'Polar align: a load that fails after a rig change shows not loaded, and nothing is sent (ADR 0015)',
+    (tester) async {
+      final rig = await _pump(tester);
+      expect(find.byType(Switch), findsNWidgets(2));
+      // A different rig or profile: every section back to not loaded, and
+      // this one's next load fails.
+      rig.initial = null;
+      final container = ProviderScope.containerOf(
+        tester.element(find.byType(ImagingPolarPanel)),
+      );
+      resetMigratedSections(container.read);
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('section-retry')), findsOneWidget);
+      expect(find.byType(Switch), findsNothing, reason: 'no default shows');
+      expect(find.byType(TextField), findsNothing);
+      // A save from here on (the Imaging tab, Simple Mode) loads once more,
+      // fails, and is refused with nothing sent.
+      await expectLater(
+        container
+            .read(polarAlignSettingsProvider.notifier)
+            .saveKnob((s) => s.copyWith(exposureSeconds: 5)),
+        throwsA(isA<SectionNotLoadedException>()),
+      );
+      expect(rig.sent, isEmpty);
+      expect(container.read(polarAlignSettingsProvider).value, isNull);
+    },
+  );
+
+  testWidgets(
+    'Polar align: a switch refused as stale keeps the change and offers Reload (ADR 0015)',
+    (tester) async {
+      final rig = await _pump(tester);
+      rig.refuse = DioException(
+        requestOptions: RequestOptions(path: '/api/v1/profile/polar-align'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/api/v1/profile/polar-align'),
+          statusCode: 412,
+        ),
+      );
+      final stopTracking = find.byType(Switch).at(1);
+      await tester.tap(stopTracking);
+      await tester.pumpAndSettle();
+      expect(rig.puts, isEmpty);
+      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isFalse, reason: 'the change stays on screen');
+      expect(find.byKey(const Key('section-reload')), findsOneWidget);
+
+      rig.refuse = null;
+      await tester.tap(find.byKey(const Key('section-reload')));
+      await tester.pumpAndSettle();
+      expect(tester.widget<Switch>(find.byType(Switch).at(1)).value, isTrue, reason: "the rig's copy again");
+      expect(find.byKey(const Key('section-reload')), findsNothing);
     },
   );
 }

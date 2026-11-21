@@ -6,6 +6,7 @@ import '../../models/polar_align.dart';
 import '../../state/polar_align/polar_align_routine_state.dart';
 import '../../state/polar_align/polar_align_state.dart';
 import '../../state/polar_align/polar_aligner_state.dart';
+import '../../state/settings/polar_align_settings_state.dart';
 import '../../state/settings/site_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../theme/ara_metrics.dart';
@@ -105,8 +106,10 @@ class PolarAlignerBlock extends ConsumerWidget {
     final live = ref.watch(polarAlignLiveProvider);
     // The run belongs to a running routine; its end sends no aligner event.
     final run = live.isActive ? live.correction : null;
-    final settings = ref.watch(polarAlignSettingsProvider).value ?? const PolarAlignSettings();
-    final southern = ref.watch(siteSettingsProvider).latitudeDeg < 0;
+    // Null until the profile's copy is in from the rig (ADR 0015): no
+    // tolerance or motors choice is made up; the routine's own state decides.
+    final settings = ref.watch(polarAlignSettingsProvider).value;
+    final southern = (ref.watch(siteSettingsProvider).value?.latitudeDeg ?? 0) < 0;
     final busy = ref.watch(polarAlignActionProvider).busy;
     final aligner = ref.read(polarAlignerProvider.notifier);
 
@@ -167,7 +170,7 @@ class PolarAlignerBlock extends ConsumerWidget {
         line('${polarAlignerNotDrivableText(l10n, device)} ${l10n.polarAlignerTurnByHand}',
             color: AraColors.textSecondary, key: const Key('polar-aligner-not-drivable')),
       ];
-    } else if (!settings.polarAlignerAuto || run?.state == PolarAlignerStates.manual) {
+    } else if (settings?.polarAlignerAuto == false || run?.state == PolarAlignerStates.manual) {
       body = [line(l10n.polarAlignerByHand, color: AraColors.textSecondary), position];
     } else if (run?.state == PolarAlignerStates.stopped) {
       final lost = run!.cause == PolarAlignerCauses.linkLost;
@@ -217,7 +220,9 @@ class PolarAlignerBlock extends ConsumerWidget {
     } else if (run?.state == PolarAlignerStates.converged) {
       body = [
         line(
-          l10n.polarAlignerConverged(run!.moves, polarToleranceText(settings.targetToleranceArcmin)),
+          settings == null
+              ? l10n.polarAlignerConvergedPlain(run!.moves)
+              : l10n.polarAlignerConverged(run!.moves, polarToleranceText(settings.targetToleranceArcmin)),
           color: AraColors.accentConnected,
           key: const Key('polar-aligner-converged'),
         ),
@@ -232,7 +237,8 @@ class PolarAlignerBlock extends ConsumerWidget {
       ];
     } else if (!live.isActive) {
       body = [
-        line(l10n.polarAlignerIdle(polarToleranceText(settings.targetToleranceArcmin))),
+        // Motors or by hand, and the tolerance, are the profile's: unsaid until it loads.
+        if (settings != null) line(l10n.polarAlignerIdle(polarToleranceText(settings.targetToleranceArcmin))),
         position,
         Row(children: [Expanded(child: home(enabled: true))]),
       ];
