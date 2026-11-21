@@ -461,6 +461,7 @@ List<SettingsSearchEntry> buildSearchIndex({
   Iterable<String> templateNames = const [],
   Iterable<(String id, String name, String type)> targets = const [],
   bool companion = false,
+  bool simple = true,
 }) {
   final entries = <SettingsSearchEntry>[];
   // 0. §61.10 — tab navigation ("go to run", "planning", …) + actions.
@@ -494,6 +495,8 @@ List<SettingsSearchEntry> buildSearchIndex({
   }
   // 2. Index individual settings.
   for (final s in settingsRegistry) {
+    // #2036 — Advanced Mode has no Advanced switch to find.
+    if (!simple && s.id == 'app.settings.advanced') continue;
     entries.add(SettingsSearchEntry(
       settingId: s.id,
       label: s.label,
