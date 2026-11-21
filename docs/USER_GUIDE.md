@@ -463,7 +463,18 @@ Ara assumes you're asleep while it works:
   re-balanced the rig.
 - **Set the meridian pause per rig.** **Stop before meridian** is when imaging stops before the
   meridian. Where the camera or rotator can reach the tripod or pier, measure how long the target
-  takes from a safe angle to the meridian and add a margin. Ara has no clearance limit yet (#1589).
+  takes from a safe angle to the meridian and add a margin.
+- **Set a clearance limit where the camera can reach the mount** (#1589). Near the zenith a long
+  imaging train or a rotator can swing into the pier or tripod even before any flip is due.
+  Turn on **Clearance limit** under **Settings → Unattended running → When to stop** and set
+  **Highest safe altitude**: point the scope higher by hand with the stop controls ready, at the
+  rotator angle where the camera comes closest, and set a few degrees under where it gets close.
+  While it is on, Ara refuses a GoTo, a plan's slew, a Center step or a meridian flip to a target
+  at or above that altitude, and nothing moves. If the mount tracks up to it, Ara stops tracking
+  and guiding, pauses the run and sends a critical alert saying why; it never slews or parks the
+  mount on its own. Slew to a lower target before you turn tracking back on. The limit is off on
+  a new profile and on an upgraded one, it is one value per profile (it does not follow the
+  rotator angle), and Simple Mode's Mount window shows it.
 - **Guiding after a flip:** the guider flips its calibration from the mount's pier side. If Dec
   runs away after a flip, change the guider's **Meridian flip reverses Dec** for this mount and
   watch the next flip.

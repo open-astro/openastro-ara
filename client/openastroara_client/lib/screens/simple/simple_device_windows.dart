@@ -1258,6 +1258,26 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
             ),
           ),
         );
+        // #1589 — the rig's clearance limit, read-only here: it is measured
+        // per rig and set in the full app.
+        children.add(
+          simpleWindowRow(
+            context.l10n.deviceClearanceLimit,
+            id: 'Clearance limit',
+            Tooltip(
+              message: context.l10n.deviceClearanceLimitHint,
+              child: Text(
+                p.clearanceLimitEnabled
+                    ? context.l10n.deviceClearanceLimitAt(
+                        p.clearanceMaxAltitudeDeg.toStringAsFixed(0),
+                      )
+                    : context.l10n.deviceOff,
+                key: const Key('simple-mount-clearance'),
+                style: kSimpleText,
+              ),
+            ),
+          ),
+        );
       } else {
         children.add(
           SectionNotLoaded(

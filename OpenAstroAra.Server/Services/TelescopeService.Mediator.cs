@@ -371,6 +371,9 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 LogSlewTargetRefused("telescope.slew", refusal);
                 throw new SequenceEntityFailedException(refusal);
             }
+            // #1589 — the profile's clearance limit (off by default), with the same no-fault refusal as above:
+            // a sequence GoTo, a Center iteration and the flip goto never point the camera into the mount.
+            ThrowIfAboveClearance(targetRa, targetDec, "telescope.slew");
             lock (_gate) {
                 TargetLatch.NoteTargetCommand(); // §57.9 — a goto re-arms the target display
                 SlewWatch.NoteSlewTarget(targetRa, targetDec); // §57.8 — slew_started carries the intent
@@ -842,6 +845,18 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             $"{op} refused: the target Dec {decDeg:F2}° is outside -90..90°. Nothing was sent to the mount.");
     }
 
+    /// <summary>#1589 — the clearance part of the mediator's slew guard: with the profile's clearance limit on,
+    /// a target at or above it fails the instruction before anything reaches the mount, with no op fault (the
+    /// mount did nothing wrong). The target is in the mount's frame; see <see cref="ClearanceGuard"/>.</summary>
+    private void ThrowIfAboveClearance(double raHours, double decDeg, string op) {
+        var target = new Coordinates(Angle.ByHours(raHours), Angle.ByDegree(decDeg), Epoch.JNOW);
+        if (ClearanceGuard.TargetAboveClearance(_profileStore, target, UtcNow(), _logger) is { } high) {
+            var refusal = $"{op} refused: {ClearanceGuard.RefusalDetail(high.AltitudeDeg, high.LimitDeg)}";
+            LogSlewTargetRefused(op, refusal);
+            throw new SequenceEntityFailedException(refusal);
+        }
+    }
+
     /// <summary>
     /// §28 — recalibrate the mount's pointing model to <paramref name="coordinates"/> (no motion). The
     /// centering loop (<see cref="OpenAstroAra.PlateSolving.CenteringSolver"/>) calls this after a solve so
@@ -963,6 +978,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogSlewTargetRefused("telescope.flip", refusal);
             throw new SequenceEntityFailedException(refusal);
         }
+        // #1589 — the clearance limit, before the pier-side write for the same reason.
+        ThrowIfAboveClearance(targetCoordinates.RA, targetCoordinates.Dec, "telescope.flip");
         // #2071 — before the pier-side hint: some mounts start the flip slew on that write. Waits for a
         // clock push in flight like the goto does, so a time sync landing at the flip does not abort it.
         if (await MountClockRefusalAfterPushAsync(token).ConfigureAwait(false) is { } clockRefusal) {

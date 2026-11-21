@@ -183,6 +183,18 @@ void main() {
     expect(row('Meridian flip'), row('Tracking'));
   });
 
+  testWidgets("the mount window shows the rig's clearance limit: Off, or the altitude it stops at (#1589)", (tester) async {
+    final off = FakeSafetySection(initial: const SafetyPolicies());
+    await _pump(tester, _wire(), safety: off);
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const Key('simple-mount-clearance'))).data, 'Off');
+    final on = FakeSafetySection(initial: const SafetyPolicies(clearanceLimitEnabled: true, clearanceMaxAltitudeDeg: 78));
+    await _pump(tester, _wire(), safety: on);
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const Key('simple-mount-clearance'))).data, 'Stops at 78°');
+    expect(on.puts, isEmpty, reason: 'read-only here');
+  });
+
   testWidgets('the meridian flip waits for the profile from the rig: no switch shows, and nothing is sent (ADR 0015)',
       (tester) async {
     final safety = FakeSafetySection(initial: null);

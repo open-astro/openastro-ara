@@ -97,11 +97,16 @@ public static class RefusalCatalog {
     // that turns RA with the motor is refused until the mount is synced or reconnected (a hand-turn start goes ahead).
     public static readonly RefusalCause PolarAlignClutchTurned = new("polar-align-clutch-turned", 409, "RA was turned with the clutch open");
 
+    // #1589 — a GoTo to a target at or above the profile's clearance limit (clearance_limit_enabled on): the camera
+    // or rotator could reach the pier or tripod there.
+    public static readonly RefusalCause AboveClearanceLimit = new("above-clearance-limit", 409, "The target is above the clearance limit", "altitude_deg", "limit_deg");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
         PolarAlignMountParked, PolarAlignUnconfirmed, PolarAlignSweepLimit, PolarAlignMovingMount, PolarAlignOnAxis,
         PolarAlignPointingUnknown, PolarAlignPoseAmbiguous, PolarAlignMountBusy,
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
+        AboveClearanceLimit,
     ];
 }

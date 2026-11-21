@@ -8673,6 +8673,16 @@ When any of Layers 1-3 trigger a failure, the mount goes to a known-safe state i
 - Sequence marked paused; in-flight target's frames preserved
 - Urgent notification fires — bundled looping alarm audio plays on any connected WILMA device, per §35.5
 
+**Clearance limit (#1589)**
+
+A per-profile `clearance_max_altitude_deg`, active only while `clearance_limit_enabled` is on (off by default, so an upgraded profile behaves as before; the safety section, D9). It answers the 2026-11-05 near miss on the CM4: tracking M33 near the zenith with the rotator at PA 72°, the camera came close to the mount 30 minutes before any flip was due, and the only altitude limit was the horizon floor. While it is on:
+
+- A REST GoTo (not a sync) to a target at or above it answers 409 `above-clearance-limit` (`altitude_deg`, `limit_deg`; `force` does not bypass it), and the mediator's slew core (a sequence GoTo, a Center iteration, the flip goto) fails the instruction before anything reaches the mount, with no op fault.
+- The flip does not start when the target will be at or above it at the flip (Layer 1's endpoint prediction, run whether or not `flip_safety_enabled` is on): nothing is touched and the run halts as on a failed flight check.
+- `MountClearanceWatch` reads the mount's cached position every 5 s; a tracking, unparked, still mount at or above the limit has its tracking and guiding stopped, every active run paused (a plain daemon pause, so the §58.12 shutdown and its park do not start from it) and one Critical notification. It never slews, parks or unparks. Tracking turned back on above the limit is stopped again, with a new notification.
+
+At the limit counts as reached. One value covers the profile: it does not follow the rotator angle or the imaging train, so the user sets it for the angle where the camera comes closest. A pad move (MoveAxis) and the path of a slew are not checked; only where a slew ends is. PUT `/profile/safety` refuses a value not above 0° and under 90° (400).
+
 ### 58.10 Severity escalation during unattended hours
 
 Profile gains an `unattended_hours` range (default: from astronomical dusk to astronomical dawn at site, or user-set time window). During unattended hours, all equipment-impacting event severities are **bumped one level**:

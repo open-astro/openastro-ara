@@ -98,6 +98,10 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
       _degrees(r.parameters['altitude_deg']),
       _degrees(r.parameters['limit_deg']),
     ),
+    RefusalCause.aboveClearanceLimit => l.refusalAboveClearanceLimit(
+      _degrees(r.parameters['altitude_deg']),
+      _degrees(r.parameters['limit_deg']),
+    ),
     RefusalCause.counterweightLimit => l.refusalCounterweightLimit(
       _hours(r.parameters['hour_angle_hours']),
       _wholeDegrees(r.parameters['counterweight_angle_deg']),

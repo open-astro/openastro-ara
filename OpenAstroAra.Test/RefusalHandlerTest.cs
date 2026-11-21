@@ -61,6 +61,7 @@ namespace OpenAstroAra.Test {
             new object[] { "mount-clock-not-verified", 409, Array.Empty<string>() },
             new object[] { "polar-align-already-running", 409, Array.Empty<string>() },
             new object[] { "polar-align-clutch-turned", 409, Array.Empty<string>() },
+            new object[] { "above-clearance-limit", 409, new[] { "altitude_deg", "limit_deg" } },
         };
 
         private static readonly string[] BothOptics = { "focal_length", "pixel_size" };
