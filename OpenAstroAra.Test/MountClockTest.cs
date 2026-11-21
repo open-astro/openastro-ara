@@ -410,6 +410,22 @@ namespace OpenAstroAra.Test {
             Assert.That(svc.MountClockMotionRefusal(), Is.Null);
         }
 
+        [Test]
+        public void MountSiderealTimeHours_reads_the_mounts_own_sidereal_time() {
+            // #1589 — the clearance watch's hour angle while the mount's clock is unverified: the mount's LST,
+            // which follows its own clock (here 6 h 49 m behind the rig's), never the rig's.
+            var mount = new FakeMountClock { Clock = StaleMount.UtcDateTime };
+            using var svc = new TelescopeService { MountClockSource = () => mount };
+            Assert.That(svc.MountSiderealTimeHours(), Is.EqualTo(Lst(StaleMount, Lng)).Within(1e-9));
+            Assert.That(svc.MountSiderealTimeHours(), Is.Not.EqualTo(Lst(Now, Lng)).Within(0.1), "the mount's clock, not the rig's");
+        }
+
+        [Test]
+        public void MountSiderealTimeHours_is_null_with_no_mount_clock() {
+            using var svc = new TelescopeService { MountClockSource = () => null };
+            Assert.That(svc.MountSiderealTimeHours(), Is.Null);
+        }
+
         // ─── the check ───
 
         private static (bool Verified, string Reason) Check(DateTimeOffset? mountUtc, double? mountLst,

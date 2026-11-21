@@ -32,6 +32,11 @@ public interface IMountClockGate {
     /// connects) or a host clock step is about to start one, it first waits for that push, up to about
     /// 10 s, instead of refusing a move the push is about to allow.</summary>
     Task<string?> MountClockRefusalAfterPushAsync(CancellationToken token);
+
+    /// <summary>#1589 — the connected mount's own local sidereal time in hours, read from the mount now; null
+    /// when no mount is connected or it cannot report one. The mount's RA follows its own clock, so this LST
+    /// gives the true hour angle even while the mount's clock is off the rig clock.</summary>
+    double? MountSiderealTimeHours();
 }
 
 // #2071 — the §31 push corrected the Pi's clock and never the mount's. On RC51 (2026-11-19) the mount
@@ -390,6 +395,8 @@ public sealed partial class TelescopeService : IMountClockGate {
     private static string Describe((DateTime? Utc, bool NotImplemented) read) =>
         read.Utc is { } u ? AlpacaTelescopeDevice.AsUtc(u).ToString("O", CultureInfo.InvariantCulture)
             : read.NotImplemented ? "not reported (not implemented)" : "unreadable";
+
+    public double? MountSiderealTimeHours() => CurrentMountClock() is { } clock ? TryRead(() => clock.SiderealTime) : null;
 
     public string? MountClockMotionRefusal() {
         var refusal = MountClockRefusalNow();

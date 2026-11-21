@@ -131,4 +131,29 @@ void main() {
       expect(find.text('Saved.'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'Unattended running: the clearance altitude row shows only while the clearance limit is on, and both save to the rig (#1589)',
+    (tester) async {
+      final section = await pumpOnRig(tester, const SafetyPoliciesPanel());
+      expect(find.byKey(const Key('safety-clearance-limit')), findsOneWidget);
+      expect(
+        find.byKey(const Key('safety-clearance-max-altitude')),
+        findsNothing,
+        reason: 'off on the rig: no altitude to set',
+      );
+      await tester.tap(
+        find.descendant(
+          of: find.byKey(const Key('safety-clearance-limit')),
+          matching: find.byType(Switch),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('safety-clearance-max-altitude')), findsOneWidget);
+      expect(find.text('80.0'), findsOneWidget, reason: "the rig's altitude");
+      await save(tester, SafetyPoliciesPanel);
+      expect(section.puts.single.clearanceLimitEnabled, isTrue);
+      expect(section.puts.single.clearanceMaxAltitudeDeg, 80.0);
+    },
+  );
 }

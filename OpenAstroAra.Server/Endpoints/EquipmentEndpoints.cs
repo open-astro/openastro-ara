@@ -51,7 +51,8 @@ public static partial class EquipmentEndpoints {
     /// active unless the request is a sync or forced (rig night 2026-10-18: a Planning GoTo mid-dither was
     /// accepted without a word, the guider stopped and the run parked); otherwise the 202 the telescope
     /// service answers. A slew (not a sync) to a target under the profile's horizon limit is refused
-    /// with the <c>below-horizon-limit</c> Refusal (#2044), and one below the pole within 2 h of the lower
+    /// with the <c>below-horizon-limit</c> Refusal (#2044), one at or above the profile's clearance limit (when it is on)
+    /// with the <c>above-clearance-limit</c> Refusal (#1589), and one below the pole within 2 h of the lower
     /// meridian on a German equatorial mount with the <c>counterweight-limit</c> Refusal (#2073); <c>force</c> bypasses neither. Testable
     /// without the host.</summary>
     internal static async Task<IResult> SlewAsync(SlewRequestDto request, string? idempotencyKey, ITelescopeService telescope, ISequencerService sequencer, IProfileStore? profiles, CancellationToken ct, Microsoft.Extensions.Logging.ILogger? logger = null, IPolarAlignService? polarAlign = null) {
@@ -71,6 +72,12 @@ public static partial class EquipmentEndpoints {
                 throw new RefusalException(RefusalCatalog.BelowHorizonLimit,
                     string.Create(CultureInfo.InvariantCulture, $"The target is at {low.AltitudeDeg:F1}°, below the {low.LimitDeg:F1}° horizon limit."),
                     new Dictionary<string, object?> { ["altitude_deg"] = low.AltitudeDeg, ["limit_deg"] = low.LimitDeg });
+            }
+            // #1589 — the profile's clearance limit (off by default): the camera can reach the mount up there.
+            if (ClearanceGuard.TargetAboveClearance(profiles, target, DateTimeOffset.UtcNow, logger) is { } high) {
+                throw new RefusalException(RefusalCatalog.AboveClearanceLimit,
+                    ClearanceGuard.RefusalDetail(high.AltitudeDeg, high.LimitDeg),
+                    new Dictionary<string, object?> { ["altitude_deg"] = high.AltitudeDeg, ["limit_deg"] = high.LimitDeg });
             }
             // #2073 — the daemon now turns tracking on before a GoTo, so the mount's "tracking is off"
             // refusal no longer stops a target below the pole that would put the counterweight up. Only a
@@ -410,7 +417,7 @@ public static partial class EquipmentEndpoints {
         telescope.MapPost("/slew", ([FromBody] SlewRequestDto request, [FromHeader(Name = "Idempotency-Key")] string? key, ITelescopeService svc, ISequencerService sequencer, IProfileStore profiles, IPolarAlignService polarAlign, Microsoft.Extensions.Logging.ILogger<Program> logger, CancellationToken ct) =>
                 SlewAsync(request, key, svc, sequencer, profiles, ct, logger, polarAlign))
             .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
-            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit, counterweight-limit or polar-align-moving-mount Refusal
+            .ProducesProblem(StatusCodes.Status409Conflict); // run_in_progress (a slew during a run that was neither a sync nor forced), or the below-horizon-limit, above-clearance-limit, counterweight-limit or polar-align-moving-mount Refusal
         // Park's body (an optional Reason) is nullable so a bodyless POST works — the panel's
         // Park button sends no body, and a required [FromBody] would 400/415 it (the bug where
         // "Park does nothing"). Reason defaults to null when absent.
