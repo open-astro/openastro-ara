@@ -114,7 +114,8 @@ namespace OpenAstroAra.Test {
             }
 
             public int Restarts() { lock (Steps) { return Steps.Count(s => s == "restart"); } }
-            public int Resumed() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.ResumeRunsAsync));
+            // From the resume's own callback: Moq lists an invocation before its callback runs.
+            public int Resumed() { lock (Steps) { return Steps.Count(s => s == "resume"); } }
             public int Paused() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync));
             public int FramePauses() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync)
                 && i.Arguments.Count == 3 && (bool)i.Arguments[1]!);
