@@ -75,8 +75,20 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequenceDetail> updateSequence(String id,
       {String? name, String? description, Map<String, dynamic>? body}) async {
+    calls.add('save');
+    if (refuseSave) {
+      final req = RequestOptions(path: '/api/v1/sequences/$id');
+      throw DioException(
+          requestOptions: req,
+          type: DioExceptionType.badResponse,
+          response: Response(
+              requestOptions: req, statusCode: 422, data: {'detail': 'exposure time must be above 0'}));
+    }
     return SequenceDetail(id: id, name: name ?? id, description: description, body: body ?? const {});
   }
+
+  /// Refuse a PATCH with a 422, when set.
+  bool refuseSave = false;
   @override
   Future<SequenceNode> getSequence(String id) async => SequenceNode(
       id: 'root', kind: SequenceNodeKind.root, displayName: 'fake');
@@ -400,6 +412,49 @@ void main() {
       expect(find.text('Not polar aligned — run anyway?'), findsNothing);
       final fake = container.read(sequenceApiProvider) as _FakeClient;
       expect(fake.calls, contains('start'));
+    });
+
+    Future<(ProviderContainer, _FakeClient)> pumpAlignedWithEdit(
+        WidgetTester tester, {bool refuseSave = false}) async {
+      await wideSurface(tester);
+      final fake = _FakeClient()..refuseSave = refuseSave;
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(fake),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(null)),
+        polarAlignLiveProvider.overrideWith(() => _AlignedLiveNotifier()),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      final editor = container.read(sequenceEditorProvider.notifier);
+      editor.load(SequenceDetail(id: 'seq-1', name: 'seq-1', body: _editedBody));
+      editor.removeNode(const [0]); // an unsaved change to the plan's layout
+      await tester.pumpAndSettle();
+      return (container, fake);
+    }
+
+    testWidgets('Run saves unsaved edits before starting', (tester) async {
+      // #2168 — a run started from the stored copy could never take them, and
+      // Resume would be stuck behind them.
+      final (container, fake) = await pumpAlignedWithEdit(tester);
+      btn(tester, 'Run').onPressed!();
+      await tester.pumpAndSettle();
+      expect(fake.calls, ['save', 'start']);
+      expect(container.read(sequenceEditorProvider)!.isDirty, isFalse);
+    });
+
+    testWidgets("Run doesn't start when saving the edits is refused",
+        (tester) async {
+      final (container, fake) = await pumpAlignedWithEdit(tester, refuseSave: true);
+      btn(tester, 'Run').onPressed!();
+      await tester.pumpAndSettle();
+      expect(fake.calls, ['save'], reason: 'not started on the old copy');
+      expect(find.textContaining("couldn't be saved, so the run didn't start"), findsOneWidget);
+      expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
     });
 
     testWidgets('a non-Dio lifecycle failure surfaces a SnackBar, not a crash',

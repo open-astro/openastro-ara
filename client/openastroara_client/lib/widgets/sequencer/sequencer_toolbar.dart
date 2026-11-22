@@ -585,9 +585,42 @@ Future<void> preflightAndRunSequence(BuildContext context, ProviderReader read) 
     if (go != true) return;
   }
   if (!context.mounted) return;
+  // #2168 — Run starts what the editor shows: unsaved edits are saved first.
+  // Started from the stored copy, they could never join the run (a running
+  // plan can't take them), and Resume would be stuck behind them.
+  if (!await _saveBeforeRun(context, read) || !context.mounted) return;
   await runSequenceLifecycle(context, read, (api, id) => api.start(id));
 }
 
+/// Save the editor's unsaved edits to the sequence about to run. True when
+/// there was nothing to save or it saved; false (with the reason) when the
+/// daemon refused, so the run doesn't start on the old copy.
+Future<bool> _saveBeforeRun(BuildContext context, ProviderReader read) async {
+  final editor = read(sequenceEditorProvider);
+  final api = read(sequenceApiProvider);
+  final id = read(selectedSequenceIdProvider);
+  if (editor == null || api == null || !editor.isDirty || editor.id != id) {
+    return true;
+  }
+  final messenger = ScaffoldMessenger.of(context);
+  final sent = editor.body;
+  try {
+    final saved = await api.updateSequence(editor.id, body: sent);
+    read(sequenceEditorProvider.notifier)
+        .markSaved(sent, modifiedUtc: saved.modifiedUtc);
+    return true;
+  } on DioException catch (e) {
+    messenger.showSnackBar(SnackBar(
+      content: Text(e.response?.statusCode == 422
+          ? "Your changes couldn't be saved, so the run didn't start: "
+              '${_validationMessage(e) ?? 'the sequence is invalid.'}'
+          : "Your changes couldn't be saved, so the run didn't start. Check "
+              'the connection and try again.'),
+      backgroundColor: AraColors.accentError,
+    ));
+    return false;
+  }
+}
 
 enum _PreflightChoice { cancel, goToSetup, runAnyway }
 

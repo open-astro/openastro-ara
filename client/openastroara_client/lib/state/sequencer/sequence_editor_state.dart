@@ -307,7 +307,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
       final s = state;
       if (s == null) return null;
       final changes = scalarFieldChanges(s.originalBody, s.body);
-      if (changes == null) return _liveStructureNotice;
+      if (changes == null) return _unsavedLayoutNotice;
       if (changes.isEmpty) return null;
       try {
         final detail = await api.setRunFields(s.id, changes,
@@ -405,6 +405,12 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         'change it.');
     return true;
   }
+
+  /// Unsaved edits from before the run started (on another screen or device)
+  /// that add, remove or move items: a running plan can't take them.
+  static const String _unsavedLayoutNotice =
+      "Your unsaved changes add, remove or move items, and the running plan "
+      "can't take them. Undo them, then try again.";
 
   static const String _liveStructureNotice =
       'While the run is going you can change settings and add, remove or '

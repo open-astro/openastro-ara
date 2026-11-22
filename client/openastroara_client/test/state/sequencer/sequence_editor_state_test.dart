@@ -829,6 +829,32 @@ void main() {
       expect(api.resumed, ['seq-1']);
     });
 
+    test('unsaved layout edits from before the run say how to get out',
+        () async {
+      // Edits made before a run that started elsewhere (Simple mode, another
+      // device): the running plan can't take them, and Undo clears the way.
+      api = _LiveFakeClient();
+      final run = _SwitchableRunNotifier();
+      final c = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(api),
+        sequenceRunStateProvider.overrideWith(() => run),
+      ]);
+      addTearDown(c.dispose);
+      await c.read(sequenceRunStateProvider.future);
+      final n = c.read(sequenceEditorProvider.notifier);
+      n.load(sampleDetail());
+      n.removeNode(const [1]); // local: no run yet
+      run.set(const SequenceRunStateInfo(
+          sequenceId: 'seq-1', runId: 'run-1', state: SequenceRunState.paused));
+
+      expect(await n.applyLiveEdits(), isFalse);
+      expect(c.read(liveEditNoticeProvider), contains('Undo them, then try again'));
+      expect(api.fieldSaves, isEmpty);
+      n.undo();
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+      expect(await n.applyLiveEdits(), isTrue, reason: 'nothing left in the way');
+    });
+
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
       final c = liveContainer();
       final n = await liveCtrl(c);
@@ -844,6 +870,13 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
   final SequenceRunStateInfo? _v;
   @override
   Future<SequenceRunStateInfo?> build() async => _v;
+}
+
+/// Run state a test can move on (no run, then a run that started elsewhere).
+class _SwitchableRunNotifier extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => null;
+  void set(SequenceRunStateInfo v) => state = AsyncData(v);
 }
 
 /// Records live-edit calls; returns a fresh sampleDetail as the updated dto.
