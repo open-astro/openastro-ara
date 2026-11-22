@@ -70,11 +70,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             if (ConnectEquipment.RoleOf(SelectedDevice) is not { } role) {
                 return;
             }
-            if (!connections.IsConnected(role)) {
+            // Only a user disconnect already on record is skipped: a tripped or still-connecting device is not
+            // Connected, yet the service must still record the disconnect and supersede its connect.
+            if (connections.IsDisconnectedByUser(role)) {
                 Logger.Info($"{SelectedDevice} is already disconnected");
                 return;
             }
-            await connections.DisconnectAsync(role, token).ConfigureAwait(false);
+            try {
+                await connections.DisconnectAsync(role, token).ConfigureAwait(false);
+            } catch (EquipmentRefusedException ex) when (ex.Cause == EquipmentRefusalCause.NotKnown) {
+                Logger.Info($"{SelectedDevice} is not known to this rig, so there is nothing to disconnect");
+            }
         }
 
         public bool Validate() {

@@ -5,7 +5,6 @@ using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.Runtime.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -53,7 +52,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             foreach (var device in Devices) {
                 if (ConnectEquipment.RoleOf(device) is not { } role) { continue; }
 
-                if (!connections.IsConnected(role)) {
+                if (connections.IsDisconnectedByUser(role)) {
                     Logger.Info($"{device} is already disconnected");
                     continue;
                 }
