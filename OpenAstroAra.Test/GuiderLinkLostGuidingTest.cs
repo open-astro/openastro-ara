@@ -320,5 +320,34 @@ namespace OpenAstroAra.Test {
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
             Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((1, 0)), "started once, never resumed on unsettled guiding");
         }
+
+        [Test]
+        public async Task A_run_the_user_took_over_during_the_reconnect_gets_no_automatic_guiding_start() {
+            // #2169 review — the user resumed or stopped the run while the guider was away: guiding is theirs to start.
+            using var rig = new Rig();
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(Array.Empty<Guid>());
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false);
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Assert.That((rig.Restarts(), rig.Titled(NotRestartedTitle)), Is.EqualTo((0, 0)), "no guiding start under a run the user owns, and no alert");
+        }
+
+        [Test]
+        public async Task Guiding_is_not_restarted_while_the_safety_engine_holds_the_rig() {
+            // #2169 review — a parked or held rig (clouds, a limit) must not start guiding under the safety engine.
+            using var rig = new Rig();
+            rig.Service.SafetyHoldsRig = () => true;
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the run stays paused, and the user is told");
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((0, 0)), "no guiding start and no resume while the safety engine holds the rig");
+        }
     }
 }
