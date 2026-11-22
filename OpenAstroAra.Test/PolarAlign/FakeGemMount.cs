@@ -406,17 +406,12 @@ namespace OpenAstroAra.Test.PolarAlign {
             }
         }
 
-        /// <summary>The mount is moved by other means: by its own motors (the hand pad, another app's slew), so it
-        /// knows where it is (<paramref name="encodersFollow"/>), or by hand with the clutches open, so it does not.</summary>
-        public void MoveByOtherMeans(GemPose truePose, bool encodersFollow = true) {
+        /// <summary>The mount is moved by other means, by its own motors (the hand pad, another app's slew), so it
+        /// knows where it is.</summary>
+        public void MoveByOtherMeans(GemPose truePose) {
             lock (_lock) {
                 IntegrateLocked();
-                var believed = BelievedLocked();
                 _true = Normalized(truePose);
-                if (!encodersFollow) {
-                    _zeroErrHaDeg = GemGeometry.Wrap180(believed.MechHaDeg - _true.MechHaDeg);
-                    _zeroErrDecDeg = believed.DecAxisDeg - _true.DecAxisDeg;
-                }
                 _homeFlag = false;
                 _sample = null;
                 NotePoseLocked();
@@ -560,23 +555,6 @@ namespace OpenAstroAra.Test.PolarAlign {
         public long AbortEpoch => Interlocked.Read(ref _abortEpoch);
 
         public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
-
-        /// <summary>The syncs the mount accepted (#2083): a test bumps it to play a plate-solve sync (Sync itself is forbidden here).</summary>
-        public long SyncEpoch { get; set; }
-
-        /// <summary>A plate-solve sync as TelescopeService takes one (#2066, #2083): not sent while a routine holds the
-        /// mount's motion owner (false); else the mount accepts it and <see cref="SyncEpoch"/> moves (true).</summary>
-        public bool SyncAsTheDaemonDoes() {
-            lock (_lock) {
-                if (_motionOwner is not null) {
-                    CommandLocked("sync refused: " + _motionOwner + " holds the mount", isMotion: false);
-                    return false;
-                }
-                SyncEpoch++;
-                CommandLocked("sync", isMotion: false);
-                return true;
-            }
-        }
 
         public ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
 

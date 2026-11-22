@@ -136,21 +136,6 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_hand_turn_says_the_polar_aligner_motors_are_off_even_with_auto_on() {
-            var settings = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(PolarAlignerAuto: true).Confirmed(MountId));
-
-            var handTurn = await PolarAlignPreflightEvaluator.EvaluateAsync(
-                Inputs(settings: () => settings) with { AlignerPresent = () => true, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.Multiple(() => {
-                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
-                Assert.That(Check(handTurn, PolarAlignPreflightChecks.Aligner).Detail,
-                    Is.EqualTo("The Polar Aligner's motors are off: you turn the bolts."),
-                    "a hand-turn run never drives the aligner's motors, so the row must not claim its Stop");
-            });
-        }
-
-        [Test]
         public async Task No_check_says_a_later_issue_will_fill_it() {
             var ready = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(), CancellationToken.None).ConfigureAwait(false);
             var aligner = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with {
@@ -246,8 +231,6 @@ namespace OpenAstroAra.Test {
                 await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { AlignmentMode = () => mode }, CancellationToken.None).ConfigureAwait(false);
 
             var altAz = await With(AlignmentMode.AltAz).ConfigureAwait(false);
-            var altAzByHand = await PolarAlignPreflightEvaluator.EvaluateAsync(
-                Inputs() with { AlignmentMode = () => AlignmentMode.AltAz, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
             var gem = await With(AlignmentMode.GermanPolar).ConfigureAwait(false);
             var fork = await With(AlignmentMode.Polar).ConfigureAwait(false);
             var unknown = await With(null).ConfigureAwait(false);
@@ -255,7 +238,6 @@ namespace OpenAstroAra.Test {
             Assert.Multiple(() => {
                 Assert.That(Check(altAz, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(CauseOf(altAz), Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount));
-                Assert.That(CauseOf(altAzByHand), Is.EqualTo(RefusalCatalog.PolarAlignAltAzMount), "turning by hand has no RA axis to turn either");
                 Assert.That(Check(gem, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(Check(fork, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(Check(unknown, PolarAlignPreflightChecks.MountType).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
@@ -263,20 +245,20 @@ namespace OpenAstroAra.Test {
             });
         }
 
-        // #2083 — a mount that cannot turn its RA axis by rate gets no motor start; Turn RA by hand moves nothing.
+        // #2083 — a mount that cannot turn its RA axis by rate cannot run Polar Align. #2170: there is no manual mode to
+        // fall back on, so neither the row nor the refusal offers one.
         [Test]
-        public async Task A_mount_that_cannot_move_its_RA_axis_refuses_a_motor_start_and_warns_a_hand_turn() {
+        public async Task A_mount_that_cannot_move_its_RA_axis_refuses() {
             var motor = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => false }, CancellationToken.None).ConfigureAwait(false);
-            var byHand = await PolarAlignPreflightEvaluator.EvaluateAsync(
-                Inputs() with { CanMovePrimaryAxis = () => false, HandTurn = true }, CancellationToken.None).ConfigureAwait(false);
             var can = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => true }, CancellationToken.None).ConfigureAwait(false);
             var unknown = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs() with { CanMovePrimaryAxis = () => null }, CancellationToken.None).ConfigureAwait(false);
 
             Assert.Multiple(() => {
                 Assert.That(Check(motor, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
                 Assert.That(CauseOf(motor), Is.EqualTo(RefusalCatalog.PolarAlignCannotMoveAxis));
-                Assert.That(Check(byHand, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Warn));
-                Assert.That(byHand.Dto.Ready, Is.True);
+                Assert.That(motor.Dto.Ready, Is.False, "the start is refused");
+                Assert.That(Check(motor, PolarAlignPreflightChecks.CanMoveAxis).Detail, Does.Not.Contain("by hand").IgnoreCase, "no hand turn is offered");
+                Assert.That(motor.FirstFailure!.Message, Does.Not.Contain("by hand").IgnoreCase, "no hand turn is offered");
                 Assert.That(Check(can, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
                 Assert.That(Check(unknown, PolarAlignPreflightChecks.CanMoveAxis).Status, Is.EqualTo(PolarAlignPreflightStatuses.Unknown));
                 Assert.That(unknown.Dto.Ready, Is.True);

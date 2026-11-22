@@ -20,11 +20,6 @@ import 'polar_align_state.dart';
 /// connect clears it with no event the app sees. Null with no rig, or from a
 /// rig that predates the list (the card then shows none, and the rig's own
 /// start refusals stand).
-///
-/// The list is the one for a Turn RA by hand start (Joey, 2026-11-21): a
-/// clearance that is not confirmed is a warn there, so Start stays on and its
-/// confirm step offers Turn RA by hand alone (the motor waits for the
-/// clearance).
 class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
   /// How long after a failing mount-clock check the list is read again: the
   /// rig's push takes up to about 10 s.
@@ -91,7 +86,7 @@ class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
       changed,
     );
     final seq = ++_seq;
-    final list = await api.preflight(handTurn: true);
+    final list = await api.preflight();
     if (seq == _seq) _scheduleClockRetry(list);
     return list;
   }
@@ -103,7 +98,7 @@ class PolarAlignPreflightNotifier extends AsyncNotifier<PolarAlignPreflight?> {
     if (api == null) return;
     final seq = ++_seq;
     try {
-      final next = await api.preflight(handTurn: true);
+      final next = await api.preflight();
       if (!ref.mounted || seq != _seq) return;
       state = AsyncData(next);
       _scheduleClockRetry(next);

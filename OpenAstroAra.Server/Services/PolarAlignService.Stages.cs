@@ -151,11 +151,6 @@ namespace OpenAstroAra.Server.Services {
         private async Task RunSeededAdjustAsync(
                 LiveCapture capture, Func<Task> renewLeaseIfDue, SiteSettingsDto site, PolarAlignSettingsDto settings,
                 RunBand band, int gen, CancellationToken ct, LiveCapture? liveCapture = null) {
-            if (band.HandTurn) {
-                // #2083 — the user turns RA by hand: no tracking switch-on, no tilt, no motor turn (PolarAlignService.HandTurn.cs).
-                await RunSeededAdjustByHandAsync(capture, renewLeaseIfDue, site, settings, band, gen, liveCapture, ct).ConfigureAwait(false);
-                return;
-            }
             var north = site.LatitudeDeg > 0;
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
 
@@ -193,8 +188,7 @@ namespace OpenAstroAra.Server.Services {
             await AdjustFromSeedAsync(axis, sigma, c, cTime, mountTurn1 + mountTurn2, liveCapture ?? capture, renewLeaseIfDue, site, gen, ct).ConfigureAwait(false);
         }
 
-        /// <summary>The seed's axis error, then the live adjust loop until Stop or Done: shared by the motor seed and
-        /// the hand-turn seed (#2083). <paramref name="c"/> is the seed's last solve, taken at <paramref name="cTime"/>;
+        /// <summary>The seed's axis error, then the live adjust loop until Stop or Done. <paramref name="c"/> is the seed's last solve, taken at <paramref name="cTime"/>;
         /// <paramref name="seedTurnDeg"/> is logged; <paramref name="sigma"/> is the fit's uncertainty (#2072), the live readout's.</summary>
         private async Task AdjustFromSeedAsync(
                 (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, PolarAlignSolveOutcome c, DateTimeOffset cTime, double seedTurnDeg,
@@ -251,9 +245,6 @@ namespace OpenAstroAra.Server.Services {
             var north = site.LatitudeDeg > 0;
             // From where the mount points (#2048), the way the user confirmed (#2082: a Check is its own confirmed Start).
             await SetStageAsync(gen, PolarAlignStages.Check, "checking").ConfigureAwait(false);
-            if (band.HandTurn) {
-                return await RunCheckByHandAsync(guiderClient, workDir, site, settings, band, gen, ct).ConfigureAwait(false); // #2083
-            }
             await EnsureTrackingOnAsync(gen, ct).ConfigureAwait(false);
             // StartAsync clears the frame size per run: a guide-camera check reads it afresh.
             if (mainCamera is null) {
@@ -295,7 +286,7 @@ namespace OpenAstroAra.Server.Services {
         }
 
         /// <summary>The check's verdict from its fitted axis, measured at <paramref name="at"/>, beside the last run's
-        /// readout: shared by the motor check and the hand-turn check (#2083).</summary>
+        /// readout.</summary>
         private PolarAlignCheckResultDto CheckResultFor(
                 (double RaDeg, double DecDeg, double ConeDeg) axis, FitUncertainty sigma, double mismatch, SiteSettingsDto site, DateTimeOffset at) {
             var (altErr, azErr) = PolarAlignGeometry.AxisError(axis.RaDeg, axis.DecDeg, site.LatitudeDeg, site.LongitudeDeg, at);
