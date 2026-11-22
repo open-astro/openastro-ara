@@ -95,8 +95,7 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>One point's solves averaged (<see cref="PolarAlignGeometry.MeanDirection"/>) at their mean time, with
         /// the rms scatter about the mean and the mean's 1σ from it (<see cref="PolarAlignGeometry.MeanStandardErrorArcsec"/>,
-        /// floored later by <see cref="PointSigmaArcsec"/>). With <paramref name="tracking"/> off (a hand-turn run may have
-        /// it off) the field runs on with the Earth's turn between frames, about 1.3″/s at Dec 85°: each solve is first
+        /// floored later by <see cref="PointSigmaArcsec"/>). With <paramref name="tracking"/> off the field runs on with the Earth's turn between frames, about 1.3″/s at Dec 85°: each solve is first
         /// moved to the mean time, as the fit moves its points, so the scatter is the solves' own and not that drift.</summary>
         internal static (PolarAlignSolveOutcome Point, DateTimeOffset At, double ScatterArcsec) AveragePointSolves(
                 IReadOnlyList<(PolarAlignSolveOutcome S, DateTimeOffset At)> solves, bool tracking) {
@@ -111,7 +110,7 @@ namespace OpenAstroAra.Server.Services {
             return (new PolarAlignSolveOutcome(true, ra, dec, SigmaArcsec: sigma, Solves: solves.Count, PixelScaleArcsec: scale), meanAt, scatter);
         }
 
-        /// <summary>The uncertainty of the three-point fit of <see cref="FitThreePointOrFail"/> (and its hand-turn twin):
+        /// <summary>The uncertainty of the three-point fit of <see cref="FitThreePointOrFail"/>:
         /// each point moved to the last one's time by the Earth's turn, as the fit moves it, and its 1σ carried through
         /// the fit to the axis error at the last point's time.</summary>
         /// <exception cref="RoutineFailedException"><c>axis_fit_failed</c>, as the fit itself (a fit that just

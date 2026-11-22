@@ -104,45 +104,6 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
-        // Joey, 2026-11-21: a Turn RA by hand start sends the mount no move (#2083), so an unconfirmed clearance only warns
-        // for it; every motor start (the plan, Start, the adjust screen's Check, Rough first) is still refused.
-        [Test]
-        public async Task A_hand_turn_start_goes_ahead_without_the_clearance_and_a_motor_start_is_still_refused() {
-            var mount = FakeGemMount.CounterweightDownAt(-4.0, 85.0, lstHours: 20.0, tracking: true, clock: new ManualMountClock());
-            mount.FreshReadTakes = FreshRead;
-            var ws = new WsRecorder();
-            var store = TenDegreeStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
-            using var svc = NewGemService(mount, ws, store);
-            string StatusOf(PolarAlignPreflightDto dto) => dto.Checks.Single(c => c.Id == PolarAlignPreflightChecks.ClearanceConfirmed).Status;
-
-            var motorList = await svc.GetPreflightAsync(null, handTurn: false, CancellationToken.None).ConfigureAwait(false);
-            var handList = await svc.GetPreflightAsync(null, handTurn: true, CancellationToken.None).ConfigureAwait(false);
-            Assert.Multiple(() => {
-                Assert.That(StatusOf(motorList), Is.EqualTo(PolarAlignPreflightStatuses.Fail), "a motor start refuses on it");
-                Assert.That(motorList.Ready, Is.False);
-                Assert.That(StatusOf(handList), Is.EqualTo(PolarAlignPreflightStatuses.Warn), "a hand-turn start only warns");
-                Assert.That(handList.Ready, Is.True, string.Join("; ", handList.Checks.Where(c => c.Status == PolarAlignPreflightStatuses.Fail).Select(c => c.Detail)));
-            });
-
-            foreach (var stage in new[] { PolarAlignStages.Fine, PolarAlignStages.Coarse, PolarAlignStages.Check }) {
-                var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(stage, handTurn: false, CancellationToken.None));
-                Assert.That(planRefusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed), $"a motor {stage} plan is refused");
-            }
-            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, handTurn: true, CancellationToken.None).ConfigureAwait(false);
-            var motorStart = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine,
-                new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None));
-            Assert.That(motorStart!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed), "a motor Start is refused");
-
-            await svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, HandTurn: true), null,
-                CancellationToken.None).ConfigureAwait(false);
-            var status = await svc.GetStatusAsync(CancellationToken.None).ConfigureAwait(false);
-            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
-
-            Assert.That(status.HandTurn, Is.True, "the hand-turn run started");
-            Assert.That(mount.Motions, Is.Empty, "and Ara moved nothing. " + mount.Describe());
-        }
-
         // ── the adjust screen's Check (EndAdjustForCheckAsync) ───────────────────────────────
 
         /// <summary>A refused Check leaves the adjust loop as it was: still adjusting, still holding the mount, no stop
@@ -198,32 +159,6 @@ namespace OpenAstroAra.Test {
             await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
         }
 
-        [Test]
-        public async Task An_adjust_screen_hand_turn_Check_without_the_clearance_goes_ahead() {
-            var mount = PolledGemAt(-4.0);
-            var ws = new WsRecorder();
-            var store = TenDegreeStore();
-            using var svc = NewGemService(mount, ws, store);
-            await StartByHandAsync(svc, PolarAlignStages.Fine).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0).ConfigureAwait(false);
-            Assert.That((await PollStateAsync(svc, "adjusting", "failed").ConfigureAwait(false)).State, Is.EqualTo("adjusting"));
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
-            var checkFrom = ws.Events.Count;
-
-            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Check, handTurn: true, CancellationToken.None).ConfigureAwait(false);
-            await svc.StartAsync(PolarAlignStages.Check, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, HandTurn: true), null,
-                CancellationToken.None).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0, from: checkFrom).ConfigureAwait(false);
-            await TurnByHandWhenAskedAsync(ws, mount, point: 3, deg: 10.0, from: checkFrom).ConfigureAwait(false);
-            var status = await PollStateAsync(svc, checkFrom, "checked", "failed").ConfigureAwait(false);
-
-            Assert.That(status.State, Is.EqualTo("checked"),
-                string.Join("; ", ws.Events.Where(e => e.Type == WsEventCatalog.PolarAlignError).Select(e => e.Payload.GetRawText())));
-            Assert.That(status.HandTurn, Is.True, "the hand-turn check ran");
-            Assert.That(mount.Motions, Is.Empty, "and Ara moved nothing. " + mount.Describe());
-        }
-
         // ── the motion owner's rank in the list ──────────────────────────────────────────────
 
         [Test]
@@ -233,10 +168,10 @@ namespace OpenAstroAra.Test {
             var mount = PolledGemAt(-4.0);
             var ws = new WsRecorder();
             var store = TenDegreeStore();
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
             using var svc = NewGemService(mount, ws, store);
-            // The motor plan is refused on the clearance; the hand-turn plan gives the direction to confirm.
-            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, handTurn: true, CancellationToken.None).ConfigureAwait(false);
+            // The plan is read while the clearance stands (an unconfirmed one refuses the plan too), then taken back.
+            var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { MountClearance = null });
             using var sequencer = mount.AcquireMotion("sequencer");
             Task Start() => svc.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin), null, CancellationToken.None);
 

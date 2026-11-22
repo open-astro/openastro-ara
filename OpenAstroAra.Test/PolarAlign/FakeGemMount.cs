@@ -561,23 +561,6 @@ namespace OpenAstroAra.Test.PolarAlign {
 
         public long SessionEpoch => Interlocked.Read(ref _sessionEpoch);
 
-        /// <summary>The syncs the mount accepted (#2083): a test bumps it to play a plate-solve sync (Sync itself is forbidden here).</summary>
-        public long SyncEpoch { get; set; }
-
-        /// <summary>A plate-solve sync as TelescopeService takes one (#2066, #2083): not sent while a routine holds the
-        /// mount's motion owner (false); else the mount accepts it and <see cref="SyncEpoch"/> moves (true).</summary>
-        public bool SyncAsTheDaemonDoes() {
-            lock (_lock) {
-                if (_motionOwner is not null) {
-                    CommandLocked("sync refused: " + _motionOwner + " holds the mount", isMotion: false);
-                    return false;
-                }
-                SyncEpoch++;
-                CommandLocked("sync", isMotion: false);
-                return true;
-            }
-        }
-
         public ASCOM.Common.DeviceInterfaces.AlignmentMode? MountAlignmentMode => ASCOM.Common.DeviceInterfaces.AlignmentMode.GermanPolar;
 
         public Task MoveAxisAsync(int axis, double rate, int? leaseMs, CancellationToken ct) =>
