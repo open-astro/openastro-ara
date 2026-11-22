@@ -12274,21 +12274,23 @@ abstract class AppLocalizations {
   /// **'RA motor direction'**
   String get polarMotorDirection;
 
-  /// Polar align saved RA motor direction (#2081); driver and version are the mount driver's name and version as reported, direction is polarDirectionEast or polarDirectionWest
+  /// Polar align saved RA motor direction (#2081, #2167); mount is the mount identity the test was saved for (its Alpaca unique id or name, or polarMotorDirectionMountDriver with the driver version), direction is polarDirectionEast or polarDirectionWest
   ///
   /// In en, this message translates to:
-  /// **'Tested on {driver} {version}: the motor\'s positive speed turns RA {direction}.'**
-  String polarMotorDirectionSaved(
-    String driver,
-    String version,
-    String direction,
-  );
+  /// **'Tested on {mount}: the motor\'s positive speed turns RA {direction}.'**
+  String polarMotorDirectionSaved(String mount, String direction);
 
-  /// Polar align saved RA motor direction (#2081): the connected mount reports another driver name or version than the saved test
+  /// Polar align saved RA motor direction (#2081, #2167): the connected mount has another identity or driver version than the saved test; mount is the saved identity as in polarMotorDirectionSaved
   ///
   /// In en, this message translates to:
-  /// **'Tested on another driver ({driver} {version}): the next start tests it again with a 0.5° turn.'**
-  String polarMotorDirectionOtherDriver(String driver, String version);
+  /// **'Tested on another mount or driver ({mount}): the next start tests it again with a 0.5° turn.'**
+  String polarMotorDirectionOtherDriver(String mount);
+
+  /// Polar align saved RA motor direction (#2167): the identity a test was saved for, a mount (its Alpaca unique id or name) with the driver version it reported
+  ///
+  /// In en, this message translates to:
+  /// **'{mount}, driver {version}'**
+  String polarMotorDirectionMountDriver(String mount, String version);
 
   /// Polar align RA motor direction (#2081): nothing saved, the next motor run tests it first (shown in its confirm step)
   ///

@@ -58,6 +58,8 @@ internal interface ITelescopeDevice : IDeviceAdapter {
     DateTime UTCDate { get; set; }
     /// <summary>The mount's local sidereal time in hours, from its own clock and longitude (#2071).</summary>
     double SiderealTime { get; }
+    /// <summary>The driver's version string (#2167): Polar Align keys its saved RA motor direction by it.</summary>
+    string DriverVersion { get; }
     bool CanMoveAxis(TelescopeAxis axis);
     IAxisRates AxisRates(TelescopeAxis axis);
     string Action(string name, string parameters);
@@ -121,6 +123,7 @@ internal sealed class AlpacaTelescopeDevice(AlpacaTelescope client) : ITelescope
         set => client.UTCDate = AsUtc(value);
     }
     public double SiderealTime => client.SiderealTime;
+    public string DriverVersion => client.DriverVersion;
     public bool CanMoveAxis(TelescopeAxis axis) => client.CanMoveAxis(axis);
     public IAxisRates AxisRates(TelescopeAxis axis) => client.AxisRates(axis);
     public string Action(string name, string parameters) => client.Action(name, parameters);

@@ -230,9 +230,10 @@ framing/focus loop when you need to point or focus by eye.
   in the south, as NINA), **East** or **West**. Pick the one whose turns do not cross the meridian from
   where you point. Later starts in the same session turn back toward the first one, whatever it says.
   Mount drivers do not agree on which way a positive motor speed turns RA, so the first start on a
-  mount (and the first after its driver or driver version changes) first turns it 0.5° to learn
+  mount (and the first after its driver version changes) first turns it 0.5° to learn
   which way its motor runs; the confirm step says so. Ara saves that for the mount, and **RA motor
-  direction** in the same panel shows it. If a turn ever goes more than 0.5° the other way, Polar
+  direction** in the same panel shows it with the mount it was tested on (its Alpaca unique id or
+  name) and the driver version, when the driver reports one. If a turn ever goes more than 0.5° the other way, Polar
   Align stops the motor and ends the run ("the mount turned the other way from its saved motor
   direction"); it never turns the mount back by itself. Check the mount, tap **Test direction
   again**, and start again.

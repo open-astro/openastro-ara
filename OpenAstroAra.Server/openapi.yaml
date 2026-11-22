@@ -14793,7 +14793,7 @@ components:
     PolarAlignMotorDirectionDto:
       required:
         - sign
-        - driver_info
+        - mount_key
         - driver_version
         - tested_utc
       type: object
@@ -14804,7 +14804,7 @@ components:
             - integer
             - string
           format: int32
-        driver_info:
+        mount_key:
           type: string
         driver_version:
           type: string

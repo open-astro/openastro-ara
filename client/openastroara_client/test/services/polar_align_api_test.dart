@@ -55,6 +55,24 @@ class _PlanDaemon implements HttpClientAdapter {
 }
 
 void main() {
+  test('a saved motor direction without mount_key or driver_version fails the read (#2167)', () {
+    Map<String, dynamic> saved(Map<String, dynamic> fields) => {
+      'saved': {'sign': 1, 'tested_utc': '2026-11-21T01:02:03Z', ...fields},
+      'matches_connected_mount': false,
+    };
+    expect(
+      () => PolarAlignMotorDirectionState.fromJson(saved({'driver_info': '', 'driver_version': ''})),
+      throwsA(isA<FormatException>()),
+      reason: 'a test saved before #2167 carries no mount_key',
+    );
+    expect(
+      () => PolarAlignMotorDirectionState.fromJson(saved({'mount_key': 'm'})),
+      throwsA(isA<FormatException>()),
+    );
+    final ok = PolarAlignMotorDirectionState.fromJson(saved({'mount_key': 'm', 'driver_version': ''}));
+    expect((ok.saved!.mountKey, ok.saved!.driverVersion), ('m', ''));
+  });
+
   test('the start plan reads where RA stands from the origin, and the start sends new_origin back (#2089)', () async {
     final d = _PlanDaemon();
     final api = PolarAlignApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
@@ -145,8 +163,8 @@ void main() {
     final d = _DirectionDaemon();
     final api = PolarAlignMotorDirectionApi(const AraServer(hostname: 'x', port: 80), dio: Dio()..httpClientAdapter = d);
     final state = await api.get();
-    expect((state!.saved!.sign, state.saved!.driverInfo, state.saved!.driverVersion, state.matchesConnectedMount),
-        (-1, 'AlpacaBridge iOptron', '6.0.0', true));
+    expect((state!.saved!.sign, state.saved!.mountKey, state.saved!.driverVersion, state.matchesConnectedMount),
+        (-1, 'hae29c-unique-id', '6.0.0', true));
     expect(state.saved!.testedUtc, DateTime.utc(2026, 11, 21, 1, 2, 3));
     await api.retest();
     expect(d.posts, ['/api/v1/equipment/polaralign/motor-direction/retest']);
@@ -168,7 +186,7 @@ class _DirectionDaemon implements HttpClientAdapter {
       return ResponseBody.fromString('', 204);
     }
     return ResponseBody.fromString(
-      '{"saved":{"sign":-1,"driver_info":"AlpacaBridge iOptron","driver_version":"6.0.0",'
+      '{"saved":{"sign":-1,"mount_key":"hae29c-unique-id","driver_version":"6.0.0",'
       '"tested_utc":"2026-11-21T01:02:03Z"},"matches_connected_mount":true}',
       200,
       headers: {

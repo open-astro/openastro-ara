@@ -116,9 +116,10 @@ namespace OpenAstroAra.Test {
             store.PutSiteSettings(store.GetSiteSettings() with { LatitudeDeg = -33.856784, LongitudeDeg = 151.215297 });
             store.PutPolarAlignSettings(new PolarAlignSettingsDto(
                 ExposureSeconds: 0.05, LoopCadenceMs: 20, SettleSeconds: 0, SeedRotationDeg: 30.0, FramesPerPoint: 1).Confirmed());
-            // #2081 — the mount's RA motor direction is already saved for its driver: no 0.5° test before the turns.
-            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, string.Empty, string.Empty, DateTimeOffset.UtcNow));
+            // #2081 — the mount's RA motor direction is already saved for it: no 0.5° test before the turns.
             var mount = NewMount().Object;
+            var key = PolarAlignService.MountDriverOf(mount.GetInfo());
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, key.Mount, key.Version, DateTimeOffset.UtcNow));
             return new PolarAlignService(guider, NullLogger<PolarAlignService>.Instance, solver ?? new ScriptedSolver(SolveA, SolveB),
                 mount, OpenAstroAra.Test.PolarAlign.MediatorMotionControl.For(mount), store, ws, log: null, fetcher ?? new FileFetcher()) {
                 PausedRetryDelay = TimeSpan.Zero,

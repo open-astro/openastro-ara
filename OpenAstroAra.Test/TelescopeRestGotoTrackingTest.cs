@@ -870,6 +870,24 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task GetInfo_reports_the_driver_version_read_once_at_connect() {
+            // #2167 — Polar Align keys its saved RA motor direction by the mount's identity and this version; the daemon
+            // never read it, so every mount logged and saved the driver '' ''.
+            var mount = Mount(tracking: true);
+            await using var box = ScriptedAlpacaDevice.Start(path =>
+                path.EndsWith("/driverversion", StringComparison.Ordinal) ? "\" 6.0.0~beta2 \"" : mount(path));
+            using var svc = await ConnectedAsync(box);
+
+            await WaitForAsync(() => svc.GetInfo().DriverVersion.Length > 0, "DriverVersion was never read");
+            var info = svc.GetInfo();
+            Assert.That((info.DriverVersion, info.DeviceId), Is.EqualTo(("6.0.0~beta2", "mount-under-test")));
+            int VersionReads() => box.Gets.Count(p => p.EndsWith("/driverversion", StringComparison.Ordinal));
+            var (reads, seen) = (VersionReads(), box.Gets.Count);
+            await WaitForAsync(() => box.Gets.Count >= seen + 20, "the mount was never polled again");
+            Assert.That(VersionReads(), Is.EqualTo(reads), "read once per connect, not on every poll");
+        }
+
+        [Test]
         public async Task A_mount_that_does_not_report_its_type_reads_unknown() {
             var log = new InfoLog();
             var mount = Mount(tracking: true);
