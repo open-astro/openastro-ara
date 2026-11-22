@@ -714,6 +714,32 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task Field_edit_against_an_older_copy_is_refused() {
+            // Positions come from the client's copy. Once someone else adds, removes or moves an
+            // item, [0, 0] may be a different item, so nothing is changed until the client reloads.
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 3);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+            var read = store.Modified;
+            var other = await svc.AddRunItemAsync(id, new SequenceRunItemAddRequestDto(ParentPath: [], Index: null,
+                Item: Fragment("added elsewhere")), null, CancellationToken.None);
+            Assert.That(other.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), other.Reason);
+            var stale = store.ReplacedBody;
+
+            var refused = await svc.SetRunFieldsAsync(id, new SequenceRunFieldsRequestDto(
+                [ExposureField("ExposureTime", 180.0)], BaseModifiedUtc: read), null, CancellationToken.None);
+            Assert.That(refused.Outcome, Is.EqualTo(SequenceLiveEditOutcome.PlanChanged));
+            Assert.That(store.ReplacedBody, Is.EqualTo(stale), "nothing persisted");
+
+            var fresh = await svc.SetRunFieldsAsync(id, new SequenceRunFieldsRequestDto(
+                [ExposureField("ExposureTime", 180.0)], BaseModifiedUtc: store.Modified), null, CancellationToken.None);
+            Assert.That(fresh.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), fresh.Reason);
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task Run_counter_fields_are_refused() {
             var id = Guid.NewGuid();
             var rig = new ExposureRig();
@@ -783,21 +809,24 @@ namespace OpenAstroAra.Test {
 
             public JsonElement? ReplacedBody { get; private set; }
             public bool FailReplacements { get; set; }
+            /// <summary>The stored record's modified time; every accepted live edit moves it on a second.</summary>
+            public DateTimeOffset Modified { get; set; } = DateTimeOffset.UnixEpoch;
 
             public Task<SequenceDto?> GetAsync(Guid id, CancellationToken ct) {
                 if (id != _id) return Task.FromResult<SequenceDto?>(null);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
-                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
-                    Body: _body, TemplateOrigin: null));
+                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: Modified,
+                    Body: ReplacedBody ?? _body, TemplateOrigin: null));
             }
 
             public Task<SequenceDto?> ReplaceRunBodyAsync(Guid id, JsonElement body, CancellationToken ct) {
                 if (id != _id || FailReplacements) return Task.FromResult<SequenceDto?>(null);
                 ReplacedBody = body;
+                Modified = Modified.AddSeconds(1);
                 return Task.FromResult<SequenceDto?>(new SequenceDto(
                     Id: id, Name: "Test", Description: null,
-                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: DateTimeOffset.UnixEpoch,
+                    CreatedUtc: DateTimeOffset.UnixEpoch, ModifiedUtc: Modified,
                     Body: body, TemplateOrigin: null));
             }
 

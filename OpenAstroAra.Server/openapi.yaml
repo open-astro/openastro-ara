@@ -16697,6 +16697,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SequenceRunFieldChangeDto'
+        base_modified_utc:
+          type:
+            - 'null'
+            - string
+          format: date-time
     SequenceRunItemAddRequestDto:
       required:
         - parent_path

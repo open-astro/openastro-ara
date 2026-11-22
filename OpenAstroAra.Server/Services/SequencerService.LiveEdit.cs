@@ -246,7 +246,7 @@ public sealed partial class SequencerService {
                 }
             }
             return (null, null);
-        }, ct);
+        }, ct, request.BaseModifiedUtc);
     }
 
     /// <summary>The object a field change addresses: the node at the path, or one of its conditions or triggers.</summary>
@@ -351,7 +351,7 @@ public sealed partial class SequencerService {
     private async Task<SequenceLiveEditResult> MutateRunAsync(
             Guid id, string op, string? idempotencyKey,
             Func<RunState, (SequenceLiveEditResult? Error, ISequenceItem? Item)> mutate,
-            CancellationToken ct) {
+            CancellationToken ct, DateTimeOffset? expectModified = null) {
         if (!_runs.TryGetValue(id, out var run) || IsTerminal(run.State)) {
             return new(SequenceLiveEditOutcome.NoActiveRun, "no active run for this sequence — edit it with the normal update endpoint");
         }
@@ -399,6 +399,15 @@ public sealed partial class SequencerService {
             }
             if (root.Status is not (SequenceEntityStatus.CREATED or SequenceEntityStatus.RUNNING)) {
                 return new(SequenceLiveEditOutcome.RunNotMutable, "the run is in its teardown phase — new items would not execute");
+            }
+
+            // #2168 — a client's positions are only good against the copy it read. Checked
+            // under the lock, so no other edit can land between this and the mutation.
+            if (expectModified is { } expected) {
+                var stored = await sequences.GetAsync(id, ct);
+                if (stored is null || stored.ModifiedUtc != expected) {
+                    return new(SequenceLiveEditOutcome.PlanChanged, "the plan changed since this copy was read — reload it and try again");
+                }
             }
 
             var (error, _) = mutate(run);

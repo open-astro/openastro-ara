@@ -253,8 +253,13 @@ public sealed record SequenceRunItemMoveRequestDto(
 /// <summary>POST /api/v1/sequences/{id}/run/fields body — #2168: change settings on the LIVE
 /// run (and the stored body) while it runs or is paused, NINA-style: every step that starts
 /// after the change uses the new value; the frame in hand and finished counts are kept.
-/// Applied all-or-nothing.</summary>
-public sealed record SequenceRunFieldsRequestDto(IReadOnlyList<SequenceRunFieldChangeDto> Changes);
+/// Applied all-or-nothing. <c>BaseModifiedUtc</c>: the stored sequence's <c>modified_utc</c> the
+/// client's paths were worked out against. When set and the plan has changed since (an item
+/// added, removed or moved by someone else), nothing is applied and the answer is 409
+/// <c>sequence-plan-changed</c>: positions in an old copy could point at a different item.</summary>
+public sealed record SequenceRunFieldsRequestDto(
+    IReadOnlyList<SequenceRunFieldChangeDto> Changes,
+    DateTimeOffset? BaseModifiedUtc = null);
 
 /// <summary>One field change. <c>Path</c> addresses a node like the other live edits (empty =
 /// the body's top container). <c>Target</c>: <c>item</c> (the node itself), <c>condition</c> or

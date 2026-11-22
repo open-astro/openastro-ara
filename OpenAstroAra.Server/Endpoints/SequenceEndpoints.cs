@@ -73,6 +73,11 @@ public static class SequenceEndpoints {
             title: "Item has already started",
             statusCode: StatusCodes.Status409Conflict,
             detail: $"Sequence {id}: {result.Reason}"),
+        SequenceLiveEditOutcome.PlanChanged => Results.Problem(
+            type: "https://openastro.net/errors/sequence-plan-changed",
+            title: "The plan changed",
+            statusCode: StatusCodes.Status409Conflict,
+            detail: $"Sequence {id}: {result.Reason}"),
         SequenceLiveEditOutcome.InvalidPath or SequenceLiveEditOutcome.InvalidItem =>
             Results.UnprocessableEntity(new { error = result.Reason }),
         _ => Results.Problem(

@@ -62,7 +62,8 @@ public interface ISequenceService {
 /// <summary>§38.9 — outcome of a live mid-run edit, mapped by the endpoint:
 /// <c>Applied</c> → 200; <c>NoActiveRun</c> → 409 (edit the sequence normally);
 /// <c>RunNotMutable</c> → 409 (run winding down / terminal); <c>ItemAlreadyStarted</c>
-/// → 409; <c>InvalidPath</c>/<c>InvalidItem</c> → 422; <c>PersistFailed</c> → 500.</summary>
+/// → 409; <c>InvalidPath</c>/<c>InvalidItem</c> → 422; <c>PersistFailed</c> → 500;
+/// <c>PlanChanged</c> → 409 (the client's copy is older than the stored plan).</summary>
 public enum SequenceLiveEditOutcome {
     Applied,
     NoActiveRun,
@@ -71,6 +72,7 @@ public enum SequenceLiveEditOutcome {
     InvalidPath,
     InvalidItem,
     PersistFailed,
+    PlanChanged,
 }
 
 /// <summary>§38.9 — live-edit result. <c>Sequence</c> is the updated stored dto on
