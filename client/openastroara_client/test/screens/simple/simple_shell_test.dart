@@ -37,8 +37,10 @@ import 'package:openastroara/widgets/stats/targets_section.dart';
 import 'package:openastroara/l10n/l10n.dart';
 import 'package:openastroara/models/sequence/imaging_run_body.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/state/alarm/safety_alarm_state.dart';
 import 'package:openastroara/services/sequence_api.dart' show SequenceClient;
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/screens/simple/simple_devices_empty.dart';
 import 'package:openastroara/screens/simple/simple_plan_panel.dart';
@@ -1211,9 +1213,27 @@ class _ResumeSeq implements SequenceClient {
     return id;
   }
 
+  /// #2168 — the Sequencer editor's unsaved settings sent ahead of a resume.
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes, {String? baseModifiedUtc}) async {
+    calls.add('fields $id');
+    return SequenceDetail(id: id, body: applyFieldChanges(_lensCapPlan().body, changes));
+  }
+
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
+
+/// #2168 — the paused calibration run's plan, as the Sequencer editor holds it.
+SequenceDetail _lensCapPlan() => SequenceDetail(id: 'cal-run', body: {
+      r'$type': 'X.SequentialContainer',
+      'Items': {
+        r'$type': itemsWrapperType,
+        r'$values': [
+          {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
+        ],
+      },
+    });
 
 const _queuedM31 = SimpleRun(sequenceId: 'seq-1', targets: [
   SimpleTarget(name: 'M31', steps: [FilterPlanStep(filterName: 'L', exposureSeconds: 120, frameCount: 30)]),
@@ -1365,6 +1385,28 @@ void main() {
     await tester.pump();
     expect(c.read(simpleMessagesProvider).where((m) => m.kind == SimpleMessageKind.question), isEmpty,
         reason: "the Plan's pause keeps its amber pill and the shutter's Resume");
+  });
+
+  testWidgets("the lens-cap pill's Resume sends the Sequencer's unsaved settings first (#2168)", (tester) async {
+    final seq = _ResumeSeq();
+    final c = await _pump(tester, const Size(1024, 768), plan: _queuedM31, gear: [
+      sequenceRunStateProvider.overrideWith(() => _MovingRun(const SequenceRunStateInfo(
+          sequenceId: 'cal-run',
+          state: SequenceRunState.pausedAwaitingUser,
+          currentInstructionDescription: 'Put the lens cap on, then resume.'))),
+      sequenceApiProvider.overrideWithValue(seq),
+    ]);
+    await tester.pump();
+    await tester.pump();
+    final editor = c.read(sequenceEditorProvider.notifier);
+    editor.load(_lensCapPlan());
+    editor.setNodeField(const [0], 'ExposureTime', 180.0);
+    expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
+    final asked = c.read(simpleMessagesProvider).firstWhere((m) => m.kind == SimpleMessageKind.question);
+    asked.actions.single.onPressed();
+    await tester.pump();
+    await tester.pump();
+    expect(seq.calls, ['fields cal-run', 'resume cal-run recenter=false']);
   });
 
 

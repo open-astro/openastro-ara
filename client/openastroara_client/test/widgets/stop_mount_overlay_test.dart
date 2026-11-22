@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/misc.dart' show Override;
+import 'package:dio/dio.dart' show DioException, RequestOptions, Response;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/discovered_device.dart';
 import 'package:openastroara/models/equipment_device_status.dart';
@@ -27,6 +28,8 @@ import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/stop_mount_overlay.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 
 class _FakeSavedServerService implements SavedServerService {
   @override
@@ -109,6 +112,27 @@ class _FakeSeqClient implements SequenceClient {
     return 'op';
   }
 
+  /// #2168 — the editor's unsaved settings; a set reason refuses them (422).
+  String? refuseFields;
+
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+      {String? baseModifiedUtc}) async {
+    if (refuseFields case final why?) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/run/fields'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/run/fields'),
+          statusCode: 422,
+          data: {'error': why},
+        ),
+      );
+    }
+    lifecycle.add('fields:$id');
+    return SequenceDetail(
+        id: id, body: applyFieldChanges(_pausedPlan().body, changes));
+  }
+
   @override
   Future<String> skipCurrent(String id) async {
     lifecycle.add('skip:$id');
@@ -127,6 +151,23 @@ class _FakeSeqClient implements SequenceClient {
   @override
   dynamic noSuchMethod(Invocation invocation) =>
       throw UnimplementedError('${invocation.memberName}');
+}
+
+/// #2168 — the paused run's plan, as the Sequencer editor holds it.
+SequenceDetail _pausedPlan() => SequenceDetail(id: 'run-7', body: {
+      r'$type': 'X.SequentialContainer',
+      'Items': {
+        r'$type': itemsWrapperType,
+        r'$values': [
+          {r'$type': 'X.TakeExposure', 'ExposureTime': 60.0},
+        ],
+      },
+    });
+
+class _PausedRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+      sequenceId: 'run-7', runId: 'r-1', state: SequenceRunState.paused);
 }
 
 WsEvent _event(String type, [Map<String, dynamic> payload = const {}]) =>
@@ -343,6 +384,44 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(seqApi.lifecycle, ['skip:run-7', 'resume:run-7']);
+  });
+
+  /// #2168 — the paused run open in the Sequencer with an unsaved exposure.
+  Future<void> pumpDirtyEditor(WidgetTester tester) async {
+    await pump(tester, extra: [sequenceRunStateProvider.overrideWith(_PausedRun.new)]);
+    final keep = container.listen(sequenceRunStateProvider, (_, _) {});
+    addTearDown(keep.close);
+    await container.read(sequenceRunStateProvider.future);
+    final editor = container.read(sequenceEditorProvider.notifier);
+    editor.load(_pausedPlan());
+    editor.setNodeField(const [0], 'ExposureTime', 180.0);
+    expect(container.read(sequenceEditorProvider)!.isDirty, isTrue);
+    await fire(tester, _event(SlewWsEvents.started));
+    await fire(tester, _event(SlewWsEvents.aborted));
+    await fire(tester, _event(SequenceWsEvents.paused, {'sequence_id': 'run-7'}));
+  }
+
+  testWidgets("the stop window's Resume sends the editor's unsaved settings first (#2168)", (tester) async {
+    await pumpDirtyEditor(tester);
+    await tester.tap(find.byKey(const ValueKey('stop_modal_resume')));
+    await tester.pumpAndSettle();
+    expect(seqApi.lifecycle, ['fields:run-7', 'resume:run-7']);
+  });
+
+  testWidgets("the stop window's Skip target sends the editor's unsaved settings before resuming (#2168)", (tester) async {
+    await pumpDirtyEditor(tester);
+    await tester.tap(find.byKey(const ValueKey('stop_modal_skip')));
+    await tester.pumpAndSettle();
+    expect(seqApi.lifecycle, ['skip:run-7', 'fields:run-7', 'resume:run-7']);
+  });
+
+  testWidgets("the stop window's Resume keeps the run paused and says why when the settings are refused (#2168)", (tester) async {
+    await pumpDirtyEditor(tester);
+    seqApi.refuseFields = 'ExposureTime not changed: exposure time must be above 0';
+    await tester.tap(find.byKey(const ValueKey('stop_modal_resume')));
+    await tester.pumpAndSettle();
+    expect(seqApi.lifecycle, isEmpty, reason: 'no resume on refused settings');
+    expect(find.textContaining('exposure time must be above 0'), findsOneWidget);
   });
 
   testWidgets('a stop that paused TWO runs acts on both', (tester) async {
