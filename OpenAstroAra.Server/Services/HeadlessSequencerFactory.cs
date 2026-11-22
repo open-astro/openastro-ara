@@ -260,8 +260,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         domeMediator ??= new HeadlessDomeMediator();
         // §38k-21 — the one non-mediator dependency a dome instruction needs.
         domeFollower ??= new HeadlessDomeFollower();
-        // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub
-        // that ConnectAll, SwitchProfile, Dither and SwitchFilter need.
+        // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub. SwitchFilter and the
+        // autofocus triggers take the filter wheel; no instruction takes the flat-device or weather stub
+        // (Program.cs DI still resolves them).
         filterWheelMediator ??= new HeadlessFilterWheelMediator();
         flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
         weatherDataMediator ??= new HeadlessWeatherDataMediator();
