@@ -578,6 +578,8 @@ class PaResidualChip extends StatelessWidget {
             ? l.paResidualChipDisagrees(value)
             : r.reliable
             ? l.paResidualChipRated(value, rating.$1)
+            : r.backlash
+            ? l.paResidualChipBacklash(value)
             : l.paResidualChipNoisy(value);
         tooltip = paResidualDetail(l, r);
     }

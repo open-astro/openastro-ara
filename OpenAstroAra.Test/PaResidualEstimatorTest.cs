@@ -161,6 +161,30 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public void Dec_pulses_the_star_does_not_answer_are_flagged_unanswered() {
+            // #2072 — South pulses every frame, and the star keeps creeping North of the lock position: backlash.
+            var estimator = new PaResidualEstimator();
+            for (var k = 0; k < 40; k++) {
+                estimator.Add(k * FrameSec, 0.05 + 0.008 * k, -150);
+            }
+            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec);
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.Value.DecPulsesUnanswered, Is.True);
+        }
+
+        [Test]
+        public void A_steady_offset_under_one_sided_pulses_is_real_drift_and_still_measures() {
+            // #2072 — a proportional guider holding a real drift sends one-sided pulses and keeps the star a steady
+            // offset (drift per frame ÷ aggressiveness) on the far side: that is a measurement, not backlash.
+            var estimator = new PaResidualEstimator();
+            Guide(estimator, driftPxPerSec: 0.05, frames: 60, noisePx: 0.05);
+            var fit = estimator.Fit(RatePxPerSec, ScaleArcsec);
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.Value.DecPulsesUnanswered, Is.False);
+            Assert.That(fit.Value.DriftArcsecPerMin, Is.EqualTo(0.05 * 60 * ScaleArcsec).Within(0.5));
+        }
+
+        [Test]
         public void No_fit_without_a_rate_a_scale_or_enough_frames() {
             var estimator = new PaResidualEstimator();
             Guide(estimator, 0.01, frames: 4, noisePx: 0.1);
@@ -219,6 +243,162 @@ namespace OpenAstroAra.Test {
 
             Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
             Assert.That(tracker.Measuring, Is.True);
+        }
+
+        // #2072 — the start-guiding settle: the star pulled onto the lock position, every Dec pulse South.
+        private static void Recovery(PaResidualTracker tracker, double fromSec, double toSec) {
+            for (var t = fromSec; t <= toSec; t += 2) {
+                tracker.OnStep(t, 4.0, -2000);
+            }
+        }
+
+        [Test]
+        public void A_start_settle_recovery_is_left_out_and_only_the_frames_after_settle_done_are_sampled() {
+            var tracker = NewTracker();
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            tracker.OnMarker("settle_begin");
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 42);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11), "the clean frames only");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+            Assert.That(tracker.Measuring, Is.True);
+        }
+
+        [Test]
+        public void A_settle_reported_before_the_guiding_start_is_not_lost() {
+            var tracker = NewTracker();
+            tracker.OnMarker("settling");
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 42);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11), "the start did not wipe the open settle");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
+        [Test]
+        public void The_rig_order_restart_then_dither_samples_only_the_settled_frames() {
+            // Rig night 2026-11-22: a re-center slew stopped guiding, the Dither restarted it (guiding_started,
+            // its settle) and then dithered (dithered, settling, settle_done).
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_stopped");
+            tracker.OnMarker("guiding_started");
+            tracker.OnMarker("settle_begin");
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 32);
+            tracker.OnMarker("dithered");
+            tracker.OnMarker("settling");
+            Recovery(tracker, 34, 44);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 46, 56);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(12), "6 + 6 settled frames");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+            Assert.That(tracker.Measuring, Is.True);
+        }
+
+        [Test]
+        public void A_stop_ends_an_open_settle_so_the_next_start_without_one_samples() {
+            // #2072 — a dither whose settle_done never came (guiding stopped mid-settle), then a start from the guider's
+            // own page (no settle_begin): its frames are samples, not held back by the old run's settle.
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_started");
+            Frames(tracker, 0, 10);
+            tracker.OnMarker("dithered");
+            tracker.OnMarker("settle_begin");
+            tracker.OnMarker("guiding_stopped");
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            Frames(tracker, 100, 120);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11));
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
+        [Test]
+        public void A_start_the_guider_runs_no_settle_for_samples_from_its_first_frame() {
+            // A start from the guider's own page: no settle_begin before its first frame, so no settle_done will come.
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_started");
+            Frames(tracker, 0, 20);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11));
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
+        [Test]
+        public void A_Dec_reversal_holds_sampling_until_the_star_answers_the_new_pulses() {
+            // #2072 — North pulses, then South ones the gear's backlash eats: the star stays North (positive) until it
+            // crosses the lock position, and those frames are not samples.
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_started");
+            for (var t = 0; t <= 20; t += 2) {
+                tracker.OnStep(t, -0.2, 100); // 11 frames, North
+            }
+            for (var t = 22; t <= 40; t += 2) {
+                tracker.OnStep(t, 0.3, -100); // 10 frames, South, unanswered
+            }
+            for (var t = 42; t <= 60; t += 2) {
+                tracker.OnStep(t, -0.05, -20); // the star is across: 10 frames, sampled
+            }
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11 + 2 + 10), "the two South frames before the reversal counted, then the answered ones");
+            Assert.That(tracker.Measuring, Is.True);
+        }
+
+        [Test]
+        public void A_Dec_reversal_the_star_never_answers_is_let_through_after_the_backlash_hold() {
+            var tracker = new PaResidualTracker(targetSeconds: 600, minSeconds: 20, progressEverySeconds: 10, backlashHoldSeconds: 30);
+            tracker.OnMarker("guiding_started");
+            for (var t = 0; t <= 20; t += 2) {
+                tracker.OnStep(t, -0.2, 100);
+            }
+            for (var t = 22; t <= 100; t += 2) {
+                tracker.OnStep(t, 0.3, -100); // never answered
+            }
+
+            // The reversal is the third South frame (t = 26): held to t = 56, sampled from 56 to 100 (23 frames).
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11 + 2 + 23));
+        }
+
+        [Test]
+        public void The_2026_11_22_rig_window_replayed_is_flagged_unanswered_and_never_reads_45_arcmin() {
+            // #2072 — the guide log of the bad window, 30 s bins of mean DECRaw and Dec pulse ms (6.45″/px; the daemon's
+            // 45.61′ from net −8161 ms puts the Dec rate at 1.14 px/s). Start settle 0–20 s, a dither and its settle
+            // 20–60 s, then guiding: North pulses with the star on the lock position, a reversal to South at 210 s, and
+            // the star creeping North (+0.17 → +0.33 px) while every pulse goes South. The real error was ≈0.6′.
+            (double Raw, double PulseMs)[] bins = [
+                (-0.24, 1930), (-1.13, 6313), (0.00, 192), (-0.02, 148), (-0.03, 109), (-0.01, 212),
+                (0.05, 0), (0.17, -1302), (0.24, -1675), (0.26, -2193), (0.33, -923), (0.35, -923),
+            ];
+            const double frameSec = 2.3, binSec = 30;
+            var tracker = new PaResidualTracker(); // the daemon's own settings
+            tracker.OnMarker("guiding_started");
+            tracker.OnMarker("settle_begin");
+            var (startSettleDone, ditherSettleDone) = (false, false);
+            for (var t = 0.0; t < 365; t += frameSec) {
+                if (!startSettleDone && t >= 20) {
+                    tracker.OnMarker("settle_done");
+                    tracker.OnMarker("dithered");
+                    tracker.OnMarker("settle_begin");
+                    startSettleDone = true;
+                }
+                if (!ditherSettleDone && t >= 60) {
+                    tracker.OnMarker("settle_done");
+                    ditherSettleDone = true;
+                }
+                var (raw, pulseMs) = bins[Math.Min((int)(t / binSec), bins.Length - 1)]; // 330–365 s: the last bin
+                tracker.OnStep(t, raw, pulseMs * frameSec / binSec);
+            }
+
+            var fit = tracker.Estimator.Fit(decRatePxPerSec: 1.14, pixelScaleArcsec: 6.45);
+            Assert.That(fit, Is.Not.Null);
+            Assert.That(fit!.Value.DecPulsesUnanswered, Is.True, "the pulses did not reach the star");
+            // Without the hold it reads 42′ over 301 s and 132 frames, the rig's 45.6′ over 301 s and 130 frames.
+            Assert.That(fit.Value.PaErrorMinArcmin, Is.LessThan(10), "the backlash after the reversal is held back");
         }
 
         [Test]

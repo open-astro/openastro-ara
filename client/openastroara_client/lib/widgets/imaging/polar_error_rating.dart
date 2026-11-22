@@ -128,6 +128,8 @@ String paResidualDetail(AppLocalizations l, PaResidual r) {
           alignText, formatPoleOffset(r.alignSigmaArcmin!).$1, error, formatPoleOffset(uncertainty).$1)
     else if (r.aboveAlign && alignText != null)
       l.paResidualDetailDisagree(alignText, error)
+    else if (r.backlash)
+      l.paResidualDetailBacklash
     else if (!r.reliable)
       l.paResidualDetailNoisy,
     if (alignText != null)

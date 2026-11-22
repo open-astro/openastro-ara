@@ -17,6 +17,7 @@ using OpenAstroAra.Server.Contracts;
 using OpenAstroAra.Server.Services;
 using System;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -88,6 +89,21 @@ namespace OpenAstroAra.Test {
             var bySession = await log.ListAsync(session, limit: 20, CancellationToken.None);
             Assert.That(bySession, Has.Count.EqualTo(1));
             Assert.That(bySession[0].Id, Is.EqualTo(first.Id));
+        }
+
+        [Test]
+        public async Task A_logged_residual_keeps_dec_pulses_unanswered() {
+            // #2072 — a listed backlash row is worded as the live one was.
+            var log = new SqlitePaResidualLog(db);
+            var t0 = new DateTimeOffset(2026, 11, 22, 5, 1, 0, TimeSpan.Zero);
+            var backlash = Done(t0, null, error: 45.6) with { Reliable = false, DecPulsesUnanswered = true };
+            var plain = Done(t0.AddHours(1), null);
+            await log.InsertAsync(backlash, CancellationToken.None);
+            await log.InsertAsync(plain, CancellationToken.None);
+
+            var all = await log.ListAsync(sessionId: null, limit: 20, CancellationToken.None);
+            Assert.That(all.Single(r => r.Id == backlash.Id).DecPulsesUnanswered, Is.True);
+            Assert.That(all.Single(r => r.Id == plain.Id).DecPulsesUnanswered, Is.False);
         }
 
         [Test]
