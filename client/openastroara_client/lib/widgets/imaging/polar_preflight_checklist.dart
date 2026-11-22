@@ -29,7 +29,7 @@ import 'polar_start_confirm.dart';
 /// it is blocked, else a tap opens the motion confirm and only then asks the
 /// rig to move; the move shows its progress and Stop above the list until the
 /// rig answers, whatever the list reads meanwhile. The row stays, so pointing
-/// by hand works as before.
+/// the scope yourself works as before.
 /// Renders the rig's list as data, loading and error; shows nothing for a rig
 /// that predates the list.
 class PolarPreflightChecklist extends ConsumerStatefulWidget {

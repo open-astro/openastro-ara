@@ -779,7 +779,7 @@ void main() {
       expect(
         find.byKey(const Key('polar-preflight-check-start_pointing')),
         findsOneWidget,
-        reason: 'the row stays: pointing by hand works as before',
+        reason: 'the row stays: pointing the scope yourself works as before',
       );
     },
   );

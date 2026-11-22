@@ -94,7 +94,7 @@ namespace OpenAstroAra.Server.Services {
                     holdRefusal = ex;
                 }
                 // The pre-flight list's offer is the guard: the start pointing failed on the pole, nothing blocks the move.
-                var preflight = await EvaluatePreflightAsync(PolarAlignStages.Fine, handTurn: false, ct).ConfigureAwait(false);
+                var preflight = await EvaluatePreflightAsync(PolarAlignStages.Fine, ct).ConfigureAwait(false);
                 if (preflight.Result.MoveToStartRefusal is { } refused) {
                     ExceptionDispatchInfo.Capture(refused).Throw();
                 }
@@ -187,7 +187,7 @@ namespace OpenAstroAra.Server.Services {
             }
             LogMoveToStartEnded(outcome, reason ?? "none");
             // The pointing read again: the fresh list the app shows (its start pointing passes once the move arrived).
-            var fresh = await EvaluatePreflightAsync(PolarAlignStages.Fine, handTurn: false, CancellationToken.None).ConfigureAwait(false);
+            var fresh = await EvaluatePreflightAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
             return new PolarAlignMoveToStartResultDto(outcome, reason, message, fresh.Result.Dto);
         }
 
