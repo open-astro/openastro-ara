@@ -119,6 +119,18 @@ namespace OpenAstroAra.Server.Services {
             }
         }
 
+        /// <summary>#2166 — a Start, a Check or a start plan while the move to the start position runs: refused at once
+        /// (<c>polar-align-run-active</c>), never left waiting for the move to end.</summary>
+        private void ThrowIfMovingToStart() {
+            lock (_gate) {
+                if (!_movingToStart) {
+                    return;
+                }
+            }
+            throw new RefusalException(RefusalCatalog.PolarAlignRunActive,
+                "Polar Align is moving the scope to the start position — wait for the move to end (or stop it), then start Polar Align");
+        }
+
         /// <summary>ADR 0024 rule 1 — nothing moves without the user's confirmation of this move: the offer's target and
         /// reach the app's confirm showed, equal to the offer now (a changed offer is asked again).</summary>
         private void ThrowIfMoveNotConfirmed(PolarAlignMoveToStartConfirmation? confirmation, PolarAlignMoveToStartOfferDto? offer) {

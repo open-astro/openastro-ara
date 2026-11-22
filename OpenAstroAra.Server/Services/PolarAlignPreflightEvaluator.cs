@@ -194,8 +194,10 @@ internal static class PolarAlignPreflightEvaluator {
         // The site.
         var latRow = rows[PolarAlignPreflightChecks.SiteLatitude];
         var lonRow = rows[PolarAlignPreflightChecks.SiteLongitudeLst];
+        double? siteLatitudeDeg = null;
         try {
             var site = inputs.Site();
+            siteLatitudeDeg = site.LatitudeDeg;
             if (site.LatitudeDeg == 0 && site.LongitudeDeg == 0) {
                 // #2083 — 0°, 0° is a site that was never set: refuse as unset, not as a bad latitude.
                 latRow.Fail(new RefusalException(RefusalCatalog.PolarAlignSiteNotSet, SiteNotSetMessage), "Set your site in Settings › Site.");
@@ -329,7 +331,7 @@ internal static class PolarAlignPreflightEvaluator {
             ReachDeg: reachDeg,
             StartCwAngleDeg: null,
             MinAltitudeDeg: null);
-        var (offer, moveRefusal) = EvaluateMoveToStart(rows, connected, info, settingsError, clearance, inputs.CanMoveSecondaryAxis);
+        var (offer, moveRefusal) = EvaluateMoveToStart(rows, connected, info, settingsError, clearance, inputs.CanMoveSecondaryAxis, siteLatitudeDeg);
         var dto = new PolarAlignPreflightDto(ready, checks, planned, mountKey, offer);
         return new PolarAlignPreflightResult(dto, firstFailure, plan, moveRefusal);
     }
@@ -345,7 +347,7 @@ internal static class PolarAlignPreflightEvaluator {
         Justification = "The evaluator never throws (#2068): a failed CanMoveAxis read does not block the move, as for the RA axis.")]
     private static (PolarAlignMoveToStartOfferDto? Offer, Exception? Refusal) EvaluateMoveToStart(
             Dictionary<string, Row> rows, bool connected, TelescopeInfo? info, Exception? settingsError,
-            PolarAlignMountClearanceDto? clearance, Func<bool?>? canMoveSecondary) {
+            PolarAlignMountClearanceDto? clearance, Func<bool?>? canMoveSecondary, double? siteLatitudeDeg) {
         if (!connected) {
             return (null, rows[PolarAlignPreflightChecks.MountConnected].Refusal ?? new InvalidOperationException(MountNotConnectedMessage));
         }
@@ -356,6 +358,13 @@ internal static class PolarAlignPreflightEvaluator {
         }
         if (pointing.Refusal is not RefusalException { Cause: var cause } || cause != RefusalCatalog.PolarAlignOnAxis) {
             return (null, pointing.Refusal);
+        }
+        // Only near the site's own pole, the one the POST moves from: the other pole is below the horizon, and an offer
+        // there would show a button the POST always refuses. An unset latitude keeps the offer, blocked by its row below.
+        if (pointing.Refusal.Data[PolarAlignService.OnAxisDecKey] is double decDeg && siteLatitudeDeg is double lat
+                && lat != 0 && Math.Sign(lat) * decDeg <= PolarAlignService.OnAxisDecDeg) {
+            return (null, new RefusalException(RefusalCatalog.PolarAlignMoveToStartNotNeeded,
+                "the scope does not point within 3° of the site's pole, so it needs no move to the start position — start Polar Align"));
         }
         var reach = PolarAlignService.MoveToStartReachDeg;
         Exception? refusal = null;

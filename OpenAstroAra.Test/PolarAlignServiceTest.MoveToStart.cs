@@ -288,6 +288,63 @@ namespace OpenAstroAra.Test {
             });
         }
 
+        [Test]
+        public async Task A_Start_or_start_plan_during_the_move_to_start_is_refused_at_once_as_run_active() {
+            var mount = PolledGemNearThePole();
+            using var svc = NewGemService(mount, new WsRecorder());
+            Task<Exception?>? start = null;
+            Task<Exception?>? plan = null;
+            var reads = 0;
+            mount.OnPoseRead = () => {
+                if (++reads == 6) {
+                    // Mid-move, on the move's own thread: a Start that queued on the move's lock would never answer here.
+                    start = Task.Run(() => CaughtAsync(() => svc.StartAsync(null, new PolarAlignStartConfirmation(PolarAlignDirections.East), null, CancellationToken.None)));
+                    plan = Task.Run(() => CaughtAsync(() => svc.GetStartPlanAsync(null, CancellationToken.None)));
+                    Task.WaitAll([start, plan], SignalTimeout);
+                }
+            };
+
+            var result = await svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(start!.IsCompleted, Is.True, "the Start answered during the move, not after it");
+                Assert.That(plan!.IsCompleted, Is.True, "the start plan answered during the move");
+                Assert.That((start.IsCompleted ? start.Result : null) is RefusalException { Cause: var c } && c == RefusalCatalog.PolarAlignRunActive, Is.True,
+                    "the Start is refused as run-active: " + (start.IsCompleted ? start.Result : null));
+                Assert.That((plan.IsCompleted ? plan.Result : null) is RefusalException { Cause: var p } && p == RefusalCatalog.PolarAlignRunActive, Is.True,
+                    "the plan is refused as run-active: " + (plan.IsCompleted ? plan.Result : null));
+                Assert.That(result.Outcome, Is.EqualTo(PolarAlignMoveToStartOutcomes.Arrived), result.Message);
+                Assert.That(mount.Motions.Where(m => m.Kind != MotionKind.DecMotor), Is.Empty, "no RA turn from the Start. " + mount.Describe());
+            });
+        }
+
+        private static async Task<Exception?> CaughtAsync<T>(Func<Task<T>> call) {
+            try {
+                await call().ConfigureAwait(false);
+                return null;
+            } catch (InvalidOperationException ex) {
+                return ex;
+            }
+        }
+
+        [Test]
+        public async Task Near_the_other_pole_the_move_is_not_offered_and_the_POST_refuses_it_too() {
+            // A northern site with the scope reading Dec -88: the start pointing fails on the pole, but the move goes only
+            // from the site's own pole, so the offer and the POST agree there is nothing to move.
+            var mount = PolledGemNearThePole(-88.0);
+            using var svc = NewGemService(mount, new WsRecorder());
+
+            var preflight = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.MoveToStartAsync(MoveConfirmed, CancellationToken.None));
+
+            Assert.Multiple(() => {
+                Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.StartPointing), Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(preflight.MoveToStart, Is.Null, "no button the POST would always refuse");
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignMoveToStartNotNeeded));
+                Assert.That(mount.Motions, Is.Empty, mount.Describe());
+            });
+        }
+
         // ── the guards of every turn ─────────────────────────────────────────────────────────
 
         [Test]
