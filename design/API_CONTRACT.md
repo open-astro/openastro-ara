@@ -1451,6 +1451,8 @@ is connected, straight from its GuideStep events):
       the things PHD2's own graph annotates. kind and its detail fields
       (omitted when PHD2 sent none):
         dithered            { dx_px, dy_px }
+        settle_begin        (no fields) #2072 — a guide or dither settle starts; a
+                            guiding start's follows guiding_started, before its first step
         settling            { distance_px, time_sec, settle_time_sec }
         settle_done         { status (0 = ok), error? }
         star_lost           { frame?, star_mass?, snr?, distance_px?, status?, error? }

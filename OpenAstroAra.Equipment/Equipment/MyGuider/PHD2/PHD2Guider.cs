@@ -1389,6 +1389,12 @@ namespace OpenAstroAra.Equipment.Equipment.MyGuider.PHD2 {
                         RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "dithered", Dx = GuidingDithered?.dx, Dy = GuidingDithered?.dy });
                         break;
                     }
+                case "SettleBegin": {
+                        // #2072: sent once when a guide or dither settle starts. For a guiding start it follows
+                        // StartGuiding before the run's first GuideStep, so the PA residual knows the settle is on.
+                        RaiseMarker(new PhdGuiderMarkerEventArgs { Kind = "settle_begin" });
+                        break;
+                    }
                 case "Settling": {
                         var settleInfo = message.ToObject<PhdEventSettling>();
                         Settling = true;

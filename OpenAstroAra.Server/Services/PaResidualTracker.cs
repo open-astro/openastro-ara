@@ -55,7 +55,8 @@ internal sealed class PaResidualTracker {
 
     // This guided run already produced (or dropped) its measurement: ignore frames until the next start.
     private bool _runDone;
-    // Inside a dither / settle or a guider pause: frames are not samples.
+    // Inside a dither / settle or a guider pause: frames are not samples. A settle is the guider's, not the run's:
+    // a guiding start keeps one already open (#2072), and only settle_done, guiding_stopped or Reset ends it.
     private bool _settling;
     private bool _paused;
     private double _nextProgressAt;
@@ -97,6 +98,10 @@ internal sealed class PaResidualTracker {
         switch (kind) {
             case "guiding_started":
                 return Begin();
+            // #2072: the guider reports a guiding start's settle (settle_begin) straight after guiding_started and
+            // before that run's first frame, so the start-guiding settle (the star pulled onto the lock position)
+            // is never sampled. A start with no settle_begin before its first frame runs no settle: it samples.
+            case "settle_begin":
             case "dithered":
             case "settling":
                 _settling = true;
@@ -118,8 +123,10 @@ internal sealed class PaResidualTracker {
             case "lock_position_lost":
                 Estimator.Break();
                 return PaResidualAction.None;
-            case "calibration_started":
             case "guiding_stopped":
+                _settling = false; // a stop ends any settle (the guider aborts it)
+                return End();
+            case "calibration_started":
                 return End();
             default:
                 return PaResidualAction.None;
@@ -153,7 +160,7 @@ internal sealed class PaResidualTracker {
         Estimator.Clear();
         Measuring = true;
         _runDone = false;
-        _settling = false;
+        // _settling is kept: a settle the guider reported before this start still holds its frames back (#2072).
         _paused = false;
         _nextProgressAt = ProgressEverySeconds;
         _ra.Clear();

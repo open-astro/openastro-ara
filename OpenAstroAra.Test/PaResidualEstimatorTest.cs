@@ -221,6 +221,73 @@ namespace OpenAstroAra.Test {
             Assert.That(tracker.Measuring, Is.True);
         }
 
+        // #2072 — the start-guiding settle: the star pulled onto the lock position, every Dec pulse South.
+        private static void Recovery(PaResidualTracker tracker, double fromSec, double toSec) {
+            for (var t = fromSec; t <= toSec; t += 2) {
+                tracker.OnStep(t, 4.0, -2000);
+            }
+        }
+
+        [Test]
+        public void A_start_settle_recovery_is_left_out_and_only_the_frames_after_settle_done_are_sampled() {
+            var tracker = NewTracker();
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            tracker.OnMarker("settle_begin");
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 42);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11), "the clean frames only");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+            Assert.That(tracker.Measuring, Is.True);
+        }
+
+        [Test]
+        public void A_settle_reported_before_the_guiding_start_is_not_lost() {
+            var tracker = NewTracker();
+            tracker.OnMarker("settling");
+            Assert.That(tracker.OnMarker("guiding_started"), Is.EqualTo(PaResidualAction.Started));
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 42);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11), "the start did not wipe the open settle");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
+        [Test]
+        public void The_rig_order_restart_then_dither_samples_only_the_settled_frames() {
+            // Rig night 2026-11-22: a re-center slew stopped guiding, the Dither restarted it (guiding_started,
+            // its settle) and then dithered (dithered, settling, settle_done).
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_stopped");
+            tracker.OnMarker("guiding_started");
+            tracker.OnMarker("settle_begin");
+            Recovery(tracker, 0, 20);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 22, 32);
+            tracker.OnMarker("dithered");
+            tracker.OnMarker("settling");
+            Recovery(tracker, 34, 44);
+            tracker.OnMarker("settle_done");
+            Frames(tracker, 46, 56);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(12), "6 + 6 settled frames");
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+            Assert.That(tracker.Measuring, Is.True);
+        }
+
+        [Test]
+        public void A_start_the_guider_runs_no_settle_for_samples_from_its_first_frame() {
+            // A start from the guider's own page: no settle_begin before its first frame, so no settle_done will come.
+            var tracker = NewTracker();
+            tracker.OnMarker("guiding_started");
+            Frames(tracker, 0, 20);
+
+            Assert.That(tracker.Estimator.Frames, Is.EqualTo(11));
+            Assert.That(tracker.Estimator.SampleSeconds, Is.EqualTo(20).Within(1e-9));
+        }
+
         [Test]
         public void Guiding_stopped_early_reports_what_it_has_only_past_the_minimum() {
             var tracker = NewTracker();
