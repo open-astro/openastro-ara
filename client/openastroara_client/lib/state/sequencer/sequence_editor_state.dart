@@ -105,8 +105,14 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   // the updated detail, which reloads the editor (server-authoritative). Nodes
   // at/before the running position are locked; the daemon re-validates every
   // rule, so these client checks are UX (fail fast with a message), not the
-  // enforcement. Scalar-field and condition/trigger edits stay local-only in
-  // live mood — they'd silently not join the run, so [_commitBody] refuses them.
+  // enforcement. Field edits (#2168) stay LOCAL until Save or Resume, which
+  // sends only the changed keys to the daemon's live `run/fields` op
+  // ([applyLiveEdits]); adding or removing a loop rule or trigger mid-run is
+  // refused with a notice in [_commitBody].
+
+  /// Whether the loaded sequence currently has an active run (running or
+  /// paused): Save and Resume send field edits live ([applyLiveEdits]).
+  bool get liveRunActive => _liveRunActive;
 
   /// Whether the loaded sequence currently has an active run — live mood.
   bool get _liveRunActive {
@@ -222,36 +228,98 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (api == null) return;
     _liveEditInFlight = true;
     try {
+      // Unsaved field edits go first: the reload below would drop them.
+      if (s.isDirty && !await _sendLiveFields(api, s)) return;
       final detail = await send(api);
       // Stale guard: the editor may have moved to another sequence mid-flight.
       if (state?.id == s.id) load(detail);
     } on DioException catch (e) {
-      final data = e.response?.data;
-      final detail = data is Map<String, dynamic>
-          ? (data['detail'] ?? data['error'])
-          : null;
-      _notice(detail is String && detail.isNotEmpty
-          ? detail
-          : "The running plan couldn't be changed. Check the connection and try again.");
-      debugPrint('[sequencer] live edit refused/failed: $e');
+      _liveRefused(e);
     } finally {
       _liveEditInFlight = false;
     }
   }
 
+  void _liveRefused(DioException e) {
+    final data = e.response?.data;
+    final detail =
+        data is Map<String, dynamic> ? (data['detail'] ?? data['error']) : null;
+    _notice(detail is String && detail.isNotEmpty
+        ? detail
+        : "The running plan couldn't be changed. Check the connection and try again.");
+    debugPrint('[sequencer] live edit refused/failed: $e');
+  }
+
+  /// #2168 — save the field edits made while the run is going (running or
+  /// paused) to the live plan, NINA-style: the daemon changes the running
+  /// items, so every step that starts after this uses the new values; the
+  /// frame in hand and finished counts are kept. Only the changed keys are
+  /// sent, never the whole body. True when there was nothing to send or the
+  /// daemon took the change; false (edits kept, with a notice) on a refusal.
+  Future<bool> applyLiveEdits() async {
+    final s = state;
+    if (s == null || !s.isDirty) return true;
+    final api = ref.read(sequenceApiProvider);
+    if (api == null) return false;
+    if (_liveBusy()) return false;
+    _liveEditInFlight = true;
+    try {
+      return await _sendLiveFields(api, s);
+    } on DioException catch (e) {
+      _liveRefused(e);
+      return false;
+    } finally {
+      _liveEditInFlight = false;
+    }
+  }
+
+  /// Send [s]'s field edits; reload the daemon's answer. DioExceptions
+  /// propagate to the caller.
+  Future<bool> _sendLiveFields(SequenceClient api, SequenceEditorState s) async {
+    final changes = scalarFieldChanges(s.originalBody, s.body);
+    if (changes == null) {
+      _notice(_liveStructureNotice);
+      return false;
+    }
+    if (changes.isEmpty) return true;
+    final detail = await api.setRunFields(s.id, changes);
+    final now = state;
+    if (now?.id == s.id) {
+      if (identical(now!.body, s.body)) {
+        load(detail);
+      } else {
+        // Typed on while the save was in flight: keep those edits dirty.
+        markSaved(s.body);
+      }
+    }
+    _notice('Saved. Frames that start now use the new settings.');
+    return true;
+  }
+
+  static const String _liveStructureNotice =
+      'While the run is going you can change settings and add, remove or '
+      'reorder upcoming items. Adding or removing a loop rule or trigger needs '
+      'the run to finish.';
+
   /// Route for every body mutation: snapshot the pre-edit body, clear redo,
   /// then apply. [coalesceKey] marks a scalar-field edit; repeats on the same
   /// key reuse the existing snapshot.
   void _commitBody(SequenceEditorState prev, SequenceEditorState next,
-      {String? coalesceKey}) {
+      {String? coalesceKey, bool liveField = false}) {
     // §38.9 — every LOCAL body mutation funnels through here; in live mood the
-    // structural ops route to the daemon before reaching this, so anything that
-    // does arrive (field/condition/trigger edits, or a routed op's local
-    // fallback) would silently not join the executing run. Refuse with a notice
-    // instead of quietly forking the working copy from the live plan.
+    // structural ops route to the daemon before reaching this. A field edit
+    // ([liveField]) is kept: it makes the editor dirty, and Save or Resume
+    // sends it to the running plan (#2168). Anything else (adding or removing
+    // a loop rule or trigger) would not join the run, so it is refused with a
+    // notice instead of quietly forking the working copy from the live plan.
     if (_liveRunActive) {
-      _notice('The sequence is running — pause-proof edits only: add, remove, '
-          'or reorder upcoming items. Field changes need the run to finish.');
+      if (!liveField) {
+        _notice(_liveStructureNotice);
+        return;
+      }
+      // Undo is off in live mood (a live save reloads the daemon's copy).
+      _lastCoalesceKey = null;
+      state = next;
       return;
     }
     final coalesce = coalesceKey != null && coalesceKey == _lastCoalesceKey;
@@ -534,7 +602,7 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final s = state;
     if (s == null || nodeAt(s.body, path) == null) return;
     _commitBody(s, s._copyWith(body: setField(s.body, path, key, value)),
-        coalesceKey: 'f:${path.join('.')}/$key');
+        coalesceKey: 'f:${path.join('.')}/$key', liveField: true);
   }
 
   /// Append a fresh condition built from [def] to the container at
@@ -579,7 +647,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         s,
         s._copyWith(
             body: setConditionField(s.body, containerPath, index, key, value)),
-        coalesceKey: 'c:${containerPath.join('.')}/$index/$key');
+        coalesceKey: 'c:${containerPath.join('.')}/$index/$key',
+        liveField: true);
   }
 
   /// Append a fresh trigger built from [def] to the container at [containerPath];
@@ -621,7 +690,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
         s,
         s._copyWith(
             body: setTriggerField(s.body, containerPath, index, key, value)),
-        coalesceKey: 't:${containerPath.join('.')}/$index/$key');
+        coalesceKey: 't:${containerPath.join('.')}/$index/$key',
+        liveField: true);
   }
 
   /// Rebaseline dirty-tracking to [savedBody] — the exact body that was just

@@ -450,4 +450,35 @@ void main() {
     expect(withConditions(node, const [])['Conditions'].keys.first, r'$type');
     expect(withTriggers(node, const [])['Triggers'].keys.first, r'$type');
   });
+
+  group('scalarFieldChanges (#2168 live save)', () {
+    Map<String, dynamic> withRules() => withTriggers(
+        withConditions(sampleBody(), [
+          {r'$type': 'X.LoopCondition', 'Iterations': 60, 'CompletedIterations': 3},
+        ]),
+        [
+          {r'$type': 'X.AutofocusAfterExposures', 'AfterExposures': 10},
+        ]);
+
+    test('finds item, condition and trigger changes and skips identical keys', () {
+      final original = withRules();
+      var edited = setField(original, const [1, 0], 'ExposureTime', 180.0);
+      edited = setConditionField(edited, const [], 0, 'Iterations', 80);
+      edited = setTriggerField(edited, const [], 0, 'AfterExposures', 5);
+
+      final changes = scalarFieldChanges(original, edited)!;
+      expect(changes.map((c) => c.toJson()), [
+        {'path': [], 'target': 'condition', 'index': 0, 'key': 'Iterations', 'value': 80},
+        {'path': [], 'target': 'trigger', 'index': 0, 'key': 'AfterExposures', 'value': 5},
+        {'path': [1, 0], 'target': 'item', 'index': null, 'key': 'ExposureTime', 'value': 180.0},
+      ]);
+    });
+
+    test('an unchanged body has no changes; a changed shape is not a field edit', () {
+      final original = withRules();
+      expect(scalarFieldChanges(original, withRules()), isEmpty);
+      expect(scalarFieldChanges(original, removeConditionAt(original, const [], 0)), isNull);
+      expect(scalarFieldChanges(original, removeAt(original, const [0])), isNull);
+    });
+  });
 }

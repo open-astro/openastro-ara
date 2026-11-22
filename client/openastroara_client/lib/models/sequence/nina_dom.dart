@@ -8,6 +8,8 @@
 /// (root = `[]`, its first child = `[0]`, that child's second child = `[0,1]`).
 library;
 
+import 'package:collection/collection.dart';
+
 /// Child-index path from the root to a node. Empty = the root itself.
 typedef NodePath = List<int>;
 
@@ -378,4 +380,85 @@ Map<String, dynamic> moveSubtree(Map<String, dynamic> root, NodePath fromPath,
     adjustedParent[p] -= 1;
   }
   return insertChild(removed, adjustedParent, toIndex, node);
+}
+
+/// One setting changed on a node, or on one of its conditions or triggers
+/// (#2168): what the daemon's live `run/fields` op takes. [target] is `item`
+/// (the node at [path]), `condition` or `trigger` (then [index] picks it).
+class FieldChange {
+  final NodePath path;
+  final String target;
+  final int? index;
+  final String key;
+  final Object? value;
+
+  const FieldChange({
+    required this.path,
+    required this.target,
+    this.index,
+    required this.key,
+    required this.value,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'path': path,
+        'target': target,
+        'index': index,
+        'key': key,
+        'value': value,
+      };
+
+  @override
+  String toString() =>
+      'FieldChange($target ${path.join('.')}${index == null ? '' : '#$index'} $key=$value)';
+}
+
+const DeepCollectionEquality _fieldEquality = DeepCollectionEquality();
+
+/// The structure keys a field diff never reports: children, the rule lists,
+/// and Json.NET metadata (`$type`, `$id`, …).
+bool _isStructureKey(String key) =>
+    key == 'Items' || key == 'Conditions' || key == 'Triggers' || key.startsWith(r'$');
+
+void _diffFields(Map<String, dynamic> a, Map<String, dynamic> b, NodePath path,
+    String target, int? index, List<FieldChange> out) {
+  for (final key in {...a.keys, ...b.keys}) {
+    if (_isStructureKey(key)) continue;
+    if (_fieldEquality.equals(a[key], b[key])) continue;
+    out.add(FieldChange(
+        path: path, target: target, index: index, key: key, value: b[key]));
+  }
+}
+
+/// The settings that differ between [original] and [edited] — only the keys
+/// that changed, never whole nodes, so a live save never writes back the run's
+/// own counters (frames taken, loops done) from a stale copy (#2168). Null when
+/// the two bodies differ in shape (a node, condition or trigger added, removed,
+/// moved or swapped for another kind): that is not a field edit.
+List<FieldChange>? scalarFieldChanges(
+    Map<String, dynamic> original, Map<String, dynamic> edited) {
+  final out = <FieldChange>[];
+  bool walk(Map<String, dynamic> a, Map<String, dynamic> b, NodePath path) {
+    if (a[r'$type'] != b[r'$type']) return false;
+    _diffFields(a, b, path, 'item', null, out);
+    for (final (target, of) in [
+      ('condition', conditionsOf),
+      ('trigger', triggersOf),
+    ]) {
+      final ra = of(a), rb = of(b);
+      if (ra.length != rb.length) return false;
+      for (var i = 0; i < ra.length; i++) {
+        if (ra[i][r'$type'] != rb[i][r'$type']) return false;
+        _diffFields(ra[i], rb[i], path, target, i, out);
+      }
+    }
+    final ka = childrenOf(a), kb = childrenOf(b);
+    if (ka.length != kb.length) return false;
+    for (var i = 0; i < ka.length; i++) {
+      if (!walk(ka[i], kb[i], <int>[...path, i])) return false;
+    }
+    return true;
+  }
+
+  return walk(original, edited, const []) ? out : null;
 }

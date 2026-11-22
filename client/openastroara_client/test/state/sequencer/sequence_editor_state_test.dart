@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/condition_catalog.dart';
@@ -608,13 +609,65 @@ void main() {
       expect(childrenOf(sent).single[r'$type'], contains('TakeExposure'));
     });
 
-    test('field edits are refused with a notice (body untouched)', () async {
+    test('field edits while running stay local and make Save available',
+        () async {
+      // #2168 — the rig: 180 s typed while paused, the row kept "5 s" and
+      // Save stayed grey.
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 180.0);
+      final s = c.read(sequenceEditorProvider)!;
+      expect(nodeAt(s.body, const [1, 0])!['ExposureTime'], 180.0);
+      expect(s.isDirty, isTrue, reason: 'Save lights up');
+      expect(c.read(liveEditNoticeProvider), isNull, reason: 'no refusal');
+      expect(api.fieldSaves, isEmpty, reason: 'nothing sent until Save');
+    });
+
+    test('applyLiveEdits sends only the changed fields and reloads', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 180.0);
+
+      expect(await n.applyLiveEdits(), isTrue);
+      expect(api.fieldSaves.single.map((f) => f.toJson()), [
+        {'path': [1, 0], 'target': 'item', 'index': null, 'key': 'ExposureTime', 'value': 180.0},
+      ]);
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse,
+          reason: "the daemon's copy was loaded");
+      expect(c.read(liveEditNoticeProvider), contains('Saved'));
+    });
+
+    test('a refused live save keeps the edits dirty with a notice', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      api.refuseFields = 'ExposureTime not changed: exposure time must be above 0';
+      n.setNodeField(const [1, 0], 'ExposureTime', 0.0);
+
+      expect(await n.applyLiveEdits(), isFalse);
+      expect(c.read(sequenceEditorProvider)!.isDirty, isTrue);
+      expect(c.read(liveEditNoticeProvider), contains('must be above 0'));
+    });
+
+    test('adding a condition while running is refused with a notice', () async {
       final c = liveContainer();
       final n = await liveCtrl(c);
       final before = c.read(sequenceEditorProvider)!.body;
-      n.setNodeField(const [1, 0], 'ExposureTime', 120.0);
+      n.addConditionTo(const [1], conditionCatalog.first);
       expect(identical(c.read(sequenceEditorProvider)!.body, before), isTrue);
-      expect(c.read(liveEditNoticeProvider), isNotNull);
+      expect(c.read(liveEditNoticeProvider), contains('loop rule'));
+    });
+
+    test('a structural live edit sends pending field edits first', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 180.0);
+      n.removeNode(const [1]);
+      await Future<void>.delayed(Duration.zero);
+      expect(api.fieldSaves, hasLength(1),
+          reason: "the remove's reload would otherwise drop the 180 s");
+      expect(api.removedPaths, [
+        [1]
+      ]);
     });
 
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
@@ -639,6 +692,24 @@ class _LiveFakeClient implements SequenceClient {
   final List<List<int>> removedPaths = [];
   final List<Map<String, dynamic>> addedItems = [];
   final List<(List<int>, int)> moves = [];
+  final List<List<FieldChange>> fieldSaves = [];
+  String? refuseFields;
+
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+    if (refuseFields != null) {
+      throw DioException(
+        requestOptions: RequestOptions(path: '/run/fields'),
+        response: Response(
+          requestOptions: RequestOptions(path: '/run/fields'),
+          statusCode: 422,
+          data: {'error': refuseFields},
+        ),
+      );
+    }
+    fieldSaves.add(changes);
+    return sampleDetail();
+  }
 
   @override
   Future<SequenceDetail> addRunItem(String id,

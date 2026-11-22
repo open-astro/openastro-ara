@@ -45,6 +45,12 @@ class _SaveClient implements SequenceClient {
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
       throw UnimplementedError();
+  List<FieldChange>? liveFields;
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+    liveFields = changes;
+    return _detail(id);
+  }
 
   @override
   Future<String> decideAutoFlats(String id,
@@ -147,6 +153,12 @@ Future<ProviderContainer> _pump(WidgetTester tester, _SaveClient client,
   return container;
 }
 
+class _PausedRun extends SequenceRunStateNotifier {
+  @override
+  Future<SequenceRunStateInfo?> build() async => const SequenceRunStateInfo(
+      sequenceId: 'seq-1', runId: 'run-1', state: SequenceRunState.paused);
+}
+
 TextButton _saveButton(WidgetTester tester) => tester.widget<TextButton>(
       find.ancestor(of: find.text('Save'), matching: find.byType(TextButton)),
     );
@@ -221,6 +233,34 @@ void main() {
     // markSaved rebaselined → no longer dirty → Save disables again.
     expect(container.read(sequenceEditorProvider)!.isDirty, isFalse);
     expect(find.text('Sequence saved.'), findsOneWidget);
+  });
+
+  testWidgets('Save while paused calls run/fields not PATCH', (tester) async {
+    // #2168 — the daemon refuses a PATCH while the run is going, and a whole
+    // body would roll back the run's own frame counts.
+    await wideSurface(tester);
+    final client = _SaveClient();
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(client),
+      sequenceRunStateProvider.overrideWith(_PausedRun.new),
+    ]);
+    addTearDown(container.dispose);
+    container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+    await container.read(sequenceRunStateProvider.future);
+    container.read(sequenceEditorProvider.notifier).load(_detail('seq-1'));
+    container.read(sequenceEditorProvider.notifier).setNodeField(const [0], 'Time', 99.0);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+    ));
+    await tester.pump();
+
+    _saveButton(tester).onPressed!();
+    await tester.pumpAndSettle();
+    expect(client.saveCalls, 0, reason: 'no PATCH while the run is going');
+    expect(client.liveFields!.single.toJson(),
+        {'path': [0], 'target': 'item', 'index': null, 'key': 'Time', 'value': 99.0});
+    expect(container.read(sequenceEditorProvider)!.isDirty, isFalse);
   });
 
   testWidgets('a 422 surfaces the validator message', (tester) async {

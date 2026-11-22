@@ -165,6 +165,9 @@ class _SequencerTabState extends ConsumerState<SequencerTab> {
       final id = ref.read(selectedSequenceIdProvider);
       if (id == null || event.payload['sequence_id'] != id) return;
       if (event.type == 'sequence.run_items_changed') {
+        // #2168 — unsaved setting edits stay: a reload would drop them. Save
+        // or Resume sends them and reloads the daemon's copy.
+        if (ref.read(sequenceEditorProvider)?.isDirty ?? false) return;
         unawaited(_loadSelectedBody(id));
       } else if (event.type == 'sequence.resume_recentering' && mounted) {
         // §38.10 — the daemon is refining pointing/focus before imaging

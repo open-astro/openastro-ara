@@ -7,10 +7,12 @@ import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/state/time_sync_state.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/models/polar_align.dart';
 import 'package:openastroara/state/polar_align/polar_align_state.dart';
 import 'package:openastroara/state/app_shell_state.dart';
+import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/state/settings/settings_nav.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_toolbar.dart';
@@ -32,6 +34,21 @@ class _FakeClient implements SequenceClient {
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
       throw UnimplementedError();
+  /// The daemon's refusal text for a live field save, when set.
+  String? refuseFields;
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) async {
+    calls.add('fields');
+    if (refuseFields != null) {
+      final req = RequestOptions(path: '/api/v1/sequences/$id/run/fields');
+      throw DioException(
+          requestOptions: req,
+          type: DioExceptionType.badResponse,
+          response: Response(
+              requestOptions: req, statusCode: 422, data: {'error': refuseFields}));
+    }
+    return SequenceDetail(id: id, name: id, body: _editedBody);
+  }
 
   @override
   Future<String> decideAutoFlats(String id,
@@ -115,6 +132,17 @@ class _FakeRunNotifier extends SequenceRunStateNotifier {
   @override
   Future<SequenceRunStateInfo?> build() async => _v;
 }
+
+/// A one-exposure body for the live-save tests (#2168).
+const Map<String, dynamic> _editedBody = {
+  r'$type': 'X.SequentialContainer',
+  'Items': {
+    r'$type': itemsWrapperType,
+    r'$values': [
+      {r'$type': 'X.TakeExposure', 'ExposureTime': 5.0},
+    ],
+  },
+};
 
 SequenceRunStateInfo _info(SequenceRunState s, {int done = 0, int total = 0}) =>
     SequenceRunStateInfo(state: s, instructionsCompleted: done, instructionsTotal: total);
@@ -462,12 +490,17 @@ void main() {
   // §38.10 — resuming a paused run offers the re-center/refocus choice; the
   // selected options ride the resume request body.
   group('resume refinement dialog', () {
-    Future<_FakeClient> pumpPaused(WidgetTester tester) async {
-      final client = _FakeClient();
-      final container = ProviderContainer(overrides: [
+    late ProviderContainer container;
+    Future<_FakeClient> pumpPaused(WidgetTester tester,
+        {_FakeClient? withClient}) async {
+      final client = withClient ?? _FakeClient();
+      container = ProviderContainer(overrides: [
         sequenceApiProvider.overrideWithValue(client),
-        sequenceRunStateProvider
-            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.paused))),
+        sequenceRunStateProvider.overrideWith(() => _FakeRunNotifier(
+            const SequenceRunStateInfo(
+                sequenceId: 'seq-1',
+                runId: 'run-1',
+                state: SequenceRunState.paused))),
       ]);
       addTearDown(container.dispose);
       await tester.pumpWidget(UncontrolledProviderScope(
@@ -477,6 +510,13 @@ void main() {
       container.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await tester.pumpAndSettle();
       return client;
+    }
+
+    /// The rig, 2026-11-21: paused, 5 s → 180 s typed, Resume (no Save).
+    void editWhilePaused() {
+      final editor = container.read(sequenceEditorProvider.notifier);
+      editor.load(SequenceDetail(id: 'seq-1', name: 'seq-1', body: _editedBody));
+      editor.setNodeField(const [0], 'ExposureTime', 180.0);
     }
 
     Future<void> tapResume(WidgetTester tester) async {
@@ -519,6 +559,30 @@ void main() {
       await tester.tap(find.text('Just resume'));
       await tester.pumpAndSettle();
       expect(client.resumeFlags, (false, false));
+    });
+
+    testWidgets('Resume with unsaved field edits saves them first',
+        (tester) async {
+      await wideSurface(tester);
+      final client = await pumpPaused(tester);
+      editWhilePaused();
+      await tapResume(tester);
+      await tester.tap(find.text('Just resume'));
+      await tester.pumpAndSettle();
+      expect(client.calls, ['fields', 'resume'],
+          reason: 'the 180 s reaches the live plan before the run goes on');
+    });
+
+    testWidgets('a refused live save keeps the run paused', (tester) async {
+      await wideSurface(tester);
+      final client = await pumpPaused(tester,
+          withClient: _FakeClient()..refuseFields = 'ExposureTime not changed');
+      editWhilePaused();
+      await tapResume(tester);
+      await tester.tap(find.text('Just resume'));
+      await tester.pumpAndSettle();
+      expect(client.calls, ['fields'], reason: 'no resume on the old values');
+      expect(container.read(liveEditNoticeProvider), 'ExposureTime not changed');
     });
 
     testWidgets('dismissing the dialog resumes nothing (user backed out)',

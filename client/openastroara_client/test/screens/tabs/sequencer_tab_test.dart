@@ -8,12 +8,14 @@ import 'package:openastroara/models/sequence/instruction_catalog.dart';
 import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
+import 'package:openastroara/models/ws_event.dart';
 import 'package:openastroara/screens/tabs/sequencer_tab.dart';
 import 'package:openastroara/widgets/sky_atlas/session_plan_dialog.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/ws/ws_providers.dart';
 import 'package:openastroara/widgets/sequencer/sequence_field_editor.dart';
 import 'package:openastroara/widgets/sequencer/sequencer_palette.dart';
 
@@ -46,6 +48,9 @@ class _FakeClient implements SequenceClient {
       throw UnimplementedError();
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes) =>
       throw UnimplementedError();
 
   @override
@@ -143,6 +148,39 @@ void main() {
     await tester.tap(find.text('Plan tonight'));
     await tester.pumpAndSettle();
     expect(find.byType(SessionPlanDialog), findsOneWidget);
+  });
+
+  testWidgets('a live-edit event does not drop unsaved setting edits',
+      (tester) async {
+    // #2168 — typed 180 s while paused; another edit's (or this client's own)
+    // run_items_changed reload would have put the old 5 s back.
+    final ws = StreamController<WsEvent>.broadcast();
+    addTearDown(ws.close);
+    final container = ProviderContainer(overrides: [
+      sequenceApiProvider.overrideWithValue(_FakeClient()),
+      wsEventsProvider.overrideWith((ref) => ws.stream),
+    ]);
+    addTearDown(container.dispose);
+    await tester.pumpWidget(UncontrolledProviderScope(
+      container: container,
+      child: const MaterialApp(home: Scaffold(body: SequencerTab())),
+    ));
+    container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+    await tester.pumpAndSettle();
+    container
+        .read(sequenceEditorProvider.notifier)
+        .setNodeField(const [0], 'ExposureTime', 180.0);
+
+    ws.add(WsEvent(
+        type: 'sequence.run_items_changed',
+        ts: DateTime.utc(2026, 11, 21),
+        seq: 1,
+        payload: const {'sequence_id': 'seq-1', 'op': 'add'}));
+    await tester.pumpAndSettle();
+
+    final s = container.read(sequenceEditorProvider)!;
+    expect(s.isDirty, isTrue);
+    expect(nodeAt(s.body, const [0])!['ExposureTime'], 180.0);
   });
 
   testWidgets('selecting a sequence loads its body into the editor', (tester) async {

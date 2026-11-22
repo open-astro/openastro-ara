@@ -727,6 +727,18 @@ Future<void> _save(BuildContext context, WidgetRef ref) async {
   // api.updateSequence below (canSave already implies a non-null api when Save
   // is tappable on a daemon sequence).
   if (api == null) return;
+  // #2168 — while the run is going (running or paused) the daemon owns the
+  // file: send the changed settings to the live plan instead of a PATCH (which
+  // it refuses, and which would roll back the run's own frame counts).
+  if (editorNotifier.liveRunActive) {
+    busy.setBusy(true);
+    try {
+      await editorNotifier.applyLiveEdits();
+    } finally {
+      busy.setBusy(false);
+    }
+    return;
+  }
   busy.setBusy(true);
   try {
     await api.updateSequence(editor.id, body: sentBody);
@@ -962,6 +974,13 @@ Future<void> promptAndResumeSequence(BuildContext context, ProviderReader read) 
     ),
   );
   if (choice == null || !context.mounted) return; // dismissed — user backed out
+  // #2168 — settings changed during the pause join the run first, so Resume
+  // without Save still uses them. A refusal keeps the run paused (with the
+  // daemon's reason) rather than resuming on the old values.
+  final editor = read(sequenceEditorProvider.notifier);
+  if ((read(sequenceEditorProvider)?.isDirty ?? false) && editor.liveRunActive) {
+    if (!await editor.applyLiveEdits() || !context.mounted) return;
+  }
   await runSequenceLifecycle(
       context,
       read,
