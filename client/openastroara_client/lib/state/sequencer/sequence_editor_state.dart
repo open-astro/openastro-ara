@@ -271,6 +271,19 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     return why == null;
   }
 
+  /// The same save for a Resume outside the Sequencer tab (#2168): the Simple
+  /// plan panel, the "press Resume" message and the stop overlay. Sends the
+  /// editor's unsaved settings when [sequenceId] is the one open in it. Null
+  /// when there was nothing to send or the daemon took it; else the reason
+  /// the run should stay paused, for the caller to show.
+  Future<String?> saveLiveEditsBeforeResume(String sequenceId) async {
+    final s = state;
+    if (s == null || s.id != sequenceId || !s.isDirty || !_liveRunActive) {
+      return null;
+    }
+    return _sendLiveEdits();
+  }
+
   Future<String?> _sendLiveEdits() async {
     final s = state;
     if (s == null || !s.isDirty) return null;
@@ -808,6 +821,19 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     if (s == null) return;
     state = s._copyWith(originalBody: savedBody, baseModified: modifiedUtc);
   }
+}
+
+/// #2168 — Resume from any button (the Simple plan panel, the "press Resume"
+/// message, the stop overlay): the Sequencer editor's unsaved settings for
+/// [id] join the run first, so the run never resumes on values the screen no
+/// longer shows. When the daemon refuses them the run stays paused and this
+/// throws a [StateError] with the reason, which the caller shows.
+Future<String> resumeWithEdits(
+    SequenceEditorController editor, SequenceClient api, String id,
+    {bool recenter = true, bool refocus = false}) async {
+  final why = await editor.saveLiveEditsBeforeResume(id);
+  if (why != null) throw StateError(why);
+  return api.resume(id, recenter: recenter, refocus: refocus);
 }
 
 /// The editor working-state for the open sequence (null when none is loaded).

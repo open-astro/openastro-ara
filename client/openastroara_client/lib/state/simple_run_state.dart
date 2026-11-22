@@ -9,6 +9,7 @@ import '../services/sequence_api.dart' show SequenceClient;
 import 'equipment/filter_wheel_state.dart';
 import 'sequencer/create_imaging_run.dart';
 import 'sequencer/rig_capabilities_state.dart';
+import 'sequencer/sequence_editor_state.dart' show resumeWithEdits, sequenceEditorProvider;
 import 'sequencer/sequence_list_state.dart';
 import 'settings/filter_set_state.dart';
 import 'simple_messages_state.dart';
@@ -1208,7 +1209,13 @@ class SimpleRunNotifier extends Notifier<SimpleRun> {
   // The shutter's resume re-centers (pointing may have drifted while
   // paused); the progress panel offers the other two.
   Future<void> resume({bool recenter = true, bool refocus = false}) => _op(
-    (api, id) => api.resume(id, recenter: recenter, refocus: refocus),
+    (api, id) => resumeWithEdits(
+      ref.read(sequenceEditorProvider.notifier),
+      api,
+      id,
+      recenter: recenter,
+      refocus: refocus,
+    ),
     (l) => l.planActionResume,
   );
   Future<void> stop() => _op((api, id) => api.stop(id), (l) => l.planActionStop);

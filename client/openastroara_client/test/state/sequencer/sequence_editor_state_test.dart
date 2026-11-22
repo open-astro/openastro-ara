@@ -11,6 +11,7 @@ import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_editor_state.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
+import 'package:openastroara/state/simple_run_state.dart';
 
 // A template-shaped body: a root SequentialContainer wrapping a SwitchFilter and
 // a nested container that holds one TakeExposure.
@@ -796,6 +797,36 @@ void main() {
       expect(n.canUndo, isTrue, reason: 'a refused value is never a trap');
       n.undo();
       expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+    });
+
+    test('resumeWithEdits sends unsaved settings before resuming', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 180.0);
+      await resumeWithEdits(n, api, 'seq-1');
+      expect(api.fieldSaves, hasLength(1));
+      expect(api.resumed, ['seq-1']);
+    });
+
+    test('resumeWithEdits keeps the run paused when the daemon refuses',
+        () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      api.refuseFields = 'ExposureTime not changed: exposure time must be above 0';
+      n.setNodeField(const [1, 0], 'ExposureTime', 0.0);
+      await expectLater(resumeWithEdits(n, api, 'seq-1'),
+          throwsA(isA<StateError>().having((e) => e.message, 'message', contains('above 0'))));
+      expect(api.resumed, isEmpty);
+    });
+
+    test("the Simple plan's Resume sends the editor's unsaved settings first",
+        () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 180.0);
+      await c.read(simpleRunProvider.notifier).resume();
+      expect(api.fieldSaves, hasLength(1));
+      expect(api.resumed, ['seq-1']);
     });
 
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
