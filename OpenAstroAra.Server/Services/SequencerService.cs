@@ -310,19 +310,32 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         return (root, bodyTop);
     }
 
-    public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
+        PauseAsync(id, afterFrame: false, idempotencyKey, ct);
+
+    public Task<OperationAcceptedDto> PauseAsync(Guid id, bool afterFrame, string? idempotencyKey, CancellationToken ct) {
         _unattendedShutdown?.NotifyUserActivity("sequencer.pause");
         // Arm the run's pause gate: the instruction or trigger in progress stops and
-        // runs again from its start on Resume (a frame, flat set or container finishes first),
-        // and the engine suspends at that boundary (SequentialStrategy). The state
-        // flip to Paused + the sequence.paused event happen in OnPauseEntered when
+        // runs again from its start on Resume, and the engine suspends at that boundary
+        // (SequentialStrategy). A plain Pause stops the exposure in progress too, light,
+        // dark or bias (#2172, as NINA's Stop does): it is not saved or counted and is
+        // taken again on Resume. With afterFrame (and for Stop after frame) the exposure
+        // finishes and is filed first. A flat set and a meridian flip always finish.
+        // The state flip to Paused + the sequence.paused event happen in OnPauseEntered when
         // the engine ACTUALLY suspends, never on the mere request. Idempotent, and
         // harmless for terminal/aborting runs (a cancelled token wins the gate).
         if (_runs.TryGetValue(id, out var run) && IsAbortableRun(run.State)) {
             // The user owns this pause: no daemon resume (safety, star-lost watch) may release it.
             run.DaemonPaused = false;
             run.AdoptablePause = false;
-            run.Gate.RequestPause();
+            if (!afterFrame) {
+                // A Pause now overrides a pending Stop after frame: the person asked to hold the run here,
+                // and the stopped frame it would have filed is gone.
+                run.StopAfterFrame = false;
+            }
+            run.Gate.RequestPause(afterFrame
+                ? OpenAstroAra.Sequencer.Utility.FrameInterrupt.None
+                : OpenAstroAra.Sequencer.Utility.FrameInterrupt.All);
         }
         return Task.FromResult(PlaceholderEquipmentHelpers.Accepted("sequencer.pause", idempotencyKey));
     }
@@ -469,7 +482,7 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
         if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Running && HasFrameInProgress(run)) {
             // The pause gate waits for the running exposure; OnPauseEntered turns its landing into the stop.
             run.StopAfterFrame = true;
-            await PauseAsync(id, idempotencyKey, ct);
+            await PauseAsync(id, afterFrame: true, idempotencyKey, ct);
         } else {
             await RequestCancelAsync(id, SequenceRunState.Stopped);
         }
@@ -557,6 +570,9 @@ public sealed partial class SequencerService : ISequencerService, IHostedService
 
     /// <summary>Whether the run's pending pause also stops the frame in progress (tests).</summary>
     internal bool PauseInterruptsFrame(Guid id) => _runs.TryGetValue(id, out var run) && run.Gate.FrameInterruptToken.IsCancellationRequested;
+
+    /// <summary>Whether the run's pending pause also stops a dark or bias in progress (tests).</summary>
+    internal bool PauseInterruptsEveryExposure(Guid id) => _runs.TryGetValue(id, out var run) && run.Gate.ExposureInterruptToken.IsCancellationRequested;
 
     public Task<int> ResumeRunsAsync(IReadOnlyCollection<Guid> ids, CancellationToken ct) {
         // §35 safety auto-resume — daemon-automated (no NotifyUserActivity), and it

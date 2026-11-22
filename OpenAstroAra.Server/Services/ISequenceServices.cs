@@ -105,7 +105,13 @@ public interface ISequencerService {
     /// <summary>#1875 — the queued plan: from the running tree while a run exists, else from the stored body; null for an unknown sequence.</summary>
     Task<SequencePlanDto?> GetPlanAsync(Guid id, CancellationToken ct);
     Task<OperationAcceptedDto> StartAsync(Guid id, SequenceStartRequestDto request, string? idempotencyKey, CancellationToken ct);
-    Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct);
+    /// <summary>§38 / #2172 — the user's Pause: the exposure in progress stops at once, is not saved or
+    /// counted, and is taken again on Resume.</summary>
+    Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
+        PauseAsync(id, afterFrame: false, idempotencyKey, ct);
+    /// <summary>#2172 — with <paramref name="afterFrame"/> the exposure in progress finishes and is filed,
+    /// then the run pauses ("Pause after this frame"); without it, as <c>PauseAsync(id, key, ct)</c>.</summary>
+    Task<OperationAcceptedDto> PauseAsync(Guid id, bool afterFrame, string? idempotencyKey, CancellationToken ct);
     /// <summary>§38.10 — resume a paused run. <paramref name="request"/> carries the
     /// resume options (re-center / refocus); null = defaults (re-center when still
     /// on the same target, no refocus). The re-center/refocus run BEFORE the pause

@@ -219,9 +219,12 @@ public static class SequenceEndpoints {
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("StartSequence");
 
+        // #2172 — the body is optional: absent = pause now (the exposure in progress stops and is taken
+        // again on Resume); after_frame = true lets that exposure finish and be filed first.
         seq.MapPost("/{id:guid}/pause",
-                async (Guid id, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
-                    Results.Accepted(value: await svc.PauseAsync(id, key, ct)))
+                async (Guid id, [FromBody] SequencePauseRequestDto? request, [FromHeader(Name = "Idempotency-Key")] string? key, ISequencerService svc, CancellationToken ct) =>
+                    Results.Accepted(value: await svc.PauseAsync(id, request?.AfterFrame == true, key, ct)))
+           .Accepts<SequencePauseRequestDto>("application/json")
            .Produces<OperationAcceptedDto>(StatusCodes.Status202Accepted)
            .ProducesProblem(StatusCodes.Status409Conflict)
            .WithName("PauseSequence");

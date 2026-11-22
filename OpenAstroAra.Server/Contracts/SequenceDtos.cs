@@ -229,6 +229,11 @@ public sealed record SequenceShareDto(
 /// gracefully and the resume proceeds with an honest notification.</summary>
 public sealed record SequenceResumeRequestDto(bool? Recenter, bool? Refocus);
 
+/// <summary>POST /api/v1/sequences/{id}/pause optional body (#2172). <c>AfterFrame</c>: true = let the
+/// exposure in progress finish and be filed, then pause; null or false = pause now (the exposure in
+/// progress stops, is not saved or counted, and is taken again on Resume).</summary>
+public sealed record SequencePauseRequestDto(bool? AfterFrame);
+
 /// <summary>POST /api/v1/sequences/{id}/run/items body — §38.9 live mid-run edit:
 /// insert <c>Item</c> (a NINA-$type node, same schema as body nodes) into the
 /// container addressed by <c>ParentPath</c> (child-index path over the body's

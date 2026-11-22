@@ -100,7 +100,11 @@ public sealed class PlaceholderSequencerService : ISequencerService {
         return PlaceholderEquipmentHelpers.Accepted("sequencer.start", idempotencyKey);
     }
 
-    public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) {
+    public Task<OperationAcceptedDto> PauseAsync(Guid id, string? idempotencyKey, CancellationToken ct) =>
+        PauseAsync(id, afterFrame: false, idempotencyKey, ct);
+
+    // The placeholder runs no frames, so a pause after the frame and a pause now are the same.
+    public Task<OperationAcceptedDto> PauseAsync(Guid id, bool afterFrame, string? idempotencyKey, CancellationToken ct) {
         if (_runs.TryGetValue(id, out var run) && run.State == SequenceRunState.Running) {
             run.State = SequenceRunState.Paused;
             _ = EmitAsync(WsEventCatalog.SequencePaused, id, run);
