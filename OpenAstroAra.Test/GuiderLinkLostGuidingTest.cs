@@ -98,7 +98,8 @@ namespace OpenAstroAra.Test {
                 Service.RestartGuidingOverride = async _ => {
                     int n;
                     lock (Steps) { Steps.Add("restart"); n = Steps.Count(s => s == "restart"); }
-                    if (RestartSucceeds && OnRestart is { } hook) {
+                    // A refused start still leaves PHD2 guiding and settled, so only its answer can fail the restore.
+                    if (OnRestart is { } hook) {
                         if (Settles(n)) {
                             await hook(0.02).ConfigureAwait(false);
                         } else if (GuidesUnsettled) {
@@ -269,7 +270,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_quick_unguided_re_drop_leaves_the_first_guided_link_loss_marked_as_guided() {
             // #2169 review — each loss keeps what it saw: a later drop with guiding off does not unmark the first.
-            using var rig = new Rig { RestartSucceeds = false };
+            using var rig = new Rig { RestartSucceeds = false, Settles = _ => false };
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
