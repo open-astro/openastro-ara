@@ -113,6 +113,13 @@ public static class RefusalCatalog {
     // #2083 — the mount reports CanMoveAxis(Primary) false: it cannot turn its RA axis by rate, so no motor start (a Turn
     // RA by hand start goes ahead).
     public static readonly RefusalCause PolarAlignCannotMoveAxis = new("polar-align-cannot-move-axis", 409, "The mount cannot turn its RA axis by rate");
+    // #2166 — Move to start position while a Polar Align run is going (or its exit still stops the mount): stop it first.
+    public static readonly RefusalCause PolarAlignRunActive = new("polar-align-run-active", 409, "A Polar Align run is going");
+    // #2166 — the mount reports CanMoveAxis(Secondary) false: it cannot turn its Dec axis by rate, so Polar Align cannot
+    // move it to the start position (point it 2–5° from the pole by hand or with its controls).
+    public static readonly RefusalCause PolarAlignCannotMoveDec = new("polar-align-cannot-move-dec", 409, "The mount cannot turn its Dec axis by rate");
+    // #2166 — Move to start position when the scope does not point within 3° of the pole: there is nothing to move.
+    public static readonly RefusalCause PolarAlignMoveToStartNotNeeded = new("polar-align-move-to-start-not-needed", 409, "The scope is not within 3° of the pole");
 
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
@@ -122,5 +129,6 @@ public static class RefusalCatalog {
         FirstFlipNotCompleted, MountClockNotVerified, PolarAlignAlreadyRunning, PolarAlignClutchTurned,
         PolarAlignClearanceNotConfirmed,
         AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
+        PolarAlignRunActive, PolarAlignCannotMoveDec, PolarAlignMoveToStartNotNeeded,
     ];
 }

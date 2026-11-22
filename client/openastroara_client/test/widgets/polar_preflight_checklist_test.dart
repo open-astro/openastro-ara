@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,16 @@ class _Rig implements PolarAlignClient {
   double? checkReachDeg;
   final List<PolarAlignStartPlan> started = [];
 
+  /// #2166 the scope points within 3° of the pole: the start pointing fails
+  /// and the rig offers [offer].
+  bool onAxis = false;
+  PolarAlignMoveToStartOffer? offer;
+  int moveCalls = 0;
+  int stops = 0;
+
+  /// Holds the move open until completed (the move's progress and Stop).
+  Completer<void>? moveGate;
+
   double _reachFor(String? stage) =>
       stage == PolarAlignStages.check ? checkReachDeg ?? reachDeg : reachDeg;
 
@@ -48,6 +59,22 @@ class _Rig implements PolarAlignClient {
       handTurn: handTurn,
       parked: parked,
       reachDeg: reachDeg,
+      onAxis: onAxis,
+      moveToStart: offer,
+    );
+  }
+
+  // As the rig: the move ends with the scope off the pole and the fresh list.
+  @override
+  Future<PolarAlignMoveToStartResult> moveToStart() async {
+    moveCalls++;
+    await moveGate?.future;
+    onAxis = false;
+    return PolarAlignMoveToStartResult(
+      outcome: PolarMoveToStartOutcomes.arrived,
+      reason: null,
+      message: null,
+      preflight: rigPreflightFor(section.initial, reachDeg: reachDeg),
     );
   }
 
@@ -76,7 +103,10 @@ class _Rig implements PolarAlignClient {
   @override
   Future<void> start(PolarAlignStartPlan plan) async => started.add(plan);
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    stops++;
+    moveGate?.complete();
+  }
   @override
   Future<void> complete() async {}
   @override
@@ -97,6 +127,7 @@ const _noMount = PolarAlignPreflight(
       detail: 'The mount is not connected.',
     ),
   ],
+  moveToStart: null,
   planned: PolarAlignPreflightPlanned(
     turnStepDeg: 10,
     checkStepDeg: 10,
@@ -122,6 +153,7 @@ const _pointingFails = PolarAlignPreflight(
       detail: 'The turns would pass the 30° sweep limit.',
     ),
   ],
+  moveToStart: null,
   planned: PolarAlignPreflightPlanned(
     turnStepDeg: 10,
     checkStepDeg: 30,
@@ -192,6 +224,45 @@ Future<_Rig> _pump(
 
 VoidCallback? _onPressed(WidgetTester tester, String key) =>
     tester.widget<ButtonStyleButton>(find.byKey(Key(key))).onPressed;
+
+const _offer = PolarAlignMoveToStartOffer(
+  blockedBy: null,
+  targetOffPoleDeg: 4,
+  reachDeg: 4.3,
+);
+
+/// #2166 the list on its own, with the scope [onAxis] and the rig's [offer].
+Future<_Rig> _pumpMoveToStart(
+  WidgetTester tester, {
+  bool onAxis = true,
+  PolarAlignMoveToStartOffer? offer = _offer,
+  bool pointingFails = false,
+}) async {
+  final rig = _Rig()
+    ..onAxis = onAxis
+    ..offer = offer
+    ..pointingFails = pointingFails;
+  rig.section.initial = rigPolarAlign.withMountClearance(
+    preflightMountKey,
+    const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+  );
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        ...polarAlignSectionOverrides(rig.section),
+        polarAlignApiProvider.overrideWithValue(rig),
+        polarAlignLiveProvider.overrideWith(_Idle.new),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(child: PolarPreflightChecklist()),
+        ),
+      ),
+    ),
+  );
+  await tester.pumpAndSettle();
+  return rig;
+}
 
 void main() {
   testWidgets('Start is disabled while a pre-flight check fails', (
@@ -646,5 +717,113 @@ void main() {
       readsAtStart + 1,
       reason: 'read once the turns are over, for the adjust screen\'s Check',
     );
+  });
+
+  // ── #2166 Move to start position ──────────────────────────────────────────
+
+  testWidgets(
+    'Move to start position shows only under a start pointing that fails on the pole',
+    (tester) async {
+      await _pumpMoveToStart(tester);
+      expect(
+        find.byKey(const Key('polar-move-to-start-button')),
+        findsOneWidget,
+        reason: 'the rig offers the move: the scope is within 3° of the pole',
+      );
+      expect(_onPressed(tester, 'polar-move-to-start-button'), isNotNull);
+      expect(find.byKey(const Key('polar-move-to-start-blocked')), findsNothing);
+      expect(
+        find.byKey(const Key('polar-preflight-check-start_pointing')),
+        findsOneWidget,
+        reason: 'the row stays: pointing by hand works as before',
+      );
+    },
+  );
+
+  testWidgets(
+    'Move to start position is not shown when the start pointing passes or fails otherwise',
+    (tester) async {
+      await _pumpMoveToStart(tester, onAxis: false);
+      expect(find.byKey(const Key('polar-move-to-start-button')), findsNothing);
+
+      await _pumpMoveToStart(
+        tester,
+        onAxis: false,
+        offer: null,
+        pointingFails: true,
+      );
+      expect(
+        find.byKey(const Key('polar-preflight-check-start_pointing')),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('polar-move-to-start-button')),
+        findsNothing,
+        reason: 'a sweep-limit failure gets no move: the rig offers none',
+      );
+    },
+  );
+
+  testWidgets('Move to start position is disabled and says why while the rig blocks it', (
+    tester,
+  ) async {
+    await _pumpMoveToStart(
+      tester,
+      offer: const PolarAlignMoveToStartOffer(
+        blockedBy: PolarMoveToStartBlocks.clearanceNotConfirmed,
+        targetOffPoleDeg: 4,
+        reachDeg: 4.3,
+      ),
+    );
+    expect(_onPressed(tester, 'polar-move-to-start-button'), isNull);
+    expect(
+      find.text('Confirm the clearance first: the move turns the Dec axis up to 4.3°.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+    'Move to start position opens the motion confirm and moves only after it',
+    (tester) async {
+      final rig = await _pumpMoveToStart(tester);
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-move-to-start-confirm')), findsOneWidget);
+      expect(rig.moveCalls, 0, reason: 'nothing moves before the user confirms');
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-cancel')));
+      await tester.pumpAndSettle();
+      expect(rig.moveCalls, 0, reason: 'Cancel moves nothing');
+
+      await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.moveCalls, 1);
+      expect(
+        find.byKey(const Key('polar-move-to-start-button')),
+        findsNothing,
+        reason: 'the list read again: the scope is off the pole now',
+      );
+    },
+  );
+
+  testWidgets('Move to start position shows its progress and Stop stops it', (
+    tester,
+  ) async {
+    final rig = await _pumpMoveToStart(tester);
+    rig.moveGate = Completer<void>();
+
+    await tester.tap(find.byKey(const Key('polar-move-to-start-button')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('polar-move-to-start-confirm-go')));
+    await tester.pump();
+    expect(find.byKey(const Key('polar-move-to-start-progress')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('polar-move-to-start-stop')));
+    await tester.pumpAndSettle();
+    expect(rig.stops, 1);
+    expect(find.byKey(const Key('polar-move-to-start-progress')), findsNothing);
   });
 }

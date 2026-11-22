@@ -7426,6 +7426,73 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get polarAlignTurnWrongWay =>
       'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.';
+
+  @override
+  String get refusalPolarAlignRunActive =>
+      'A Polar align run is going. Stop it first, then move to the start position.';
+
+  @override
+  String get refusalPolarAlignCannotMoveDec =>
+      'This mount cannot turn its Dec axis by motor speed, so Polar align cannot move it to the start position. Point it 2–5° from the pole with its own controls.';
+
+  @override
+  String get refusalPolarAlignMoveToStartNotNeeded =>
+      'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.';
+
+  @override
+  String get polarMoveToStartButton => 'Move to start position';
+
+  @override
+  String get polarMoveToStartMoving =>
+      'Moving the scope to the start position…';
+
+  @override
+  String get polarMoveToStartStop => 'Stop';
+
+  @override
+  String get polarMoveToStartTitle => 'Move to the start position?';
+
+  @override
+  String polarMoveToStartConfirmBody(String deg, String probe) {
+    return 'Polar align turns the Dec axis alone until the scope points about $deg° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec $probe° to learn which way its motor turns.';
+  }
+
+  @override
+  String get polarMoveToStartBlockedParked =>
+      'Unpark the mount first: Polar align never unparks it.';
+
+  @override
+  String get polarMoveToStartBlockedSite =>
+      'Set the site\'s latitude first, so Polar align knows which pole to move from.';
+
+  @override
+  String get polarMoveToStartBlockedPose =>
+      'Confirm the mount\'s Home first: its position is not trusted.';
+
+  @override
+  String polarMoveToStartBlockedClearance(String deg) {
+    return 'Confirm the clearance first: the move turns the Dec axis up to $deg°.';
+  }
+
+  @override
+  String get polarMoveToStartBlockedAltAz =>
+      'This mount says it is alt-az: Polar align needs an equatorial mount.';
+
+  @override
+  String get polarMoveToStartBlockedDec =>
+      'This mount cannot turn its Dec axis by motor speed. Point it 2–5° from the pole with its own controls.';
+
+  @override
+  String get polarMoveToStartBlockedOther =>
+      'Fix the failing check above first.';
+
+  @override
+  String polarMoveToStartFailed(String message) {
+    return 'The move to the start position stopped: $message';
+  }
+
+  @override
+  String get polarActionMoveToStart => 'move the scope to the start position';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -14905,4 +14972,72 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarAlignTurnWrongWay =>
       'A montagem girou para o lado contrário da direção do motor salva, então o alinhamento polar a parou e nunca a girou de volta. Verifique a montagem, toque em Testar a direção de novo em Configurações › Imagem › Alinhamento polar e comece de novo.';
+
+  @override
+  String get refusalPolarAlignRunActive =>
+      'Um alinhamento polar está em andamento. Pare-o primeiro e depois mova para a posição inicial.';
+
+  @override
+  String get refusalPolarAlignCannotMoveDec =>
+      'Esta montagem não consegue girar o eixo de Dec por velocidade do motor, então o alinhamento polar não consegue movê-la para a posição inicial. Aponte-a 2–5° do polo com os próprios controles.';
+
+  @override
+  String get refusalPolarAlignMoveToStartNotNeeded =>
+      'O telescópio não aponta a menos de 3° do polo, então não precisa ser movido. Inicie o alinhamento polar.';
+
+  @override
+  String get polarMoveToStartButton => 'Mover para a posição inicial';
+
+  @override
+  String get polarMoveToStartMoving =>
+      'Movendo o telescópio para a posição inicial…';
+
+  @override
+  String get polarMoveToStartStop => 'Parar';
+
+  @override
+  String get polarMoveToStartTitle => 'Mover para a posição inicial?';
+
+  @override
+  String polarMoveToStartConfirmBody(String deg, String probe) {
+    return 'O alinhamento polar gira só o eixo de Dec até o telescópio apontar a cerca de $deg° do polo. O eixo de AR e os contrapesos ficam onde estão. Primeiro ele move a Dec $probe° para descobrir para que lado o motor gira.';
+  }
+
+  @override
+  String get polarMoveToStartBlockedParked =>
+      'Destrave a montagem do estacionamento primeiro: o alinhamento polar nunca faz isso.';
+
+  @override
+  String get polarMoveToStartBlockedSite =>
+      'Defina primeiro a latitude do local, para o alinhamento polar saber de qual polo se afastar.';
+
+  @override
+  String get polarMoveToStartBlockedPose =>
+      'Confirme primeiro a posição Home da montagem: a posição dela não é confiável.';
+
+  @override
+  String polarMoveToStartBlockedClearance(String deg) {
+    return 'Confirme a folga primeiro: o movimento gira o eixo de Dec até $deg°.';
+  }
+
+  @override
+  String get polarMoveToStartBlockedAltAz =>
+      'Esta montagem diz que é altazimutal: o alinhamento polar precisa de uma montagem equatorial.';
+
+  @override
+  String get polarMoveToStartBlockedDec =>
+      'Esta montagem não consegue girar o eixo de Dec por velocidade do motor. Aponte-a 2–5° do polo com os próprios controles.';
+
+  @override
+  String get polarMoveToStartBlockedOther =>
+      'Corrija primeiro a verificação que falhou acima.';
+
+  @override
+  String polarMoveToStartFailed(String message) {
+    return 'O movimento para a posição inicial parou: $message';
+  }
+
+  @override
+  String get polarActionMoveToStart =>
+      'mover o telescópio para a posição inicial';
 }

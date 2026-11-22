@@ -28,6 +28,12 @@ abstract interface class PolarAlignClient {
   /// never leads into another; a check started from the adjust loop ends the
   /// loop first).
   Future<void> start(PolarAlignStartPlan plan);
+
+  /// #2166 "Move to start position": the rig moves the scope's Dec axis alone
+  /// from within 3° of the pole to its start position, and answers once the
+  /// move ended, with its outcome and the fresh pre-flight list. A refusal
+  /// before anything moved is a [Refusal]. [stop] ends the move.
+  Future<PolarAlignMoveToStartResult> moveToStart();
   Future<void> stop();
   Future<void> complete();
   Future<void> requestCapture();
@@ -157,6 +163,32 @@ class PolarAlignApi implements PolarAlignClient {
       rethrow;
     }
   }
+
+  /// #2166 the move answers once the mount stood still and the list was read
+  /// again: the probe and the move (each bounded by twice its planned time),
+  /// two settles and the confirmed stop fit well inside [moveToStartTimeout].
+  @override
+  Future<PolarAlignMoveToStartResult> moveToStart() async {
+    final Response<dynamic> res;
+    try {
+      res = await _dio.post<dynamic>(
+        '/api/v1/equipment/polaralign/move-to-start',
+        options: Options(receiveTimeout: moveToStartTimeout),
+      );
+    } on DioException catch (e) {
+      final refusal = Refusal.fromDio(e);
+      if (refusal != null) throw refusal;
+      rethrow;
+    }
+    final data = res.data;
+    if (data is! Map<String, dynamic>) {
+      throw const FormatException('move-to-start returned a non-object body');
+    }
+    return PolarAlignMoveToStartResult.fromJson(data);
+  }
+
+  /// #2166 how long the app waits for the move to the start position.
+  static const moveToStartTimeout = Duration(seconds: 120);
 
   /// Abort — the mount stops where it is (#2048: AbortSlew and both motors
   /// stopped, confirmed on the daemon, tracking left off); logged as

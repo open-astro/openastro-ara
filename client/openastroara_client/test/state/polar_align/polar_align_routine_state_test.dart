@@ -11,6 +11,9 @@ import 'package:openastroara/state/polar_align/polar_align_state.dart';
 /// Fake rig: frame fetches wait on [frames] in order; status scripted.
 class _Api implements PolarAlignClient {
   @override
+  Future<PolarAlignMoveToStartResult> moveToStart() =>
+      throw UnimplementedError();
+  @override
   Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>

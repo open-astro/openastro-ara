@@ -156,7 +156,7 @@ namespace OpenAstroAra.Server.Services {
         public bool IsActive {
             get {
                 lock (_gate) {
-                    return _active || _exitsInFlight > 0;
+                    return _active || _exitsInFlight > 0 || _movingToStart; // #2166 — the move to the start position too
                 }
             }
         }

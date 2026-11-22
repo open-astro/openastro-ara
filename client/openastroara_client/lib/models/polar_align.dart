@@ -745,22 +745,95 @@ class PolarAlignPreflightPlanned {
       );
 }
 
+/// #2166 why the rig's "Move to start position" cannot be asked for now
+/// ([PolarAlignMoveToStartOffer.blockedBy]).
+abstract final class PolarMoveToStartBlocks {
+  static const mountParked = 'mount_parked';
+  static const siteLatitude = 'site_latitude';
+  static const poseUnverified = 'pose_unverified';
+  static const clearanceNotConfirmed = 'clearance_not_confirmed';
+  static const altAzMount = 'alt_az_mount';
+  static const cannotMoveDec = 'cannot_move_dec';
+}
+
+/// #2166 the rig offers to move the scope to the start position: the start
+/// pointing fails because it points within 3° of the pole. The move turns the
+/// Dec axis alone to [targetOffPoleDeg] from the pole, at most [reachDeg] from
+/// where it starts. [blockedBy] is null when it may be asked for, else why not
+/// ([PolarMoveToStartBlocks]).
+class PolarAlignMoveToStartOffer {
+  final String? blockedBy;
+  final double targetOffPoleDeg;
+  final double reachDeg;
+
+  const PolarAlignMoveToStartOffer({
+    required this.blockedBy,
+    required this.targetOffPoleDeg,
+    required this.reachDeg,
+  });
+
+  factory PolarAlignMoveToStartOffer.fromJson(Map<String, dynamic> json) =>
+      PolarAlignMoveToStartOffer(
+        blockedBy: json['blocked_by'] as String?,
+        targetOffPoleDeg: (json['target_off_pole_deg'] as num).toDouble(),
+        reachDeg: (json['reach_deg'] as num).toDouble(),
+      );
+}
+
+/// #2166 the outcomes of [PolarAlignMoveToStartResult].
+abstract final class PolarMoveToStartOutcomes {
+  static const arrived = 'arrived';
+  static const stopped = 'stopped';
+  static const failed = 'failed';
+}
+
+/// #2166 what `POST /polaralign/move-to-start` did once it moved: [outcome]
+/// ([PolarMoveToStartOutcomes]), the rig's [reason] and English [message] for a
+/// failed or stopped move, and the pre-flight list read again after it.
+class PolarAlignMoveToStartResult {
+  final String outcome;
+  final String? reason;
+  final String? message;
+  final PolarAlignPreflight preflight;
+
+  const PolarAlignMoveToStartResult({
+    required this.outcome,
+    required this.reason,
+    required this.message,
+    required this.preflight,
+  });
+
+  factory PolarAlignMoveToStartResult.fromJson(Map<String, dynamic> json) =>
+      PolarAlignMoveToStartResult(
+        outcome: json['outcome'] as String,
+        reason: json['reason'] as String?,
+        message: json['message'] as String?,
+        preflight: PolarAlignPreflight.fromJson(
+          json['preflight'] as Map<String, dynamic>,
+        ),
+      );
+}
+
 /// #2068 (ARA-18) Polar Align's pre-flight list
 /// (`GET /api/v1/equipment/polaralign/preflight`): every check a start makes,
 /// in its order. The rig refuses a start on the first that [fails]; a warn or
 /// unknown check never refuses. [mountKey] is the connected mount's key in
-/// [PolarAlignSettings.mountClearance] (null with no mount).
+/// [PolarAlignSettings.mountClearance] (null with no mount). [moveToStart]
+/// (#2166) is the rig's offer to move the scope off the pole, null when it
+/// makes none.
 class PolarAlignPreflight {
   final bool ready;
   final List<PolarAlignPreflightCheck> checks;
   final PolarAlignPreflightPlanned planned;
   final String? mountKey;
+  final PolarAlignMoveToStartOffer? moveToStart;
 
   const PolarAlignPreflight({
     required this.ready,
     required this.checks,
     required this.planned,
     this.mountKey,
+    required this.moveToStart,
   });
 
   /// A check fails: the rig would refuse a start.
@@ -791,6 +864,10 @@ class PolarAlignPreflight {
           json['planned'] as Map<String, dynamic>,
         ),
         mountKey: json['mount_key'] as String?,
+        moveToStart: switch (json['move_to_start'] as Map<String, dynamic>?) {
+          final offer? => PolarAlignMoveToStartOffer.fromJson(offer),
+          null => null,
+        },
       );
 }
 

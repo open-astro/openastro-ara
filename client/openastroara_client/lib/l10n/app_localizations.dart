@@ -12319,6 +12319,108 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The mount turned the other way from its saved motor direction, so Polar align stopped it and never turned it back. Check the mount, then tap Test direction again in Settings › Imaging › Polar align, and start again.'**
   String get polarAlignTurnWrongWay;
+
+  /// Refusal (polar-align-run-active, #2166): Move to start position while a polar alignment run is going or still stopping the mount
+  ///
+  /// In en, this message translates to:
+  /// **'A Polar align run is going. Stop it first, then move to the start position.'**
+  String get refusalPolarAlignRunActive;
+
+  /// Refusal (polar-align-cannot-move-dec, #2166): the mount reports CanMoveAxis false for its Dec axis
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot turn its Dec axis by motor speed, so Polar align cannot move it to the start position. Point it 2–5° from the pole with its own controls.'**
+  String get refusalPolarAlignCannotMoveDec;
+
+  /// Refusal (polar-align-move-to-start-not-needed, #2166): Move to start position when the scope already points far enough from the pole
+  ///
+  /// In en, this message translates to:
+  /// **'The scope does not point within 3° of the pole, so it needs no move. Start Polar align.'**
+  String get refusalPolarAlignMoveToStartNotNeeded;
+
+  /// Polar align pre-flight list (#2166, both modes): button on the failing 'Where the scope points' row; Polar align moves the Dec axis alone off the pole
+  ///
+  /// In en, this message translates to:
+  /// **'Move to start position'**
+  String get polarMoveToStartButton;
+
+  /// Polar align pre-flight list (#2166): shown with a spinner and Stop while the move runs
+  ///
+  /// In en, this message translates to:
+  /// **'Moving the scope to the start position…'**
+  String get polarMoveToStartMoving;
+
+  /// Polar align pre-flight list (#2166): stops the move to the start position
+  ///
+  /// In en, this message translates to:
+  /// **'Stop'**
+  String get polarMoveToStartStop;
+
+  /// Polar align (#2166): title of the motion confirm dialog before the move to the start position
+  ///
+  /// In en, this message translates to:
+  /// **'Move to the start position?'**
+  String get polarMoveToStartTitle;
+
+  /// Polar align (#2166): the confirm dialog's body; {deg} is the target distance from the pole and {probe} the small first move, in degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align turns the Dec axis alone until the scope points about {deg}° from the pole. The RA axis and the counterweights stay where they are. It first moves Dec {probe}° to learn which way its motor turns.'**
+  String polarMoveToStartConfirmBody(String deg, String probe);
+
+  /// Polar align (#2166): why Move to start position is off: the mount is parked
+  ///
+  /// In en, this message translates to:
+  /// **'Unpark the mount first: Polar align never unparks it.'**
+  String get polarMoveToStartBlockedParked;
+
+  /// Polar align (#2166): why Move to start position is off: the site latitude is not set
+  ///
+  /// In en, this message translates to:
+  /// **'Set the site\'s latitude first, so Polar align knows which pole to move from.'**
+  String get polarMoveToStartBlockedSite;
+
+  /// Polar align (#2166): why Move to start position is off: the mount's position is unverified
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the mount\'s Home first: its position is not trusted.'**
+  String get polarMoveToStartBlockedPose;
+
+  /// Polar align (#2166): why Move to start position is off: the mount's clearance is not confirmed for the move; {deg} is how far the move turns Dec, in degrees
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm the clearance first: the move turns the Dec axis up to {deg}°.'**
+  String polarMoveToStartBlockedClearance(String deg);
+
+  /// Polar align (#2166): why Move to start position is off: an alt-az mount
+  ///
+  /// In en, this message translates to:
+  /// **'This mount says it is alt-az: Polar align needs an equatorial mount.'**
+  String get polarMoveToStartBlockedAltAz;
+
+  /// Polar align (#2166): why Move to start position is off: CanMoveAxis false for the Dec axis
+  ///
+  /// In en, this message translates to:
+  /// **'This mount cannot turn its Dec axis by motor speed. Point it 2–5° from the pole with its own controls.'**
+  String get polarMoveToStartBlockedDec;
+
+  /// Polar align (#2166): why Move to start position is off, for a reason this app does not know
+  ///
+  /// In en, this message translates to:
+  /// **'Fix the failing check above first.'**
+  String get polarMoveToStartBlockedOther;
+
+  /// Polar align (#2166): the move failed; {message} is the rig's English sentence
+  ///
+  /// In en, this message translates to:
+  /// **'The move to the start position stopped: {message}'**
+  String polarMoveToStartFailed(String message);
+
+  /// Polar align (#2166): verb phrase completing "Couldn't …" when the move to the start position was refused or failed
+  ///
+  /// In en, this message translates to:
+  /// **'move the scope to the start position'**
+  String get polarActionMoveToStart;
 }
 
 class _AppLocalizationsDelegate

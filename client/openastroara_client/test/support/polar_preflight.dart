@@ -8,15 +8,19 @@ const preflightMountKey = 'mount-1';
 /// for a Turn RA by hand start ([handTurn], Joey 2026-11-21), the rest as a
 /// fresh rig has them. The run turns RA up to [reachDeg] each way (#2165: the
 /// two 10° turns plus the 0.5° direction test); [parked] adds the parked
-/// mount's failing check.
+/// mount's failing check. [onAxis] (#2166): the scope points within 3° of the
+/// pole, so the start pointing fails, and the rig offers [moveToStart].
 PolarAlignPreflight rigPreflight({
   required bool confirmed,
   bool handTurn = false,
   bool parked = false,
   double reachDeg = 20.5,
+  bool onAxis = false,
+  PolarAlignMoveToStartOffer? moveToStart,
 }) => PolarAlignPreflight(
-  ready: (confirmed || handTurn) && !parked,
+  ready: (confirmed || handTurn) && !parked && !onAxis,
   mountKey: preflightMountKey,
+  moveToStart: onAxis ? moveToStart : null,
   checks: [
     const PolarAlignPreflightCheck(
       id: 'mount_connected',
@@ -41,6 +45,12 @@ PolarAlignPreflight rigPreflight({
           ? 'You confirmed this mount clears the pier.'
           : 'Not confirmed for this mount.',
     ),
+    if (onAxis)
+      const PolarAlignPreflightCheck(
+        id: PolarAlignPreflightChecks.startPointing,
+        status: PolarAlignPreflightStatuses.fail,
+        detail: 'The scope points within 3° of the pole.',
+      ),
     const PolarAlignPreflightCheck(
       id: 'mount_type',
       status: PolarAlignPreflightStatuses.unknown,
@@ -70,6 +80,8 @@ PolarAlignPreflight rigPreflightFor(
   bool handTurn = false,
   bool parked = false,
   double reachDeg = 20.5,
+  bool onAxis = false,
+  PolarAlignMoveToStartOffer? moveToStart,
 }) {
   final entry = settings?.mountClearance[preflightMountKey];
   return rigPreflight(
@@ -77,5 +89,7 @@ PolarAlignPreflight rigPreflightFor(
     handTurn: handTurn,
     parked: parked,
     reachDeg: reachDeg,
+    onAxis: onAxis,
+    moveToStart: moveToStart,
   );
 }

@@ -215,6 +215,8 @@ namespace OpenAstroAra.Test.PolarAlign {
         /// <summary>#2070 — why the daemon does not trust the reported pose (a routine's motor move is refused); null = trusted.</summary>
         public string? PositionUnverifiedReason { get; set; }
         public bool CanFindHome { get; set; } = true;
+        /// <summary>#2166 — CanMoveAxis(Secondary), as the telescope service read it at connect (null: unknown).</summary>
+        public bool? CanMoveSecondaryAxis { get; set; } = true;
         /// <summary>Where a park takes the mount, as the mount believes it (Home by default).</summary>
         public GemPose? ParkPose { get; set; }
         /// <summary>How long one fresh driver read (position, Slewing, <see cref="ReadNowAsync"/>) takes on a

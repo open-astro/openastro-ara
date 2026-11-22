@@ -145,12 +145,12 @@ namespace OpenAstroAra.Server.Services {
 
         /// <summary>A poll's RA reading that changed further than the motor could have turned it since the last change: a
         /// reading that jumped (a bad read, a driver glitch), never motion to steer by.</summary>
-        private void ThrowIfReadingJumped(double changeDeg, double fastRate, TimeSpan sinceLastChange) {
+        private void ThrowIfReadingJumped(double changeDeg, double fastRate, TimeSpan sinceLastChange, string axisName = "RA") {
             var possible = (2.0 * fastRate * sinceLastChange.TotalSeconds) + ReadingJumpSlackDeg;
             if (Math.Abs(changeDeg) > possible) {
                 LogTurnReadingJumped(changeDeg, possible);
                 throw new RoutineFailedException(TurnMismatch, string.Create(CultureInfo.InvariantCulture,
-                    $"the mount's RA reading jumped {Math.Abs(changeDeg):F1}° in one read during a turn, more than the motor can turn — check the mount and its connection, then start again"));
+                    $"the mount's {axisName} reading jumped {Math.Abs(changeDeg):F1}° in one read during a turn, more than the motor can turn — check the mount and its connection, then start again"));
             }
         }
 
@@ -160,10 +160,12 @@ namespace OpenAstroAra.Server.Services {
         /// checked like a poll of the turn (Dec, pier side). A mount that runs on more than <see cref="RunawayPastStepDeg"/>
         /// past the step, or does not stand still within <see cref="AxisSteadyWindow"/>, did not obey the stop: the confirmed
         /// stop goes out at once (<see cref="FailTurnNotStoppedAsync"/>). Returns the last reading: where the turn ended.
+        /// <paramref name="checkPose"/> (#2166) replaces the RA turn's Dec and pier-side check for a Dec move.
         /// </summary>
         private async Task<(double RaDeg, double DecDeg, PierSide Side)> SettleAfterTurnAsync(
                 (double RaDeg, double DecDeg) start, PierSide startSide, double degrees,
-                Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct) {
+                Func<(double RaDeg, double DecDeg), (double RaDeg, double DecDeg), double> progress, int gen, CancellationToken ct,
+                Action<double, double, PierSide>? checkPose = null) {
             var began = Clock.GetTimestamp(); // monotonic: a wall clock that steps must not stretch or cut the settle
             (double RaDeg, double DecDeg, long At)? anchor = null;
             while (true) {
@@ -176,7 +178,11 @@ namespace OpenAstroAra.Server.Services {
                 var at = Clock.GetTimestamp();
                 var side = r.Side is PierSide.pierUnknown ? startSide : r.Side;
                 NoteMountLeft((r.RaDeg, r.DecDeg), side);
-                ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
+                if (checkPose is null) {
+                    ThrowIfTurnLeftItsAxis(start.DecDeg, startSide, r.DecDeg, r.Side);
+                } else {
+                    checkPose(r.RaDeg, r.DecDeg, r.Side);
+                }
                 var past = progress(start, (r.RaDeg, r.DecDeg)) - degrees;
                 if (past > RunawayPastStepDeg) {
                     await FailTurnNotStoppedAsync(string.Create(CultureInfo.InvariantCulture,

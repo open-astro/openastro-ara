@@ -94,6 +94,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private AlignmentMode? _alignmentMode;
     // #2083 — CanMoveAxis(Primary), read with the capabilities once per connect; null = unknown.
     private bool? _canMovePrimaryAxis;
+    // #2166 — CanMoveAxis(Secondary), read with the capabilities once per connect; null = unknown.
+    private bool? _canMoveSecondaryAxis;
     // #1064/#1072/#1078 — per-axis MoveAxis rate BANDS (deg/s, ASCOM AxisRates [Min,Max] pairs;
     // index = TelescopeAxis), cached for the session so the nudge start path stays a single driver
     // call: an inline AxisRates GET on the press leg let a fast release's MoveAxis(0) overtake the
@@ -207,6 +209,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _mountActions = null;
         _alignmentMode = null;
         _canMovePrimaryAxis = null;
+        _canMoveSecondaryAxis = null;
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -1337,7 +1340,8 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var pad = needCaps || needAxisRates ? ReadPadAxisBands(client) : default;
         var caps = needCaps ? ReadCapabilities(client, pad) : null;
         var alignmentMode = needCaps ? ReadAlignmentMode(client) : null;
-        var canMovePrimary = needCaps ? ReadCanMovePrimaryAxis(client) : null;
+        var canMovePrimary = needCaps ? ReadCanMoveAxis(client, TelescopeAxis.Primary) : null;
+        var canMoveSecondary = needCaps ? ReadCanMoveAxis(client, TelescopeAxis.Secondary) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -1373,6 +1377,7 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _mountActions = actions;
                     _alignmentMode = alignmentMode;
                     _canMovePrimaryAxis = canMovePrimary;
+                    _canMoveSecondaryAxis = canMoveSecondary;
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -1965,9 +1970,9 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Per-field read boundary: a driver that fails CanMoveAxis reads as unknown (null); Polar Align then lists its check as unknown and does not refuse on it.")]
-    private static bool? ReadCanMovePrimaryAxis(ITelescopeDevice c) {
+    private static bool? ReadCanMoveAxis(ITelescopeDevice c, TelescopeAxis axis) {
         try {
-            return c.CanMoveAxis(TelescopeAxis.Primary);
+            return c.CanMoveAxis(axis);
         } catch (Exception) {
             return null;
         }
@@ -1978,6 +1983,15 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         get {
             lock (_gate) {
                 return _canMovePrimaryAxis;
+            }
+        }
+    }
+
+    /// <summary>#2166 — CanMoveAxis(Secondary) read at connect; see <see cref="IMountMotionControl.CanMoveSecondaryAxis"/>.</summary>
+    public bool? CanMoveSecondaryAxis {
+        get {
+            lock (_gate) {
+                return _canMoveSecondaryAxis;
             }
         }
     }

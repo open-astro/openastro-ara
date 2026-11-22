@@ -46,6 +46,9 @@ namespace OpenAstroAra.Server.Services;
 /// <param name="DirectionTestOwedDeg">#2165 — the direction test the run makes first (0.5°, or 0 with a saved RA motor
 /// direction), read only when the plan could not be made: the reach is then the stage's two turns plus it. Null
 /// delegate: the test is counted (the larger reach).</param>
+/// <param name="CanMoveSecondaryAxis">#2166 — CanMoveAxis(Secondary) read at connect
+/// (<see cref="IMountMotionControl.CanMoveSecondaryAxis"/>): null when unknown; null delegate when this daemon reads none.
+/// False blocks the move to the start position.</param>
 internal sealed record PolarAlignPreflightInputs(
     string Stage,
     Func<TelescopeInfo?> MountInfo,
@@ -58,11 +61,14 @@ internal sealed record PolarAlignPreflightInputs(
     bool HandTurn = false,
     Func<AlignmentMode?>? AlignmentMode = null,
     Func<bool?>? CanMovePrimaryAxis = null,
-    Func<double>? DirectionTestOwedDeg = null);
+    Func<double>? DirectionTestOwedDeg = null,
+    Func<bool?>? CanMoveSecondaryAxis = null);
 
 /// <summary>The pre-flight list and, for a start, the exception the first failing check refuses with (null when none
-/// fails), with the confirm step's plan when it could be made.</summary>
-internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exception? FirstFailure, PolarAlignStartPlanDto? Plan);
+/// fails), with the confirm step's plan when it could be made. #2166 — <c>MoveToStartRefusal</c>: what
+/// <c>POST /polaralign/move-to-start</c> refuses with now (null when the move may go).</summary>
+internal sealed record PolarAlignPreflightResult(PolarAlignPreflightDto Dto, Exception? FirstFailure, PolarAlignStartPlanDto? Plan,
+    Exception? MoveToStartRefusal = null);
 
 /// <summary>
 /// #2068 (ARA-18) — Polar Align's pre-flight checks, one list for the app's Start card
@@ -338,8 +344,73 @@ internal static class PolarAlignPreflightEvaluator {
             ReachDeg: reachDeg,
             StartCwAngleDeg: null,
             MinAltitudeDeg: null);
-        var dto = new PolarAlignPreflightDto(ready, checks, planned, mountKey);
-        return new PolarAlignPreflightResult(dto, firstFailure, plan);
+        var (offer, moveRefusal) = EvaluateMoveToStart(rows, connected, info, settingsError, clearance, inputs.CanMoveSecondaryAxis);
+        var dto = new PolarAlignPreflightDto(ready, checks, planned, mountKey, offer);
+        return new PolarAlignPreflightResult(dto, firstFailure, plan, moveRefusal);
+    }
+
+    /// <summary>#2166 — the "Move to start position" offer and what the move refuses with now. Offered only when the
+    /// start pointing fails because the scope points within 3° of the pole (<c>polar-align-on-axis</c>). Blocked, in this
+    /// order, by a parked mount, an unset site latitude (the pole's side), an unverified position (#2070), a clearance not
+    /// confirmed for the move's reach (<see cref="PolarAlignService.MoveToStartReachDeg"/>), an alt-az mount, and
+    /// CanMoveAxis(Secondary) false. Not offered: the mount not connected (its own refusal), another start-pointing
+    /// failure (that one's refusal: no fresh reading, a Dec past the pole, a busy mount) or none
+    /// (<c>polar-align-move-to-start-not-needed</c>).</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The evaluator never throws (#2068): a failed CanMoveAxis read does not block the move, as for the RA axis.")]
+    private static (PolarAlignMoveToStartOfferDto? Offer, Exception? Refusal) EvaluateMoveToStart(
+            Dictionary<string, Row> rows, bool connected, TelescopeInfo? info, Exception? settingsError,
+            PolarAlignMountClearanceDto? clearance, Func<bool?>? canMoveSecondary) {
+        if (!connected) {
+            return (null, rows[PolarAlignPreflightChecks.MountConnected].Refusal ?? new InvalidOperationException(MountNotConnectedMessage));
+        }
+        var pointing = rows[PolarAlignPreflightChecks.StartPointing];
+        if (pointing.Status != PolarAlignPreflightStatuses.Fail) {
+            return (null, new RefusalException(RefusalCatalog.PolarAlignMoveToStartNotNeeded,
+                "the scope does not point within 3° of the pole, so it needs no move to the start position — start Polar Align"));
+        }
+        if (pointing.Refusal is not RefusalException { Cause: var cause } || cause != RefusalCatalog.PolarAlignOnAxis) {
+            return (null, pointing.Refusal);
+        }
+        var reach = PolarAlignService.MoveToStartReachDeg;
+        Exception? refusal = null;
+        string? blockedBy = null;
+        void Block(string why, Exception? ex) {
+            if (blockedBy is null) {
+                blockedBy = why;
+                refusal = ex;
+            }
+        }
+        if (info!.AtPark) {
+            Block(PolarAlignMoveToStartBlocks.MountParked, rows[PolarAlignPreflightChecks.MountParked].Refusal);
+        }
+        if (rows[PolarAlignPreflightChecks.SiteLatitude].Status == PolarAlignPreflightStatuses.Fail) {
+            Block(PolarAlignMoveToStartBlocks.SiteLatitude, rows[PolarAlignPreflightChecks.SiteLatitude].Refusal);
+        }
+        if (rows[PolarAlignPreflightChecks.PoseVerified].Status == PolarAlignPreflightStatuses.Fail) {
+            Block(PolarAlignMoveToStartBlocks.PoseUnverified, rows[PolarAlignPreflightChecks.PoseVerified].Refusal);
+        }
+        if (settingsError is not null) {
+            Block(PolarAlignMoveToStartBlocks.ClearanceNotConfirmed, settingsError);
+        } else if (clearance is null || !PolarAlignSettingsClamp.ReachCovered(clearance.ConfirmedReachDeg, reach)) {
+            Block(PolarAlignMoveToStartBlocks.ClearanceNotConfirmed, new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,
+                $"Confirm this mount's clearance first: the move to the start position turns the Dec axis up to {ReachText(reach)}°. Check there is room for the tube, counterweight and cables to move that far, then confirm it in Polar Align",
+                new Dictionary<string, object?> { ["reach_deg"] = reach }));
+        }
+        if (rows[PolarAlignPreflightChecks.MountType].Status == PolarAlignPreflightStatuses.Fail) {
+            Block(PolarAlignMoveToStartBlocks.AltAzMount, rows[PolarAlignPreflightChecks.MountType].Refusal);
+        }
+        bool? canMove = null;
+        try {
+            canMove = canMoveSecondary?.Invoke();
+        } catch (Exception) {
+            canMove = null;
+        }
+        if (canMove == false) {
+            Block(PolarAlignMoveToStartBlocks.CannotMoveDec, new RefusalException(RefusalCatalog.PolarAlignCannotMoveDec,
+                "this mount cannot turn its Dec axis by rate (CanMoveAxis is false), so Polar Align cannot move it to the start position — point it 2–5° from the pole with its own controls"));
+        }
+        return (new PolarAlignMoveToStartOfferDto(blockedBy, PolarAlignService.MoveToStartOffPoleDeg, reach), refusal);
     }
 
     /// <summary>#2165 — the direction test owed when the plan could not be made; a failed read counts it.</summary>
