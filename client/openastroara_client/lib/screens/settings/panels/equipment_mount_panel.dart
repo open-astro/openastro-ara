@@ -12,6 +12,7 @@ import '../../../theme/ara_colors.dart';
 import '../../../util/slew_rates.dart';
 import '../../../util/tracking_rate_words.dart';
 import '../../../widgets/help_icon.dart';
+import '../../../widgets/equipment/pose_solve_check.dart';
 import '../../../widgets/equipment/equipment_connection_card.dart';
 import '../../../widgets/settings/auto_connect_row.dart';
 import '../../../widgets/settings/settings_row.dart';
@@ -361,6 +362,8 @@ class _PositionUnverified extends ConsumerWidget {
                         : l10n.mountPositionUnverifiedPressHome)
                   : l10n.mountPositionUnverifiedRunZeroSearch,
             ),
+          // #2173 — or a plate solve, which moves nothing.
+          const PoseSolveCheck(),
         ],
       ),
     );

@@ -22,7 +22,9 @@ namespace OpenAstroAra.Server.Services;
 
 /// <summary>Who wants the Guide Camera. <see cref="Guiding"/> takes it from anyone; the other three are
 /// setup activities (ADR 0016).</summary>
-public enum CameraUse { Guiding, PolarAlign, GuideFocus, LiveView }
+// #2173 — PoseCheck: the plate-solve check of an unverified mount position, when there is no main camera (appended,
+// never reordered).
+public enum CameraUse { Guiding, PolarAlign, GuideFocus, LiveView, PoseCheck }
 
 /// <summary>What the custody module needs from the Guider: its app state and the guider program's
 /// single-client lease. <c>GuiderService</c> implements it; a holder or the Guider passes it in, so the
@@ -85,6 +87,7 @@ public sealed partial class GuideCameraCustody {
         return Holder switch {
             CameraUse.PolarAlign => "A polar alignment is in progress. It will be deleted once it ends.",
             CameraUse.GuideFocus => "The guide-camera focus loop is running. It will be deleted once it stops.",
+            CameraUse.PoseCheck => "A plate-solve check of the mount's position is running. It will be deleted once it ends.",
             CameraUse.LiveView when appState is "Looping" or "Selected" =>
                 "The guider live view is open. It will be deleted once it is stopped.",
             _ => null,
@@ -185,6 +188,7 @@ public sealed partial class GuideCameraCustody {
     private static string Purpose(CameraUse use) => use switch {
         CameraUse.PolarAlign => "starting polar alignment",
         CameraUse.GuideFocus => "focusing the guide camera",
+        CameraUse.PoseCheck => "checking the mount's position with a plate solve",
         _ => "opening the live view",
     };
 

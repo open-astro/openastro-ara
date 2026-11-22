@@ -164,6 +164,24 @@ public interface ITelescopeService : IMountMotionControl {
     /// ran. GoTo, Park and polar alignment are then refused, as after a power loss, until a Home search ends at Home
     /// (#2173, for the unconfirmed-stop reason only; <see cref="MountPoseTrust.HomeSearchMayTrust"/>) or <see cref="ConfirmHomeAsync"/>; the flag is kept per device across reconnects and restarts. Never throws.</summary>
     void MarkPositionUnverified(string reason) { }
+
+    /// <summary>#2173 — how many Ara mount commands and axis moves the position trust has been told of: the plate-solve
+    /// check reads it before its exposure and trusts nothing when it changed by the trust.</summary>
+    long PoseCommandCount => 0;
+
+    /// <summary>#2173 — the connected mount's device id (the one its trust is kept under), or null when not connected.</summary>
+    string? PoseDeviceId => null;
+
+    /// <summary>#2173 — a plate solve that moved nothing agreed with the mount's reported position and pier side: the
+    /// position is trusted again for every reason, logged, persisted and pushed. Refused (null) when the mount session
+    /// is no longer <paramref name="sessionEpoch"/> or an Ara command came since <paramref name="commandCount"/> was read;
+    /// otherwise the reason it cleared (empty when it was already trusted). <paramref name="decDeg"/> is the read Dec.</summary>
+    string? TrustPositionBySolve(long sessionEpoch, long commandCount, double decDeg) => null;
+
+    /// <summary>#2173 — the user's one-tap Sync after a plate-solve mismatch, to <paramref name="sky"/>: the existing
+    /// mediator Sync (the motion owner, the parked mount, the mount clock, the coordinate system and range guards
+    /// apply). False when it was refused or failed.</summary>
+    Task<bool> SyncForPoseCheckAsync(OpenAstroAra.Astrometry.Coordinates sky, CancellationToken ct) => Task.FromResult(false);
 }
 
 public interface IFocuserService {

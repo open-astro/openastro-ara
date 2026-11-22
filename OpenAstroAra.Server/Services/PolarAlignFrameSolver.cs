@@ -43,6 +43,13 @@ public interface IPolarAlignFrameSolver {
     /// 2×2 frame is searched at half its true scale and never solves.</param>
     Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct);
 
+    /// <summary>#2173 — <see cref="SolveAsync(string, int, double?, double?, CancellationToken)"/> that may widen to the
+    /// staged search and the blind solver when the near solve misses (<paramref name="blindFailover"/>): the plate-solve
+    /// check of an unverified mount, whose hint may be a false zero degrees away. Never the §45 loop's frames.</summary>
+    Task<PolarAlignSolveOutcome> SolveAsync(string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool blindFailover,
+            CancellationToken ct) =>
+        SolveAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, ct);
+
     /// <summary>
     /// Solve a frame that would not solve at the configured scale once more with no scale hint, and report the
     /// guide focal length (mm) its measured scale implies; null when it does not solve either (#1715). Run once,
@@ -119,9 +126,13 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         return read;
     }
 
+    public Task<PolarAlignSolveOutcome> SolveAsync(
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) =>
+        SolveAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, blindFailover: false, ct);
+
     public async Task<PolarAlignSolveOutcome> SolveAsync(
-            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, CancellationToken ct) {
-        var (result, binnedPixelSizeUm, focalLengthMm) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: false, ct).ConfigureAwait(false);
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool blindFailover, CancellationToken ct) {
+        var (result, binnedPixelSizeUm, focalLengthMm) = await SolveCoreAsync(fitsPath, binning, hintRaDegJnow, hintDecDegJnow, searchScale: false, ct, blindFailover).ConfigureAwait(false);
         if (result?.Success != true || result.Coordinates is null) {
             return new PolarAlignSolveOutcome(false, 0, 0);
         }
@@ -147,7 +158,8 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
 
     // searchScale: ask the solver to find the pixel scale itself (ASTAP -fov 0) instead of trusting the profile's.
     private async Task<(PlateSolveResult? Result, double BinnedPixelSizeUm, double FocalLengthMm)> SolveCoreAsync(
-            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool searchScale, CancellationToken ct) {
+            string fitsPath, int binning, double? hintRaDegJnow, double? hintDecDegJnow, bool searchScale, CancellationToken ct,
+            bool blindFailover = false) {
         ArgumentException.ThrowIfNullOrWhiteSpace(fitsPath);
         ArgumentOutOfRangeException.ThrowIfLessThan(binning, 1);
 
@@ -186,7 +198,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
         // (~1 s cadence), so the long blind-solve fallback the imaging path uses is wrong here — the
         // hint (mount pointing / last solve) is always available to a running routine.
         var plateSolver = _solverFactory.GetPlateSolver(settings);
-        var imageSolver = _solverFactory.GetImageSolver(plateSolver, plateSolver);
+        var imageSolver = _solverFactory.GetImageSolver(plateSolver, blindFailover ? _solverFactory.GetBlindSolver(settings) : plateSolver);
 
         Coordinates? hint = null;
         if (hintRaDegJnow is double ra && hintDecDegJnow is double dec) {
@@ -202,7 +214,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             MaxObjects = settings.MaxObjects,
             Timeout = PlateSolveService.TimeoutFrom(settings),
             // No staged search either (#1136): same fail-fast contract as the blind fallback below.
-            StagedSearchEnabled = false,
+            StagedSearchEnabled = blindFailover,
             // The guider saves the binned frame: the solver's scale is pixel size × binning.
             Binning = binning,
             Coordinates = hint,
@@ -210,7 +222,7 @@ public sealed class PolarAlignFrameSolver : IPolarAlignFrameSolver {
             // whole-sky solve that stalls the ~1s loop (and the lease-renew cadence) for its full
             // duration. The §45 loop's contract is fail-fast-and-retry; a failed near solve is one
             // failed iteration, not a cue to search the entire sky near the sparse pole field.
-            BlindFailoverEnabled = false,
+            BlindFailoverEnabled = blindFailover, // #2173: only the plate-solve check of an unverified mount asks for it
             SearchScale = searchScale,
         };
 

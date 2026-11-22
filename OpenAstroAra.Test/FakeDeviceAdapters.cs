@@ -369,7 +369,9 @@ namespace OpenAstroAra.Test {
         public volatile bool ReportsArrival;
         private volatile bool _atPark, _atHome;
         public bool IsPulseGuiding => false;
-        public PointingState SideOfPier { get => PointingState.Normal; set => Interlocked.Increment(ref _pierSideWrites); }
+        public PointingState SideOfPier { get => Side; set => Interlocked.Increment(ref _pierSideWrites); }
+        /// <summary>#2173 — the pier side the mount reports (Normal = pierEast unless a test turns it).</summary>
+        public volatile PointingState Side = PointingState.Normal;
         public EquatorialCoordinateType EquatorialSystem => EquatorialCoordinateType.Topocentric;
         /// <summary>#2073 — the mount type; null makes the read throw, as a driver that does not implement it.</summary>
         public AlignmentMode? Alignment { get; set; } = AlignmentMode.GermanPolar;
@@ -431,7 +433,15 @@ namespace OpenAstroAra.Test {
             Interlocked.Increment(ref _slews);
             OnSlew?.Invoke(raHours, decDegrees);
         }
-        public void SyncToCoordinates(double raHours, double decDegrees) => Interlocked.Increment(ref _syncs);
+        public void SyncToCoordinates(double raHours, double decDegrees) {
+            Interlocked.Increment(ref _syncs);
+            if (SyncMovesReading) {
+                Ra = raHours;
+                Dec = decDegrees;
+            }
+        }
+        /// <summary>#2173 — a Sync the mount takes: its reported RA and Dec become the sync target (off: the mount ignores it).</summary>
+        public volatile bool SyncMovesReading;
 
         private sealed class FakeTrackingRates : ITrackingRates {
             private readonly DriveRate[] _rates = [DriveRate.Sidereal];

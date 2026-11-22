@@ -7480,4 +7480,80 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarActionMoveToStart => 'move the scope to the start position';
+
+  @override
+  String get poseCheckButton => 'Check position with a plate solve';
+
+  @override
+  String get poseCheckRunning => 'Checking the position with a plate solve…';
+
+  @override
+  String get poseCheckCameraMain => 'main camera';
+
+  @override
+  String get poseCheckCameraGuide => 'guide camera';
+
+  @override
+  String poseCheckPosition(String ra, String dec) {
+    return 'RA $ra, Dec $dec';
+  }
+
+  @override
+  String poseCheckTrusted(String camera) {
+    return 'The sky agrees with the mount (checked with the $camera): its position is trusted again.';
+  }
+
+  @override
+  String poseCheckMismatch(
+    String mount,
+    String sky,
+    String delta,
+    String camera,
+  ) {
+    return 'The mount reads $mount, the sky says $sky (Δ $delta°). Checked with the $camera.';
+  }
+
+  @override
+  String get poseCheckSync => 'Sync the mount to the sky';
+
+  @override
+  String poseCheckPierSideDisagrees(String camera) {
+    return 'The pier side does not match the sky (checked with the $camera): the mount may be a meridian flip off. No Sync is offered; use Home.';
+  }
+
+  @override
+  String poseCheckPierSideUnknown(String camera) {
+    return 'The pier side could not be checked (with the $camera), so the position is not trusted. Use Home.';
+  }
+
+  @override
+  String poseCheckSolveFailed(String camera) {
+    return 'The frame from the $camera did not solve: clouds, a closed cover or too few stars. The position stays unverified.';
+  }
+
+  @override
+  String get poseCheckMountMoved =>
+      'The mount moved during the check, so nothing was decided. Check again.';
+
+  @override
+  String get poseCheckSyncRefused =>
+      'The mount refused the Sync. The position stays unverified; use Home.';
+
+  @override
+  String get poseCheckSyncNotTaken =>
+      'After the Sync the mount still disagrees with the sky. The position stays unverified; use Home.';
+
+  @override
+  String get poseCheckCouldnt => 'Couldn\'t check the position';
+
+  @override
+  String get refusalPoseCheckNotNeeded =>
+      'The mount\'s position is trusted, or still being read: there is nothing to check.';
+
+  @override
+  String get refusalPoseSyncNotOffered =>
+      'That Sync is no longer on offer. Check the position again, then tap Sync.';
+
+  @override
+  String get refusalMountNotConnected => 'No mount is connected.';
 }

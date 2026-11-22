@@ -7480,6 +7480,82 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarActionMoveToStart => 'move the scope to the start position';
+
+  @override
+  String get poseCheckButton => 'Check position with a plate solve';
+
+  @override
+  String get poseCheckRunning => 'Checking the position with a plate solve…';
+
+  @override
+  String get poseCheckCameraMain => 'main camera';
+
+  @override
+  String get poseCheckCameraGuide => 'guide camera';
+
+  @override
+  String poseCheckPosition(String ra, String dec) {
+    return 'RA $ra, Dec $dec';
+  }
+
+  @override
+  String poseCheckTrusted(String camera) {
+    return 'The sky agrees with the mount (checked with the $camera): its position is trusted again.';
+  }
+
+  @override
+  String poseCheckMismatch(
+    String mount,
+    String sky,
+    String delta,
+    String camera,
+  ) {
+    return 'The mount reads $mount, the sky says $sky (Δ $delta°). Checked with the $camera.';
+  }
+
+  @override
+  String get poseCheckSync => 'Sync the mount to the sky';
+
+  @override
+  String poseCheckPierSideDisagrees(String camera) {
+    return 'The pier side does not match the sky (checked with the $camera): the mount may be a meridian flip off. No Sync is offered; use Home.';
+  }
+
+  @override
+  String poseCheckPierSideUnknown(String camera) {
+    return 'The pier side could not be checked (with the $camera), so the position is not trusted. Use Home.';
+  }
+
+  @override
+  String poseCheckSolveFailed(String camera) {
+    return 'The frame from the $camera did not solve: clouds, a closed cover or too few stars. The position stays unverified.';
+  }
+
+  @override
+  String get poseCheckMountMoved =>
+      'The mount moved during the check, so nothing was decided. Check again.';
+
+  @override
+  String get poseCheckSyncRefused =>
+      'The mount refused the Sync. The position stays unverified; use Home.';
+
+  @override
+  String get poseCheckSyncNotTaken =>
+      'After the Sync the mount still disagrees with the sky. The position stays unverified; use Home.';
+
+  @override
+  String get poseCheckCouldnt => 'Couldn\'t check the position';
+
+  @override
+  String get refusalPoseCheckNotNeeded =>
+      'The mount\'s position is trusted, or still being read: there is nothing to check.';
+
+  @override
+  String get refusalPoseSyncNotOffered =>
+      'That Sync is no longer on offer. Check the position again, then tap Sync.';
+
+  @override
+  String get refusalMountNotConnected => 'No mount is connected.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -15013,4 +15089,82 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get polarActionMoveToStart =>
       'mover o telescópio para a posição inicial';
+
+  @override
+  String get poseCheckButton =>
+      'Verificar a posição com uma resolução de placa';
+
+  @override
+  String get poseCheckRunning =>
+      'Verificando a posição com uma resolução de placa…';
+
+  @override
+  String get poseCheckCameraMain => 'câmera principal';
+
+  @override
+  String get poseCheckCameraGuide => 'câmera de guiagem';
+
+  @override
+  String poseCheckPosition(String ra, String dec) {
+    return 'AR $ra, Dec $dec';
+  }
+
+  @override
+  String poseCheckTrusted(String camera) {
+    return 'O céu concorda com a montagem (verificado com a $camera): a posição dela é confiável de novo.';
+  }
+
+  @override
+  String poseCheckMismatch(
+    String mount,
+    String sky,
+    String delta,
+    String camera,
+  ) {
+    return 'A montagem indica $mount, o céu diz $sky (Δ $delta°). Verificado com a $camera.';
+  }
+
+  @override
+  String get poseCheckSync => 'Sincronizar a montagem com o céu';
+
+  @override
+  String poseCheckPierSideDisagrees(String camera) {
+    return 'O lado do pilar não corresponde ao céu (verificado com a $camera): a montagem pode estar com um flip de meridiano errado. Nenhum Sync é oferecido; use o Home.';
+  }
+
+  @override
+  String poseCheckPierSideUnknown(String camera) {
+    return 'Não foi possível verificar o lado do pilar (com a $camera), então a posição não é confiável. Use o Home.';
+  }
+
+  @override
+  String poseCheckSolveFailed(String camera) {
+    return 'O quadro da $camera não foi resolvido: nuvens, tampa fechada ou poucas estrelas. A posição continua não verificada.';
+  }
+
+  @override
+  String get poseCheckMountMoved =>
+      'A montagem se moveu durante a verificação, então nada foi decidido. Verifique de novo.';
+
+  @override
+  String get poseCheckSyncRefused =>
+      'A montagem recusou o Sync. A posição continua não verificada; use o Home.';
+
+  @override
+  String get poseCheckSyncNotTaken =>
+      'Depois do Sync a montagem ainda discorda do céu. A posição continua não verificada; use o Home.';
+
+  @override
+  String get poseCheckCouldnt => 'Não foi possível verificar a posição';
+
+  @override
+  String get refusalPoseCheckNotNeeded =>
+      'A posição da montagem é confiável, ou ainda está sendo lida: não há nada para verificar.';
+
+  @override
+  String get refusalPoseSyncNotOffered =>
+      'Esse Sync não está mais disponível. Verifique a posição de novo e depois toque em Sync.';
+
+  @override
+  String get refusalMountNotConnected => 'Nenhuma montagem está conectada.';
 }

@@ -119,6 +119,14 @@ public static class RefusalCatalog {
     // or numbers that are not the offer's now): confirm the move again.
     public static readonly RefusalCause PolarAlignMoveNotConfirmed = new("polar-align-move-not-confirmed", 409, "Polar Align needs your confirmation before it moves the scope to the start position");
 
+    // #2173 — the plate-solve check of the mount's position while it is trusted already (or not read yet): nothing to check.
+    public static readonly RefusalCause PoseCheckNotNeeded = new("pose-check-not-needed", 409, "The mount's position is not unverified");
+    // #2173 — the plate-solve check's Sync with no current mismatch offer (no check_id, a stale one, or another mount session):
+    // check the position again, then tap Sync.
+    public static readonly RefusalCause PoseSyncNotOffered = new("pose-sync-not-offered", 409, "No plate-solve Sync is on offer");
+    // #2173 — the plate-solve check with no mount connected.
+    public static readonly RefusalCause MountNotConnected = new("mount-not-connected", 409, "No mount is connected");
+
     public static readonly IReadOnlyList<RefusalCause> All = [
         NoCamera, CameraBusy, GateStuck, CenterInProgress, OpticsNotSet, SolverNotSet, CaptureSettingsUnsupported, StorageUnavailable,
         EndNightInProgress, BelowHorizonLimit, MountPositionUnverified, CounterweightLimit,
@@ -129,5 +137,6 @@ public static class RefusalCatalog {
         AboveClearanceLimit, PolarAlignSiteNotSet, PolarAlignAltAzMount, PolarAlignCannotMoveAxis,
         PolarAlignRunActive, PolarAlignCannotMoveDec, PolarAlignMoveToStartNotNeeded,
         PolarAlignMoveNotConfirmed,
+        PoseCheckNotNeeded, PoseSyncNotOffered, MountNotConnected,
     ];
 }

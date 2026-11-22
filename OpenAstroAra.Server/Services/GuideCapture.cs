@@ -37,6 +37,10 @@ internal interface IGuideCapture {
     /// guides or calibrates), or null when none is known. Polar Align reads it before each motion: a guider that started
     /// guiding by its own controls would chase the turn.</summary>
     string? AppState => null;
+
+    /// <summary>#2173 — the setup activity that holds the Guide Camera now (<see cref="GuideCameraCustody.Holder"/>), or
+    /// null. The plate-solve check counts the camera busy while one holds it, and never stops it.</summary>
+    CameraUse? CameraHolder => null;
 }
 
 /// <summary>One connected guider's capture operations.</summary>

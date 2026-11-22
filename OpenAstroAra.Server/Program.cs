@@ -287,6 +287,24 @@ public partial class Program {
         builder.Services.AddSingleton<OpenAstroAra.Server.Services.IVerifyPositionService>(sp =>
             new OpenAstroAra.Server.Services.VerifyPositionService(sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>(),
                 () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
+        // #2173 — clear an unverified mount position with a plate solve (no motion): the main camera, or the guide camera
+        // only when there is no main camera, solved by ASTAP through the existing pipelines.
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPoseSolveCamera>(sp =>
+            new OpenAstroAra.Server.Services.PoseSolveCamera(
+                sp.GetRequiredService<OpenAstroAra.Server.Services.MainCameraPointingSolver>(),
+                sp.GetService<ICameraService>(),
+                sp.GetService<GuiderService>(),
+                sp.GetRequiredService<IPolarAlignFrameSolver>(),
+                sp.GetRequiredService<IPolarAlignFrameFetcher>(),
+                sp.GetRequiredService<IProfileStore>(),
+                () => sp.GetService<OpenAstroAra.Equipment.Interfaces.Mediator.IRotatorMediator>()));
+        builder.Services.AddSingleton<OpenAstroAra.Server.Services.IPoseSolveCheckService>(sp =>
+            new OpenAstroAra.Server.Services.PoseSolveCheckService(
+                sp.GetRequiredService<ITelescopeService>(),
+                sp.GetRequiredService<OpenAstroAra.Server.Services.IPoseSolveCamera>(),
+                sp.GetService<IProfileStore>(),
+                sp.GetRequiredService<IPoseSolvePaStore>(),
+                sp.GetService<ILogger<OpenAstroAra.Server.Services.PoseSolveCheckService>>()));
         // §58.4 — the real meridian-flip orchestration (stop guiding → pass meridian → flip slew → recenter →
         // resume guiding), replacing the throwing placeholder. Handed into the sequencer factory below so the
         // MeridianFlipTrigger prototype runs it. Mount-gated to live-validate.
@@ -684,6 +702,9 @@ public partial class Program {
         // #2070 — the mounts whose position is unverified (a false zero after a power loss) stay so across a restart.
         builder.Services.AddSingleton<IMountPoseStore>(sp =>
             new FileMountPoseStore(profileDir, sp.GetService<ILogger<FileMountPoseStore>>()));
+        // #2173 — the last trusted plate solve's position angle per mount, camera and rotator angle (the pier-side check).
+        builder.Services.AddSingleton<IPoseSolvePaStore>(sp =>
+            new FilePoseSolvePaStore(profileDir, sp.GetService<ILogger<FilePoseSolvePaStore>>()));
         // §63.4 — guider-twin deletes waiting for a connected, idle guider (survive a daemon restart).
         builder.Services.AddSingleton<IGuiderTwinDeleteStore>(sp =>
             new FileGuiderTwinDeleteStore(profileDir, sp.GetService<ILogger<FileGuiderTwinDeleteStore>>()));

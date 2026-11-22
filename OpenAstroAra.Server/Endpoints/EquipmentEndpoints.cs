@@ -135,6 +135,27 @@ public static partial class EquipmentEndpoints {
         }
     }
 
+    /// <summary>#2173 — <c>POST /equipment/telescope/verify-position-by-solve</c>: one plate solve compared with the
+    /// mount (no motion). 200 with the result; a declared Refusal (ADR 0022) when it cannot run.</summary>
+    internal static async Task<IResult> VerifyPositionBySolveAsync(IPoseSolveCheckService check, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(check);
+        return Results.Ok(await check.VerifyPoseBySolveAsync(null, ct));
+    }
+
+    /// <summary>#2173 — <c>POST /equipment/telescope/verify-position-by-solve/sync</c>: the one-tap Sync after a mismatch,
+    /// then the re-read and a second solve. Refused while Polar Align holds the mount (#2123: no sync during a run), and
+    /// <c>pose-sync-not-offered</c> without the current offer's <c>check_id</c>.</summary>
+    internal static async Task<IResult> SyncPositionBySolveAsync(PoseSolveSyncRequestDto? request, IPoseSolveCheckService check,
+            ITelescopeService telescope, IPolarAlignService? polarAlign, CancellationToken ct) {
+        ArgumentNullException.ThrowIfNull(check);
+        ThrowIfPolarAlignMovesTheMount(polarAlign, "sync", telescope);
+        if (request?.CheckId is not { Length: > 0 } id) {
+            throw new RefusalException(RefusalCatalog.PoseSyncNotOffered,
+                "The Sync needs the check_id of the plate-solve check that offered it: check the position again, then tap Sync.");
+        }
+        return Results.Ok(await check.VerifyPoseBySolveAsync(id, ct));
+    }
+
     /// <summary>#1364 — one live-view action: 204 on success; 409 when no guider is connected
     /// (InvalidOperationException), 400 for a bad position (ArgumentOutOfRangeException), 422 when the
     /// guider refused (GuiderRpcException — no image yet, no star near the tap, not looping).</summary>
@@ -438,6 +459,28 @@ public static partial class EquipmentEndpoints {
             .ProducesProblem(StatusCodes.Status409Conflict)
             .WithName("ConfirmTelescopeHome")
             .WithSummary("Confirm the mount is physically at Home, so an unverified position (after a power loss) is trusted again. 409 when the mount is not connected or does not report AtHome.");
+        // #2173 — clear an unverified position with a plate solve (no motion), and the one-tap Sync after a mismatch.
+        telescope.MapGet("/verify-position-by-solve", async (IPoseSolveCheckService svc, CancellationToken ct) =>
+                Results.Ok(await svc.AvailabilityAsync(ct)))
+            .Produces<PoseSolveAvailabilityDto>(StatusCodes.Status200OK)
+            .WithName("GetVerifyPositionBySolve")
+            .WithSummary("Whether the plate-solve check of an unverified mount position can run now, and with which camera.");
+        telescope.MapPost("/verify-position-by-solve", (IPoseSolveCheckService svc, CancellationToken ct) => VerifyPositionBySolveAsync(svc, ct))
+            .Produces<PoseSolveCheckResultDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("VerifyPositionBySolve")
+            .WithDescription("Sends the mount no motion. A 409 or 422 problem carries a stable `reason` (ADR 0022): `mount-not-connected`, `pose-check-not-needed`, `no-camera`, `camera-busy`, `gate-stuck`, `storage-unavailable`, `optics-not-set` (with `missing`), `solver-not-set` and `capture-settings-unsupported`.")
+            .WithSummary("Check an unverified mount position with one plate solve; trusts it again when the sky and the pier side agree, or offers one Sync.");
+        telescope.MapPost("/verify-position-by-solve/sync", ([FromBody] PoseSolveSyncRequestDto? request, IPoseSolveCheckService svc, ITelescopeService mount, IPolarAlignService polarAlign, CancellationToken ct) =>
+                SyncPositionBySolveAsync(request, svc, mount, polarAlign, ct))
+            .Accepts<PoseSolveSyncRequestDto>("application/json")
+            .Produces<PoseSolveCheckResultDto>(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status409Conflict)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity)
+            .WithName("SyncPositionBySolve")
+            .WithDescription("The user's one tap after a `mismatch`: solve, Sync (the existing Sync and its guards), re-read and solve again; trusts the position only when both agree. Besides the check's reasons: `pose-sync-not-offered` and `polar-align-moving-mount`.")
+            .WithSummary("Sync the mount to the sky after a plate-solve mismatch, then verify it with a second solve.");
         telescope.MapPost("/abort", async (ITelescopeService svc, ISequencerService sequencer, CancellationToken ct) => {
             // §57.4 steps 1+2 — device abort, then an UNCONDITIONAL sequence pause (even when the
             // abort throws); the ordering contract lives in MountStopHandler where tests pin it.

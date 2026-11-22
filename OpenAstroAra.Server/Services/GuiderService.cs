@@ -212,6 +212,8 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
 
     string? IGuideCapture.AppState => ConnectedGuiderOrNull()?.State;
 
+    CameraUse? IGuideCapture.CameraHolder => Custody.Holder;
+
     void IGuideCapture.ThrowIfOutOfStep(string operation) => ThrowIfOutOfStep(operation);
 
     Task<GuideCameraCustody.Claim> IGuideCapture.TakeCameraAsync(CameraUse use, Func<CameraUse, Task> stop, CancellationToken ct) =>

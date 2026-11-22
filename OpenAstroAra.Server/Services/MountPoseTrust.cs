@@ -44,7 +44,8 @@ namespace OpenAstroAra.Server.Services;
 /// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
 /// reconnected while it ran (#2066). A reading that suggests one of the model-suspect reasons replaces it (#2173 review, see
 /// <see cref="HomeSearchMayTrust"/>).
-/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home while the reason allows it, <see cref="HomeSearchMayTrust"/>) clears it; a new session for the
+/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home while the reason allows it, <see cref="HomeSearchMayTrust"/>)
+/// or #2173 <see cref="TrustBySolve"/> (a plate solve that moved nothing agreed with the mount) clears it; a new session for the
 /// same device keeps it, and the owner persists it per device so a daemon restart keeps it too.
 /// Until a session's first read is observed the mount is not trusted either (<see cref="Observed"/>).
 ///
@@ -217,12 +218,14 @@ internal sealed class MountPoseTrust {
 
     /// <summary>An Ara mount command (goto, sync, park, home, axis move, abort, tracking) is about to be sent.</summary>
     public void NoteCommand(DateTimeOffset now) {
+        _commands++;
         _lastMotionAt = now;
         _motionSinceTrusted = true;
     }
 
     /// <summary>An Ara MoveAxis started (or renewed) <paramref name="moving"/> = true, or stopped one axis.</summary>
     public void NoteAxisMove(int axis, bool moving, DateTimeOffset now) {
+        _commands++;
         _lastMotionAt = now;
         _motionSinceTrusted = true;
         if (axis is < 0 or > 30) {
@@ -233,6 +236,7 @@ internal sealed class MountPoseTrust {
 
     /// <summary>An abort stopped every axis.</summary>
     public void NoteAllAxesStopped(DateTimeOffset now) {
+        _commands++;
         _lastMotionAt = now;
         _motionSinceTrusted = true;
         _movingAxes = 0;
@@ -331,6 +335,29 @@ internal sealed class MountPoseTrust {
         }
         _reason = reason;
         return true;
+    }
+
+    /// <summary>#2173 — counts every Ara mount command and axis move this object was told of (<see cref="NoteCommand"/>,
+    /// <see cref="NoteAxisMove"/>, <see cref="NoteAllAxesStopped"/>, <see cref="BeginCommandedMove"/>): a check that
+    /// reads the mount, exposes and reads again (the plate-solve check) trusts nothing when it changed in between.</summary>
+    public long Commands => _commands;
+
+    private long _commands;
+
+    /// <summary>#2173 — a plate solve that moved nothing agreed with the mount's reported position and pier side (the
+    /// owner checked both): the flag clears for every reason, with no eye check, and the read pose becomes the last
+    /// trusted one. True when it cleared one.</summary>
+    public bool TrustBySolve(bool atHome, double decDeg) {
+        var cleared = _reason is not null;
+        _reason = null;
+        _observed = true;
+        _pending = null;
+        if (FoldDec(decDeg) is double dec) {
+            _lastTrusted = (atHome, dec);
+            _previous = (atHome, dec);
+            _motionSinceTrusted = false; // the owner read the mount still, with no command since the check began
+        }
+        return cleared;
     }
 
     /// <summary>The user confirmed the mount is physically at Home (the owner checked that it reports
