@@ -30,8 +30,9 @@ using System.Threading.Tasks;
 
 namespace OpenAstroAra.Test {
 
-    /// <summary>#2068 — the polar-align routes over HTTP: the <c>hand_turn</c> query reaches the service as the
-    /// start's hand-turn choice, and an unknown stage is a 400 before the service is asked.</summary>
+    /// <summary>#2068 — the polar-align routes over HTTP: an unknown stage is a 400 before the service is asked. #2170 —
+    /// the removed <c>hand_turn</c> query and body field open no manual path: the route reads them as any unknown name
+    /// (ignored), so the service is asked for the one motor start there is.</summary>
     [TestFixture]
     public class EquipmentEndpointsPolarAlignHttpTest {
 
@@ -50,8 +51,10 @@ namespace OpenAstroAra.Test {
             private HttpClient _http = null!;
 
             public async Task StartAsync() {
-                Svc.Setup(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(List);
-                Svc.Setup(s => s.GetStartPlanAsync(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>())).ReturnsAsync(Plan);
+                Svc.Setup(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(List);
+                Svc.Setup(s => s.GetStartPlanAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync(Plan);
+                Svc.Setup(s => s.StartAsync(It.IsAny<string?>(), It.IsAny<PolarAlignStartConfirmation?>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+                    .ReturnsAsync(new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null));
                 var builder = WebApplication.CreateSlimBuilder();
                 builder.WebHost.UseUrls("http://127.0.0.1:0");
                 builder.Services.AddSingleton(Svc.Object);
@@ -70,6 +73,12 @@ namespace OpenAstroAra.Test {
                 return (int)response.StatusCode;
             }
 
+            public async Task<int> PostJsonAsync(string path, string json) {
+                using var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                using var response = await _http.PostAsync(new Uri("/api/v1/equipment/polaralign" + path, UriKind.Relative), content);
+                return (int)response.StatusCode;
+            }
+
             public async ValueTask DisposeAsync() {
                 _http?.Dispose();
                 if (_app is not null) {
@@ -79,16 +88,15 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task Preflight_passes_hand_turn_true_through_and_no_query_is_a_motor_start() {
+        public async Task Preflight_ignores_the_removed_hand_turn_query() {
             await using var host = new Host();
             await host.StartAsync();
 
             Assert.That(await host.GetAsync("/preflight?hand_turn=true"), Is.EqualTo(200));
-            Assert.That(await host.GetAsync("/preflight?stage=check"), Is.EqualTo(200));
+            Assert.That(await host.GetAsync("/preflight?stage=check&hand_turn=true"), Is.EqualTo(200));
 
-            host.Svc.Verify(s => s.GetPreflightAsync(null, true, It.IsAny<CancellationToken>()), Times.Once, "hand_turn=true is a hand-turn list");
-            host.Svc.Verify(s => s.GetPreflightAsync(PolarAlignStages.Check, false, It.IsAny<CancellationToken>()), Times.Once,
-                "no hand_turn is a motor start's list");
+            host.Svc.Verify(s => s.GetPreflightAsync(null, It.IsAny<CancellationToken>()), Times.Once, "the motor start's list");
+            host.Svc.Verify(s => s.GetPreflightAsync(PolarAlignStages.Check, It.IsAny<CancellationToken>()), Times.Once, "the motor check's list");
         }
 
         [Test]
@@ -96,20 +104,33 @@ namespace OpenAstroAra.Test {
             await using var host = new Host();
             await host.StartAsync();
 
-            Assert.That(await host.GetAsync("/preflight?stage=sideways&hand_turn=true"), Is.EqualTo(400));
-            host.Svc.Verify(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()), Times.Never);
+            Assert.That(await host.GetAsync("/preflight?stage=sideways"), Is.EqualTo(400));
+            host.Svc.Verify(s => s.GetPreflightAsync(It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
-        public async Task Start_plan_passes_hand_turn_true_through_and_no_query_is_a_motor_start() {
+        public async Task Start_plan_ignores_the_removed_hand_turn_query() {
             await using var host = new Host();
             await host.StartAsync();
 
             Assert.That(await host.GetAsync("/start-plan?stage=fine&hand_turn=true"), Is.EqualTo(200));
-            Assert.That(await host.GetAsync("/start-plan?stage=fine"), Is.EqualTo(200));
 
-            host.Svc.Verify(s => s.GetStartPlanAsync(PolarAlignStages.Fine, true, It.IsAny<CancellationToken>()), Times.Once);
-            host.Svc.Verify(s => s.GetStartPlanAsync(PolarAlignStages.Fine, false, It.IsAny<CancellationToken>()), Times.Once);
+            host.Svc.Verify(s => s.GetStartPlanAsync(PolarAlignStages.Fine, It.IsAny<CancellationToken>()), Times.Once, "the motor start's plan");
+        }
+
+        // #2170 — an older app's start body that still says hand_turn: the service gets the plain motor confirmation, so
+        // the start runs the same pre-flight list and moves the mount only as a motor start does.
+        [Test]
+        public async Task A_start_body_with_the_removed_hand_turn_field_is_a_motor_start() {
+            await using var host = new Host();
+            await host.StartAsync();
+
+            var status = await host.PostJsonAsync("/start",
+                """{"stage":"fine","confirmed":true,"direction":"east","new_origin":true,"hand_turn":true}""");
+
+            Assert.That(status, Is.EqualTo(202));
+            host.Svc.Verify(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation(PolarAlignDirections.East, true),
+                null, It.IsAny<CancellationToken>()), Times.Once, "the confirmation of a motor start, nothing else");
         }
     }
 }

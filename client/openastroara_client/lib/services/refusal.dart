@@ -29,7 +29,6 @@ enum RefusalCause {
   firstFlipNotCompleted('first-flip-not-completed'),
   mountClockNotVerified('mount-clock-not-verified'),
   polarAlignAlreadyRunning('polar-align-already-running'),
-  polarAlignClutchTurned('polar-align-clutch-turned'),
   polarAlignClearanceNotConfirmed('polar-align-clearance-not-confirmed'),
   aboveClearanceLimit('above-clearance-limit'),
   polarAlignSiteNotSet('polar-align-site-not-set'),

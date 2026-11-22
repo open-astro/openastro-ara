@@ -214,22 +214,21 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public void A_tracking_off_point_is_averaged_at_its_mean_time_so_the_Earths_turn_is_not_scatter() {
-            // Three solves 5 s apart with tracking off: the field runs on in RA with the Earth's turn (about 6.5″ on the
-            // sky at Dec 85° each time), and nothing else moves. Moved to the mean time, they agree.
+        public void A_point_whose_solves_run_on_in_RA_is_scatter_because_the_mount_tracks() {
+            // #2170: every run turns RA with the motor and tracks while a point's frames are taken, so the field should
+            // stand still. Three solves 5 s apart that run on in RA at the sidereal rate (about 6.5″ on the sky at Dec 85°
+            // each time) are a real scatter, not a drift to take out.
             var t0 = new DateTimeOffset(2026, 11, 20, 4, 0, 0, TimeSpan.Zero);
             var solves = Enumerable.Range(0, 3)
                 .Select(i => (new PolarAlignSolveOutcome(true, 30.0 + i * 5.0 * SiderealRate, PoleMountDecDeg), t0.AddSeconds(i * 5.0)))
                 .ToList();
 
-            var (point, at, scatter) = PolarAlignService.AveragePointSolves(solves, tracking: false);
+            var (point, at, scatter) = PolarAlignService.AveragePointSolves(solves);
 
-            Assert.That(scatter, Is.LessThan(0.01), "the drift is not scatter");
-            Assert.That(at, Is.EqualTo(t0.AddSeconds(5.0)));
-            Assert.That(point.RaDegJnow, Is.EqualTo(30.0 + 5.0 * SiderealRate).Within(1e-7), "the field as it stood at the mean time");
+            Assert.That(scatter, Is.GreaterThan(4.0), "the solves disagree and the scatter says so");
+            Assert.That(at, Is.EqualTo(t0.AddSeconds(5.0)), "the point stands at its frames' mean time");
+            Assert.That(point.RaDegJnow, Is.EqualTo(30.0 + 5.0 * SiderealRate).Within(1e-7), "the plain mean of the solves");
             Assert.That(point.Solves, Is.EqualTo(3));
-            // Tracking on, the same solves are a real scatter (the field should have stood still).
-            Assert.That(PolarAlignService.AveragePointSolves(solves, tracking: true).ScatterArcsec, Is.GreaterThan(4.0));
         }
 
         private const double SiderealRate = 360.98564736629 / 86400.0;

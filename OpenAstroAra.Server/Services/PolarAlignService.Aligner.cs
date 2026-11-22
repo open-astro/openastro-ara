@@ -336,13 +336,12 @@ namespace OpenAstroAra.Server.Services {
         private async Task CorrectAsync(int gen, double altErr, double azErr, PolarAlignSettingsDto settings, CancellationToken ct) {
             AlignerRun? run;
             CancellationToken userStop;
-            bool stopped, stopOwed, handTurn;
+            bool stopped, stopOwed;
             lock (_gate) {
                 run = _generation == gen ? _alignerRun : null;
                 if (run is null) {
                     return;
                 }
-                handTurn = _handTurn;
                 if (run.RearmRequested) {
                     run.RearmRequested = false;
                     run.Rearm();
@@ -383,9 +382,7 @@ namespace OpenAstroAra.Server.Services {
             if (stopped || run.Undrivable) {
                 return;
             }
-            // #2083 — a hand-turn run moves nothing, the Polar Aligner's motors included: the person turns its bolts, as
-            // with auto off.
-            var auto = PolarAlignPreflightEvaluator.DrivesAlignerMotors(settings.PolarAlignerAuto, handTurn);
+            var auto = settings.PolarAlignerAuto;
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, userStop);
             try {
                 if (run.Device is null) {
