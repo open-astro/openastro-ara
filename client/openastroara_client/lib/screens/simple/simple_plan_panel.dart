@@ -322,6 +322,8 @@ class _SimpleRunTrackerState extends ConsumerState<SimpleRunTracker> {
       // #1747: no frame in hand while the rig waits out the meridian.
       SimpleRunPhase.imaging when info?.meridianWaitLeft != null =>
         context.l10n.planWaitingForFlip,
+      SimpleRunPhase.pausing when run.pausingAfterFrame =>
+        context.l10n.planPausingAfterFrame,
       SimpleRunPhase.pausing => context.l10n.planPausing,
       SimpleRunPhase.paused => context.l10n.planPaused,
       SimpleRunPhase.done => context.l10n.planDone,
@@ -640,8 +642,7 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
       // White like every mode's ring; the paused colour while paused.
       SimpleRunPhase.ready || SimpleRunPhase.none => AraColors.textPrimary,
       SimpleRunPhase.paused => simplePausedColour(ref),
-      // Greyed out once the pause is asked: the frame in hand finishes first
-      // (user, 2026-11-11).
+      // Greyed out once the pause is asked, until the run reports Paused.
       SimpleRunPhase.pausing => AraColors.textDisabled,
       _ => AraColors.textPrimary.withValues(alpha: 0.25),
     };
@@ -658,7 +659,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
         SimpleRunPhase.ready ||
         SimpleRunPhase.none => context.l10n.planStartImaging,
         SimpleRunPhase.imaging when flipWait => context.l10n.planPauseAfterFlip,
-        SimpleRunPhase.imaging => context.l10n.planPauseAfterFrame,
+        // #2172 — the shutter pauses now; "Pause after this frame" is the
+        // button under the plan.
+        SimpleRunPhase.imaging => context.l10n.planPauseNow,
         SimpleRunPhase.pausing => context.l10n.planPausingLabel,
         SimpleRunPhase.paused => context.l10n.planResume,
         _ => context.l10n.planStartImaging,
@@ -671,7 +674,9 @@ class _SimpleRunShutterState extends ConsumerState<SimpleRunShutter> {
             ? simpleSayWhy(
                 context,
                 phase == SimpleRunPhase.pausing
-                    ? context.l10n.planPausingAfterFrame
+                    ? (run.pausingAfterFrame
+                          ? context.l10n.planPausingAfterFrame
+                          : context.l10n.planPausing)
                     : waiting
                     ? context.l10n.planRisesAtCap(
                         _hhmm(run.targets.first.rise!.toLocal()),
@@ -2270,11 +2275,25 @@ class SimpleRunPanel extends ConsumerWidget {
                     ref.read(simpleRunProvider.notifier).resume(refocus: true),
                 child: Text(context.l10n.planRecenterAndRefocus),
               ),
-            ] else if (imaging)
+            ] else if (imaging) ...[
               Text(
                 context.l10n.planHintPause,
                 style: _dim.copyWith(fontSize: AraFontSize.simpleCaption),
               ),
+              // #2172 — the shutter stops the frame in hand; this keeps it.
+              // Not while a pause is on its way, nor with no frame in hand
+              // (the meridian wait).
+              if (!run.pausing && info?.meridianWaitLeft == null)
+                TextButton(
+                  key: const Key('simple-run-pause-after-frame'),
+                  onPressed: run.busy
+                      ? null
+                      : () => ref
+                            .read(simpleRunProvider.notifier)
+                            .pauseAfterFrame(),
+                  child: Text(context.l10n.planPauseAfterFrame),
+                ),
+            ],
             // The plan alone, not Emergency Stop: asks in place (#1911).
             if (imaging) _StopPlan(frames: allCaptured),
             // Solid like the sheet's Add to queue (user, 2026-11-04).

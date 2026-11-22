@@ -209,6 +209,30 @@ void main() {
     });
   });
 
+  group('SequenceApi pause (#2172)', () {
+    test('pause posts no body, so the daemon pauses now', () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'operation_id': 'op-1'};
+      });
+      await api.pause('seq-1');
+      expect(captured!.path, endsWith('/api/v1/sequences/seq-1/pause'));
+      expect(captured!.data, isNull);
+    });
+
+    test('pauseAfterFrame posts after_frame true', () async {
+      RequestOptions? captured;
+      final api = _api((opts) {
+        captured = opts;
+        return {'operation_id': 'op-1'};
+      });
+      await api.pauseAfterFrame('seq-1');
+      expect(captured!.path, endsWith('/api/v1/sequences/seq-1/pause'));
+      expect(captured!.data, {'after_frame': true});
+    });
+  });
+
   group('SequenceApi.create', () {
     test('posts name + body to /sequences and returns the created id', () async {
       RequestOptions? captured;

@@ -80,6 +80,9 @@ class _FakeClient implements SequenceClient {
   }
   @override
   Future<String> pause(String id) async => (calls..add('pause')).last;
+  @override
+  Future<String> pauseAfterFrame(String id) async =>
+      (calls..add('pauseAfterFrame')).last;
   (bool, bool)? resumeFlags;
   @override
   Future<String> resume(String id,
@@ -273,6 +276,33 @@ void main() {
       await pump(tester, run: _info(SequenceRunState.paused));
       expect(btn(tester, 'Skip').onPressed, isNotNull);
       expect(btn(tester, 'Abort').onPressed, isNotNull);
+    });
+
+    testWidgets('Pause after this frame calls pauseAfterFrame', (tester) async {
+      // #2172 — Pause stops the frame in progress; this one keeps it. Enabled with Pause, never while paused.
+      await wideSurface(tester);
+      final container = ProviderContainer(overrides: [
+        sequenceApiProvider.overrideWithValue(_FakeClient()),
+        sequenceRunStateProvider
+            .overrideWith(() => _FakeRunNotifier(_info(SequenceRunState.running))),
+      ]);
+      addTearDown(container.dispose);
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: const MaterialApp(home: Scaffold(body: SequencerToolbar())),
+      ));
+      container.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await tester.pumpAndSettle();
+      btn(tester, 'Pause after this frame').onPressed!();
+      await tester.pumpAndSettle();
+      final fake = container.read(sequenceApiProvider) as _FakeClient;
+      expect(fake.calls, ['pauseAfterFrame']);
+    });
+
+    testWidgets('paused → Pause after this frame disabled', (tester) async {
+      await wideSurface(tester);
+      await pump(tester, run: _info(SequenceRunState.paused));
+      expect(btn(tester, 'Pause after this frame').onPressed, isNull);
     });
 
     testWidgets('pressing Skip fires skip-current', (tester) async {

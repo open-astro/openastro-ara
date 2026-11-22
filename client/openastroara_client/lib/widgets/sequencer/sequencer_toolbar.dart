@@ -226,6 +226,16 @@ class SequencerToolbar extends ConsumerWidget {
                 context, ref.read, (api, id) => api.pause(id))
             : null,
       ),
+      // #2172 — Pause stops the frame in progress (it is taken again on
+      // Resume); this one lets that frame finish and be saved first.
+      _ToolAction(
+        icon: Icons.pause_circle_outline,
+        label: context.l10n.planPauseAfterFrame,
+        onPressed: canPause
+            ? () => runSequenceLifecycle(
+                context, ref.read, (api, id) => api.pauseAfterFrame(id))
+            : null,
+      ),
       _ToolAction(
         icon: Icons.skip_next,
         label: 'Skip',
@@ -283,7 +293,7 @@ class _ToolAction {
 /// whatever didn't fit — on a phone or a half-width window Delete, Validate
 /// and Export simply weren't there, with no hint that the row scrolled. Now:
 ///
-/// * the lifecycle cluster (Run / Pause / Skip / Abort) is ALWAYS on screen —
+/// * the lifecycle cluster (Run / Pause / Pause after this frame / Skip / Abort) is ALWAYS on screen —
 ///   labelled when there's room, icon-only with tooltips when not;
 /// * utility buttons fill from the left in their usual order, and whichever
 ///   don't fit fold into a trailing "More" (⋯) menu, so every action stays

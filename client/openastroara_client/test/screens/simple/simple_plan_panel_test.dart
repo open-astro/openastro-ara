@@ -202,6 +202,8 @@ class _Seq implements SequenceClient {
   @override
   Future<String> pause(String id) async => _op('pause $id');
   @override
+  Future<String> pauseAfterFrame(String id) async => _op('pause-after-frame $id');
+  @override
   Future<String> resume(String id, {bool recenter = true, bool refocus = false}) async =>
       _op('resume $id${recenter ? '' : ' no-recenter'}${refocus ? ' refocus' : ''}');
   String _op(String c) {
@@ -2855,7 +2857,7 @@ void main() {
       final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
       c.read(selectedSequenceIdProvider.notifier).select('seq-1');
       await imaging(tester, c, seq, _imaging(24));
-      expect(find.textContaining('pause after this frame'), findsOneWidget);
+      expect(find.textContaining('Tap the shutter to pause now'), findsOneWidget);
       expect(find.text('Resume without re-centering'), findsNothing);
       expect(find.text('Re-center and refocus'), findsNothing);
 
@@ -2867,6 +2869,25 @@ void main() {
       await tester.tap(find.text('Re-center and refocus'));
       await tester.pumpAndSettle();
       expect(seq.calls.last, 'resume seq-1 refocus');
+    });
+
+    testWidgets('the Pause after this frame button shows while imaging', (tester) async {
+      // #2172 — next to Stop plan: the frame in hand finishes and is saved, then the run pauses.
+      final seq = _Seq();
+      final c = await _pump(tester, seq, SimpleRunPanel(onAdd: () {}, onEdit: (_) {}));
+      c.read(selectedSequenceIdProvider.notifier).select('seq-1');
+      await imaging(tester, c, seq, _imaging(24));
+      final button = find.byKey(const Key('simple-run-pause-after-frame'));
+      expect(find.descendant(of: button, matching: find.text('Pause after this frame')), findsOneWidget);
+      await tester.ensureVisible(button);
+      await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause-after-frame seq-1');
+      expect(c.read(simpleRunProvider).pausingAfterFrame, isTrue);
+      expect(button, findsNothing, reason: 'gone once the pause is on its way');
+
+      await imaging(tester, c, seq, _imaging(24, state: SequenceRunState.paused));
+      expect(button, findsNothing, reason: 'not while paused');
     });
   });
 
@@ -2993,6 +3014,26 @@ void main() {
       await tester.tap(find.byKey(const Key('simple-shutter')));
       await tester.pump();
       expect(seq.calls.length, calls, reason: 'nothing more is sent');
+      expect(c.read(simpleMessagesProvider).map((m) => m.title), contains('Pausing…'),
+          reason: 'the shutter pauses now, not after the frame (#2172)');
+      await tester.pump(kSimpleResultLife);
+    });
+
+    testWidgets('the shutter pauses now; after Pause after this frame the tracker says so', (tester) async {
+      // #2172 — the shutter stops the frame in hand; Pause after this frame keeps it, and the tracker says which.
+      final (c, seq) = await run(tester);
+      await create(tester);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pumpAndSettle();
+      await imaging(tester, c, seq, _imaging(23));
+      expect(find.bySemanticsLabel('Pause'), findsOneWidget, reason: 'the shutter pauses now');
+
+      await c.read(simpleRunProvider.notifier).pauseAfterFrame();
+      await tester.pumpAndSettle();
+      expect(seq.calls.last, 'pause-after-frame seq-1');
+      expect(find.text('Pausing after this frame'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('simple-shutter')));
+      await tester.pump();
       expect(c.read(simpleMessagesProvider).map((m) => m.title), contains('Pausing after this frame'));
       await tester.pump(kSimpleResultLife);
     });

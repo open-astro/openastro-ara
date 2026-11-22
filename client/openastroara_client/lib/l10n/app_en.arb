@@ -2337,7 +2337,7 @@
   },
   "planPausing": "Pausing…",
   "@planPausing": {
-    "description": "Plan square: the run is pausing after the current frame"
+    "description": "Plan square and pill: a Pause is on its way (the frame in hand stops; a flat set or meridian flip finishes first)"
   },
   "planPaused": "Paused",
   "@planPaused": {
@@ -2383,7 +2383,11 @@
   },
   "planPauseAfterFrame": "Pause after this frame",
   "@planPauseAfterFrame": {
-    "description": "Shutter screen-reader label while imaging"
+    "description": "Progress panel button while imaging: the frame in hand finishes and is saved, then the run pauses (#2172)"
+  },
+  "planPauseNow": "Pause",
+  "@planPauseNow": {
+    "description": "Shutter screen-reader label while imaging: pauses now, the frame in hand stops and is taken again on Resume (#2172)"
   },
   "planPausingLabel": "Pausing",
   "@planPausingLabel": {
@@ -2391,7 +2395,7 @@
   },
   "planPausingAfterFrame": "Pausing after this frame",
   "@planPausingAfterFrame": {
-    "description": "Plan pill and the greyed shutter's tap while a pause waits for the frame in hand to finish"
+    "description": "Plan pill and the greyed shutter's tap while a Pause after this frame waits for the frame in hand to finish"
   },
   "planPauseAfterFlip": "Pause after the flip",
   "@planPauseAfterFlip": {
@@ -2691,7 +2695,7 @@
   "@planRecenterAndRefocus": {
     "description": "Progress panel button while paused: resume after re-centering and refocusing"
   },
-  "planHintPause": "Tap the shutter to pause after this frame.",
+  "planHintPause": "Tap the shutter to pause now.",
   "@planHintPause": {
     "description": "Progress panel hint while imaging"
   },
