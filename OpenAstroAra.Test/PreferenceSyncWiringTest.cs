@@ -138,7 +138,7 @@ namespace OpenAstroAra.Test {
         public async Task Test_direction_again_over_HTTP_forgets_the_saved_RA_motor_direction() {
             var store = app.Services.GetRequiredService<IProfileStore>();
             store.PutPolarAlignMotorDirection(new OpenAstroAra.Server.Contracts.PolarAlignMotorDirectionDto(
-                -1, "AlpacaBridge iOptron", "6.0.0", DateTimeOffset.UtcNow));
+                -1, "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow));
             using var before = await http.GetAsync(new Uri("/api/v1/equipment/polaralign/motor-direction", UriKind.Relative));
             Assert.That(await before.Content.ReadAsStringAsync(), Does.Contain("\"sign\":-1"), "the saved direction reads back");
 

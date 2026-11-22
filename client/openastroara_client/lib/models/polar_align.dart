@@ -768,32 +768,50 @@ class PolarAlignPreflight {
 /// #2081 — the RA motor direction Polar Align tested and saved for this
 /// profile's mount (`polar_align_motor_direction`): [sign] +1 when a positive
 /// MoveAxis rate raises the mount's RA reading (east, NINA's assumption), −1
-/// when it lowers it; tested on the driver [driverInfo] [driverVersion].
+/// when it lowers it. #2167: tested on the mount [mountKey] (its identity, the
+/// key its `mount_clearance` entry uses: the Alpaca UniqueID, else its name,
+/// else `unidentified-mount`) with the driver [driverInfo] [driverVersion]
+/// (each empty when the driver reported none), at [testedUtc].
 class PolarAlignMotorDirection {
   final int sign;
+  final String mountKey;
   final String driverInfo;
   final String driverVersion;
-  final DateTime? testedUtc;
+  final DateTime testedUtc;
 
   const PolarAlignMotorDirection({
     required this.sign,
+    required this.mountKey,
     required this.driverInfo,
     required this.driverVersion,
-    this.testedUtc,
+    required this.testedUtc,
   });
 
   /// Null for anything that is not a saved test (no object, a sign other
-  /// than ±1).
+  /// than ±1). Strict on the key (#2167): a saved test without a string
+  /// `mount_key`, `driver_info` or `driver_version`, or without a
+  /// `tested_utc` date string, fails the read.
   static PolarAlignMotorDirection? tryParse(Object? json) {
     if (json is! Map<String, dynamic>) return null;
     final sign = (json['sign'] as num?)?.toInt();
     if (sign != 1 && sign != -1) return null;
+    final mountKey = json['mount_key'];
+    final driverInfo = json['driver_info'];
+    final driverVersion = json['driver_version'];
+    if (mountKey is! String || driverInfo is! String || driverVersion is! String) {
+      throw const FormatException('motor direction without mount_key, driver_info or driver_version');
+    }
     final tested = json['tested_utc'];
+    final testedUtc = tested is String ? DateTime.tryParse(tested) : null;
+    if (testedUtc == null) {
+      throw const FormatException('motor direction without a tested_utc date');
+    }
     return PolarAlignMotorDirection(
       sign: sign!,
-      driverInfo: json['driver_info'] is String ? json['driver_info'] as String : '',
-      driverVersion: json['driver_version'] is String ? json['driver_version'] as String : '',
-      testedUtc: tested is String ? DateTime.tryParse(tested) : null,
+      mountKey: mountKey,
+      driverInfo: driverInfo,
+      driverVersion: driverVersion,
+      testedUtc: testedUtc,
     );
   }
 }

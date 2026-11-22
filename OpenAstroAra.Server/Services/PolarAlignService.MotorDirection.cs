@@ -27,7 +27,7 @@ namespace OpenAstroAra.Server.Services {
     /// #2081 rows 4 and 5 — the RA turn direction the user sees, and a motor that turns the way it is shown. NINA's Three
     /// Point Polar Alignment turns <c>MoveAxis(Primary, EastDirection ? +rate : −rate)</c> and assumes a positive rate turns
     /// east. ASCOM leaves that sign to the driver (AlpacaBridge #2424), so Polar Align learns it once per mount: a run on a
-    /// mount whose driver (DriverInfo and DriverVersion) has no saved direction first turns the RA axis
+    /// mount with no saved direction for its identity and driver version (#2167: <see cref="MountDriverKey"/>) first turns the RA axis
     /// <see cref="DirectionTestDeg"/> at the slow rate, with the guarded move of every turn (#2067), shown in the confirm
     /// step and counted toward the sweep limit, and saves which way the reading went (profile section
     /// <c>polar_align_motor_direction</c>). A later turn whose reading goes more than <see cref="WrongWayDeg"/> the other way
@@ -54,25 +54,57 @@ namespace OpenAstroAra.Server.Services {
         /// and again before the direction test saves its sign. Null (tests, no repository): the save is never skipped.</summary>
         internal Func<Guid?>? ActiveProfileId { get; set; }
 
-        /// <summary>The mount driver a saved motor direction stands for: its DriverInfo and DriverVersion.</summary>
-        internal sealed record MountDriverKey(string Info, string Version);
-
-        private MountDriverKey ReadMountDriver() {
-            var info = _mount.GetInfo();
-            return new MountDriverKey(info?.DriverInfo ?? string.Empty, info?.DriverVersion ?? string.Empty);
+        /// <summary>#2167 — the mount a saved motor direction stands for: <see cref="Mount"/> is its identity, the key its
+        /// <c>mount_clearance</c> entry uses (<see cref="PolarAlignPreflightEvaluator.MountKey"/>: the Alpaca UniqueID, else
+        /// its name, else <see cref="PolarAlignPreflightEvaluator.UnidentifiedMountKey"/>; blank only with no mount
+        /// connected, a key no saved test stands for and none is saved under), <see cref="Info"/> its driver's DriverInfo
+        /// and <see cref="Version"/> its DriverVersion (both read once per connect; empty when the driver reports none).
+        /// The driver's name is in the key because another driver set up behind the same Alpaca device keeps its UniqueID
+        /// and the bridge's version. A blank DriverInfo and DriverVersion were the whole key before: the daemon never read
+        /// them, so every mount shared one saved direction.</summary>
+        internal sealed record MountDriverKey(string Mount, string Info, string Version) {
+            /// <summary>What a log line names: the mount, and its driver's name and version when they are reported.</summary>
+            public string Identity {
+                get {
+                    var mount = Mount.Length == 0 ? "(no mount connected)" : Mount;
+                    var driver = Info.Length == 0 ? Version : Version.Length == 0 ? Info : $"{Info} {Version}";
+                    return driver.Length == 0 ? mount : $"{mount}, driver {driver}";
+                }
+            }
         }
 
+        /// <summary>The key of the mount <paramref name="info"/> reports. With no mount connected the key is blank (never
+        /// <see cref="PolarAlignPreflightEvaluator.UnidentifiedMountKey"/>, which a mount with no UniqueID and no name
+        /// saves under): no saved test stands for it, and a test is never saved under it.</summary>
+        internal static MountDriverKey MountDriverOf(TelescopeInfo? info) =>
+            new(PolarAlignPreflightEvaluator.MountKey(info) ?? string.Empty,
+                info?.Connected == true ? info.DriverInfo?.Trim() ?? string.Empty : string.Empty,
+                info?.Connected == true ? info.DriverVersion?.Trim() ?? string.Empty : string.Empty);
+
+        private MountDriverKey ReadMountDriver() => MountDriverOf(_mount.GetInfo());
+
         /// <summary>The saved RA motor sign (+1 or −1) when one stands for <paramref name="driver"/>; null otherwise (never
-        /// tested, forgotten, or tested on another driver name or version).</summary>
+        /// tested, forgotten, tested on another mount or driver name or version, or no mount connected).</summary>
         private double? SavedRaMotorSign(MountDriverKey driver) =>
-            _profileStore.GetPolarAlignMotorDirection() is { } saved && saved.IsFor(driver.Info, driver.Version)
+            _profileStore.GetPolarAlignMotorDirection() is { } saved && saved.IsFor(driver.Mount, driver.Info, driver.Version)
                 ? saved.Sign
                 : null;
 
         /// <summary><c>GET /polaralign/motor-direction</c>: the saved test, and whether it stands for the connected mount
-        /// (null when none is connected). Pure, for the endpoint and its tests.</summary>
-        internal static PolarAlignMotorDirectionStateDto MotorDirectionState(PolarAlignMotorDirectionDto? saved, TelescopeInfo? mount) =>
-            new(saved, mount?.Connected == true ? saved is not null && saved.IsFor(mount.DriverInfo, mount.DriverVersion) : null);
+        /// (null when none is connected). A test saved before #2167 has no mount key and stands for no mount: it is sent as
+        /// nothing saved (never a null <c>mount_key</c> the client's strict reader refuses), so the next start tests again.
+        /// Pure, for the endpoint and its tests.</summary>
+        internal static PolarAlignMotorDirectionStateDto MotorDirectionState(PolarAlignMotorDirectionDto? saved, TelescopeInfo? mount) {
+            saved = saved is { MountKey: { } key } && !string.IsNullOrWhiteSpace(key) && saved.DriverInfo is not null
+                    && saved.DriverVersion is not null
+                ? saved
+                : null;
+            if (mount?.Connected != true) {
+                return new(saved, null);
+            }
+            var driver = MountDriverOf(mount);
+            return new(saved, saved is not null && saved.IsFor(driver.Mount, driver.Info, driver.Version));
+        }
 
         /// <summary>#2081 — when no saved RA motor direction stands for the mount's driver (<see cref="RunBand.RaMotorSign"/>
         /// null), turn the RA axis <see cref="DirectionTestDeg"/> before the measurement's first point, with the same
@@ -91,7 +123,7 @@ namespace OpenAstroAra.Server.Services {
             var toward = band.AwaySign >= 0 ? 1.0 : -1.0;
             (double RaDeg, double DecDeg)? from = null;
             LogDirectionTestStarts(DirectionTestDeg, toward > 0 ? PolarAlignDirections.East : PolarAlignDirections.West,
-                driver.Info, driver.Version);
+                driver.Identity);
             var after = await MoveAxisUntilAsync(TelescopeAxes.Primary, toward, DirectionTestDeg,
                 (start, now) => Math.Abs(Wrap180(now.RaDeg - start.RaDeg)), checkDirection: false, gen, ct,
                 beforeMove: start => {
@@ -121,15 +153,19 @@ namespace OpenAstroAra.Server.Services {
                 LogDirectionTestNotSavedProfileSwitched(sign, band.ProfileId, profileNow);
                 return;
             }
-            _profileStore.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(sign, driver.Info, driver.Version, DateTimeOffset.UtcNow));
-            LogDirectionTested(moved, sign, driver.Info, driver.Version);
+            if (driver.Mount.Length == 0) {
+                // No mount was connected when the key was read: a blank key stands for no mount, so nothing is saved.
+                return;
+            }
+            _profileStore.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(sign, driver.Mount, driver.Info, driver.Version, DateTimeOffset.UtcNow));
+            LogDirectionTested(moved, sign, driver.Identity);
         }
 
-        [LoggerMessage(EventId = 4650, Level = LogLevel.Information, Message = "§45 polar-align: no saved RA motor direction for the driver '{DriverInfo}' {DriverVersion} — testing it with a {Degrees:F1}° turn toward the {Direction} (a positive rate assumed east)")]
-        private partial void LogDirectionTestStarts(double degrees, string direction, string driverInfo, string driverVersion);
+        [LoggerMessage(EventId = 4650, Level = LogLevel.Information, Message = "§45 polar-align: no saved RA motor direction for the mount {Mount} — testing it with a {Degrees:F1}° turn toward the {Direction} (a positive rate assumed east)")]
+        private partial void LogDirectionTestStarts(double degrees, string direction, string mount);
 
-        [LoggerMessage(EventId = 4651, Level = LogLevel.Information, Message = "§45 polar-align: the direction test moved the RA reading {MovedDeg:+0.00;-0.00}°: RA motor sign {Sign:+0;-0}, saved for the driver '{DriverInfo}' {DriverVersion}")]
-        private partial void LogDirectionTested(double movedDeg, int sign, string driverInfo, string driverVersion);
+        [LoggerMessage(EventId = 4651, Level = LogLevel.Information, Message = "§45 polar-align: the direction test moved the RA reading {MovedDeg:+0.00;-0.00}°: RA motor sign {Sign:+0;-0}, saved for the mount {Mount}")]
+        private partial void LogDirectionTested(double movedDeg, int sign, string mount);
 
         [LoggerMessage(EventId = 4652, Level = LogLevel.Warning, Message = "§45 polar-align: the direction test found RA motor sign {Sign:+0;-0}, not saved: the active profile changed during it (was {ProfileAtPlan}, now {ProfileNow}); this run turns with it")]
         private partial void LogDirectionTestNotSavedProfileSwitched(int sign, Guid? profileAtPlan, Guid? profileNow);

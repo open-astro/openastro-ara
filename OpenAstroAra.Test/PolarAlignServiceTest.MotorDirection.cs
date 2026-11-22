@@ -75,7 +75,7 @@ namespace OpenAstroAra.Test {
             Assert.That(status.State, Is.EqualTo("checked"), "the run completes: " + mount.Describe());
             var saved = store.GetPolarAlignMotorDirection();
             Assert.That(saved, Is.Not.Null);
-            Assert.That((saved!.Sign, saved.DriverInfo, saved.DriverVersion), Is.EqualTo((-1, mount.DriverInfo, mount.DriverVersion)));
+            Assert.That((saved!.Sign, saved.MountKey, saved.DriverVersion), Is.EqualTo((-1, PolarAlignPreflightEvaluator.UnidentifiedMountKey, mount.DriverVersion)));
             var turns = RaTurns(mount);
             Assert.That(turns, Has.Length.EqualTo(3), "the test move, then the measurement's two turns. " + mount.Describe());
             // The test sent the rate that would turn east on NINA's assumption: this driver turned the true axis west.
@@ -89,7 +89,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void Test_direction_again_while_a_run_is_going_is_refused_and_keeps_the_saved_direction() {
             var store = TenDegreeStore();
-            var saved = new PolarAlignMotorDirectionDto(-1, "AlpacaBridge iOptron", "6.0.0", DateTimeOffset.UtcNow);
+            var saved = new PolarAlignMotorDirectionDto(-1, "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow);
             store.PutPolarAlignMotorDirection(saved);
             var running = new Mock<IPolarAlignService>();
             running.SetupGet(s => s.IsActive).Returns(true);
@@ -218,6 +218,126 @@ namespace OpenAstroAra.Test {
             mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
         }
 
+        // ── #2167: the key is the mount's identity ─────────────────────────────────────────────
+
+        /// <summary>A fake GEM service with a capturing logger and the bench motor rates.</summary>
+        private static PolarAlignService NewGemServiceLogged(FakeGemMount mount, WsRecorder ws, IProfileStore store, CapturingLogger logger) {
+            mount.EventCount = () => ws.Events.Count;
+            var svc = NewServiceOn(NewFake(), new TrueSkySolver(mount), mount, ws, store, logger: logger, motorDirectionSaved: false);
+            svc.AxisFastRateDegPerSec = 30.0;
+            svc.AxisSlowRateDegPerSec = 10.0;
+            return svc;
+        }
+
+        [Test]
+        public async Task A_direction_saved_on_the_blank_driver_key_is_tested_again_and_saved_for_the_mounts_identity() {
+            // Rig night 2026-11-21 (HAE29C, AlpacaBridge 6.0.0~beta2): the daemon never read DriverInfo or DriverVersion, so
+            // the direction was saved for the driver '' ''. That save stands for no mount: the next start tests again.
+            var mount = PolledGemAt(-4.0);
+            mount.DeviceId = "fake-gem-unique-id";
+            mount.DriverVersion = "6.0.0~beta2";
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(mount.DeviceId));
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, string.Empty, string.Empty, string.Empty, DateTimeOffset.UtcNow));
+            var logger = new CapturingLogger();
+            using var svc = NewGemServiceLogged(mount, ws, store, logger);
+
+            var plan = await FineRunWithTestToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg), "the blank-keyed save does not stand");
+            var saved = store.GetPolarAlignMotorDirection()!;
+            Assert.That((saved.Sign, saved.MountKey, saved.DriverVersion), Is.EqualTo((1, "fake-gem-unique-id", "6.0.0~beta2")));
+            var line = logger.Entries.Single(e => e.EventId == 4651).Message;
+            Assert.That(line, Does.Contain("fake-gem-unique-id, driver 6.0.0~beta2"));
+            Assert.That(line, Does.Not.Contain("''").And.Not.Contain("\"\""));
+            var next = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(next.DirectionTestDeg, Is.Zero, "tested once for this mount and version");
+            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
+        }
+
+        [Test]
+        public async Task A_mount_whose_driver_reports_no_version_is_keyed_by_its_name_alone_and_tested_once() {
+            var mount = PolledGemAt(-4.0);
+            mount.DeviceId = string.Empty; // no Alpaca UniqueID: the name is the identity, as for mount_clearance
+            mount.Name = "iOptron HAE29C";
+            mount.DriverVersion = string.Empty;
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(mount.Name));
+            var logger = new CapturingLogger();
+            using var svc = NewGemServiceLogged(mount, ws, store, logger);
+
+            var plan = await FineRunWithTestToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg));
+            var saved = store.GetPolarAlignMotorDirection()!;
+            Assert.That((saved.MountKey, saved.DriverVersion), Is.EqualTo(("iOptron HAE29C", string.Empty)));
+            foreach (var id in new[] { 4650, 4651 }) {
+                var line = logger.Entries.Single(e => e.EventId == id).Message;
+                Assert.That(line, Does.Contain("iOptron HAE29C").And.Not.Contain("driver ").And.Not.Contain("\"\""), line);
+            }
+            var next = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
+            Assert.That(next.DirectionTestDeg, Is.Zero, "the name alone keys it; no version is not a new version");
+            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
+        }
+
+        [Test]
+        public async Task A_direction_saved_for_another_driver_behind_the_same_Alpaca_device_is_tested_again() {
+            // An AlpacaBridge device edited to another vendor driver keeps its UniqueID, and the bridge's version is the
+            // same: the driver's name is what tells the two apart.
+            var mount = PolledGemAt(-4.0);
+            mount.DeviceId = "fake-gem-unique-id";
+            mount.DriverInfo = "AlpacaBridge iOptron";
+            mount.DriverVersion = "6.0.0";
+            var ws = new WsRecorder();
+            var store = TenDegreeStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(mount.DeviceId));
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(-1, "fake-gem-unique-id", "AlpacaBridge Sky-Watcher", "6.0.0", DateTimeOffset.UtcNow));
+            var logger = new CapturingLogger();
+            using var svc = NewGemServiceLogged(mount, ws, store, logger);
+
+            var plan = await FineRunWithTestToAdjustingAsync(svc).ConfigureAwait(false);
+            await svc.StopAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg), "another driver's save does not stand");
+            var saved = store.GetPolarAlignMotorDirection()!;
+            Assert.That((saved.Sign, saved.MountKey, saved.DriverInfo, saved.DriverVersion),
+                Is.EqualTo((1, "fake-gem-unique-id", "AlpacaBridge iOptron", "6.0.0")));
+            Assert.That(logger.Entries.Single(e => e.EventId == 4651).Message,
+                Does.Contain("fake-gem-unique-id, driver AlpacaBridge iOptron 6.0.0"));
+            mount.AssertCommon(LastEventIndex(ws, WsEventCatalog.PolarAlignStopped), CounterweightLimitDeg);
+        }
+
+        [Test]
+        public void With_no_mount_connected_the_key_is_blank_and_no_saved_direction_stands_for_it() {
+            // A mount with no UniqueID and no name saves under unidentified-mount; a mount read as not connected must not
+            // take that save (nor save under it).
+            var key = PolarAlignService.MountDriverOf(new TelescopeInfo { Connected = false, DriverVersion = "6.0.0" });
+            var unidentified = new PolarAlignMotorDirectionDto(1, PolarAlignPreflightEvaluator.UnidentifiedMountKey,
+                string.Empty, string.Empty, DateTimeOffset.UtcNow);
+
+            Assert.That((key.Mount, key.Info, key.Version), Is.EqualTo((string.Empty, string.Empty, string.Empty)));
+            Assert.That(unidentified.IsFor(key.Mount, key.Info, key.Version), Is.False);
+            Assert.That(PolarAlignService.MountDriverOf(null).Mount, Is.Empty);
+        }
+
+        [Test]
+        public void A_saved_direction_with_a_blank_mount_key_stands_for_no_mount() {
+            // A test saved before #2167 reads back with no mount_key (its driver_info is ignored).
+            var older = System.Text.Json.JsonSerializer.Deserialize(
+                "{\"sign\":1,\"driver_info\":\"\",\"driver_version\":\"\",\"tested_utc\":\"2026-11-21T03:00:00Z\"}",
+                OpenAstroAra.Server.AraJsonSerializerContext.Default.PolarAlignMotorDirectionDto)!;
+            var blank = new PolarAlignMotorDirectionDto(1, " ", string.Empty, string.Empty, DateTimeOffset.UtcNow);
+
+            Assert.That(older.IsFor(PolarAlignPreflightEvaluator.UnidentifiedMountKey, string.Empty, string.Empty), Is.False);
+            Assert.That(older.IsFor(null, null, null), Is.False, "a blank driver name and version are never the whole key");
+            Assert.That(blank.IsFor(" ", string.Empty, string.Empty), Is.False);
+            Assert.That(new PolarAlignMotorDirectionDto(1, "m", string.Empty, string.Empty, DateTimeOffset.UtcNow).IsFor("m", null, null), Is.True);
+        }
+
         // Site latitude and the driver's sign → the direction the confirm step shows (east_direction unset: east in the north,
         // west in the south). East means the true hour angle falls, west that it grows, whichever way the driver's rate runs.
         [TestCase(45.0, 1.0)]
@@ -303,7 +423,7 @@ namespace OpenAstroAra.Test {
 
             var plan = await svc.GetStartPlanAsync(PolarAlignStages.Fine, CancellationToken.None).ConfigureAwait(false);
             Assert.That(plan.DirectionTestDeg, Is.EqualTo(PolarAlignService.DirectionTestDeg));
-            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, mount.DriverInfo, mount.DriverVersion, DateTimeOffset.UtcNow));
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(1, PolarAlignPreflightEvaluator.UnidentifiedMountKey, mount.DriverInfo, mount.DriverVersion, DateTimeOffset.UtcNow));
             var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartAsync(PolarAlignStages.Fine,
                 new PolarAlignStartConfirmation(plan.Direction, plan.NewOrigin, DirectionTest: true), null, CancellationToken.None));
 
@@ -373,14 +493,14 @@ namespace OpenAstroAra.Test {
         [Test]
         public void The_motor_direction_endpoint_says_whether_the_saved_test_stands_for_the_connected_mounts_driver() {
             var store = new InMemoryProfileStore();
-            var info = new TelescopeInfo { Connected = true, DriverInfo = "AlpacaBridge iOptron", DriverVersion = "6.0.0" };
+            var info = new TelescopeInfo { Connected = true, DeviceId = "hae29c-unique-id", DriverVersion = "6.0.0" };
             var mount = new Mock<ITelescopeMediator>();
             mount.Setup(m => m.GetInfo()).Returns(() => info);
             var services = new Mock<IServiceProvider>();
             services.Setup(s => s.GetService(typeof(ITelescopeMediator))).Returns(mount.Object);
 
             var never = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
-            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(-1, "AlpacaBridge iOptron", "6.0.0", DateTimeOffset.UtcNow));
+            store.PutPolarAlignMotorDirection(new PolarAlignMotorDirectionDto(-1, "hae29c-unique-id", string.Empty, "6.0.0", DateTimeOffset.UtcNow));
             var same = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
             info.DriverVersion = "6.1.0";
             var upgraded = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
@@ -391,6 +511,31 @@ namespace OpenAstroAra.Test {
             Assert.That((same.Saved!.Sign, same.MatchesConnectedMount), Is.EqualTo((-1, (bool?)true)));
             Assert.That(upgraded.MatchesConnectedMount, Is.False, "another driver version: the next start tests again");
             Assert.That(none.MatchesConnectedMount, Is.Null, "no mount connected");
+        }
+
+        [Test]
+        public void The_motor_direction_endpoint_sends_a_test_saved_before_2167_as_nothing_saved() {
+            // A test saved before #2167 reads back with no mount_key: the client's strict reader would refuse a null one.
+            var older = System.Text.Json.JsonSerializer.Deserialize(
+                "{\"sign\":1,\"driver_info\":\"\",\"driver_version\":\"\",\"tested_utc\":\"2026-11-21T03:00:00Z\"}",
+                OpenAstroAra.Server.AraJsonSerializerContext.Default.PolarAlignMotorDirectionDto)!;
+            var store = new InMemoryProfileStore();
+            store.PutPolarAlignMotorDirection(older);
+            var info = new TelescopeInfo { Connected = true, DeviceId = "hae29c-unique-id", DriverVersion = "6.0.0" };
+            var mount = new Mock<ITelescopeMediator>();
+            mount.Setup(m => m.GetInfo()).Returns(() => info);
+            var services = new Mock<IServiceProvider>();
+            services.Setup(s => s.GetService(typeof(ITelescopeMediator))).Returns(mount.Object);
+
+            var connected = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
+            info.Connected = false;
+            var none = EquipmentEndpoints.PolarAlignMotorDirection(store, services.Object);
+
+            Assert.That((connected.Saved, connected.MatchesConnectedMount), Is.EqualTo(((PolarAlignMotorDirectionDto?)null, (bool?)false)));
+            Assert.That((none.Saved, none.MatchesConnectedMount), Is.EqualTo(((PolarAlignMotorDirectionDto?)null, (bool?)null)));
+            var json = System.Text.Json.JsonSerializer.Serialize(connected,
+                OpenAstroAra.Server.AraJsonSerializerContext.Default.PolarAlignMotorDirectionStateDto);
+            Assert.That(json, Does.Not.Contain("mount_key"), json);
         }
     }
 }

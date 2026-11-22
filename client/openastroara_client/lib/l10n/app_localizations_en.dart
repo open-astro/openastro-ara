@@ -7364,17 +7364,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarMotorDirection => 'RA motor direction';
 
   @override
-  String polarMotorDirectionSaved(
-    String driver,
-    String version,
-    String direction,
-  ) {
-    return 'Tested on $driver $version: the motor\'s positive speed turns RA $direction.';
+  String polarMotorDirectionSaved(String mount, String direction) {
+    return 'Tested on $mount: the motor\'s positive speed turns RA $direction.';
   }
 
   @override
-  String polarMotorDirectionOtherDriver(String driver, String version) {
-    return 'Tested on another driver ($driver $version): the next start tests it again with a 0.5° turn.';
+  String polarMotorDirectionOtherDriver(String mount) {
+    return 'Tested on another mount or driver ($mount): the next start tests it again with a 0.5° turn.';
+  }
+
+  @override
+  String polarMotorDirectionMountDriver(String mount, String driver) {
+    return '$mount, driver $driver';
   }
 
   @override
