@@ -41,6 +41,7 @@ namespace OpenAstroAra.Test {
         private const string NotRestartedTitle = "Guiding did not restart — sequence stays paused";
         private static readonly string[] RestartThenResume = ["restart", "resume"];
         private static readonly string[] RestartRestartResume = ["restart", "restart", "resume"];
+        private static readonly string[] CheckThenRestartThenResume = ["camera checked", "restart", "resume"];
 
         private sealed class Rig : IDisposable {
             public readonly Mock<ISequencerService> Sequencer = new();
@@ -50,6 +51,7 @@ namespace OpenAstroAra.Test {
             public readonly Guid RunId = Guid.NewGuid();
             public readonly HeadlessProfileService Profile = new();
             public readonly FaultReactionService Reaction;
+            public readonly Mock<IAlpacaManagementClient> Alpaca = new();
             public bool RestartSucceeds = true;
             public Func<double, Task>? OnRestart; // the fake's side of a restart: app state Guiding, a guide step of that distance
             public Func<int, bool> Settles = _ => true; // whether restart n (from 1) brings guiding back and settled
@@ -91,7 +93,7 @@ namespace OpenAstroAra.Test {
                     new GuiderRecoveryCoordinator(Mock.Of<IGuiderProcessSupervisor>(), Mock.Of<INotificationService>(),
                         Mock.Of<IDiagnosticsService>(), NullLogger<GuiderRecoveryCoordinator>.Instance),
                     NullLogger<GuiderService>.Instance, Mock.Of<IGuiderProcessSupervisor>(), ws.Object,
-                    profiles.Object, () => Sequencer.Object, notifications.Object, hub) {
+                    profiles.Object, () => Sequencer.Object, notifications.Object, hub, alpaca: Alpaca.Object) {
                     GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(5),
                     GuidingRestoreReconcileWait = TimeSpan.FromSeconds(5),
                 };
@@ -365,6 +367,43 @@ namespace OpenAstroAra.Test {
             Assert.That(await WaitUntilAsync(() => rig.Restarts() == 1).ConfigureAwait(false), Is.True, "the restart never ran");
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
             Assert.That((rig.Titled(NotRestartedTitle), rig.Resumed()), Is.EqualTo((0, 0)), "the user owns the run: no alert, no resume");
+        }
+
+        [Test]
+        public async Task The_guiding_restart_waits_for_the_reconnects_guide_camera_check() {
+            // #2169 review — the reconnect re-checks the guide camera (#1362); guiding starts after it, never
+            // while the camera may still be re-picked.
+            using var rig = new Rig();
+            rig.Profile.ActiveProfile.GuiderSettings.GuiderCamera = "Alpaca Camera [192.0.2.10:6800/1]";
+            var hold = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var armed = false; // the reconnect's checks are held; the first connect's are not
+            var checks = 0;
+            rig.Alpaca.Setup(a => a.GetConfiguredDevicesAsync("192.0.2.10", 6800, It.IsAny<CancellationToken>()))
+                .Returns(async (string _, int _, CancellationToken _) => {
+                    if (Volatile.Read(ref armed)) {
+                        Interlocked.Increment(ref checks);
+                        await hold.Task.ConfigureAwait(false);
+                        lock (rig.Steps) {
+                            if (!rig.Steps.Contains("camera checked")) {
+                                rig.Steps.Add("camera checked");
+                            }
+                        }
+                    }
+                    return (IReadOnlyDictionary<string, AlpacaConfiguredDevice>)new Dictionary<string, AlpacaConfiguredDevice>();
+                });
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+            Volatile.Write(ref armed, true);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => Volatile.Read(ref checks) > 0).ConfigureAwait(false), Is.True, "the reconnect never re-checked the camera");
+            // A restart that does not wait would land in this window; one that waits stays put until the check ends.
+            await WaitUntilAsync(() => rig.Restarts() > 0, timeoutMs: 2_000).ConfigureAwait(false);
+            hold.SetResult();
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(CheckThenRestartThenResume), "the camera check ends before guiding starts");
+            }
         }
     }
 }
