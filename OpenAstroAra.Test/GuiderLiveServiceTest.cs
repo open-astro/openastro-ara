@@ -159,6 +159,49 @@ namespace OpenAstroAra.Test {
             Assert.That(GuiderLiveService.MapHistory(Newtonsoft.Json.Linq.JObject.Parse("{}"), now), Is.Empty);
         }
 
+        // Guider #228 changed get_guide_history: "t" was a %g float (6 digits, hours off) and ra_dir/dec_dir
+        // were always ""; now "t" is integer ms and the letters are N/S/E/W when that axis pulsed. Ara reads both.
+        [Test]
+        public void History_from_an_old_guider_with_float_times_and_empty_directions_still_maps() {
+            const long now = 1_795_300_100_000;
+            var raw = Newtonsoft.Json.Linq.JObject.Parse(@"{
+                ""pixel_scale"": 4.98,
+                ""points"": [
+                    { ""t"": 1.7953e+12, ""ra"": 0.2, ""dec"": -0.1, ""ra_dur"": 120, ""ra_dir"": """", ""dec_dur"": 746, ""dec_dir"": """", ""snr"": 41.5, ""mass"": 12000 },
+                    { ""t"": 1.7953e+12, ""ra"": -0.3, ""dec"": 0.4, ""ra_dur"": 0, ""ra_dir"": """", ""dec_dur"": 0, ""dec_dir"": """", ""snr"": 40.1, ""mass"": 11800 }
+                ]
+            }");
+            var steps = GuiderLiveService.MapHistory(raw, now);
+            Assert.That(steps, Has.Count.EqualTo(2));
+            Assert.That(steps[0].AgeSec, Is.EqualTo(100), "a float Unix-ms time is still read as a time");
+            Assert.That(steps[0].RaDurationMs, Is.EqualTo(120), "no letter: the pulse keeps its plain size");
+            Assert.That(steps[0].DecDurationMs, Is.EqualTo(746));
+            Assert.That(steps[1].RaDurationMs, Is.EqualTo(0));
+            Assert.That(steps[0].RaArcsec, Is.EqualTo(Math.Round(0.2 * 4.98, 3)));
+        }
+
+        [Test]
+        public void History_from_a_new_guider_with_integer_ms_and_all_four_letters_maps_signed_pulses() {
+            const long now = 1_795_296_225_000;
+            var raw = Newtonsoft.Json.Linq.JObject.Parse(@"{
+                ""pixel_scale"": 4.98,
+                ""points"": [
+                    { ""t"": 1795296221123, ""ra"": 0.2, ""dec"": -0.1, ""ra_dur"": 120, ""ra_dir"": ""E"", ""dec_dur"": 746, ""dec_dir"": ""N"", ""snr"": 41.5, ""mass"": 12000 },
+                    { ""t"": 1795296223123, ""ra"": -0.3, ""dec"": 0.4, ""ra_dur"": 90, ""ra_dir"": ""W"", ""dec_dur"": 200, ""dec_dir"": ""S"", ""snr"": 40.1, ""mass"": 11800 },
+                    { ""t"": 1795296224123, ""ra"": 0.0, ""dec"": 0.0, ""ra_dur"": 0, ""ra_dir"": """", ""dec_dur"": 0, ""dec_dir"": """", ""snr"": 40.0, ""mass"": 11700 }
+                ]
+            }");
+            var steps = GuiderLiveService.MapHistory(raw, now);
+            Assert.That(steps.Select(x => x.AgeSec), Is.EqualTo(NewGuiderAges), "exact ages from integer ms");
+            Assert.That(steps[0].RaDurationMs, Is.EqualTo(-120), "East is negative");
+            Assert.That(steps[0].DecDurationMs, Is.EqualTo(746), "North is positive");
+            Assert.That(steps[1].RaDurationMs, Is.EqualTo(90), "West is positive");
+            Assert.That(steps[1].DecDurationMs, Is.EqualTo(-200), "South is negative");
+            Assert.That(steps[2].RaDurationMs, Is.EqualTo(0), "no pulse, no letter");
+        }
+
+        private static readonly double[] NewGuiderAges = [3.877, 1.877, 0.877];
+
         [Test]
         public async Task Without_a_guider_the_history_is_empty() {
             using var guider = NewGuiderService();
