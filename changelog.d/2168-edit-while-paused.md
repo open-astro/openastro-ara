@@ -1,0 +1,3 @@
+### Fixed
+
+- **A setting changed during a run is used for the rest of it** (sequencer, #2168). Changing Take Exposure's time (or gain, binning, a loop's count, a trigger's setting) while the run is going or paused now sticks: the row shows the new value, Save is available, and Save or Resume sends it to the running plan. Frames already taken and the frame in progress keep their old settings; every frame after that uses the new ones, as in NINA. Before, the change was dropped with only a brief message, the editor still showed it, and the run kept the old value. Adding or removing a loop rule or trigger while the run is going still needs the run to finish, and says so.
