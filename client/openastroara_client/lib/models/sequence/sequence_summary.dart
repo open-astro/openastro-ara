@@ -208,6 +208,11 @@ class SequenceDetail {
   final Map<String, dynamic> body;
   final String? templateOrigin;
 
+  /// The stored record's `modified_utc`, verbatim (#2168): a live setting edit
+  /// sends it back so the daemon can tell when its positions came from an
+  /// older copy. Kept as the daemon's string, so no precision is lost.
+  final String? modifiedUtc;
+
   // [body] is wrapped DEEPLY unmodifiable so it can't be mutated at any depth —
   // it's a true immutable value (edits produce a NEW body via copyWith). Not
   // const because the wrap isn't a const expression.
@@ -217,6 +222,7 @@ class SequenceDetail {
     this.description,
     Map<String, dynamic> body = const <String, dynamic>{},
     this.templateOrigin,
+    this.modifiedUtc,
   }) : body = _deepUnmodifiableBody(body);
 
   // Internal fast path. PRECONDITION: [body] MUST already be deeply-unmodifiable
@@ -229,6 +235,7 @@ class SequenceDetail {
     required this.description,
     required this.body,
     required this.templateOrigin,
+    required this.modifiedUtc,
   });
 
   factory SequenceDetail.fromJson(Map<String, dynamic> json) => SequenceDetail(
@@ -239,6 +246,7 @@ class SequenceDetail {
             ? json['body'] as Map<String, dynamic>
             : const <String, dynamic>{},
         templateOrigin: _str(json['template_origin']),
+        modifiedUtc: _str(json['modified_utc']),
       );
 
   // NOTE: like the PATCH payload, a null arg means "keep current" — there's no
@@ -254,6 +262,7 @@ class SequenceDetail {
               description: description ?? this.description,
               body: this.body,
               templateOrigin: templateOrigin,
+              modifiedUtc: modifiedUtc,
             )
           : SequenceDetail(
               id: id,
@@ -261,6 +270,7 @@ class SequenceDetail {
               description: description ?? this.description,
               body: body,
               templateOrigin: templateOrigin,
+              modifiedUtc: modifiedUtc,
             );
 
   // DeepCollectionEquality (not mapEquals): the NINA body is deeply nested JSON,

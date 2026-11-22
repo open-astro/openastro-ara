@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:openastroara/models/sequence/sequence_node.dart';
 import 'package:openastroara/models/sequence/sequence_summary.dart';
 import 'package:openastroara/models/sequence/sequence_share_export.dart';
+import 'package:openastroara/models/sequence/nina_dom.dart';
 import 'package:openastroara/services/sequence_api.dart';
 import 'package:openastroara/state/sequencer/sequence_list_state.dart';
 import 'package:openastroara/widgets/sequencer/sequence_new_dialog.dart';
@@ -22,6 +23,10 @@ class _NewClient implements SequenceClient {
       throw UnimplementedError();
   @override
   Future<SequenceDetail> moveRunItem(String id, List<int> path, int newIndex) =>
+      throw UnimplementedError();
+  @override
+  Future<SequenceDetail> setRunFields(String id, List<FieldChange> changes,
+          {String? baseModifiedUtc}) =>
       throw UnimplementedError();
 
   @override

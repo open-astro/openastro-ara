@@ -62,7 +62,8 @@ public interface ISequenceService {
 /// <summary>§38.9 — outcome of a live mid-run edit, mapped by the endpoint:
 /// <c>Applied</c> → 200; <c>NoActiveRun</c> → 409 (edit the sequence normally);
 /// <c>RunNotMutable</c> → 409 (run winding down / terminal); <c>ItemAlreadyStarted</c>
-/// → 409; <c>InvalidPath</c>/<c>InvalidItem</c> → 422; <c>PersistFailed</c> → 500.</summary>
+/// → 409; <c>InvalidPath</c>/<c>InvalidItem</c> → 422; <c>PersistFailed</c> → 500;
+/// <c>PlanChanged</c> → 409 (the client's copy is older than the stored plan).</summary>
 public enum SequenceLiveEditOutcome {
     Applied,
     NoActiveRun,
@@ -71,6 +72,7 @@ public enum SequenceLiveEditOutcome {
     InvalidPath,
     InvalidItem,
     PersistFailed,
+    PlanChanged,
 }
 
 /// <summary>§38.9 — live-edit result. <c>Sequence</c> is the updated stored dto on
@@ -221,6 +223,11 @@ public interface ISequencerService {
     /// <summary>§38.9 — reorder a not-yet-started item within its parent, to a
     /// position strictly after the parent's last started item.</summary>
     Task<SequenceLiveEditResult> MoveRunItemAsync(Guid id, SequenceRunItemMoveRequestDto request, string? idempotencyKey, CancellationToken ct);
+
+    /// <summary>#2168 — change settings (exposure time, a loop's count, …) on the live run and
+    /// the stored body. Steps that start later use the new values; the frame in hand keeps its
+    /// own, and run counters (frames taken, loops done) are never written. All-or-nothing.</summary>
+    Task<SequenceLiveEditResult> SetRunFieldsAsync(Guid id, SequenceRunFieldsRequestDto request, string? idempotencyKey, CancellationToken ct);
 }
 
 /// <summary>Templates per §38.6 / §38.7 — built-ins + user-saved.</summary>
