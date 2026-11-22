@@ -30,28 +30,23 @@ namespace OpenAstroAra.Server.Services {
             PolarAlignSettingsDto Settings,
             (PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)? Start);
 
-        /// <summary>The list for a motor start (<see cref="GetPreflightAsync(string?, bool, CancellationToken)"/>).</summary>
-        public Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct) =>
-            GetPreflightAsync(stage, handTurn: false, ct);
-
         /// <inheritdoc />
-        /// <remarks>Takes no <c>_opLock</c>, like <see cref="GetStartPlanAsync(string?, bool, CancellationToken)"/>: a list
+        /// <remarks>Takes no <c>_opLock</c>, like <see cref="GetStartPlanAsync(string?, CancellationToken)"/>: a list
         /// read during a Start or a Stop must not wait behind it (the Start card would hang through a 15 s unwind). That
         /// holds only while <see cref="EvaluatePreflightAsync"/> reads and never writes: the mount, the profile, the mount
         /// clock gate and the session's sweep origin (under <c>_gate</c>). A check that writes the mount or the routine's
         /// state belongs in the Start under the lock, not in the list.</remarks>
-        public async Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, bool handTurn, CancellationToken ct) {
+        public async Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct) {
             if (stage is not null && !PolarAlignStages.IsValid(stage)) {
                 throw new ArgumentException($"unknown polar-align stage '{stage}' — use coarse, fine or check");
             }
-            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, handTurn, ct).ConfigureAwait(false);
+            var preflight = await EvaluatePreflightAsync(stage ?? PolarAlignStages.Fine, ct).ConfigureAwait(false);
             return preflight.Result.Dto;
         }
 
         /// <summary>#2068 (ARA-18) — the pre-flight list for a start at <paramref name="stage"/>
-        /// (<see cref="PolarAlignPreflightEvaluator"/>): the same checks the app's Start card shows. Never throws.
-        /// <paramref name="handTurn"/>: the start turns RA by hand, so an unconfirmed clearance only warns.</summary>
-        private async Task<StartPreflight> EvaluatePreflightAsync(string stage, bool handTurn, CancellationToken ct) {
+        /// (<see cref="PolarAlignPreflightEvaluator"/>): the same checks the app's Start card shows. Never throws.</summary>
+        private async Task<StartPreflight> EvaluatePreflightAsync(string stage, CancellationToken ct) {
             PolarAlignSettingsDto? settings = null;
             (PolarAlignStartPlanDto Plan, RunBand Band, SweepPlan Sweep)? start = null;
             var inputs = new PolarAlignPreflightInputs(
@@ -67,7 +62,6 @@ namespace OpenAstroAra.Server.Services {
                     return planned.Plan;
                 },
                 AlignerPresent: _alignerSource is { } aligners ? () => aligners.Current() is not null : null,
-                HandTurn: handTurn,
                 AlignmentMode: () => _motionControl.MountAlignmentMode,
                 CanMovePrimaryAxis: () => _motionControl.CanMovePrimaryAxis);
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, ct).ConfigureAwait(false);

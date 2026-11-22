@@ -98,10 +98,10 @@ namespace OpenAstroAra.Server.Services {
         /// guarded move as every turn (<see cref="MoveAxisUntilAsync"/>: steady first, the matched slow rate, the stall,
         /// the time bound, the Dec and pier-side checks, the arrival check), a rate that assumes NINA's positive = east, and
         /// progress counted either way. The reading says which way the driver turns: the run turns with that sign, and it is
-        /// saved for the driver. The sweep limit is checked first for the test going either way. Nothing happens on a
-        /// hand-turn run (the user turns RA) or when a saved sign stands.</summary>
+        /// saved for the driver. The sweep limit is checked first for the test going either way. Nothing happens when a
+        /// saved sign stands.</summary>
         private async Task TestRaMotorDirectionIfOwedAsync(RunBand band, int gen, CancellationToken ct) {
-            if (band.HandTurn || band.RaMotorSign is not null) {
+            if (band.RaMotorSign is not null) {
                 return;
             }
             var driver = band.Driver ?? ReadMountDriver();

@@ -142,20 +142,6 @@ namespace OpenAstroAra.Test {
             Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
         }
 
-        // #2083 — the user chose to turn RA by hand in the confirm step: the body's hand_turn reaches the service with it.
-        [TestCase(true)]
-        [TestCase(false)]
-        public async Task A_start_body_carries_the_hand_turn_choice_the_user_confirmed(bool handTurn) {
-            var accepted = new OperationAcceptedDto(Guid.NewGuid(), "polar-align.start", DateTimeOffset.UtcNow, null);
-            var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.StartAsync(PolarAlignStages.Fine, new PolarAlignStartConfirmation("east", true, handTurn), null, It.IsAny<CancellationToken>())).ReturnsAsync(accepted);
-
-            var result = await EquipmentEndpoints.PolarAlignStartAsync(svc.Object,
-                new PolarAlignStartRequestDto(PolarAlignStages.Fine, true, "east", true, HandTurn: handTurn), null, CancellationToken.None);
-
-            Assert.That((result as Accepted<OperationAcceptedDto>)?.Value, Is.SameAs(accepted));
-        }
-
         // ADR 0022 — the parked and unconfirmed refusals leave the endpoint for the one Refusal handler, which answers with
         // their reason; the endpoint's own 409 catch would drop it.
         [Test]
@@ -173,10 +159,10 @@ namespace OpenAstroAra.Test {
         public async Task The_start_plan_comes_back_200_and_an_unknown_stage_is_400() {
             var plan = new PolarAlignStartPlanDto(PolarAlignStages.Check, PolarAlignDirections.West, 10.0, 2, 20.0);
             var svc = new Mock<IPolarAlignService>();
-            svc.Setup(s => s.GetStartPlanAsync(PolarAlignStages.Check, false, It.IsAny<CancellationToken>())).ReturnsAsync(plan);
+            svc.Setup(s => s.GetStartPlanAsync(PolarAlignStages.Check, It.IsAny<CancellationToken>())).ReturnsAsync(plan);
 
-            var ok = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, PolarAlignStages.Check, handTurn: false, CancellationToken.None);
-            var bad = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, "sideways", handTurn: false, CancellationToken.None);
+            var ok = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, PolarAlignStages.Check, CancellationToken.None);
+            var bad = await EquipmentEndpoints.PolarAlignStartPlanAsync(svc.Object, "sideways", CancellationToken.None);
 
             Assert.That((ok as Ok<PolarAlignStartPlanDto>)?.Value, Is.SameAs(plan));
             Assert.That(ProblemStatusOf(bad), Is.EqualTo(StatusCodes.Status400BadRequest));
