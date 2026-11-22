@@ -1270,6 +1270,25 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
+        public async Task A_guided_link_loss_pause_stops_the_frame_but_no_later_daemon_pause_adopts_it() {
+            // #2169 — the guider asks for the frame stop without the star-lost watch's adoptable custody.
+            var id = Guid.NewGuid();
+            var svc = BuildService(id, BuildBody(c => {
+                c.Items.Add(new WaitForTimeSpan { Time = 600 });
+            }), new RecordingWsBroadcaster());
+            await svc.StartAsync(id, StartReq, null, CancellationToken.None);
+            await WaitForInstructionInFlightAsync(svc, id, 0);
+
+            Assert.That(await svc.PauseActiveRunsAsync(adoptable: false, interruptFrames: true, CancellationToken.None), Is.EquivalentTo(new[] { id }));
+            Assert.That(svc.PauseInterruptsFrame(id), Is.True, "the guided link-loss pause stops the frame");
+            await WaitForStateAsync(svc, id, SequenceRunState.Paused);
+            Assert.That(await svc.PauseActiveRunsAsync(CancellationToken.None), Is.Empty, "the pause is not adoptable");
+
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
+        }
+
+        [Test]
         public async Task DaemonPausedRunsAsync_drops_a_run_the_user_re_paused_or_stopped() {
             var id = Guid.NewGuid();
             var svc = BuildService(id, BuildBody(c => {
