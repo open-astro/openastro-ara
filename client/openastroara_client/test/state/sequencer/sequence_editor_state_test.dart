@@ -766,6 +766,38 @@ void main() {
       expect(s.isDirty, isTrue, reason: 'still to be saved');
     });
 
+    test("a target's coordinates can't be changed while the run is going",
+        () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      final before = c.read(sequenceEditorProvider)!.body;
+      n.setNodeField(const [3], 'Target', {r'$type': 'X.InputTarget', 'TargetName': 'M31'});
+      expect(identical(c.read(sequenceEditorProvider)!.body, before), isTrue);
+      expect(c.read(liveEditNoticeProvider),
+          "Target can't be changed while the run is going. Stop the run to change it.");
+    });
+
+    test('a filter change while the run is going is kept for Save', () async {
+      final c = liveContainer();
+      final n = await threeCtrl(c);
+      n.load(SequenceDetail(
+          id: 'seq-1',
+          body: setField(threeTargets(), const [0], 'Filter', buildFilterInfo('L'))));
+      n.setNodeField(const [0], 'Filter', buildFilterInfo('Ha'));
+      expect(nodeAt(c.read(sequenceEditorProvider)!.body, const [0])!['Filter'],
+          buildFilterInfo('Ha'));
+      expect(c.read(liveEditNoticeProvider), isNull);
+    });
+
+    test('undo puts back a setting changed while the run is going', () async {
+      final c = liveContainer();
+      final n = await liveCtrl(c);
+      n.setNodeField(const [1, 0], 'ExposureTime', 0.0);
+      expect(n.canUndo, isTrue, reason: 'a refused value is never a trap');
+      n.undo();
+      expect(c.read(sequenceEditorProvider)!.isDirty, isFalse);
+    });
+
     test('cross-parent drag is refused; same-parent reorder is sent', () async {
       final c = liveContainer();
       final n = await liveCtrl(c);

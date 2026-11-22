@@ -804,8 +804,10 @@ Future<void> _validate(BuildContext context, WidgetRef ref) async {
 void _deleteSelectedItem(
     BuildContext context, WidgetRef ref, NodePath path, String label) {
   final notifier = ref.read(sequenceEditorProvider.notifier);
+  // A live delete goes to the running plan: nothing to undo locally.
+  final live = notifier.liveRunActive;
   notifier.removeNode(path);
-  if (!notifier.canUndo) return;
+  if (live || !notifier.canUndo) return;
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text('Deleted $label'),
     // The default action colour is near-white on the light snackbar.

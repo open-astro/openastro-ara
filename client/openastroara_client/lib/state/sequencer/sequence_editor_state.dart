@@ -102,8 +102,10 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   // (per-keystroke snapshots would make ⌘Z a character-eraser).
   String? _lastCoalesceKey;
 
-  bool get canUndo => !_liveRunActive && _undoStack.isNotEmpty;
-  bool get canRedo => !_liveRunActive && _redoStack.isNotEmpty;
+  // Undo works in live mood too (#2168): it only steps back the editor's own
+  // unsaved edits, so a setting the daemon refuses can always be put back.
+  bool get canUndo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
 
   // ── §38.9 live mid-run editing ────────────────────────────────────────────
   // While the LOADED sequence has an active run, structural edits (insert /
@@ -367,6 +369,30 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   static const String _busyNotice =
       'Hold on — the previous change is still being applied.';
 
+  /// #2168 — while the run is going the daemon takes plain values (numbers,
+  /// text, on/off, choices), a binning and a Switch Filter's filter. Other
+  /// object settings (a target and its coordinates, a time source, lists) are
+  /// read-only until the run ends: refused here with a notice, so the edit is
+  /// never kept only to be refused at Save or Resume.
+  bool _refuseLiveValue(String key, Object? old, Object? value) {
+    if (!_liveRunActive) return false;
+    bool settable(Object? v) {
+      if (v is List) return false;
+      if (v is! Map) return true;
+      // A reference to a filter another item also uses: the new value says
+      // what it becomes.
+      if (v.containsKey(r'$ref')) return true;
+      final type = v[r'$type'];
+      return type is String &&
+          (type.contains('.FilterInfo,') || type.contains('.BinningMode,'));
+    }
+
+    if (settable(old) && settable(value)) return false;
+    _notice("$key can't be changed while the run is going. Stop the run to "
+        'change it.');
+    return true;
+  }
+
   static const String _liveStructureNotice =
       'While the run is going you can change settings and add, remove or '
       'reorder upcoming items. Adding or removing a loop rule or trigger needs '
@@ -383,14 +409,8 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     // sends it to the running plan (#2168). Anything else (adding or removing
     // a loop rule or trigger) would not join the run, so it is refused with a
     // notice instead of quietly forking the working copy from the live plan.
-    if (_liveRunActive) {
-      if (!liveField) {
-        _notice(_liveStructureNotice);
-        return;
-      }
-      // Undo is off in live mood (a live save reloads the daemon's copy).
-      _lastCoalesceKey = null;
-      state = next;
+    if (_liveRunActive && !liveField) {
+      _notice(_liveStructureNotice);
       return;
     }
     final coalesce = coalesceKey != null && coalesceKey == _lastCoalesceKey;
@@ -672,7 +692,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
   /// (structure is unchanged). No-op for an unresolvable path.
   void setNodeField(NodePath path, String key, Object? value) {
     final s = state;
-    if (s == null || nodeAt(s.body, path) == null) return;
+    final node = s == null ? null : nodeAt(s.body, path);
+    if (s == null || node == null) return;
+    if (_refuseLiveValue(key, node[key], value)) return;
     _commitBody(s, s._copyWith(body: setField(s.body, path, key, value)),
         coalesceKey: 'f:${path.join('.')}/$key', liveField: true);
   }
@@ -715,6 +737,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= conditionsOf(container).length) return;
+    if (_refuseLiveValue(key, conditionsOf(container)[index][key], value)) {
+      return;
+    }
     _commitBody(
         s,
         s._copyWith(
@@ -758,6 +783,9 @@ class SequenceEditorController extends Notifier<SequenceEditorState?> {
     final container = nodeAt(s.body, containerPath);
     if (container == null) return;
     if (index < 0 || index >= triggersOf(container).length) return;
+    if (_refuseLiveValue(key, triggersOf(container)[index][key], value)) {
+      return;
+    }
     _commitBody(
         s,
         s._copyWith(
