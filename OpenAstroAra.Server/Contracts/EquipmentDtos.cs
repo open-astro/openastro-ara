@@ -302,8 +302,8 @@ public sealed record TelescopeStateDto(
     // names as in SupportedSiderealRates); null when the mount can't report it.
     string? TrackingRate = null,
     // #2070 — the mount's reported position is not trusted (it reported Home right after it
-    // connected, or its position jumped with nothing commanded): GoTo, Park, Home and polar
-    // alignment are refused until the user confirms Home. The reason is one of
+    // connected, or its position jumped with nothing commanded): GoTo, Park and polar alignment
+    // are refused until a Home search ends at Home (#2173) or the user confirms Home. The reason is one of
     // at_home_on_connect | pose_jump_on_reconnect | at_home_without_command | pose_jump_in_session.
     bool PositionUnverified = false,
     string? PositionUnverifiedReason = null);

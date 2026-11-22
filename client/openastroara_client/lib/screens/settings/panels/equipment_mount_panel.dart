@@ -117,8 +117,8 @@ class _MountBody extends ConsumerWidget {
         _row('Parked', s.parked ? 'Yes' : 'No'),
         _row('At home', s.atHome ? 'Yes' : 'No'),
         // #2070 — the rig does not trust the mount's position (it may have
-        // lost power): GoTo, Park, Home and Polar Align are refused until the
-        // user confirms Home.
+        // lost power): GoTo, Park and Polar Align are refused until a Home
+        // search ends at Home (#2173) or the user confirms Home.
         if (s.positionUnverified) _PositionUnverified(status: s),
         if (s.isBusy)
           Padding(
@@ -225,9 +225,11 @@ class _MountBody extends ConsumerWidget {
               ),
             // Home slews to the mount's homing switch — disabled while parked (must
             // unpark first) or busy. Shown only when the mount supports FindHome.
+            // #2173 — on while the position is unverified: it is the way out.
             if (caps?.canFindHome ?? false)
               OutlinedButton(
-                onPressed: (s.isBusy || s.parked || s.positionUnverified)
+                key: const Key('mount_find_home'),
+                onPressed: (s.isBusy || s.parked)
                     ? null
                     : () => _run(
                         context,

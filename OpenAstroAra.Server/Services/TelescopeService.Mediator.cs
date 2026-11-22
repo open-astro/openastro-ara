@@ -391,7 +391,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                     },
                     c => !ReadSlewing(c) && PointingNear(c, targetRa, targetDec),
                     token,
-                    SlewSettleMaxPolls).ConfigureAwait(false);
+                    SlewSettleMaxPolls,
+                    gotoTargetDecDeg: targetDec).ConfigureAwait(false);
             } finally {
                 // Consume-or-clear (#836 r2/r5): when the op returns — success, failure, or throw —
                 // this command's episode is over. Either the poll consumed the target (clear is a
@@ -540,7 +541,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Sequencer mount-op boundary: the blocking ASCOM call can throw arbitrary driver/HTTP exceptions and a concurrent Disconnect/Dispose can dispose the captured client mid-op; genuine sequencer cancellation is rethrown, and any other escape (including a device/HTTP-timeout OCE) is logged, published as a §42.4 fault, and rethrown as SequenceEntityFailedException so the instruction's retry/failure machinery engages (§42.2). CA1031's catch-classify-rethrow boundary applies.")]
-    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls) {
+    private async Task<bool> RunMountOpAsync(string op, Action<ITelescopeDevice> action, Func<ITelescopeDevice, bool> isDone, CancellationToken ct, int settleMaxPolls = MountOpSettleMaxPolls,
+            double? gotoTargetDecDeg = null) {
         var client = ConnectedClientOrNull();
         if (client is null) {
             return false; // not connected: the instruction's Validate has already blocked this
@@ -574,6 +576,10 @@ public sealed partial class TelescopeService : ITelescopeMediator {
                 throw;
             }
         }
+        // #2173 — the move (its call and the wait for its end) is Ara's own: no change it makes reads as a jump,
+        // however long a slew, park or Home runs, and the quiet window counts from its end. A GoTo's target Dec stays
+        // its own after that too (a re-center after a resume that outlasts the window with no Slewing read).
+        var poseMove = BeginPoseMove(gotoTargetDecDeg);
         try {
             // §42.2 — note the command before dispatch so the tracking watch's grace window is
             // armed by the time any refresh tick can observe the op's effect. Park/home end with
@@ -631,6 +637,8 @@ public sealed partial class TelescopeService : ITelescopeMediator {
             LogMountOpFailed(ex, op);
             PublishOpFault(client, EquipmentFaultKind.OpError, $"{op} failed: {ex.Message}");
             throw new SequenceEntityFailedException($"{op} failed: {ex.Message}", ex);
+        } finally {
+            EndPoseMove(poseMove);
         }
     }
 

@@ -168,8 +168,8 @@ class MountStatus extends EquipmentDeviceStatus {
   /// The rig does not trust the mount's reported position (#2070): it reported
   /// Home right after it connected, as a mount without absolute encoders does
   /// after a power loss wherever it points, or its position jumped with nothing
-  /// commanded. GoTo, Park, Home and Polar Align are refused until Home is
-  /// confirmed.
+  /// commanded. GoTo, Park and Polar Align are refused until a Home search
+  /// ends at Home (#2173) or Home is confirmed; Home itself stays allowed.
   final bool positionUnverified;
 
   /// Why [positionUnverified] (`at_home_on_connect`, `pose_jump_on_reconnect`,
