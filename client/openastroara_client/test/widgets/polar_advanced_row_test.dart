@@ -20,9 +20,9 @@ import '../support/polar_align_section.dart';
 /// The routine's fake Polar Align client: no routine runs.
 class _Api implements PolarAlignClient {
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;

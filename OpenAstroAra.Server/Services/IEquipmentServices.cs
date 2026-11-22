@@ -462,15 +462,13 @@ public interface IPolarAlignService {
     /// (<c>polar-align-mount-parked</c>), no site latitude, a pointing within 3° of the pole (<c>polar-align-on-axis</c>),
     /// turns past the session's sweep limit (<c>polar-align-sweep-limit</c>); #2068: on the first failing check of
     /// <see cref="GetPreflightAsync"/> (the mount's clock, the clearance not confirmed among them). A null stage plans the
-    /// fine measurement. <paramref name="handTurn"/>: the plan of a hand-turn start (#2083), which an unconfirmed clearance
-    /// does not refuse (it moves nothing; Joey, 2026-11-21).</summary>
-    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, bool handTurn, CancellationToken ct);
+    /// fine measurement.</summary>
+    Task<PolarAlignStartPlanDto> GetStartPlanAsync(string? stage, CancellationToken ct);
     /// <summary>#2068 (ARA-18) — the pre-flight list for a start at <paramref name="stage"/> (null = fine): every check a
     /// start makes, in its order, with what the start would do. Never refuses: a check that fails is listed as
     /// <c>fail</c>, and <see cref="StartAsync"/> and <see cref="GetStartPlanAsync"/> refuse on the first one. Throws
-    /// <see cref="ArgumentException"/> for an unknown stage only. <paramref name="handTurn"/>: the list of a hand-turn start,
-    /// whose clearance check is a <c>warn</c> while the clearance is not confirmed (a motor start's is a <c>fail</c>).</summary>
-    Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, bool handTurn, CancellationToken ct);
+    /// <see cref="ArgumentException"/> for an unknown stage only.</summary>
+    Task<PolarAlignPreflightDto> GetPreflightAsync(string? stage, CancellationToken ct);
     /// <summary>Begin ONE measurement (#2082) at <paramref name="stage"/> (<see cref="PolarAlignStages"/>; null =
     /// fine), from where the mount points now: no stage sends the mount Home or slews it (#2048), and none leads into
     /// another. The mount moves only with a <paramref name="confirmation"/> whose direction is the one the run would

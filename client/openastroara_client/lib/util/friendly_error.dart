@@ -133,7 +133,6 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.firstFlipNotCompleted => l.refusalFirstFlipNotCompleted,
     RefusalCause.mountClockNotVerified => l.refusalMountClockNotVerified,
     RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
-    RefusalCause.polarAlignClutchTurned => l.refusalPolarAlignClutchTurned,
     RefusalCause.polarAlignClearanceNotConfirmed =>
       l.refusalPolarAlignClearanceNotConfirmed(
         polarReachText(r.parameters['reach_deg'], l.localeName),

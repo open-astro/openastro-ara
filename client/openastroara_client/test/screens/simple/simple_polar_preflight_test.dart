@@ -19,10 +19,10 @@ class _Rig implements PolarAlignClient {
   bool parked = true;
 
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async =>
-      rigPreflightFor(section.initial, handTurn: handTurn, parked: parked);
+  Future<PolarAlignPreflight?> preflight({String? stage}) async =>
+      rigPreflightFor(section.initial, parked: parked);
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   @override
   Future<PolarAlignStatus?> getStatus() async => null;
@@ -49,7 +49,13 @@ void main() {
   testWidgets('Start is disabled while a pre-flight check fails', (
     tester,
   ) async {
+    // The clearance is confirmed: only the parked mount fails (#2170: an
+    // unconfirmed clearance fails the list too).
     final rig = _Rig();
+    rig.section.initial = rigPolarAlign.withMountClearance(
+      preflightMountKey,
+      const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+    );
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

@@ -322,45 +322,6 @@ class PolarAlignFrameInfo {
       );
 }
 
-/// #2083 a hand-turn run waiting for the user to turn the RA axis
-/// (`hand_turn_wait` on the status, and the `polar_align.hand_turn` payload):
-/// the [point] it waits for (2 or 3 of three), the turn asked for
-/// ([direction], [targetDeg]) and how far the mount's reading shows the axis
-/// turned that way so far ([turnedDeg]; negative is the other way, null before
-/// a solve and with the clutch open, when no angle can be claimed).
-/// [waiting] is false once the turn is in.
-class PolarAlignHandTurn {
-  final int point;
-
-  /// [PolarAlignDirections.east] or [PolarAlignDirections.west].
-  final String direction;
-  final double targetDeg;
-  final double? turnedDeg;
-  final bool waiting;
-
-  const PolarAlignHandTurn({
-    required this.point,
-    required this.direction,
-    required this.targetDeg,
-    this.turnedDeg,
-    this.waiting = true,
-  });
-
-  /// Null for anything that is not an object with a point.
-  static PolarAlignHandTurn? tryParse(Object? json) {
-    if (json is! Map || json['point'] is! num) return null;
-    return PolarAlignHandTurn(
-      point: (json['point'] as num).toInt(),
-      direction: json['direction'] == PolarAlignDirections.west
-          ? PolarAlignDirections.west
-          : PolarAlignDirections.east,
-      targetDeg: (json['target_deg'] as num?)?.toDouble() ?? 10.0,
-      turnedDeg: (json['turned_deg'] as num?)?.toDouble(),
-      waiting: json['waiting'] != false,
-    );
-  }
-}
-
 /// Snapshot of the routine (`GET /api/v1/equipment/polaralign/status`).
 /// Error fields are null until the live-adjust loop has produced its first
 /// solve (and always null for `idle`/`stopped`).
@@ -403,11 +364,6 @@ class PolarAlignStatus {
   /// #2082 a point of the measurement stayed scattered over 3″ after its
   /// retake: the readout rests on noisy solves.
   final bool measurementNoisy;
-  /// #2083 the current or last run turns RA by hand (Ara moves nothing).
-  final bool handTurn;
-
-  /// #2083 a hand-turn run waiting for the user's turn; null otherwise.
-  final PolarAlignHandTurn? handTurnWait;
 
   /// #2072 the 1σ of [currentErrorArcmin] (arcmin), from the fit the readout
   /// rests on; null with no error and from an older daemon.
@@ -435,8 +391,6 @@ class PolarAlignStatus {
     this.readoutCaution,
     this.camera,
     this.measurementNoisy = false,
-    this.handTurn = false,
-    this.handTurnWait,
     this.currentSigmaArcmin,
     this.decSpreadArcsec,
   });
@@ -464,8 +418,6 @@ class PolarAlignStatus {
         readoutCaution: json['readout_caution'] is String ? json['readout_caution'] as String : null,
         camera: json['camera'] is String ? json['camera'] as String : null,
         measurementNoisy: json['measurement_noisy'] == true,
-        handTurn: json['hand_turn'] == true,
-        handTurnWait: PolarAlignHandTurn.tryParse(json['hand_turn_wait']),
         currentSigmaArcmin: (json['current_sigma_arcmin'] as num?)?.toDouble(),
         decSpreadArcsec: (json['dec_spread_arcsec'] as num?)?.toDouble(),
       );
@@ -866,10 +818,6 @@ abstract final class PolarAlignDirections {
 /// − west) and [direction] turns back toward it. No turn goes more than
 /// [sweepLimitDeg] from that start. The start sends [newOrigin] back too.
 ///
-/// #2083 — [handTurnAvailable]: the rig takes a hand-turn start (an older rig
-/// leaves it out, and would turn the mount with its motor). [handTurn] is the
-/// user's choice in the confirm step, never the rig's ([byHand]).
-///
 /// #2081 — at a new origin [direction] is the profile's East/West setting.
 /// [directionTestDeg] (0.5, or 0) is the turn a motor run makes first to learn
 /// the RA motor's direction, when none is saved for the mount's driver; the
@@ -886,8 +834,6 @@ class PolarAlignStartPlan {
   final bool newOrigin;
   final double originOffsetDeg;
   final double sweepLimitDeg;
-  final bool handTurnAvailable;
-  final bool handTurn;
   final double directionTestDeg;
 
   /// #2082 the camera the run measures with ([PolarAlignCameras]): the main
@@ -904,26 +850,8 @@ class PolarAlignStartPlan {
     this.originOffsetDeg = 0.0,
     this.sweepLimitDeg = 30.0,
     this.camera = PolarAlignCameras.guide,
-    this.handTurnAvailable = false,
-    this.handTurn = false,
     this.directionTestDeg = 0.0,
   });
-
-  /// This plan, turned by hand: the start asks the rig to move nothing.
-  PolarAlignStartPlan byHand() => PolarAlignStartPlan(
-        stage: stage,
-        direction: direction,
-        stepDeg: stepDeg,
-        turns: turns,
-        maxSweepDeg: maxSweepDeg,
-        newOrigin: newOrigin,
-        originOffsetDeg: originOffsetDeg,
-        sweepLimitDeg: sweepLimitDeg,
-        camera: camera,
-        handTurnAvailable: handTurnAvailable,
-        handTurn: true,
-        directionTestDeg: directionTestDeg,
-      );
 
   factory PolarAlignStartPlan.fromJson(Map<String, dynamic> json, {String? stage}) =>
       PolarAlignStartPlan(
@@ -940,7 +868,6 @@ class PolarAlignStartPlan {
         camera: json['camera'] == PolarAlignCameras.main
             ? PolarAlignCameras.main
             : PolarAlignCameras.guide,
-        handTurnAvailable: json['hand_turn_available'] == true,
         directionTestDeg:
             (json['direction_test_deg'] as num?)?.toDouble() ?? 0.0,
       );

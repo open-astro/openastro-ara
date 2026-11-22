@@ -6809,10 +6809,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'The mount is not tracking and did not start tracking when Ara asked. Turn tracking on from the mount controls, then start again.';
 
   @override
-  String get polarAlignErrorHandTurnTooFar =>
-      'RA was turned further than this measurement allows. Turn it back near where you started, then start again.';
-
-  @override
   String get polarAlignErrorSweepLimit =>
       'The next turn would take the RA axis past Polar Align\'s limit. Slew it back near the pole, counterweights down, or take fewer or shorter frames, then start again.';
 
@@ -6880,11 +6876,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalPolarAlignAlreadyRunning =>
-      'Polar alignment is already running, and it turns RA the other way than you picked (by hand or with the motor). Stop it first, then start again.';
-
-  @override
-  String get refusalPolarAlignClutchTurned =>
-      'RA was turned by hand with the clutch open, so the mount no longer knows where it points. Sync it (Center does) or reconnect it once it is homed, then start again, or use Turn RA by hand.';
+      'Polar alignment is running. Wait for it to end, or stop it, then try again.';
 
   @override
   String get polarConfirmTitle => 'Before the mount moves';
@@ -6934,32 +6926,6 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get polarConfirmGuideMeridian =>
       'Choose a start whose turns do not cross the meridian, so the tube cannot swing into the pier.';
-
-  @override
-  String get polarConfirmHandTurnHint =>
-      'Or turn RA yourself: with Turn RA by hand, Ara moves nothing. It asks for each turn and measures it: with the hand pad from the mount\'s reading, with the clutch open from the frames.';
-
-  @override
-  String get polarConfirmHandTurn => 'Turn RA by hand';
-
-  @override
-  String polarHandTurnAsk(String step, String direction) {
-    return 'Turn RA by hand about $step° toward the $direction, then let go.';
-  }
-
-  @override
-  String polarHandTurnTurned(String turned) {
-    return 'Turned $turned° so far.';
-  }
-
-  @override
-  String polarHandTurnWrongWay(String direction) {
-    return 'That went the other way: turn toward the $direction.';
-  }
-
-  @override
-  String get polarHandTurnRunNote =>
-      'You turn RA by hand: Ara does not move the mount.';
 
   @override
   String get polarAzimuthArc => 'true arc (cos alt)';
@@ -7322,10 +7288,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarClearanceTakeBack => 'Take back';
 
   @override
-  String get polarConfirmMotorNeedsClearance =>
-      'This mount\'s clearance is not confirmed, so the motor does not turn it: Move the mount is off. Turn RA by hand moves nothing, so it can start. To use the motor, confirm the clearance on the Polar align card first.';
-
-  @override
   String get polarActionClearance => 'save the mount\'s clearance';
 
   @override
@@ -7343,7 +7305,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalPolarAlignCannotMoveAxis =>
-      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
+      'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Polar align needs a mount whose driver can move the RA axis.';
 
   @override
   String get polarKnobClearance => 'Room to turn the mount';

@@ -13,15 +13,11 @@ abstract interface class PolarAlignClient {
 
   /// #2048 — what a start at [stage] would do, for the confirm step the user
   /// answers before the mount moves.
-  /// [handTurn]: the plan of a Turn RA by hand start, which the rig does not
-  /// refuse for an unconfirmed clearance (it moves nothing).
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false});
+  Future<PolarAlignStartPlan> startPlan({String? stage});
 
   /// #2068 the pre-flight list for a start at [stage]: every check the rig
   /// refuses a start on. Null from a rig that predates it (a 404).
-  /// [handTurn]: the list of a Turn RA by hand start, whose clearance check is
-  /// a warn while the clearance is not confirmed.
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false});
+  Future<PolarAlignPreflight?> preflight({String? stage});
 
   /// Begin the [plan] the user confirmed: from where the mount points, one
   /// measurement at its stage, turning its direction (#2082: a measurement
@@ -69,25 +65,19 @@ class PolarAlignApi implements PolarAlignClient {
     }
   }
 
-  // `hand_turn` only when true: a rig from before it plans the motor start.
-  static Map<String, dynamic>? _planQuery(String? stage, bool handTurn) {
-    final q = <String, dynamic>{'stage': ?stage, if (handTurn) 'hand_turn': true};
-    return q.isEmpty ? null : q;
-  }
+  static Map<String, dynamic>? _planQuery(String? stage) =>
+      stage == null ? null : <String, dynamic>{'stage': stage};
 
   /// #2048 — the confirm step's plan: the RA turn direction from where the
   /// mount points now, the step, and the most the run turns. A parked mount is
   /// the `polar-align-mount-parked` [Refusal].
   @override
-  Future<PolarAlignStartPlan> startPlan({
-    String? stage,
-    bool handTurn = false,
-  }) async {
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async {
     final Response<dynamic> res;
     try {
       res = await _dio.get<dynamic>(
         '/api/v1/equipment/polaralign/start-plan',
-        queryParameters: _planQuery(stage, handTurn),
+        queryParameters: _planQuery(stage),
       );
     } on DioException catch (e) {
       final refusal = Refusal.fromDio(e);
@@ -105,15 +95,12 @@ class PolarAlignApi implements PolarAlignClient {
   /// that fails is a row. Null on a 404 (an older rig): the card then shows no
   /// list and the rig's own start refusals stand.
   @override
-  Future<PolarAlignPreflight?> preflight({
-    String? stage,
-    bool handTurn = false,
-  }) async {
+  Future<PolarAlignPreflight?> preflight({String? stage}) async {
     final Response<dynamic> res;
     try {
       res = await _dio.get<dynamic>(
         '/api/v1/equipment/polaralign/preflight',
-        queryParameters: _planQuery(stage, handTurn),
+        queryParameters: _planQuery(stage),
       );
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) return null;
@@ -143,11 +130,8 @@ class PolarAlignApi implements PolarAlignClient {
           'confirmed': true,
           'direction': plan.direction,
           'new_origin': plan.newOrigin,
-          // #2083 — only when the user chose it: the rig then moves nothing.
-          if (plan.handTurn) 'hand_turn': true,
-          // #2081 — the user saw the 0.5° motor-direction test (a motor run).
-          if (!plan.handTurn && plan.directionTestDeg > 0)
-            'direction_test': true,
+          // #2081 — the user saw the 0.5° motor-direction test.
+          if (plan.directionTestDeg > 0) 'direction_test': true,
         },
         options: plan.stage == PolarAlignStages.check ? Options(receiveTimeout: endTimeout) : null,
       );

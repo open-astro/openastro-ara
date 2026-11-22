@@ -60,7 +60,6 @@ namespace OpenAstroAra.Test {
             new object[] { "first-flip-not-completed", 409, Array.Empty<string>() },
             new object[] { "mount-clock-not-verified", 409, Array.Empty<string>() },
             new object[] { "polar-align-already-running", 409, Array.Empty<string>() },
-            new object[] { "polar-align-clutch-turned", 409, Array.Empty<string>() },
             new object[] { "polar-align-clearance-not-confirmed", 409, new[] { "reach_deg" } },
             new object[] { "above-clearance-limit", 409, new[] { "altitude_deg", "limit_deg" } },
             new object[] { "polar-align-site-not-set", 409, Array.Empty<string>() },

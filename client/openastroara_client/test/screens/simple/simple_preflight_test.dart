@@ -34,9 +34,9 @@ final _aligned = NotifierProvider<_Step, SetupStepState>(() => _Step(SetupStepSt
 
 class _PolarApi implements PolarAlignClient {
   @override
-  Future<PolarAlignPreflight?> preflight({String? stage, bool handTurn = false}) async => null;
+  Future<PolarAlignPreflight?> preflight({String? stage}) async => null;
   @override
-  Future<PolarAlignStartPlan> startPlan({String? stage, bool handTurn = false}) async =>
+  Future<PolarAlignStartPlan> startPlan({String? stage}) async =>
       PolarAlignStartPlan(stage: stage, direction: PolarAlignDirections.east);
   final calls = <String>[];
   @override

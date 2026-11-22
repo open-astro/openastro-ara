@@ -522,18 +522,6 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
                 style: kSimpleText,
                 maxLines: 3,
               ),
-            // #2083 a hand-turn run: the turn it asks for, or that Ara moves nothing.
-            if (active &&
-                live.handTurn &&
-                (live.phase == PolarAlignStates.seeding || live.phase == PolarAlignStates.checking))
-              Text(
-                polarHandTurnText(l10n, live.handTurnWait) ?? l10n.polarHandTurnRunNote,
-                key: const Key('simple-polar-hand-turn'),
-                style: kSimpleText.copyWith(
-                  color: live.handTurnWait == null ? null : AraColors.accentBusy,
-                ),
-                maxLines: 4,
-              ),
             // #2072 the camera sits where the readout reads the altitude bolt poorly.
             if (active &&
                 !verifying &&
