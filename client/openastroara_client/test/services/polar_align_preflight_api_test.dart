@@ -65,7 +65,7 @@ const _list = {
     'check_step_deg': 15,
     'turns': 2,
     'max_sweep_deg': 20,
-    'max_cw_angle_deg': 45,
+    'reach_deg': 20.5,
     'start_cw_angle_deg': 12.5,
     'min_altitude_deg': null,
   },
@@ -125,9 +125,9 @@ void main() {
           p.checkStepDeg,
           p.turns,
           p.maxSweepDeg,
-          p.maxCwAngleDeg,
+          p.reachDeg,
         ),
-        ('west', 10.0, 15.0, 2, 20.0, 45.0),
+        ('west', 10.0, 15.0, 2, 20.0, 20.5),
       );
       expect((p.startCwAngleDeg, p.minAltitudeDeg), (12.5, null));
     },
@@ -151,16 +151,8 @@ void main() {
     final section = {
       ...rigDefaults['polar-align']!,
       'mount_clearance': {
-        'ZWO_AM5_1': {
-          'max_cw_angle_deg': 45,
-          'clearance_confirmed': true,
-          'confirmed_max_cw_angle_deg': 45,
-        },
-        'Telescope Simulator': {
-          'max_cw_angle_deg': 60,
-          'clearance_confirmed': false,
-          'confirmed_max_cw_angle_deg': null,
-        },
+        'ZWO_AM5_1': {'confirmed_reach_deg': 20.5},
+        'Telescope Simulator': {'confirmed_reach_deg': 60},
       },
     };
     final api = ProfileApi(
@@ -171,20 +163,12 @@ void main() {
     final got = (await api.getPolarAlignSection()).value.mountClearance;
 
     expect(got.keys, unorderedEquals(['ZWO_AM5_1', 'Telescope Simulator']));
-    final am5 = got['ZWO_AM5_1']!;
-    expect(
-      (am5.maxCwAngleDeg, am5.clearanceConfirmed, am5.confirmedMaxCwAngleDeg),
-      (45.0, true, 45.0),
-    );
-    final sim = got['Telescope Simulator']!;
-    expect(
-      (sim.maxCwAngleDeg, sim.clearanceConfirmed, sim.confirmedMaxCwAngleDeg),
-      (60.0, false, null),
-    );
+    expect(got['ZWO_AM5_1']!.confirmedReachDeg, 20.5);
+    expect(got['Telescope Simulator']!.confirmedReachDeg, 60.0);
   });
 
   test(
-    'a clearance entry without confirmed_max_cw_angle_deg fails the load',
+    'a clearance entry without confirmed_reach_deg fails the load',
     () async {
       final section = {
         ...rigDefaults['polar-align']!,

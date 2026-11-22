@@ -25,9 +25,8 @@ namespace OpenAstroAra.Server.Services;
 /// lands. It uses #2048's shared model: the counterweight angle φ is how far the RA axis has
 /// turned from counterweight-down (0 = Home, 90 = counterweight horizontal, 180 = straight up), and
 /// for a reported hour angle, assuming counterweight-down, φ = 90° − the angular distance from the
-/// hour angle to the nearer of 0 h and 12 h. The limit is #2048's 60° default
-/// (<c>polar_align.max_cw_angle_deg</c> there; that setting does not exist yet, so the limit is a
-/// constant here).
+/// hour angle to the nearer of 0 h and 12 h. The limit is #2048's 60° default, a constant here
+/// (#2165: Polar Align's clearance is a reach the user confirms, never a counterweight angle).
 /// <para>Only a target below the pole (|HA| &gt; 6 h) is checked. Near the lower meridian the
 /// counterweight is close to horizontal, and the 2026-11-19 incident showed what happens there:
 /// two GoTos at HA ≈ −11.1 h that the mount would have made counterweight-up. They were stopped

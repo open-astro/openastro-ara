@@ -420,7 +420,12 @@ class _PolarAlignPanelState extends ConsumerState<PolarAlignPanel> {
   /// user confirms.
   Future<void> _start({String? stage}) => _run(
         'start polar alignment',
-        (api) => confirmAndStartPolarAlign(context, api, stage: stage),
+        (api) => confirmAndStartPolarAlign(
+          context,
+          api,
+          stage: stage,
+          confirmClearance: (reach) => confirmPolarClearanceForStart(context, ref, reach),
+        ),
       );
 
   /// #2082 — Check: a confirmed Start(check) through the rig's sweep plan. From

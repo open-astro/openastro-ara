@@ -213,7 +213,7 @@ class _ImagingPolarPanelState extends ConsumerState<ImagingPolarPanel>
         ),
         // #2081 the RA motor direction the 0.5° test saved, and its retest.
         const PolarMotorDirectionRow(),
-        // #2068 per mount: the connected mount's counterweight limit and clearance.
+        // #2068 per mount: how far the run turns the mount and whether the room for it is confirmed (#2165).
         const PolarClearanceSettingsRow(),
       ],
     );

@@ -225,6 +225,14 @@ framing/focus loop when you need to point or focus by eye.
   a confirm step shows which way RA will turn (east or west: on the first start the **Turn
   direction** setting, later back toward Polar Align's start) and how far (about 10° twice); the
   mount moves only when you tap **Move the mount**. Keep a hand on the mount's power switch.
+- **Room to turn the mount** (#2165). Before the motor first turns a mount, Polar Align asks one
+  question: "Polar Align will turn the mount up to N° each way. Is there room for the tube,
+  counterweight and cables to move that far?" N is how far this run turns RA each way: the two turns,
+  plus 0.5° the first time, when it learns which way the RA motor runs. Look, and tap **Yes, there is
+  room**; you never measure an angle. Until you do, the pre-flight list fails and Start stays off.
+  Cancel just closes the question, and nothing moves. The answer is kept for each mount: a smaller or
+  equal turn stays confirmed, a bigger one (a larger turn size, or a Check whose step is bigger) asks
+  again when you start it. **Take back** withdraws it.
 - **Turn direction and the motor test.** Settings › Imaging › Polar align › **Turn direction** picks
   which way RA turns when Polar Align starts from a new pose: **Automatic** (east in the north, west
   in the south, as NINA), **East** or **West**. Pick the one whose turns do not cross the meridian from

@@ -24,26 +24,45 @@ class _Rig implements PolarAlignClient {
   bool mountConnected = true;
   bool pointingFails = false;
   bool parked = false;
+
+  /// The pre-flight list fails to read (#2165: Start stays on, the rig judges).
+  bool preflightFails = false;
+
+  /// How far the run turns RA each way: the turn size on the Start card.
+  double reachDeg = 20.5;
+
+  /// How far a Check turns RA each way: the Check step, set apart (#2165).
+  double? checkReachDeg;
   final List<PolarAlignStartPlan> started = [];
 
-  bool get _confirmed => rigPreflightFor(section.initial).ready;
+  double _reachFor(String? stage) =>
+      stage == PolarAlignStages.check ? checkReachDeg ?? reachDeg : reachDeg;
+
+  bool _confirmed(String? stage) =>
+      rigPreflightFor(section.initial, reachDeg: _reachFor(stage)).ready;
 
   @override
   Future<PolarAlignPreflight?> preflight({String? stage}) async {
     preflightReads++;
+    if (preflightFails) throw StateError('the pre-flight list did not load');
     if (!mountConnected) return _noMount;
     if (pointingFails) return _pointingFails;
-    return rigPreflightFor(section.initial, parked: parked);
+    return rigPreflightFor(
+      section.initial,
+      parked: parked,
+      reachDeg: reachDeg,
+    );
   }
 
   // As the rig: a start's plan is refused while the clearance is not confirmed.
   @override
   Future<PolarAlignStartPlan> startPlan({String? stage}) async {
-    if (!_confirmed) {
-      throw const Refusal(
+    if (!_confirmed(stage)) {
+      throw Refusal(
         cause: RefusalCause.polarAlignClearanceNotConfirmed,
         reason: 'polar-align-clearance-not-confirmed',
         detail: "Confirm this mount's clearance first",
+        parameters: {'reach_deg': _reachFor(stage)},
         status: 409,
       );
     }
@@ -84,7 +103,7 @@ const _noMount = PolarAlignPreflight(
     checkStepDeg: 10,
     turns: 2,
     maxSweepDeg: 20,
-    maxCwAngleDeg: 60,
+    reachDeg: 20.5,
   ),
 );
 
@@ -109,7 +128,7 @@ const _pointingFails = PolarAlignPreflight(
     checkStepDeg: 30,
     turns: 2,
     maxSweepDeg: 20,
-    maxCwAngleDeg: 60,
+    reachDeg: 20.5,
   ),
 );
 
@@ -186,7 +205,7 @@ void main() {
       parked: true,
       settings: rigPolarAlign.withMountClearance(
         preflightMountKey,
-        const PolarAlignMountClearance.confirmedAt(60),
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
       ),
     );
 
@@ -245,7 +264,7 @@ void main() {
       final rig = _Rig()..mountConnected = false;
       rig.section.initial = rigPolarAlign.withMountClearance(
         preflightMountKey,
-        const PolarAlignMountClearance.confirmedAt(60),
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
       );
       await tester.pumpWidget(
         ProviderScope(
@@ -290,27 +309,14 @@ void main() {
       await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('polar-clearance-dialog')), findsOneWidget);
-      expect(
-        find.text('Counterweight limit: 60° from counterweight-down'),
-        findsOneWidget,
-        reason: "pre-filled with the rig's limit for this mount",
-      );
-      expect(
-        _onPressed(tester, 'polar-clearance-confirm'),
-        isNull,
-        reason: 'Confirm waits for the tick',
-      );
-
-      await tester.tap(find.byKey(const Key('polar-clearance-checked')));
-      await tester.pumpAndSettle();
       await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
       await tester.pumpAndSettle();
 
       expect(rig.section.puts, hasLength(1));
       expect(
         rig.section.puts.single.mountClearance[preflightMountKey],
-        const PolarAlignMountClearance.confirmedAt(60),
-        reason: "the mount's own entry, confirmed for its limit",
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        reason: "the mount's own entry, confirmed for the run's reach",
       );
       expect(
         find.text('Change clearance…'),
@@ -326,8 +332,221 @@ void main() {
     },
   );
 
+  // #2165: a Check turns by the Check step, set apart from the turn size, so
+  // the fine run's confirmation can be too small for it. The start asks the
+  // clearance question for the rig's reach, saves it, and the motor goes.
+  testWidgets(
+    'A Check whose step is bigger than the turn asks about its own reach and then starts on the motor',
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig.checkReachDeg = 40.5;
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const Key('polar-clearance-dialog')),
+        findsOneWidget,
+        reason: "the rig refused the Check's motor start for clearance",
+      );
+      expect(find.textContaining('40.5°'), findsOneWidget);
+      await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.last.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance(confirmedReachDeg: 40.5),
+        reason: "the entry covers the Check's reach, the refusal's number",
+      );
+      expect(find.byKey(const Key('polar-start-confirm')), findsOneWidget);
+      expect(
+        _onPressed(tester, 'polar-start-confirm-go'),
+        isNotNull,
+        reason: 'the plan was asked again and the motor is allowed',
+      );
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+    },
+  );
+
+  // #2165: the clearance is confirmed for a reach, and the list's is the fine
+  // stage's. A bigger turn size fails it there, but a Check turns by its own
+  // step, so the rig judges the Check: Check stays on and starts.
+  testWidgets(
+    "A Check stays on while the fine stage's clearance fails and starts when the rig accepts its reach",
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig
+        ..reachDeg = 30.5
+        ..checkReachDeg = 20.5;
+      await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byKey(const Key('polar-preflight-check-clearance_confirmed')),
+        findsOneWidget,
+        reason: 'the 20.5° confirmation does not cover the 30.5° fine run',
+      );
+      expect(_onPressed(tester, 'polar-align-start'), isNull);
+      expect(
+        _onPressed(tester, 'polar-align-start-check'),
+        isNotNull,
+        reason: "the Check's 20.5° reach is covered: the rig decides",
+      );
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+    },
+  );
+
+  // #2165: the same, with a Check the rig refuses too: the tap asks the
+  // clearance question for the Check's own reach, not the fine stage's.
+  testWidgets(
+    "A Check refused while the fine stage's clearance fails asks about the Check's reach",
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig
+        ..reachDeg = 30.5
+        ..checkReachDeg = 40.5;
+      await tester.tap(find.byKey(const Key('polar-preflight-refresh')));
+      await tester.pumpAndSettle();
+      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const Key('polar-clearance-dialog'))).data,
+        contains('up to 40.5° each way'),
+      );
+      await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.last.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance(confirmedReachDeg: 40.5),
+      );
+      await tester.tap(find.byKey(const Key('polar-start-confirm-go')));
+      await tester.pumpAndSettle();
+      expect(rig.started.single.stage, PolarAlignStages.check);
+    },
+  );
+
+  // #2165: an entry for a smaller reach than the run's still has Take back,
+  // which removes it.
+  testWidgets(
+    'The clearance dialog offers Take back for an entry too small for the run',
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 10),
+        ),
+      );
+
+      await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('polar-clearance-take-back')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.single.mountClearance.containsKey(preflightMountKey),
+        isFalse,
+      );
+    },
+  );
+
+  // #2165, #2170: Cancel on the clearance question just closes. Nothing is
+  // saved, no confirm step opens and nothing starts: there is no fallback.
+  testWidgets(
+    'Cancel on the clearance question a Check asks closes it and starts nothing',
+    (tester) async {
+      final rig = await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+      rig.checkReachDeg = 40.5;
+
+      await tester.tap(find.byKey(const Key('polar-align-start-check')));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsOneWidget);
+      await tester.tap(find.byKey(const Key('polar-clearance-cancel')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing);
+      expect(
+        find.textContaining('Confirm there is room'),
+        findsNothing,
+        reason: 'Cancel is not an error: the refusal does not reach the card',
+      );
+      expect(rig.section.puts, isEmpty);
+      expect(rig.started, isEmpty);
+    },
+  );
+
+  // #2165: with no pre-flight list to ask from (it failed to read) Start stays
+  // on and the rig's clearance refusal reaches the card: a tap is never silent.
+  testWidgets(
+    'A clearance refusal with no pre-flight list shows the refusal on the card',
+    (tester) async {
+      final rig = _Rig()..preflightFails = true;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...polarAlignSectionOverrides(rig.section),
+            polarAlignApiProvider.overrideWithValue(rig),
+            polarAlignLiveProvider.overrideWith(_Idle.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: PolarAlignPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(_onPressed(tester, 'polar-align-start'), isNotNull);
+
+      await tester.tap(find.byKey(const Key('polar-align-start')));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('polar-clearance-dialog')), findsNothing);
+      expect(find.byKey(const Key('polar-start-confirm')), findsNothing);
+      expect(find.textContaining('Confirm there is room'), findsOneWidget);
+      expect(rig.started, isEmpty);
+    },
+  );
+
   // #2170 — there is no hand-turn start to fall back on: an unconfirmed
-  // clearance fails the list, so Start and Check stay off until it is confirmed.
+  // clearance fails the list, so Start stays off until it is confirmed. A
+  // Check stays on (#2165): its reach is the Check step's, so the rig judges
+  // it and a refused Check asks the clearance question.
   testWidgets(
     'An unconfirmed clearance fails the list and Start stays off',
     (tester) async {
@@ -346,7 +565,7 @@ void main() {
         reason: 'a fail, not a warn',
       );
       expect(_onPressed(tester, 'polar-align-start'), isNull);
-      expect(_onPressed(tester, 'polar-align-start-check'), isNull);
+      expect(_onPressed(tester, 'polar-align-start-check'), isNotNull);
       expect(find.text('Confirm clearance…'), findsOneWidget);
       expect(rig.started, isEmpty);
     },
@@ -359,12 +578,12 @@ void main() {
         tester,
         settings: rigPolarAlign.withMountClearance(
           preflightMountKey,
-          const PolarAlignMountClearance.confirmedAt(45),
+          const PolarAlignMountClearance(confirmedReachDeg: 45),
         ),
         child: const PolarClearanceSettingsRow(),
       );
       expect(
-        find.text('45° from counterweight-down, confirmed for this mount'),
+        find.text('Turns up to 20.5° each way, room confirmed for this mount'),
         findsOneWidget,
       );
 
@@ -374,12 +593,12 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(
-        rig.section.puts.single.mountClearance[preflightMountKey],
-        const PolarAlignMountClearance.notConfirmed(45),
-        reason: 'the limit kept, not confirmed',
+        rig.section.puts.single.mountClearance.containsKey(preflightMountKey),
+        isFalse,
+        reason: "the mount's confirmation removed",
       );
       expect(
-        find.textContaining('45° from counterweight-down, not confirmed'),
+        find.textContaining('Turns up to 20.5° each way, not confirmed'),
         findsOneWidget,
         reason: 'the clearance check does not pass any more',
       );
@@ -397,7 +616,7 @@ void main() {
       tester,
       settings: rigPolarAlign.withMountClearance(
         preflightMountKey,
-        const PolarAlignMountClearance.confirmedAt(60),
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
       ),
     );
 
@@ -407,40 +626,108 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      rig.section.puts.single.mountClearance[preflightMountKey],
-      const PolarAlignMountClearance.notConfirmed(60),
+      rig.section.puts.single.mountClearance.containsKey(preflightMountKey),
+      isFalse,
     );
     expect(find.text('Confirm clearance…'), findsOneWidget);
   });
 
-  testWidgets('Moving the limit in the clearance dialog clears its tick', (
-    tester,
-  ) async {
-    await _pump(tester);
+  // #2165 (Joey, 2026-11-21): no slider, no angle, no tick: one question
+  // with the rig's reach and one button.
+  testWidgets(
+    "The clearance dialog asks once about the rig's reach, with no slider or tick",
+    (tester) async {
+      await _pump(tester);
 
-    await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('polar-clearance-checked')));
-    await tester.pumpAndSettle();
-    expect(_onPressed(tester, 'polar-clearance-confirm'), isNotNull);
+      await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+      await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byKey(const Key('polar-clearance-limit')),
-      const Offset(-120, 0),
-    );
-    await tester.pumpAndSettle();
+      expect(
+        find.text(
+          'Polar Align will turn the mount up to 20.5° each way. Is there room for the tube, counterweight and cables to move that far?',
+        ),
+        findsOneWidget,
+        reason: "the rig's reach: two 10° turns and the 0.5° test",
+      );
+      expect(find.byType(Slider), findsNothing);
+      expect(find.byType(Checkbox), findsNothing);
+      expect(find.text('Yes, there is room'), findsOneWidget);
+      expect(
+        _onPressed(tester, 'polar-clearance-confirm'),
+        isNotNull,
+        reason: 'one tap confirms',
+      );
+    },
+  );
 
-    expect(
-      find.text('Counterweight limit: 60° from counterweight-down'),
-      findsNothing,
-      reason: 'the limit moved',
-    );
-    expect(
-      _onPressed(tester, 'polar-clearance-confirm'),
-      isNull,
-      reason: 'a confirmation is for one limit: tick again',
-    );
-  });
+  testWidgets(
+    'A bigger turn size asks again and the dialog confirms the new reach',
+    (tester) async {
+      final rig = _Rig()..reachDeg = 60.5;
+      rig.section.initial = rigPolarAlign.withMountClearance(
+        preflightMountKey,
+        const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+      );
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            ...polarAlignSectionOverrides(rig.section),
+            polarAlignApiProvider.overrideWithValue(rig),
+            polarAlignLiveProvider.overrideWith(_Idle.new),
+          ],
+          child: const MaterialApp(
+            home: Scaffold(
+              body: SingleChildScrollView(child: PolarAlignPanel()),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Confirm clearance…'),
+        findsOneWidget,
+        reason: 'the 20.5° confirmation does not cover a 60.5° run',
+      );
+
+      await tester.tap(find.byKey(const Key('polar-preflight-clearance')));
+      await tester.pumpAndSettle();
+      expect(
+        tester.widget<Text>(find.byKey(const Key('polar-clearance-dialog'))).data,
+        contains('up to 60.5° each way'),
+      );
+      await tester.tap(find.byKey(const Key('polar-clearance-confirm')));
+      await tester.pumpAndSettle();
+
+      expect(
+        rig.section.puts.single.mountClearance[preflightMountKey],
+        const PolarAlignMountClearance(confirmedReachDeg: 60.5),
+      );
+      expect(find.text('Change clearance…'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'The Start card says how far the run turns the mount even when every check passes',
+    (tester) async {
+      await _pump(
+        tester,
+        settings: rigPolarAlign.withMountClearance(
+          preflightMountKey,
+          const PolarAlignMountClearance(confirmedReachDeg: 20.5),
+        ),
+      );
+
+      expect(
+        find.byKey(const Key('polar-preflight-check-clearance_confirmed')),
+        findsNothing,
+        reason: 'the passing clearance row folds away',
+      );
+      expect(
+        find.text('Polar align turns the mount up to 20.5° each way.'),
+        findsOneWidget,
+      );
+    },
+  );
 
   test('The list is not read again while a run moves the mount', () async {
     final rig = _Rig();

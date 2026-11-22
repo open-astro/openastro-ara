@@ -8,6 +8,7 @@ import '../services/guider_api.dart' show GuideStartFailed;
 import '../services/profile_api.dart' show SectionVersionMissingException;
 import '../services/refusal.dart';
 import 'gps_site_fill.dart' show clientPlatform, thisDeviceLabel;
+import 'polar_reach_text.dart';
 
 /// Turns whatever went wrong into a sentence a person can act on.
 ///
@@ -134,7 +135,7 @@ String? _refusalWords(AppLocalizations l, Refusal r) {
     RefusalCause.polarAlignAlreadyRunning => l.refusalPolarAlignAlreadyRunning,
     RefusalCause.polarAlignClearanceNotConfirmed =>
       l.refusalPolarAlignClearanceNotConfirmed(
-        _wholeDegrees(r.parameters['max_cw_angle_deg']),
+        polarReachText(r.parameters['reach_deg'], l.localeName),
       ),
     RefusalCause.polarAlignSiteNotSet => l.refusalPolarAlignSiteNotSet,
     RefusalCause.polarAlignAltAzMount => l.refusalPolarAlignAltAzMount,

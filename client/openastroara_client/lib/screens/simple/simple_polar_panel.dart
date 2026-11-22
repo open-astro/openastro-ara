@@ -95,7 +95,11 @@ class SimplePolarShutter extends ConsumerWidget {
           : active
           ? () => run(l10n.polarActionStop, (api) => api.stop())
           // #2048 — through the confirm step: nothing moves until the user says so.
-          : () => run(l10n.polarActionStart, (api) => confirmAndStartPolarAlign(context, api)),
+          : () => run(l10n.polarActionStart, (api) => confirmAndStartPolarAlign(
+                context,
+                api,
+                confirmClearance: (reach) => confirmPolarClearanceForStart(context, ref, reach),
+              )),
     );
   }
 }
@@ -225,7 +229,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final l10n = context.l10n;
     return _run(
       l10n.polarActionCheck,
-      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.check),
+      (api) => confirmAndStartPolarAlign(
+        context,
+        api,
+        stage: PolarAlignStages.check,
+        confirmClearance: (reach) => confirmPolarClearanceForStart(context, ref, reach),
+      ),
     );
   }
 
@@ -236,7 +245,12 @@ class _SimplePolarPanelState extends ConsumerState<SimplePolarPanel> {
     final l10n = context.l10n;
     return _run(
       l10n.polarActionStart,
-      (api) => confirmAndStartPolarAlign(context, api, stage: PolarAlignStages.coarse),
+      (api) => confirmAndStartPolarAlign(
+        context,
+        api,
+        stage: PolarAlignStages.coarse,
+        confirmClearance: (reach) => confirmPolarClearanceForStart(context, ref, reach),
+      ),
     );
   }
 

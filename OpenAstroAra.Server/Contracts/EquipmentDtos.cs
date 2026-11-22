@@ -995,8 +995,10 @@ public sealed record PolarAlignPreflightCheckDto(string Id, string Status, strin
 /// <summary>What the next Start at <c>Stage</c> would do (the confirm step's plan where the mount could be read):
 /// <c>Direction</c> (<c>east</c> | <c>west</c>, null when the plan could not be made), <c>TurnStepDeg</c> each of the
 /// measurement's two turns (<c>CheckStepDeg</c> a Check's), <c>MaxSweepDeg</c> the most it turns from where it starts,
-/// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and the mount's
-/// counterweight limit (<c>MaxCwAngleDeg</c>, the connected mount's entry or the default). <c>StartCwAngleDeg</c> and
+/// the session's sweep origin (<c>NewOrigin</c>, <c>OriginOffsetDeg</c>, <c>SweepLimitDeg</c>, #2089) and (#2165)
+/// <c>ReachDeg</c>, the most the run's motor turns RA each way: <c>MaxSweepDeg</c> plus the 0.5° direction test when it
+/// is owed (the plan's <see cref="PolarAlignStartPlanDto.DirectionTestDeg"/>), the reach the clearance is confirmed for.
+/// <c>StartCwAngleDeg</c> and
 /// <c>MinAltitudeDeg</c> are always null: Ara has no counterweight model or pose envelope (NINA parity, Joey
 /// 2026-11-21); they stay so an app that reads them still parses the list.</summary>
 public sealed record PolarAlignPreflightPlannedDto(
@@ -1009,7 +1011,7 @@ public sealed record PolarAlignPreflightPlannedDto(
     bool? NewOrigin,
     double? OriginOffsetDeg,
     double? SweepLimitDeg,
-    double MaxCwAngleDeg,
+    double ReachDeg,
     double? StartCwAngleDeg,
     double? MinAltitudeDeg);
 

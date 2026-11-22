@@ -92,10 +92,10 @@ public static class RefusalCatalog {
     // #2081 — a motor-direction retest while a run is going (its own 0.5° test could save a sign right after).
     public static readonly RefusalCause PolarAlignAlreadyRunning = new("polar-align-already-running", 409, "Polar alignment is already running");
 
-    // #2068 (ARA-8, ARA-18) — the connected mount's counterweight and cable clearance is not confirmed (the pre-flight list's
-    // clearance check): no Polar Align motion until the user checked it with the hand controller and confirmed it in the
-    // app. max_cw_angle_deg is the limit the confirmation is for.
-    public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "max_cw_angle_deg");
+    // #2068 (ARA-8, ARA-18) — the connected mount's clearance is not confirmed for this run's reach (the pre-flight list's
+    // clearance check): no Polar Align motor motion until the user said in the app that there is room for the tube,
+    // counterweight and cables to turn that far. reach_deg (#2165) is how far this run turns RA each way, the reach the user confirms there is room for.
+    public static readonly RefusalCause PolarAlignClearanceNotConfirmed = new("polar-align-clearance-not-confirmed", 409, "The mount's clearance is not confirmed", "reach_deg");
 
     // #1589 — a GoTo to a target at or above the profile's clearance limit (clearance_limit_enabled on): the camera
     // or rotator could reach the pier or tripod there.

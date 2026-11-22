@@ -2403,7 +2403,7 @@ paths:
     post:
       tags:
         - Equipment
-      summary: 'Start one polar-align measurement; RA always turns with the mount''s motor. #2170 removed the hand_turn field (and the hand_turn query of start-plan and preflight): there is no hand-turn mode, and a body that still sends it makes the same motor start.'
+      summary: Start one polar-align measurement; RA always turns with the mount's motor.
       parameters:
         - name: Idempotency-Key
           in: header
@@ -14825,22 +14825,13 @@ components:
             - 'null'
             - boolean
     PolarAlignMountClearanceDto:
+      required:
+        - confirmed_reach_deg
       type: object
       properties:
-        max_cw_angle_deg:
+        confirmed_reach_deg:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
-            - number
-            - string
-          format: double
-          default: 60
-        clearance_confirmed:
-          type: boolean
-          default: false
-        confirmed_max_cw_angle_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
             - number
             - string
           format: double
@@ -14888,7 +14879,7 @@ components:
         - new_origin
         - origin_offset_deg
         - sweep_limit_deg
-        - max_cw_angle_deg
+        - reach_deg
         - start_cw_angle_deg
         - min_altitude_deg
       type: object
@@ -14941,7 +14932,7 @@ components:
             - number
             - string
           format: double
-        max_cw_angle_deg:
+        reach_deg:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number

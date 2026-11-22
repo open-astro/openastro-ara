@@ -136,7 +136,7 @@ public class ProfileShareServiceTest {
         // #2068 — the clearance names the donor's mounts and confirms the donor's own pier and cables.
         var donor = DonorSnapshot() with {
             PolarAlign = new PolarAlignSettingsDto(ExposureSeconds: 7, MountClearance: new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["DONOR-MOUNT-DO-NOT-LEAK"] = new(MaxCwAngleDeg: 45, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 45),
+                ["DONOR-MOUNT-DO-NOT-LEAK"] = new(ConfirmedReachDeg: 45),
             }),
         };
         using var repo = new FakeRepo(donor);

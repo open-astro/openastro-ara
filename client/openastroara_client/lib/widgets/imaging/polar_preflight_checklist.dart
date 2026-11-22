@@ -9,6 +9,7 @@ import '../../state/settings/loaded_section.dart';
 import '../../state/settings/polar_align_settings_state.dart';
 import '../../theme/ara_colors.dart';
 import '../../util/friendly_error.dart';
+import '../../util/polar_reach_text.dart';
 import '../adaptive_controls.dart';
 import '../adaptive_dialog.dart';
 import '../help_icon.dart';
@@ -18,6 +19,8 @@ import '../settings/settings_row.dart';
 /// Simple Mode alike: every check the rig refuses a start on, the failing and
 /// the warning ones always shown, the rest behind "Show all checks". A failing
 /// clearance check offers the clearance dialog ([confirmPolarClearance]).
+/// #2165: with a mount connected it always says how far the run turns RA
+/// each way (the rig's reach), so the limit is never hidden.
 /// Renders the rig's list as data, loading and error; shows nothing for a rig
 /// that predates the list.
 class PolarPreflightChecklist extends ConsumerStatefulWidget {
@@ -126,6 +129,20 @@ class _PolarPreflightChecklistState
             ),
           ],
         ),
+        if (preflight.mountKey != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Text(
+              l10n.polarPreflightReach(
+                polarReachText(preflight.planned.reachDeg, l10n.localeName),
+              ),
+              key: const Key('polar-preflight-reach'),
+              style: const TextStyle(
+                fontSize: 13,
+                color: AraColors.textSecondary,
+              ),
+            ),
+          ),
         for (final c in shown) _row(c),
         Wrap(
           spacing: 8,
@@ -250,15 +267,16 @@ String polarPreflightCheckTitle(AppLocalizations l10n, String id) =>
       _ => id,
     };
 
-/// #2068 (ARA-8) the clearance confirmation: the dialog explains the check,
-/// takes the counterweight limit the user measured with the hand controller
-/// (pre-filled with the rig's value for this mount), and on Confirm saves it,
-/// confirmed for that limit, as this mount's entry of the polar-align section,
-/// then reads the pre-flight list again. Take back (a confirmed mount) saves
-/// it not confirmed (Joey, 2026-11-21). Nothing is saved on Cancel. The
-/// section is loaded from the rig before it is saved (ADR 0015). Returns a
-/// failed save's message in the user's words, null otherwise; the caller
-/// shows it.
+/// #2068 (ARA-8) the clearance confirmation. #2165: the dialog asks one
+/// question, whether there is room for the run's reach (the rig's
+/// [PolarAlignPreflightPlanned.reachDeg]: its turns plus the 0.5° direction
+/// test when owed), and on "Yes, there is room" saves this mount's entry
+/// confirmed for that reach, then reads the pre-flight list again. Take back
+/// (a mount with an entry, confirmed for this reach or a smaller one) removes
+/// the entry (Joey, 2026-11-21). Nothing is saved
+/// on Cancel. The section is loaded from the rig before it is saved (ADR
+/// 0015). Returns a failed save's message in the user's words, null
+/// otherwise; the caller shows it.
 Future<String?> confirmPolarClearance(
   BuildContext context,
   WidgetRef ref,
@@ -266,30 +284,94 @@ Future<String?> confirmPolarClearance(
 ) async {
   final key = preflight.mountKey;
   if (key == null) return null;
-  final confirmed =
-      preflight.check(PolarAlignPreflightChecks.clearanceConfirmed)?.passes ??
-      false;
-  final result = await showAdaptiveAlert<PolarClearanceResult>(
-    context: context,
-    builder: (_) => PolarClearanceDialog(
-      initialDeg: preflight.planned.maxCwAngleDeg,
-      confirmed: confirmed,
-    ),
+  final result = await _askPolarClearance(
+    context,
+    key,
+    preflight.planned.reachDeg,
+    hasEntry: polarMountHasClearanceEntry(ref, preflight),
   );
   if (result == null || !context.mounted) return null;
-  return _savePolarClearance(
-    context,
-    ref,
-    key,
-    result.takeBack
-        ? PolarAlignMountClearance.notConfirmed(preflight.planned.maxCwAngleDeg)
-        : PolarAlignMountClearance.confirmedAt(result.limitDeg),
-  );
+  return _savePolarClearance(context, ref, result.change(key));
 }
 
-/// #2068 Take back: this mount's clearance not confirmed any more, its limit
-/// kept, so the clearance check fails again for a motor start (Joey,
-/// 2026-11-21). Returns a failed save's message, null otherwise.
+/// #2165 the confirm step's clearance question: a motor start the rig refused
+/// for clearance asks about [reachDeg], the rig's reach for that start's stage
+/// (the refusal's `reach_deg`: a Check turns by the Check step, which can be
+/// bigger than the turn size the Start card's list shows), and "Yes, there is
+/// room" saves this mount's entry for it. True once that is saved; false on
+/// Cancel and on Take back. Null when it cannot ask (the pre-flight list is
+/// not loaded or failed to read, or names no mount): the caller shows the
+/// rig's refusal. A failed save throws its message in the user's words (a
+/// [StateError]).
+Future<bool?> confirmPolarClearanceForStart(
+  BuildContext context,
+  WidgetRef ref,
+  double reachDeg,
+) async {
+  final preflight = ref.read(polarAlignPreflightProvider).value;
+  final key = preflight?.mountKey;
+  if (preflight == null || key == null) return null;
+  final result = await _askPolarClearance(
+    context,
+    key,
+    reachDeg,
+    hasEntry: polarMountHasClearanceEntry(ref, preflight),
+  );
+  if (result == null || !context.mounted) return false;
+  final failure = await _savePolarClearance(context, ref, result.change(key));
+  if (failure != null) throw StateError(failure);
+  return result.saved != null;
+}
+
+/// #2165 the mount has a clearance entry (Take back has something to remove),
+/// confirmed for this run's reach or not; the clearance row's pass while the
+/// settings are not loaded yet.
+bool polarMountHasClearanceEntry(
+  WidgetRef ref,
+  PolarAlignPreflight preflight,
+) {
+  final key = preflight.mountKey;
+  final settings = ref.read(polarAlignSettingsProvider).value;
+  if (key != null && settings != null) {
+    return settings.mountClearance.containsKey(key);
+  }
+  return preflight.check(PolarAlignPreflightChecks.clearanceConfirmed)?.passes ??
+      false;
+}
+
+/// The dialog's answer for [reachDeg]: the change it makes to the settings,
+/// and the entry it saves (null for Take back). Null on Cancel.
+Future<({PolarAlignMountClearance? saved})?> _askPolarClearance(
+  BuildContext context,
+  String key,
+  double reachDeg, {
+  required bool hasEntry,
+}) async {
+  final result = await showAdaptiveAlert<PolarClearanceResult>(
+    context: context,
+    builder: (_) =>
+        PolarClearanceDialog(reachDeg: reachDeg, confirmed: hasEntry),
+  );
+  return switch (result) {
+    null => null,
+    PolarClearanceResult.takeBack => (saved: null),
+    PolarClearanceResult.confirm => (
+      saved: PolarAlignMountClearance(confirmedReachDeg: reachDeg),
+    ),
+  };
+}
+
+extension on ({PolarAlignMountClearance? saved}) {
+  PolarAlignSettings Function(PolarAlignSettings) change(String key) =>
+      (s) => switch (saved) {
+        null => s.withoutMountClearance(key),
+        final entry => s.withMountClearance(key, entry),
+      };
+}
+
+/// #2068 Take back: this mount's entry removed, so the clearance check fails
+/// again for a motor start (Joey, 2026-11-21). Returns a failed save's
+/// message, null otherwise.
 Future<String?> takeBackPolarClearance(
   BuildContext context,
   WidgetRef ref,
@@ -300,23 +382,21 @@ Future<String?> takeBackPolarClearance(
   return _savePolarClearance(
     context,
     ref,
-    key,
-    PolarAlignMountClearance.notConfirmed(preflight.planned.maxCwAngleDeg),
+    (s) => s.withoutMountClearance(key),
   );
 }
 
 Future<String?> _savePolarClearance(
   BuildContext context,
   WidgetRef ref,
-  String key,
-  PolarAlignMountClearance entry,
+  PolarAlignSettings Function(PolarAlignSettings) change,
 ) async {
   final l10n = context.l10n;
   String? failure;
   try {
     await ref
         .read(polarAlignSettingsProvider.notifier)
-        .changeAndSave((s) => s.withMountClearance(key, entry));
+        .changeAndSave(change);
   } catch (e) {
     failure = e is SectionNotLoadedException || e is SectionConflictException
         ? e.toString()
@@ -328,9 +408,10 @@ Future<String?> _savePolarClearance(
   return failure;
 }
 
-/// #2068 Settings › Imaging › Polar align: the connected mount's counterweight
-/// limit and whether its clearance is confirmed, as the rig's pre-flight list
-/// has them, with the clearance dialog. Without a mount it says to connect one.
+/// #2068 Settings › Imaging › Polar align: how far the run turns the
+/// connected mount each way (#2165, the rig's reach) and whether the room for
+/// it is confirmed, as the rig's pre-flight list has them, with the clearance
+/// dialog. Without a mount it says to connect one.
 class PolarClearanceSettingsRow extends ConsumerWidget {
   const PolarClearanceSettingsRow({super.key});
 
@@ -349,7 +430,7 @@ class PolarClearanceSettingsRow extends ConsumerWidget {
         helpKey: 'img.polar.clearance_confirmed',
       );
     }
-    final deg = preflight.planned.maxCwAngleDeg.toStringAsFixed(0);
+    final deg = polarReachText(preflight.planned.reachDeg, l10n.localeName);
     final messenger = ScaffoldMessenger.of(context);
     return Column(
       key: const Key('polar-clearance-setting'),
@@ -407,92 +488,39 @@ class PolarClearanceSettingsRow extends ConsumerWidget {
   }
 }
 
-/// What the clearance dialog answers: Confirm with the limit, or Take back.
-class PolarClearanceResult {
-  const PolarClearanceResult.confirm(this.limitDeg) : takeBack = false;
-  const PolarClearanceResult.takeBack() : limitDeg = 0, takeBack = true;
+/// What the clearance dialog answers: there is room, or Take back.
+enum PolarClearanceResult { confirm, takeBack }
 
-  final double limitDeg;
-  final bool takeBack;
-}
-
-/// The clearance dialog: what to check, the counterweight limit (10–75° from
-/// counterweight-down, in 5° steps), and a tick that the user checked it.
-/// The tick starts clear and clears again when the limit moves: a
-/// confirmation is for one limit (Joey, 2026-11-21). Pops
-/// [PolarClearanceResult.confirm] on Confirm (only once ticked),
+/// #2165 the clearance dialog: one question, whether there is room for the
+/// tube, counterweight and cables to turn [reachDeg] each way, and one
+/// button, "Yes, there is room" (Joey, 2026-11-21). No slider, no angle to
+/// measure. Pops [PolarClearanceResult.confirm] on it,
 /// [PolarClearanceResult.takeBack] on Take back (a [confirmed] mount only),
 /// null on Cancel.
-class PolarClearanceDialog extends StatefulWidget {
+class PolarClearanceDialog extends StatelessWidget {
   const PolarClearanceDialog({
     super.key,
-    required this.initialDeg,
-    this.confirmed = false,
+    required this.reachDeg,
+    required this.confirmed,
   });
 
-  /// The rig's limit for this mount (its default for a mount with none).
-  final double initialDeg;
+  /// How far this run turns RA each way: the rig's plan.
+  final double reachDeg;
 
-  /// The mount's clearance is confirmed now: the dialog offers Take back.
+  /// The mount has a clearance entry, for this reach or a smaller one: the
+  /// dialog offers Take back.
   final bool confirmed;
-
-  @override
-  State<PolarClearanceDialog> createState() => _PolarClearanceDialogState();
-}
-
-class _PolarClearanceDialogState extends State<PolarClearanceDialog> {
-  late double _deg = widget.initialDeg
-      .clamp(
-        PolarAlignMountClearance.minMaxCwAngleDeg,
-        PolarAlignMountClearance.maxMaxCwAngleDeg,
-      )
-      .toDouble();
-  bool _checked = false;
 
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
-    const min = PolarAlignMountClearance.minMaxCwAngleDeg;
-    const max = PolarAlignMountClearance.maxMaxCwAngleDeg;
     return adaptiveAlertDialog(
       scrollable: true,
       icon: const Icon(Icons.warning_amber_rounded),
       title: Text(l10n.polarClearanceTitle),
-      content: Column(
+      content: Text(
+        l10n.polarClearanceQuestion(polarReachText(reachDeg, l10n.localeName)),
         key: const Key('polar-clearance-dialog'),
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.polarClearanceExplain),
-          const SizedBox(height: 8),
-          Text(l10n.polarClearanceHow),
-          const SizedBox(height: 12),
-          Text(
-            l10n.polarClearanceLimit(_deg.toStringAsFixed(0)),
-            key: const Key('polar-clearance-limit-label'),
-            style: const TextStyle(fontWeight: FontWeight.w600),
-          ),
-          Slider.adaptive(
-            key: const Key('polar-clearance-limit'),
-            min: min,
-            max: max,
-            divisions: ((max - min) / 5).round(),
-            value: _deg,
-            label: '${_deg.toStringAsFixed(0)}°',
-            onChanged: (v) => setState(() {
-              if (v != _deg) _checked = false;
-              _deg = v;
-            }),
-          ),
-          CheckboxListTile.adaptive(
-            key: const Key('polar-clearance-checked'),
-            contentPadding: EdgeInsets.zero,
-            controlAffinity: ListTileControlAffinity.leading,
-            value: _checked,
-            onChanged: (v) => setState(() => _checked = v ?? false),
-            title: Text(l10n.polarClearanceTick),
-          ),
-        ],
       ),
       actions: [
         adaptiveDialogAction(
@@ -501,14 +529,13 @@ class _PolarClearanceDialogState extends State<PolarClearanceDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: Text(l10n.polarConfirmCancel),
         ),
-        if (widget.confirmed)
+        if (confirmed)
           adaptiveDialogAction(
             context,
             key: const Key('polar-clearance-take-back'),
             isDestructive: true,
-            onPressed: () => Navigator.of(
-              context,
-            ).pop(const PolarClearanceResult.takeBack()),
+            onPressed: () =>
+                Navigator.of(context).pop(PolarClearanceResult.takeBack),
             child: Text(l10n.polarClearanceTakeBack),
           ),
         adaptiveDialogAction(
@@ -516,10 +543,9 @@ class _PolarClearanceDialogState extends State<PolarClearanceDialog> {
           key: const Key('polar-clearance-confirm'),
           isDefault: true,
           filled: true,
-          onPressed: _checked
-              ? () => Navigator.of(context).pop(PolarClearanceResult.confirm(_deg))
-              : null,
-          child: Text(l10n.polarClearanceConfirm),
+          onPressed: () =>
+              Navigator.of(context).pop(PolarClearanceResult.confirm),
+          child: Text(l10n.polarClearanceYes),
         ),
       ],
     );

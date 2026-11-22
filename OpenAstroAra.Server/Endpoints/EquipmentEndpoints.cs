@@ -1003,8 +1003,8 @@ public static partial class EquipmentEndpoints {
                 [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] PolarAlignStartRequestDto? body,
                 IPolarAlignService svc, CancellationToken ct) =>
             await PolarAlignStartAsync(svc, body, key, ct))
-            // #2170 — the hand_turn body field and the hand_turn query of start-plan and preflight are removed.
-            .WithSummary("Start one polar-align measurement; RA always turns with the mount's motor. #2170 removed the hand_turn field (and the hand_turn query of start-plan and preflight): there is no hand-turn mode, and a body that still sends it makes the same motor start.");
+            // The removed fields' history is in design/API_CONTRACT.md (#2170), not in the summary.
+            .WithSummary("Start one polar-align measurement; RA always turns with the mount's motor.");
         // Retired (#2082): one measurement per Start, so there is no next step. Always 409.
         polar.MapPost("/next", async ([FromHeader(Name = "Idempotency-Key")] string? key, IPolarAlignService svc, CancellationToken ct) =>
                 await PolarAlignNextAsync(svc, key, ct))
