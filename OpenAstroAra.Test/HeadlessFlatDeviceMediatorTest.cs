@@ -24,9 +24,9 @@ namespace OpenAstroAra.Test {
     /// §38k-19 — verifies <see cref="HeadlessFlatDeviceMediator"/> sentinel
     /// behavior. Completes the device-mediator stub set together with
     /// <see cref="HeadlessWeatherDataMediator"/>. No instruction is registered
-    /// against it (there are no flat-device sequence items; the disconnect
-    /// instructions that would consume the full device set are deferred with the
-    /// Connect capstone).
+    /// against it (the flat-panel instructions go through
+    /// <c>IFlatCaptureExecutor</c>; the Connect instructions reach devices
+    /// through the connections port).
     /// </summary>
     [TestFixture]
     public class HeadlessFlatDeviceMediatorTest {

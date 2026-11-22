@@ -260,8 +260,9 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         domeMediator ??= new HeadlessDomeMediator();
         // §38k-21 — the one non-mediator dependency a dome instruction needs.
         domeFollower ??= new HeadlessDomeFollower();
-        // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub
-        // that the Connect dir (except ConnectEquipment) + Dither/SwitchFilter need.
+        // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub. SwitchFilter and the
+        // autofocus triggers take the filter wheel; no instruction takes the flat-device or weather stub
+        // (Program.cs DI still resolves them).
         filterWheelMediator ??= new HeadlessFilterWheelMediator();
         flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
         weatherDataMediator ??= new HeadlessWeatherDataMediator();
@@ -270,7 +271,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // placeholder keeps the prototype JSON-resolvable for clone/validate; Program.cs hands in the real
         // §58.4 MeridianFlipExecutor so an executed flip actually runs the recovery sequence.
         meridianFlipExecutor ??= new PlaceholderMeridianFlipExecutor();
-        // The Connect Equipment item and the Reconnect trigger connect through the rig's connections; Program.cs
+        // The Connect and Disconnect items and the Reconnect trigger go through the rig's connections; Program.cs
         // hands in the EquipmentReconnector. This placeholder keeps the prototypes constructible and refuses a run.
         equipmentConnections ??= new UnwiredEquipmentConnections();
         // Wait (until time) and Until a time need their time sources: the clock (the default, which
@@ -397,21 +398,15 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             [typeof(OpenFlatPanelCover)] = () => new OpenFlatPanelCover(flatCaptureExecutor),
             // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
             [typeof(CloseFlatPanelCover)] = () => new CloseFlatPanelCover(flatCaptureExecutor),
-            // §38k-22 — Connect dir. ConnectEquipment, DisconnectEquipment, DisconnectAllEquipment (and the
-            // ReconnectTrigger below) take only the connections port (#1545); ConnectAll/SwitchProfile still
-            // take the full 11 device mediators and IProfileService (profile-first). Real connect/disconnect
+            // §38k-22 — Connect dir. ConnectEquipment, ConnectAll, DisconnectEquipment and DisconnectAll take
+            // the connections port (#1545); ConnectAll also reads the profile's guider type. SwitchProfile
+            // takes only the profile service and always refuses (ADR 0023). Real connect/disconnect
             // orchestration runs at execution time; these register so saved bodies resolve.
-            [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(equipmentConnections, profileService),
             [typeof(ConnectEquipment)] = () => new ConnectEquipment(equipmentConnections),
             [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(equipmentConnections),
             [typeof(DisconnectEquipment)] = () => new DisconnectEquipment(equipmentConnections),
-            [typeof(SwitchProfile)] = () => new SwitchProfile(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(SwitchProfile)] = () => new SwitchProfile(profileService),
 
             // §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
             // parameterless; the two astrometry conditions read the site (and custom horizon) from the

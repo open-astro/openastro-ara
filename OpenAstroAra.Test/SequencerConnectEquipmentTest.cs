@@ -16,6 +16,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Equipment.Interfaces.Mediator;
+using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.SequenceItem.Connect;
 using OpenAstroAra.Sequencer.Trigger.Connect;
 using OpenAstroAra.Server.Contracts;
@@ -51,6 +53,10 @@ namespace OpenAstroAra.Test {
             _owned.Add(disposable);
             return disposable;
         }
+
+        // One fixture instance serves every test: a release set by an earlier test's teardown must not leak into the next.
+        [SetUp]
+        public void HoldConnects() => _releaseConnect.Reset();
 
         [TearDown]
         public void DisposeOwned() {
@@ -107,6 +113,14 @@ namespace OpenAstroAra.Test {
             // Disconnect All reaches the Switch role, which resolves its service before it asks what is known.
             services.Setup(s => s.GetService(typeof(ISwitchService))).Returns(Mock.Of<ISwitchService>(
                 m => m.GetAllAsync(It.IsAny<CancellationToken>()) == Task.FromResult<IReadOnlyList<SwitchDto>>(Array.Empty<SwitchDto>())));
+            // Connect All asks every role whether it is connected, so each role resolves its service; these hold no device.
+            services.Setup(s => s.GetService(typeof(ICameraService))).Returns(Mock.Of<ICameraService>());
+            services.Setup(s => s.GetService(typeof(ITelescopeService))).Returns(Mock.Of<ITelescopeService>());
+            services.Setup(s => s.GetService(typeof(IFocuserService))).Returns(Mock.Of<IFocuserService>());
+            services.Setup(s => s.GetService(typeof(IFilterWheelService))).Returns(Mock.Of<IFilterWheelService>());
+            services.Setup(s => s.GetService(typeof(IDomeService))).Returns(Mock.Of<IDomeService>());
+            services.Setup(s => s.GetService(typeof(IObservingConditionsService))).Returns(Mock.Of<IObservingConditionsService>());
+            services.Setup(s => s.GetService(typeof(IFlatDeviceService))).Returns(Mock.Of<IFlatDeviceService>());
             if (guider is not null) {
                 services.Setup(s => s.GetService(typeof(IGuiderService))).Returns(guider);
             }
@@ -156,15 +170,13 @@ namespace OpenAstroAra.Test {
             Track(new RotatorService { DeviceFactory = _ => fake });
 
         // The construction points of the instructions: Connect Equipment and the Reconnect trigger take the
-        // connections port (the reconnector); Disconnect Equipment takes it too; the others still take the mediators until their slices move them.
+        // connections port (the reconnector); Disconnect Equipment and Connect All take it too (Connect All also reads the profile);
+        // Switch Profile takes only the profile.
         private static ConnectEquipment ConnectItem(string device, Rig rig) =>
             new(rig.Reconnector) { SelectedDevice = device };
 
         private static ConnectAllEquipment ConnectAllItem(Rig rig) =>
-            new(rig.Profile, new HeadlessCameraMediator(), new HeadlessFilterWheelMediator(), new HeadlessFocuserMediator(),
-                rig.Rotator, new HeadlessTelescopeMediator(), rig.GuiderOrNone, new HeadlessSwitchMediator(),
-                new HeadlessFlatDeviceMediator(), new HeadlessWeatherDataMediator(), new HeadlessDomeMediator(),
-                rig.SafetyMonitor);
+            new(rig.Reconnector, rig.Profile);
 
         private static DisconnectEquipment DisconnectItem(string device, Rig rig) =>
             new(rig.Reconnector) { SelectedDevice = device };
@@ -173,10 +185,7 @@ namespace OpenAstroAra.Test {
             new(rig.Reconnector) { SelectedDevice = device };
 
         private static SwitchProfile SwitchProfileItem(Rig rig) =>
-            new(rig.Profile, new HeadlessCameraMediator(), new HeadlessFilterWheelMediator(), new HeadlessFocuserMediator(),
-                rig.Rotator, new HeadlessTelescopeMediator(), rig.GuiderOrNone, new HeadlessSwitchMediator(),
-                new HeadlessFlatDeviceMediator(), new HeadlessWeatherDataMediator(), new HeadlessDomeMediator(),
-                rig.SafetyMonitor) { SelectedProfileId = Guid.Parse("cccccccc-0000-0000-0000-000000000000"), Reconnect = true };
+            new(rig.Profile) { SelectedProfileId = Guid.Parse("cccccccc-0000-0000-0000-000000000000"), Reconnect = true };
 
         private static async Task WaitForAsync(Func<bool> condition, string what) {
             for (var i = 0; i < 100 && !condition(); i++) {
@@ -252,6 +261,49 @@ namespace OpenAstroAra.Test {
 
             await Assert.CatchAsync<OperationCanceledException>(() => item.Execute(new Progress<ApplicationStatus>(), stop.Token),
                 "a stopped connect throws OperationCanceledException, not SequenceEntityFailedException");
+        }
+
+        // ── Connect All Equipment (B1 again, and B3b: the Safety Monitor goes first) ──
+
+        [Test]
+        public async Task ConnectAllEquipment_connects_every_device_the_rig_remembers() {
+            var monitor = Track(new FakeSafetyMonitorDevice());
+            var rotator = Track(new FakeRotatorDevice());
+            var rig = BuildRig(SafetyMonitorOver(monitor), RotatorOver(rotator),
+                Dto(DeviceType.SafetyMonitor, "rig-safety"), Dto(DeviceType.Rotator, "rig-rotator"));
+
+            await ConnectAllItem(rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(rig.SafetyMonitor.GetInfo().Connected, Is.True, "Connect All reported success but the monitor is not connected");
+            Assert.That(rig.Rotator.GetInfo().Connected, Is.True, "Connect All reported success but the rotator is not connected");
+        }
+
+        [Test]
+        public async Task ConnectAllEquipment_stops_before_any_other_device_when_the_safety_monitor_fails_to_connect() {
+            var rotator = Track(new FakeRotatorDevice());
+            var safetyMonitor = Track(new SafetyMonitorService {
+                DeviceFactory = _ => throw new InvalidOperationException("the monitor's Alpaca server is down"),
+            });
+            var rig = BuildRig(safetyMonitor, RotatorOver(rotator),
+                Dto(DeviceType.SafetyMonitor, "rig-safety"), Dto(DeviceType.Rotator, "rig-rotator"));
+
+            var failure = await Assert.CatchAsync<Exception>(() => ConnectAllItem(rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None),
+                "a rig whose safety is unknown must fail Connect All");
+            Assert.That(failure!.ToString(), Does.Contain("Safety Monitor"), "the failure names the device that stopped the connect");
+            await Task.Delay(200);
+            Assert.That(rotator.Connects, Is.EqualTo(0), "no device connects before the Safety Monitor has");
+        }
+
+        // ADR 0023 rule 5: a refusal reaches the Sequencer as a refusal, with its cause, never re-wrapped as a plain failure.
+        [Test]
+        public async Task ConnectAllEquipment_keeps_a_refusal_as_a_refusal() {
+            var port = new Mock<IEquipmentConnections>();
+            port.Setup(p => p.ConnectAsync(EquipmentRole.SafetyMonitor, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new EquipmentRefusedException(EquipmentRefusalCause.NotSupported, "the monitor cannot connect here"));
+
+            var refusal = await Assert.ThrowsAsync<EquipmentRefusedException>(() =>
+                new ConnectAllEquipment(port.Object, Mock.Of<IProfileService>()).Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(refusal!.Cause, Is.EqualTo(EquipmentRefusalCause.NotSupported));
         }
 
         // ── Disconnect Equipment (B3c: a Sequencer disconnect is a user disconnect, #1539) ──
@@ -361,6 +413,40 @@ namespace OpenAstroAra.Test {
 
         // ── The guider (PHD2, not on the lifecycle module and not in the selection store) ──
 
+        [Test]
+        [Category("IO")] // loopback TCP to the bench fake guider
+        [Category("bench")]
+        public async Task ConnectAllEquipment_dials_the_guider_the_profile_names() {
+            await using var phd2 = StartFakeGuider();
+            var profile = ProfileWithPhd2At(phd2);
+            var rig = BuildRig(SafetyMonitorOver(Track(new FakeSafetyMonitorDevice())), RotatorOver(Track(new FakeRotatorDevice())),
+                profile, GuiderOver(profile));
+
+            await ConnectAllItem(rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+
+            Assert.That(rig.Guider!.GetInfo().Connected, Is.True, "the profile names PHD2, so Connect All connects the guider");
+            Assert.That(phd2.ConnectionCount, Is.GreaterThanOrEqualTo(1), "the connect must reach PHD2");
+        }
+
+        // Guard (passes on master). No production code writes No_Guider (only NINA's DummyGuider, which Ara
+        // never builds), so this sets it by hand: it pins the skip, not an identity source.
+        [Test]
+        [Category("IO")] // loopback TCP to the bench fake guider
+        [Category("bench")]
+        public async Task ConnectAllEquipment_does_not_dial_the_guider_when_the_profile_has_none() {
+            await using var phd2 = StartFakeGuider();
+            var profile = ProfileWithPhd2At(phd2);
+            profile.ActiveProfile.GuiderSettings.GuiderName = "No_Guider";
+            var rig = BuildRig(SafetyMonitorOver(Track(new FakeSafetyMonitorDevice())), RotatorOver(Track(new FakeRotatorDevice())),
+                profile, GuiderOver(profile));
+
+            await ConnectAllItem(rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None);
+            await Task.Delay(300);
+
+            Assert.That(rig.Guider!.GetInfo().Connected, Is.False);
+            Assert.That(phd2.ConnectionCount, Is.EqualTo(0), "No_Guider means no guider: PHD2 is never dialled");
+        }
+
         // Guard that pins a known gap (passes on master): the guider has no user-disconnect gate, so a
         // Reconnect trigger redials a guider the sequence disconnected. Gating it changes the §42.3 ladder
         // for every caller; when that lands, this test flips on purpose.
@@ -385,5 +471,28 @@ namespace OpenAstroAra.Test {
             Assert.That(phd2.ConnectionCount, Is.GreaterThanOrEqualTo(1));
         }
 
+
+        // ── Switch Profile (B3a: never disconnect the rig and then fail) ──
+
+        [Test]
+        public async Task SwitchProfile_that_cannot_switch_refuses_before_it_disconnects_anything() {
+            var fake = Track(new FakeRotatorDevice());
+            var rig = BuildRig(SafetyMonitorOver(Track(new FakeSafetyMonitorDevice())), RotatorOver(fake));
+            await ConnectedAsync(rig.Rotator, "rig-rotator");
+
+            await Assert.CatchAsync<SequenceEntityFailedException>(() =>
+                SwitchProfileItem(rig).Execute(new Progress<ApplicationStatus>(), CancellationToken.None));
+            Assert.That(rig.Rotator.GetInfo().Connected, Is.True, "the rig stays connected when the switch cannot happen");
+            Assert.That(fake.Disconnects, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void SwitchProfile_fails_validation_with_the_refusal() {
+            var item = new SwitchProfile(Track(new StoreBackedProfileService(new InMemoryProfileStore())));
+
+            Assert.That(item.Validate(), Is.False);
+            Assert.That(item.Issues, Has.Count.EqualTo(1));
+            Assert.That(item.Issues[0], Is.EqualTo("The daemon runs one profile; switch it from the Profiles page."));
+        }
     }
 }

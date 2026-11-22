@@ -1,0 +1,3 @@
+### Fixed (sequencer)
+- **Connect All Equipment connects the rig you set up, and no longer fails on a rig with a guider** (#1545): it connects a remembered Safety Monitor first and stops, naming the monitor, if that fails; it then connects every other device the rig remembers, and PHD2 when the profile names a guider. Before, it connected nothing and reported success, or threw an "ambiguous match" error on a rig whose profile names a guider.
+- **Switch Profile refuses up front instead of disconnecting the rig** (#1545): the daemon runs one profile, so the instruction now reports "switch it from the Profiles page" in the sequence check and when it runs, before it touches any device. Sequences that contain it still load.

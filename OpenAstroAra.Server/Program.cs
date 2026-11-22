@@ -1250,13 +1250,11 @@ public partial class Program {
         // Open/Close shutter, Park, FindHome and SlewAzimuth instructions drive the live Alpaca dome.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IDomeMediator>(
             sp => sp.GetRequiredService<DomeService>());
-        // §38k-19/20 — last two device-mediator stubs complete the device set.
-        // No instruction prototype consumes them yet (there are no flat-device /
-        // weather sequence items, and the Connect dir — Connect*/Disconnect*/
-        // SwitchProfile — is deferred: Connect*/SwitchProfile need IProfileService,
-        // and the Disconnect* classes are `internal` in the Sequencer; they land
-        // together as the Connect capstone). DI-registered so consumers can resolve
-        // the full IDeviceMediator surface.
+        // §38k-19/20 — no sequence instruction takes these two stubs. The flat-panel
+        // instructions go through IFlatCaptureExecutor, nothing in the Sequencer reads
+        // weather data, and the Connect instructions reach devices through the
+        // connections port (#1545). DI-registered so consumers can resolve the full
+        // IDeviceMediator surface.
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IFlatDeviceMediator,
             OpenAstroAra.Server.Services.Equipment.HeadlessFlatDeviceMediator>();
         builder.Services.AddSingleton<OpenAstroAra.Equipment.Interfaces.Mediator.IWeatherDataMediator,
