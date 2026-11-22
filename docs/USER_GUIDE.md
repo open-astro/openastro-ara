@@ -377,7 +377,7 @@ framing/focus loop when you need to point or focus by eye.
   seconds for that. The first time you use the motor on a mount, **Confirm clearance…** asks you to
   turn RA with the hand controller from counterweight-down, see how far it can go before anything
   touches the pier, the tripod or a cable, and set that limit. Until you confirm, **Move the mount**
-  is off; **Turn RA by hand** still works, because it moves nothing. The confirmation is kept for
+  stays off. The confirmation is kept for
   that mount in this profile, for that limit: change the limit and you confirm again. **Take back**
   (in the dialog, or Settings › Imaging › Polar align) removes it. No setting or app option skips a
   failing check.

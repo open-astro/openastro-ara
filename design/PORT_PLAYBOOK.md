@@ -6671,7 +6671,7 @@ removed by #2159.
 **No flag lifts a guard.** `force` on `POST /equipment/telescope/slew` lifts only `run_in_progress`;
 `polar-align-moving-mount`, `below-horizon-limit` and `counterweight-limit` (the GoTo refusal of #2073,
 not the dropped #2065 limit) are checked before it. A
-Polar Align start has no `force`. There is no manual (hand-turn) mode: #2170 removes #2121's, and a
+Polar Align start has no `force`. There is no manual (hand-turn) mode: #2174 (#2170) removed #2121's, and a
 mount that cannot move its RA axis is refused.
 
 **Deviations, on purpose.** From the #2048 ARA spec (Joey's re-spec, 2026-11-20): Stop answers after
