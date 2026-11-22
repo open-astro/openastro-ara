@@ -3087,7 +3087,7 @@ abstract class AppLocalizations {
   /// **'Pausing'**
   String get planPausingLabel;
 
-  /// Plan pill and the greyed shutter's tap while a Pause after this frame waits for the frame in hand to finish
+  /// Plan pill and run tracker while a Pause after this frame waits for the frame in hand to finish (the shutter stays live; a tap pauses now)
   ///
   /// In en, this message translates to:
   /// **'Pausing after this frame'**

@@ -2395,7 +2395,7 @@
   },
   "planPausingAfterFrame": "Pausing after this frame",
   "@planPausingAfterFrame": {
-    "description": "Plan pill and the greyed shutter's tap while a Pause after this frame waits for the frame in hand to finish"
+    "description": "Plan pill and run tracker while a Pause after this frame waits for the frame in hand to finish (the shutter stays live; a tap pauses now)"
   },
   "planPauseAfterFlip": "Pause after the flip",
   "@planPauseAfterFlip": {
