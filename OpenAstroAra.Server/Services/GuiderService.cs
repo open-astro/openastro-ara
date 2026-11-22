@@ -692,6 +692,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     // Recovered: the user disconnect bumps UserDisconnects, and the shared reaction releases its episode by user.
     private void DropOpenFaultsLocked() {
         _linkFault = null;
+        _guidedLinkFault = null;
         _cameraFault = null;
         _starLostReacted = false;
         _starLostFault = null;
@@ -762,13 +763,17 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     // converge here. Caller holds _gate and has verified the loss belongs to the
     // current guider/session.
     private void HandleLinkDownLocked() {
+        // #2169 — read before anything: the reconnect's dispose of this guider forgets that it guided.
+        var guided = GuidingOnLocked();
+        _reconcileStartsAtLinkLoss = ReconcileStarts;
         SetStateLocked(EquipmentConnectionState.Error);
         // §63.3 guider-d: the daemon dropped mid-session — try to recover the process
         // (and, on success, auto-reconnect within the §63.3 grace window).
         BeginRecoveryLocked();
         // §42.2: guiding is gone NOW — any running sequence is shooting unguided, so the shared
         // reaction runs the profile's on_guider_lost plan.
-        _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down");
+        // #2169 — guided, the light in progress is stopped and guiding restarts before the runs resume.
+        _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down", f => _guidedLinkFault = guided ? f : null);
     }
 
     // Append each guide step's raw RA/Dec error to the bounded RMS window. Guarded on the current

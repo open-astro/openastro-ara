@@ -46,6 +46,17 @@ public interface IGuiderEpisodeListener {
     /// joined a guider episode already running. A fault the guider still has open can then make way for a
     /// new one that runs the plan again. Called outside the reaction's lock.</summary>
     void Released(EquipmentFaultEvent fault) { }
+
+    /// <summary>#2169 — the guider was guiding when this fault took guiding away (a link loss mid-guide):
+    /// the pause also stops the LIGHT in progress, which is not saved or counted and is taken again on
+    /// Resume. Called outside the reaction's lock.</summary>
+    bool GuidedWhenLost(EquipmentFaultEvent fault) => false;
+
+    /// <summary>#2169 — the fault is recovered and the runs it paused are about to resume. A guider that was
+    /// guiding when the fault hit starts guiding again and waits for it to settle first, so the run never
+    /// resumes unguided. False = guiding did not come back: the runs stay paused. True when there is
+    /// nothing to restore. Called outside the reaction's lock.</summary>
+    Task<bool> RestoreGuidingAsync(EquipmentFaultEvent fault, IReadOnlyList<Guid> runIds, CancellationToken ct) => Task.FromResult(true);
 }
 
 /// <summary>
@@ -375,8 +386,10 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             return;
         }
 
-        var paused = await PauseActiveRunsAsync(plan.Adoptable).ConfigureAwait(false);
         // Outside _gate: the guider takes its own lock (lock order guider, hub, reaction).
+        // #2169 — guiding was on when the link went: the light in progress is stopped, not finished unguided.
+        var interruptFrames = plan.Adoptable || _guiderEpisodes?.Invoke()?.GuidedWhenLost(fault) == true;
+        var paused = await PauseActiveRunsAsync(plan.Adoptable, interruptFrames).ConfigureAwait(false);
         _guiderEpisodes?.Invoke()?.Paused(fault, paused);
         if (paused.Count == 0) {
             await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
@@ -397,6 +410,17 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             if (!recovered.IsCompleted && await ReleasedByUserAsync(fault, label, paused, userDisconnected).ConfigureAwait(false)) {
                 return;
             }
+        }
+        // #2169 — guiding first: a run that was guided resumes only once guiding is back and settled. If it
+        // does not come back the runs stay paused (never resumed unguided) and the user is told once.
+        if (!await RestoreGuidingQuietlyAsync(fault, paused).ConfigureAwait(false)) {
+            if (_cts.IsCancellationRequested || !await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false)) {
+                return; // daemon shutdown, or the user already took the runs over: nothing to say
+            }
+            await NotifyQuietlyAsync(plan.GiveUpSeverity, "Guiding did not restart — sequence stays paused",
+                $"'{label}' is connected again, but guiding did not restart and settle, so {paused.Count} run(s) stay paused "
+                + "and no unguided frame is taken. Start guiding, then Resume them.").ConfigureAwait(false);
+            return;
         }
         var resumed = await ResumeRunsAsync(paused).ConfigureAwait(false);
         // The hub's Recovered already broadcast `recovered` and resolved the fault-log row.
@@ -696,16 +720,20 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
         Justification = "Best-effort rung: a sequencer fault must not stop the remaining reaction steps. CA1031's log-and-recover boundary applies.")]
-    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable = false) {
+    private async Task<IReadOnlyList<Guid>> PauseActiveRunsAsync(bool adoptable = false, bool interruptFrames = false) {
         var sequencer = _sequencerResolver?.Invoke();
         if (sequencer is null) {
             return [];
         }
         try {
             // An adoptable pause lets the safety engine take the runs over (a parked guider sends no
-            // guide step to resume on).
-            return adoptable
-                ? await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false)
+            // guide step to resume on), and stops the light in progress. #2169 — a guided link loss stops
+            // the light too, without handing the pause to anyone.
+            if (adoptable) {
+                return await sequencer.PauseActiveRunsAsync(adoptable: true, CancellationToken.None).ConfigureAwait(false);
+            }
+            return interruptFrames
+                ? await sequencer.PauseActiveRunsAsync(adoptable: false, interruptFrames: true, CancellationToken.None).ConfigureAwait(false)
                 : await sequencer.PauseActiveRunsAsync(CancellationToken.None).ConfigureAwait(false);
         } catch (Exception ex) {
             LogRungFailed("pause", ex);
@@ -725,6 +753,37 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogRungFailed("resume", ex);
             return 0;
+        }
+    }
+
+    // #2169 — the guider brings guiding back before its runs resume (IGuiderEpisodeListener.RestoreGuidingAsync).
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: a guider fault while restarting guiding leaves the runs paused, the safe outcome. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> RestoreGuidingQuietlyAsync(EquipmentFaultEvent fault, IReadOnlyList<Guid> paused) {
+        var listener = _guiderEpisodes?.Invoke();
+        if (listener is null) {
+            return true;
+        }
+        try {
+            return await listener.RestoreGuidingAsync(fault, paused, _cts.Token).ConfigureAwait(false);
+        } catch (Exception ex) {
+            LogRungFailed("restore_guiding", ex);
+            return false;
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort read: a sequencer fault counts as still paused, so the user hears why. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> AnyStillDaemonPausedAsync(IReadOnlyList<Guid> ids) {
+        var sequencer = _sequencerResolver?.Invoke();
+        if (sequencer is null) {
+            return false;
+        }
+        try {
+            return (await sequencer.DaemonPausedRunsAsync(ids.ToArray(), CancellationToken.None).ConfigureAwait(false)).Count > 0;
+        } catch (Exception ex) {
+            LogRungFailed("custody", ex);
+            return true;
         }
     }
 
