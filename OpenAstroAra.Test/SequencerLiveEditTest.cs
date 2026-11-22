@@ -474,10 +474,11 @@ namespace OpenAstroAra.Test {
             public readonly TaskCompletionSource FirstStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public readonly TaskCompletionSource ReleaseFirst = new(TaskCreationOptions.RunContinuationsAsynchronously);
             public readonly HeadlessSequencerFactory Factory = HeadlessSequencerFactory.WithDefaults();
+            public volatile bool CameraConnected = true;
 
             public ExposureRig() {
                 var camera = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.ICameraMediator>();
-                camera.Setup(c => c.GetInfo()).Returns(new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = true });
+                camera.Setup(c => c.GetInfo()).Returns(() => new OpenAstroAra.Equipment.Equipment.MyCamera.CameraInfo { Connected = CameraConnected });
                 var imaging = new Moq.Mock<OpenAstroAra.Equipment.Interfaces.Mediator.IImagingMediator>();
                 imaging.Setup(m => m.CaptureImage(Moq.It.IsAny<OpenAstroAra.Equipment.Model.CaptureSequence>(), Moq.It.IsAny<CancellationToken>(),
                         Moq.It.IsAny<IProgress<OpenAstroAra.Core.Model.ApplicationStatus>?>(), Moq.It.IsAny<string>()))
@@ -622,6 +623,23 @@ namespace OpenAstroAra.Test {
             await svc.ResumeAsync(id, null, null, CancellationToken.None);
             await WaitForTerminalAsync(svc, id);
             Assert.That(rig.Frames, Is.EqualTo(new[] { (5.0, -1), (5.0, -1) }), "both old values came back");
+        }
+
+        [Test]
+        public async Task A_problem_already_there_does_not_refuse_the_edit() {
+            // The camera dropped during the pause: TakeExposure already fails Validate, and that is
+            // not the edit's fault. The new exposure time is still taken.
+            var id = Guid.NewGuid();
+            var rig = new ExposureRig();
+            var (svc, store) = rig.Service(id, iterations: 2);
+            await PauseAfterFirstFrameAsync(svc, id, rig);
+            rig.CameraConnected = false;
+
+            var result = await svc.SetRunFieldsAsync(id, Fields(ExposureField("ExposureTime", 180.0)), null, CancellationToken.None);
+            Assert.That(result.Outcome, Is.EqualTo(SequenceLiveEditOutcome.Applied), result.Reason);
+            Assert.That(store.ReplacedBody!.Value.GetRawText(), Does.Contain("\"ExposureTime\":180"));
+            await svc.StopAsync(id, null, CancellationToken.None);
+            await WaitForTerminalAsync(svc, id);
         }
 
         [Test]
