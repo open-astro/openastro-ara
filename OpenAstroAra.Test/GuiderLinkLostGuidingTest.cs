@@ -51,8 +51,9 @@ namespace OpenAstroAra.Test {
             public readonly HeadlessProfileService Profile = new();
             public readonly FaultReactionService Reaction;
             public bool RestartSucceeds = true;
-            public Func<Task>? OnRestart; // the fake's side of a restart: app state Guiding, a settled guide step
+            public Func<double, Task>? OnRestart; // the fake's side of a restart: app state Guiding, a guide step of that distance
             public Func<int, bool> Settles = _ => true; // whether restart n (from 1) brings guiding back and settled
+            public bool GuidesUnsettled; // a restart that does not settle still guides, far from the lock position
             public GuiderService Service = null!;
 
             public Rig() {
@@ -97,8 +98,12 @@ namespace OpenAstroAra.Test {
                 Service.RestartGuidingOverride = async _ => {
                     int n;
                     lock (Steps) { Steps.Add("restart"); n = Steps.Count(s => s == "restart"); }
-                    if (RestartSucceeds && Settles(n) && OnRestart is { } hook) {
-                        await hook().ConfigureAwait(false);
+                    if (RestartSucceeds && OnRestart is { } hook) {
+                        if (Settles(n)) {
+                            await hook(0.02).ConfigureAwait(false);
+                        } else if (GuidesUnsettled) {
+                            await hook(5.0).ConfigureAwait(false);
+                        }
                     }
                     return RestartSucceeds;
                 };
@@ -135,12 +140,12 @@ namespace OpenAstroAra.Test {
             fake.SetOnConnectEvents(PhdEvents.Version(subver: "openastroara-fake"), PhdEvents.AppState(state));
             fake.OnRpc("get_app_state", JsonValue.Create(state));
             fake.OnRpc("get_connected", JsonValue.Create(true));
-            rig.OnRestart = async () => {
+            rig.OnRestart = async distance => {
                 var guider = rig.Service.RequireConnectedGuider();
                 fake.OnRpc("get_app_state", JsonValue.Create("Guiding"));
                 await fake.BroadcastAsync(PhdEvents.AppState("Guiding")).ConfigureAwait(false);
                 await fake.BroadcastAsync(PhdEvents.StartGuiding()).ConfigureAwait(false);
-                await fake.BroadcastAsync(PhdEvents.GuideStep(0.02, 0.02)).ConfigureAwait(false);
+                await fake.BroadcastAsync(PhdEvents.GuideStep(distance, distance)).ConfigureAwait(false);
                 await WaitUntilAsync(() => guider.AppState?.State == "Guiding").ConfigureAwait(false);
             };
             await rig.Service.ConnectAsync(new GuiderConnectRequestDto("127.0.0.1", fake.Port), idempotencyKey: null, CancellationToken.None).ConfigureAwait(false);
@@ -299,6 +304,20 @@ namespace OpenAstroAra.Test {
             lock (rig.Steps) {
                 Assert.That(rig.Steps, Is.EqualTo(RestartThenResume), "guiding restarts and settles first, then the run resumes");
             }
+        }
+
+        [Test]
+        public async Task A_guiding_restart_that_never_settles_leaves_the_run_paused_with_one_alert() {
+            // #2169 review — PHD2 takes the start and guides, but the star never comes within the settle distance.
+            using var rig = new Rig { Settles = _ => false, GuidesUnsettled = true };
+            rig.Service.GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(1);
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the user is never told why the run stays paused");
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((1, 0)), "started once, never resumed on unsettled guiding");
         }
     }
 }
