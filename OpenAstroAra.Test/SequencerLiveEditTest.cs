@@ -534,11 +534,12 @@ namespace OpenAstroAra.Test {
             Assert.Fail($"run never reached {state}");
         }
 
-        /// <summary>Pause armed during frame 1; the frame finishes and the run parks at the boundary.</summary>
+        /// <summary>Pause after this frame, armed during frame 1; the frame finishes and the run parks at
+        /// the boundary. A plain Pause would stop frame 1 and take it again on Resume (#2172).</summary>
         private static async Task PauseAfterFirstFrameAsync(SequencerService svc, Guid id, ExposureRig rig) {
             await svc.StartAsync(id, StartReq, null, CancellationToken.None);
             await rig.FirstStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            await svc.PauseAsync(id, null, CancellationToken.None);
+            await svc.PauseAsync(id, afterFrame: true, null, CancellationToken.None);
             rig.ReleaseFirst.TrySetResult();
             await WaitForStateAsync(svc, id, SequenceRunState.Paused);
         }
