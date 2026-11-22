@@ -397,21 +397,15 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
             [typeof(OpenFlatPanelCover)] = () => new OpenFlatPanelCover(flatCaptureExecutor),
             // #1757 — closes the cover for unattended bias/darks; fails (never skips) without a motorised cover.
             [typeof(CloseFlatPanelCover)] = () => new CloseFlatPanelCover(flatCaptureExecutor),
-            // §38k-22 — Connect dir. ConnectEquipment, DisconnectEquipment, DisconnectAllEquipment (and the
-            // ReconnectTrigger below) take only the connections port (#1545); ConnectAll/SwitchProfile still
-            // take the full 11 device mediators and IProfileService (profile-first). Real connect/disconnect
+            // §38k-22 — Connect dir. ConnectEquipment, ConnectAll, DisconnectEquipment and DisconnectAll take
+            // the connections port (#1545); ConnectAll also reads the profile's guider type. SwitchProfile
+            // takes only the profile service and always refuses (ADR 0023). Real connect/disconnect
             // orchestration runs at execution time; these register so saved bodies resolve.
-            [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(ConnectAllEquipment)] = () => new ConnectAllEquipment(equipmentConnections, profileService),
             [typeof(ConnectEquipment)] = () => new ConnectEquipment(equipmentConnections),
             [typeof(DisconnectAllEquipment)] = () => new DisconnectAllEquipment(equipmentConnections),
             [typeof(DisconnectEquipment)] = () => new DisconnectEquipment(equipmentConnections),
-            [typeof(SwitchProfile)] = () => new SwitchProfile(
-                profileService, cameraMediator, filterWheelMediator, focuserMediator,
-                rotatorMediator, telescopeMediator, guiderMediator, switchMediator,
-                flatDeviceMediator, weatherDataMediator, domeMediator, safetyMonitorMediator),
+            [typeof(SwitchProfile)] = () => new SwitchProfile(profileService),
 
             // §38k-7 / §38.10a — the condition prototypes. LoopCondition and TimeSpanCondition are
             // parameterless; the two astrometry conditions read the site (and custom horizon) from the

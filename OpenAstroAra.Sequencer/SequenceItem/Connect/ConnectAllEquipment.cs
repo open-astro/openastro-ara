@@ -1,57 +1,28 @@
 using Newtonsoft.Json;
 using OpenAstroAra.Core.Model;
 using OpenAstroAra.Core.Utility;
-using OpenAstroAra.Equipment.Equipment;
-using OpenAstroAra.Equipment.Interfaces.Mediator;
 using OpenAstroAra.Profile.Interfaces;
+using OpenAstroAra.Sequencer.Connections;
 using OpenAstroAra.Sequencer.Validations;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
+    /// <summary>
+    /// Connects the rig through the connections port (#1545, ADR 0023): the Safety Monitor first, then every
+    /// other role with a remembered or retained device, then the guider when the profile names a guider type.
+    /// The guider is not Alpaca and not in the selection store, so the profile (not the rig's memory) says whether it is wanted.
+    /// </summary>
     [JsonObject(MemberSerialization.OptIn)]
     public class ConnectAllEquipment : SequenceItem, IValidatable {
-        private IProfileService profileService;
-        private ICameraMediator cameraMediator;
-        private IFilterWheelMediator fwMediator;
-        private IFocuserMediator focuserMediator;
-        private IRotatorMediator rotatorMediator;
-        private ITelescopeMediator telescopeMediator;
-        private IGuiderMediator guiderMediator;
-        private ISwitchMediator switchMediator;
-        private IFlatDeviceMediator flatDeviceMediator;
-        private IWeatherDataMediator weatherDataMediator;
-        private IDomeMediator domeMediator;
-        private ISafetyMonitorMediator safetyMonitorMediator;
+        private readonly IEquipmentConnections connections;
+        private readonly IProfileService profileService;
 
-        public ConnectAllEquipment(IProfileService profileService,
-                                ICameraMediator cameraMediator,
-                                IFilterWheelMediator fwMediator,
-                                IFocuserMediator focuserMediator,
-                                IRotatorMediator rotatorMediator,
-                                ITelescopeMediator telescopeMediator,
-                                IGuiderMediator guiderMediator,
-                                ISwitchMediator switchMediator,
-                                IFlatDeviceMediator flatDeviceMediator,
-                                IWeatherDataMediator weatherDataMediator,
-                                IDomeMediator domeMediator,
-                                ISafetyMonitorMediator safetyMonitorMediator) {
+        public ConnectAllEquipment(IEquipmentConnections connections, IProfileService profileService) {
+            this.connections = connections;
             this.profileService = profileService;
-            this.cameraMediator = cameraMediator;
-            this.fwMediator = fwMediator;
-            this.focuserMediator = focuserMediator;
-            this.rotatorMediator = rotatorMediator;
-            this.telescopeMediator = telescopeMediator;
-            this.guiderMediator = guiderMediator;
-            this.switchMediator = switchMediator;
-            this.flatDeviceMediator = flatDeviceMediator;
-            this.weatherDataMediator = weatherDataMediator;
-            this.domeMediator = domeMediator;
-            this.safetyMonitorMediator = safetyMonitorMediator;
             Devices = new List<string>() {
                 "Camera",
                 "Filter Wheel",
@@ -69,54 +40,7 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
 
         public IReadOnlyList<string> Devices { get; }
 
-        private object? GetMediator(string device) {
-            switch (device) {
-                case "Camera": return cameraMediator;
-                case "Filter Wheel": return fwMediator;
-                case "Focuser": return focuserMediator;
-                case "Rotator": return rotatorMediator;
-                case "Mount": return telescopeMediator;
-                case "Telescope": return telescopeMediator;
-                case "Guider": return guiderMediator;
-                case "Switch": return switchMediator;
-                case "Flat Panel": return flatDeviceMediator;
-                case "Weather": return weatherDataMediator;
-                case "Dome": return domeMediator;
-                case "Safety Monitor": return safetyMonitorMediator;
-                default: return null;
-            }
-        }
-
-        public string? GetProfileId(string device) {
-            switch (device) {
-                case "Camera": return profileService.ActiveProfile.CameraSettings.Id;
-                case "Filter Wheel": return profileService.ActiveProfile.FilterWheelSettings.Id;
-                case "Focuser": return profileService.ActiveProfile.FocuserSettings.Id;
-                case "Rotator": return profileService.ActiveProfile.RotatorSettings.Id;
-                case "Telescope": return profileService.ActiveProfile.TelescopeSettings.Id;
-                case "Mount": return profileService.ActiveProfile.TelescopeSettings.Id;
-                case "Guider": return profileService.ActiveProfile.GuiderSettings.GuiderName;
-                case "Switch": return profileService.ActiveProfile.SwitchSettings.Id;
-                case "Flat Panel": return profileService.ActiveProfile.FlatDeviceSettings.Id;
-                case "Weather": return profileService.ActiveProfile.WeatherDataSettings.Id;
-                case "Dome": return profileService.ActiveProfile.DomeSettings.Id;
-                case "Safety Monitor": return profileService.ActiveProfile.SafetyMonitorSettings.Id;
-                default: return null;
-            }
-        }
-
-        private ConnectAllEquipment(ConnectAllEquipment copyMe) : this(copyMe.profileService,
-                                                                 copyMe.cameraMediator,
-                                                                 copyMe.fwMediator,
-                                                                 copyMe.focuserMediator,
-                                                                 copyMe.rotatorMediator,
-                                                                 copyMe.telescopeMediator,
-                                                                 copyMe.guiderMediator,
-                                                                 copyMe.switchMediator,
-                                                                 copyMe.flatDeviceMediator,
-                                                                 copyMe.weatherDataMediator,
-                                                                 copyMe.domeMediator,
-                                                                 copyMe.safetyMonitorMediator) {
+        private ConnectAllEquipment(ConnectAllEquipment copyMe) : this(copyMe.connections, copyMe.profileService) {
             CopyMetaData(copyMe);
         }
 
@@ -131,36 +55,17 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
         }
 
         public override async Task Execute(IProgress<ApplicationStatus> progress, CancellationToken token) {
+            // A rig whose safety is unknown must not connect anything else (a remembered monitor that fails throws).
+            await ConnectAsync("Safety Monitor", token).ConfigureAwait(false);
+
             var errors = new List<Exception>();
-
             foreach (var device in Devices) {
-                if (!IsConnected(device)) {
-                    var profileId = GetProfileId(device);
-                    if (!(profileId == "No_Device" || profileId == "No_Guider")) {
-                        var mediator = GetMediator(device);
-                        if (mediator == null) { continue; }
-
-                        var type = mediator.GetType();
-                        var GetInfo = type.GetMethod("GetInfo");
-                        var Rescan = type.GetMethod("Rescan");
-                        var devices = await (Task<IList<string>>)Rescan!.Invoke(mediator, null)!;
-
-                        if (profileId != null && devices.Contains(profileId)) {
-                            var Connect = type.GetMethod("Connect");
-                            var success = await (Task<bool>)Connect!.Invoke(mediator, null)!;
-
-                            DeviceInfo infoAfterConnect = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-                            success = success && infoAfterConnect.Connected;
-                            if (!success) {
-                                errors.Add(new SequenceEntityFailedException($"Failed to connect to {device}"));
-                            }
-                        } else {
-                            errors.Add(new SequenceEntityFailedException($"Failed to connect to {device} as it was not found"));
-                        }
-
-                    }
-                } else {
-                    Logger.Info($"{device} is already connected");
+                if (device == "Safety Monitor") { continue; }
+                if (device == "Guider" && profileService.ActiveProfile.GuiderSettings.GuiderName == "No_Guider") { continue; }
+                try {
+                    await ConnectAsync(device, token).ConfigureAwait(false);
+                } catch (SequenceEntityFailedException ex) {
+                    errors.Add(ex);
                 }
             }
 
@@ -169,14 +74,20 @@ namespace OpenAstroAra.Sequencer.SequenceItem.Connect {
             }
         }
 
-        public bool IsConnected(string device) {
-            var mediator = GetMediator(device);
-            if (mediator == null) { return false; }
+        private async Task ConnectAsync(string device, CancellationToken token) {
+            if (ConnectEquipment.RoleOf(device) is not { } role) { return; }
 
-            var type = mediator.GetType();
-            var GetInfo = type.GetMethod("GetInfo");
-            DeviceInfo info = (DeviceInfo)GetInfo!.Invoke(mediator, null)!;
-            return info.Connected;
+            if (connections.IsConnected(role)) {
+                Logger.Info($"{device} is already connected");
+                return;
+            }
+            try {
+                await connections.ConnectAsync(role, token).ConfigureAwait(false);
+            } catch (EquipmentRefusedException ex) when (ex.Cause == EquipmentRefusalCause.NotKnown && role != EquipmentRole.Guider) {
+                Logger.Info($"{device} is not known to this rig, so there is nothing to connect");
+            } catch (SequenceEntityFailedException ex) {
+                throw new SequenceEntityFailedException($"Failed to connect to {device}: {ex.Message}", ex);
+            }
         }
 
         public bool Validate() {
