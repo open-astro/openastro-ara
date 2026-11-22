@@ -28,11 +28,10 @@ namespace OpenAstroAra.Server.Services.Equipment;
 /// <summary>
 /// §38k-19 — headless no-op stub for <see cref="IFlatDeviceMediator"/>.
 /// Same pattern as the §38k-9 … §38k-18 stubs. Completes the device-mediator
-/// stub set together with <see cref="HeadlessWeatherDataMediator"/>; both are
-/// dependencies of the connect instruction prototypes
-/// (<c>ConnectAllEquipment</c>, <c>SwitchProfile</c>). There are no
-/// flat-device sequence instructions in the tree, so this stub has no
-/// instruction of its own.
+/// stub set together with <see cref="HeadlessWeatherDataMediator"/>. No
+/// sequence instruction takes it: the Connect instructions reach devices
+/// through the connections port (#1545), and there are no flat-device
+/// sequence instructions in the tree.
 /// </summary>
 public sealed class HeadlessFlatDeviceMediator : IFlatDeviceMediator {
 

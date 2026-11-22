@@ -32,7 +32,7 @@ namespace OpenAstroAra.Server.Services;
 /// sensor every refresh while Connected so <see cref="GetAsync"/> serves the cached readings synchronously.
 ///
 /// REST-only: unlike SafetyMonitor, no sequence instruction consumes the weather mediator's live
-/// data (<c>IWeatherDataMediator</c> is only a connect/disconnect dependency), so this does not
+/// data (no instruction takes <c>IWeatherDataMediator</c> at all), so this does not
 /// unify with that mediator — it stays the headless stub.
 /// </summary>
 public sealed partial class ObservingConditionsService : IObservingConditionsService, IRetainedDeviceSource, IRecoverableDevice, IDisposable {

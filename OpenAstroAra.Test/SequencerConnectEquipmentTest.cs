@@ -485,5 +485,14 @@ namespace OpenAstroAra.Test {
             Assert.That(rig.Rotator.GetInfo().Connected, Is.True, "the rig stays connected when the switch cannot happen");
             Assert.That(fake.Disconnects, Is.EqualTo(0));
         }
+
+        [Test]
+        public void SwitchProfile_fails_validation_with_the_refusal() {
+            var item = new SwitchProfile(Track(new StoreBackedProfileService(new InMemoryProfileStore())));
+
+            Assert.That(item.Validate(), Is.False);
+            Assert.That(item.Issues, Has.Count.EqualTo(1));
+            Assert.That(item.Issues[0], Is.EqualTo("The daemon runs one profile; switch it from the Profiles page."));
+        }
     }
 }

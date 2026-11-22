@@ -261,7 +261,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // §38k-21 — the one non-mediator dependency a dome instruction needs.
         domeFollower ??= new HeadlessDomeFollower();
         // §38k-19/20 + §38k-22 — the remaining device mediators + the profile stub
-        // that the Connect dir (except ConnectEquipment) + Dither/SwitchFilter need.
+        // that ConnectAll, SwitchProfile, Dither and SwitchFilter need.
         filterWheelMediator ??= new HeadlessFilterWheelMediator();
         flatDeviceMediator ??= new HeadlessFlatDeviceMediator();
         weatherDataMediator ??= new HeadlessWeatherDataMediator();
@@ -270,7 +270,7 @@ public sealed class HeadlessSequencerFactory : ISequencerFactory {
         // placeholder keeps the prototype JSON-resolvable for clone/validate; Program.cs hands in the real
         // §58.4 MeridianFlipExecutor so an executed flip actually runs the recovery sequence.
         meridianFlipExecutor ??= new PlaceholderMeridianFlipExecutor();
-        // The Connect Equipment item and the Reconnect trigger connect through the rig's connections; Program.cs
+        // The Connect and Disconnect items and the Reconnect trigger go through the rig's connections; Program.cs
         // hands in the EquipmentReconnector. This placeholder keeps the prototypes constructible and refuses a run.
         equipmentConnections ??= new UnwiredEquipmentConnections();
         // Wait (until time) and Until a time need their time sources: the clock (the default, which
