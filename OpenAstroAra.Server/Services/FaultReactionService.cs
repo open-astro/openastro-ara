@@ -85,6 +85,9 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // not behind a Recovery rung yet). Registered in OnFault, before the episode task starts, so a
     // Recovered that lands while the pause is still being placed is not lost. Mutated under _gate.
     private readonly Dictionary<object, (EquipmentFaultEvent Fault, TaskCompletionSource Recovered)> _recoveryWaiters = [];
+    // #1871 — guide camera drops announced with no run active: their Recovered posts "Guide camera back".
+    // Mutated under _gate. shortcut: a drop the user ends by disconnecting the guider (no Recovered) stays here; upgrade if that ever adds up.
+    private readonly HashSet<EquipmentFaultEvent> _announcedCameraDrops = [];
     // §42.2 items 2+5 — persistence counter for op-channel faults (mutated under _gate).
     private readonly OpFaultEscalator _escalator = new();
     private readonly CancellationTokenSource _cts = new();
@@ -200,12 +203,21 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     /// that fault started. A recovery of a fault folded into the running episode (a duplicate) does
     /// not end it.</summary>
     internal void OnRecovered(EquipmentFaultEvent fault) {
+        bool announceBack;
         lock (_gate) {
             if (_recoveryWaiters.TryGetValue(NormalizeType(fault.DeviceType), out var waiter) && waiter.Fault == fault) {
                 waiter.Recovered.TrySetResult();
             }
+            announceBack = _announcedCameraDrops.Remove(fault);
+        }
+        if (announceBack) {
+            _ = NotifyGuideCameraBackAsync(fault);
         }
     }
+
+    private Task NotifyGuideCameraBackAsync(EquipmentFaultEvent fault) =>
+        NotifyQuietlyAsync(NotificationSeverity.Info, "Guide camera back",
+            $"'{fault.DeviceName ?? "The guider"}' reconnected the guide camera and is taking frames again.");
 
     /// <summary>Completion of every in-flight episode (tests await this after OnFault).</summary>
     internal Task WhenIdleAsync() {
@@ -358,8 +370,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         if (plan.Skip || plan.TerminalAction == FaultTerminalAction.Abort) {
             var acted = plan.Skip ? await SkipActiveRunsAsync().ConfigureAwait(false) : await AbortActiveRunsAsync().ConfigureAwait(false);
             if (acted == 0) {
-                await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-                await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
+                await NotifyNoRunGuiderFaultAsync(fault, plan, label, what, advice, recovered).ConfigureAwait(false);
             } else if (plan.Skip) {
                 await PublishActionAsync(fault, "skipped", extra: p => p["skipped_runs"] = acted).ConfigureAwait(false);
                 await NotifyQuietlyAsync(plan.GiveUpSeverity, $"{what} — current target skipped",
@@ -379,8 +390,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         // Outside _gate: the guider takes its own lock (lock order guider, hub, reaction).
         _guiderEpisodes?.Invoke()?.Paused(fault, paused);
         if (paused.Count == 0) {
-            await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
-            await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' reported {fault.Details}; no sequence was running.{advice}").ConfigureAwait(false);
+            await NotifyNoRunGuiderFaultAsync(fault, plan, label, what, advice, recovered).ConfigureAwait(false);
             return;
         }
         await PublishActionAsync(fault, "sequence_paused", extra: p => p["paused_runs"] = paused.Count).ConfigureAwait(false);
@@ -410,6 +420,32 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         };
         await NotifyQuietlyAsync(NotificationSeverity.Info, $"{back} — sequence resumed",
             $"'{label}' is guiding again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
+    }
+
+    // A guider fault with no run to pause or act on: record notify_only and tell the user. A guide camera
+    // drop also gets its "Guide camera back" (#1871): from OnRecovered once announced, or here if the
+    // camera was back before the episode got this far.
+    private async Task NotifyNoRunGuiderFaultAsync(EquipmentFaultEvent fault, FaultPlan plan, string label, string what,
+            string advice, Task recovered) {
+        await PublishActionAsync(fault, "notify_only").ConfigureAwait(false);
+        var cameraDrop = fault.Details == "equipment_disconnected";
+        var reason = cameraDrop ? "lost its guide camera and is reconnecting it" : $"reported {fault.Details}";
+        await NotifyQuietlyAsync(plan.GiveUpSeverity, what, $"'{label}' {reason}; no sequence was running.{advice}").ConfigureAwait(false);
+        if (!cameraDrop) {
+            return;
+        }
+        // After the drop is posted, so "back" never lands first. The waiter is still registered here
+        // (the episode's finally removes it), so a Recovered so far has completed `recovered`.
+        bool backAlready;
+        lock (_gate) {
+            backAlready = recovered.IsCompleted;
+            if (!backAlready) {
+                _announcedCameraDrops.Add(fault);
+            }
+        }
+        if (backAlready) {
+            await NotifyGuideCameraBackAsync(fault).ConfigureAwait(false);
+        }
     }
 
     // §42.2 items 2+5 — a persistent-op-fault escalation is not a failed recovery: the device is
