@@ -773,6 +773,10 @@ namespace OpenAstroAra.Test {
             var ws = new WsRecorder();
             var solver = new SetAngleSkySolver(mount);
             using var svc = NewGemServiceWith(mount, ws, solver);
+            // The check's verdict waits for the exit's stop check, which the bench service gives 500 ms of wall time: a CI
+            // runner that stalls longer there fails the check as mount_did_not_stop. The fake stops at once, so the stop
+            // is confirmed on its first two reads and a longer window costs nothing.
+            svc.StopVerifyWindow = TimeSpan.FromSeconds(10);
 
             await StartByHandAsync(svc, PolarAlignStages.Check).ConfigureAwait(false);
             await TurnByHandWhenAskedAsync(ws, mount, point: 2, deg: 10.0).ConfigureAwait(false);
