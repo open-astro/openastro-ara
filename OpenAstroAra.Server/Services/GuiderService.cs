@@ -663,7 +663,14 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             if (ReferenceEquals(sender, _guider) && _state == EquipmentConnectionState.Connected
                     && AffectsGuiding(e.DeviceType)) {
                 // #1241 — a repeat drop while the first is still open adds no row of its own.
-                _cameraFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected");
+                // #2169 review — guiding stops with the camera: guided, the light in progress is stopped and
+                // guiding restarts (after the camera is back) before the runs resume, as for a link loss.
+                var guided = GuidingOnLocked();
+                _cameraFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected", f => {
+                    if (guided) {
+                        _guidedLossFault = f;
+                    }
+                });
             }
         }
     }
@@ -775,7 +782,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
         // A loss with guiding off leaves an earlier guided loss marked: its episode may still be deciding.
         _linkFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "link_down", f => {
             if (guided) {
-                _guidedLinkFault = f;
+                _guidedLossFault = f;
             }
         });
     }

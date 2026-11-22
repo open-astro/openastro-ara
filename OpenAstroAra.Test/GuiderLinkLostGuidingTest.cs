@@ -279,5 +279,26 @@ namespace OpenAstroAra.Test {
             IGuiderEpisodeListener listener = rig.Service;
             Assert.That((listener.GuidedWhenLost(links[0]), listener.GuidedWhenLost(links[1])), Is.EqualTo((true, false)));
         }
+
+        [Test]
+        public async Task A_guide_camera_dropped_while_guiding_stops_the_light_and_its_reconnect_restarts_guiding_before_the_run_resumes() {
+            // #2169 review — the camera blip takes guiding away like a link loss: the light stops, and the
+            // run resumes only once guiding is back and settled.
+            using var rig = new Rig();
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
+            rig.Sequencer.Verify(s => s.PauseActiveRunsAsync(false, true, It.IsAny<CancellationToken>()), Times.Once,
+                "guiding was on: the pause stops the light in progress");
+
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(RestartThenResume), "guiding restarts and settles first, then the run resumes");
+            }
+        }
     }
 }

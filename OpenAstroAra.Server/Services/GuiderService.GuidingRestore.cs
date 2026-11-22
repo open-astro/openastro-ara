@@ -25,7 +25,8 @@ namespace OpenAstroAra.Server.Services;
 /// <summary>
 /// #2169 — the guider link went down while guiding (rig night 2026-11-21: the guider was killed mid-frame).
 /// The shared reaction's pause stops the light in progress (<see cref="IGuiderEpisodeListener.GuidedWhenLost"/>),
-/// so no unguided frame is saved or counted. Once the §63.3 auto-reconnect (or any connect) brings the link
+/// so no unguided frame is saved or counted (a guide camera dropped while guiding is treated the same way).
+/// Once the §63.3 auto-reconnect (or any connect) brings the link
 /// back, PHD2 is up with guiding stopped: guiding is started again and must settle before the runs resume
 /// (<see cref="IGuiderEpisodeListener.RestoreGuidingAsync"/>), and the stopped light is taken again. One
 /// attempt per recovery: a start that fails or never settles leaves the runs paused for the user. A guider
@@ -41,9 +42,9 @@ public sealed partial class GuiderService {
     /// finish before it starts guiding anyway.</summary>
     internal TimeSpan GuidingRestoreReconcileWait { get; set; } = TimeSpan.FromSeconds(30);
 
-    // The last link-down fault published while guiding was on (under _gate). Only compared by reference, so a
-    // stale one never matches a later fault.
-    private EquipmentFaultEvent? _guidedLinkFault;
+    // The last link-down or guide-camera-drop fault published while guiding was on (under _gate). Only
+    // compared by reference, so a stale one never matches a later fault.
+    private EquipmentFaultEvent? _guidedLossFault;
     private int _reconcileStartsAtLinkLoss;        // ReconcileStarts when the link went down (under _gate)
 
     // Caller holds _gate. A guide step or guiding_started since the last stop, or PHD2 still reading a
@@ -52,7 +53,7 @@ public sealed partial class GuiderService {
 
     bool IGuiderEpisodeListener.GuidedWhenLost(EquipmentFaultEvent fault) {
         lock (_gate) {
-            return _guidedLinkFault is not null && ReferenceEquals(fault, _guidedLinkFault);
+            return _guidedLossFault is not null && ReferenceEquals(fault, _guidedLossFault);
         }
     }
 
@@ -121,12 +122,12 @@ public sealed partial class GuiderService {
         }
     }
 
-    [LoggerMessage(EventId = 4261, Level = LogLevel.Information, Message = "#2169 guider link back after a loss while guiding — restarting guiding before the paused runs resume")]
+    [LoggerMessage(EventId = 4261, Level = LogLevel.Information, Message = "#2169 guider back after a loss while guiding — restarting guiding before the paused runs resume")]
     private partial void LogGuidingRestoreStarted();
 
     [LoggerMessage(EventId = 4262, Level = LogLevel.Information, Message = "#2169 guiding restarted and settled — the paused runs resume and the stopped frame is taken again")]
     private partial void LogGuidingRestored();
 
-    [LoggerMessage(EventId = 4263, Level = LogLevel.Warning, Message = "#2169 guiding not restored after the link loss ({Why}) — the paused runs stay paused")]
+    [LoggerMessage(EventId = 4263, Level = LogLevel.Warning, Message = "#2169 guiding not restored after the guider loss ({Why}) — the paused runs stay paused")]
     private partial void LogGuidingRestoreFailed(string why);
 }
