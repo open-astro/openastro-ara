@@ -950,6 +950,43 @@ namespace OpenAstroAra.Test {
             Assert.That(Runtime(svc)!.PositionUnverified, Is.True);
         }
 
+        // #2173 — confirm-home on a sensor-search mount that does not report Home: the error names Home as clearing the
+        // flag by itself, not an eye check, even after a power loss.
+        [Test]
+        public async Task Confirm_home_off_home_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+            Current.ReportsAtHome = false;
+
+            var error = (await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmHomeAsync(CancellationToken.None)))!;
+
+            Assert.That(error.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(error.Message, Does.Not.Contain("confirm by eye"));
+        }
+
+        // #2173 — the reverse: a mount whose driver does not say its Home is a sensor search keeps the eye check.
+        [Test]
+        public async Task Confirm_home_off_home_on_a_model_home_mount_asks_for_the_eye_check() {
+            using var svc = await ConnectedAtFalseZeroAsync();
+            Current.ReportsAtHome = false;
+
+            var error = (await Assert.ThrowsAsync<InvalidOperationException>(() => svc.ConfirmHomeAsync(CancellationToken.None)))!;
+
+            Assert.That(error.Message, Does.Contain("confirm by eye"));
+        }
+
+        // #2173 — a sequence GoTo refused on a sensor-search mount fails the instruction with words that name Home as
+        // clearing the flag by itself.
+        [Test]
+        public async Task A_sequence_goto_refused_on_a_sensor_search_mount_says_Home_clears_it_by_itself() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.SaysHomeIsSensorSearch());
+
+            var failed = (await Assert.ThrowsAsync<SequenceEntityFailedException>(() => ((ITelescopeMediator)svc).SlewToCoordinatesAsync(Target, CancellationToken.None)))!;
+
+            Assert.That(failed.Message, Does.Contain("trusted again once the mount is seen to move"));
+            Assert.That(failed.Message, Does.Not.Contain("confirm by eye"));
+            Assert.That(Current.Slews, Is.Zero);
+        }
+
         [Test]
         public async Task Confirm_home_clears_at_once_and_a_goto_then_goes() {
             using var svc = await ConnectedAtFalseZeroAsync();
