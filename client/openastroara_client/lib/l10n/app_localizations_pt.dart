@@ -7219,6 +7219,11 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarPreflightTitle => 'Pre-flight checks';
 
   @override
+  String polarPreflightReach(String deg) {
+    return 'Polar align turns the mount up to $deg° each way.';
+  }
+
+  @override
   String get polarPreflightChecking => 'Checking the rig…';
 
   @override
@@ -7303,27 +7308,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarClearanceChange => 'Change clearance…';
 
   @override
-  String get polarClearanceTitle => 'Check the mount\'s clearance';
+  String get polarClearanceTitle => 'Room to turn the mount';
 
   @override
-  String get polarClearanceExplain =>
-      'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.';
-
-  @override
-  String get polarClearanceHow =>
-      'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.';
-
-  @override
-  String polarClearanceLimit(String deg) {
-    return 'Counterweight limit: $deg° from counterweight-down';
+  String polarClearanceQuestion(String deg) {
+    return 'Polar Align will turn the mount up to $deg° each way. Is there room for the tube, counterweight and cables to move that far?';
   }
 
   @override
-  String get polarClearanceTick =>
-      'I checked this mount\'s clearance with its hand controller';
-
-  @override
-  String get polarClearanceConfirm => 'Confirm';
+  String get polarClearanceYes => 'Yes, there is room';
 
   @override
   String get polarClearanceTakeBack => 'Take back';
@@ -7336,8 +7329,8 @@ class AppLocalizationsPt extends AppLocalizations {
   String get polarActionClearance => 'save the mount\'s clearance';
 
   @override
-  String refusalPolarAlignClearanceNotConfirmed(String limit) {
-    return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
+  String refusalPolarAlignClearanceNotConfirmed(String reach) {
+    return 'Polar align turns this mount up to $reach° each way. Confirm there is room for the tube, counterweight and cables to move that far: tap Confirm clearance in Polar align.';
   }
 
   @override
@@ -7353,16 +7346,16 @@ class AppLocalizationsPt extends AppLocalizations {
       'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
 
   @override
-  String get polarKnobClearance => 'Counterweight limit and clearance';
+  String get polarKnobClearance => 'Room to turn the mount';
 
   @override
   String polarKnobClearanceConfirmed(String deg) {
-    return '$deg° from counterweight-down, confirmed for this mount';
+    return 'Turns up to $deg° each way, room confirmed for this mount';
   }
 
   @override
   String polarKnobClearanceNotConfirmed(String deg) {
-    return '$deg° from counterweight-down, not confirmed: Polar align does not move this mount';
+    return 'Turns up to $deg° each way, not confirmed: the motor does not turn this mount';
   }
 
   @override
@@ -7371,7 +7364,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get polarKnobClearanceHint =>
-      'Kept for each mount. Measure it with the hand controller.';
+      'Kept for each mount. A bigger turn size asks again.';
 
   @override
   String get polarKnobEastDirection => 'Turn direction';
@@ -14705,6 +14698,11 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarPreflightTitle => 'Verificações antes de iniciar';
 
   @override
+  String polarPreflightReach(String deg) {
+    return 'O alinhamento polar gira a montagem até $deg° para cada lado.';
+  }
+
+  @override
   String get polarPreflightChecking => 'Verificando o setup…';
 
   @override
@@ -14789,27 +14787,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarClearanceChange => 'Alterar folga…';
 
   @override
-  String get polarClearanceTitle => 'Verifique a folga da montagem';
+  String get polarClearanceTitle => 'Espaço para girar a montagem';
 
   @override
-  String get polarClearanceExplain =>
-      'O alinhamento polar gira o eixo de AR com o motor da montagem. Antes disso, gire o eixo de AR com o controle de mão a partir do contrapeso para baixo e veja até onde ele vai antes que o contrapeso, o tubo ou um cabo toque no pilar, no tripé ou em qualquer outra coisa.';
-
-  @override
-  String get polarClearanceHow =>
-      'Ajuste o limite abaixo para o que você mediu e confirme. O alinhamento polar não move esta montagem até você confirmar. Mantenha a mão no interruptor de energia da montagem na primeira vez.';
-
-  @override
-  String polarClearanceLimit(String deg) {
-    return 'Limite do contrapeso: $deg° a partir do contrapeso para baixo';
+  String polarClearanceQuestion(String deg) {
+    return 'O alinhamento polar vai girar a montagem até $deg° para cada lado. Há espaço para o tubo, o contrapeso e os cabos se moverem até lá?';
   }
 
   @override
-  String get polarClearanceTick =>
-      'Verifiquei a folga desta montagem com o controle de mão';
-
-  @override
-  String get polarClearanceConfirm => 'Confirmar';
+  String get polarClearanceYes => 'Sim, há espaço';
 
   @override
   String get polarClearanceTakeBack => 'Retirar';
@@ -14822,8 +14808,8 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get polarActionClearance => 'salvar a folga da montagem';
 
   @override
-  String refusalPolarAlignClearanceNotConfirmed(String limit) {
-    return 'Confirme antes a folga desta montagem: verifique com o controle de mão que o contrapeso, o tubo e os cabos não tocam o pilar nem o tripé até $limit° a partir do contrapeso para baixo, depois toque em Confirmar folga no alinhamento polar.';
+  String refusalPolarAlignClearanceNotConfirmed(String reach) {
+    return 'O alinhamento polar gira esta montagem até $reach° para cada lado. Confirme que há espaço para o tubo, o contrapeso e os cabos se moverem até lá: toque em Confirmar folga no alinhamento polar.';
   }
 
   @override
@@ -14839,16 +14825,16 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
       'Esta montagem não consegue girar o eixo de AR por velocidade do motor, então o alinhamento polar não consegue girá-la. Use Girar a AR à mão.';
 
   @override
-  String get polarKnobClearance => 'Limite do contrapeso e folga';
+  String get polarKnobClearance => 'Espaço para girar a montagem';
 
   @override
   String polarKnobClearanceConfirmed(String deg) {
-    return '$deg° a partir do contrapeso para baixo, confirmado para esta montagem';
+    return 'Gira até $deg° para cada lado, espaço confirmado para esta montagem';
   }
 
   @override
   String polarKnobClearanceNotConfirmed(String deg) {
-    return '$deg° a partir do contrapeso para baixo, não confirmado: o alinhamento polar não move esta montagem';
+    return 'Gira até $deg° para cada lado, não confirmado: o motor não gira esta montagem';
   }
 
   @override
@@ -14857,7 +14843,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get polarKnobClearanceHint =>
-      'Guardado para cada montagem. Meça com o controle de mão.';
+      'Guardado para cada montagem. Um tamanho de giro maior pergunta de novo.';
 
   @override
   String get polarKnobEastDirection => 'Direção do giro';

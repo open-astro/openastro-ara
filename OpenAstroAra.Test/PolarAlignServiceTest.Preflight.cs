@@ -62,6 +62,36 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.MoveAxis(It.IsAny<TelescopeAxes>(), It.IsNotIn(0.0)), Times.Never, "nothing moved");
         }
 
+        // #2165 — the clearance is confirmed for the reach the user saw. A bigger turn size picked on the Start card after
+        // that turns further, so a motor start asks again; going back to the smaller one is still confirmed.
+        [Test]
+        public async Task A_bigger_turn_size_after_the_confirmation_refuses_a_motor_start_and_nothing_moves() {
+            var fake = NewFake();
+            var mount = NewMount();
+            var store = NewStore();
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 10.0, MountClearance = null });
+            using var svc = NewService(fake, new ScriptedSolver(), mount, store: store);
+            var seen = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(seen.MountKey!, seen.Planned.ReachDeg));
+
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 15.0 });
+            var bigger = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+            var refusal = await Assert.ThrowsAsync<RefusalException>(() => svc.StartConfirmedAsync(PolarAlignStages.Fine, null, CancellationToken.None));
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings() with { SeedRotationDeg = 5.0 });
+            var smaller = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
+
+            string StatusOf(PolarAlignPreflightDto dto) => dto.Checks.Single(c => c.Id == PolarAlignPreflightChecks.ClearanceConfirmed).Status;
+            Assert.Multiple(() => {
+                Assert.That(bigger.Planned.ReachDeg, Is.GreaterThan(seen.Planned.ReachDeg));
+                Assert.That(StatusOf(bigger), Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(refusal!.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed));
+                Assert.That(refusal.Parameters["reach_deg"], Is.EqualTo(bigger.Planned.ReachDeg));
+                Assert.That(StatusOf(smaller), Is.EqualTo(PolarAlignPreflightStatuses.Ok), "a smaller reach stays confirmed");
+                Assert.That(fake.LeaseCalls, Is.Empty, "a refused start takes no lease");
+            });
+            mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.IsNotIn(0.0)), Times.Never, "nothing moved");
+        }
+
         [Test]
         public async Task Preflight_lists_every_check_and_Start_refuses_on_a_fail() {
             var fake = NewFake();
@@ -83,7 +113,8 @@ namespace OpenAstroAra.Test {
                 Assert.That(StatusOf(preflight, PolarAlignPreflightChecks.MountLimits), Is.EqualTo(PolarAlignPreflightStatuses.Warn));
                 Assert.That(preflight.MountKey, Is.EqualTo(PolarAlignPreflightEvaluator.UnidentifiedMountKey));
                 Assert.That(preflight.Planned.Direction, Is.Not.Null, "the plan the next Start would confirm");
-                Assert.That(preflight.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));
+                Assert.That(preflight.Planned.ReachDeg, Is.EqualTo(preflight.Planned.MaxSweepDeg),
+                    "the bench store has a saved RA motor direction: the run's turns, no test");
             });
 
             var planRefusal = await Assert.ThrowsAsync<RefusalException>(() => svc.GetStartPlanAsync(null, CancellationToken.None));
@@ -95,7 +126,7 @@ namespace OpenAstroAra.Test {
             mount.Verify(m => m.MoveAxis(TelescopeAxes.Primary, It.IsNotIn(0.0)), Times.Never, "nothing moved");
 
             // The user confirms the clearance (the app's dialog writes the mount's entry): the list is ready and Start goes.
-            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(preflight.MountKey!));
+            store.PutPolarAlignSettings(store.GetPolarAlignSettings().Confirmed(preflight.MountKey!, preflight.Planned.ReachDeg));
             var ready = await svc.GetPreflightAsync(null, CancellationToken.None).ConfigureAwait(false);
             Assert.That(ready.Ready, Is.True, string.Join("; ", ready.Checks.Where(c => c.Status == PolarAlignPreflightStatuses.Fail).Select(c => c.Detail)));
             Assert.That(StatusOf(ready, PolarAlignPreflightChecks.ClearanceConfirmed), Is.EqualTo(PolarAlignPreflightStatuses.Ok));

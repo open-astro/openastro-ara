@@ -1573,25 +1573,14 @@ const List<Setting> settingsRegistry = [
     profilePath: 'polar_align.frames_per_point',
   ),
   // #2068 per mount (profile `polar_align.mount_clearance`, keyed by the
-  // mount): the counterweight limit and the clearance confirmation, set in
-  // the clearance dialog. No Polar align motion until it is confirmed.
-  Setting(
-    id: 'img.polar.max_cw_angle_deg',
-    tier: SettingTier.advanced,
-    label: 'Counterweight limit (°)',
-    description: 'How far Polar align may turn this mount\'s counterweight up from counterweight-down (0° counterweights down, 90° horizontal), as you measured it with the hand controller. Kept for each mount, between 10° and 75°. Set it in the clearance dialog; a new limit needs a new confirmation.',
-    keywords: ['polar', 'alignment', 'counterweight', 'limit', 'clearance', 'pier', 'collision', 'cw'],
-    path: ['Settings', 'Imaging', 'Polar align'],
-    type: SettingType.doubleRange(min: 10, max: 75, step: 5),
-    defaultValue: null,
-    profilePath: 'polar_align.mount_clearance',
-  ),
+  // mount): the clearance confirmation, set in the clearance dialog, for the
+  // run's reach (#2165). No Polar align motor motion until it is confirmed.
   Setting(
     id: 'img.polar.clearance_confirmed',
     tier: SettingTier.advanced,
     label: 'Clearance confirmed',
-    description: 'You checked with the hand controller that this mount\'s counterweight, tube and cables clear the pier and tripod up to its counterweight limit. Polar align does not turn a mount with its motor until its clearance is confirmed; Turn RA by hand moves nothing, so it can start. A confirmation is for one limit; Take back withdraws it. Kept for each mount.',
-    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety'],
+    description: 'You said there is room for this mount\'s tube, counterweight and cables to move as far as Polar align turns it: up to the turn size twice each way, plus 0.5° the first time it learns the RA motor\'s direction. Polar align does not turn a mount with its motor until its clearance is confirmed; Turn RA by hand moves nothing, so it can start. A bigger turn size asks again; Take back withdraws it. Kept for each mount.',
+    keywords: ['polar', 'alignment', 'clearance', 'confirm', 'counterweight', 'cables', 'pier', 'safety', 'room', 'reach'],
     path: ['Settings', 'Imaging', 'Polar align'],
     type: SettingType.bool(),
     defaultValue: null,

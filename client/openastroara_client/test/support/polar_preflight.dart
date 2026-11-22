@@ -6,13 +6,14 @@ const preflightMountKey = 'mount-1';
 /// #2068 the rig's pre-flight list for a mount whose clearance is [confirmed]
 /// (or not): the clearance check passes, or fails for a motor start and warns
 /// for a Turn RA by hand start ([handTurn], Joey 2026-11-21), the rest as a
-/// fresh rig has them. The counterweight limit is [maxCwAngleDeg]; [parked]
-/// adds the parked mount's failing check.
+/// fresh rig has them. The run turns RA up to [reachDeg] each way (#2165: the
+/// two 10° turns plus the 0.5° direction test); [parked] adds the parked
+/// mount's failing check.
 PolarAlignPreflight rigPreflight({
   required bool confirmed,
   bool handTurn = false,
   bool parked = false,
-  double maxCwAngleDeg = 60,
+  double reachDeg = 20.5,
 }) => PolarAlignPreflight(
   ready: (confirmed || handTurn) && !parked,
   mountKey: preflightMountKey,
@@ -57,26 +58,24 @@ PolarAlignPreflight rigPreflight({
     checkStepDeg: 10,
     turns: 2,
     maxSweepDeg: 20,
-    maxCwAngleDeg: maxCwAngleDeg,
+    reachDeg: reachDeg,
   ),
 );
 
 /// The list the rig answers for [settings]: the clearance check reads the
-/// connected mount's own entry, as the rig's does (confirmed only for the
-/// limit it was confirmed for).
+/// connected mount's own entry, as the rig's does (#2165: confirmed while the
+/// run's [reachDeg] is no bigger than the reach it was confirmed for).
 PolarAlignPreflight rigPreflightFor(
   PolarAlignSettings? settings, {
   bool handTurn = false,
   bool parked = false,
+  double reachDeg = 20.5,
 }) {
   final entry = settings?.mountClearance[preflightMountKey];
   return rigPreflight(
-    confirmed:
-        entry != null &&
-        entry.clearanceConfirmed &&
-        entry.confirmedMaxCwAngleDeg == entry.maxCwAngleDeg,
+    confirmed: entry != null && reachDeg <= entry.confirmedReachDeg,
     handTurn: handTurn,
     parked: parked,
-    maxCwAngleDeg: entry?.maxCwAngleDeg ?? 60,
+    reachDeg: reachDeg,
   );
 }

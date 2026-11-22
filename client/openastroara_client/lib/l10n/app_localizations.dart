@@ -11974,6 +11974,12 @@ abstract class AppLocalizations {
   /// **'Pre-flight checks'**
   String get polarPreflightTitle;
 
+  /// Polar align Start card (#2165): how far this run turns RA each way, in degrees, always shown
+  ///
+  /// In en, this message translates to:
+  /// **'Polar align turns the mount up to {deg}° each way.'**
+  String polarPreflightReach(String deg);
+
   /// Polar align (#2068): the pre-flight list is being read from the rig
   ///
   /// In en, this message translates to:
@@ -12130,41 +12136,23 @@ abstract class AppLocalizations {
   /// **'Change clearance…'**
   String get polarClearanceChange;
 
-  /// Polar align (#2068): title of the clearance dialog
+  /// Polar align (#2068, #2165): title of the clearance dialog
   ///
   /// In en, this message translates to:
-  /// **'Check the mount\'s clearance'**
+  /// **'Room to turn the mount'**
   String get polarClearanceTitle;
 
-  /// Polar align (#2068): the clearance dialog's first paragraph: what to check, with the hand controller
+  /// Polar align (#2165, Joey 2026-11-21): the clearance dialog's question; {deg} is how far this run turns RA each way, in degrees (the turns plus the 0.5° direction test when owed)
   ///
   /// In en, this message translates to:
-  /// **'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.'**
-  String get polarClearanceExplain;
+  /// **'Polar Align will turn the mount up to {deg}° each way. Is there room for the tube, counterweight and cables to move that far?'**
+  String polarClearanceQuestion(String deg);
 
-  /// Polar align (#2068): the clearance dialog's second paragraph
+  /// Polar align (#2165): the clearance dialog's one confirm button
   ///
   /// In en, this message translates to:
-  /// **'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.'**
-  String get polarClearanceHow;
-
-  /// Polar align (#2068): the clearance dialog's limit (0° = counterweights down, 90° = horizontal), whole degrees
-  ///
-  /// In en, this message translates to:
-  /// **'Counterweight limit: {deg}° from counterweight-down'**
-  String polarClearanceLimit(String deg);
-
-  /// Polar align (#2068): the tick the clearance dialog's Confirm needs
-  ///
-  /// In en, this message translates to:
-  /// **'I checked this mount\'s clearance with its hand controller'**
-  String get polarClearanceTick;
-
-  /// Polar align (#2068): the clearance dialog's confirm button
-  ///
-  /// In en, this message translates to:
-  /// **'Confirm'**
-  String get polarClearanceConfirm;
+  /// **'Yes, there is room'**
+  String get polarClearanceYes;
 
   /// Polar align (#2068, Joey 2026-11-21): button in the clearance dialog and in Settings › Imaging › Polar align that withdraws this mount's clearance confirmation, so the motor does not turn it until it is confirmed again
   ///
@@ -12184,11 +12172,11 @@ abstract class AppLocalizations {
   /// **'save the mount\'s clearance'**
   String get polarActionClearance;
 
-  /// Refusal (polar-align-clearance-not-confirmed, #2068): no polar alignment motion until the user confirmed this mount's counterweight and cable clearance; {limit} is the limit in whole degrees
+  /// Refusal (polar-align-clearance-not-confirmed, #2068, #2165): no polar alignment motor motion until the user confirmed there is room for this run's reach; {reach} is how far the run turns RA each way, in degrees
   ///
   /// In en, this message translates to:
-  /// **'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to {limit}° from counterweight-down, then tap Confirm clearance in Polar align.'**
-  String refusalPolarAlignClearanceNotConfirmed(String limit);
+  /// **'Polar align turns this mount up to {reach}° each way. Confirm there is room for the tube, counterweight and cables to move that far: tap Confirm clearance in Polar align.'**
+  String refusalPolarAlignClearanceNotConfirmed(String reach);
 
   /// Refusal (polar-align-site-not-set, #2083): the site has no longitude, sits at latitude 0 and longitude 0 (never set), or its sidereal time is unknown; polar alignment steers by the hour angle
   ///
@@ -12208,22 +12196,22 @@ abstract class AppLocalizations {
   /// **'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.'**
   String get refusalPolarAlignCannotMoveAxis;
 
-  /// Settings › Imaging › Polar align (#2068): the connected mount's counterweight limit and clearance confirmation
+  /// Settings › Imaging › Polar align (#2068, #2165): how far Polar align turns the connected mount and whether the user confirmed there is room
   ///
   /// In en, this message translates to:
-  /// **'Counterweight limit and clearance'**
+  /// **'Room to turn the mount'**
   String get polarKnobClearance;
 
-  /// Settings › Imaging › Polar align (#2068): the connected mount's limit, its clearance confirmed
+  /// Settings › Imaging › Polar align (#2165): the run's reach in degrees, the room for it confirmed
   ///
   /// In en, this message translates to:
-  /// **'{deg}° from counterweight-down, confirmed for this mount'**
+  /// **'Turns up to {deg}° each way, room confirmed for this mount'**
   String polarKnobClearanceConfirmed(String deg);
 
-  /// Settings › Imaging › Polar align (#2068): the connected mount's limit, its clearance not confirmed
+  /// Settings › Imaging › Polar align (#2165): the run's reach in degrees, the room for it not confirmed
   ///
   /// In en, this message translates to:
-  /// **'{deg}° from counterweight-down, not confirmed: Polar align does not move this mount'**
+  /// **'Turns up to {deg}° each way, not confirmed: the motor does not turn this mount'**
   String polarKnobClearanceNotConfirmed(String deg);
 
   /// Settings › Imaging › Polar align (#2068): no mount connected, so no clearance to show
@@ -12235,7 +12223,7 @@ abstract class AppLocalizations {
   /// Settings › Imaging › Polar align (#2068): hint under the clearance row
   ///
   /// In en, this message translates to:
-  /// **'Kept for each mount. Measure it with the hand controller.'**
+  /// **'Kept for each mount. A bigger turn size asks again.'**
   String get polarKnobClearanceHint;
 
   /// Settings › Imaging › Polar align (#2081): the way the RA axis turns when a run starts a new start pose (NINA's East direction)

@@ -19,13 +19,15 @@ using System.Collections.Generic;
 namespace OpenAstroAra.Test.PolarAlign;
 
 /// <summary>#2068 — a bench profile whose mount's clearance the user confirmed: no Polar Align motion without it. The
-/// bench mounts (mocks, the fake GEM) report no identity, so their key is the unidentified mount's.</summary>
+/// bench mounts (mocks, the fake GEM) report no identity, so their key is the unidentified mount's. #2165: confirmed for
+/// a whole turn by default, so every bench run's reach is covered.</summary>
 internal static class PolarAlignClearance {
     public static PolarAlignSettingsDto Confirmed(this PolarAlignSettingsDto settings,
-            string mountKey = PolarAlignPreflightEvaluator.UnidentifiedMountKey, double maxCwAngleDeg = 60.0) =>
+            string mountKey = PolarAlignPreflightEvaluator.UnidentifiedMountKey,
+            double reachDeg = PolarAlignSettingsClamp.MaxConfirmedReachDeg) =>
         settings with {
             MountClearance = new Dictionary<string, PolarAlignMountClearanceDto> {
-                [mountKey] = new(maxCwAngleDeg, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: maxCwAngleDeg),
+                [mountKey] = new(reachDeg),
             },
         };
 }

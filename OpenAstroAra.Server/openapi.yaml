@@ -14826,22 +14826,13 @@ components:
             - 'null'
             - boolean
     PolarAlignMountClearanceDto:
+      required:
+        - confirmed_reach_deg
       type: object
       properties:
-        max_cw_angle_deg:
+        confirmed_reach_deg:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
-            - number
-            - string
-          format: double
-          default: 60
-        clearance_confirmed:
-          type: boolean
-          default: false
-        confirmed_max_cw_angle_deg:
-          pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
-          type:
-            - 'null'
             - number
             - string
           format: double
@@ -14889,7 +14880,7 @@ components:
         - new_origin
         - origin_offset_deg
         - sweep_limit_deg
-        - max_cw_angle_deg
+        - reach_deg
         - start_cw_angle_deg
         - min_altitude_deg
       type: object
@@ -14942,7 +14933,7 @@ components:
             - number
             - string
           format: double
-        max_cw_angle_deg:
+        reach_deg:
           pattern: '^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$'
           type:
             - number

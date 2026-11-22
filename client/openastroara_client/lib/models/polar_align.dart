@@ -512,10 +512,10 @@ class PolarAlignSettings {
   /// #2082 frames averaged at each of a measurement's three points (1–5).
   final int framesPerPoint;
 
-  /// #2068 the counterweight limit and the clearance confirmation per mount,
-  /// keyed by the mount's identity (the rig's [PolarAlignPreflight.mountKey]).
-  /// A mount with no entry has the rig's defaults: the pre-flight list shows
-  /// them ([PolarAlignPreflightPlanned.maxCwAngleDeg]).
+  /// #2068 the clearance confirmation per mount, keyed by the mount's identity
+  /// (the rig's [PolarAlignPreflight.mountKey]). A mount with no entry is not
+  /// confirmed. #2165: each entry is for a reach; the rig judges it against
+  /// the run's reach ([PolarAlignPreflightPlanned.reachDeg]).
   final Map<String, PolarAlignMountClearance> mountClearance;
 
   /// #2081 the RA turn direction of a run that starts a new sweep origin
@@ -624,59 +624,38 @@ class PolarAlignSettings {
     String mountKey,
     PolarAlignMountClearance clearance,
   ) => copyWith(mountClearance: {...mountClearance, mountKey: clearance});
+
+  /// #2165 Take back: this section without [mountKey]'s entry, so that mount
+  /// is not confirmed; the other mounts' entries kept.
+  PolarAlignSettings withoutMountClearance(String mountKey) => copyWith(
+    mountClearance: {
+      for (final e in mountClearance.entries)
+        if (e.key != mountKey) e.key: e.value,
+    },
+  );
 }
 
-/// #2068 one mount's entry in [PolarAlignSettings.mountClearance]: how far the
-/// RA axis may turn the counterweight up from counterweight-down
-/// ([maxCwAngleDeg]: 0° Home, 90° horizontal; the rig holds it at 10–75°), and
-/// whether the user checked with the hand controller that the counterweight,
-/// tube and cables clear the pier and tripod up to it. A confirmation is for
-/// one limit ([confirmedMaxCwAngleDeg], null while not confirmed): the rig
-/// keeps the entry confirmed only while it equals [maxCwAngleDeg], so a limit
-/// changed without a new confirmation is not confirmed (Joey, 2026-11-21).
+/// #2068 one mount's entry in [PolarAlignSettings.mountClearance]: the user
+/// said there is room for the tube, counterweight and cables to turn this far
+/// each way ([confirmedReachDeg], degrees of RA). #2165: the rig keeps the
+/// mount confirmed for a run whose reach is no bigger; a bigger one asks
+/// again (Joey, 2026-11-21).
 class PolarAlignMountClearance {
-  final double maxCwAngleDeg;
-  final bool clearanceConfirmed;
-  final double? confirmedMaxCwAngleDeg;
+  final double confirmedReachDeg;
 
-  const PolarAlignMountClearance({
-    required this.maxCwAngleDeg,
-    required this.clearanceConfirmed,
-    required this.confirmedMaxCwAngleDeg,
-  });
-
-  /// The user confirmed the clearance up to [limitDeg].
-  const PolarAlignMountClearance.confirmedAt(double limitDeg)
-    : maxCwAngleDeg = limitDeg,
-      clearanceConfirmed = true,
-      confirmedMaxCwAngleDeg = limitDeg;
-
-  /// Not confirmed (taken back), the limit kept.
-  const PolarAlignMountClearance.notConfirmed(double limitDeg)
-    : maxCwAngleDeg = limitDeg,
-      clearanceConfirmed = false,
-      confirmedMaxCwAngleDeg = null;
-
-  /// The limit the rig accepts ([maxCwAngleDeg] is clamped to it).
-  static const double minMaxCwAngleDeg = 10;
-  static const double maxMaxCwAngleDeg = 75;
+  const PolarAlignMountClearance({required this.confirmedReachDeg});
 
   Map<String, dynamic> toJson() => <String, dynamic>{
-    'max_cw_angle_deg': maxCwAngleDeg,
-    'clearance_confirmed': clearanceConfirmed,
-    'confirmed_max_cw_angle_deg': confirmedMaxCwAngleDeg,
+    'confirmed_reach_deg': confirmedReachDeg,
   };
 
   @override
   bool operator ==(Object other) =>
       other is PolarAlignMountClearance &&
-      other.maxCwAngleDeg == maxCwAngleDeg &&
-      other.clearanceConfirmed == clearanceConfirmed &&
-      other.confirmedMaxCwAngleDeg == confirmedMaxCwAngleDeg;
+      other.confirmedReachDeg == confirmedReachDeg;
 
   @override
-  int get hashCode =>
-      Object.hash(maxCwAngleDeg, clearanceConfirmed, confirmedMaxCwAngleDeg);
+  int get hashCode => confirmedReachDeg.hashCode;
 }
 
 /// #2068 the statuses of a [PolarAlignPreflightCheck].
@@ -729,14 +708,16 @@ class PolarAlignPreflightCheck {
 
 /// #2068 what the next Start would do, from the pre-flight list: the RA turn
 /// direction (null when the rig could not plan it), each turn's step, the most
-/// it turns, and the mount's counterweight limit.
+/// it turns, and (#2165) its reach: how far the motor turns RA each way, the
+/// turns plus the 0.5° direction test when owed, the reach the clearance is
+/// confirmed for.
 class PolarAlignPreflightPlanned {
   final String? direction;
   final double turnStepDeg;
   final double checkStepDeg;
   final int turns;
   final double maxSweepDeg;
-  final double maxCwAngleDeg;
+  final double reachDeg;
   final double? startCwAngleDeg;
   final double? minAltitudeDeg;
 
@@ -746,7 +727,7 @@ class PolarAlignPreflightPlanned {
     required this.checkStepDeg,
     required this.turns,
     required this.maxSweepDeg,
-    required this.maxCwAngleDeg,
+    required this.reachDeg,
     this.startCwAngleDeg,
     this.minAltitudeDeg,
   });
@@ -758,7 +739,7 @@ class PolarAlignPreflightPlanned {
         checkStepDeg: (json['check_step_deg'] as num).toDouble(),
         turns: (json['turns'] as num).toInt(),
         maxSweepDeg: (json['max_sweep_deg'] as num).toDouble(),
-        maxCwAngleDeg: (json['max_cw_angle_deg'] as num).toDouble(),
+        reachDeg: (json['reach_deg'] as num).toDouble(),
         startCwAngleDeg: (json['start_cw_angle_deg'] as num?)?.toDouble(),
         minAltitudeDeg: (json['min_altitude_deg'] as num?)?.toDouble(),
       );

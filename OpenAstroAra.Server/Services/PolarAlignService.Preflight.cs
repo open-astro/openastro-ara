@@ -69,7 +69,9 @@ namespace OpenAstroAra.Server.Services {
                 AlignerPresent: _alignerSource is { } aligners ? () => aligners.Current() is not null : null,
                 HandTurn: handTurn,
                 AlignmentMode: () => _motionControl.MountAlignmentMode,
-                CanMovePrimaryAxis: () => _motionControl.CanMovePrimaryAxis);
+                CanMovePrimaryAxis: () => _motionControl.CanMovePrimaryAxis,
+                // #2165 — the reach when the plan cannot be made: the same test PlanStartAsync owes.
+                DirectionTestOwedDeg: () => SavedRaMotorSign(ReadMountDriver()) is null ? DirectionTestDeg : 0.0);
             var result = await PolarAlignPreflightEvaluator.EvaluateAsync(inputs, ct).ConfigureAwait(false);
             return new StartPreflight(result, settings ?? PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto()), start);
         }

@@ -971,8 +971,8 @@ public static partial class ProfileEndpoints {
         // stored any value: a stored value outside the range must not make the panel's own edits (the
         // whole DTO comes back on every PUT) fail over a field the user cannot reach. Clamp, don't refuse
         // — the same table the service applies on every read (PolarAlignSettingsClamp).
-        // #2068 — a confirmed clearance is for the limit the user checked: one out of range is a 400, never raised or
-        // lowered to a limit the user did not confirm. An unconfirmed entry's limit is clamped like the other knobs.
+        // #2068 — a confirmed clearance is for the reach the user said there is room for (#2165): one that is not a usable
+        // reach is a 400, never raised or lowered to a reach the user did not confirm.
         if (InvalidConfirmedClearance(body.MountClearance) is { } clearanceProblem) {
             return Results.Problem(detail: clearanceProblem, statusCode: StatusCodes.Status400BadRequest);
         }
@@ -986,19 +986,16 @@ public static partial class ProfileEndpoints {
         return Results.Ok(body);
     }
 
-    /// <summary>#2068 — the 400 detail for a confirmed clearance entry whose counterweight limit is outside 10–75°, or
-    /// null when every confirmed entry is in range.</summary>
+    /// <summary>#2068 — the 400 detail for a clearance entry whose confirmed reach (#2165) is not a positive number up to
+    /// 360°, or null when every entry is usable.</summary>
     internal static string? InvalidConfirmedClearance(IReadOnlyDictionary<string, PolarAlignMountClearanceDto>? entries) {
         if (entries is null) {
             return null;
         }
         foreach (var (key, entry) in entries) {
-            if (entry is { ClearanceConfirmed: true } &&
-                !(double.IsFinite(entry.MaxCwAngleDeg) &&
-                  entry.MaxCwAngleDeg >= PolarAlignSettingsClamp.MinMaxCwAngleDeg &&
-                  entry.MaxCwAngleDeg <= PolarAlignSettingsClamp.MaxMaxCwAngleDeg)) {
+            if (entry is not null && !PolarAlignSettingsClamp.IsReach(entry.ConfirmedReachDeg)) {
                 return string.Create(CultureInfo.InvariantCulture,
-                    $"mount_clearance['{key}'].max_cw_angle_deg must be {PolarAlignSettingsClamp.MinMaxCwAngleDeg:0} to {PolarAlignSettingsClamp.MaxMaxCwAngleDeg:0} when clearance_confirmed is true");
+                    $"mount_clearance['{key}'].confirmed_reach_deg must be above 0 and at most {PolarAlignSettingsClamp.MaxConfirmedReachDeg:0} degrees");
             }
         }
         return null;

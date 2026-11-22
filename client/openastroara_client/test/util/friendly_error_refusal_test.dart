@@ -103,6 +103,17 @@ void main() {
     }
   });
 
+  test("the polar-align clearance sentence names the run's reach, in both languages (#2165)", () {
+    const refusal = Refusal(
+      cause: RefusalCause.polarAlignClearanceNotConfirmed,
+      reason: 'polar-align-clearance-not-confirmed',
+      detail: _detail,
+      parameters: {'reach_deg': 20.5},
+    );
+    expect(failureReason(_en, refusal), contains('up to 20.5° each way'));
+    expect(failureReason(_pt, refusal), contains('até 20,5° para cada lado'));
+  });
+
   test('an unverified mount position read too early says to try again (#2070)', () {
     for (final l in [_en, _pt]) {
       const early = Refusal(

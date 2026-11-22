@@ -978,20 +978,16 @@ class ProfileApi {
     };
   }
 
-  // Every key of an entry must be there; confirmed_max_cw_angle_deg is null
-  // while the mount is not confirmed.
+  // #2165 every entry names the reach it was confirmed for: an entry without
+  // one (the old slider format, a counterweight angle) fails the load.
   static PolarAlignMountClearance _mountClearanceEntryFromRig(
     Map<String, dynamic> j,
   ) {
-    if (!j.containsKey('confirmed_max_cw_angle_deg')) {
-      throw const FormatException('missing confirmed_max_cw_angle_deg');
+    final reach = j['confirmed_reach_deg'];
+    if (reach is! num) {
+      throw FormatException('missing confirmed_reach_deg', reach);
     }
-    return PolarAlignMountClearance(
-      maxCwAngleDeg: (j['max_cw_angle_deg'] as num).toDouble(),
-      clearanceConfirmed: j['clearance_confirmed'] as bool,
-      confirmedMaxCwAngleDeg: (j['confirmed_max_cw_angle_deg'] as num?)
-          ?.toDouble(),
-    );
+    return PolarAlignMountClearance(confirmedReachDeg: reach.toDouble());
   }
 
   /// Every safety key the client has a field for.

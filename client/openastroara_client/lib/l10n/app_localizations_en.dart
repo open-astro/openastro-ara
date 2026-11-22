@@ -7219,6 +7219,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarPreflightTitle => 'Pre-flight checks';
 
   @override
+  String polarPreflightReach(String deg) {
+    return 'Polar align turns the mount up to $deg° each way.';
+  }
+
+  @override
   String get polarPreflightChecking => 'Checking the rig…';
 
   @override
@@ -7303,27 +7308,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarClearanceChange => 'Change clearance…';
 
   @override
-  String get polarClearanceTitle => 'Check the mount\'s clearance';
+  String get polarClearanceTitle => 'Room to turn the mount';
 
   @override
-  String get polarClearanceExplain =>
-      'Polar align turns the RA axis with the mount\'s motor. Before it does, turn the RA axis with the hand controller from counterweight-down and see how far it can go before the counterweight, the tube or a cable touches the pier, the tripod or anything else.';
-
-  @override
-  String get polarClearanceHow =>
-      'Set the limit below to what you measured, then confirm. Polar align does not move this mount until you do. Keep a hand on the mount\'s power switch the first time.';
-
-  @override
-  String polarClearanceLimit(String deg) {
-    return 'Counterweight limit: $deg° from counterweight-down';
+  String polarClearanceQuestion(String deg) {
+    return 'Polar Align will turn the mount up to $deg° each way. Is there room for the tube, counterweight and cables to move that far?';
   }
 
   @override
-  String get polarClearanceTick =>
-      'I checked this mount\'s clearance with its hand controller';
-
-  @override
-  String get polarClearanceConfirm => 'Confirm';
+  String get polarClearanceYes => 'Yes, there is room';
 
   @override
   String get polarClearanceTakeBack => 'Take back';
@@ -7336,8 +7329,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get polarActionClearance => 'save the mount\'s clearance';
 
   @override
-  String refusalPolarAlignClearanceNotConfirmed(String limit) {
-    return 'Confirm this mount\'s clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to $limit° from counterweight-down, then tap Confirm clearance in Polar align.';
+  String refusalPolarAlignClearanceNotConfirmed(String reach) {
+    return 'Polar align turns this mount up to $reach° each way. Confirm there is room for the tube, counterweight and cables to move that far: tap Confirm clearance in Polar align.';
   }
 
   @override
@@ -7353,16 +7346,16 @@ class AppLocalizationsEn extends AppLocalizations {
       'This mount cannot turn its RA axis by motor speed, so Polar align cannot turn it. Use Turn RA by hand.';
 
   @override
-  String get polarKnobClearance => 'Counterweight limit and clearance';
+  String get polarKnobClearance => 'Room to turn the mount';
 
   @override
   String polarKnobClearanceConfirmed(String deg) {
-    return '$deg° from counterweight-down, confirmed for this mount';
+    return 'Turns up to $deg° each way, room confirmed for this mount';
   }
 
   @override
   String polarKnobClearanceNotConfirmed(String deg) {
-    return '$deg° from counterweight-down, not confirmed: Polar align does not move this mount';
+    return 'Turns up to $deg° each way, not confirmed: the motor does not turn this mount';
   }
 
   @override
@@ -7371,7 +7364,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get polarKnobClearanceHint =>
-      'Kept for each mount. Measure it with the hand controller.';
+      'Kept for each mount. A bigger turn size asks again.';
 
   @override
   String get polarKnobEastDirection => 'Turn direction';

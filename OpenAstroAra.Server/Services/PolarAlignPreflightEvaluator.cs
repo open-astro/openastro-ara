@@ -43,6 +43,9 @@ namespace OpenAstroAra.Server.Services;
 /// null when unknown; null delegate when this daemon reads none.</param>
 /// <param name="CanMovePrimaryAxis">#2083 — CanMoveAxis(Primary) read at connect
 /// (<see cref="IMountMotionControl.CanMovePrimaryAxis"/>): null when unknown; null delegate when this daemon reads none.</param>
+/// <param name="DirectionTestOwedDeg">#2165 — the direction test the run makes first (0.5°, or 0 with a saved RA motor
+/// direction), read only when the plan could not be made: the reach is then the stage's two turns plus it. Null
+/// delegate: the test is counted (the larger reach).</param>
 internal sealed record PolarAlignPreflightInputs(
     string Stage,
     Func<TelescopeInfo?> MountInfo,
@@ -54,7 +57,8 @@ internal sealed record PolarAlignPreflightInputs(
     Func<bool>? AlignerPresent,
     bool HandTurn = false,
     Func<AlignmentMode?>? AlignmentMode = null,
-    Func<bool?>? CanMovePrimaryAxis = null);
+    Func<bool?>? CanMovePrimaryAxis = null,
+    Func<double>? DirectionTestOwedDeg = null);
 
 /// <summary>The pre-flight list and, for a start, the exception the first failing check refuses with (null when none
 /// fails), with the confirm step's plan when it could be made.</summary>
@@ -98,11 +102,14 @@ internal static class PolarAlignPreflightEvaluator {
         return string.IsNullOrWhiteSpace(info.Name) ? UnidentifiedMountKey : info.Name.Trim();
     }
 
-    /// <summary>The connected mount's clearance entry, or the defaults (60°, not confirmed) when it has none.</summary>
-    public static PolarAlignMountClearanceDto ClearanceFor(PolarAlignSettingsDto settings, string? mountKey) =>
-        mountKey is not null && settings.MountClearance is { } entries && entries.TryGetValue(mountKey, out var entry) && entry is not null
+    /// <summary>The connected mount's clearance entry, or null when it has none (not confirmed).</summary>
+    public static PolarAlignMountClearanceDto? ClearanceFor(PolarAlignSettingsDto settings, string? mountKey) =>
+        mountKey is not null && settings.MountClearance is { } entries && entries.TryGetValue(mountKey, out var entry)
             ? entry
-            : new PolarAlignMountClearanceDto();
+            : null;
+
+    /// <summary>#2165 — a reach in degrees for people: 20 or 20.5.</summary>
+    internal static string ReachText(double deg) => deg.ToString("0.#", CultureInfo.InvariantCulture);
 
     internal const string MountNotConnectedMessage = "mount is not connected";
     internal const string SiteLatitudeMessage =
@@ -241,30 +248,7 @@ internal static class PolarAlignPreflightEvaluator {
             }
         }
 
-        // ARA-8: no motor motion until the user confirmed this mount's clearance. A hand-turn start sends the mount no move
-        // (#2083), so it goes ahead with a warning (Joey, 2026-11-21).
-        var clearance = ClearanceFor(settings, mountKey);
-        var clearanceRow = rows[PolarAlignPreflightChecks.ClearanceConfirmed];
-        if (settingsError is not null) {
-            clearanceRow.Fail(settingsError, $"The polar-align settings could not be read: {settingsError.Message}");
-        } else if (!connected) {
-            clearanceRow.Unknown(WaitsForMount);
-        } else if (clearance.ClearanceConfirmed) {
-            clearanceRow.Ok(string.Create(CultureInfo.InvariantCulture,
-                $"You confirmed this mount clears the pier and tripod with the counterweight up to {clearance.MaxCwAngleDeg:0}° from down."));
-        } else if (inputs.HandTurn) {
-            clearanceRow.Warn(string.Create(CultureInfo.InvariantCulture,
-                $"Not confirmed for this mount: Turn RA by hand moves nothing, so it can start. The motor does not turn this mount until you confirm its clearance up to {clearance.MaxCwAngleDeg:0}° from counterweight-down."));
-        } else {
-            var limit = clearance.MaxCwAngleDeg;
-            clearanceRow.Fail(new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,
-                    string.Create(CultureInfo.InvariantCulture,
-                        $"Confirm this mount's clearance first: check with the hand controller that the counterweight, tube and cables clear the pier and tripod up to {limit:0}° from counterweight-down, then confirm it in Polar Align"),
-                    new Dictionary<string, object?> { ["max_cw_angle_deg"] = limit }),
-                "Not confirmed for this mount: check its counterweight and cable clearance, then confirm it. Polar Align does not move the mount until then.");
-        }
-
-        // The start pointing: the confirm step's plan, from a fresh reading.
+        // The start pointing: the confirm step's plan, from a fresh reading. Read before the clearance, which needs its reach.
         PolarAlignStartPlanDto? plan = null;
         var pointingRow = rows[PolarAlignPreflightChecks.StartPointing];
         if (!connected) {
@@ -276,6 +260,37 @@ internal static class PolarAlignPreflightEvaluator {
                     $"RA turns {plan.StepDeg:0}° twice toward the {plan.Direction}, at most {plan.MaxSweepDeg:0}° from where the mount points."));
             } catch (Exception ex) {
                 pointingRow.Fail(ex);
+            }
+        }
+
+        // ARA-8: no motor motion until the user confirmed this mount's clearance. A hand-turn start sends the mount no move
+        // (#2083), so it goes ahead with a warning (Joey, 2026-11-21). #2165: the confirmation is for a reach, how far the
+        // run turns RA each way (the plan's turns plus the direction test when owed); a bigger reach asks again.
+        var turnStep = settings.SeedRotationDeg;
+        var stageStep = stage == PolarAlignStages.Check ? settings.CheckStepDeg : turnStep;
+        var reachDeg = plan is not null
+            ? plan.MaxSweepDeg + plan.DirectionTestDeg
+            : (2.0 * stageStep) + DirectionTestOwed(inputs.DirectionTestOwedDeg);
+        var reach = ReachText(reachDeg);
+        var clearance = ClearanceFor(settings, mountKey);
+        var clearanceRow = rows[PolarAlignPreflightChecks.ClearanceConfirmed];
+        if (settingsError is not null) {
+            clearanceRow.Fail(settingsError, $"The polar-align settings could not be read: {settingsError.Message}");
+        } else if (!connected) {
+            clearanceRow.Unknown(WaitsForMount);
+        } else if (clearance is not null && PolarAlignSettingsClamp.ReachCovered(clearance.ConfirmedReachDeg, reachDeg)) {
+            clearanceRow.Ok($"Polar Align turns this mount up to {reach}° each way. You confirmed there is room for {ReachText(clearance.ConfirmedReachDeg)}°.");
+        } else {
+            var why = clearance is null
+                ? $"Polar Align turns this mount up to {reach}° each way, and you have not confirmed there is room."
+                : $"Polar Align turns this mount up to {reach}° each way, more than the {ReachText(clearance.ConfirmedReachDeg)}° you confirmed.";
+            if (inputs.HandTurn) {
+                clearanceRow.Warn($"{why} Turn RA by hand moves nothing, so it can start; the motor waits until you confirm.");
+            } else {
+                clearanceRow.Fail(new RefusalException(RefusalCatalog.PolarAlignClearanceNotConfirmed,
+                        $"Confirm this mount's clearance first: this run turns the mount up to {reach}° each way. Check there is room for the tube, counterweight and cables to move that far, then confirm it in Polar Align",
+                        new Dictionary<string, object?> { ["reach_deg"] = reachDeg }),
+                    $"{why} Polar Align does not move the mount until you confirm.");
             }
         }
 
@@ -310,8 +325,6 @@ internal static class PolarAlignPreflightEvaluator {
                 ready = false;
             }
         }
-        var turnStep = settings.SeedRotationDeg;
-        var stageStep = stage == PolarAlignStages.Check ? settings.CheckStepDeg : turnStep;
         var planned = new PolarAlignPreflightPlannedDto(
             Stage: stage,
             Direction: plan?.Direction,
@@ -322,11 +335,25 @@ internal static class PolarAlignPreflightEvaluator {
             NewOrigin: plan?.NewOrigin,
             OriginOffsetDeg: plan?.OriginOffsetDeg,
             SweepLimitDeg: plan?.SweepLimitDeg,
-            MaxCwAngleDeg: clearance.MaxCwAngleDeg,
+            ReachDeg: reachDeg,
             StartCwAngleDeg: null,
             MinAltitudeDeg: null);
         var dto = new PolarAlignPreflightDto(ready, checks, planned, mountKey);
         return new PolarAlignPreflightResult(dto, firstFailure, plan);
+    }
+
+    /// <summary>#2165 — the direction test owed when the plan could not be made; a failed read counts it.</summary>
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "The evaluator never throws (#2068): a failed read counts the test, the larger reach.")]
+    private static double DirectionTestOwed(Func<double>? read) {
+        if (read is null) {
+            return PolarAlignService.DirectionTestDeg;
+        }
+        try {
+            return read();
+        } catch (Exception) {
+            return PolarAlignService.DirectionTestDeg;
+        }
     }
 
     internal const string SiteNotSetMessage =

@@ -189,8 +189,8 @@ namespace OpenAstroAra.Test {
 
         [Test]
         public async Task The_clearance_check_reads_the_connected_mounts_own_entry() {
-            var otherMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed("another-mount", maxCwAngleDeg: 45));
-            var thisMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed(MountId, maxCwAngleDeg: 50));
+            var otherMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed("another-mount", reachDeg: 45));
+            var thisMount = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed(MountId, reachDeg: 45));
 
             var notConfirmed = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(settings: () => otherMount), CancellationToken.None).ConfigureAwait(false);
             var confirmed = await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(settings: () => thisMount), CancellationToken.None).ConfigureAwait(false);
@@ -201,11 +201,58 @@ namespace OpenAstroAra.Test {
                     "another mount's confirmation is not this one's");
                 var refusal = notConfirmed.FirstFailure as RefusalException;
                 Assert.That(refusal?.Cause, Is.EqualTo(RefusalCatalog.PolarAlignClearanceNotConfirmed));
-                Assert.That(refusal?.Parameters["max_cw_angle_deg"], Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));
-                Assert.That(notConfirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.DefaultMaxCwAngleDeg));
+                Assert.That(refusal?.Parameters["reach_deg"], Is.EqualTo(20.0), "the plan's two 10° turns");
                 Assert.That(Check(confirmed, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
-                Assert.That(confirmed.Dto.Planned.MaxCwAngleDeg, Is.EqualTo(50.0), "this mount's own limit");
                 Assert.That(confirmed.Dto.Ready, Is.True);
+            });
+        }
+
+        // #2165 — the confirmation is for a reach: the plan's turns plus the 0.5° direction test when it is owed. A
+        // smaller or equal reach stays confirmed; a bigger one (a larger turn size, a test now owed) asks again.
+        [Test]
+        public async Task A_confirmed_reach_covers_a_smaller_or_equal_run_and_a_bigger_one_asks_again() {
+            var withTest = Plan with { DirectionTestDeg = 0.5 };
+            async Task<PolarAlignPreflightResult> Run(double confirmedDeg, PolarAlignStartPlanDto plan, bool handTurn = false) =>
+                await PolarAlignPreflightEvaluator.EvaluateAsync(Inputs(
+                    settings: () => PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto().Confirmed(MountId, reachDeg: confirmedDeg)),
+                    plan: _ => Task.FromResult(plan)) with { HandTurn = handTurn }, CancellationToken.None).ConfigureAwait(false);
+
+            var equal = await Run(20.5, withTest).ConfigureAwait(false);
+            var larger = await Run(60.5, withTest).ConfigureAwait(false);
+            var smaller = await Run(20.0, withTest).ConfigureAwait(false);
+            var smallerHand = await Run(20.0, withTest, handTurn: true).ConfigureAwait(false);
+            var noTest = await Run(20.0, Plan).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(equal.Dto.Planned.ReachDeg, Is.EqualTo(20.5), "the turns plus the owed test");
+                Assert.That(noTest.Dto.Planned.ReachDeg, Is.EqualTo(20.0), "no test owed, no test counted");
+                Assert.That(Check(equal, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(equal, PolarAlignPreflightChecks.ClearanceConfirmed).Detail, Does.Contain("up to 20.5° each way"));
+                Assert.That(Check(larger, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(noTest, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
+                Assert.That(Check(smaller, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail),
+                    "a bigger reach than the one confirmed asks again");
+                Assert.That((smaller.FirstFailure as RefusalException)?.Parameters["reach_deg"], Is.EqualTo(20.5));
+                Assert.That(Check(smallerHand, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Warn),
+                    "a hand-turn start only warns");
+            });
+        }
+
+        // #2165 — with no plan (the start pointing fails) the reach is still the stage's two turns plus the test the
+        // daemon owes, never less.
+        [Test]
+        public async Task Without_a_plan_the_reach_is_the_stage_turns_plus_the_owed_direction_test() {
+            var settings = PolarAlignSettingsClamp.Apply(new PolarAlignSettingsDto(SeedRotationDeg: 5.0).Confirmed(MountId, reachDeg: 10.0));
+            var noPlan = Inputs(settings: () => settings, plan: _ => Task.FromException<PolarAlignStartPlanDto>(new InvalidOperationException("no reading")));
+
+            var owed = await PolarAlignPreflightEvaluator.EvaluateAsync(noPlan with { DirectionTestOwedDeg = () => 0.5 }, CancellationToken.None).ConfigureAwait(false);
+            var saved = await PolarAlignPreflightEvaluator.EvaluateAsync(noPlan with { DirectionTestOwedDeg = () => 0.0 }, CancellationToken.None).ConfigureAwait(false);
+
+            Assert.Multiple(() => {
+                Assert.That(owed.Dto.Planned.ReachDeg, Is.EqualTo(10.5));
+                Assert.That(Check(owed, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Fail));
+                Assert.That(saved.Dto.Planned.ReachDeg, Is.EqualTo(10.0));
+                Assert.That(Check(saved, PolarAlignPreflightChecks.ClearanceConfirmed).Status, Is.EqualTo(PolarAlignPreflightStatuses.Ok));
             });
         }
 

@@ -174,7 +174,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public void A_PUT_without_mount_clearance_keeps_every_stored_confirmation() {
             var stored = new Dictionary<string, PolarAlignMountClearanceDto> {
-                ["mount-a"] = new(MaxCwAngleDeg: 45.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 45.0),
+                ["mount-a"] = new(ConfirmedReachDeg: 20.5),
             };
             var store = new Mock<IProfileStore>();
             store.Setup(s => s.GetPolarAlignSettings()).Returns(new PolarAlignSettingsDto(MountClearance: stored));
@@ -185,53 +185,43 @@ namespace OpenAstroAra.Test {
                 new PolarAlignSettingsDto(MountClearance: new Dictionary<string, PolarAlignMountClearanceDto>()), store.Object)
                 as Ok<PolarAlignSettingsDto>)?.Value;
 
-            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(45.0, true, 45.0)));
+            Assert.That(kept?.MountClearance?["mount-a"], Is.EqualTo(new PolarAlignMountClearanceDto(20.5)));
             Assert.That(kept!.ExposureSeconds, Is.EqualTo(4.0));
             Assert.That(cleared?.MountClearance, Is.Empty, "an empty map clears them");
         }
 
-        // #2068 review — a confirmation is for the limit the user checked: a confirmed limit out of range is refused, not
-        // raised to 10° or lowered to 75°. An unconfirmed one is clamped like the other knobs.
-        [TestCase(5.0)]
-        [TestCase(80.0)]
-        public void A_confirmed_clearance_outside_10_to_75_degrees_is_400_and_not_stored(double limitDeg) {
+        // #2165 — a confirmation is for the reach the user said there is room for: one that is not a positive number up
+        // to a whole turn is refused, never raised or lowered to a reach the user did not confirm.
+        [TestCase(0.0)]
+        [TestCase(-1.0)]
+        [TestCase(361.0)]
+        [TestCase(double.NaN)]
+        public void A_confirmed_reach_that_is_not_a_positive_number_up_to_360_is_400_and_not_stored(double reachDeg) {
             var store = new Mock<IProfileStore>();
-            var entries = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(limitDeg, ClearanceConfirmed: true) };
+            var entries = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(reachDeg) };
 
             var refused = ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: entries), store.Object);
+
             Assert.That((refused as ProblemHttpResult)?.StatusCode, Is.EqualTo(StatusCodes.Status400BadRequest));
             store.Verify(s => s.PutPolarAlignSettings(It.IsAny<PolarAlignSettingsDto>()), Times.Never);
-
-            var unconfirmed = new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = new(limitDeg, ClearanceConfirmed: false) };
-            var clamped = (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(MountClearance: unconfirmed), store.Object)
-                as Ok<PolarAlignSettingsDto>)?.Value;
-            Assert.That(clamped?.MountClearance?["m"].MaxCwAngleDeg, Is.EqualTo(PolarAlignSettingsClamp.ClampMaxCwAngleDeg(limitDeg)));
         }
 
-        // Joey, 2026-11-21: a confirmation is for one limit. A PUT that changes the limit and carries the old confirmation
-        // along (an app that copied the entry) stores the mount not confirmed; the same PUT confirming the new limit
-        // keeps it confirmed; taking it back (clearance_confirmed false) stores it not confirmed.
+        // #2165 — a confirmation stored in the old slider format (a counterweight angle, no reach) is dropped when it is
+        // read, so that mount is asked again (pre-beta, no migration of meaning). A reach entry beside it stays.
         [Test]
-        public void A_limit_changed_without_a_new_confirmation_is_stored_not_confirmed() {
-            var store = new Mock<IProfileStore>();
-            PolarAlignMountClearanceDto? Put(PolarAlignMountClearanceDto entry) =>
-                (ProfileEndpoints.PutPolarAlignSettings(new PolarAlignSettingsDto(
-                    MountClearance: new Dictionary<string, PolarAlignMountClearanceDto> { ["m"] = entry }), store.Object)
-                    as Ok<PolarAlignSettingsDto>)?.Value?.MountClearance?["m"];
+        public void An_old_slider_format_clearance_entry_is_dropped_and_asked_again() {
+            const string json = """
+                {"mount_clearance": {
+                  "old-mount": {"max_cw_angle_deg": 60, "clearance_confirmed": true, "confirmed_max_cw_angle_deg": 60},
+                  "new-mount": {"confirmed_reach_deg": 20.5}}}
+                """;
+            var stored = System.Text.Json.JsonSerializer.Deserialize<PolarAlignSettingsDto>(json, OpenAstroAra.Server.AraJsonSerializerContext.Default.Options);
 
-            var copied = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 45.0));
-            var unnamed = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true));
-            var confirmedAgain = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: true, ConfirmedMaxCwAngleDeg: 30.0));
-            var takenBack = Put(new(MaxCwAngleDeg: 30.0, ClearanceConfirmed: false, ConfirmedMaxCwAngleDeg: 30.0));
+            var read = PolarAlignSettingsClamp.Apply(stored!);
 
-            Assert.Multiple(() => {
-                Assert.That(copied, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "the old confirmation does not carry to a new limit");
-                Assert.That(unnamed, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "a confirmation names the limit it is for");
-                Assert.That(confirmedAgain, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, true, 30.0)), "the same request confirms the new limit");
-                Assert.That(takenBack, Is.EqualTo(new PolarAlignMountClearanceDto(30.0, false)), "taken back");
-            });
-            store.Verify(s => s.PutPolarAlignSettings(It.Is<PolarAlignSettingsDto>(v => v.MountClearance!["m"].ClearanceConfirmed)), Times.Once,
-                "only the request that confirms the new limit stores it confirmed");
+            Assert.That(read.MountClearance, Is.EqualTo(new Dictionary<string, PolarAlignMountClearanceDto> {
+                ["new-mount"] = new(20.5),
+            }));
         }
 
         [TestCase(0.001, PolarAlignLoopModes.Loop)]
