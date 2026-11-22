@@ -349,5 +349,22 @@ namespace OpenAstroAra.Test {
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
             Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((0, 0)), "no guiding start and no resume while the safety engine holds the rig");
         }
+
+        [Test]
+        public async Task A_failed_guiding_restart_says_nothing_when_the_user_took_the_run_over_meanwhile() {
+            // #2169 review — the user resumed or stopped the run while the start was failing: no stale alert.
+            using var rig = new Rig { RestartSucceeds = false };
+            var reads = 0;
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) =>
+                    Interlocked.Increment(ref reads) == 1 ? ids.ToList() : (IReadOnlyList<Guid>)Array.Empty<Guid>());
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Restarts() == 1).ConfigureAwait(false), Is.True, "the restart never ran");
+            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Assert.That((rig.Titled(NotRestartedTitle), rig.Resumed()), Is.EqualTo((0, 0)), "the user owns the run: no alert, no resume");
+        }
     }
 }
