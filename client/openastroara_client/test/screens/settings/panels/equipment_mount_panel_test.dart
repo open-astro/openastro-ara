@@ -320,8 +320,8 @@ void main() {
     expect(home.onPressed, isNull); // must unpark before homing
   });
 
-  // #2173 — Home (the mount's home-sensor search) is the way out of an
-  // unverified position, so it stays on; Park stays off.
+  // #2173 — Home is the way out of an unverified position on any mount that
+  // can find Home, so it stays on; Park stays off.
   testWidgets('an unverified position turns Park off, keeps Home on and says to press Home (#2173)', (
     tester,
   ) async {

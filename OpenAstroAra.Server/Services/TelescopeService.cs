@@ -218,7 +218,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         _canMoveSecondaryAxis = null;
         _driverVersion = null;
         _driverInfo = null;
-        _homeIsSensorSearch = false; // #2173 review — read again with the next session's capabilities
         _axisBands = null;          // #1064 — per-axis rate bands re-read for the new device
         _axisRatesSettled = false;
         _axisRatesDeadline = DateTimeOffset.UtcNow + AxisRatesSettleWindow;
@@ -510,23 +509,22 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "#2066 — the dispatch scope is handed to the background send, which disposes it when the move is sent or dropped; a throw before the hand-off disposes it here.")]
     private async Task<OperationAcceptedDto> FindHomeAfterGuidingStoppedAsync(ITelescopeDevice client, string? idempotencyKey, long abortEpoch, long motion, CancellationToken ct) {
-        // #2173 — on a mount whose FindHome is its home-sensor search (HomeIsSensorSearch: the HAE29C on an AlpacaBridge
-        // that runs :MSH# for it, AlpacaBridge#2420/#2472), Home is not refused while the position is unverified: it is
-        // the way out, and a search seen to run that ends at Home trusts the position again (TrustPoseAfterHomeSearchAsync).
-        // #2173 review — any other mount's Home drives to where its model thinks Home is, which may be counterweight up
-        // or into the pier, so it stays refused (#2070), with the hand controller's search as the way out. GoTo, Park and
-        // polar alignment stay refused either way. The sequencer's Find Home instruction always is (RunMountOpAsync).
-        bool sensorSearch;
+        // #2173 — NINA allows Find Home at any time, so the user's Home is not refused while the position is unverified on
+        // any mount whose Alpaca CanFindHome is true (ADR 0003 rule 2: no brand or driver check): it is the way out, and a
+        // search seen to run that ends at Home trusts the position again (TrustPoseAfterHomeSearchAsync). A mount that
+        // cannot find Home keeps the #2070 refusal, with the hand controller's search as the way out. GoTo, Park and polar
+        // alignment stay refused either way, and so does the sequencer's Find Home instruction (RunMountOpAsync).
+        bool canFindHome;
         try {
-            sensorSearch = await Task.Run(() => ReadHomeIsSensorSearch(client), CancellationToken.None)
+            canFindHome = await Task.Run(() => ReadCanFindHomeBestEffort(client), CancellationToken.None)
                 .WaitAsync(PoseReadTimeout, ct).ConfigureAwait(false);
         } catch (TimeoutException) {
-            sensorSearch = false;
+            canFindHome = false;
         } catch {
             NoteMotionFailed(motion, client);
             throw;
         }
-        if (!sensorSearch) {
+        if (!canFindHome) {
             try {
                 await ThrowIfPoseUnverifiedAsync(client, "findhome", ct).ConfigureAwait(false);
             } catch {
@@ -568,16 +566,17 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                                 LogFindHomeDroppedAfterAbort(StoppedSinceWords(fence));
                                 return;
                             }
-                            atSend = sensorSearch ? ReadPoseBestEffort(c) : default; // #2173 — where the search starts
+                            atSend = canFindHome ? ReadPoseBestEffort(c) : default; // #2173 — where the search starts
                             SendMotion(motion, c, c.FindHome);
                             sent = true;
                         });
                     }
-                    if (sent && sensorSearch) {
+                    if (sent && canFindHome) {
                         await TrustPoseAfterHomeSearchAsync(client, fence, atSend).ConfigureAwait(false);
                     } else if (sent) {
-                        // #2173 review — a model Home whose call returned at once still moves: it stays Ara's own until
-                        // the mount reports Home or not slewing (bounded).
+                        // #2173 review — a Home on a mount that says it cannot find Home (sent only from a trusted
+                        // position) whose call returned at once may still move: it stays Ara's own until the mount
+                        // reports Home or not slewing (bounded).
                         await HoldPoseMoveUntilSettledAsync(client, fence, d => d.AtHome).ConfigureAwait(false);
                     }
                 } finally {
@@ -1409,7 +1408,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
         var canMoveSecondary = needCaps ? ReadCanMoveAxis(client, TelescopeAxis.Secondary) : null;
         var driverVersion = needCaps ? ReadDriverVersion(client) : null;
         var driverInfo = needCaps ? ReadDriverInfo(client) : null;
-        var driverName = needCaps ? ReadDriverName(client) : null;
         var actions = needCaps
             ? new LiveDriverActions(LiveDriverActions.Read(() => client.SupportedActions), () => _lifecycle.IsLive(client), client.Action)
             : null;
@@ -1448,7 +1446,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
                     _canMoveSecondaryAxis = canMoveSecondary;
                     _driverVersion = driverVersion;
                     _driverInfo = driverInfo;
-                    _homeIsSensorSearch = HomeIsSensorSearch(driverName, driverInfo, driverVersion); // #2173 review
                 }
                 if (needAxisRates) {
                     // Keep any axis already known; fill the rest from this pass.
@@ -2054,16 +2051,6 @@ public sealed partial class TelescopeService : ITelescopeService, IRetainedDevic
     private static string ReadDriverVersion(ITelescopeDevice c) {
         try {
             return c.DriverVersion?.Trim() ?? string.Empty;
-        } catch (Exception) {
-            return string.Empty;
-        }
-    }
-
-    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
-        Justification = "Per-field read boundary: a driver that fails Name reports none (empty), so it is not known to run a sensor search for Home.")]
-    private static string ReadDriverName(ITelescopeDevice c) {
-        try {
-            return c.Name?.Trim() ?? string.Empty;
         } catch (Exception) {
             return string.Empty;
         }

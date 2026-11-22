@@ -32,8 +32,8 @@ using System.Threading.Tasks;
 namespace OpenAstroAra.Test {
 
     /// <summary>#2070 — after a power loss an iOptron HAE29C reports Home (Dec 90) wherever it points. Ara marks
-    /// that position unverified and refuses every move that trusts it (GoTo, Park, model Home, the flip, polar
-    /// alignment's motor moves) until the user confirms Home; Sync, the pad and Stop still work. Against a fake
+    /// that position unverified and refuses every move that trusts it (GoTo, Park, the flip, polar alignment's
+    /// motor moves) until Home is confirmed; Sync, the pad, Stop and (#2173) the user's Home still work. Against a fake
     /// mount: no test here dials a port.</summary>
     [TestFixture]
     public class TelescopePositionUnverifiedTest {
@@ -108,18 +108,10 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => s.IsCleanlyConnected && s.GetAsync(CancellationToken.None).Result?.Capabilities is not null, "the first clean read");
         }
 
-        // #2173 review — the one mount whose FindHome is known to be its home-sensor search: the HAE29C on an AlpacaBridge
-        // that runs :MSH# for it and keeps an unmoved search from reading as Home (6.0.0~beta3 and later).
-        private static void AsHae29c(FakeTelescopeDevice f) {
-            f.Name = "iOptron HAE29C EQ";
-            f.DriverInfo = "AlpacaCore iOptron Driver v1.0";
-            f.DriverVersion = "6.0.0~beta4";
-        }
-
         // The RC51 case: the mount wakes at its false zero and Ara connects to it.
         private async Task<TelescopeService> ConnectedAtFalseZeroAsync(IMountPoseStore? store = null, IProfileService? profile = null,
-                bool hae29c = false, TimeProvider? clock = null) {
-            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; if (hae29c) { AsHae29c(f); } };
+                TimeProvider? clock = null, Action<FakeTelescopeDevice>? also = null) {
+            _configure = f => { f.ReportsAtHome = true; f.Dec = 90; also?.Invoke(f); };
             var svc = Build(store, profile, clock: clock);
             await ConnectAsync(svc);
             await WaitForAsync(() => Runtime(svc)?.PositionUnverified == true, "the unverified position");
@@ -181,18 +173,19 @@ namespace OpenAstroAra.Test {
             await WaitForAsync(() => Current.Syncs == 1, "the sync");
         }
 
-        // #2173 — on the HAE29C, Home (the mount's home-sensor search) is the way out of an unverified position, so it
-        // runs; GoTo and Park, which drive by the untrusted model, stay refused, and the Park refusal names Home.
+        // #2173 — Home is the way out of an unverified position on any mount that can find Home (NINA allows Find Home at
+        // any time), so it runs; GoTo and Park, which drive by the untrusted model, stay refused, and the Park refusal
+        // names Home.
         [Test]
         public async Task Home_runs_while_unverified_but_GoTo_and_Park_stay_refused() {
-            using var svc = await ConnectedAtFalseZeroAsync(hae29c: true);
+            using var svc = await ConnectedAtFalseZeroAsync();
 
             await svc.FindHomeAsync(null, CancellationToken.None);
             await WaitForAsync(() => Current.Homes == 1, "the Home search");
 
             var park = await RefusedAsync(() => svc.ParkAsync(new ParkRequestDto(), null, CancellationToken.None));
             Assert.That(park.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
-            Assert.That(park.Message, Does.Contain("The safe way out is Home"));
+            Assert.That(park.Message, Does.Contain("The way out is Home").And.Not.Contain("hand controller"));
             var goTo = await RefusedAsync(() => svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None));
             Assert.That(goTo.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
             await Task.Delay(100);
@@ -200,37 +193,40 @@ namespace OpenAstroAra.Test {
             Assert.That(Current.Slews, Is.Zero);
         }
 
-        // #2173 review — any other mount's Home drives to where its model thinks Home is (counterweight up, or the pier,
-        // when the model is wrong), so it stays refused while unverified, and the refusal sends the user to the hand
-        // controller's search. Nothing reaches the mount.
+        // #2173 — ADR 0003 rule 2: whether Home may run follows CanFindHome, never the brand or driver. A mount that is
+        // no iOptron, on a driver that is no AlpacaBridge, runs its Home while unverified all the same.
         [Test]
-        public async Task Home_stays_refused_while_unverified_on_a_mount_whose_home_is_no_sensor_search() {
-            using var svc = await ConnectedAtFalseZeroAsync();
+        public async Task Home_is_allowed_while_unverified_on_a_mount_with_a_non_iOptron_name() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => {
+                f.DriverInfo = "Generic Alpaca Telescope Driver";
+                f.DriverVersion = "2.3.1";
+            });
+
+            await svc.FindHomeAsync(null, CancellationToken.None);
+
+            await WaitForAsync(() => Current.Homes == 1, "the Home");
+        }
+
+        // #2173 — a mount whose Alpaca CanFindHome is false keeps the #2070 refusal while unverified, and the refusal sends
+        // the user to the hand controller's search. Nothing reaches the mount.
+        [Test]
+        public async Task Home_is_refused_while_unverified_on_a_mount_that_cannot_find_home() {
+            using var svc = await ConnectedAtFalseZeroAsync(also: f => f.FindHomeCapable = false);
 
             var home = await RefusedAsync(() => svc.FindHomeAsync(null, CancellationToken.None));
 
             Assert.That(home.Cause, Is.EqualTo(RefusalCatalog.MountPositionUnverified));
-            Assert.That(home.Message, Does.Contain("hand controller").And.Not.Contain("The safe way out is Home"));
+            Assert.That(home.Message, Does.Contain("hand controller").And.Not.Contain("The way out is Home"));
             await Task.Delay(100);
             Assert.That(Current.Homes, Is.Zero);
         }
 
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "6.0.0~beta3", ExpectedResult = true)]
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "6.0.0", ExpectedResult = true)]
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "7.1.0~beta1", ExpectedResult = true)]
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "6.0.0~beta2", ExpectedResult = false)]
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "5.0.2", ExpectedResult = false)]
-        [TestCase("iOptron HAE29C EQ", "AlpacaCore iOptron Driver v1.0", "", ExpectedResult = false)]
-        [TestCase("iOptron CEM70", "AlpacaCore iOptron Driver v1.0", "6.0.0~beta4", ExpectedResult = false)]
-        [TestCase("iOptron HAE29C EQ", "Some other HAE29C driver", "6.0.0~beta4", ExpectedResult = false)]
-        public bool Home_is_a_sensor_search_only_on_the_HAE29C_on_AlpacaBridge_6_0_0_beta3_or_later(string name, string info, string version) =>
-            TelescopeService.HomeIsSensorSearch(name, info, version);
-
-        // #2173 — a HAE29C that ignored the search, sent Home at its false zero, goes nowhere and reports Home throughout:
-        // that is no search, so the position stays unverified (the eye confirmation is still needed).
+        // #2173 — a mount that woke at its false zero believes it is at Home, so its FindHome (:MH#-style, by the model)
+        // goes nowhere and it reports Home throughout: no search was seen to run, so the position stays unverified (the
+        // eye confirmation is still needed). No brand knowledge is needed for that.
         [Test]
-        public async Task A_home_that_never_leaves_a_false_zero_does_not_trust_the_position() {
-            using var svc = await ConnectedAtFalseZeroAsync(hae29c: true);
+        public async Task Home_that_never_moves_at_a_false_zero_clears_nothing() {
+            using var svc = await ConnectedAtFalseZeroAsync();
 
             await svc.FindHomeAsync(null, CancellationToken.None);
             await WaitForAsync(() => Current.Homes == 1, "the Home");
@@ -243,7 +239,7 @@ namespace OpenAstroAra.Test {
         // failed read is no "left Home", so nothing was seen moving and the position stays unverified.
         [Test]
         public async Task A_failed_at_home_read_during_a_home_at_a_false_zero_stays_unverified() {
-            using var svc = await ConnectedAtFalseZeroAsync(hae29c: true);
+            using var svc = await ConnectedAtFalseZeroAsync();
 
             await svc.FindHomeAsync(null, CancellationToken.None);
             await WaitForAsync(() => Current.Homes == 1, "the Home");
@@ -260,7 +256,7 @@ namespace OpenAstroAra.Test {
         // counts, so the Home it reports after it is not trusted.
         [Test]
         public async Task A_mount_that_resets_in_the_middle_of_the_search_is_not_trusted() {
-            using var svc = await ConnectedAtFalseZeroAsync(hae29c: true);
+            using var svc = await ConnectedAtFalseZeroAsync();
             Current.ReportsAtHome = false; // the search: away from Home and slewing
             Current.IsSlewing = true;
             Current.Dec = 60;
@@ -285,7 +281,7 @@ namespace OpenAstroAra.Test {
         [Test]
         public async Task A_home_search_that_ends_at_home_at_dec_90_71_trusts_the_position_again() {
             var store = new MemoryPoseStore();
-            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; AsHae29c(f); };
+            _configure = f => { f.ReportsAtHome = false; f.Dec = 23.52; };
             using var svc = Build(store);
             await ConnectAsync(svc);
             await WaitForAsync(() => Runtime(svc)?.DeclinationDegrees is 23.52, "a position");
@@ -302,7 +298,8 @@ namespace OpenAstroAra.Test {
 
             await WaitForAsync(() => Runtime(svc)?.PositionUnverified == false, "the position trusted again after the search");
             Assert.That(Current.Homes, Is.EqualTo(1));
-            Assert.That(store.UnverifiedReason(Mount.UniqueId), Is.Null, "persisted");
+            // The store write follows the trust under load (the tick can show the trust first), so wait for it.
+            await WaitForAsync(() => store.UnverifiedReason(Mount.UniqueId) is null, "the trust persisted");
             await Task.Delay(200);
             Assert.That(Runtime(svc)!.PositionUnverified, Is.False, "Dec 90.71° at Home is no jump afterwards");
             await svc.SlewAsync(new SlewRequestDto(5.0, 30.0), null, CancellationToken.None);

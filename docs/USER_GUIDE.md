@@ -335,11 +335,12 @@ framing/focus loop when you need to point or focus by eye.
   mount where it is: Ara stops both motors and checks on fresh readings
   that the mount stands still. If it cannot confirm that, the card says so: cut the mount's power and
   check the mount before you start again. Ara then stops trusting where the mount says it points,
-  as after a power loss: GoTo, Park and Polar Align stay blocked until the mount's zero (home-sensor)
-  search ends at Home. On an iOptron HAE29C with AlpacaBridge 6, press Home in the app: it runs that
-  search, and the position is trusted again once the mount reports Home. On any other mount Home is
-  blocked too (it goes by the mount's position model): run the search from its hand controller or app,
-  then confirm Home in the mount window. The same happens when
+  as after a power loss: GoTo, Park and Polar Align stay blocked until a Home ends at Home. Press Home
+  in the app (it works while the position is unverified, as in NINA): once Ara sees the mount move and
+  then report Home, the position is trusted again. A Home that never moves (a mount that already thinks
+  it is at Home) clears nothing; you can also confirm Home in the mount window once you have checked by
+  eye that it is there. A mount with no Home in Ara: run its zero search from its hand controller or
+  app, then confirm Home. The same happens when
   the mount disconnects and connects again while Polar Align is open. Then tracking goes off, as NINA does by default, so the mount
   cannot track into the pier while nobody watches. With *Stop tracking when polar align ends* off
   (Settings › Imaging › Polar align), Done and the end of a Check give back the tracking the run found;

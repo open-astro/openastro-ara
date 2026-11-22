@@ -1347,9 +1347,8 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
                 ref.watch(simpleMountHomeProvider) ||
                 (m.isBusy && !ref.watch(simplePadMovingProvider)),
             canHome: caps?.canFindHome ?? false,
-            // #2173 — Home stays on while the position is unverified: where it is
-            // the mount's home-sensor search it is the way out; elsewhere the rig
-            // refuses it and says to use the hand controller's search.
+            // #2173 — Home stays on while the position is unverified (NINA allows
+            // Find Home at any time): it is the way out of an unverified position.
             onHome: m.parked || m.isBusy
                 ? null
                 : () => planRunning
@@ -1474,7 +1473,10 @@ class _SimpleMountWindowState extends ConsumerState<SimpleMountWindow> {
           ),
           if (!m.atHome)
             Text(
-              l10n.mountPositionUnverifiedRunZeroSearch,
+              // #2173 — Home is the way out on a mount that can find Home.
+              (m.capabilities?.canFindHome ?? false)
+                  ? l10n.mountPositionUnverifiedPressHome
+                  : l10n.mountPositionUnverifiedRunZeroSearch,
               key: const Key('simple-mount-run-zero-search'),
               style: kSimpleCaption,
             )

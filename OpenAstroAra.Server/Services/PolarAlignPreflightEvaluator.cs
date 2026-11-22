@@ -237,9 +237,9 @@ internal static class PolarAlignPreflightEvaluator {
         } else {
             try {
                 if (await inputs.PoseUnverifiedReason(ct).ConfigureAwait(false) is { } reason) {
-                    // #2173 review — the way out named for this mount: Home where it is the sensor search, else the hand controller.
-                    var sensorHome = TelescopeService.HomeIsSensorSearch(info?.Name, info?.DriverInfo, info?.DriverVersion);
-                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason, sensorHome), TelescopeService.PositionUnverifiedDetail(reason, sensorHome));
+                    // #2173 — the way out named from the mount's Alpaca CanFindHome: Home, else the hand controller.
+                    var canFindHome = info?.CanFindHome == true;
+                    poseRow.Fail(TelescopeService.PositionUnverifiedRefusal(reason, canFindHome), TelescopeService.PositionUnverifiedDetail(reason, canFindHome));
                 } else {
                     poseRow.Ok("The mount's position is trusted.");
                 }

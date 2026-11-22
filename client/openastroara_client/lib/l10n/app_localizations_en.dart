@@ -6705,7 +6705,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalMountPositionUnverified =>
-      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. If the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6), press Home: the position is trusted again once the search ends at Home. Otherwise run the zero search from the mount\'s hand controller or app, then confirm Home.';
+      'The mount\'s position is unverified: it may have lost power, and it reports Home wherever it points. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get refusalMountPositionNotReadYet =>
@@ -6713,22 +6713,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get refusalMountPositionStopUnconfirmed =>
-      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. If the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6), press Home: the position is trusted again once the search ends at Home. Otherwise run the zero search from the mount\'s hand controller or app, then confirm Home.';
+      'The mount\'s position is unverified: Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran. Press Home: the position is trusted again once the mount is seen to move and then reports Home. If the mount has no Home in Ara, run its zero search from its hand controller or app, then confirm Home.';
 
   @override
   String get mountPositionUnverifiedTitle => 'Mount position unverified';
 
   @override
   String get mountPositionUnverifiedBody =>
-      'The mount may have lost power: it reports Home wherever it points. GoTo, Park and Polar Align are blocked, and so is Home unless it is the mount\'s home-sensor search. Stop, the direction pad and tracking still work.';
+      'The mount may have lost power: it reports Home wherever it points. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.';
 
   @override
   String get mountPositionUnverifiedRunZeroSearch =>
-      'Press Home if the mount\'s Home is its home-sensor search (the iOptron HAE29C on AlpacaBridge 6): its position is trusted again once it reports Home. Otherwise run the zero search from its hand controller or app, then confirm Home here.';
+      'This mount cannot find Home from Ara: run its zero search from its hand controller or app. When it reports Home, confirm it here.';
+
+  @override
+  String get mountPositionUnverifiedPressHome =>
+      'Press Home: the position is trusted again once the mount is seen to move and then reports Home.';
 
   @override
   String get mountPositionStopUnconfirmedBody =>
-      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked, and so is Home unless it is the mount\'s home-sensor search. Stop, the direction pad and tracking still work.';
+      'Ara could not confirm that the mount stopped after polar alignment moved it, or the mount reconnected while polar alignment ran, so it may have moved on. GoTo, Park and Polar Align are blocked. Home, Stop, the direction pad and tracking still work.';
 
   @override
   String get mountConfirmAtHome => 'The mount IS at Home';

@@ -379,7 +379,9 @@ namespace OpenAstroAra.Test {
         public bool CanUnpark => true;
         public bool CanSetTracking => true;
         public bool CanPulseGuide => true;
-        public bool CanFindHome => true;
+        public bool CanFindHome => FindHomeCapable;
+        /// <summary>#2173 — the mount's Alpaca CanFindHome (true unless a test turns it off).</summary>
+        public volatile bool FindHomeCapable = true;
         public bool CanSetPierSide { get => PierSideSettable; set => PierSideSettable = value; }
         public double FocalLength => 0.5;
         public double ApertureDiameter => 0.1;
@@ -391,8 +393,6 @@ namespace OpenAstroAra.Test {
         public double SiderealTime => 0.0;
         public string DriverVersion { get; set; } = string.Empty;
         public string DriverInfo { get; set; } = string.Empty;
-        /// <summary>#2173 review — the driver's Name (with DriverInfo and DriverVersion: whether Home is a sensor search).</summary>
-        public string Name { get; set; } = string.Empty;
         public bool CanMoveAxis(TelescopeAxis axis) => true;
         public IAxisRates AxisRates(TelescopeAxis axis) => new FakeAxisRates();
         // The driver's actions: set the list before the connect reads it; ActionResponder answers each

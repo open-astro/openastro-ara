@@ -43,7 +43,7 @@ namespace OpenAstroAra.Server.Services;
 /// that window does not wash it out: the next still reading settles it (see <see cref="Observe"/>).
 /// A routine that drove the motors flags it too (<see cref="StopUnconfirmed"/>): its stop was not confirmed, or the mount
 /// reconnected while it ran (#2066).
-/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara home-sensor search ended at Home) clears it; a new session for the
+/// Only <see cref="Confirm"/> (the user says the mount is at Home, or #2173 an Ara Home seen to run ended at Home) clears it; a new session for the
 /// same device keeps it, and the owner persists it per device so a daemon restart keeps it too.
 /// Until a session's first read is observed the mount is not trusted either (<see cref="Observed"/>).
 ///

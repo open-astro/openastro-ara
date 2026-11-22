@@ -225,9 +225,9 @@ class _MountBody extends ConsumerWidget {
               ),
             // Home slews to the mount's homing switch — disabled while parked (must
             // unpark first) or busy. Shown only when the mount supports FindHome.
-            // #2173 — on while the position is unverified: on a mount whose Home is
-            // its home-sensor search it is the way out; on any other the rig refuses
-            // it with the hand controller's search as the way out (shown as the error).
+            // #2173 — on while the position is unverified, as NINA allows Find
+            // Home at any time: it is the way out, and a search seen to run that
+            // ends at Home trusts the position again.
             if (caps?.canFindHome ?? false)
               OutlinedButton(
                 key: const Key('mount_find_home'),
@@ -349,7 +349,13 @@ class _PositionUnverified extends ConsumerWidget {
               child: Text(l10n.mountConfirmAtHome),
             )
           else
-            Text(l10n.mountPositionUnverifiedRunZeroSearch),
+            // #2173 — Home is the way out on a mount that can find Home; one
+            // that cannot is sent to its hand controller's search.
+            Text(
+              (status.capabilities?.canFindHome ?? false)
+                  ? l10n.mountPositionUnverifiedPressHome
+                  : l10n.mountPositionUnverifiedRunZeroSearch,
+            ),
         ],
       ),
     );
