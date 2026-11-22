@@ -13,6 +13,7 @@
 #endregion "copyright"
 
 using Microsoft.Extensions.Logging;
+using OpenAstroAra.Equipment.Equipment.MyGuider.PHD2;
 using OpenAstroAra.Server.Contracts;
 using System;
 using System.Collections.Generic;
@@ -28,9 +29,14 @@ namespace OpenAstroAra.Server.Services;
 /// so no unguided frame is saved or counted (a guide camera dropped while guiding is treated the same way).
 /// Once the §63.3 auto-reconnect (or any connect) brings the link
 /// back, PHD2 is up with guiding stopped: guiding is started again and must settle before the runs resume
-/// (<see cref="IGuiderEpisodeListener.RestoreGuidingAsync"/>), and the stopped light is taken again. One
-/// attempt per recovery: a start that fails or never settles leaves the runs paused for the user. A guider
-/// loss during the restore cuts it short; the reaction waits for that loss's recovery and restores again.
+/// (<see cref="IGuiderEpisodeListener.RestoreGuidingAsync"/>), and the stopped light is taken again. A start
+/// that fails or never settles is tried again later by the shared reaction until it works or the user takes
+/// the runs over. A guider loss during the restore cuts it short; the reaction waits for that loss's recovery
+/// and restores again.
+/// A guide camera drop is closed only by real frames (rig check 2026-11-21: the guider said "camera back"
+/// while the camera was still unplugged): a guide step, or one guide frame taken by
+/// <see cref="IGuiderEpisodeListener.CheckGuideCameraAsync"/>. The guider's "camera back" event is a hint
+/// that makes the reaction try now (<see cref="IGuiderEpisodeListener.RetryHint"/>).
 /// </summary>
 public sealed partial class GuiderService {
 
@@ -46,6 +52,76 @@ public sealed partial class GuiderService {
     // compared by reference, so a stale one never matches a later fault.
     private EquipmentFaultEvent? _guidedLossFault;
     private int _reconcileStartsAtLinkLoss;        // ReconcileStarts when the link went down (under _gate)
+
+    /// <summary>Exposure of the frame that checks a dropped guide camera is back (unguided runs).</summary>
+    internal TimeSpan GuideCameraCheckExposure { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>How long that frame may take to arrive before the check counts as failed.</summary>
+    internal TimeSpan GuideCameraCheckTimeout { get; set; } = TimeSpan.FromSeconds(30);
+
+    // Completed by the guider's "camera back" while a camera-drop fault is open; taken (and replaced) by
+    // the shared reaction's retry wait (under _gate).
+    private TaskCompletionSource _retryHint = NewRetryHint();
+
+    private static TaskCompletionSource NewRetryHint() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    Task IGuiderEpisodeListener.RetryHint() {
+        lock (_gate) {
+            var hint = _retryHint.Task;
+            if (hint.IsCompleted) {
+                _retryHint = NewRetryHint(); // taken: the next wait needs a new hint
+            }
+            return hint;
+        }
+    }
+
+    // Caller holds _gate. Real frames came from the guide camera: an open camera-drop fault is over.
+    private void RecoverCameraFaultOnFramesLocked() {
+        if (_cameraFault is not null) {
+            LogCameraFramesBack();
+            RecoverFaultLocked(ref _cameraFault);
+        }
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "A capture that throws (camera still gone, RPC) is a failed check: tried again later. Logged.")]
+    async Task<bool> IGuiderEpisodeListener.CheckGuideCameraAsync(CancellationToken ct) {
+        PHD2Guider guider;
+        lock (_gate) {
+            if (_cameraFault is null) {
+                return true; // frames came back already
+            }
+            if (_guider is null || _state != EquipmentConnectionState.Connected) {
+                return false;
+            }
+            guider = _guider;
+        }
+        var frame = new TaskCompletionSource<SingleFrameCompleteEventArgs>(TaskCreationOptions.RunContinuationsAsynchronously);
+        void OnFrame(object? sender, SingleFrameCompleteEventArgs e) => frame.TrySetResult(e);
+        guider.SingleFrameComplete += OnFrame;
+        try {
+            await guider.CaptureSolverFrameAsync((int)GuideCameraCheckExposure.TotalMilliseconds, binning: null, gain: null,
+                subframe: null, path: null, save: false, ct).ConfigureAwait(false);
+            var done = await frame.Task.WaitAsync(GuideCameraCheckExposure + GuideCameraCheckTimeout, ct).ConfigureAwait(false);
+            if (!done.Success) {
+                LogGuideCameraCheckFailed(done.Error ?? "the frame failed");
+                return false;
+            }
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            throw;
+        } catch (Exception ex) {
+            LogGuideCameraCheckFailed(ex.Message);
+            return false;
+        } finally {
+            guider.SingleFrameComplete -= OnFrame;
+        }
+        lock (_gate) {
+            if (ReferenceEquals(guider, _guider)) {
+                RecoverCameraFaultOnFramesLocked();
+            }
+            return _cameraFault is null;
+        }
+    }
 
     // Caller holds _gate. A guide step or guiding_started since the last stop, or PHD2 still reading a
     // guiding state: either says the frame in progress was being guided.
@@ -128,6 +204,12 @@ public sealed partial class GuiderService {
     [LoggerMessage(EventId = 4262, Level = LogLevel.Information, Message = "#2169 guiding restarted and settled — the paused runs resume and the stopped frame is taken again")]
     private partial void LogGuidingRestored();
 
-    [LoggerMessage(EventId = 4263, Level = LogLevel.Warning, Message = "#2169 guiding not restored after the guider loss ({Why}) — the paused runs stay paused")]
+    [LoggerMessage(EventId = 4263, Level = LogLevel.Warning, Message = "#2169 guiding not restored after the guider loss ({Why}) — the paused runs stay paused and Ara tries again")]
     private partial void LogGuidingRestoreFailed(string why);
+
+    [LoggerMessage(EventId = 4264, Level = LogLevel.Information, Message = "#2169 real guide frames again — the guide camera drop is over")]
+    private partial void LogCameraFramesBack();
+
+    [LoggerMessage(EventId = 4265, Level = LogLevel.Warning, Message = "#2169 guide camera check frame failed ({Why}) — the camera drop stays open and Ara tries again")]
+    private partial void LogGuideCameraCheckFailed(string why);
 }

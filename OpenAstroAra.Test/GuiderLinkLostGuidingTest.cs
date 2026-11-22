@@ -38,21 +38,24 @@ namespace OpenAstroAra.Test {
     public class GuiderLinkLostGuidingTest {
 
         private const string RestoredTitle = "Guiding restored — sequence resumed";
-        private const string NotRestartedTitle = "Guiding did not restart — sequence stays paused";
+        private const string StillTryingTitle = "Guiding not back yet — still trying, sequence stays paused";
+        private const string CameraStillTryingTitle = "Guide camera not back yet — still trying, sequence stays paused";
         private static readonly string[] RestartThenResume = ["restart", "resume"];
         private static readonly string[] RestartRestartResume = ["restart", "restart", "resume"];
         private static readonly string[] CheckThenRestartThenResume = ["camera checked", "restart", "resume"];
+        private static readonly string[] ThreeRestartsThenResume = ["restart", "restart", "restart", "resume"];
 
         private sealed class Rig : IDisposable {
             public readonly Mock<ISequencerService> Sequencer = new();
             public readonly List<NotificationDto> Notifications = new();
             public readonly List<string> Steps = new(); // "restart" and "resume", in the order they happened
             public readonly List<EquipmentFaultEvent> Faults = new(); // every fault the guider published
+            public readonly List<EquipmentFaultEvent> Recovered = new(); // every fault the guider recovered
             public readonly Guid RunId = Guid.NewGuid();
             public readonly HeadlessProfileService Profile = new();
             public readonly FaultReactionService Reaction;
             public readonly Mock<IAlpacaManagementClient> Alpaca = new();
-            public bool RestartSucceeds = true;
+            public Func<int, bool> RestartSucceeds = _ => true; // whether restart n (from 1) is taken by the guider
             public Func<double, Task>? OnRestart; // the fake's side of a restart: app state Guiding, a guide step of that distance
             public Func<int, bool> Settles = _ => true; // whether restart n (from 1) brings guiding back and settled
             public bool GuidesUnsettled; // a restart that does not settle still guides, far from the lock position
@@ -85,8 +88,12 @@ namespace OpenAstroAra.Test {
                     .Returns(Task.CompletedTask);
                 var hub = new EquipmentFaultHub(ws.Object);
                 hub.Subscribe(f => { lock (Faults) { Faults.Add(f); } });
+                hub.SubscribeRecovered(f => { lock (Recovered) { Recovered.Add(f); } });
                 Reaction = new FaultReactionService(hub, reconnector: null, profiles.Object, () => Sequencer.Object,
                     telescope: null, notifications.Object, ws.Object, guiderEpisodes: () => Service);
+                // No fixed waits: the retries come quickly here.
+                Reaction.GuiderRetryBackoff = [TimeSpan.FromMilliseconds(50)];
+                Reaction.ReleasePollInterval = TimeSpan.FromMilliseconds(50);
                 Reaction.StartAsync(CancellationToken.None).GetAwaiter().GetResult();
                 Service = new GuiderService(
                     Profile,
@@ -109,7 +116,7 @@ namespace OpenAstroAra.Test {
                             await hook(5.0).ConfigureAwait(false);
                         }
                     }
-                    return RestartSucceeds;
+                    return RestartSucceeds(n);
                 };
             }
 
@@ -120,6 +127,7 @@ namespace OpenAstroAra.Test {
             public int FramePauses() => Sequencer.Invocations.Count(i => i.Method.Name == nameof(ISequencerService.PauseActiveRunsAsync)
                 && i.Arguments.Count == 3 && (bool)i.Arguments[1]!);
             public int Titled(string title) { lock (Notifications) { return Notifications.Count(n => n.Title == title); } }
+            public bool WasRecovered(string details) { lock (Recovered) { return Recovered.Any(f => f.Details == details); } }
 
             public void Dispose() {
                 Service.Dispose();
@@ -205,7 +213,7 @@ namespace OpenAstroAra.Test {
                 Assert.That(rig.Steps, Is.EqualTo(RestartThenResume), "guiding restarts and settles first, then the run resumes");
             }
             Assert.That(await WaitUntilAsync(() => rig.Titled(RestoredTitle) == 1).ConfigureAwait(false), Is.True);
-            Assert.That(rig.Titled(NotRestartedTitle), Is.Zero);
+            Assert.That(rig.Titled(StillTryingTitle), Is.Zero);
         }
 
         [Test]
@@ -222,17 +230,41 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_guiding_restart_that_fails_leaves_the_run_paused_with_one_alert_and_no_retry() {
-            using var rig = new Rig { RestartSucceeds = false };
+        public async Task A_guiding_restart_that_fails_twice_is_tried_again_until_it_works_and_the_user_is_told_once() {
+            // #2169 rig check — Ara never gives up after one try: the run stays paused while the start fails
+            // (camera still gone, cloud) and resumes once guiding is back and settled.
+            using var rig = new Rig { RestartSucceeds = n => n >= 3, Settles = n => n >= 3 };
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
-            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the user is never told why the run stays paused");
-            // Only the episode resumes, so once it has ended nothing can resume later.
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed after the third try");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(ThreeRestartsThenResume), "two failed starts, a third that works, then the resume");
+            }
+            Assert.That(await WaitUntilAsync(() => rig.Titled(RestoredTitle) == 1).ConfigureAwait(false), Is.True);
+            Assert.That(rig.Titled(StillTryingTitle), Is.EqualTo(1), "told once, not on every try");
+        }
+
+        [Test]
+        public async Task A_user_resume_during_the_guiding_retries_stops_them_with_no_further_guiding_start() {
+            // #2169 rig check — the user took the run over while Ara was still trying: guiding is theirs to start.
+            using var rig = new Rig { RestartSucceeds = _ => false, Settles = _ => false };
+            var userResumed = false;
+            rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) =>
+                    Volatile.Read(ref userResumed) ? Array.Empty<Guid>() : (IReadOnlyList<Guid>)ids.ToList());
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+
+            await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Restarts() >= 2).ConfigureAwait(false), Is.True, "the failed start was never tried again");
+            Volatile.Write(ref userResumed, true);
+            var startsWhenResumed = rig.Restarts();
+
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-            Assert.That(rig.Resumed(), Is.Zero, "never resumed unguided");
-            Assert.That((rig.Restarts(), rig.Titled(NotRestartedTitle)), Is.EqualTo((1, 1)), "one attempt, one alert");
+            // One start may already be in flight when the user resumes; none begins after it.
+            Assert.That(rig.Restarts(), Is.InRange(startsWhenResumed, startsWhenResumed + 1), "the retries stop once the user owns the run");
+            Assert.That(rig.Resumed(), Is.Zero, "the user resumed it: nothing for Ara to resume");
         }
 
         [Test]
@@ -267,17 +299,17 @@ namespace OpenAstroAra.Test {
             lock (rig.Steps) {
                 Assert.That(rig.Steps, Is.EqualTo(RestartRestartResume), "the second reconnect restarts guiding before the run resumes");
             }
-            Assert.That(rig.Titled(NotRestartedTitle), Is.Zero, "the first restart was cut short by the loss, not given up on");
+            Assert.That(rig.Titled(StillTryingTitle), Is.Zero, "the first restart was cut short by the loss, not counted as a failed try");
         }
 
         [Test]
         public async Task A_quick_unguided_re_drop_leaves_the_first_guided_link_loss_marked_as_guided() {
             // #2169 review — each loss keeps what it saw: a later drop with guiding off does not unmark the first.
-            using var rig = new Rig { RestartSucceeds = false, Settles = _ => false };
+            using var rig = new Rig { RestartSucceeds = _ => false, Settles = _ => false };
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
-            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True);
+            Assert.That(await WaitUntilAsync(() => rig.Titled(StillTryingTitle) == 1).ConfigureAwait(false), Is.True);
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
             EquipmentFaultEvent[] links;
@@ -311,17 +343,17 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_guiding_restart_that_never_settles_leaves_the_run_paused_with_one_alert() {
+        public async Task A_guiding_restart_that_never_settles_keeps_the_run_paused_and_is_tried_again() {
             // #2169 review — PHD2 takes the start and guides, but the star never comes within the settle distance.
             using var rig = new Rig { Settles = _ => false, GuidesUnsettled = true };
-            rig.Service.GuidingRestoreSettleTimeout = TimeSpan.FromSeconds(1);
+            rig.Service.GuidingRestoreSettleTimeout = TimeSpan.FromMilliseconds(300);
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
-            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the user is never told why the run stays paused");
-            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-            Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((1, 0)), "started once, never resumed on unsettled guiding");
+            Assert.That(await WaitUntilAsync(() => rig.Restarts() >= 3).ConfigureAwait(false), Is.True, "the unsettled start was not tried again");
+            Assert.That(rig.Resumed(), Is.Zero, "never resumed on unsettled guiding");
+            Assert.That(rig.Titled(StillTryingTitle), Is.EqualTo(1), "told once, not on every try");
         }
 
         [Test]
@@ -336,38 +368,46 @@ namespace OpenAstroAra.Test {
 
             await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false);
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-            Assert.That((rig.Restarts(), rig.Titled(NotRestartedTitle)), Is.EqualTo((0, 0)), "no guiding start under a run the user owns, and no alert");
+            Assert.That((rig.Restarts(), rig.Titled(StillTryingTitle)), Is.EqualTo((0, 0)), "no guiding start under a run the user owns, and no alert");
         }
 
         [Test]
-        public async Task Guiding_is_not_restarted_while_the_safety_engine_holds_the_rig() {
-            // #2169 review — a parked or held rig (clouds, a limit) must not start guiding under the safety engine.
+        public async Task Guiding_is_not_restarted_while_the_safety_engine_holds_the_rig_and_starts_once_it_lets_go() {
+            // #2169 review — a parked or held rig (clouds, a limit) must not start guiding under the safety engine;
+            // the hold is waited out, not given up on.
             using var rig = new Rig();
-            rig.Service.SafetyHoldsRig = () => true;
+            var held = true;
+            rig.Service.SafetyHoldsRig = () => Volatile.Read(ref held);
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
-            Assert.That(await WaitUntilAsync(() => rig.Titled(NotRestartedTitle) == 1).ConfigureAwait(false), Is.True, "the run stays paused, and the user is told");
-            await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Titled(StillTryingTitle) == 1).ConfigureAwait(false), Is.True, "the run stays paused, and the user is told");
             Assert.That((rig.Restarts(), rig.Resumed()), Is.EqualTo((0, 0)), "no guiding start and no resume while the safety engine holds the rig");
+            Volatile.Write(ref held, false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed once the hold ended");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(RestartThenResume), "guiding restarts after the hold, then the run resumes");
+            }
         }
 
         [Test]
         public async Task A_failed_guiding_restart_says_nothing_when_the_user_took_the_run_over_meanwhile() {
             // #2169 review — the user resumed or stopped the run while the start was failing: no stale alert.
-            using var rig = new Rig { RestartSucceeds = false };
+            using var rig = new Rig { RestartSucceeds = _ => false, Settles = _ => false };
             var reads = 0;
+            // Read 1: before the try; read 2: the restore's own check. From read 3 the user owns the run.
             rig.Sequencer.Setup(s => s.DaemonPausedRunsAsync(It.IsAny<IReadOnlyCollection<Guid>>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync((IReadOnlyCollection<Guid> ids, CancellationToken _) =>
-                    Interlocked.Increment(ref reads) == 1 ? ids.ToList() : (IReadOnlyList<Guid>)Array.Empty<Guid>());
+                    Interlocked.Increment(ref reads) <= 2 ? ids.ToList() : (IReadOnlyList<Guid>)Array.Empty<Guid>());
             await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
 
             await DropAndReconnectStoppedAsync(rig, fake).ConfigureAwait(false);
 
             Assert.That(await WaitUntilAsync(() => rig.Restarts() == 1).ConfigureAwait(false), Is.True, "the restart never ran");
             await rig.Reaction.WhenIdleAsync().WaitAsync(TimeSpan.FromSeconds(30)).ConfigureAwait(false);
-            Assert.That((rig.Titled(NotRestartedTitle), rig.Resumed()), Is.EqualTo((0, 0)), "the user owns the run: no alert, no resume");
+            Assert.That((rig.Titled(StillTryingTitle), rig.Resumed(), rig.Restarts()), Is.EqualTo((0, 0, 1)), "the user owns the run: no alert, no resume, no second start");
         }
 
         [Test]
@@ -405,6 +445,75 @@ namespace OpenAstroAra.Test {
             lock (rig.Steps) {
                 Assert.That(rig.Steps, Is.EqualTo(CheckThenRestartThenResume), "the camera check ends before guiding starts");
             }
+        }
+
+        // The guide camera drops while PHD2 guides: guiding stops with it.
+        private static async Task DropGuideCameraWhileGuidingAsync(Rig rig, FakeGuider fake) {
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
+            fake.OnRpc("get_app_state", JsonValue.Create("Stopped"));
+            await fake.BroadcastAsync(PhdEvents.AppState("Stopped")).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuidingStopped()).ConfigureAwait(false);
+        }
+
+        private static JsonObject SingleFrameComplete(bool success) => new() {
+            ["Event"] = "SingleFrameComplete", ["Timestamp"] = 0.0, ["Host"] = "fake-guider", ["Inst"] = 1,
+            ["Success"] = success, ["Error"] = success ? null : "camera not connected",
+        };
+
+        [Test]
+        public async Task A_camera_back_event_with_no_guide_frames_keeps_the_camera_fault_open_and_the_run_paused() {
+            // #2169 rig check — the guider said "camera back" while the camera was still unplugged. The event is
+            // only a hint: with no real frames the fault stays open and the run stays paused.
+            using var rig = new Rig { RestartSucceeds = _ => false, Settles = _ => false };
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+            await DropGuideCameraWhileGuidingAsync(rig, fake).ConfigureAwait(false);
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Restarts() >= 2).ConfigureAwait(false), Is.True, "Ara never kept trying to start guiding");
+            Assert.That(rig.WasRecovered("equipment_disconnected"), Is.False, "no guide frame came: the camera drop is not over");
+            Assert.That(rig.Resumed(), Is.Zero, "the run stays paused");
+            Assert.That(rig.Titled(StillTryingTitle), Is.EqualTo(1));
+        }
+
+        [Test]
+        public async Task Guide_frames_after_a_camera_drop_recover_the_fault_and_the_run_resumes_guided() {
+            // #2169 rig check — the guider never says the camera is back (guider#66), but a later try starts
+            // guiding and its guide steps prove the camera works: the fault is recovered and the run resumes.
+            using var rig = new Rig { RestartSucceeds = n => n >= 2, Settles = n => n >= 2 };
+            await using var fake = await ConnectedFakeAsync(rig, guiding: true).ConfigureAwait(false);
+            await DropGuideCameraWhileGuidingAsync(rig, fake).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
+            Assert.That(rig.WasRecovered("equipment_disconnected"), Is.True, "the guide frames end the camera drop");
+            lock (rig.Steps) {
+                Assert.That(rig.Steps, Is.EqualTo(RestartRestartResume), "a failed start, one that guides, then the resume");
+            }
+        }
+
+        [Test]
+        public async Task An_unguided_camera_drop_lets_the_frame_finish_and_resolves_only_once_a_guide_frame_comes_back() {
+            // #2169 rig check — unguided, the frame in progress finishes; the "camera back" event alone does not
+            // end the drop. Ara takes a guide frame; the first fails (camera still gone), the second comes back.
+            using var rig = new Rig();
+            await using var fake = await ConnectedFakeAsync(rig, guiding: false).ConfigureAwait(false);
+            var captures = 0;
+            fake.OnRpc("capture_single_frame", request => {
+                var n = Interlocked.Increment(ref captures);
+                _ = Task.Run(() => fake.BroadcastAsync(SingleFrameComplete(success: n >= 2)));
+                return JsonValue.Create(0);
+            });
+
+            await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
+            Assert.That(await WaitUntilAsync(() => rig.Paused() == 1).ConfigureAwait(false), Is.True, "the run was not paused");
+            await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+
+            Assert.That(await WaitUntilAsync(() => rig.Resumed() == 1).ConfigureAwait(false), Is.True, "the run never resumed");
+            Assert.That(Volatile.Read(ref captures), Is.EqualTo(2), "one failed check frame, then one that came back");
+            Assert.That(rig.WasRecovered("equipment_disconnected"), Is.True);
+            Assert.That(rig.FramePauses(), Is.Zero, "an unguided run's frame is not stopped");
+            Assert.That((rig.Restarts(), rig.Titled(CameraStillTryingTitle)), Is.EqualTo((0, 1)), "no guiding start; told once");
         }
     }
 }

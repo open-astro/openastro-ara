@@ -55,8 +55,20 @@ public interface IGuiderEpisodeListener {
     /// <summary>#2169 — the episode's fault was one <see cref="GuidedWhenLost"/> said took guiding away; it is
     /// recovered and the runs it paused are about to resume. The guider starts guiding again and waits for it
     /// to settle first, so the run never resumes unguided. False = guiding did not come back: the runs stay
-    /// paused. Cancelled when the guider is lost again first. Called outside the reaction's lock.</summary>
+    /// paused and the reaction tries again later. Cancelled when the guider is lost again first. Called outside
+    /// the reaction's lock.</summary>
     Task<bool> RestoreGuidingAsync(IReadOnlyList<Guid> runIds, CancellationToken ct) => Task.FromResult(true);
+
+    /// <summary>#2169 — an unguided run's guide camera dropped: takes one guide frame. True = a real frame came
+    /// (or guide frames came already) and the camera-drop fault is recovered; false = the camera is not back
+    /// yet, the reaction tries again later. Called outside the reaction's lock.</summary>
+    Task<bool> CheckGuideCameraAsync(CancellationToken ct) => Task.FromResult(true);
+
+    /// <summary>#2169 — completes when the guider says a dropped device is back (only a hint: the next try
+    /// decides). A hint that came since the last call is returned completed, once. Called outside the reaction's lock.</summary>
+    Task RetryHint() => NeverHint;
+
+    private static readonly Task NeverHint = new TaskCompletionSource().Task;
 }
 
 /// <summary>
@@ -117,6 +129,11 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
     // §42.3 linger phase — slow-cadence post-give-up re-adoption (~an hour at the defaults).
     // How often a guider episode that waits for Recovered checks whether the user disconnected the guider.
     internal TimeSpan ReleasePollInterval { get; set; } = TimeSpan.FromSeconds(2);
+    /// <summary>#2169 — the waits between tries to bring guiding (or a dropped guide camera) back; the last
+    /// one repeats. Internal so tests can shorten it.</summary>
+    internal IReadOnlyList<TimeSpan> GuiderRetryBackoff { get; set; } = [
+        TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2),
+    ];
     internal TimeSpan LingerInterval { get; set; } = TimeSpan.FromSeconds(120);
     internal int LingerMaxAttempts { get; set; } = 30;
     /// <summary>#2066 — how long the park waits for polar alignment and the Polar Aligner to stop first. A routine that
@@ -245,7 +262,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             var key = (object)NormalizeType(fault.DeviceType);
             if (_recoveryWaiters.TryGetValue(key, out var waiter) && waiter.Fault == fault && waiter.Recovered.TrySetResult()) {
                 // #2169 review — from here a new guider fault is this episode's follow-up (TryFollowUpGuiderEpisode).
-                _guiderRestores[key] = new GuiderRestore();
+                // A camera drop's episode has one already: it tries to bring the camera back before Recovered.
+                _guiderRestores.TryAdd(key, new GuiderRestore());
             }
         }
     }
@@ -443,27 +461,39 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             + $"They resume on their own once the guider is back; otherwise Resume them.{advice}").ConfigureAwait(false);
 
         var current = fault;
+        var retry = new GuiderRetry();
         while (true) {
-            while (!recovered.IsCompleted) {
-                await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
-                if (_cts.IsCancellationRequested) {
-                    return; // daemon shutdown: the runs stay paused, as the ladder leaves them
-                }
-                var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
-                if (!recovered.IsCompleted && await ReleasedByUserAsync(current, label, paused, userDisconnected).ConfigureAwait(false)) {
-                    return;
+            // #2169 rig check — a camera drop is over only when real frames come: the guider's "camera back"
+            // is a hint. So its episode tries to bring the camera back first, and frames recover the fault.
+            var framesDecide = current.Details == "equipment_disconnected";
+            if (!framesDecide) {
+                while (!recovered.IsCompleted) {
+                    await Task.WhenAny(recovered, Task.Delay(ReleasePollInterval, _cts.Token)).ConfigureAwait(false);
+                    if (_cts.IsCancellationRequested) {
+                        return; // daemon shutdown: the runs stay paused, as the ladder leaves them
+                    }
+                    var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
+                    if (!recovered.IsCompleted && await ReleasedByUserAsync(current, label, paused, userDisconnected).ConfigureAwait(false)) {
+                        return;
+                    }
                 }
             }
-            GuiderRestore? restore;
+            GuiderRestore restore;
             lock (_gate) {
-                _guiderRestores.TryGetValue(key, out restore);
+                if (!_guiderRestores.TryGetValue(key, out restore!)) {
+                    restore = new GuiderRestore();
+                    _guiderRestores[key] = restore;
+                }
             }
             // #2169 — guiding first: a run that was guided resumes only once guiding is back and settled. If it
-            // does not come back the runs stay paused (never resumed unguided) and the user is told once.
-            var restored = !guided || await RestoreGuidingQuietlyAsync(paused, restore?.LostAgain.Task).ConfigureAwait(false);
+            // does not come back yet, the runs stay paused (never resumed unguided) and Ara tries again.
+            var outcome = guided || framesDecide
+                ? await RetryUntilBackAsync(current, label, paused, guided, framesDecide, restore.LostAgain.Task,
+                    disconnectsAtFault, retry).ConfigureAwait(false)
+                : GuiderRetryOutcome.Back;
             EquipmentFaultEvent? followUp = null;
             lock (_gate) {
-                if (restore is not null && _guiderRestores.Remove(key)) {
+                if (_guiderRestores.Remove(key)) {
                     followUp = restore.FollowUp;
                     if (followUp is not null && _recoveryWaiters.TryGetValue(key, out var waiter)) {
                         recovered = waiter.Recovered.Task;
@@ -482,14 +512,8 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
                 current = followUp;
                 continue;
             }
-            if (!restored) {
-                if (_cts.IsCancellationRequested || !await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false)) {
-                    return; // daemon shutdown, or the user already took the runs over: nothing to say
-                }
-                await NotifyQuietlyAsync(plan.GiveUpSeverity, "Guiding did not restart — sequence stays paused",
-                    $"'{label}' is connected again, but guiding did not restart and settle, so {paused.Count} run(s) stay paused "
-                    + "and no unguided frame is taken. Start guiding, then Resume them.").ConfigureAwait(false);
-                return;
+            if (outcome != GuiderRetryOutcome.Back) {
+                return; // daemon shutdown, or the user took the runs or the guider over
             }
             break;
         }
@@ -504,7 +528,7 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
             _ => "Guiding restored",
         };
         await NotifyQuietlyAsync(NotificationSeverity.Info, $"{back} — sequence resumed",
-            $"'{label}' is guiding again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
+            $"'{label}' is {(guided || fault.Details != "equipment_disconnected" ? "guiding" : "sending guide frames")} again; {resumed} paused sequence run(s) resumed.").ConfigureAwait(false);
     }
 
     // §42.2 items 2+5 — a persistent-op-fault escalation is not a failed recovery: the device is
@@ -824,6 +848,107 @@ public sealed partial class FaultReactionService : IHostedService, IDisposable {
         } catch (Exception ex) {
             LogRungFailed("resume", ex);
             return 0;
+        }
+    }
+
+    private enum GuiderRetryOutcome { Back, Stopped }
+
+    private sealed class GuiderRetry {
+        public int Waits;   // waits so far this episode: picks the next backoff step
+        public bool Told;   // the one "still trying" notice was sent
+    }
+
+    // #2169 — Joey's rule: Ara recovers on its own and never gives up after one try. Tries to bring guiding
+    // back (guided) or the guide camera (a camera drop) until it works, the user takes the runs or the guider
+    // over, the daemon stops, or the guider is lost again (the caller picks up that follow-up). The runs stay
+    // paused throughout; the user hears it once. A camera drop waits first (the camera has just gone) unless
+    // the guider already said it is back.
+    private async Task<GuiderRetryOutcome> RetryUntilBackAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> paused,
+            bool guided, bool waitFirst, Task lostAgain, int disconnectsAtFault, GuiderRetry retry) {
+        var wait = waitFirst;
+        while (true) {
+            if (wait) {
+                var backoff = GuiderRetryBackoff;
+                var delay = backoff.Count == 0 ? TimeSpan.Zero : backoff[Math.Min(retry.Waits, backoff.Count - 1)];
+                retry.Waits++;
+                var hint = _guiderEpisodes?.Invoke()?.RetryHint() ?? Task.CompletedTask;
+                var deadline = DateTime.UtcNow + delay;
+                while (!hint.IsCompleted && !lostAgain.IsCompleted) {
+                    var left = deadline - DateTime.UtcNow;
+                    if (left <= TimeSpan.Zero) {
+                        break;
+                    }
+                    await Task.WhenAny(hint, lostAgain, Task.Delay(left < ReleasePollInterval ? left : ReleasePollInterval, _cts.Token))
+                        .ConfigureAwait(false);
+                    if (_cts.IsCancellationRequested) {
+                        return GuiderRetryOutcome.Stopped;
+                    }
+                    if (await UserTookOverAsync(fault, label, paused, disconnectsAtFault).ConfigureAwait(false)) {
+                        return GuiderRetryOutcome.Stopped;
+                    }
+                }
+                if (hint.IsCompleted) {
+                    _ = _guiderEpisodes?.Invoke()?.RetryHint(); // used: the next wait needs a new hint
+                }
+            }
+            wait = true;
+            if (lostAgain.IsCompleted) {
+                return GuiderRetryOutcome.Stopped; // the caller takes the follow-up
+            }
+            if (_cts.IsCancellationRequested || await UserTookOverAsync(fault, label, paused, disconnectsAtFault).ConfigureAwait(false)) {
+                return GuiderRetryOutcome.Stopped;
+            }
+            var back = guided
+                ? await RestoreGuidingQuietlyAsync(paused, lostAgain).ConfigureAwait(false)
+                : await CheckGuideCameraQuietlyAsync(lostAgain).ConfigureAwait(false);
+            if (lostAgain.IsCompleted || _cts.IsCancellationRequested) {
+                return GuiderRetryOutcome.Stopped;
+            }
+            if (back) {
+                return GuiderRetryOutcome.Back;
+            }
+            if (!retry.Told && await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false)) {
+                retry.Told = true;
+                var title = guided ? "Guiding not back yet — still trying, sequence stays paused"
+                    : "Guide camera not back yet — still trying, sequence stays paused";
+                await NotifyQuietlyAsync(NotificationSeverity.Warning, title, guided
+                    ? $"'{label}' did not restart guiding and settle yet, so {paused.Count} run(s) stay paused and no unguided frame is taken. "
+                      + "Ara keeps trying and resumes them once guiding is back. You can also Resume them yourself."
+                    : $"'{label}' sends no guide frames yet, so {paused.Count} run(s) stay paused. "
+                      + "Ara keeps checking and resumes them once the guide camera is back. You can also Resume them yourself.")
+                    .ConfigureAwait(false);
+            }
+        }
+    }
+
+    // The user disconnected the guider, or resumed, paused or stopped the runs: the retries stop.
+    private async Task<bool> UserTookOverAsync(EquipmentFaultEvent fault, string label, IReadOnlyList<Guid> paused, int disconnectsAtFault) {
+        var userDisconnected = (_guiderEpisodes?.Invoke()?.UserDisconnects ?? 0) != disconnectsAtFault;
+        if (await ReleasedByUserAsync(fault, label, paused, userDisconnected).ConfigureAwait(false)) {
+            return true;
+        }
+        return !await AnyStillDaemonPausedAsync(paused).ConfigureAwait(false);
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Best-effort rung: a guider fault while checking the camera leaves the runs paused for the next try. CA1031's log-and-recover boundary applies.")]
+    private async Task<bool> CheckGuideCameraQuietlyAsync(Task lostAgain) {
+        var listener = _guiderEpisodes?.Invoke();
+        if (listener is null) {
+            return true;
+        }
+        using var ct = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        try {
+            var check = listener.CheckGuideCameraAsync(ct.Token);
+            if (await Task.WhenAny(check, lostAgain).ConfigureAwait(false) == lostAgain) {
+                await ct.CancelAsync().ConfigureAwait(false);
+            }
+            return await check.ConfigureAwait(false);
+        } catch (OperationCanceledException) when (ct.IsCancellationRequested) {
+            return false;
+        } catch (Exception ex) {
+            LogRungFailed("check_guide_camera", ex);
+            return false;
         }
     }
 

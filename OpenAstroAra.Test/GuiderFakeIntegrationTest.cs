@@ -1469,11 +1469,11 @@ namespace OpenAstroAra.Test {
         }
 
         [Test]
-        public async Task A_camera_drop_publishes_one_fault_stays_connected_and_the_reconnect_recovers_that_fault() {
+        public async Task A_camera_drop_publishes_one_fault_stays_connected_and_its_guide_frames_recover_that_fault() {
             // §42.2 (openastro-guider #57) + #1191 + #1241: EquipmentDisconnected publishes one
             // equipment_disconnected fault and the session stays Connected; a repeat drop while it is open adds
-            // nothing; EquipmentReconnected reports Recovered for THAT fault (the hub resolves its row);
-            // a drop after the recovery is a new fault with its own row.
+            // nothing; #2169 — EquipmentReconnected is only a hint, and the first guide step after it reports
+            // Recovered for THAT fault (the hub resolves its row); a drop after the recovery is a new fault with its own row.
             var (fake, svc, sink) = await ConnectWithSinkAsync().ConfigureAwait(false);
             await using var _ = fake;
             using var __ = svc;
@@ -1492,8 +1492,9 @@ namespace OpenAstroAra.Test {
 
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
             Assert.That(await PollUntilAsync(() => sink.RecoveredCount() == 1).ConfigureAwait(false), Is.True,
-                "the camera reconnect never reported Recovered");
+                "the guide frames after the camera reconnect never reported Recovered");
             lock (sink.Published) {
                 Assert.That(sink.Published, Has.Count.EqualTo(1), "a repeat drop while the first fault is open adds no second fault");
                 Assert.That(sink.Recovered[0], Is.SameAs(first), "Recovered names the fault the drop published (natural key)");
@@ -1501,6 +1502,7 @@ namespace OpenAstroAra.Test {
 
             await fake.BroadcastAsync(PhdEvents.EquipmentDisconnected()).ConfigureAwait(false);
             await fake.BroadcastAsync(PhdEvents.EquipmentReconnected()).ConfigureAwait(false);
+            await fake.BroadcastAsync(PhdEvents.GuideStep(0.1, 0.1)).ConfigureAwait(false);
             Assert.That(await PollUntilAsync(() => sink.RecoveredCount() == 2).ConfigureAwait(false), Is.True);
             lock (sink.Published) {
                 Assert.That(sink.Published, Has.Count.EqualTo(2), "#1241: a drop after the recovery is a new fault with its own row");

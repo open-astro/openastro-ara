@@ -356,7 +356,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             // §42.2: a structured device fault (guide camera dropped) — the link stays up, so this runs
             // the on_guider_lost policy without dropping to Error or starting §63.3 recovery.
             guider.EquipmentFault += OnEquipmentFault;
-            guider.EquipmentReconnected += OnEquipmentReconnected; // #1191 — closes that fault's row
+            guider.EquipmentReconnected += OnEquipmentReconnected; // #1191 / #2169 — a hint that the camera is back
             _guideSteps.Clear(); // fresh session — drop the prior connection's RMS window
             _latestStarStats = default;
             _guider = guider;
@@ -666,6 +666,9 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
                 // #2169 review — guiding stops with the camera: guided, the light in progress is stopped and
                 // guiding restarts (after the camera is back) before the runs resume, as for a link loss.
                 var guided = GuidingOnLocked();
+                if (_cameraFault is null) {
+                    _retryHint = NewRetryHint(); // a "camera back" from before this drop does not count
+                }
                 _cameraFault ??= PublishFaultLocked(EquipmentFaultKind.Disconnected, "equipment_disconnected", f => {
                     if (guided) {
                         _guidedLossFault = f;
@@ -717,8 +720,11 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
             if (_cameraFault is null) {
                 return; // no open camera-drop fault (an unsolicited or repeated reconnect)
             }
+            // #2169 rig check — the guider said "camera back" while the camera was still unplugged. The event
+            // is only a hint: the fault stays open until real frames come (a guide step, or the camera check
+            // the shared reaction runs). The hint makes that reaction try now instead of after its wait.
             LogCameraReconnected(e.DeviceType);
-            RecoverFaultLocked(ref _cameraFault);
+            _retryHint.TrySetResult();
         }
     }
 
@@ -754,7 +760,7 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     [LoggerMessage(EventId = 4226, Level = LogLevel.Warning, Message = "§42.2 fault notification post failed (best-effort)")]
     private partial void LogFaultNotifyFailed(Exception exception);
 
-    [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — recovering the open camera-drop fault (#1191)")]
+    [LoggerMessage(EventId = 4229, Level = LogLevel.Information, Message = "§42.2 guider reports its {DeviceType} back — the camera-drop fault stays open until real guide frames come (#2169)")]
     private partial void LogCameraReconnected(string deviceType);
 
     // The daemon's device-type enum is effectively "camera" today. Treat a missing/blank type as the
@@ -811,6 +817,8 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
                 _latestStarStats = (phd.SNR, phd.StarMass);
             }
             NoteGuideStepLocked(step); // settled guide steps mean the guider has its star: the star-lost watch stands down
+            // #2169 — a guide step is a real frame with a star: the guide camera is back for sure.
+            RecoverCameraFaultOnFramesLocked();
             guider = _guider!; // non-null: ReferenceEquals(sender, _guider) with a non-null sender
             pixelScale = guider.PixelScale;
         }
@@ -1016,10 +1024,9 @@ public sealed partial class GuiderService : IGuiderService, IGuideCameraPort, IG
     private void SetStateLocked(EquipmentConnectionState state) {
         _state = state;
         if (state == EquipmentConnectionState.Connected) {
-            // §42.5 — a connect is the guider's recovery from a link drop (and the backstop for a camera
-            // drop whose EquipmentReconnected never came): the hub resolves those rows.
+            // §42.5 — a connect is the guider's recovery from a link drop: the hub resolves that row.
+            // #2169 — not a camera drop's: the camera may still be unplugged. Only real frames close that one.
             RecoverFaultLocked(ref _linkFault);
-            RecoverFaultLocked(ref _cameraFault);
             // A star-lost episode stays open across the reconnect (the star may still be lost), but the
             // dispose stopped its probe: re-arm it, or nothing sees a Resume or a clear sky for its runs.
             if (_starLostReacted) {
